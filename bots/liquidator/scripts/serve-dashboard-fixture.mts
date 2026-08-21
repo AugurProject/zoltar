@@ -202,6 +202,7 @@ const server = startDashboardServer(4183, {
 			walletEth: '2.184',
 			walletRep: '2508.19',
 		},
+		network: network?.name,
 		paused,
 		rpcEndpointHealth: [
 			{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://rpc-primary.example' },

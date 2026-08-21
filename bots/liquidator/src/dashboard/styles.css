@@ -794,6 +794,10 @@ td small {
 		justify-content: flex-start;
 	}
 
+	#network-badge {
+		font-size: 0.68rem;
+	}
+
 	.topbar-actions .action-status {
 		flex-basis: 100%;
 		order: 1;

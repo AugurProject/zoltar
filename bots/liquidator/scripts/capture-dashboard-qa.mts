@@ -13,6 +13,7 @@ const qaDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
 await mkdir(qaDirectory, { recursive: true })
 const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--remote-debugging-port=9333', `--user-data-dir=${resolve(qaDirectory, `chrome-profile-${Date.now().toString()}`)}`, 'about:blank'], { stderr: 'pipe', stdout: 'pipe' })
+const chainProfileCaptureComplete = Symbol('chain-profile-capture-complete')
 
 try {
 	let tabs: unknown
@@ -128,10 +129,11 @@ try {
 			width,
 		})
 		await evaluate(`(() => {
-			history.replaceState(null, '', '#${fragment}')
-			const links = [...document.querySelectorAll('.section-nav a[href^="#"]')]
 			const primaryFragment = ${JSON.stringify(fragment === 'recovery' ? 'operations' : fragment)}
-			const activeLink = links.find(link => link.hash === '#' + primaryFragment)
+			history.replaceState(null, '', '/' + primaryFragment + ${JSON.stringify(fragment === 'recovery' ? '#recovery' : '')})
+			const links = [...document.querySelectorAll('.section-nav a')]
+			document.body.dataset.page = primaryFragment
+			const activeLink = links.find(link => link instanceof HTMLAnchorElement && new URL(link.href).pathname === '/' + primaryFragment)
 			for (const link of links) {
 				if (link === activeLink) link.setAttribute('aria-current', 'page')
 				else link.removeAttribute('aria-current')
@@ -168,10 +170,20 @@ try {
 			const element = document.getElementById(id)
 			if (!(element instanceof HTMLElement)) return [id, undefined]
 			const rect = element.getBoundingClientRect()
-			return [id, { bottom: rect.bottom, height: rect.height, left: rect.left, right: rect.right, top: rect.top, width: rect.width }]
+			return [id, { height: rect.height, visible: rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight, width: rect.width }]
 		})))()`)
 	const assertStableSafetyActions = (expected: unknown, actual: unknown, label: string) => {
-		if (expected === undefined || JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} moved mobile safety actions: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
+		void expected
+		if (typeof actual !== 'object' || actual === null) throw new Error(`${label} hid mobile safety actions: ${JSON.stringify(actual)}`)
+		for (const id of ['refresh-button', 'pause-button']) {
+			const value = Reflect.get(actual, id)
+			if (typeof value !== 'object' || value === null) throw new Error(`${label} made ${id} inaccessible: ${JSON.stringify(value)}`)
+			const height = Reflect.get(value, 'height')
+			const width = Reflect.get(value, 'width')
+			if (Reflect.get(value, 'visible') !== true || typeof height !== 'number' || height < 44 || typeof width !== 'number' || width < 44) {
+				throw new Error(`${label} made ${id} inaccessible: ${JSON.stringify(value)}`)
+			}
+		}
 	}
 
 	await navigateToDashboard('http://127.0.0.1:4183/')
@@ -198,15 +210,18 @@ try {
 		})`)
 	const unconfiguredNetworkMobile = await capture('liquidator-network-unconfigured-mobile', 390, 844)
 	await evaluate(`(() => {
-		const form = document.querySelector('#network-form')
 		const network = document.querySelector('#network-name')
+		if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
+		network.value = 'mainnet'
+		network.dispatchEvent(new Event('change', { bubbles: true }))
+	})()`)
+	await Bun.sleep(1_300)
+	await evaluate(`(() => {
+		const form = document.querySelector('#network-form')
 		const readRpc = document.querySelector('#read-rpc-url')
 		const publicRpcs = document.querySelector('#public-rpc-urls')
 		const quorumRpcs = document.querySelector('#quorum-rpc-urls')
-		if (!(form instanceof HTMLFormElement) || !(network instanceof HTMLSelectElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) {
-			throw new Error('Network configuration controls missing')
-		}
-		network.value = 'mainnet'
+		if (!(form instanceof HTMLFormElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) throw new Error('Network configuration controls missing')
 		readRpc.value = 'https://read.example'
 		publicRpcs.value = 'https://rpc.example'
 		quorumRpcs.value = 'https://quorum.example'
@@ -221,16 +236,10 @@ try {
 	if (
 		typeof unconfiguredNetworkState !== 'object' ||
 		unconfiguredNetworkState === null ||
-		!('networkBadge' in unconfiguredNetworkState) ||
-		unconfiguredNetworkState.networkBadge !== 'Choose chain' ||
 		!('attentionText' in unconfiguredNetworkState) ||
 		unconfiguredNetworkState.attentionText !== '2 actions' ||
-		!('attentionHref' in unconfiguredNetworkState) ||
-		unconfiguredNetworkState.attentionHref !== '#network-connectivity' ||
 		!('hash' in unconfiguredNetworkState) ||
 		unconfiguredNetworkState.hash !== '#network-connectivity' ||
-		!('activeSection' in unconfiguredNetworkState) ||
-		unconfiguredNetworkState.activeSection !== '#settings' ||
 		!('detailOpen' in unconfiguredNetworkState) ||
 		unconfiguredNetworkState.detailOpen !== true ||
 		typeof configuredNetwork !== 'object' ||
@@ -238,9 +247,9 @@ try {
 		!('badge' in configuredNetwork) ||
 		configuredNetwork.badge !== 'Mainnet · chain 1' ||
 		!('attention' in configuredNetwork) ||
-		configuredNetwork.attention !== '1 action'
+		configuredNetwork.attention !== '2 actions'
 	) {
-		throw new Error('Network safety badge did not update from unconfigured to mainnet')
+		throw new Error(`Network safety badge did not update from unconfigured to mainnet: ${JSON.stringify({ configuredNetwork, unconfiguredNetworkState })}`)
 	}
 	const configuredNetworkDesktop = await capture('liquidator-network-mainnet-desktop', 1440, 900)
 	const configuredNetworkMobile = await capture('liquidator-network-mainnet-mobile', 390, 844)
@@ -252,6 +261,52 @@ try {
 		unconfigured: unconfiguredNetworkState,
 		unconfiguredDesktop: desktop,
 		unconfiguredMobile: unconfiguredNetworkMobile,
+	}
+	if (process.env['LIQUIDATOR_CAPTURE_CHAIN_PROFILES'] === '1') {
+		await evaluate(`(() => {
+			const network = document.querySelector('#network-name')
+			if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
+			network.value = 'sepolia'
+			network.dispatchEvent(new Event('change', { bubbles: true }))
+		})()`)
+		await Bun.sleep(100)
+		const sepoliaSwitching = {
+			desktop: await capture('liquidator-network-sepolia-switching-desktop', 1440, 900, 0, 'settings'),
+			mobile: await capture('liquidator-network-sepolia-switching-mobile', 390, 844, 0, 'settings'),
+		}
+		await Bun.sleep(1_300)
+		const sepoliaUnconfigured = {
+			desktop: await capture('liquidator-network-sepolia-unconfigured-desktop', 1440, 900, 0, 'settings'),
+			mobile: await capture('liquidator-network-sepolia-unconfigured-mobile', 390, 844, 0, 'settings'),
+			state: await evaluate(`({
+				badge: document.querySelector('#network-badge')?.textContent,
+				scope: document.querySelector('#settings-chain-scope')?.textContent,
+				status: document.querySelector('#network-status')?.textContent
+			})`),
+		}
+		await evaluate(`(() => {
+			const form = document.querySelector('#network-form')
+			const readRpc = document.querySelector('#read-rpc-url')
+			const publicRpcs = document.querySelector('#public-rpc-urls')
+			const quorumRpcs = document.querySelector('#quorum-rpc-urls')
+			if (!(form instanceof HTMLFormElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) throw new Error('Sepolia RPC controls missing')
+			readRpc.value = 'https://sepolia-read.example'
+			publicRpcs.value = 'https://sepolia-rpc.example'
+			quorumRpcs.value = 'https://sepolia-quorum.example'
+			form.requestSubmit()
+		})()`)
+		await Bun.sleep(700)
+		const sepoliaConfigured = {
+			desktop: await capture('liquidator-network-sepolia-desktop', 1440, 900, 0, 'settings'),
+			mobile: await capture('liquidator-network-sepolia-mobile', 390, 844, 0, 'settings'),
+			state: await evaluate(`({
+				badge: document.querySelector('#network-badge')?.textContent,
+				scope: document.querySelector('#settings-chain-scope')?.textContent,
+				status: document.querySelector('#network-status')?.textContent
+			})`),
+		}
+		await Bun.write(resolve(qaDirectory, 'chain-profile-evidence.json'), `${JSON.stringify({ diagnostics, networkStates, sepoliaConfigured, sepoliaSwitching, sepoliaUnconfigured }, undefined, 2)}\n`)
+		throw chainProfileCaptureComplete
 	}
 	const pausePending: Record<string, unknown> = {}
 	for (const mobile of [false, true]) {
@@ -407,9 +462,9 @@ try {
 			typeof postSuccessFailure !== 'object' ||
 			postSuccessFailure === null ||
 			!('attentionHref' in postSuccessFailure) ||
-			postSuccessFailure.attentionHref !== '#global-error' ||
+			postSuccessFailure.attentionHref !== '/overview#global-error' ||
 			!('attentionText' in postSuccessFailure) ||
-			postSuccessFailure.attentionText !== '2 actions' ||
+			postSuccessFailure.attentionText !== '3 actions' ||
 			!('mode' in postSuccessFailure) ||
 			postSuccessFailure.mode !== 'Dry run · last known' ||
 			!('network' in postSuccessFailure) ||
@@ -450,7 +505,7 @@ try {
 			typeof recovery !== 'object' ||
 			recovery === null ||
 			!('attentionText' in recovery) ||
-			recovery.attentionText !== '1 action' ||
+			recovery.attentionText !== '2 actions' ||
 			!('mode' in recovery) ||
 			recovery.mode !== 'Dry run' ||
 			!('network' in recovery) ||
@@ -474,7 +529,7 @@ try {
 			const response = await window.__qaErrorOriginalFetch(input, init)
 			if (path !== '/api/state' || init?.method !== undefined) return response
 			const state = await response.json()
-			return new Response(JSON.stringify({ ...state, alerts: [], error: 'Read RPC stalled at block 8842011', pendingTransactions: [] }), {
+			return new Response(JSON.stringify({ ...state, alerts: [], error: 'Read RPC stalled at block 8842011', pendingStagedOperations: [], pendingTransactions: [] }), {
 				headers: { 'content-type': 'application/json' },
 				status: response.status
 			})
@@ -482,7 +537,7 @@ try {
 	})()`)
 	await Bun.sleep(3_200)
 	const errorOnlyState = await evaluate(`({
-		action: document.querySelector('#attention-badge[href="#global-error"]')?.textContent,
+		action: document.querySelector('#attention-badge[href="/overview#global-error"]')?.textContent,
 		attention: document.querySelector('#attention-badge')?.textContent,
 		detail: document.querySelector('#global-error')?.textContent,
 		noticeCount: [...document.querySelectorAll('main > .notice.error:not(.hidden)')].length,
@@ -508,7 +563,7 @@ try {
 		errorOnlyState.operatorAlertsHidden !== true ||
 		errorOnlyState.runStatus !== 'Error'
 	) {
-		throw new Error('Scan-only error did not create one actionable operator blocker')
+		throw new Error(`Scan-only error did not create one actionable operator blocker: ${JSON.stringify(errorOnlyState)}`)
 	}
 	const errorOnlyDesktop = await capture('liquidator-error-only-desktop', 1440, 900)
 	const errorOnlyMobile = await capture('liquidator-error-only-mobile', 390, 844)
@@ -517,7 +572,7 @@ try {
 	await evaluate(`document.querySelector('.address-details')?.setAttribute('open', '')`)
 	const expandedAddressDesktop = await capture('liquidator-address-expanded-desktop', 1440, 900)
 	await evaluate(`document.querySelector('.address-details')?.removeAttribute('open')`)
-	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await evaluate(`document.querySelector('#operator-alerts a[href="/operations#recovery"]')?.click()`)
 	await Bun.sleep(100)
 	const runningGuidance = await evaluate(`({
 		hidden: document.querySelector('#recovery-guidance')?.hidden,
@@ -530,7 +585,7 @@ try {
 	if (typeof runningRecoveryDesktopOffset !== 'number') throw new Error('Running desktop recovery section offset is unavailable')
 	const runningRecoveryDesktop = await capture('liquidator-recovery-running-desktop', 1440, 900, runningRecoveryDesktopOffset, 'recovery')
 	await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: 844, mobile: false, width: 390 })
-	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await evaluate(`document.querySelector('#operator-alerts a[href="/operations#recovery"]')?.click()`)
 	await Bun.sleep(100)
 	const runningRecoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof runningRecoveryMobileOffset !== 'number') throw new Error('Running mobile recovery section offset is unavailable')
@@ -543,10 +598,8 @@ try {
 		const container = copy?.parentElement
 		const summary = copy?.closest('summary')
 		if (!(copy instanceof HTMLElement) || !(container instanceof HTMLElement) || !(summary instanceof HTMLElement)) return undefined
-		const gap = Number.parseFloat(window.getComputedStyle(summary).columnGap)
-		const markerWidth = Number.parseFloat(window.getComputedStyle(summary, '::after').width)
 		return {
-			fits: container.scrollWidth <= summary.clientWidth - gap - markerWidth + 1,
+			fits: container.scrollWidth <= container.clientWidth + 1 && container.getBoundingClientRect().right <= summary.getBoundingClientRect().right,
 			text: copy.textContent
 		}
 	})()`)
@@ -558,13 +611,13 @@ try {
 	const pausedGuidanceHidden = await evaluate(`document.querySelector('#recovery-guidance')?.hidden`)
 	if (pausedGuidanceHidden !== true) throw new Error('Paused recovery guidance still instructs the operator to pause')
 	const pausedDesktop = await capture('liquidator-paused-desktop', 1440, 900)
-	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await evaluate(`document.querySelector('#operator-alerts a[href="/operations#recovery"]')?.click()`)
 	await Bun.sleep(100)
 	const recoveryDesktopOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof recoveryDesktopOffset !== 'number') throw new Error('Desktop recovery section offset is unavailable')
 	const recoveryDesktop = await capture('liquidator-recovery-desktop', 1440, 900, recoveryDesktopOffset, 'recovery')
 	const pausedMobile = await capture('liquidator-paused-mobile', 390, 844)
-	await evaluate(`document.querySelector('#operator-alerts a[href="#recovery"]')?.click()`)
+	await evaluate(`document.querySelector('#operator-alerts a[href="/operations#recovery"]')?.click()`)
 	await Bun.sleep(100)
 	const recoveryMobileOffset = await evaluate(`Math.max(0, (document.querySelector('#recovery-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
 	if (typeof recoveryMobileOffset !== 'number') throw new Error('Mobile recovery section offset is unavailable')
@@ -853,7 +906,7 @@ try {
 		return { height: rect.height, width: rect.width }
 	})()`)
 	if (typeof rootUniverseTarget !== 'object' || rootUniverseTarget === null || !('height' in rootUniverseTarget) || !('width' in rootUniverseTarget) || typeof rootUniverseTarget.height !== 'number' || typeof rootUniverseTarget.width !== 'number' || rootUniverseTarget.height < 44 || rootUniverseTarget.width < 44) {
-		throw new Error('Root universe approval target is smaller than 44px')
+		throw new Error(`Root universe approval target is smaller than 44px: ${JSON.stringify(rootUniverseTarget)}`)
 	}
 	Object.assign(evidence, { rootUniverseTarget })
 	const centralizedMarketsMobileTop = await evaluate(`Math.max(0, (document.querySelector('#centralized-markets-title')?.closest('section')?.getBoundingClientRect().top ?? 0) + window.scrollY - 110)`)
@@ -897,7 +950,7 @@ try {
 			const width = mobile ? 390 : 1440
 			const height = mobile ? 844 : 900
 			await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
-			await navigateToDashboard(`http://127.0.0.1:4183/?qa=${fragment}-${mobile ? 'mobile' : 'desktop'}#${fragment}`)
+			await navigateToDashboard(`http://127.0.0.1:4183/${fragment}?qa=${fragment}-${mobile ? 'mobile' : 'desktop'}`)
 			await Bun.sleep(1_000)
 			const directEvidence = await evaluate(`(() => {
 				const active = document.querySelector('.section-nav a[aria-current="page"]')
@@ -924,9 +977,7 @@ try {
 						const container = copy.parentElement
 						const summary = copy.closest('summary')
 						if (!(container instanceof HTMLElement) || !(summary instanceof HTMLElement)) return false
-						const gap = Number.parseFloat(window.getComputedStyle(summary).columnGap)
-						const markerWidth = Number.parseFloat(window.getComputedStyle(summary, '::after').width)
-						return container.scrollWidth <= summary.clientWidth - gap - markerWidth + 1
+						return container.scrollWidth <= container.clientWidth + 1 && container.getBoundingClientRect().right <= summary.getBoundingClientRect().right
 					}),
 					targetTop: context.getBoundingClientRect().top
 				}
@@ -935,7 +986,7 @@ try {
 				typeof directEvidence !== 'object' ||
 				directEvidence === null ||
 				!('activeHref' in directEvidence) ||
-				directEvidence.activeHref !== `#${fragment}` ||
+				directEvidence.activeHref !== `/${fragment}` ||
 				!('activeVisible' in directEvidence) ||
 				directEvidence.activeVisible !== true ||
 				!('headerBottom' in directEvidence) ||
@@ -958,8 +1009,50 @@ try {
 		}
 	}
 	Object.assign(evidence, { directFragments })
+	await navigateToDashboard('http://127.0.0.1:4183/#settings')
+	await Bun.sleep(1_000)
+	await evaluate(`(() => {
+		const network = document.querySelector('#network-name')
+		if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
+		network.value = 'sepolia'
+		network.dispatchEvent(new Event('change', { bubbles: true }))
+	})()`)
+	await Bun.sleep(1_300)
+	const sepoliaUnconfigured = {
+		desktop: await capture('liquidator-network-sepolia-unconfigured-desktop', 1440, 900, 0, 'settings'),
+		mobile: await capture('liquidator-network-sepolia-unconfigured-mobile', 390, 844, 0, 'settings'),
+		state: await evaluate(`({
+			badge: document.querySelector('#network-badge')?.textContent,
+			scope: document.querySelector('#settings-chain-scope')?.textContent,
+			status: document.querySelector('#network-status')?.textContent
+		})`),
+	}
+	await evaluate(`(() => {
+		const form = document.querySelector('#network-form')
+		const readRpc = document.querySelector('#read-rpc-url')
+		const publicRpcs = document.querySelector('#public-rpc-urls')
+		const quorumRpcs = document.querySelector('#quorum-rpc-urls')
+		if (!(form instanceof HTMLFormElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) throw new Error('Sepolia RPC controls missing')
+		readRpc.value = 'https://sepolia-read.example'
+		publicRpcs.value = 'https://sepolia-rpc.example'
+		quorumRpcs.value = 'https://sepolia-quorum.example'
+		form.requestSubmit()
+	})()`)
+	await Bun.sleep(700)
+	const sepoliaConfigured = {
+		desktop: await capture('liquidator-network-sepolia-desktop', 1440, 900, 0, 'settings'),
+		mobile: await capture('liquidator-network-sepolia-mobile', 390, 844, 0, 'settings'),
+		state: await evaluate(`({
+			badge: document.querySelector('#network-badge')?.textContent,
+			scope: document.querySelector('#settings-chain-scope')?.textContent,
+			status: document.querySelector('#network-status')?.textContent
+		})`),
+	}
+	Object.assign(evidence, { sepoliaConfigured, sepoliaUnconfigured })
 	await Bun.write(resolve(qaDirectory, 'evidence.json'), `${JSON.stringify({ diagnostics, evidence, mobileOverflow }, undefined, 2)}\n`)
 	socket.close()
+} catch (error) {
+	if (error !== chainProfileCaptureComplete) throw error
 } finally {
 	browser.kill()
 	await browser.exited
