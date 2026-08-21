@@ -1109,6 +1109,11 @@ networkName.addEventListener('change', async () => {
 	profileRequestEpoch += 1
 	pendingNetworkProfile = requestedNetwork
 	pendingProfileStateConfirmed = false
+	marketSourceProbeRows = undefined
+	marketSourceCaption.textContent = 'Configured source admission'
+	showActiveAdmissionButton.classList.add('hidden')
+	actionStatus(marketSourceTestStatus, '')
+	renderMarketSources([])
 	networkFields.disabled = true
 	setMutationControlsEnabled(stateConnected)
 	actionStatus(networkStatus, `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)

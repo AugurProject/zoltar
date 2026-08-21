@@ -552,6 +552,12 @@ describe('liquidator dashboard refresh behavior', () => {
 		const strategyFields = page.window.document.getElementById('strategy-fields')
 		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement)) throw new Error('Expected chain-profile controls')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
+		const testSources = page.window.document.getElementById('test-market-sources')
+		if (!(testSources instanceof page.window.HTMLButtonElement)) throw new Error('Expected source test control')
+		testSources.click()
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.window.document.getElementById('market-source-rows')?.textContent).toContain('Observed')
 
 		page.suspendNextStateRequest()
 		const staleStateRefresh = page.refresh()
@@ -564,6 +570,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
+		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
+		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
 
 		page.releaseStateRequest()
 		await Bun.sleep(20)
