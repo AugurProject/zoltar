@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
-const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', 'HTMLOutputElement'] as const
+const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', 'HTMLOutputElement', 'SVGSVGElement'] as const
 
 const loadDocument = async (relativePath: string, url: string) => {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
@@ -401,3 +401,76 @@ test('shared scenarios reject invalid number control values', async () => {
 		cleanup()
 	}
 })
+
+test('shared scenarios reject unknown segmented-control values without dispatching them', async () => {
+	const state = encodeURIComponent(JSON.stringify({ depositOutcome: 'bogus', depositAmount: '4' }))
+	const cleanup = await loadDocument('docs/explanation/escalation-game.html', `http://localhost/docs/explanation/escalation-game.html?tool=escalation-game-example&state=${state}`)
+	try {
+		const outcome = document.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')
+		if (outcome === null) throw new Error('Escalation outcome fixture is missing')
+		let invalidChangeCount = 0
+		outcome.addEventListener('change', () => {
+			if (!Array.from(outcome.options).some(option => option.value === outcome.value)) invalidChangeCount += 1
+		})
+		await runGeneratedRuntime('interactiveTools')
+		const status = document.querySelector<HTMLElement>('#escalation-game-example .interactive-tool-status')
+		const selectedOutcome = document.querySelector<HTMLButtonElement>('#escalation-game-example .segmented-control button[aria-pressed="true"]')
+		const depositAmount = document.querySelector<HTMLInputElement>('[data-example-input="depositAmount"]')
+		if (status === null || selectedOutcome === null || depositAmount === null) throw new Error('Escalation shared-state controls are incomplete')
+		expect(invalidChangeCount).toBe(0)
+		expect(outcome.value).toBe('yes')
+		expect(selectedOutcome.textContent).toBe('Yes')
+		expect(depositAmount.value).toBe('1')
+		expect(status.textContent).toBe('The shared scenario contains invalid values; defaults remain active.')
+	} finally {
+		cleanup()
+	}
+})
+
+for (const scenario of [
+	{ input: 'aliceEth', mount: 'fig-auction-clearing-ladder', name: 'auction', path: 'docs/explanation/truth-auctions.html', tool: 'simple-auction-example' },
+	{ input: 'parentSettlementCollateral', mount: 'plot-statoblast-whitepaper-19', name: 'collateral repair', path: 'docs/explanation/statoblast.html', tool: 'collateral-repair-example' },
+	{ input: 'nonDecisionThreshold', mount: 'fig-statoblast-escalation-cost-curve', name: 'escalation', path: 'docs/explanation/escalation-game.html', tool: 'escalation-game-example' },
+] as const) {
+	test(`quantitative chart resize preserves last-valid ${scenario.name} state`, async () => {
+		const cleanup = await loadDocument(scenario.path, `http://localhost/${scenario.path}`)
+		const globalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver')
+		const windowDescriptor = Object.getOwnPropertyDescriptor(window, 'ResizeObserver')
+		const observers: TestResizeObserver[] = []
+		class TestResizeObserver implements ResizeObserver {
+			readonly callback: ResizeObserverCallback
+
+			constructor(callback: ResizeObserverCallback) {
+				this.callback = callback
+				observers.push(this)
+			}
+
+			disconnect(): void {}
+			observe(): void {}
+			unobserve(): void {}
+		}
+		Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: TestResizeObserver })
+		Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: TestResizeObserver })
+		try {
+			await runGeneratedRuntime('chartRuntime')
+			await runGeneratedRuntime('interactiveTools')
+			const tool = document.getElementById(scenario.tool)
+			const input = tool?.querySelector<HTMLInputElement>(`[data-example-input="${scenario.input}"]`)
+			const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${scenario.mount}"]`)
+			if (!(tool instanceof HTMLDetailsElement) || input === null || input === undefined || mount === null) throw new Error(`${scenario.name} resize fixture is incomplete`)
+			input.value = ''
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+			expect(tool.dataset['inputsValid']).toBe('false')
+			mount.dataset['renderedChartWidth'] = '0'
+			for (const observer of observers) observer.callback([], observer)
+			await new Promise(resolve => setTimeout(resolve, 20))
+			expect(mount.dataset['renderedChartWidth']).toBe('0')
+		} finally {
+			if (globalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'ResizeObserver')
+			else Object.defineProperty(globalThis, 'ResizeObserver', globalDescriptor)
+			if (windowDescriptor === undefined) Reflect.deleteProperty(window, 'ResizeObserver')
+			else Object.defineProperty(window, 'ResizeObserver', windowDescriptor)
+			cleanup()
+		}
+	})
+}

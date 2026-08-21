@@ -901,6 +901,12 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 
 const observedEnvelopes = new WeakSet<HTMLElement>()
 
+function quantitativeInputRoot(chartId: string, mount: HTMLElement): HTMLElement | null {
+	if (chartId === 'fig-auction-clearing-ladder') return document.querySelector('#simple-auction-example')
+	if (chartId === 'fig-statoblast-escalation-cost-curve') return document.querySelector('#escalation-game-example')
+	return mount.closest('.interactive-example')
+}
+
 function observeChartEnvelope(mount: HTMLElement, overflowEnvelope: HTMLElement, chartId: string, spec: ChartSpec): void {
 	if (observedEnvelopes.has(overflowEnvelope) || typeof ResizeObserver === 'undefined') return
 	observedEnvelopes.add(overflowEnvelope)
@@ -911,6 +917,7 @@ function observeChartEnvelope(mount: HTMLElement, overflowEnvelope: HTMLElement,
 		requestAnimationFrame(() => {
 			scheduled = false
 			if (quantitativeChartIdSet.has(chartId)) {
+				if (quantitativeInputRoot(chartId, mount)?.dataset['inputsValid'] === 'false') return
 				const expectedWidth = responsiveChartSpec(spec, overflowEnvelope).width
 				const currentWidth = Number(mount.dataset['renderedChartWidth'])
 				if (!Number.isFinite(currentWidth) || Math.abs(expectedWidth - currentWidth) > 1) {
@@ -1073,10 +1080,7 @@ updateEscalationSimulator()
 
 for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19', 'fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
-	let inputRoot: Element | null
-	if (chartId === 'fig-auction-clearing-ladder') inputRoot = document.querySelector('#simple-auction-example')
-	else if (chartId === 'fig-statoblast-escalation-cost-curve') inputRoot = document.querySelector('#escalation-game-example')
-	else inputRoot = mount?.closest('.interactive-example') ?? null
+	const inputRoot = mount === null ? null : quantitativeInputRoot(chartId, mount)
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
 			if (chartId === 'fig-statoblast-escalation-cost-curve') updateEscalationSimulator()

@@ -140,6 +140,10 @@ function applyValues(tool: HTMLDetailsElement, values: Readonly<Record<string, s
 		const key = inputKey(input)
 		const value = key === undefined ? undefined : values[key]
 		if (value === undefined) continue
+		if (input instanceof HTMLSelectElement && !Array.from(input.options).some(option => !option.disabled && option.value === value)) {
+			valid = false
+			continue
+		}
 		input.value = String(value)
 		dispatchInput(input)
 		if (input instanceof HTMLInputElement && input.getAttribute('aria-invalid') === 'true') valid = false
