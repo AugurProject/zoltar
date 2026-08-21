@@ -77,7 +77,13 @@ import {
 	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
-import { discoveryLogAddresses, indexerLogSources, scanDiscoveredLogCoverage } from '../src/indexer-runtime.ts'
+import {
+	contractDeploymentCandidateFrom,
+	discoveryLogAddresses,
+	indexerLogSources,
+	readHistoricalCodeWithPermanentFallback,
+	scanDiscoveredLogCoverage,
+} from '../src/indexer-runtime.ts'
 import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
@@ -876,16 +882,35 @@ describe('network indexer lifecycle', () => {
 		expect(await findContractDeploymentBlock(0n, 100n, async () => '0x01')).toBeUndefined()
 	})
 
-	test('moves deployment bisection forward across pruned historical state', async () => {
+	test('does not treat pruned historical state as absent contract code', async () => {
 		const checkedBlocks: bigint[] = []
-		const deployment = await findContractDeploymentBlock(1n, 100n, async (block) => {
-			checkedBlocks.push(block)
-			if (block <= 50n) throw new RpcRequestError({ body: {}, error: { code: -32603, message: `state at block #${block} is pruned` }, url: '' })
-			return block >= 70n ? '0x01' : undefined
-		})
-		expect(deployment).toEqual({ block: 70n, exact: false })
-		expect(checkedBlocks.filter((block) => block === 1n)).toHaveLength(1)
-		expect(checkedBlocks.slice(2).every((block) => block > 1n)).toBeTrue()
+		await expect(
+			findContractDeploymentBlock(1n, 100n, async (block) => {
+				checkedBlocks.push(block)
+				if (block <= 50n) throw new RpcRequestError({ body: {}, error: { code: -32603, message: `state at block #${block} is pruned` }, url: '' })
+				return block >= 70n ? '0x01' : undefined
+			}),
+		).rejects.toThrow('state at block #1 is pruned')
+		expect(checkedBlocks).toEqual([100n, 1n])
+	})
+
+	test('uses the configured coverage boundary when manifest deployment history is pruned', async () => {
+		const failures: unknown[] = []
+		const deployment = await findManifestContractDeployment(
+			address,
+			1n,
+			100n,
+			false,
+			async (_candidate, block) => {
+				if (block === 1n) throw new RpcError('state at block #1 is pruned', { code: -32603, shortMessage: 'state at block #1 is pruned' })
+				return '0x01'
+			},
+			5_000,
+			Date.now,
+			(error) => failures.push(error),
+		)
+		expect(deployment).toEqual({ block: 1n, exact: false })
+		expect(failures).toHaveLength(1)
 	})
 
 	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
@@ -932,6 +957,88 @@ describe('network indexer lifecycle', () => {
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 		expect(failures).toHaveLength(1)
+	})
+
+	test('reuses a known historical-code limitation without repeating deployment reads', async () => {
+		const contract = { address, label: 'Unresolved', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			50n,
+			100n,
+			0n,
+			async () => {
+				throw new Error('historical code should not be retried')
+			},
+			async () => new Date(0),
+			undefined,
+			new Set([address.toLowerCase()]),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
+	})
+
+	test('skips a periodically refreshed pruned candidate without starving later candidates', async () => {
+		const availableAddress = '0x2000000000000000000000000000000000000002'
+		const unavailable = { address, label: 'Unavailable', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const available = { address: availableAddress, label: 'Available', kind: 'zoltar', provenance: 'manifest' } satisfies ContractMetadata
+		const historicalCodeUnavailable = new Set<string>()
+		const pruned = new RpcError('state at block #1 is pruned', { code: -32603, shortMessage: 'state at block #1 is pruned' })
+		const reads: string[] = []
+		const first = contractDeploymentCandidateFrom([unavailable, available], historicalCodeUnavailable)
+		expect(first).toBe(unavailable)
+		expect(
+			await readHistoricalCodeWithPermanentFallback(
+				async () => {
+					reads.push(first?.address ?? '')
+					throw pruned
+				},
+				() => historicalCodeUnavailable.add(unavailable.address.toLowerCase()),
+			),
+		).toEqual({ status: 'unavailable' })
+		const second = contractDeploymentCandidateFrom([unavailable, available], historicalCodeUnavailable)
+		expect(second).toBe(available)
+		expect(
+			await readHistoricalCodeWithPermanentFallback(
+				async () => {
+					reads.push(second?.address ?? '')
+					return '0x01'
+				},
+				() => {},
+			),
+		).toEqual({
+			status: 'success',
+			value: '0x01',
+		})
+		expect(reads).toEqual([address, availableAddress])
+		expect(contractDeploymentCandidateFrom([unavailable], historicalCodeUnavailable)).toBeUndefined()
+		await expect(
+			readHistoricalCodeWithPermanentFallback(
+				async () => {
+					throw new RpcError('temporary transport failure')
+				},
+				() => historicalCodeUnavailable.add(availableAddress.toLowerCase()),
+			),
+		).rejects.toThrow('temporary transport failure')
+		expect(historicalCodeUnavailable.has(availableAddress.toLowerCase())).toBeFalse()
+	})
+
+	test('keeps a periodically refreshed candidate eligible when its deployment timestamp read fails', async () => {
+		const candidate = { address, label: 'Available', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const historicalCodeUnavailable = new Set<string>()
+		const timestampFailure = new RpcError('archive unavailable', { code: -32601 })
+		const historicalRead = await readHistoricalCodeWithPermanentFallback(
+			async () => ({ block: 42n, exact: true }),
+			() => historicalCodeUnavailable.add(candidate.address.toLowerCase()),
+		)
+
+		expect(historicalRead.status).toBe('success')
+		await expect(
+			(async () => {
+				if (historicalRead.status !== 'success') throw new Error('Expected successful bytecode discovery')
+				await Promise.reject(timestampFailure)
+			})(),
+		).rejects.toBe(timestampFailure)
+		expect(historicalCodeUnavailable.has(candidate.address.toLowerCase())).toBeFalse()
+		expect(contractDeploymentCandidateFrom([candidate], historicalCodeUnavailable)).toBe(candidate)
 	})
 
 	test('propagates rate limits instead of broadening the deployment-aware log scan', async () => {
@@ -1523,7 +1630,7 @@ describe('network indexer lifecycle', () => {
 			storedBlocks.push(block)
 			if (block.number === 12n) controller.abort()
 		})
-		spyOn(database, 'contractDeploymentCandidate').mockResolvedValue(undefined)
+		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([])
 		const info = spyOn(console, 'info').mockImplementation(() => {})
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const timeout = setTimeout(() => controller.abort(), 2_000)

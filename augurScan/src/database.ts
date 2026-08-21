@@ -654,7 +654,7 @@ export class ScannerDatabase {
 		})
 	}
 
-	async contractDeploymentCandidate(chainId: number, observedHead: bigint, lease: IndexerLease): Promise<ContractMetadata | undefined> {
+	async contractDeploymentCandidates(chainId: number, observedHead: bigint, lease: IndexerLease): Promise<readonly ContractMetadata[]> {
 		const staleBefore = observedHead >= 100n ? observedHead - 100n : -1n
 		return await withIndexerLease(lease, async (transaction) => {
 			const rows = await transaction`
@@ -664,10 +664,8 @@ export class ScannerDatabase {
 				WHERE chain_id = ${chainId} AND canonical AND deployment_block IS NULL
 					AND (deployment_checked_block IS NULL OR deployment_checked_block <= ${staleBefore.toString()})
 				ORDER BY deployment_checked_block NULLS FIRST, label, address
-				LIMIT 1
 			`
-			const row = rows[0]
-			return row === undefined ? undefined : contractMetadataFromRow(row)
+			return rows.map((row: Record<string, unknown>) => contractMetadataFromRow(row))
 		})
 	}
 
