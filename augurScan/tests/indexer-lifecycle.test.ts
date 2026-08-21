@@ -156,11 +156,12 @@ const malformedDecimalsResult = (): Error => {
 	}
 }
 
-const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string } => {
+const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string; readonly params?: readonly unknown[] } => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value))
 		throw new Error('Unexpected RPC request')
 	if (value.id !== null && typeof value.id !== 'number' && typeof value.id !== 'string') throw new Error('Unexpected RPC request ID')
-	return { id: value.id, method: value.method }
+	if ('params' in value && value.params !== undefined && !Array.isArray(value.params)) throw new Error('Unexpected RPC request parameters')
+	return { id: value.id, method: value.method, ...('params' in value && Array.isArray(value.params) ? { params: value.params } : {}) }
 }
 
 describe('network indexer lifecycle', () => {
@@ -1298,7 +1299,7 @@ describe('network indexer lifecycle', () => {
 			{ address: oracleAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest' },
 		] satisfies readonly ContractMetadata[]
 		expect(indexerLogSources(contracts).map((contract) => contract.address)).toEqual([repAddress, oracleAddress])
-		const contractMap = new Map(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
+		const contractMap = new Map<string, ContractMetadata>(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
 		expect(discoveryLogAddresses([repAddress, wethAddress, oracleAddress], contractMap)).toEqual([repAddress, oracleAddress])
 		const factoryAddress = '0x6000000000000000000000000000000000000006'
 		contractMap.set(factoryAddress, { address: factoryAddress, label: 'V3 factory', kind: 'uniswapV3Factory', provenance: 'manifest' })
@@ -1319,11 +1320,11 @@ describe('network indexer lifecycle', () => {
 			blockHash: `0x${digit.repeat(64)}`,
 			blockNumber,
 			data: '0x',
-			logIndex: 0,
+			logIndex: 0n,
 			removed: false,
 			topics: [],
 			transactionHash: `0x${digit.repeat(64)}`,
-			transactionIndex: 0,
+			transactionIndex: 0n,
 		})
 		const currentLog = logAt(10n, '1')
 		const laterLog = logAt(12n, '2')
@@ -1414,74 +1415,77 @@ describe('network indexer lifecycle', () => {
 		)
 		const allLogs = [deployLog, sameBlockRepLog, laterRepLog]
 		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
-		const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
-			const request = JSON.parse(String(init?.body)) as { id: number; method: string; params?: readonly unknown[] }
-			const result = (() => {
-				if (request.method === 'eth_chainId') return '0x7a69'
-				if (request.method === 'eth_blockNumber') return '0xc'
-				if (request.method === 'eth_getBlockByNumber') {
-					const blockNumber = BigInt(String(request.params?.[0]))
-					const blockHash = blockHashes.get(blockNumber)
-					if (blockHash === undefined) throw new Error(`Unexpected block ${blockNumber}`)
-					return {
-						hash: blockHash,
-						number: toHex(blockNumber),
-						parentHash: blockNumber === 10n ? hash('9') : blockHashes.get(blockNumber - 1n),
-						timestamp: toHex(1_700_000_000n + blockNumber),
-						transactions: [],
+		const rpcServer = Bun.serve({
+			port: 0,
+			fetch: async (rpcRequest) => {
+				const request = parseRpcRequestBody(await rpcRequest.json())
+				const result = (() => {
+					if (request.method === 'eth_chainId') return '0x7a69'
+					if (request.method === 'eth_blockNumber') return '0xc'
+					if (request.method === 'eth_getBlockByNumber') {
+						const blockNumber = BigInt(String(request.params?.[0]))
+						const blockHash = blockHashes.get(blockNumber)
+						if (blockHash === undefined) throw new Error(`Unexpected block ${blockNumber}`)
+						return {
+							hash: blockHash,
+							number: toHex(blockNumber),
+							parentHash: blockNumber === 10n ? hash('9') : blockHashes.get(blockNumber - 1n),
+							timestamp: toHex(1_700_000_000n + blockNumber),
+							transactions: [],
+						}
 					}
-				}
-				if (request.method === 'eth_getLogs') {
-					const filter = request.params?.[0]
-					if (typeof filter !== 'object' || filter === null || !('address' in filter) || !('fromBlock' in filter) || !('toBlock' in filter))
-						throw new Error('Unexpected log filter')
-					const rawAddresses = filter.address
-					const addresses = (Array.isArray(rawAddresses) ? rawAddresses : [rawAddresses]).map(String)
-					const fromBlock = BigInt(String(filter.fromBlock))
-					const toBlock = BigInt(String(filter.toBlock))
-					rpcLogQueries.push({ addresses, fromBlock, toBlock })
-					return allLogs.filter(
-						(log) =>
-							addresses.some((candidate) => candidate.toLowerCase() === log.address.toLowerCase()) &&
-							BigInt(log.blockNumber) >= fromBlock &&
-							BigInt(log.blockNumber) <= toBlock,
-					)
-				}
-				const transactionHash = String(request.params?.[0])
-				const sourceLog = allLogs.find((log) => log.transactionHash === transactionHash)
-				if (sourceLog === undefined) throw new Error(`Unexpected ${request.method} for ${transactionHash}`)
-				if (request.method === 'eth_getTransactionByHash')
-					return {
-						blockHash: sourceLog.blockHash,
-						blockNumber: sourceLog.blockNumber,
-						from: sender,
-						gas: '0x5208',
-						hash: sourceLog.transactionHash,
-						input: '0x',
-						nonce: '0x0',
-						to: sourceLog.address,
-						transactionIndex: sourceLog.transactionIndex,
-						type: '0x2',
-						value: '0x0',
+					if (request.method === 'eth_getLogs') {
+						const filter = request.params?.[0]
+						if (typeof filter !== 'object' || filter === null || !('address' in filter) || !('fromBlock' in filter) || !('toBlock' in filter))
+							throw new Error('Unexpected log filter')
+						const rawAddresses = filter.address
+						const addresses = (Array.isArray(rawAddresses) ? rawAddresses : [rawAddresses]).map(String)
+						const fromBlock = BigInt(String(filter.fromBlock))
+						const toBlock = BigInt(String(filter.toBlock))
+						rpcLogQueries.push({ addresses, fromBlock, toBlock })
+						return allLogs.filter(
+							(log) =>
+								addresses.some((candidate) => candidate.toLowerCase() === log.address.toLowerCase()) &&
+								BigInt(log.blockNumber) >= fromBlock &&
+								BigInt(log.blockNumber) <= toBlock,
+						)
 					}
-				if (request.method === 'eth_getTransactionReceipt')
-					return {
-						blockHash: sourceLog.blockHash,
-						blockNumber: sourceLog.blockNumber,
-						contractAddress: null,
-						cumulativeGasUsed: '0x5208',
-						from: sender,
-						gasUsed: '0x5208',
-						logs: [sourceLog],
-						status: '0x1',
-						to: sourceLog.address,
-						transactionHash: sourceLog.transactionHash,
-						transactionIndex: sourceLog.transactionIndex,
-						type: '0x2',
-					}
-				throw new Error(`Unexpected RPC method ${request.method}`)
-			})()
-			return Response.json({ id: request.id, jsonrpc: '2.0', result })
+					const transactionHash = String(request.params?.[0])
+					const sourceLog = allLogs.find((log) => log.transactionHash === transactionHash)
+					if (sourceLog === undefined) throw new Error(`Unexpected ${request.method} for ${transactionHash}`)
+					if (request.method === 'eth_getTransactionByHash')
+						return {
+							blockHash: sourceLog.blockHash,
+							blockNumber: sourceLog.blockNumber,
+							from: sender,
+							gas: '0x5208',
+							hash: sourceLog.transactionHash,
+							input: '0x',
+							nonce: '0x0',
+							to: sourceLog.address,
+							transactionIndex: sourceLog.transactionIndex,
+							type: '0x2',
+							value: '0x0',
+						}
+					if (request.method === 'eth_getTransactionReceipt')
+						return {
+							blockHash: sourceLog.blockHash,
+							blockNumber: sourceLog.blockNumber,
+							contractAddress: null,
+							cumulativeGasUsed: '0x5208',
+							from: sender,
+							gasUsed: '0x5208',
+							logs: [sourceLog],
+							status: '0x1',
+							to: sourceLog.address,
+							transactionHash: sourceLog.transactionHash,
+							transactionIndex: sourceLog.transactionIndex,
+							type: '0x2',
+						}
+					throw new Error(`Unexpected RPC method ${request.method}`)
+				})()
+				return Response.json({ id: request.id, jsonrpc: '2.0', result })
+			},
 		})
 		const controller = new AbortController()
 		const database = new ScannerDatabase('postgres://unused')
@@ -1535,7 +1539,7 @@ describe('network indexer lifecycle', () => {
 				id: 'rep-lifecycle',
 				name: 'REP lifecycle',
 				nativeSymbol: 'ETH',
-				rpcUrls: ['https://rpc.example'],
+				rpcUrls: [`http://127.0.0.1:${rpcServer.port}`],
 				startBlock: 10n,
 			}
 			await Promise.all(startIndexers([network], database, controller.signal))
@@ -1550,7 +1554,7 @@ describe('network indexer lifecycle', () => {
 		} finally {
 			clearTimeout(timeout)
 			controller.abort()
-			fetchSpy.mockRestore()
+			await rpcServer.stop(true)
 			info.mockRestore()
 			error.mockRestore()
 		}
