@@ -59,6 +59,7 @@ import {
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
+	showIndexerSyncDetails,
 	transactionRetryMode,
 } from './live-update.ts'
 
@@ -2342,13 +2343,16 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 		ageNode.dataset.time = network.indexed_timestamp ?? ''
 		ageNode.title = exactTimestamp(network.indexed_timestamp)
 		const lag = indexerLagLabel(network)
-		meta.append(indexedTime, ageNode, element('span', '', lag))
+		const displaySyncDetails = showIndexerSyncDetails(network, currentTime)
+		meta.append(indexedTime, ageNode)
+		if (displaySyncDetails) meta.append(element('span', '', lag))
 		const progressLabel = headFreshness.stale
 			? `${progress.percentage ?? '100.00'}% indexed · RPC head ${age(network.indexed_timestamp).replace(/ ago$/, '')} old (limit 1m)`
 			: progress.percentage === undefined
 				? progress.eta
 				: `${progress.percentage}% complete · ${progress.eta}`
-		card.append(title, block, meta, element('p', 'network-progress', progressLabel))
+		card.append(title, block, meta)
+		if (displaySyncDetails) card.append(element('p', 'network-progress', progressLabel))
 		if (Number(network.consecutive_failures) > 0) {
 			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
 			card.append(element('p', 'network-retry', `${number(network.consecutive_failures)} consecutive failures · ${retry}`))

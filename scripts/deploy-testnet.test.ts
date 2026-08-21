@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../ui/ts/protocol/deploymentHelpers.ts'
-import { SEPOLIA_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../ui/ts/lib/chainBackend.ts'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/ts/protocol/deployment.ts'
+import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
+import { SEPOLIA_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
+import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/zoltar/ts/protocol/deployment.ts'
 import {
 	assertBootstrapDescendantCode,
 	assertConfirmedProxyCode,

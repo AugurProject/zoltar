@@ -50,8 +50,7 @@ jobs:
         shell: bash
         run: |
           IMAGE_ROOT="${REGISTRY}/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-          echo "ZOLTAR_IMAGE=${IMAGE_ROOT}:${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          echo "TRADING_IMAGE=${IMAGE_ROOT}-trading:${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "PUBLISHER_IMAGE=${IMAGE_ROOT}:${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -63,7 +62,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Zoltar IPFS publisher
+      - name: Build IPFS publisher
         uses: docker/build-push-action@v6
         with:
           build-args: BUN_VERSION=${{ env.BUN_VERSION }}
@@ -72,34 +71,18 @@ jobs:
           context: .
           file: ui/Dockerfile
           load: true
-          tags: ${{ env.ZOLTAR_IMAGE }}
-
-      - name: Build trading IPFS publisher
-        uses: docker/build-push-action@v6
-        with:
-          build-args: BUN_VERSION=${{ env.BUN_VERSION }}
-          cache-from: type=gha,scope=trading-version-ipfs
-          cache-to: type=gha,mode=max,scope=trading-version-ipfs
-          context: .
-          file: trading/Dockerfile
-          load: true
           target: publisher
-          tags: ${{ env.TRADING_IMAGE }}
+          tags: ${{ env.PUBLISHER_IMAGE }}
 
-      - name: Read content identifiers
+      - name: Read content identifier
         shell: bash
         run: |
-          ZOLTAR_CID=$(docker run --rm --entrypoint /bin/sh "${ZOLTAR_IMAGE}" -c 'cat /ipfs_hash.txt')
-          TRADING_CID=$(docker run --rm --entrypoint /bin/sh "${TRADING_IMAGE}" -c 'cat /ipfs_hash.txt')
-          [[ "${ZOLTAR_CID}" =~ ^bafy[a-z2-7]+$ ]]
-          [[ "${TRADING_CID}" =~ ^bafy[a-z2-7]+$ ]]
-          echo "ZOLTAR_CID=${ZOLTAR_CID}" >> "$GITHUB_ENV"
-          echo "TRADING_CID=${TRADING_CID}" >> "$GITHUB_ENV"
+          IPFS_CID=$(docker run --rm --entrypoint /bin/sh "${PUBLISHER_IMAGE}" -c 'cat /ipfs_hash.txt')
+          [[ "${IPFS_CID}" =~ ^bafy[a-z2-7]+$ ]]
+          echo "IPFS_CID=${IPFS_CID}" >> "$GITHUB_ENV"
 
-      - name: Push versioned publisher images
-        run: |
-          docker push "${ZOLTAR_IMAGE}"
-          docker push "${TRADING_IMAGE}"
+      - name: Push versioned publisher image
+        run: docker push "${PUBLISHER_IMAGE}"
 
       - name: Create or update GitHub release
         env:
@@ -113,23 +96,16 @@ jobs:
           cat > release-notes.md <<EOF
           ## IPFS applications
 
-          The versioned publisher images contain the exact static files represented by these content identifiers.
+          The versioned publisher image contains the exact static files represented by this content identifier:
 
-          ### Zoltar
+          \`${IPFS_CID}\`
 
-          \`${ZOLTAR_CID}\`
-
-          - [ipfs://${ZOLTAR_CID}](ipfs://${ZOLTAR_CID}) (recommended; requires an IPFS-capable browser)
-          - [https://${ZOLTAR_CID}.ipfs.dweb.link](https://${ZOLTAR_CID}.ipfs.dweb.link)
-          - [https://${ZOLTAR_CID}.ipfs.w3s.link](https://${ZOLTAR_CID}.ipfs.w3s.link)
-
-          ### Trading
-
-          \`${TRADING_CID}\`
-
-          - [ipfs://${TRADING_CID}](ipfs://${TRADING_CID}) (recommended; requires an IPFS-capable browser)
-          - [https://${TRADING_CID}.ipfs.dweb.link](https://${TRADING_CID}.ipfs.dweb.link)
-          - [https://${TRADING_CID}.ipfs.w3s.link](https://${TRADING_CID}.ipfs.w3s.link)
+          - [Zoltar — ipfs://${IPFS_CID}/zoltar/](ipfs://${IPFS_CID}/zoltar/)
+          - [Augur Statoblast — ipfs://${IPFS_CID}/statoblast/](ipfs://${IPFS_CID}/statoblast/)
+          - [Trading — ipfs://${IPFS_CID}/trading/](ipfs://${IPFS_CID}/trading/)
+          - [Zoltar gateway](https://${IPFS_CID}.ipfs.w3s.link/zoltar/)
+          - [Augur Statoblast gateway](https://${IPFS_CID}.ipfs.w3s.link/statoblast/)
+          - [Trading gateway](https://${IPFS_CID}.ipfs.w3s.link/trading/)
 
           ${GENERATED_NOTES}
           EOF

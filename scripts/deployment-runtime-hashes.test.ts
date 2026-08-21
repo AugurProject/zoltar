@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { hexToBytes, type Hex } from '@zoltar/shared/ethereum'
-import { getDeploymentSteps } from '../ui/ts/protocol/deployment.ts'
-import { MAINNET_NETWORK_PROFILE } from '../ui/ts/lib/networkProfile.ts'
+import { getDeploymentSteps } from '../ui/statoblast/ts/protocol/deployment.ts'
+import { MAINNET_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { assertBootstrapDescendantCode, createPreparedDeploymentClient, deployTestnet, runDeploymentPlan } from './deploy-testnet.mts'
 

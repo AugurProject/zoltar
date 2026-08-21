@@ -43,7 +43,7 @@ await cleanupStaleAnvilState('before')
 
 if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
 	// Build shared production assets before parallel tests so productionBuild.test.ts
-	// does not clear and regenerate ui/vendor while sharedAssets.test.ts traverses it.
+	// does not clear and regenerate ui/<app>/vendor while sharedAssets.test.ts traverses it.
 	const productionBuild = Bun.spawn({
 		cmd: [process.execPath, 'run', 'ui:build:prod'],
 		stderr: 'inherit',

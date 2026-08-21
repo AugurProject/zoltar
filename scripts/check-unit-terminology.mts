@@ -53,8 +53,8 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['docs/explanation/truth-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],
 	['solidity/contracts/statoblast/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|forkCarryBackingExportedBeforeResume|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
 	['bots/shared/src/monitoring/constant-product-markets.ts', /\bethReceived\b/],
-	['ui/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
-	['ui/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
+	['ui/zoltar/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
+	['ui/zoltar/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
 	['scripts/check-docs-reference-values.mts', /poolHeldVaultRepBackingValueAttoRep/],
 ])
 
@@ -108,14 +108,14 @@ for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().spl
 	if (path !== terminologyCheckPath && ambiguousParentEscalationTerminology.test(source)) failures.push(`${path}: uses an ambiguous parent escalation-lock alias`)
 	if (path !== terminologyCheckPath && ambiguousLiquidationBackingTerminology.test(source)) failures.push(`${path}: describes target-assigned REP backing as rescue collateral or seizure`)
 	if (path !== terminologyCheckPath && ambiguousPoolHeldRepTerminology.test(source)) failures.push(`${path}: uses pool REP instead of pool-held REP`)
-	if ((path.startsWith('docs/') || path.startsWith('ui/ts/copy/')) && ambiguousSettlementCollateralTerminology.test(source)) failures.push(`${path}: uses generic open-interest or parent collateral instead of settlement collateral`)
-	if (path.startsWith('ui/ts/') && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
-	if (path.startsWith('ui/ts/') && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
+	if ((path.startsWith('docs/') || /^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\/copy\//.test(path)) && ambiguousSettlementCollateralTerminology.test(source)) failures.push(`${path}: uses generic open-interest or parent collateral instead of settlement collateral`)
+	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(path) && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
+	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(path) && uiDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction REP backing units as direct child-pool REP`)
 	if (path === 'docs/explanation/statoblast.html' && docsDirectRepTruthAuctionClaimAlias.test(source)) failures.push(`${path}: describes truth-auction settlement as direct locked REP and undefined security commitments`)
 	if (path === 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol' && invalidSecurityPoolInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
 	if (path !== terminologyCheckPath && capacityOwnershipIdentifierWithAttoEthUnits.test(source)) failures.push(`${path}: uses attoETH units in a capacity-ownership identifier; use attoREP for ownership or an explicit debt/capacity-value name`)
 	if (path.startsWith('bots/liquidator/') && legacyLiquidatorCoverageModel.test(source)) failures.push(`${path}: uses the removed fixed-coverage liquidator model`)
-	if (path.startsWith('ui/ts/') && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)
+	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(path) && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)
 	if (pathSpecificForbidden.get(path)?.test(source)) failures.push(`${path}: contains an atomic or command identifier without canonical naming`)
 }
 

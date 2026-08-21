@@ -338,6 +338,13 @@ export const indexerLagLabel = (network: NetworkFreshnessRecord): string => {
 	return `${lag.toLocaleString('en-US')} ${lag === 1n ? 'block' : 'blocks'} behind`
 }
 
+export const showIndexerSyncDetails = (network: NetworkFreshnessRecord, sampledAt = Date.now()): boolean => {
+	if (network.phase !== 'live' || indexerWaitingForStart(network) || indexerHeadFreshness(network, sampledAt).stale) return true
+	const observedBlock = decimalBlock(network.observed_block)
+	const indexedBlock = decimalBlock(network.indexed_block)
+	return observedBlock === undefined || indexedBlock === undefined || indexedBlock < observedBlock
+}
+
 export const compactIndexerDuration = (seconds: number): string => {
 	const rounded = Math.max(1, Math.ceil(seconds))
 	if (rounded < 60) return `${rounded}s`

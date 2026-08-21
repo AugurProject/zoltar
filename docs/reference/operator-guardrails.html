@@ -561,7 +561,7 @@
 						<tr>
 							<td>Atomic initial report</td>
 							<td>The sponsor funds the ETH bounty and WETH/REP position; the coordinator submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="../explanation/open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
-							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Immediate execution</td>
@@ -581,7 +581,7 @@
 						<tr>
 							<td>Delegated receiver approvals</td>
 							<td><code>LiquidationApprovalRegistry</code> supports direct receiver approvals and EIP-712 permits from EOAs or ERC-1271 wallets. An approval binds pool, receiver, exact operator, exact or wildcard target, cumulative and per-operation ETH debt limits, minimum post-health factor, validity window, and nonce. Revocation blocks new reservations without disturbing pending ones; nonce invalidation blocks stale approvals.</td>
-							<td><a href="../../solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td><a href="../../solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Approval reservation lifecycle</td>
@@ -750,6 +750,7 @@
 						</tr>
 					</tbody>
 				</table>
+				<h3 id="production-contract-inventory">Production contract inventory</h3>
 				<table>
 					<thead>
 						<tr>
@@ -871,6 +872,21 @@
 								>, <a href="../../solidity/contracts/statoblast/WETH9.sol"><code>WETH9.sol</code></a>
 							</td>
 							<td>Shared constants and math, outcome representations, Multicall3 <code>aggregate</code>, <code>tryAggregate</code>, <code>tryBlockAndAggregate</code>, <code>blockAndAggregate</code>, <code>aggregate3</code>, <code>aggregate3Value</code>, and block-context reads, plus standard WETH9 <code>deposit</code>, <code>withdraw</code>, approval, and transfer support.</td>
+						</tr>
+						<tr>
+							<td>Trading protocol</td>
+							<td>
+								<a href="../../solidity/contracts/trading/PredeploymentShareSink.sol"><code>PredeploymentShareSink.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactory.sol"><code>TwoWayConstantProductFactory.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductMath.sol"><code>TwoWayConstantProductMath.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPair.sol"><code>TwoWayConstantProductPair.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductRouter.sol"><code>TwoWayConstantProductRouter.sol</code></a
+								>, <a href="../../solidity/contracts/trading/interfaces/ITradingShareToken.sol"><code>ITradingShareToken.sol</code></a
+								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductFactory.sol"><code>ITwoWayConstantProductFactory.sol</code></a
+								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a
+								>.
+							</td>
+							<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
 						</tr>
 						<tr>
 							<td>Imported oracle integration</td>

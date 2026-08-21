@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import * as path from 'node:path'
+import { shareUiPreactRuntime } from './share-ui-preact-runtime.mjs'
 
 const installDirectory = process.argv[2] === undefined ? process.cwd() : path.resolve(process.cwd(), process.argv[2])
 const packageJsonPath = path.join(installDirectory, 'package.json')
@@ -110,5 +111,6 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 }
 
 const exitStatus = process.platform === 'win32' ? runWindowsInstallWithoutSharedCacheCopy() : runInstall(['install', '--frozen-lockfile'])
+if (exitStatus === 0) shareUiPreactRuntime(installDirectory)
 
 process.exit(exitStatus)

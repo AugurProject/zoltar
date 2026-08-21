@@ -43,7 +43,7 @@ Card-like surfaces must never be nested inside other card-like surfaces. A scree
 
 ## Components and reuse
 
-Inspect shared `ui/ts/components`, the relevant `ui/ts/features/*/components`, and the touched route before introducing a primitive or pattern.
+Inspect shared `ui/coreShared/ts/components`, the relevant `ui/<app>/ts/features/*/components`, and the touched route before introducing a primitive or pattern.
 
 - Reuse a component when its semantic role, behavior, and accessibility match the need.
 - Adapt composition around the closest shared pattern when that preserves its meaning.
@@ -61,7 +61,7 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 - Keep related data near the actions it unlocks and action placement stable across state changes.
 - Avoid oversized empty panels and cramped control clusters.
 - Use serif display type only for route or hero headings, mono for labels/addresses/hashes/numbers, and sans-serif for body copy and controls.
-- Use semantic variables from `ui/css/tokens.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
+- Use semantic variables from `ui/coreShared/css/tokens.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
 - Reserve stronger accent treatment for active, focused, or meaningful status states.
 - Keep gradients, glow, shine, and overlays subtle and mostly page-level.
 
@@ -117,6 +117,6 @@ For relevant UI changes, verify:
 - transaction prerequisite and duplicate-submission guards
 - desktop and narrow/mobile layouts
 - long values and dense data
-- no edits to generated `ui/js/**`
+- no edits to generated `ui/zoltar/js/**`, `ui/statoblast/js/**`, or `ui/trading/js/**`
 
 Use the browser-local simulation harness described in root `AGENTS.md`. Capture the current screenshots and record the route, scenario, exact viewport dimensions, states, browser, evidence paths or identifiers, intentional differences, and console or runtime errors for the visual-review handoff. Include trustworthy baseline or before evidence when available. Record the tested coverage in the final response. If browser QA or visual review is skipped, give a concrete reason the changed files cannot affect rendered or interactive behavior.

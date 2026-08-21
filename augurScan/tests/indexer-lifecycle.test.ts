@@ -4,11 +4,26 @@ import {
 	assertIndexerLeaseObservation,
 	assertIndexerLeaseReleaseObservation,
 	DatabaseConsistencyError,
+	type IndexedBlock,
+	type IndexerLease,
 	manifestContractSetChanged,
 	runFencedIndexerTransaction,
+	ScannerDatabase,
 	type StoredTransaction,
 } from '../src/database.ts'
-import { type Address, createPublicClient, decodeFunctionResult, http, parseAbi, RpcError, toHex } from '../src/ethereum.ts'
+import {
+	type Address,
+	createPublicClient,
+	decodeFunctionResult,
+	encodeAbiParameters,
+	encodeEventTopics,
+	getAddress,
+	http,
+	type Log,
+	parseAbi,
+	RpcError,
+	toHex,
+} from '../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -55,12 +70,14 @@ import {
 	runOwnedNetworkLifecycle,
 	safeIndexerFailure,
 	safeIndexerFailureReason,
+	startIndexers,
 	tokenMetadataNeedsRead,
 	uniswapV4PoolIds,
 	waitForIndexerDelay,
 	withRpcRequestQueue,
 	withVerifiedProvider,
 } from '../src/indexer.ts'
+import { discoveryLogAddresses, indexerLogSources, scanDiscoveredLogCoverage } from '../src/indexer-runtime.ts'
 import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
@@ -139,11 +156,12 @@ const malformedDecimalsResult = (): Error => {
 	}
 }
 
-const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string } => {
+const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string; readonly params?: readonly unknown[] } => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value))
 		throw new Error('Unexpected RPC request')
 	if (value.id !== null && typeof value.id !== 'number' && typeof value.id !== 'string') throw new Error('Unexpected RPC request ID')
-	return { id: value.id, method: value.method }
+	if ('params' in value && value.params !== undefined && !Array.isArray(value.params)) throw new Error('Unexpected RPC request parameters')
+	return { id: value.id, method: value.method, ...('params' in value && Array.isArray(value.params) ? { params: value.params } : {}) }
 }
 
 describe('network indexer lifecycle', () => {
@@ -1248,7 +1266,7 @@ describe('network indexer lifecycle', () => {
 		expect(now).toBe(8)
 	})
 
-	test('tracks implicit token filter coverage from the replay start without querying token logs', async () => {
+	test('tracks filtered token coverage from the replay start', async () => {
 		const tokenAddress = '0x3000000000000000000000000000000000000003'
 		const helperAddress = '0x4000000000000000000000000000000000000004'
 		const contracts = new Map<string, ContractMetadata>([
@@ -1269,6 +1287,277 @@ describe('network indexer lifecycle', () => {
 				mock(async () => undefined),
 			),
 		).toBe(50n)
+	})
+
+	test('scans REP history without adding high-volume quote-token histories', () => {
+		const repAddress = '0x3000000000000000000000000000000000000003'
+		const wethAddress = '0x4000000000000000000000000000000000000004'
+		const oracleAddress = '0x5000000000000000000000000000000000000005'
+		const contracts = [
+			{ address: repAddress, label: 'REP', kind: 'reputationToken', provenance: 'manifest' },
+			{ address: wethAddress, label: 'WETH', kind: 'weth', provenance: 'manifest' },
+			{ address: oracleAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest' },
+		] satisfies readonly ContractMetadata[]
+		expect(indexerLogSources(contracts).map((contract) => contract.address)).toEqual([repAddress, oracleAddress])
+		const contractMap = new Map<string, ContractMetadata>(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
+		expect(discoveryLogAddresses([repAddress, wethAddress, oracleAddress], contractMap)).toEqual([repAddress, oracleAddress])
+		const factoryAddress = '0x6000000000000000000000000000000000000006'
+		contractMap.set(factoryAddress, { address: factoryAddress, label: 'V3 factory', kind: 'uniswapV3Factory', provenance: 'manifest' })
+		expect(discoveryLogAddresses([repAddress], contractMap)).toEqual([repAddress, factoryAddress])
+	})
+
+	test('covers REP events from the discovery block through the active scan segment', async () => {
+		const repAddress = '0x3000000000000000000000000000000000000003'
+		const wethAddress = '0x4000000000000000000000000000000000000004'
+		const factoryAddress = '0x6000000000000000000000000000000000000006'
+		const contracts = new Map<string, ContractMetadata>([
+			[repAddress, { address: repAddress, label: 'Child REP', kind: 'reputationToken', provenance: 'REP.DeployChild' }],
+			[wethAddress, { address: wethAddress, label: 'WETH', kind: 'weth', provenance: 'manifest' }],
+			[factoryAddress, { address: factoryAddress, label: 'V3 factory', kind: 'uniswapV3Factory', provenance: 'manifest' }],
+		])
+		const logAt = (blockNumber: bigint, digit: string): Log => ({
+			address: repAddress,
+			blockHash: `0x${digit.repeat(64)}`,
+			blockNumber,
+			data: '0x',
+			logIndex: 0n,
+			removed: false,
+			topics: [],
+			transactionHash: `0x${digit.repeat(64)}`,
+			transactionIndex: 0n,
+		})
+		const currentLog = logAt(10n, '1')
+		const laterLog = logAt(12n, '2')
+		const currentQueries: Array<readonly Address[]> = []
+		const remainingQueries: Array<{ readonly addresses: readonly Address[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
+		const coverage = await scanDiscoveredLogCoverage(
+			10n,
+			12n,
+			[repAddress, wethAddress],
+			contracts,
+			async (addresses) => {
+				currentQueries.push(addresses)
+				return [currentLog]
+			},
+			async (fromBlock, toBlock, addresses) => {
+				remainingQueries.push({ addresses, fromBlock, toBlock })
+				return [laterLog]
+			},
+		)
+
+		expect(currentQueries).toEqual([[repAddress, factoryAddress]])
+		expect(remainingQueries).toEqual([{ addresses: [repAddress, factoryAddress], fromBlock: 11n, toBlock: 12n }])
+		expect(coverage).toEqual({ currentBlockLogs: [currentLog], remainingLogs: [laterLog] })
+	})
+
+	test('stores same-block and later REP activity after discovering the token mid-segment', async () => {
+		const zoltarAddress = getAddress('0x7000000000000000000000000000000000000007')
+		const repAddress = getAddress('0x8000000000000000000000000000000000000008')
+		const wethAddress = getAddress('0x9000000000000000000000000000000000000009')
+		const holder = getAddress('0xa00000000000000000000000000000000000000a')
+		const sender = getAddress('0xb00000000000000000000000000000000000000b')
+		const hash = (digit: string) => `0x${digit.repeat(64)}` as const
+		const blockHashes = new Map([
+			[10n, hash('a')],
+			[11n, hash('b')],
+			[12n, hash('c')],
+		])
+		const deployAbi = parseAbi([
+			'event DeployChild(address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,address childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep)',
+		])
+		const transferAbi = parseAbi(['event Transfer(address indexed from,address indexed to,uint256 value)'])
+		const topicsFrom = (topics: readonly (string | readonly string[] | null)[]): readonly string[] =>
+			topics.map((topic) => {
+				if (typeof topic !== 'string') throw new Error('Expected one topic per indexed event argument')
+				return topic
+			})
+		const rawLog = (
+			contractAddress: Address,
+			blockNumber: bigint,
+			transactionDigit: string,
+			transactionIndex: number,
+			topics: readonly string[],
+			data: string,
+		) => ({
+			address: contractAddress,
+			blockHash: blockHashes.get(blockNumber),
+			blockNumber: toHex(blockNumber),
+			data,
+			logIndex: '0x0',
+			removed: false,
+			topics,
+			transactionHash: hash(transactionDigit),
+			transactionIndex: toHex(transactionIndex),
+		})
+		const deployLog = rawLog(
+			zoltarAddress,
+			10n,
+			'1',
+			0,
+			topicsFrom(encodeEventTopics({ abi: deployAbi, eventName: 'DeployChild', args: { universeId: 1n, outcomeIndex: 2n, childUniverseId: 3n } })),
+			encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [sender, repAddress, 1_000n]),
+		)
+		const sameBlockRepLog = rawLog(
+			repAddress,
+			10n,
+			'2',
+			1,
+			topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })),
+			encodeAbiParameters([{ type: 'uint256' }], [100n]),
+		)
+		const laterRepLog = rawLog(
+			repAddress,
+			12n,
+			'3',
+			0,
+			topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })),
+			encodeAbiParameters([{ type: 'uint256' }], [50n]),
+		)
+		const allLogs = [deployLog, sameBlockRepLog, laterRepLog]
+		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
+		const rpcServer = Bun.serve({
+			port: 0,
+			fetch: async (rpcRequest) => {
+				const request = parseRpcRequestBody(await rpcRequest.json())
+				const result = (() => {
+					if (request.method === 'eth_chainId') return '0x7a69'
+					if (request.method === 'eth_blockNumber') return '0xc'
+					if (request.method === 'eth_getBlockByNumber') {
+						const blockNumber = BigInt(String(request.params?.[0]))
+						const blockHash = blockHashes.get(blockNumber)
+						if (blockHash === undefined) throw new Error(`Unexpected block ${blockNumber}`)
+						return {
+							hash: blockHash,
+							number: toHex(blockNumber),
+							parentHash: blockNumber === 10n ? hash('9') : blockHashes.get(blockNumber - 1n),
+							timestamp: toHex(1_700_000_000n + blockNumber),
+							transactions: [],
+						}
+					}
+					if (request.method === 'eth_getLogs') {
+						const filter = request.params?.[0]
+						if (typeof filter !== 'object' || filter === null || !('address' in filter) || !('fromBlock' in filter) || !('toBlock' in filter))
+							throw new Error('Unexpected log filter')
+						const rawAddresses = filter.address
+						const addresses = (Array.isArray(rawAddresses) ? rawAddresses : [rawAddresses]).map(String)
+						const fromBlock = BigInt(String(filter.fromBlock))
+						const toBlock = BigInt(String(filter.toBlock))
+						rpcLogQueries.push({ addresses, fromBlock, toBlock })
+						return allLogs.filter(
+							(log) =>
+								addresses.some((candidate) => candidate.toLowerCase() === log.address.toLowerCase()) &&
+								BigInt(log.blockNumber) >= fromBlock &&
+								BigInt(log.blockNumber) <= toBlock,
+						)
+					}
+					const transactionHash = String(request.params?.[0])
+					const sourceLog = allLogs.find((log) => log.transactionHash === transactionHash)
+					if (sourceLog === undefined) throw new Error(`Unexpected ${request.method} for ${transactionHash}`)
+					if (request.method === 'eth_getTransactionByHash')
+						return {
+							blockHash: sourceLog.blockHash,
+							blockNumber: sourceLog.blockNumber,
+							from: sender,
+							gas: '0x5208',
+							hash: sourceLog.transactionHash,
+							input: '0x',
+							nonce: '0x0',
+							to: sourceLog.address,
+							transactionIndex: sourceLog.transactionIndex,
+							type: '0x2',
+							value: '0x0',
+						}
+					if (request.method === 'eth_getTransactionReceipt')
+						return {
+							blockHash: sourceLog.blockHash,
+							blockNumber: sourceLog.blockNumber,
+							contractAddress: null,
+							cumulativeGasUsed: '0x5208',
+							from: sender,
+							gasUsed: '0x5208',
+							logs: [sourceLog],
+							status: '0x1',
+							to: sourceLog.address,
+							transactionHash: sourceLog.transactionHash,
+							transactionIndex: sourceLog.transactionIndex,
+							type: '0x2',
+						}
+					throw new Error(`Unexpected RPC method ${request.method}`)
+				})()
+				return Response.json({ id: request.id, jsonrpc: '2.0', result })
+			},
+		})
+		const controller = new AbortController()
+		const database = new ScannerDatabase('postgres://unused')
+		const storedBlocks: IndexedBlock[] = []
+		const contracts = new Map<string, ContractMetadata>([
+			[
+				zoltarAddress.toLowerCase(),
+				{ address: zoltarAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'zoltar', label: 'Zoltar', provenance: 'manifest' },
+			],
+			[
+				wethAddress.toLowerCase(),
+				{ address: wethAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'weth', label: 'WETH', provenance: 'manifest' },
+			],
+		])
+		const lease: IndexerLease = {
+			backendPid: 1,
+			connection: database.sql as IndexerLease['connection'],
+			assertHeld: async () => {},
+			release: async () => {},
+		}
+		spyOn(database, 'tryAcquireIndexerLock').mockResolvedValue(lease)
+		spyOn(database, 'checkpoint').mockResolvedValue(undefined)
+		spyOn(database, 'networkStartBlock').mockResolvedValue(10n)
+		spyOn(database, 'storedBlockTip').mockResolvedValue(undefined)
+		spyOn(database, 'contracts').mockResolvedValue(contracts)
+		spyOn(database, 'logScanCursors').mockResolvedValue(new Map())
+		spyOn(database, 'seedNetwork').mockResolvedValue(false)
+		spyOn(database, 'tokenMetadata').mockResolvedValue(
+			new Map([
+				[repAddress.toLowerCase(), { address: repAddress, decimals: 18, name: 'Reputation', readBlock: 10n, symbol: 'REP' }],
+				[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }],
+			]),
+		)
+		spyOn(database, 'storeBlock').mockImplementation(async (_chainId, block) => {
+			storedBlocks.push(block)
+			if (block.number === 12n) controller.abort()
+		})
+		spyOn(database, 'contractDeploymentCandidate').mockResolvedValue(undefined)
+		const info = spyOn(console, 'info').mockImplementation(() => {})
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const timeout = setTimeout(() => controller.abort(), 2_000)
+		try {
+			const network = {
+				chainId: 31_337,
+				confirmationDepth: 100n,
+				contracts: [
+					[zoltarAddress, 'Zoltar', 'zoltar', 10n],
+					[wethAddress, 'WETH', 'weth', 10n],
+				] as const,
+				explorerBaseUrl: 'https://example.invalid',
+				id: 'rep-lifecycle',
+				name: 'REP lifecycle',
+				nativeSymbol: 'ETH',
+				rpcUrls: [`http://127.0.0.1:${rpcServer.port}`],
+				startBlock: 10n,
+			}
+			await Promise.all(startIndexers([network], database, controller.signal))
+			expect(error.mock.calls).toEqual([])
+			expect(storedBlocks.map((block) => block.number)).toEqual([10n, 11n, 12n])
+			const storedRepLogs = storedBlocks.flatMap((block) => block.logs).filter((log) => log.address === repAddress)
+			expect(storedRepLogs.map((log) => log.blockNumber)).toEqual([10n, 12n])
+			expect(storedBlocks.flatMap((block) => block.addressActivity).some((activity) => activity.address === holder)).toBe(true)
+			expect(rpcLogQueries.some((query) => query.fromBlock === 10n && query.toBlock === 10n && query.addresses.includes(repAddress))).toBe(true)
+			expect(rpcLogQueries.some((query) => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
+			expect(rpcLogQueries.every((query) => !query.addresses.includes(wethAddress))).toBe(true)
+		} finally {
+			clearTimeout(timeout)
+			controller.abort()
+			await rpcServer.stop(true)
+			info.mockRestore()
+			error.mockRestore()
+		}
 	})
 
 	test('does not rewind for covered, future, absent, or non-activity manifest contracts', async () => {

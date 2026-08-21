@@ -1,36 +1,53 @@
 {
-	"entry": [
-		"docs/charts/chartRuntime.ts",
-		"solidity/ts/compile.ts",
-		"solidity/ts/gas-costs.ts",
-		"solidity/ts/tests/**/*.ts",
-		"solidity/ts/fuzz/**/*.ts",
-		"solidity/ts/types/bun-test.d.ts",
-		"solidity/ts/types/index.d.ts",
-		"ui/ts/tests/**/*.ts",
-		"ui/ts/tests/**/*.tsx",
-		"ui/ts/index.ts",
-		"ui/build/vendor.mts",
-		"ui/build/tests.mts"
-	],
-	"project": [
-		"docs/charts/**/*.ts",
-		"scripts/uniswap-deployment.mts",
-		"solidity/ts/**/*.ts",
-		"ui/ts/**/*.ts",
-		"ui/ts/**/*.tsx",
-		"ui/build/**/*.mts"
-	],
-	"ignoreDependencies": [
-		"better-typescript-lib"
-	],
-	"ignoreIssues": {
-		"solidity/ts/**/*.ts": ["unlisted"]
+	"workspaces": {
+		".": {
+			"entry": ["docs/charts/chartRuntime.ts", "solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/fuzz/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts"],
+			"project": ["docs/charts/**/*.ts", "scripts/uniswap-deployment.mts", "solidity/ts/**/*.ts"],
+			"ignoreIssues": {
+				"solidity/ts/**/*.ts": ["unlisted"]
+			},
+			"ignore": ["docs/charts/virtualModules.d.ts"]
+		},
+		"ui/coreShared": {
+			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "build/browserSmoke.mts", "build/vendor.mts", "build/tests.mts"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx", "build/**/*.mts"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["./ts/*"]
+			},
+			"ignore": ["build/production.mts", "build/workers.mts", "ts/simulation/tevmWorker.ts", "ts/simulation/tevmEngine.ts"]
+		},
+		"ui/zoltar": {
+			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "ts/index.ts"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar/*": ["./ts/*"]
+			},
+			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts", "ts/simulation/tevmWorker.ts"]
+		},
+		"ui/statoblast": {
+			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "ts/index.ts"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
+				"@zoltar/ui-statoblast/*": ["./ts/*"]
+			},
+			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts", "ts/simulation/tevmWorker.ts"]
+		},
+		"ui/trading": {
+			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "ts/index.ts", "ts/simulation/tevmWorker.ts"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
+				"@zoltar/ui-statoblast/*": ["../statoblast/ts/*"],
+				"@zoltar/ui-trading/*": ["./ts/*"]
+			},
+			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts"],
+			"ignoreDependencies": ["bun-types"]
+		}
 	},
-	"ignore": [
-		"ui/build/production.mts",
-		"ui/build/workers.mts",
-		"ui/ts/index.dev.ts",
-		"ui/ts/liveReload.ts"
-	]
+	"ignoreDependencies": ["better-typescript-lib", "@preact/signals", "tevm", "@noble/curves", "@noble/hashes", "buffer", "micro-eth-signer", "micro-packed", "source-map", "funtypes", "solc-0-8-28"],
+	"ignoreUnresolved": ["./bun-test-setup-ui.ts", "../../scripts/sharedBrowserArtifacts.ts"]
 }

@@ -60,10 +60,18 @@ jobs:
         run: |
           bun install --frozen-lockfile
           (cd solidity && bun install --frozen-lockfile)
-          (cd ui && bun install --frozen-lockfile)
+          (cd ui/coreShared && bun install --frozen-lockfile)
+          (cd ui/zoltar && bun install --frozen-lockfile)
+          (cd ui/statoblast && bun install --frozen-lockfile)
+          (cd ui/trading && bun install --frozen-lockfile)
 
       - name: Prepare contract artifacts
         run: bun run ensure-contract-artifacts
+
+      - name: Build UI deployment dependencies
+        run: |
+          bun run ui:build:apps
+          bun ./scripts/deploy-testnet.mts --help > /dev/null
 
       - name: Deploy deterministic infrastructure
         env:
