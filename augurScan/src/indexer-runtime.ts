@@ -158,7 +158,7 @@ export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
 	return false
 }
 
-export const isPrunedHistoricalStateError = (error: unknown): boolean => {
+const isPrunedHistoricalStateError = (error: unknown): boolean => {
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
@@ -604,6 +604,24 @@ export const deploymentReadBudget = (timeoutMs = 5_000, now = Date.now): (<T>(re
 
 export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean =>
 	lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
+
+export const contractDeploymentCandidateFrom = (
+	candidates: readonly ContractMetadata[],
+	historicalCodeUnavailable: ReadonlySet<string>,
+): ContractMetadata | undefined => candidates.find(({ address }) => !historicalCodeUnavailable.has(address.toLowerCase()))
+
+export const readHistoricalCodeWithPermanentFallback = async <T>(
+	read: () => Promise<T>,
+	onHistoricalCodeUnavailable: (error: unknown) => void,
+): Promise<{ readonly status: 'success'; readonly value: T } | { readonly status: 'unavailable' }> => {
+	try {
+		return { status: 'success', value: await read() }
+	} catch (error) {
+		if (!isPermanentHistoricalCodeError(error)) throw error
+		onHistoricalCodeUnavailable(error)
+		return { status: 'unavailable' }
+	}
+}
 
 type NetworkLifecycle = {
 	readonly verify: () => Promise<void>

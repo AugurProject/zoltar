@@ -150,9 +150,13 @@ export const createRpcLoggingFetch =
 			if (rpcError !== undefined) {
 				const name = jsonRpcErrorName(rpcError.code)
 				const providerMessage = safeRpcProviderMessage(rpcError.message)
-				console.error(
-					`RPC error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`,
-				)
+				const method = typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'
+				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`
+				if (method === 'eth_getCode' && providerMessage !== undefined) {
+					console.warn(
+						`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; continuing with conservative log coverage; full exchange logged to ${logPath}`,
+					)
+				} else console.error(message)
 			}
 			return response
 		} catch (error) {

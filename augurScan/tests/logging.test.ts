@@ -156,6 +156,7 @@ describe('AugurScan runtime logging', () => {
 		const directory = await temporaryDirectory()
 		const filename = path.join(directory, 'rpc.jsonl')
 		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
 		try {
 			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
 				Response.json({ error: { code: -32603, message: 'state at block #1 is pruned' }, id: 1, jsonrpc: '2.0' }),
@@ -164,11 +165,13 @@ describe('AugurScan runtime logging', () => {
 				body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getCode', params: ['0x1234', '0x1'] }),
 				method: 'POST',
 			})
-			expect(consoleError).toHaveBeenCalledWith(
-				`RPC error from #1 http://reth:8545; method eth_getCode; code -32603 (Internal error); message: state at block #1 is pruned; full exchange logged to ${filename}`,
+			expect(consoleWarn).toHaveBeenCalledWith(
+				`Historical state unavailable from #1 http://reth:8545; method eth_getCode; message: state at block #1 is pruned; continuing with conservative log coverage; full exchange logged to ${filename}`,
 			)
+			expect(consoleError).not.toHaveBeenCalled()
 		} finally {
 			consoleError.mockRestore()
+			consoleWarn.mockRestore()
 		}
 	})
 

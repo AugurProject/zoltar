@@ -100,52 +100,68 @@
 
 			<section id="interactive-example">
 				<h2>Interactive Clearing Example</h2>
-				<p>The slider example shows the uniform-clearing path, the underfunded path, and how the same bid ladder reacts when the ETH cap, REP cap, and bid sizes change.</p>
+				<p>The interactive example shows the uniform-clearing path, the underfunded path, and how the same bid ladder reacts when the ETH cap, REP cap, and bid sizes change.</p>
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
 					<p>The simplified calculator visualizes both finalized branches with three fixed price levels and real-number arithmetic. The <a href="#clearing">clearing section</a> specifies the contract's exact tick and cumulative-floor behavior.</p>
-					<div class="example-grid">
-						<label>
-							ETH raise cap
-							<input type="range" min="1" max="30" step="1" value="12" data-example-input="ethRaiseCap" />
-							<span class="example-value" data-example-value="ethRaiseCap">12 ETH</span>
-						</label>
-						<label>
-							REP inventory
-							<input type="range" min="1" max="12" step="1" value="4" data-example-input="repInventory" />
-							<span class="example-value" data-example-value="repInventory">4 REP</span>
-						</label>
-						<label>
-							Alice bid near 5 ETH/REP
-							<input type="range" min="0" max="20" step="1" value="3" data-example-input="aliceEth" />
-							<span class="example-value" data-example-value="aliceEth">3 ETH</span>
-						</label>
-						<label>
-							Bob bid near 4 ETH/REP
-							<input type="range" min="0" max="20" step="1" value="4" data-example-input="bobEth" />
-							<span class="example-value" data-example-value="bobEth">4 ETH</span>
-						</label>
-						<label>
-							Carol bid near 3 ETH/REP
-							<input type="range" min="0" max="20" step="1" value="6" data-example-input="carolEth" />
-							<span class="example-value" data-example-value="carolEth">6 ETH</span>
-						</label>
+					<div class="tool-outcome-strip">
+						<div data-primary-output><span>Mode</span><output data-example-output="clearingMode">uniform clearing near 3 ETH/REP</output></div>
+						<div data-primary-output><span>ETH retained</span><output data-example-output="ethRaised">12 ETH</output></div>
 					</div>
-					<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
-						<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
-						<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing or qualification price, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates from the auction controls directly above it.</p>
-					</figure>
-					<div class="example-output-grid">
-						<div><span>Mode</span><output data-example-output="clearingMode">uniform clearing near 3 ETH/REP</output></div>
-						<div><span>Binding condition</span><output data-example-output="bindingCondition">both caps</output></div>
-						<div><span>ETH retained</span><output data-example-output="ethRaised">12 ETH</output></div>
-						<div><span>Winning ETH kept</span><output data-example-output="thresholdInputEth">not underfunded</output></div>
-						<div><span>Threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
-						<div><span>Approximate Alice REP</span><output data-example-output="aliceReceives">1.00 REP</output></div>
-						<div><span>Approximate Bob REP</span><output data-example-output="bobReceives">1.33 REP</output></div>
-						<div><span>Approximate Carol REP</span><output data-example-output="carolReceives">1.67 REP</output></div>
-						<div><span>Total REP allocated</span><output data-example-output="totalRepAllocated">4 REP</output></div>
-						<div><span>Refunds</span><output data-example-output="refunds">1.00 ETH</output></div>
+					<div class="tool-workspace">
+						<div class="tool-control-stack tool-workspace-controls">
+							<details class="tool-control-group" data-group-tone="system">
+								<summary>Auction settings</summary>
+								<div class="example-grid">
+									<label>
+										ETH raise cap
+										<input type="number" inputmode="decimal" min="1" max="30" step="1" value="12" data-example-input="ethRaiseCap" />
+										<span class="example-value" data-example-value="ethRaiseCap">12 ETH</span>
+									</label>
+									<label>
+										REP inventory
+										<input type="number" inputmode="decimal" min="1" max="12" step="1" value="4" data-example-input="repInventory" />
+										<span class="example-value" data-example-value="repInventory">4 REP</span>
+									</label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="players" data-mobile-open open>
+								<summary>Player bids</summary>
+								<div class="example-grid">
+									<label>
+										Alice bid near 5 ETH/REP
+										<input type="number" inputmode="decimal" min="0" max="20" step="1" value="3" data-example-input="aliceEth" />
+										<span class="example-value" data-example-value="aliceEth">3 ETH</span>
+									</label>
+									<label>
+										Bob bid near 4 ETH/REP
+										<input type="number" inputmode="decimal" min="0" max="20" step="1" value="4" data-example-input="bobEth" />
+										<span class="example-value" data-example-value="bobEth">4 ETH</span>
+									</label>
+									<label>
+										Carol bid near 3 ETH/REP
+										<input type="number" inputmode="decimal" min="0" max="20" step="1" value="6" data-example-input="carolEth" />
+										<span class="example-value" data-example-value="carolEth">6 ETH</span>
+									</label>
+								</div>
+							</details>
+						</div>
+						<div class="tool-workspace-view">
+							<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
+								<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
+								<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing or qualification price, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates as the auction controls change.</p>
+							</figure>
+							<div class="example-output-grid tool-detail-grid auction-allocation-grid">
+								<div><span>Binding condition</span><output data-example-output="bindingCondition">both caps</output></div>
+								<div><span>Winning ETH kept</span><output data-example-output="thresholdInputEth">not underfunded</output></div>
+								<div><span>Threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
+								<div class="auction-allocation"><span>Alice allocation</span><output data-example-output="aliceReceives">1.00 REP</output></div>
+								<div class="auction-allocation"><span>Bob allocation</span><output data-example-output="bobReceives">1.33 REP</output></div>
+								<div class="auction-allocation"><span>Carol allocation</span><output data-example-output="carolReceives">1.67 REP</output></div>
+								<div><span>Total REP allocated</span><output data-example-output="totalRepAllocated">4 REP</output></div>
+								<div><span>Refunds</span><output data-example-output="refunds">1.00 ETH</output></div>
+							</div>
+						</div>
 					</div>
 				</details>
 			</section>
@@ -160,152 +176,7 @@
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script>
-			const formatFixed = (value, digits = 2) => {
-				if (!Number.isFinite(value)) {
-					return "not available";
-				}
-				const rounded = value.toFixed(digits);
-				return rounded.replace(/\.?0+$/, "");
-			};
-			const formatEth = (value) => `${formatFixed(value)} ETH`;
-			const formatRep = (value) => `${formatFixed(value)} REP`;
-			const example = document.querySelector("#simple-auction-example");
-			if (example !== null) {
-				const inputs = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-input]")).map((inputElement) => [inputElement.dataset.exampleInput, inputElement]));
-				const outputs = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-output]")).map((outputElement) => [outputElement.dataset.exampleOutput, outputElement]));
-				const values = Object.fromEntries(Array.from(example.querySelectorAll("[data-example-value]")).map((valueElement) => [valueElement.dataset.exampleValue, valueElement]));
-				const read = (name) => {
-					const input = inputs[name];
-					if (input === undefined) {
-						return 0;
-					}
-					const value = Number(input.value);
-					return Number.isFinite(value) ? value : 0;
-				};
-				const write = (name, value) => {
-					const output = outputs[name];
-					if (output !== undefined) {
-						output.value = value;
-					}
-				};
-				const writeValue = (name, value) => {
-					const element = values[name];
-					if (element !== undefined) {
-						element.textContent = value;
-					}
-				};
-				const update = () => {
-					const ethRaiseCap = read("ethRaiseCap");
-					const repInventory = Math.max(read("repInventory"), 1);
-					const bids = [
-						{ key: "alice", eth: read("aliceEth"), price: 5 },
-						{ key: "bob", eth: read("bobEth"), price: 4 },
-						{ key: "carol", eth: read("carolEth"), price: 3 },
-					];
-					const threshold = ethRaiseCap / repInventory;
-					const submittedBids = bids.filter((bid) => bid.eth > 0);
-					const activeBids = submittedBids.filter((bid) => bid.price >= threshold);
-					writeValue("ethRaiseCap", formatEth(ethRaiseCap));
-					writeValue("repInventory", formatRep(repInventory));
-					writeValue("aliceEth", formatEth(bids[0].eth));
-					writeValue("bobEth", formatEth(bids[1].eth));
-					writeValue("carolEth", formatEth(bids[2].eth));
-					let accumulatedBidEth = 0;
-					let clearingPrice = 0;
-					let ethFilledAtClearing = 0;
-					let funded = false;
-					let lastValidPrice = 0;
-					let lastValidEthAtTick = 0;
-					for (const bid of activeBids) {
-						if (accumulatedBidEth > 0 && accumulatedBidEth / bid.price > repInventory) {
-							funded = true;
-							clearingPrice = lastValidPrice;
-							ethFilledAtClearing = lastValidEthAtTick;
-							break;
-						}
-						const ethToTake = Math.min(bid.eth, Math.max(0, ethRaiseCap - accumulatedBidEth));
-						const newAccumulatedEth = accumulatedBidEth + ethToTake;
-						if (newAccumulatedEth / bid.price >= repInventory) {
-							funded = true;
-							clearingPrice = bid.price;
-							ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * bid.price - accumulatedBidEth));
-							accumulatedBidEth += ethFilledAtClearing;
-							break;
-						}
-						if (newAccumulatedEth >= ethRaiseCap) {
-							funded = true;
-							clearingPrice = bid.price;
-							ethFilledAtClearing = ethToTake;
-							accumulatedBidEth = newAccumulatedEth;
-							break;
-						}
-						accumulatedBidEth = newAccumulatedEth;
-						lastValidPrice = bid.price;
-						lastValidEthAtTick = ethToTake;
-					}
-					let refunds = submittedBids.filter((bid) => bid.price < threshold).reduce((sum, bid) => sum + bid.eth, 0);
-					const repResults = { alice: 0, bob: 0, carol: 0 };
-					if (funded && clearingPrice > 0) {
-						let clearingTickEthRemaining = ethFilledAtClearing;
-						for (const bid of activeBids) {
-							if (bid.price > clearingPrice) {
-								repResults[bid.key] = bid.eth / clearingPrice;
-							} else if (bid.price === clearingPrice) {
-								const fillEth = Math.min(bid.eth, clearingTickEthRemaining);
-								clearingTickEthRemaining -= fillEth;
-								repResults[bid.key] = fillEth / clearingPrice;
-								refunds += bid.eth - fillEth;
-							} else {
-								refunds += bid.eth;
-							}
-						}
-						const repSold = Object.values(repResults).reduce((sum, repAmount) => sum + repAmount, 0);
-						const hitEthCap = Math.abs(accumulatedBidEth - ethRaiseCap) < 1e-9;
-						const hitRepCap = Math.abs(repSold - repInventory) < 1e-9;
-						let bindingCondition = "REP cap";
-						if (hitEthCap && hitRepCap) {
-							bindingCondition = "both caps";
-						} else if (hitEthCap) {
-							bindingCondition = "ETH cap";
-						}
-						write("clearingMode", `uniform clearing near ${formatFixed(clearingPrice)} ETH/REP`);
-						write("bindingCondition", bindingCondition);
-						write("thresholdInputEth", "not underfunded");
-						write("underfundedThreshold", "not underfunded");
-					} else {
-						let winningEthAmount = 0;
-						for (const bid of activeBids) {
-							if (bid.price >= threshold) {
-								winningEthAmount += bid.eth;
-							} else refunds += bid.eth;
-						}
-						if (winningEthAmount > 0) {
-							for (const bid of activeBids) {
-								if (bid.price >= threshold) {
-									repResults[bid.key] = (bid.eth * repInventory) / winningEthAmount;
-								}
-							}
-						}
-						accumulatedBidEth = winningEthAmount;
-						write("clearingMode", "underfunded qualification clearing");
-						write("bindingCondition", "underfunded");
-						write("thresholdInputEth", formatEth(winningEthAmount));
-						write("underfundedThreshold", `${formatFixed(threshold)} ETH/REP`);
-					}
-					write("ethRaised", formatEth(accumulatedBidEth));
-					write("aliceReceives", formatRep(repResults.alice));
-					write("bobReceives", formatRep(repResults.bob));
-					write("carolReceives", formatRep(repResults.carol));
-					write("totalRepAllocated", formatRep(Object.values(repResults).reduce((sum, repAmount) => sum + repAmount, 0)));
-					write("refunds", formatEth(refunds));
-				};
-				for (const input of Object.values(inputs)) {
-					input.addEventListener("input", update);
-				}
-				update();
-			}
-		</script>
+		<script type="module" src="../assets/js/auctionClearing.js"></script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>

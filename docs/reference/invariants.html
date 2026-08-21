@@ -21,6 +21,9 @@
 			</header>
 
 			<section class="invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer">
+				<div class="tool-outcome-strip tool-outcome-strip-single">
+					<div data-primary-output><span>Matches</span><output class="invariant-result-count" data-invariant-count aria-live="polite">Loading invariants…</output></div>
+				</div>
 				<div class="invariant-explorer-controls">
 					<label>Search <input type="search" data-invariant-search placeholder="Search invariants" /></label>
 					<label
@@ -47,7 +50,6 @@
 					<button type="button" data-invariant-collapse>Collapse all</button>
 					<button type="button" data-invariant-reset>Reset filters</button>
 				</div>
-				<p class="invariant-result-count" data-invariant-count aria-live="polite">Loading invariants…</p>
 				<p data-invariant-empty hidden>No invariants match the selected filters.</p>
 			</section>
 

@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import ts from 'typescript'
 
-export const documentationRuntimeNames = ['docsShell', 'responsiveDocs', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner'] as const
+export const documentationRuntimeNames = ['auctionClearing', 'deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'openOracleTools', 'responsiveDocs'] as const
 
 export type DocumentationRuntimeName = (typeof documentationRuntimeNames)[number]
 
@@ -10,6 +10,18 @@ const generatedBanner = '// Generated from docs/runtime TypeScript by bun run do
 
 export async function buildDocumentationRuntime(name: DocumentationRuntimeName, sourceRoot: string): Promise<string> {
 	const sourcePath = path.join(sourceRoot, `${name}.ts`)
+	if (name === 'auctionClearing') {
+		const result = await Bun.build({
+			entrypoints: [sourcePath],
+			format: 'iife',
+			minify: false,
+			target: 'browser',
+		})
+		if (!result.success) throw new AggregateError(result.logs, 'Failed to bundle the auction documentation runtime')
+		const output = result.outputs[0]
+		if (output === undefined) throw new Error('Auction documentation runtime build produced no output')
+		return `${generatedBanner}${await output.text()}`
+	}
 	const source = await Bun.file(sourcePath).text()
 	const result = ts.transpileModule(source, {
 		compilerOptions: {
