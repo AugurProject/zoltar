@@ -39,21 +39,45 @@
 						<div data-primary-output><span>Deposit result</span><output data-escalation-output="deposit">accepted: 1 REP</output></div>
 						<div data-primary-output><span>Contract-model state</span><output data-escalation-output="state">activation pending</output></div>
 					</div>
-					<div class="tool-control-stack">
-						<details class="tool-control-group" data-group-tone="system" open>
-							<summary>Game settings</summary>
-							<div class="example-grid">
-								<label>Start bond <input type="number" inputmode="decimal" min="0.1" max="20" value="1" step="0.1" data-example-input="startBond" /><span class="example-value" data-example-value="startBond">1 REP</span></label>
-								<label>Non-decision threshold <input type="number" inputmode="decimal" min="1.1" max="100" value="10" step="0.1" data-example-input="nonDecisionThreshold" /><span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span></label>
-							</div>
-						</details>
-						<details class="tool-control-group" data-group-tone="players" open>
-							<summary>Player positions</summary>
-							<div class="example-grid">
-								<label>Current Yes balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
-								<label>Current No balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
-								<label>Current Invalid balance <input type="number" inputmode="decimal" min="0" max="100" value="0" step="1" data-example-input="invalid" /><span class="example-value" data-escalation-value="invalid">0 REP</span></label>
-							</div>
+					<div class="tool-workspace">
+						<div class="tool-control-stack tool-workspace-controls">
+							<details class="tool-control-group" data-group-tone="system">
+								<summary>Game settings</summary>
+								<div class="example-grid">
+									<label>Start bond <input type="number" inputmode="decimal" min="0.1" max="20" value="1" step="0.1" data-example-input="startBond" /><span class="example-value" data-example-value="startBond">1 REP</span></label>
+									<label>Non-decision threshold <input type="number" inputmode="decimal" min="1.1" max="100" value="10" step="0.1" data-example-input="nonDecisionThreshold" /><span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span></label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="players">
+								<summary>Player positions</summary>
+								<div class="example-grid">
+									<label>Current Yes balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
+									<label>Current No balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
+									<label>Current Invalid balance <input type="number" inputmode="decimal" min="0" max="100" value="0" step="1" data-example-input="invalid" /><span class="example-value" data-escalation-value="invalid">0 REP</span></label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="action" data-mobile-open open>
+								<summary>Player move</summary>
+								<div class="example-grid">
+									<label
+										>Deposit outcome
+										<select data-example-input="depositOutcome">
+											<option value="yes">Yes</option>
+											<option value="no">No</option>
+											<option value="invalid">Invalid</option>
+										</select></label
+									>
+									<label>Requested deposit <input type="number" inputmode="decimal" min="0" max="100" value="1" step="0.1" data-example-input="depositAmount" /><span class="example-value" data-example-value="depositAmount">1 REP</span></label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="time">
+								<summary>Timeline</summary>
+								<div class="example-grid">
+									<label>Days since start <input type="range" min="0" max="56" value="0" step="1" data-example-input="days" /><span class="example-value" data-escalation-value="days">0 days</span></label>
+								</div>
+							</details>
+						</div>
+						<div class="tool-workspace-view">
 							<div class="escalation-arena" aria-label="Current and projected outcome balances">
 								<div class="escalation-arena-row" data-escalation-arena="yes">
 									<span>Yes</span><span class="escalation-balance-track" aria-hidden="true"><i></i><b></b></span><output data-escalation-arena-value="yes">1 → 2 REP</output>
@@ -65,37 +89,17 @@
 									<span>Invalid</span><span class="escalation-balance-track" aria-hidden="true"><i></i><b></b></span><output data-escalation-arena-value="invalid">0 → 0 REP</output>
 								</div>
 							</div>
-						</details>
-						<details class="tool-control-group" data-group-tone="action" open>
-							<summary>Player move</summary>
-							<div class="example-grid">
-								<label
-									>Deposit outcome
-									<select data-example-input="depositOutcome">
-										<option value="yes">Yes</option>
-										<option value="no">No</option>
-										<option value="invalid">Invalid</option>
-									</select></label
-								>
-								<label>Requested deposit <input type="number" inputmode="decimal" min="0" max="100" value="1" step="0.1" data-example-input="depositAmount" /><span class="example-value" data-example-value="depositAmount">1 REP</span></label>
+							<p class="example-error" role="alert" data-escalation-error hidden></p>
+							<div class="example-output-grid tool-detail-grid">
+								<div><span>Configured start bond</span><output data-escalation-output="startBond">1 REP</output></div>
+								<div><span>Configured threshold</span><output data-escalation-output="threshold">10 REP</output></div>
+								<div><span>Projected leader</span><output data-escalation-output="leader">Yes</output></div>
+								<div><span>Projected median balance</span><output data-escalation-output="median">1 REP</output></div>
+								<div><span>Deposit before → after</span><output data-escalation-output="balances">Yes 1 / 2 REP; No 1 / 1 REP; Invalid 0 / 0 REP</output></div>
+								<div><span>Activation</span><output data-escalation-output="activation">3 days</output></div>
+								<div><span>Scheduled deadline (before → after)</span><output data-escalation-output="deadline">day 3.0 → day 3.0</output></div>
 							</div>
-						</details>
-						<details class="tool-control-group" data-group-tone="time" open>
-							<summary>Timeline</summary>
-							<div class="example-grid">
-								<label>Days since start <input type="range" min="0" max="56" value="0" step="1" data-example-input="days" /><span class="example-value" data-escalation-value="days">0 days</span></label>
-							</div>
-						</details>
-					</div>
-					<p class="example-error" role="alert" data-escalation-error hidden></p>
-					<div class="example-output-grid tool-detail-grid">
-						<div><span>Configured start bond</span><output data-escalation-output="startBond">1 REP</output></div>
-						<div><span>Configured threshold</span><output data-escalation-output="threshold">10 REP</output></div>
-						<div><span>Projected leader</span><output data-escalation-output="leader">Yes</output></div>
-						<div><span>Projected median balance</span><output data-escalation-output="median">1 REP</output></div>
-						<div><span>Deposit before → after</span><output data-escalation-output="balances">Yes 1 / 2 REP; No 1 / 1 REP; Invalid 0 / 0 REP</output></div>
-						<div><span>Activation</span><output data-escalation-output="activation">3 days</output></div>
-						<div><span>Scheduled deadline (before → after)</span><output data-escalation-output="deadline">day 3.0 → day 3.0</output></div>
+						</div>
 					</div>
 				</details>
 			</section>

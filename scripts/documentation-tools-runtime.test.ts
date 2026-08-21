@@ -150,10 +150,10 @@ test('escalation controls use an outcome segment and retain one timeline scrubbe
 		const groups = Array.from(document.querySelectorAll<HTMLDetailsElement>('#escalation-game-example .tool-control-group'))
 		if (outcome === null || noButton === undefined || days === null || depositAmount === null || leaderPreset === undefined || groups.length !== 4) throw new Error('Escalation control fixture is incomplete')
 		expect(numericInputs.length).toBe(6)
-		expect(groups.every(group => group.open)).toBeTrue()
+		expect(groups.filter(group => group.open).map(group => group.querySelector('summary')?.textContent)).toEqual(['Player move'])
 		groups[0]?.querySelector('summary')?.click()
-		expect(groups[0]?.open).toBeFalse()
-		expect(groups.slice(1).every(group => group.open)).toBeTrue()
+		expect(groups[0]?.open).toBeTrue()
+		expect(groups[2]?.open).toBeTrue()
 		expect(days.type).toBe('range')
 		expect(outcome.tabIndex).toBe(-1)
 		expect(outcome.getAttribute('aria-hidden')).toBe('true')
@@ -164,6 +164,30 @@ test('escalation controls use an outcome segment and retain one timeline scrubbe
 		depositAmount.dispatchEvent(new Event('input', { bubbles: true }))
 		leaderPreset.click()
 		expect(depositAmount.value).toBe('1')
+	} finally {
+		cleanup()
+	}
+})
+
+test('mobile widgets preserve the primary-only disclosure default', async () => {
+	const cleanup = await loadDocument('docs/explanation/escalation-game.html', 'http://localhost/docs/explanation/escalation-game.html')
+	try {
+		const mobileQuery: MediaQueryList = {
+			addEventListener: () => {},
+			addListener: () => {},
+			dispatchEvent: () => true,
+			matches: true,
+			media: '(max-width: 640px)',
+			onchange: null,
+			removeEventListener: () => {},
+			removeListener: () => {},
+		}
+		Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => mobileQuery })
+		await runGeneratedRuntime('interactiveTools')
+		const groups = Array.from(document.querySelectorAll<HTMLDetailsElement>('#escalation-game-example .tool-control-group'))
+		const openGroups = groups.filter(group => group.open)
+		expect(openGroups).toHaveLength(1)
+		expect(openGroups[0]?.querySelector('summary')?.textContent).toBe('Player move')
 	} finally {
 		cleanup()
 	}
@@ -181,7 +205,7 @@ test('OpenOracle controls separate coordinator policy from the report request an
 		const reporterFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleReporterFee"]')
 		const protocolFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleProtocolFee"]')
 		if (feeBound === null || target === null || reporterFee === null || protocolFee === null) throw new Error('OpenOracle grouping fixture is incomplete')
-		expect(groups.every(candidate => candidate.open)).toBeTrue()
+		expect(groups.filter(candidate => candidate.open).map(candidate => candidate.querySelector('summary')?.textContent)).toEqual(['Report request'])
 		expect(group('Oracle fees')?.dataset['groupTone']).toBe('system')
 		expect(group('Coordinator policy')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).not.toBeNull()
 		expect(group('Report request')?.querySelector('[data-example-input="requestedInitialWeth"]')).not.toBeNull()
@@ -255,7 +279,9 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		const heightTwo = Array.from(document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).find(button => button.textContent === 'Height 2')
 		const preset = Array.from(document.querySelectorAll<HTMLButtonElement>('#mmr-proof-planner .interactive-tool-presets button')).find(button => button.textContent === '13 leaves, height 2')
 		const status = document.querySelector<HTMLElement>('#mmr-proof-planner .interactive-tool-status')
-		if (leafCount === null || peakHeight === null || leafIndex === null || leafCountError === null || leafIndexError === null || selection === null || siblings === null || heightTwo === undefined || preset === undefined || status === null) throw new Error('MMR planner fixture is incomplete')
+		const snapshotGroup = leafCount?.closest<HTMLDetailsElement>('details.tool-control-group')
+		if (leafCount === null || peakHeight === null || leafIndex === null || leafCountError === null || leafIndexError === null || selection === null || siblings === null || heightTwo === undefined || preset === undefined || status === null || snapshotGroup === null || snapshotGroup === undefined)
+			throw new Error('MMR planner fixture is incomplete')
 
 		expect(peakHeight.value).toBe('2')
 		expect(peakHeight.tabIndex).toBe(-1)
@@ -273,8 +299,10 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		expect(preset.getAttribute('aria-pressed')).toBe('false')
 		expect(status.textContent).toBe('')
 
+		snapshotGroup.open = false
 		leafCount.value = '0'
 		leafCount.dispatchEvent(new Event('input'))
+		expect(snapshotGroup.open).toBeTrue()
 		expect(leafCount.getAttribute('aria-invalid')).toBe('true')
 		expect(leafCount.getAttribute('aria-describedby')).toContain(leafCountError.id)
 		expect(leafCountError.hidden).toBeFalse()
@@ -284,11 +312,13 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		expect(peakHeight.disabled).toBeTrue()
 		expect(Array.from(document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).every(button => button.disabled)).toBeTrue()
 		expect(selection.value).toBe('—')
+		expect(status.textContent).toBe('Snapshot leaf count: Enter an integer from 1 through 2⁶⁴ − 1.')
 
 		leafCount.value = '8'
 		leafCount.dispatchEvent(new Event('input'))
 		expect(leafCount.hasAttribute('aria-invalid')).toBeFalse()
 		expect(leafCountError.hidden).toBeTrue()
+		expect(status.textContent).toBe('')
 		expect(peakHeight.value).toBe('3')
 		leafIndex.value = '8'
 		leafIndex.dispatchEvent(new Event('input'))
@@ -468,6 +498,23 @@ test('shared scenarios reject unknown segmented-control values without dispatchi
 	}
 })
 
+test('shared scenarios reject out-of-range timeline values before the browser clamps them', async () => {
+	const state = encodeURIComponent(JSON.stringify({ days: '999', depositAmount: '4' }))
+	const cleanup = await loadDocument('docs/explanation/escalation-game.html', `http://localhost/docs/explanation/escalation-game.html?tool=escalation-game-example&state=${state}`)
+	try {
+		await runGeneratedRuntime('interactiveTools')
+		const days = document.querySelector<HTMLInputElement>('[data-example-input="days"]')
+		const depositAmount = document.querySelector<HTMLInputElement>('[data-example-input="depositAmount"]')
+		const status = document.querySelector<HTMLElement>('#escalation-game-example .interactive-tool-status')
+		if (days === null || depositAmount === null || status === null) throw new Error('Escalation range-state fixture is incomplete')
+		expect(days.value).toBe('0')
+		expect(depositAmount.value).toBe('1')
+		expect(status.textContent).toBe('The shared scenario contains invalid values; defaults remain active.')
+	} finally {
+		cleanup()
+	}
+})
+
 for (const scenario of [
 	{ input: 'aliceEth', mount: 'fig-auction-clearing-ladder', name: 'auction', path: 'docs/explanation/truth-auctions.html', tool: 'simple-auction-example' },
 	{ input: 'parentSettlementCollateral', mount: 'plot-statoblast-whitepaper-19', name: 'collateral repair', path: 'docs/explanation/statoblast.html', tool: 'collateral-repair-example' },
@@ -549,6 +596,34 @@ for (const scenario of [
 			input.value = ''
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 			expect(tool.dataset['inputsValid']).toBe('false')
+			if (scenario.name === 'escalation') {
+				const state = tool.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')
+				const yesArena = tool.querySelector<HTMLElement>('[data-escalation-arena="yes"]')
+				const noArena = tool.querySelector<HTMLElement>('[data-escalation-arena="no"]')
+				const outcome = tool.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')
+				const days = tool.querySelector<HTMLInputElement>('[data-example-input="days"]')
+				if (state === null || yesArena === null || noArena === null || outcome === null || days === null) throw new Error('Escalation invalid-state fixture is incomplete')
+				const lastValidState = state.value
+				const lastValidYesSelection = yesArena.dataset['selected']
+
+				days.value = '0'
+				days.dispatchEvent(new Event('input', { bubbles: true }))
+				outcome.value = 'no'
+				outcome.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(state.value).toBe(lastValidState)
+				expect(yesArena.dataset['selected']).toBe(lastValidYesSelection)
+				expect(noArena.dataset['selected']).toBe('false')
+
+				input.value = '10'
+				input.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(tool.dataset['inputsValid']).toBeUndefined()
+				expect(state.value).toBe('activation pending')
+				expect(yesArena.dataset['selected']).toBe('false')
+				expect(noArena.dataset['selected']).toBe('true')
+				input.value = ''
+				input.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(tool.dataset['inputsValid']).toBe('false')
+			}
 			mount.dataset['renderedChartWidth'] = '0'
 			for (const observer of observers) observer.callback([], observer)
 			await new Promise(resolve => setTimeout(resolve, 20))

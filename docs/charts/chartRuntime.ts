@@ -1100,6 +1100,7 @@ for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepape
 	const inputRoot = mount === null ? null : quantitativeInputRoot(chartId, mount)
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {
 		input.addEventListener('input', () => {
+			if (inputRoot?.dataset['inputsValid'] === 'false') return
 			if (chartId === 'fig-statoblast-escalation-cost-curve') updateEscalationSimulator()
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)

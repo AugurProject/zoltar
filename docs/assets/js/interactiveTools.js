@@ -123,6 +123,27 @@ function dispatchInput(input) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
 }
+function numericInputValueIsValid(input, value) {
+    if (input.type !== 'number' && input.type !== 'range')
+        return true;
+    if (value.trim().length === 0)
+        return false;
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue))
+        return false;
+    const minimum = Number(input.min);
+    const maximum = Number(input.max);
+    if (Number.isFinite(minimum) && numericValue < minimum)
+        return false;
+    if (Number.isFinite(maximum) && numericValue > maximum)
+        return false;
+    const step = Number(input.step);
+    if (!Number.isFinite(step) || step <= 0)
+        return true;
+    const base = Number.isFinite(minimum) ? minimum : 0;
+    const stepOffset = (numericValue - base) / step;
+    return Math.abs(stepOffset - Math.round(stepOffset)) <= 1e-9;
+}
 function applyValues(tool, values) {
     let valid = true;
     for (const input of toolInputs(tool)) {
@@ -131,6 +152,10 @@ function applyValues(tool, values) {
         if (value === undefined)
             continue;
         if (input instanceof HTMLSelectElement && !Array.from(input.options).some(option => !option.disabled && option.value === value)) {
+            valid = false;
+            continue;
+        }
+        if (input instanceof HTMLInputElement && !numericInputValueIsValid(input, value)) {
             valid = false;
             continue;
         }
@@ -520,6 +545,12 @@ function makeOutputsLive(tool) {
     outputRegion.setAttribute('aria-live', 'polite');
     outputRegion.setAttribute('aria-atomic', 'false');
 }
+function applyResponsiveDisclosureDefaults(tool) {
+    if (!window.matchMedia('(max-width: 640px)').matches)
+        return;
+    for (const group of tool.querySelectorAll('.tool-control-group'))
+        group.open = group.hasAttribute('data-mobile-open');
+}
 function keepFocusedControlVisible(tool) {
     tool.addEventListener('focusin', event => {
         if (!window.matchMedia('(max-width: 640px)').matches || !(event.target instanceof Element))
@@ -595,6 +626,7 @@ for (const tool of document.querySelectorAll('details.interactive-example[id], d
     }
     tool.querySelector('summary')?.insertAdjacentElement('afterend', createToolbar(tool));
     makeOutputsLive(tool);
+    applyResponsiveDisclosureDefaults(tool);
     keepFocusedControlVisible(tool);
 }
 applyLinkedScenario();

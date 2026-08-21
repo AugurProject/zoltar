@@ -3744,6 +3744,29 @@ body.paper-zoltar .footer-note {
 		margin: 0.6rem 0 0.75rem;
 	}
 
+	body.docs-shell-page .tool-workspace {
+		display: grid;
+		grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+		gap: 0.75rem;
+		align-items: start;
+	}
+
+	body.docs-shell-page .tool-workspace > .tool-control-stack {
+		margin: 0;
+	}
+
+	body.docs-shell-page .tool-workspace-view {
+		position: sticky;
+		top: calc(var(--docs-shell-header-height) + 0.75rem);
+		display: grid;
+		min-width: 0;
+		gap: 0.65rem;
+	}
+
+	body.docs-shell-page .tool-workspace-view :is(.diagram, .example-visual, .example-output-grid, .escalation-arena) {
+		margin: 0;
+	}
+
 	body.docs-shell-page .tool-control-group {
 		min-width: 0;
 		padding: 0.45rem 0.55rem 0.55rem;
@@ -4091,6 +4114,29 @@ body.paper-zoltar .footer-note {
 		overflow-wrap: anywhere;
 	}
 
+	body.docs-shell-page .tool-workspace-view .example-output-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1px;
+	}
+
+	body.docs-shell-page .auction-allocation-grid .auction-allocation,
+	body.docs-shell-page .mmr-proof-profile .mmr-proof-length,
+	body.docs-shell-page .censorship-result-grid > div:nth-child(-n + 2),
+	body.docs-shell-page .oracle-threshold-grid > div {
+		grid-column: 1 / -1;
+	}
+
+	body.docs-shell-page :is(.auction-allocation, .mmr-proof-length, .censorship-result-grid > div:nth-child(-n + 2), .oracle-threshold-grid > div) {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.4rem;
+		align-items: end;
+	}
+
+	body.docs-shell-page :is(.auction-allocation, .mmr-proof-length, .censorship-result-grid > div:nth-child(-n + 2), .oracle-threshold-grid > div) output {
+		text-align: right;
+	}
+
 	body.doc-openoracle.docs-shell-page #initial-report-estimator-example .example-output-grid {
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 	}
@@ -4174,6 +4220,20 @@ body.paper-zoltar .footer-note {
 
 	body.docs-shell-page .tool-control-group {
 		padding: 0.4rem 0.45rem 0.5rem;
+	}
+
+	body.docs-shell-page .tool-control-group > summary {
+		min-height: 2.5rem;
+		padding-block: 0.45rem;
+	}
+
+	body.docs-shell-page .tool-workspace {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.65rem;
+	}
+
+	body.docs-shell-page .tool-workspace-view {
+		position: static;
 	}
 
 	body.doc-openoracle .invariant-explorer {

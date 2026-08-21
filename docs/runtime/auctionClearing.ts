@@ -1,5 +1,4 @@
-type BidKey = 'alice' | 'bob' | 'carol'
-type AuctionBid = { eth: number; key: BidKey; price: number }
+import { type AuctionBidInput, calculateAuctionModel } from '../charts/chartModels'
 
 function formatFixed(value: number, digits = 2): string {
 	if (!Number.isFinite(value)) return 'not available'
@@ -44,98 +43,48 @@ if (auctionExample instanceof HTMLElement) {
 	const update = (): void => {
 		const ethRaiseCap = read('ethRaiseCap')
 		const repInventory = Math.max(read('repInventory'), 1)
-		const bids: AuctionBid[] = [
-			{ eth: read('aliceEth'), key: 'alice', price: 5 },
-			{ eth: read('bobEth'), key: 'bob', price: 4 },
-			{ eth: read('carolEth'), key: 'carol', price: 3 },
+		const bids: AuctionBidInput[] = [
+			{ eth: read('aliceEth'), key: 'alice', name: 'Alice', price: 5 },
+			{ eth: read('bobEth'), key: 'bob', name: 'Bob', price: 4 },
+			{ eth: read('carolEth'), key: 'carol', name: 'Carol', price: 3 },
 		]
-		const threshold = ethRaiseCap / repInventory
-		const submittedBids = bids.filter(bid => bid.eth > 0)
-		const activeBids = submittedBids.filter(bid => bid.price >= threshold)
+		const model = calculateAuctionModel(ethRaiseCap, repInventory, bids)
 		writeValue('ethRaiseCap', formatEth(ethRaiseCap))
 		writeValue('repInventory', formatRep(repInventory))
 		for (const bid of bids) writeValue(`${bid.key}Eth`, formatEth(bid.eth))
-		let accumulatedBidEth = 0
-		let clearingPrice = 0
-		let ethFilledAtClearing = 0
-		let funded = false
-		let lastValidPrice = 0
-		let lastValidEthAtTick = 0
-		for (const bid of activeBids) {
-			if (accumulatedBidEth > 0 && accumulatedBidEth / bid.price > repInventory) {
-				funded = true
-				clearingPrice = lastValidPrice
-				ethFilledAtClearing = lastValidEthAtTick
-				break
-			}
-			const ethToTake = Math.min(bid.eth, Math.max(0, ethRaiseCap - accumulatedBidEth))
-			const newAccumulatedEth = accumulatedBidEth + ethToTake
-			if (newAccumulatedEth / bid.price >= repInventory) {
-				funded = true
-				clearingPrice = bid.price
-				ethFilledAtClearing = Math.max(0, Math.min(ethToTake, repInventory * bid.price - accumulatedBidEth))
-				accumulatedBidEth += ethFilledAtClearing
-				break
-			}
-			if (newAccumulatedEth >= ethRaiseCap) {
-				funded = true
-				clearingPrice = bid.price
-				ethFilledAtClearing = ethToTake
-				accumulatedBidEth = newAccumulatedEth
-				break
-			}
-			accumulatedBidEth = newAccumulatedEth
-			lastValidPrice = bid.price
-			lastValidEthAtTick = ethToTake
-		}
-		let refunds = submittedBids.filter(bid => bid.price < threshold).reduce((sum, bid) => sum + bid.eth, 0)
-		const repResults: Record<BidKey, number> = { alice: 0, bob: 0, carol: 0 }
-		if (funded && clearingPrice > 0) {
-			let clearingTickEthRemaining = ethFilledAtClearing
-			for (const bid of activeBids) {
-				if (bid.price > clearingPrice) repResults[bid.key] = bid.eth / clearingPrice
-				else if (bid.price === clearingPrice) {
-					const fillEth = Math.min(bid.eth, clearingTickEthRemaining)
-					clearingTickEthRemaining -= fillEth
-					repResults[bid.key] = fillEth / clearingPrice
-					refunds += bid.eth - fillEth
-				} else refunds += bid.eth
-			}
-			const repSold = repResults.alice + repResults.bob + repResults.carol
-			const hitEthCap = Math.abs(accumulatedBidEth - ethRaiseCap) < 1e-9
+		const repResults = Object.fromEntries(model.bids.map(bid => [bid.key, bid.rep]))
+		const repSold = model.bids.reduce((sum, bid) => sum + bid.rep, 0)
+		if (model.mode === 'uniform') {
+			const hitEthCap = Math.abs(model.ethRaised - ethRaiseCap) < 1e-9
 			const hitRepCap = Math.abs(repSold - repInventory) < 1e-9
 			let bindingCondition = 'REP cap'
 			if (hitEthCap && hitRepCap) bindingCondition = 'both caps'
 			else if (hitEthCap) bindingCondition = 'ETH cap'
-			write('clearingMode', `uniform clearing near ${formatFixed(clearingPrice)} ETH/REP`)
+			write('clearingMode', `uniform clearing near ${formatFixed(model.clearingPrice)} ETH/REP`)
 			write('bindingCondition', bindingCondition)
 			write('thresholdInputEth', 'not underfunded')
 			write('underfundedThreshold', 'not underfunded')
 			auctionExample.dataset['widgetState'] = 'safe'
 		} else {
-			const winningEthAmount = activeBids.reduce((sum, bid) => sum + bid.eth, 0)
-			if (winningEthAmount > 0) {
-				for (const bid of activeBids) repResults[bid.key] = (bid.eth * repInventory) / winningEthAmount
-			}
-			accumulatedBidEth = winningEthAmount
 			write('clearingMode', 'underfunded qualification clearing')
 			write('bindingCondition', 'underfunded')
-			write('thresholdInputEth', formatEth(winningEthAmount))
-			write('underfundedThreshold', `${formatFixed(threshold)} ETH/REP`)
-			auctionExample.dataset['widgetState'] = winningEthAmount > 0 ? 'warning' : 'unsafe'
+			write('thresholdInputEth', formatEth(model.ethRaised))
+			write('underfundedThreshold', `${formatFixed(model.qualificationPrice)} ETH/REP`)
+			auctionExample.dataset['widgetState'] = model.ethRaised > 0 ? 'warning' : 'unsafe'
 		}
-		write('ethRaised', formatEth(accumulatedBidEth))
+		write('ethRaised', formatEth(model.ethRaised))
 		for (const bid of bids) {
 			const outputName = `${bid.key}Receives`
-			write(outputName, formatRep(repResults[bid.key]))
+			const allocation = repResults[bid.key] ?? 0
+			write(outputName, formatRep(allocation))
 			const card = outputs[outputName]?.parentElement
 			if (card !== null && card !== undefined) {
 				card.dataset['widgetMeter'] = 'true'
-				card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (repResults[bid.key] / repInventory) * 100))}%`)
+				card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (allocation / repInventory) * 100))}%`)
 			}
 		}
-		write('totalRepAllocated', formatRep(repResults.alice + repResults.bob + repResults.carol))
-		write('refunds', formatEth(refunds))
+		write('totalRepAllocated', formatRep(repSold))
+		write('refunds', formatEth(bids.reduce((sum, bid) => sum + bid.eth, 0) - model.ethRaised))
 	}
 	for (const input of Object.values(inputs)) input?.addEventListener('input', update)
 	update()

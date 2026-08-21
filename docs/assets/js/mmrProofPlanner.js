@@ -35,6 +35,7 @@ function updateInputError(input, error, message) {
 }
 const leafCountError = createInputError(leafCountInput, 'mmr-leaf-count-error');
 const leafIndexError = createInputError(leafIndexInput, 'mmr-leaf-index-error');
+const snapshotGroup = leafCountInput.closest('details.tool-control-group');
 const peakChoices = document.createElement('span');
 peakChoices.className = 'peak-choice-control';
 peakChoices.setAttribute('role', 'group');
@@ -47,6 +48,23 @@ function writeOutput(name, value) {
     const output = plannerElement.querySelector(`[data-mmr-output="${name}"]`);
     if (output instanceof HTMLOutputElement)
         output.value = value;
+}
+function setProofLengthMeter(name, value, maximum) {
+    const output = plannerElement.querySelector(`[data-mmr-output="${name}"]`);
+    const card = output?.parentElement;
+    if (card === null || card === undefined)
+        return;
+    card.dataset['widgetMeter'] = 'true';
+    card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (value / maximum) * 100))}%`);
+}
+function clearProofLengthMeters() {
+    for (const name of ['mmrSiblings', 'nullifierSiblings']) {
+        const card = plannerElement.querySelector(`[data-mmr-output="${name}"]`)?.parentElement;
+        if (card === null || card === undefined)
+            continue;
+        delete card.dataset['widgetMeter'];
+        card.style.removeProperty('--widget-meter');
+    }
 }
 function unsignedInteger(value) {
     const source = value.trim();
@@ -66,12 +84,55 @@ function occupiedPeakHeights(leafCount) {
     }
     return heights;
 }
+function formatHeightRanges(heights) {
+    const ranges = [];
+    const appendRange = (start, end) => {
+        if (end - start >= 3)
+            ranges.push(`${start}–${end}`);
+        else
+            for (let height = start; height <= end; height += 1)
+                ranges.push(String(height));
+    };
+    let start = heights[0];
+    let end = start;
+    for (const height of heights.slice(1)) {
+        if (end !== undefined && height === end + 1) {
+            end = height;
+            continue;
+        }
+        if (start !== undefined && end !== undefined)
+            appendRange(start, end);
+        start = height;
+        end = height;
+    }
+    if (start !== undefined && end !== undefined)
+        appendRange(start, end);
+    return ranges.join(', ');
+}
+function setPlannerStatus(message) {
+    const status = plannerElement.querySelector('.interactive-tool-status');
+    if (status === null)
+        return;
+    if (message !== undefined) {
+        status.dataset['validationError'] = 'true';
+        status.textContent = message;
+    }
+    else if (status.dataset['validationError'] === 'true') {
+        delete status.dataset['validationError'];
+        status.textContent = '';
+    }
+}
 function updatePeakOptions(peaks) {
     const current = Number(peakHeightSelect.value);
     const selectedHeight = String(peaks.includes(current) ? current : peaks.at(-1));
+    const useNativeSelect = peaks.length > 8;
+    peakHeightSelect.classList.toggle('visually-hidden-control', !useNativeSelect);
+    peakHeightSelect.tabIndex = useNativeSelect ? 0 : -1;
+    peakHeightSelect.setAttribute('aria-hidden', String(!useNativeSelect));
+    peakChoices.hidden = useNativeSelect;
     const buttons = Array.from(peakChoices.querySelectorAll('button'));
     const existingHeights = buttons.map(button => Number(button.dataset['peakHeight']));
-    if (existingHeights.length === peaks.length && existingHeights.every((height, index) => height === peaks[index])) {
+    if (!useNativeSelect && existingHeights.length === peaks.length && existingHeights.every((height, index) => height === peaks[index])) {
         peakHeightSelect.disabled = false;
         peakHeightSelect.value = selectedHeight;
         for (const button of buttons) {
@@ -88,6 +149,10 @@ function updatePeakOptions(peaks) {
         return option;
     }));
     peakHeightSelect.value = selectedHeight;
+    if (useNativeSelect) {
+        peakChoices.replaceChildren();
+        return;
+    }
     peakChoices.replaceChildren(...peaks.map(height => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -110,16 +175,22 @@ function clearPeakOptions() {
 function updatePlanner() {
     const leafCount = unsignedInteger(leafCountInput.value);
     if (leafCount === undefined || leafCount < 1n || leafCount >= 1n << 64n) {
-        updateInputError(leafCountInput, leafCountError, 'Enter an integer from 1 through 2⁶⁴ − 1.');
+        const message = 'Enter an integer from 1 through 2⁶⁴ − 1.';
+        updateInputError(leafCountInput, leafCountError, message);
         updateInputError(leafIndexInput, leafIndexError);
+        if (snapshotGroup instanceof HTMLDetailsElement)
+            snapshotGroup.open = true;
+        setPlannerStatus(`Snapshot leaf count: ${message}`);
         clearPeakOptions();
         for (const name of ['binary', 'peaks', 'capacity', 'mmrSiblings', 'selection']) {
             writeOutput(name, '—');
         }
+        clearProofLengthMeters();
         plannerElement.dataset['widgetState'] = 'unsafe';
         return;
     }
     updateInputError(leafCountInput, leafCountError);
+    setPlannerStatus();
     const peaks = occupiedPeakHeights(leafCount);
     updatePeakOptions(peaks);
     const peakHeight = Number(peakHeightSelect.value);
@@ -130,10 +201,14 @@ function updatePlanner() {
     for (const button of peakChoices.querySelectorAll('button'))
         button.setAttribute('aria-pressed', String(button.dataset['peakHeight'] === peakHeightSelect.value));
     writeOutput('binary', `${leafCount.toString(2)}₂`);
-    writeOutput('peaks', peaks.join(', '));
+    writeOutput('peaks', formatHeightRanges(peaks));
     writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; local indexes 0…${(capacity - 1n).toLocaleString()}`);
-    writeOutput('mmrSiblings', String(peakHeight + peaks.length - 1));
+    const mmrSiblings = peakHeight + peaks.length - 1;
+    const proofLengthMaximum = Math.max(mmrSiblings, 64);
+    writeOutput('mmrSiblings', String(mmrSiblings));
     writeOutput('nullifierSiblings', '64');
+    setProofLengthMeter('mmrSiblings', mmrSiblings, proofLengthMaximum);
+    setProofLengthMeter('nullifierSiblings', 64, proofLengthMaximum);
     writeOutput('selection', validIndex ? 'Valid peak-local index' : `Index must be between 0 and ${capacity - 1n}`);
     plannerElement.dataset['widgetState'] = validIndex ? 'safe' : 'unsafe';
 }

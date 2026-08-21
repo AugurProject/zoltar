@@ -110,6 +110,14 @@ function formatWethFromAttoEth(attoWeth) {
     const fraction = attoWeth % atomicWethPerWeth;
     return `${whole.toString()}.${fraction.toString().padStart(18, '0')} WETH`;
 }
+function formatCompactWethFromAttoEth(attoWeth) {
+    const displayScale = 10000n;
+    const atomicPerDisplayUnit = 10n ** 18n / displayScale;
+    const rounded = (attoWeth + atomicPerDisplayUnit / 2n) / atomicPerDisplayUnit;
+    const whole = rounded / displayScale;
+    const fraction = (rounded % displayScale).toString().padStart(4, '0').replace(/0+$/, '');
+    return `${whole}${fraction.length === 0 ? '' : `.${fraction}`} WETH`;
+}
 function setMeter(context, name, value, maximum) {
     const output = context.root.querySelector(`[data-example-output="${name}"]`);
     const card = output?.parentElement;
@@ -147,7 +155,7 @@ bindExample('#initial-report-estimator-example', context => {
     context.writeOutput('initialReportEscalationHalt', estimate.initialReportEscalationHaltAttoEth === undefined ? unsafeText : formatWethFromAttoEth(estimate.initialReportEscalationHaltAttoEth));
     context.writeOutput('openInterestEscalationHalt', formatWethFromAttoEth(estimate.openInterestEscalationHaltAttoEth));
     context.writeOutput('estimatedMinimumWethReport', estimate.minimumWethReportAttoEth === undefined ? unsafeText : formatWethFromAttoEth(estimate.minimumWethReportAttoEth));
-    context.writeOutput('selectedInitialWethReport', estimate.selectedInitialWethReportAttoEth === undefined ? unsafeText : formatWethFromAttoEth(estimate.selectedInitialWethReportAttoEth));
+    context.writeOutput('selectedInitialWethReport', estimate.selectedInitialWethReportAttoEth === undefined ? unsafeText : formatCompactWethFromAttoEth(estimate.selectedInitialWethReportAttoEth));
     context.writeOutput('selectedEscalationHalt', estimate.selectedEscalationHaltAttoEth === undefined ? unsafeText : formatWethFromAttoEth(estimate.selectedEscalationHaltAttoEth));
     context.writeOutput('disputeGasCost', `${estimate.disputeGasCostEth.toFixed(6)} ETH`);
     context.writeOutput('bufferedGasCost', `${estimate.bufferedGasCostEth.toFixed(6)} ETH`);
@@ -204,4 +212,7 @@ bindExample('#binary-censorship-example', context => {
     const maximum = Math.max(attackerPayoff, censorshipCost, 1);
     setMeter(context, 'attackerPayoff', attackerPayoff, maximum);
     setMeter(context, 'censorshipCost', censorshipCost, maximum);
+    const maximumError = Math.max(executionErrorThreshold, manipulatedPriceError, 0.01);
+    setMeter(context, 'executionErrorThreshold', executionErrorThreshold, maximumError);
+    setMeter(context, 'manipulatedPriceError', manipulatedPriceError, maximumError);
 });
