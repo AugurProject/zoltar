@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
 
-const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLOutputElement'] as const
+const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', 'HTMLOutputElement'] as const
 
 const loadDocument = async (relativePath: string, url: string) => {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
@@ -23,42 +23,142 @@ const loadDocument = async (relativePath: string, url: string) => {
 }
 
 const runGeneratedRuntime = async (name: string): Promise<void> => {
-	Function(await Bun.file(`docs/assets/js/${name}.js`).text())()
+	const source = await Bun.file(`docs/assets/js/${name}.js`).text()
+	await Function(`${source}\nreturn typeof deploymentMaskDecoderReady === 'undefined' ? undefined : deploymentMaskDecoderReady`)()
 }
 
 test('interactive tools load shared state and preserve preset and reset behavior', async () => {
 	const state = encodeURIComponent(JSON.stringify({ aliceEth: '9', bobEth: '8', carolEth: '7', ethRaiseCap: '30', repInventory: '6' }))
 	const cleanup = await loadDocument('docs/explanation/truth-auctions.html', `http://localhost/docs/explanation/truth-auctions.html?tool=simple-auction-example&state=${state}`)
 	try {
+		await runGeneratedRuntime('auctionClearing')
 		const tool = document.querySelector<HTMLDetailsElement>('#simple-auction-example')
 		const alice = tool?.querySelector<HTMLInputElement>('[data-example-input="aliceEth"]')
-		if (tool === null || alice === null || alice === undefined) throw new Error('Interactive truth-auction fixture is missing')
+		const bob = tool?.querySelector<HTMLInputElement>('[data-example-input="bobEth"]')
+		if (tool === null || alice === null || alice === undefined || bob === null || bob === undefined) throw new Error('Interactive truth-auction fixture is missing')
 		const defaultAlice = alice.value
 		await runGeneratedRuntime('interactiveTools')
 		const scenario = tool.querySelector<HTMLSelectElement>('.interactive-tool-toolbar select')
 		const reset = Array.from(tool.querySelectorAll<HTMLButtonElement>('.interactive-tool-toolbar button')).find(button => button.textContent === 'Reset')
 		const status = tool.querySelector<HTMLElement>('.interactive-tool-status')
-		if (scenario === null || reset === undefined || status === null) throw new Error('Interactive toolbar was not created')
+		const weakDemand = Array.from(tool.querySelectorAll<HTMLButtonElement>('.interactive-tool-presets button')).find(button => button.textContent === 'Weak demand')
+		const numberControl = alice.closest<HTMLElement>('.number-control')
+		const decrement = Array.from(numberControl?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === '−')
+		const increment = Array.from(numberControl?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(button => button.textContent === '+')
+		if (scenario === null || reset === undefined || status === null || weakDemand === undefined || numberControl === null || decrement === undefined || increment === undefined) throw new Error('Interactive toolbar was not created')
 
 		expect(tool.open).toBeTrue()
 		expect(alice.value).toBe('9')
 		expect(status.textContent).toBe('Shared scenario loaded; results updated.')
 		expect(tool.querySelector('.example-output-grid, .example-output, [data-tool-output-region]')?.getAttribute('aria-live')).toBe('polite')
+		expect(scenario.closest('.interactive-tool-preset-select')).not.toBeNull()
+		expect(scenario.tabIndex).toBe(-1)
+		expect(scenario.getAttribute('aria-hidden')).toBe('true')
+		expect(numberControl.style.getPropertyValue('--control-progress')).not.toBe('')
+		expect(weakDemand.getAttribute('aria-pressed')).toBe('false')
+		expect(increment.getAttribute('aria-label')).toBe('Increase Alice bid near 5 ETH/REP')
 
-		scenario.value = '0'
-		scenario.dispatchEvent(new Event('change'))
+		weakDemand.click()
 		expect(alice.value).toBe('3')
-		expect(status.textContent).toBe('Weak demand applied; results updated.')
+		expect(weakDemand.getAttribute('aria-pressed')).toBe('true')
+		expect(status.textContent).toBe('')
+		increment.dispatchEvent(new Event('click', { bubbles: true }))
+		expect(alice.value).toBe('4')
+		expect(weakDemand.getAttribute('aria-pressed')).toBe('false')
+		expect(scenario.value).toBe('')
+
+		const aliceResult = tool.querySelector<HTMLOutputElement>('[data-example-output="aliceReceives"]')
+		const aliceValueChip = tool.querySelector<HTMLElement>('[data-example-value="aliceEth"]')
+		if (aliceResult === null || aliceValueChip === null) throw new Error('Auction result fixture is incomplete')
+		weakDemand.click()
+		const validResult = aliceResult.value
+		alice.value = ''
+		alice.dispatchEvent(new Event('input', { bubbles: true }))
+		const inlineError = document.getElementById(alice.getAttribute('aria-describedby') ?? '')
+		if (!(inlineError instanceof HTMLElement)) throw new Error('Auction inline validation error is missing')
+		expect(weakDemand.getAttribute('aria-pressed')).toBe('false')
+		expect(scenario.value).toBe('')
+		expect(status.textContent).toBe('Alice bid near 5 ETH/REP: Enter a number.')
+		expect(inlineError.textContent).toBe('Enter a number.')
+		expect(inlineError.hidden).toBeFalse()
+		expect(aliceValueChip.hidden).toBeTrue()
+		expect(tool.dataset['inputsValid']).toBe('false')
+		expect(tool.querySelector('.interactive-tool-results-cue')?.textContent).toBe('Results show the last valid values.')
+		expect(aliceResult.value).toBe(validResult)
+		for (const [invalidValue, expectedMessage] of [
+			['-1', 'Alice bid near 5 ETH/REP: Enter a value of at least 0.'],
+			['21', 'Alice bid near 5 ETH/REP: Enter a value of at most 20.'],
+			['3.5', 'Alice bid near 5 ETH/REP: Enter a value in steps of 1.'],
+		] as const) {
+			alice.value = invalidValue
+			alice.dispatchEvent(new Event('input', { bubbles: true }))
+			expect(alice.getAttribute('aria-invalid')).toBe('true')
+			expect(status.textContent).toBe(expectedMessage)
+			expect(aliceResult.value).toBe(validResult)
+		}
+		bob.value = '4.5'
+		bob.dispatchEvent(new Event('input', { bubbles: true }))
+		alice.value = '5'
+		alice.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(alice.hasAttribute('aria-invalid')).toBeFalse()
+		expect(bob.getAttribute('aria-invalid')).toBe('true')
+		expect(status.textContent).toBe('Bob bid near 4 ETH/REP: Enter a value in steps of 1.')
+		expect(aliceResult.value).toBe(validResult)
+		bob.value = '5'
+		bob.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(bob.hasAttribute('aria-invalid')).toBeFalse()
+		expect(status.textContent).toBe('')
+		expect(inlineError.hidden).toBeTrue()
+		expect(aliceValueChip.hidden).toBeFalse()
+		expect(tool.dataset['inputsValid']).toBeUndefined()
+		expect(tool.querySelector('.interactive-tool-results-cue')).toBeNull()
+		expect(aliceResult.value).not.toBe(validResult)
+
+		alice.value = '0'
+		alice.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(decrement.disabled).toBeTrue()
+		expect(increment.disabled).toBeFalse()
+		alice.value = '20'
+		alice.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(decrement.disabled).toBeFalse()
+		expect(increment.disabled).toBeTrue()
 
 		reset.click()
 		expect(alice.value).toBe(defaultAlice)
 		expect(scenario.value).toBe('')
-		expect(status.textContent).toBe('Default values restored.')
+		expect(status.textContent).toBe('')
 
 		tool.dataset['toolUnavailable'] = 'true'
 		tool.dispatchEvent(new CustomEvent('docs:tool-availability'))
 		expect(scenario.disabled).toBeTrue()
 		expect(reset.disabled).toBeTrue()
+	} finally {
+		cleanup()
+	}
+})
+
+test('escalation controls use an outcome segment and retain one timeline scrubber', async () => {
+	const cleanup = await loadDocument('docs/explanation/escalation-game.html', 'http://localhost/docs/explanation/escalation-game.html')
+	try {
+		await runGeneratedRuntime('interactiveTools')
+		const outcome = document.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')
+		const noButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.segmented-control button')).find(button => button.textContent === 'No')
+		const days = document.querySelector<HTMLInputElement>('[data-example-input="days"]')
+		const numericInputs = Array.from(document.querySelectorAll<HTMLInputElement>('#escalation-game-example input[type="number"]'))
+		const depositAmount = document.querySelector<HTMLInputElement>('[data-example-input="depositAmount"]')
+		const leaderPreset = Array.from(document.querySelectorAll<HTMLButtonElement>('#escalation-game-example .interactive-tool-presets button')).find(button => button.textContent === 'Leader deposit does not extend')
+		if (outcome === null || noButton === undefined || days === null || depositAmount === null || leaderPreset === undefined) throw new Error('Escalation control fixture is incomplete')
+		expect(numericInputs.length).toBe(6)
+		expect(days.type).toBe('range')
+		expect(outcome.tabIndex).toBe(-1)
+		expect(outcome.getAttribute('aria-hidden')).toBe('true')
+		noButton.click()
+		expect(outcome.value).toBe('no')
+		expect(noButton.getAttribute('aria-pressed')).toBe('true')
+		depositAmount.value = '9'
+		depositAmount.dispatchEvent(new Event('input', { bubbles: true }))
+		leaderPreset.click()
+		expect(depositAmount.value).toBe('1')
 	} finally {
 		cleanup()
 	}
@@ -103,33 +203,200 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 	const cleanup = await loadDocument('docs/reference/merkle-mountain-range.html', 'http://localhost/docs/reference/merkle-mountain-range.html')
 	try {
 		await runGeneratedRuntime('mmrProofPlanner')
+		await runGeneratedRuntime('interactiveTools')
 		const leafCount = document.querySelector<HTMLInputElement>('[data-tool-input="leafCount"]')
 		const peakHeight = document.querySelector<HTMLSelectElement>('[data-tool-input="peakHeight"]')
 		const leafIndex = document.querySelector<HTMLInputElement>('[data-tool-input="leafIndex"]')
+		const leafCountError = document.querySelector<HTMLElement>('#mmr-leaf-count-error')
+		const leafIndexError = document.querySelector<HTMLElement>('#mmr-leaf-index-error')
 		const selection = document.querySelector<HTMLOutputElement>('[data-mmr-output="selection"]')
 		const siblings = document.querySelector<HTMLOutputElement>('[data-mmr-output="mmrSiblings"]')
-		if (leafCount === null || peakHeight === null || leafIndex === null || selection === null || siblings === null) throw new Error('MMR planner fixture is incomplete')
+		const heightTwo = Array.from(document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).find(button => button.textContent === 'Height 2')
+		const preset = Array.from(document.querySelectorAll<HTMLButtonElement>('#mmr-proof-planner .interactive-tool-presets button')).find(button => button.textContent === '13 leaves, height 2')
+		const status = document.querySelector<HTMLElement>('#mmr-proof-planner .interactive-tool-status')
+		if (leafCount === null || peakHeight === null || leafIndex === null || leafCountError === null || leafIndexError === null || selection === null || siblings === null || heightTwo === undefined || preset === undefined || status === null) throw new Error('MMR planner fixture is incomplete')
 
 		expect(peakHeight.value).toBe('2')
+		expect(peakHeight.tabIndex).toBe(-1)
+		expect(peakHeight.getAttribute('aria-hidden')).toBe('true')
 		expect(selection.value).toBe('Valid peak-local index')
 		expect(siblings.value).toBe('4')
+		expect(heightTwo.getAttribute('aria-pressed')).toBe('true')
+		preset.click()
+		expect(preset.getAttribute('aria-pressed')).toBe('true')
+		const heightZero = Array.from(document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).find(button => button.textContent === 'Height 0')
+		if (heightZero === undefined) throw new Error('MMR height-zero control is missing')
+		heightZero.focus()
+		heightZero.click()
+		expect(document.activeElement).toBe(heightZero)
+		expect(preset.getAttribute('aria-pressed')).toBe('false')
+		expect(status.textContent).toBe('')
 
 		leafCount.value = '0'
 		leafCount.dispatchEvent(new Event('input'))
 		expect(leafCount.getAttribute('aria-invalid')).toBe('true')
+		expect(leafCount.getAttribute('aria-describedby')).toContain(leafCountError.id)
+		expect(leafCountError.hidden).toBeFalse()
+		expect(leafCountError.textContent).toContain('Enter an integer from 1 through')
+		expect(leafIndex.hasAttribute('aria-invalid')).toBeFalse()
+		expect(leafIndexError.hidden).toBeTrue()
 		expect(peakHeight.disabled).toBeTrue()
-		expect(selection.value).toContain('Enter an integer from 1 through')
+		expect(Array.from(document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).every(button => button.disabled)).toBeTrue()
+		expect(selection.value).toBe('—')
 
 		leafCount.value = '8'
 		leafCount.dispatchEvent(new Event('input'))
 		expect(leafCount.hasAttribute('aria-invalid')).toBeFalse()
+		expect(leafCountError.hidden).toBeTrue()
 		expect(peakHeight.value).toBe('3')
 		leafIndex.value = '8'
 		leafIndex.dispatchEvent(new Event('input'))
+		expect(leafIndex.getAttribute('aria-invalid')).toBe('true')
+		expect(leafIndex.getAttribute('aria-describedby')).toContain(leafIndexError.id)
+		expect(leafIndexError.hidden).toBeFalse()
+		expect(leafIndexError.textContent).toBe('Enter an index from 0 through 7.')
 		expect(selection.value).toBe('Index must be between 0 and 7')
 		leafIndex.value = '7'
 		leafIndex.dispatchEvent(new Event('input'))
+		expect(leafIndex.hasAttribute('aria-invalid')).toBeFalse()
+		expect(leafIndexError.hidden).toBeTrue()
 		expect(selection.value).toBe('Valid peak-local index')
+	} finally {
+		cleanup()
+	}
+})
+
+test('deployment bit controls clear the active preset and stale status', async () => {
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
+	Object.defineProperty(globalThis, 'fetch', {
+		configurable: true,
+		value: async (input: URL | RequestInfo) => {
+			const source = String(input)
+			const path = source.includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
+			return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
+		},
+	})
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		await runGeneratedRuntime('interactiveTools')
+		for (let attempt = 0; attempt < 20 && document.querySelector('[data-deployment-bit-toggle]') === null; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
+		const preset = Array.from(document.querySelectorAll<HTMLButtonElement>('#deployment-mask-decoder .interactive-tool-presets button')).find(button => button.textContent === 'First and third set')
+		const bit = document.querySelector<HTMLButtonElement>('[data-deployment-bit-toggle="0"]')
+		const status = document.querySelector<HTMLElement>('#deployment-mask-decoder .interactive-tool-status')
+		if (preset === undefined || bit === null || status === null) throw new Error('Deployment decoder controls are missing')
+		preset.click()
+		expect(preset.getAttribute('aria-pressed')).toBe('true')
+		bit.click()
+		expect(preset.getAttribute('aria-pressed')).toBe('false')
+		expect(status.textContent).toBe('')
+	} finally {
+		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
+		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		cleanup()
+	}
+})
+
+test('deployment decoder exposes retryable HTTP and malformed-manifest failures', async () => {
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
+	let mainnetResponse: 'http-error' | 'malformed' = 'http-error'
+	Object.defineProperty(globalThis, 'fetch', {
+		configurable: true,
+		value: async (input: URL | RequestInfo) => {
+			const source = String(input)
+			if (source.includes('sepolia')) return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
+			if (mainnetResponse === 'http-error') return new Response('Unavailable', { status: 500 })
+			return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
+		},
+	})
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		await runGeneratedRuntime('interactiveTools')
+		const mapping = document.querySelector<HTMLTableSectionElement>('#deployment-status-bit-mapping')
+		const sepoliaMapping = document.querySelector<HTMLTableSectionElement>('#sepolia-deployment-status-bit-mapping')
+		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
+		const retry = document.querySelector<HTMLButtonElement>('[data-deployment-mask-retry]')
+		const preset = document.querySelector<HTMLButtonElement>('#deployment-mask-decoder .interactive-tool-presets button')
+		if (mapping === null || sepoliaMapping === null || input === null || retry === null || preset === null) throw new Error('Deployment failure controls are missing')
+		for (let attempt = 0; attempt < 20 && retry.hidden; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
+		expect(mapping.textContent).toContain('Unable to load the deployment mapping.')
+		expect(sepoliaMapping.textContent).toContain('Unable to load the deployment mapping.')
+		expect(mapping.getAttribute('aria-busy')).toBe('false')
+		expect(sepoliaMapping.getAttribute('aria-busy')).toBe('false')
+		expect(input.disabled).toBeTrue()
+		expect(preset.disabled).toBeTrue()
+		expect(retry.hidden).toBeFalse()
+		expect(retry.disabled).toBeFalse()
+
+		mainnetResponse = 'malformed'
+		retry.click()
+		expect(mapping.getAttribute('aria-busy')).toBe('true')
+		for (let attempt = 0; attempt < 20 && mapping.getAttribute('aria-busy') !== 'false'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
+		expect(mapping.textContent).toContain('Unable to load the deployment mapping.')
+		expect(mapping.getAttribute('aria-busy')).toBe('false')
+		expect(input.disabled).toBeTrue()
+		expect(retry.hidden).toBeFalse()
+		expect(retry.disabled).toBeFalse()
+	} finally {
+		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
+		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		cleanup()
+	}
+})
+
+test('copy status clears on edit and failed clipboard access reveals a focused link', async () => {
+	const cleanup = await loadDocument('docs/explanation/truth-auctions.html', 'http://localhost/docs/explanation/truth-auctions.html')
+	const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+	const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand')
+	try {
+		await runGeneratedRuntime('interactiveTools')
+		const copy = Array.from(document.querySelectorAll<HTMLButtonElement>('#simple-auction-example .interactive-tool-actions button')).find(button => button.textContent === 'Copy scenario link')
+		const increment = document.querySelector<HTMLButtonElement>('#simple-auction-example .number-control [data-step-direction="increment"]')
+		const status = document.querySelector<HTMLElement>('#simple-auction-example .interactive-tool-status')
+		if (copy === undefined || increment === null || status === null) throw new Error('Copy scenario controls are missing')
+		Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => undefined } })
+		copy.click()
+		await new Promise(resolve => setTimeout(resolve, 0))
+		expect(status.textContent).toBe('Scenario link copied.')
+		increment.click()
+		expect(status.textContent).toBe('')
+
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: {
+				writeText: async () => {
+					throw new DOMException('Clipboard unavailable')
+				},
+			},
+		})
+		Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false })
+		copy.click()
+		await new Promise(resolve => setTimeout(resolve, 0))
+		const recoveryLink = status.querySelector<HTMLAnchorElement>('a')
+		expect(status.textContent).toBe('Copy failed. Open scenario link')
+		expect(recoveryLink?.href).toContain('tool=simple-auction-example')
+		expect(document.activeElement).toBe(recoveryLink)
+	} finally {
+		if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+		else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+		if (execCommandDescriptor === undefined) Reflect.deleteProperty(document, 'execCommand')
+		else Object.defineProperty(document, 'execCommand', execCommandDescriptor)
+		cleanup()
+	}
+})
+
+test('shared scenarios reject invalid number control values', async () => {
+	const state = encodeURIComponent(JSON.stringify({ aliceEth: '21' }))
+	const cleanup = await loadDocument('docs/explanation/truth-auctions.html', `http://localhost/docs/explanation/truth-auctions.html?tool=simple-auction-example&state=${state}`)
+	try {
+		await runGeneratedRuntime('interactiveTools')
+		const alice = document.querySelector<HTMLInputElement>('[data-example-input="aliceEth"]')
+		const status = document.querySelector<HTMLElement>('#simple-auction-example .interactive-tool-status')
+		if (alice === null || status === null) throw new Error('Interactive truth-auction fixture is missing')
+		expect(alice.value).toBe('3')
+		expect(alice.hasAttribute('aria-invalid')).toBeFalse()
+		expect(status.textContent).toBe('The shared scenario contains invalid values; defaults remain active.')
 	} finally {
 		cleanup()
 	}

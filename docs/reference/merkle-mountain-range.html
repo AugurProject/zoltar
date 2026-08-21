@@ -58,7 +58,7 @@
 			<section id="encoding">
 				<h2>Normative Encoding</h2>
 				<p>The leaf ABI types are <code>(address,uint8,uint256,uint256,uint256,uint256)</code>, in the order <code>depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId</code>. <code>outcome</code> is the Solidity enum ordinal. Leaf hashing uses standard ABI word padding through <code>abi.encode</code>; parent hashing uses the 64 raw bytes from <code>abi.encodePacked(left, right)</code>. There is no additional domain separator.</p>
-				<pre><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
+				<pre class="code-scroll" tabindex="0"><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
     parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId))
 parentHash = keccak256(abi.encodePacked(left, right))
 root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
@@ -187,7 +187,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 							<span>Nullifier sibling hashes required</span>
 							<output data-mmr-output="nullifierSiblings">64</output>
 						</div>
-						<div>
+						<div data-primary-output>
 							<span>Selection</span>
 							<output data-mmr-output="selection">Valid peak-local index</output>
 						</div>

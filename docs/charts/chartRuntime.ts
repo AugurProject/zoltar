@@ -695,6 +695,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 	const auctionRaised = readInput(example, 'auctionRaised', 2.5)
 	const model = calculateCollateralRepairModel(parentSettlementCollateral, forkSettlementCollateralReceived, auctionRaised)
 	if (example !== null) {
+		if (example instanceof HTMLElement) example.dataset['widgetState'] = model.remainingShortfall === 0 ? 'safe' : 'warning'
 		const values = {
 			auctionRaised: `${auctionRaised.toFixed(2)} ETH`,
 			forkSettlementCollateralReceived: `${forkSettlementCollateralReceived.toFixed(2)} ETH`,
@@ -1062,6 +1063,10 @@ function updateEscalationSimulator(): void {
 	else if (daysSinceStart > deadlineDays && (ordered[0]?.[1] ?? 0) > (ordered[1]?.[1] ?? 0)) state = `locally resolvable: ${ordered[0]?.[0] ?? 'None'}`
 	else if (daysSinceStart > deadlineDays) state = balanceValues.every(balance => balance === 0) ? 'resolved: Invalid' : 'unresolved tie'
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')?.replaceChildren(state)
+	let widgetState = 'neutral'
+	if (state.startsWith('locally resolvable') || state.startsWith('resolved')) widgetState = 'safe'
+	else if (state.includes('fork') || state.includes('tie')) widgetState = 'warning'
+	simulator.dataset['widgetState'] = widgetState
 }
 
 updateEscalationSimulator()

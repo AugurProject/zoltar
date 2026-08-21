@@ -276,52 +276,52 @@
 					<div class="example-grid">
 						<label>
 							Block base fee
-							<input data-example-input="blockBaseFeeGwei" max="200" min="0" step="1" type="range" value="30" />
+							<input data-example-input="blockBaseFeeGwei" max="200" min="0" step="1" type="number" inputmode="decimal" value="30" />
 							<span class="example-value" data-example-value="blockBaseFeeGwei">30 gwei</span>
 						</label>
 						<label>
 							Initial-report priority fee
-							<input data-example-input="initialReportPriorityFeeGwei" max="100" min="1" step="1" type="range" value="10" />
+							<input data-example-input="initialReportPriorityFeeGwei" max="100" min="1" step="1" type="number" inputmode="decimal" value="10" />
 							<span class="example-value" data-example-value="initialReportPriorityFeeGwei">10 gwei</span>
 						</label>
 						<label>
 							Pool open interest
-							<input data-example-input="openInterestWeth" max="10000" min="0" step="100" type="range" value="100" />
+							<input data-example-input="openInterestWeth" max="10000" min="0" step="100" type="number" inputmode="decimal" value="100" />
 							<span class="example-value" data-example-value="openInterestWeth">100 WETH</span>
 						</label>
 						<label>
 							Gas units for one dispute
-							<input data-example-input="gasUnitsForOneDispute" max="1000000" min="100000" step="10000" type="range" value="300000" />
+							<input data-example-input="gasUnitsForOneDispute" max="1000000" min="100000" step="10000" type="number" inputmode="decimal" value="300000" />
 							<span class="example-value" data-example-value="gasUnitsForOneDispute">300,000 gas</span>
 						</label>
 						<label>
 							Open Oracle Security multiplier
-							<input data-example-input="openOracleSecurityMultiplier" max="20" min="1" step="0.5" type="range" value="10" />
+							<input data-example-input="openOracleSecurityMultiplier" max="20" min="1" step="0.5" type="number" inputmode="decimal" value="10" />
 							<span class="example-value" data-example-value="openOracleSecurityMultiplier">10.0x</span>
 						</label>
 						<label>
 							Target wrong-price error
-							<input data-example-input="targetPriceErrorForDispute" max="25" min="1.2" step="0.1" type="range" value="5" />
+							<input data-example-input="targetPriceErrorForDispute" max="25" min="1.2" step="0.1" type="number" inputmode="decimal" value="5" />
 							<span class="example-value" data-example-value="targetPriceErrorForDispute">5.0%</span>
 						</label>
 						<label>
 							OpenOracle protocol fee
-							<input data-example-input="openOracleProtocolFee" max="5" min="0" step="0.1" type="range" value="1" />
+							<input data-example-input="openOracleProtocolFee" max="5" min="0" step="0.1" type="number" inputmode="decimal" value="1" />
 							<span class="example-value" data-example-value="openOracleProtocolFee">1.0%</span>
 						</label>
 						<label>
 							OpenOracle reporter fee
-							<input data-example-input="openOracleReporterFee" max="2" min="0" step="0.1" type="range" value="0.1" />
+							<input data-example-input="openOracleReporterFee" max="2" min="0" step="0.1" type="number" inputmode="decimal" value="0.1" />
 							<span class="example-value" data-example-value="openOracleReporterFee">0.1%</span>
 						</label>
 						<label>
 							Requested initial WETH
-							<input data-example-input="requestedInitialWeth" max="25" min="0" step="0.25" type="range" value="0" />
+							<input data-example-input="requestedInitialWeth" max="25" min="0" step="0.25" type="number" inputmode="decimal" value="0" />
 							<span class="example-value" data-example-value="requestedInitialWeth">0.00 WETH</span>
 						</label>
 						<label>
 							Escalation halt multiplier
-							<input data-example-input="escalationHaltMultiplier" max="20" min="1" step="1" type="range" value="10" />
+							<input data-example-input="escalationHaltMultiplier" max="20" min="1" step="1" type="number" inputmode="decimal" value="10" />
 							<span class="example-value" data-example-value="escalationHaltMultiplier">10x</span>
 						</label>
 					</div>
@@ -329,12 +329,12 @@
 						<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">32.307692307692307700 WETH</output></div>
 						<div><span>Open-interest halt floor</span><output data-example-output="openInterestEscalationHalt">1.000000000000000000 WETH</output></div>
 						<div><span>Minimum token1 report</span><output data-example-output="estimatedMinimumWethReport">3.230769230769230770 WETH</output></div>
-						<div><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.230769230769230770 WETH</output></div>
+						<div data-primary-output><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.230769230769230770 WETH</output></div>
 						<div><span>Escalation halt</span><output data-example-output="selectedEscalationHalt">32.307692307692307700 WETH</output></div>
 						<div><span>Modeled dispute gas cost</span><output data-example-output="disputeGasCost">0.012000 ETH</output></div>
 						<div><span>Buffered gas target</span><output data-example-output="bufferedGasCost">0.120000 ETH</output></div>
 						<div><span>Correction profit fraction after fees</span><output data-example-output="correctionProfitFraction">3.7143%</output></div>
-						<div><span>Safety state</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
+						<div data-primary-output><span>Safety state</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
 					</div>
 				</details>
 			</section>
@@ -509,54 +509,54 @@
 					<div class="example-grid">
 						<label>
 							Honest price
-							<input data-example-input="honestPrice" max="200" min="50" step="1" type="range" value="100" />
+							<input data-example-input="honestPrice" max="200" min="50" step="1" type="number" inputmode="decimal" value="100" />
 							<span class="example-value" data-example-value="honestPrice">100</span>
 						</label>
 						<label>
 							Manipulated price
-							<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="range" value="113" />
+							<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="number" inputmode="decimal" value="113" />
 							<span class="example-value" data-example-value="manipulatedPrice">113</span>
 						</label>
 						<label>
 							Liquidation threshold
-							<input data-example-input="liquidationThresholdPrice" max="200" min="50" step="1" type="range" value="101" />
+							<input data-example-input="liquidationThresholdPrice" max="200" min="50" step="1" type="number" inputmode="decimal" value="101" />
 							<span class="example-value" data-example-value="liquidationThresholdPrice">101</span>
 						</label>
 						<label>
 							Liquidation distance
-							<input data-example-input="minLiquidationPriceDistanceBps" max="3000" min="0" step="100" type="range" value="1000" />
+							<input data-example-input="minLiquidationPriceDistanceBps" max="3000" min="0" step="100" type="number" inputmode="decimal" value="1000" />
 							<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
 						</label>
 						<label>
 							External payoff
-							<input data-example-input="externalPayoff" max="10000" min="100" step="100" type="range" value="1000" />
+							<input data-example-input="externalPayoff" max="10000" min="100" step="100" type="number" inputmode="decimal" value="1000" />
 							<span class="example-value" data-example-value="externalPayoff">1000.00 ETH</span>
 						</label>
 						<label>
 							Report liquidity
-							<input data-example-input="oracleReportLiquidity" max="20000" min="100" step="100" type="range" value="4000" />
+							<input data-example-input="oracleReportLiquidity" max="20000" min="100" step="100" type="number" inputmode="decimal" value="4000" />
 							<span class="example-value" data-example-value="oracleReportLiquidity">4000.00 ETH</span>
 						</label>
 						<label>
 							Honest dispute barrier (model)
-							<input data-example-input="honestDisputeBarrierFraction" max="0.5" min="0" step="0.001" type="range" value="0.011" />
+							<input data-example-input="honestDisputeBarrierFraction" max="0.5" min="0" step="0.001" type="number" inputmode="decimal" value="0.011" />
 							<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.10%</span>
 						</label>
 						<label>
 							Censorship duration (model steps)
-							<input data-example-input="censorshipDuration" max="168" min="0" step="1" type="range" value="24" />
+							<input data-example-input="censorshipDuration" max="168" min="0" step="1" type="number" inputmode="decimal" value="24" />
 							<span class="example-value" data-example-value="censorshipDuration">24 steps</span>
 						</label>
 						<label>
 							Target excess-cost ratio
-							<input data-example-input="targetGriefRatio" max="5" min="0" step="0.1" type="range" value="1" />
+							<input data-example-input="targetGriefRatio" max="5" min="0" step="0.1" type="number" inputmode="decimal" value="1" />
 							<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
 						</label>
 					</div>
 					<div class="example-output-grid" aria-live="polite">
 						<div><span>Execution error threshold</span><output data-example-output="executionErrorThreshold">12.22%</output></div>
 						<div><span>Manipulated price error</span><output data-example-output="manipulatedPriceError">13.00%</output></div>
-						<div><span>Liquidation executable</span><output data-example-output="liquidationExecutable">yes</output></div>
+						<div data-primary-output><span>Liquidation executable</span><output data-example-output="liquidationExecutable">yes</output></div>
 						<div><span>Attacker payoff</span><output data-example-output="attackerPayoff">1000.00 ETH</output></div>
 						<div><span>Censorship cost</span><output data-example-output="censorshipCost">11424.00 ETH</output></div>
 						<div><span>Oracle liquidity ratio</span><output data-example-output="oracleLiquidityRatio">4.00</output></div>
@@ -680,202 +680,7 @@
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script>
-			const collectExample = (exampleId) => {
-				const root = document.querySelector(exampleId);
-				if (!root) {
-					return undefined;
-				}
-				const collect = (selector, key) => Object.fromEntries(Array.from(root.querySelectorAll(selector)).map((element) => [element.dataset[key], element]));
-				const inputs = collect("[data-example-input]", "exampleInput");
-				const outputs = collect("[data-example-output]", "exampleOutput");
-				const values = collect("[data-example-value]", "exampleValue");
-				const read = (inputName) => {
-					const inputElement = inputs[inputName];
-					if (!inputElement) {
-						return 0;
-					}
-					const inputValue = Number(inputElement.value);
-					return Number.isFinite(inputValue) ? inputValue : 0;
-				};
-				const writeOutput = (outputName, value) => {
-					const outputElement = outputs[outputName];
-					if (outputElement) {
-						outputElement.value = value;
-					}
-				};
-				const writeValue = (valueName, value) => {
-					const valueElement = values[valueName];
-					if (valueElement) {
-						valueElement.textContent = value;
-					}
-				};
-				return {
-					inputs,
-					read,
-					writeOutput,
-					writeValue,
-				};
-			};
-			const bindExample = (exampleId, update) => {
-				const context = collectExample(exampleId);
-				if (!context) {
-					return;
-				}
-				for (const inputElement of Object.values(context.inputs)) {
-					inputElement.addEventListener("input", () => update(context));
-				}
-				update(context);
-			};
-			const formatPercent = (fractionValue) => `${(fractionValue * 100).toFixed(2)}%`;
-			const formatEth = (ethValue) => `${ethValue.toFixed(2)} ETH`;
-			const formatExecutionThreshold = (thresholdValue) => {
-				if (!Number.isFinite(thresholdValue)) {
-					return "no finite threshold";
-				}
-				return formatPercent(thresholdValue);
-			};
-			const formatDuration = (durationValue) => {
-				if (durationValue === undefined) {
-					return "not applicable without attacker payoff";
-				}
-				if (!Number.isFinite(durationValue)) {
-					return "unbounded when censorship rate is zero";
-				}
-				return durationValue.toFixed(2);
-			};
-			const calculateMinimumWethEstimate = (parameters) => {
-				const percentagePrecision = 10_000_000n;
-				const targetErrorUnits = BigInt(Math.round(parameters.targetPriceErrorForDispute * 100_000));
-				const feeUnits = BigInt(Math.round((parameters.openOracleProtocolFee + parameters.openOracleReporterFee) * 100_000));
-				const targetError = parameters.targetPriceErrorForDispute / 100;
-				const feeFraction = (parameters.openOracleProtocolFee + parameters.openOracleReporterFee) / 100;
-				const correctionProfitFraction = (targetError - feeFraction) / (1 + targetError);
-				const disputeGasCostEth = parameters.gasUnitsForOneDispute * (parameters.blockBaseFeeGwei + parameters.initialReportPriorityFeeGwei) * 1e-9;
-				const bufferedGasCostEth = disputeGasCostEth * parameters.openOracleSecurityMultiplier;
-				const correctionProfitUnits = targetErrorUnits - feeUnits;
-				let minimumWethReportAttoEth;
-				if (correctionProfitUnits > 0n) {
-					const denominator = 10_000n * correctionProfitUnits;
-					const calculateGasPriceReport = (gasPriceGwei) => {
-						const numerator = BigInt(Math.round(gasPriceGwei * 1e9)) * BigInt(Math.round(parameters.gasUnitsForOneDispute)) * BigInt(Math.round(parameters.openOracleSecurityMultiplier * 10_000)) * (percentagePrecision + targetErrorUnits);
-						return (numerator + denominator - 1n) / denominator;
-					};
-					const priorityFeeReportAttoEth = calculateGasPriceReport(parameters.initialReportPriorityFeeGwei);
-					const baseFeeReportAttoEth = calculateGasPriceReport(parameters.blockBaseFeeGwei);
-					const openInterestAttoWeth = BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
-					const openInterestReportAttoEth = (openInterestAttoWeth + 99n) / 100n;
-					minimumWethReportAttoEth = priorityFeeReportAttoEth + (baseFeeReportAttoEth > openInterestReportAttoEth ? baseFeeReportAttoEth : openInterestReportAttoEth);
-				}
-				const openInterestAttoWeth = BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
-				const openInterestEscalationHaltAttoEth = (openInterestAttoWeth + 99n) / 100n;
-				const requestedInitialAttoWeth = BigInt(Math.round(parameters.requestedInitialWeth * 1e18));
-				let selectedInitialWethReportAttoEth;
-				if (minimumWethReportAttoEth !== undefined) {
-					selectedInitialWethReportAttoEth = requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
-				}
-				const initialReportEscalationHaltAttoEth = selectedInitialWethReportAttoEth === undefined ? undefined : (selectedInitialWethReportAttoEth * BigInt(Math.round(parameters.escalationHaltMultiplier * 10_000))) / 10_000n;
-				let selectedEscalationHaltAttoEth;
-				if (initialReportEscalationHaltAttoEth !== undefined) {
-					selectedEscalationHaltAttoEth = initialReportEscalationHaltAttoEth > openInterestEscalationHaltAttoEth ? initialReportEscalationHaltAttoEth : openInterestEscalationHaltAttoEth;
-				}
-				return {
-					bufferedGasCostEth,
-					correctionProfitFraction,
-					disputeGasCostEth,
-					initialReportEscalationHaltAttoEth,
-					minimumWethReportAttoEth,
-					openInterestEscalationHaltAttoEth,
-					selectedEscalationHaltAttoEth,
-					selectedInitialWethReportAttoEth,
-				};
-			};
-			const formatWethFromAttoEth = (attoWeth) => {
-				const atomicWethPerWeth = 10n ** 18n;
-				const whole = attoWeth / atomicWethPerWeth;
-				const fraction = attoWeth % atomicWethPerWeth;
-				return `${whole.toString()}.${fraction.toString().padStart(18, "0")} WETH`;
-			};
-			bindExample("#initial-report-estimator-example", (context) => {
-				const parameters = {
-					blockBaseFeeGwei: context.read("blockBaseFeeGwei"),
-					initialReportPriorityFeeGwei: context.read("initialReportPriorityFeeGwei"),
-					gasUnitsForOneDispute: context.read("gasUnitsForOneDispute"),
-					openInterestWeth: context.read("openInterestWeth"),
-					openOracleProtocolFee: context.read("openOracleProtocolFee"),
-					openOracleReporterFee: context.read("openOracleReporterFee"),
-					openOracleSecurityMultiplier: context.read("openOracleSecurityMultiplier"),
-					requestedInitialWeth: context.read("requestedInitialWeth"),
-					escalationHaltMultiplier: context.read("escalationHaltMultiplier"),
-					targetPriceErrorForDispute: context.read("targetPriceErrorForDispute"),
-				};
-				const estimate = calculateMinimumWethEstimate(parameters);
-				context.writeValue("blockBaseFeeGwei", parameters.blockBaseFeeGwei.toFixed(0) + " gwei");
-				context.writeValue("initialReportPriorityFeeGwei", parameters.initialReportPriorityFeeGwei.toFixed(0) + " gwei");
-				context.writeValue("openInterestWeth", parameters.openInterestWeth.toFixed(0) + " WETH");
-				context.writeValue("gasUnitsForOneDispute", parameters.gasUnitsForOneDispute.toLocaleString() + " gas");
-				context.writeValue("openOracleSecurityMultiplier", parameters.openOracleSecurityMultiplier.toFixed(1) + "x");
-				context.writeValue("targetPriceErrorForDispute", parameters.targetPriceErrorForDispute.toFixed(1) + "%");
-				context.writeValue("openOracleProtocolFee", parameters.openOracleProtocolFee.toFixed(1) + "%");
-				context.writeValue("openOracleReporterFee", parameters.openOracleReporterFee.toFixed(1) + "%");
-				context.writeValue("requestedInitialWeth", parameters.requestedInitialWeth.toFixed(2) + " WETH");
-				context.writeValue("escalationHaltMultiplier", parameters.escalationHaltMultiplier.toFixed(0) + "x");
-				const minimumWethText = estimate.minimumWethReportAttoEth === undefined ? "unsafe: fees meet or exceed target error" : formatWethFromAttoEth(estimate.minimumWethReportAttoEth);
-				const selectedInitialWethText = estimate.selectedInitialWethReportAttoEth === undefined ? "unsafe: fees meet or exceed target error" : formatWethFromAttoEth(estimate.selectedInitialWethReportAttoEth);
-				const selectedEscalationHaltText = estimate.selectedEscalationHaltAttoEth === undefined ? "unsafe: fees meet or exceed target error" : formatWethFromAttoEth(estimate.selectedEscalationHaltAttoEth);
-				const initialReportEscalationHaltText = estimate.initialReportEscalationHaltAttoEth === undefined ? "unsafe: fees meet or exceed target error" : formatWethFromAttoEth(estimate.initialReportEscalationHaltAttoEth);
-				context.writeOutput("initialReportEscalationHalt", initialReportEscalationHaltText);
-				context.writeOutput("openInterestEscalationHalt", formatWethFromAttoEth(estimate.openInterestEscalationHaltAttoEth));
-				context.writeOutput("estimatedMinimumWethReport", minimumWethText);
-				context.writeOutput("selectedInitialWethReport", selectedInitialWethText);
-				context.writeOutput("selectedEscalationHalt", selectedEscalationHaltText);
-				context.writeOutput("disputeGasCost", estimate.disputeGasCostEth.toFixed(6) + " ETH");
-				context.writeOutput("bufferedGasCost", estimate.bufferedGasCostEth.toFixed(6) + " ETH");
-				context.writeOutput("correctionProfitFraction", estimate.correctionProfitFraction > 0 ? (estimate.correctionProfitFraction * 100).toFixed(4) + "%" : "not positive");
-				context.writeOutput("estimatorSafetyState", estimate.correctionProfitFraction > 0 ? "fees below target error" : "unsafe: fees meet or exceed target error");
-			});
-			bindExample("#binary-censorship-example", (context) => {
-				const honestPrice = Math.max(context.read("honestPrice"), 0.0001);
-				const manipulatedPrice = Math.max(context.read("manipulatedPrice"), 0.0001);
-				const liquidationThresholdPrice = Math.max(context.read("liquidationThresholdPrice"), 0.0001);
-				const minLiquidationPriceDistanceBps = Math.max(context.read("minLiquidationPriceDistanceBps"), 0);
-				const externalPayoff = Math.max(context.read("externalPayoff"), 0.0001);
-				const oracleReportLiquidity = Math.max(context.read("oracleReportLiquidity"), 0.0001);
-				const honestDisputeBarrierFraction = Math.max(context.read("honestDisputeBarrierFraction"), 0);
-				const censorshipDuration = Math.max(context.read("censorshipDuration"), 0);
-				const targetGriefRatio = Math.max(context.read("targetGriefRatio"), 0);
-				const boundedLiquidationDistanceBps = Math.min(minLiquidationPriceDistanceBps, 10000);
-				const liquidationDistanceFraction = boundedLiquidationDistanceBps / 10000;
-				const discountedHonestPrice = honestPrice * (1 - liquidationDistanceFraction);
-				const executionErrorThreshold = discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1);
-				const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice);
-				const liquidationExecutable = manipulatedPrice > liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold;
-				const attackerPayoff = liquidationExecutable ? externalPayoff : 0;
-				const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction);
-				const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity;
-				const oracleLiquidityRatio = oracleReportLiquidity / externalPayoff;
-				let safeCensorshipDuration;
-				if (liquidationExecutable) {
-					safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio);
-				}
-				context.writeValue("honestPrice", honestPrice.toFixed(0));
-				context.writeValue("manipulatedPrice", manipulatedPrice.toFixed(0));
-				context.writeValue("liquidationThresholdPrice", liquidationThresholdPrice.toFixed(0));
-				context.writeValue("minLiquidationPriceDistanceBps", `${boundedLiquidationDistanceBps.toFixed(0)} bps`);
-				context.writeValue("externalPayoff", formatEth(externalPayoff));
-				context.writeValue("oracleReportLiquidity", formatEth(oracleReportLiquidity));
-				context.writeValue("honestDisputeBarrierFraction", formatPercent(honestDisputeBarrierFraction));
-				context.writeValue("censorshipDuration", `${censorshipDuration.toFixed(0)} steps`);
-				context.writeValue("targetGriefRatio", targetGriefRatio.toFixed(1));
-				context.writeOutput("executionErrorThreshold", formatExecutionThreshold(executionErrorThreshold));
-				context.writeOutput("manipulatedPriceError", formatPercent(manipulatedPriceError));
-				context.writeOutput("liquidationExecutable", liquidationExecutable ? "yes" : "no");
-				context.writeOutput("attackerPayoff", formatEth(attackerPayoff));
-				context.writeOutput("censorshipCost", formatEth(censorshipCost));
-				context.writeOutput("oracleLiquidityRatio", oracleLiquidityRatio.toFixed(2));
-				context.writeOutput("safeCensorshipDuration", formatDuration(safeCensorshipDuration));
-			});
-		</script>
+		<script type="module" src="../assets/js/openOracleTools.js"></script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>

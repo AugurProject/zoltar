@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import ts from 'typescript'
 
-export const documentationRuntimeNames = ['docsShell', 'responsiveDocs', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner'] as const
+export const documentationRuntimeNames = ['auctionClearing', 'deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'openOracleTools', 'responsiveDocs'] as const
 
 export type DocumentationRuntimeName = (typeof documentationRuntimeNames)[number]
 

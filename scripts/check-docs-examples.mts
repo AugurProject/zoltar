@@ -62,15 +62,10 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 	window.document.write(html)
 	window.document.close()
 
-	const script = window.document.querySelector('script:not([src])')
-	const scriptText = script?.textContent
-	if (scriptText === undefined || scriptText.trim().length === 0) {
-		window.close()
-		throw new Error(`${filePath} is missing an inline auction example script`)
-	}
-
-	const runScript = new Function('window', 'document', 'SVGCircleElement', 'SVGElement', 'SVGLineElement', 'SVGPolylineElement', 'SVGRectElement', 'SVGTextElement', scriptText)
-	runScript(window, window.document, window.SVGCircleElement, window.SVGElement, window.SVGLineElement, window.SVGPolylineElement, window.SVGRectElement, window.SVGTextElement)
+	const runtimeName = exampleId === 'simple-auction-example' ? 'auctionClearing' : 'openOracleTools'
+	const runtimeSource = await readFile(`docs/assets/js/${runtimeName}.js`, 'utf8')
+	const runScript = new Function('document', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', runtimeSource)
+	runScript(window.document, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement)
 
 	const example = window.document.getElementById(exampleId)
 	if (example === null) {
@@ -188,11 +183,7 @@ async function renderDeploymentMapping(
 		window.document.write(html)
 		window.document.close()
 
-		const script = window.document.querySelector('script[type="module"]:not([src])')
-		const scriptText = script?.textContent
-		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error(`${filePath} is missing its manifest-rendering script`)
-		}
+		const runtimeSource = await readFile('docs/assets/js/deploymentMaskDecoder.js', 'utf8')
 
 		const responses = retryResponse === undefined ? [response] : [response, retryResponse]
 		let fetchCount = 0
@@ -218,7 +209,7 @@ async function renderDeploymentMapping(
 			fetchCount += 1
 			return selectedResponse
 		}
-		const runScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
+		const runScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `${runtimeSource}\nreturn deploymentMaskDecoderReady`)
 		await runScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
 
 		const interactiveToolsSource = await readFile('docs/assets/js/interactiveTools.js', 'utf8')
@@ -423,15 +414,16 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 
 		for (const invalidLeafCount of ['0', String(1n << 64n)]) {
 			setInput(leafCount, invalidLeafCount)
-			assert.equal(output('binary'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must be outside the supported leaf-count domain`)
-			assert.equal(output('selection'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must clear the prior selection result`)
+			assert.equal(output('binary'), '—', `${invalidLeafCount} must mark calculated output unavailable without repeating the validation message`)
+			assert.equal(output('selection'), '—', `${invalidLeafCount} must clear the prior selection result`)
 			assert.equal(output('nullifierSiblings'), '64', 'invalid MMR input must not change the protocol-fixed nullifier depth')
 			assert.equal(leafCount.getAttribute('aria-invalid'), 'true', `${invalidLeafCount} must expose the invalid leaf-count state`)
 			assert.equal(peakHeight.disabled, true, `${invalidLeafCount} must disable the occupied-peak selector`)
-			assert.deepEqual(
-				Array.from(peakHeight.options, option => ({ text: option.textContent, value: option.value })),
-				[{ text: 'Enter a valid leaf count', value: '' }],
-				`${invalidLeafCount} must replace stale occupied peaks with one invalid-state option`,
+			assert.equal(peakHeight.options.length, 64, `${invalidLeafCount} must retain the dependent peak choices for layout stability`)
+			assert.equal(
+				Array.from(window.document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).every(button => button.disabled),
+				true,
+				`${invalidLeafCount} must visibly disable every dependent peak choice`,
 			)
 		}
 		setInput(leafCount, '13')
@@ -577,7 +569,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 			},
 			'a calculator preset must apply its complete input scenario',
 		)
-		assert.equal(status.textContent, 'Weak demand applied; results updated.', 'preset application must announce completion')
+		assert.equal(status.textContent, '', 'preset application must avoid redundant status narration')
 
 		for (const presetCase of [
 			{ expected: '47.5', input: 'forkSettlementCollateralReceived', presetIndex: '0', toolId: 'collateral-repair-example' },
@@ -615,7 +607,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 			},
 			'Reset must restore the calculator values that were present before linked state was applied',
 		)
-		assert.equal(status.textContent, 'Default values restored.', 'Reset must announce completion')
+		assert.equal(status.textContent, '', 'Reset must avoid redundant status narration')
 
 		copy.click()
 		await Promise.resolve()
@@ -732,11 +724,12 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 
 async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourceSnippets: string[]): Promise<void> {
 	const html = await readFile(filePath, 'utf8')
+	const runtimeSource = await readFile('docs/runtime/auctionClearing.ts', 'utf8')
 	assert.match(html, /<span>ETH retained<\/span/, `${filePath} should label retained ETH explicitly`)
 	assert.match(html, /<span>Winning ETH kept<\/span/, `${filePath} should label winning ETH kept explicitly`)
 	assert.match(html, /qualification threshold as <code>clearingTick<\/code>[\s\S]*Only bids at or above/, `${filePath} should describe the underfunded winner boundary with clearingTick`)
 	for (const snippet of requiredSourceSnippets) {
-		assert.match(html, new RegExp(escapeRegExp(snippet)), `${filePath} is missing expected source snippet: ${snippet}`)
+		assert.match(runtimeSource, new RegExp(escapeRegExp(snippet)), `${filePath} runtime is missing expected source snippet: ${snippet}`)
 	}
 }
 
@@ -859,9 +852,9 @@ for (const scenario of scenarios) {
 }
 
 await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', [
-	'write("clearingMode", "underfunded qualification clearing")',
-	'write("bindingCondition", "underfunded")',
-	'write("thresholdInputEth", formatEth(winningEthAmount))',
+	"write('clearingMode', 'underfunded qualification clearing')",
+	"write('bindingCondition', 'underfunded')",
+	"write('thresholdInputEth', formatEth(winningEthAmount))",
 	'const threshold = ethRaiseCap / repInventory',
 	'bid.price >= threshold',
 	'repResults[bid.key] = (bid.eth * repInventory) / winningEthAmount',
