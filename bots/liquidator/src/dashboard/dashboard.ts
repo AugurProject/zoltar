@@ -1109,9 +1109,11 @@ networkName.addEventListener('change', async () => {
 	if (currentConfiguration?.network?.name === networkName.value) return
 	if (networkName.value !== 'mainnet' && networkName.value !== 'sepolia') return
 	const requestedNetwork = networkName.value
+	const activeNetwork = currentConfiguration?.network?.name
 	profileRequestEpoch += 1
 	pendingNetworkProfile = requestedNetwork
 	pendingProfileStateConfirmed = false
+	if (activeNetwork !== undefined) networkName.value = activeNetwork
 	marketSourceProbeRows = undefined
 	marketSourceCaption.textContent = 'Configured source admission'
 	showActiveAdmissionButton.classList.add('hidden')

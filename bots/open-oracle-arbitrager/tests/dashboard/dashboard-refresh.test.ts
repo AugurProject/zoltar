@@ -174,7 +174,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	networkSelect.dispatchEvent(new window.Event('change'))
 	await Bun.sleep(20)
 
-	expect(networkSelect.value).toBe('sepolia')
+	expect(networkSelect.value).toBe('mainnet')
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(true)
 	releaseState?.()
@@ -182,7 +182,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	stateGate = new Promise(resolve => (releaseState = resolve))
 	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))
 	await Bun.sleep(20)
-	expect(networkSelect.value).toBe('sepolia')
+	expect(networkSelect.value).toBe('mainnet')
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
 

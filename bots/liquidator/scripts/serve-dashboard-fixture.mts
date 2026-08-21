@@ -282,10 +282,12 @@ const server = startDashboardServer(4183, {
 		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
 		const requestedConnectivity = Reflect.get(value, 'connectivity')
 		const requestedRpcQuorum = typeof requestedConnectivity === 'object' && requestedConnectivity !== null ? Reflect.get(requestedConnectivity, 'rpcQuorum') : undefined
+		const requestedQuorumRpcUrls = typeof requestedConnectivity === 'object' && requestedConnectivity !== null ? Reflect.get(requestedConnectivity, 'quorumRpcUrls') : undefined
+		if (!Array.isArray(requestedQuorumRpcUrls) || requestedQuorumRpcUrls.some(url => typeof url !== 'string')) throw new Error('Expected quorum RPC URL list')
 		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
 		connectivity = {
 			publicRpcUrls: ['https://rpc.example'],
-			quorumRpcUrls: ['https://quorum.example'],
+			quorumRpcUrls: requestedQuorumRpcUrls,
 			readRpcUrl: 'https://read.example',
 			rpcQuorum: requestedRpcQuorum === 2 ? 2 : 1,
 		}

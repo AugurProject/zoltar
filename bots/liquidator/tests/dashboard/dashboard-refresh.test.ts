@@ -554,7 +554,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(mainnet.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
 	})
 
-	test('keeps the requested chain locked and visible while stale profile polls drain', async () => {
+	test('keeps the active chain visible and locked while a requested profile loads', async () => {
 		const page = await dashboard(
 			{ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://mainnet-public.example'], quorumRpcUrls: ['https://mainnet-quorum-a.example', 'https://mainnet-quorum-b.example'], readRpcUrl: 'https://mainnet-read.example', rpcQuorum: 2 } },
 			state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }),
@@ -564,7 +564,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		const networkFields = page.window.document.getElementById('network-fields')
 		const strategyFields = page.window.document.getElementById('strategy-fields')
 		const rpcQuorum = page.window.document.getElementById('rpc-quorum')
-		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement) || !(rpcQuorum instanceof page.window.HTMLSelectElement)) throw new Error('Expected chain-profile controls')
+		const readRpcUrl = page.window.document.getElementById('read-rpc-url')
+		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement) || !(rpcQuorum instanceof page.window.HTMLSelectElement) || !(readRpcUrl instanceof page.window.HTMLInputElement))
+			throw new Error('Expected chain-profile controls')
 		expect(rpcQuorum.value).toBe('2')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
 		const testSources = page.window.document.getElementById('test-market-sources')
@@ -579,11 +581,13 @@ describe('liquidator dashboard refresh behavior', () => {
 		networkName.value = 'sepolia'
 		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
 		await Bun.sleep(50)
-		expect(networkName.value).toBe('sepolia')
+		expect(networkName.value).toBe('mainnet')
 		expect(networkFields.disabled).toBe(true)
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
+		expect(readRpcUrl.value).toBe('https://mainnet-read.example')
+		expect(rpcQuorum.value).toBe('2')
 		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
 		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
 		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
@@ -595,7 +599,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 		page.releaseStateRequest()
 		await Bun.sleep(20)
-		expect(networkName.value).toBe('sepolia')
+		expect(networkName.value).toBe('mainnet')
 		await staleStateRefresh
 		await Bun.sleep(1_600)
 		expect(networkName.value).toBe('sepolia')

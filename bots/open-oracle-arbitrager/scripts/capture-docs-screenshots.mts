@@ -42,6 +42,7 @@ let fixtureConfigurationHanging = false
 let fixtureConfigurationUnavailable = false
 let fixtureNetworkConfigured = true
 let fixturePauseHanging = false
+let fixtureProfileHanging = false
 const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
@@ -366,6 +367,75 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			if (typeof recoveryValue !== 'object' || recoveryValue === null || !('fieldsetDisabled' in recoveryValue) || recoveryValue.fieldsetDisabled !== false || !('status' in recoveryValue) || recoveryValue.status !== 'Chain and RPCs passed validation, were saved, and apply to the next scan.') {
 				throw new Error(`Connectivity mutation did not recover after retry: ${JSON.stringify(recoveryValue)}`)
 			}
+			fixtureProfileHanging = true
+			await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const network = document.querySelector('#network-name')
+						if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
+						network.value = 'sepolia'
+						network.dispatchEvent(new Event('change', { bubbles: true }))
+					})()`,
+				},
+				sessionId,
+			)
+			await Bun.sleep(100)
+			for (const [name, width, height] of [
+				['profile-switching-desktop.png', 1440, 900],
+				['profile-switching-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const pendingProfile = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const group = document.querySelector('#network-connectivity')
+							if (group instanceof HTMLDetailsElement) group.open = true
+							if (group instanceof HTMLElement) {
+								const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
+								window.scrollTo(0, Math.max(0, group.getBoundingClientRect().top + window.scrollY - offset))
+							}
+							return {
+								activeProfile: document.querySelector('#network-name')?.value,
+								bodyScrollWidth: document.body.scrollWidth,
+								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+								readRpcUrl: document.querySelector('#read-rpc-url')?.value,
+								rpcQuorum: document.querySelector('#rpc-quorum')?.value,
+								scope: document.querySelector('#settings-chain-scope')?.textContent,
+								status: document.querySelector('#connectivity-status')?.textContent
+							}
+						})()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const pendingValue = typeof pendingProfile === 'object' && pendingProfile !== null && 'result' in pendingProfile && typeof pendingProfile.result === 'object' && pendingProfile.result !== null && 'value' in pendingProfile.result ? pendingProfile.result.value : undefined
+				if (
+					typeof pendingValue !== 'object' ||
+					pendingValue === null ||
+					!('activeProfile' in pendingValue) ||
+					pendingValue.activeProfile !== 'mainnet' ||
+					!('fieldsetDisabled' in pendingValue) ||
+					pendingValue.fieldsetDisabled !== true ||
+					!('readRpcUrl' in pendingValue) ||
+					pendingValue.readRpcUrl !== 'https://read.example/' ||
+					!('rpcQuorum' in pendingValue) ||
+					pendingValue.rpcQuorum !== '2' ||
+					!('scope' in pendingValue) ||
+					!String(pendingValue.scope).includes('Ethereum mainnet') ||
+					!('status' in pendingValue) ||
+					!String(pendingValue.status).includes('Switching to the Sepolia profile') ||
+					!('bodyScrollWidth' in pendingValue) ||
+					typeof pendingValue.bodyScrollWidth !== 'number' ||
+					pendingValue.bodyScrollWidth > width
+				) {
+					throw new Error(`Pending arbitrager profile switch mixed chain contexts: ${JSON.stringify(pendingValue)}`)
+				}
+				await settlePaint()
+				await capturePng(name)
+			}
+			fixtureProfileHanging = false
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION_STATES'] === '1') {
 			const readConfigurationState = async () => {
@@ -1710,6 +1780,11 @@ const server = startDashboardServer(0, {
 		fixturePauseRequests.push(value)
 		while (fixturePauseHanging) await Bun.sleep(10)
 		paused = value
+	},
+	switchNetworkProfile: async value => {
+		if (typeof value !== 'object' || value === null || Reflect.get(value, 'network') !== 'sepolia') throw new Error('Expected Sepolia profile request')
+		while (fixtureProfileHanging) await Bun.sleep(10)
+		return { network: 'sepolia' }
 	},
 	updateConnectivity: async () => {
 		while (fixtureConnectivityHanging) await Bun.sleep(10)

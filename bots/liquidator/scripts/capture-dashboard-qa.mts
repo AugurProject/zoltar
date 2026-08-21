@@ -82,6 +82,11 @@ try {
 			window.__qaStateRequestCount = 0
 			window.fetch = (input, init) => {
 				const path = typeof input === 'string' ? new URL(input, window.location.href).pathname : input instanceof Request ? new URL(input.url).pathname : String(input)
+				if (new URL(window.location.href).searchParams.get('qaProfile') === 'pending' && path === '/api/network-profile' && init?.method === 'PUT') {
+					return new Promise(resolve => {
+						window.__qaReleaseProfile = async () => resolve(await originalFetch(input, init))
+					})
+				}
 				if (path === '/api/state' && init?.method === undefined) window.__qaStateRequestCount += 1
 				if (new URL(window.location.href).searchParams.get('qaState') === 'unavailable' && path === '/api/state' && init?.method === undefined) {
 					return Promise.resolve(new Response(JSON.stringify({ error: 'fixture state endpoint unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 }))
@@ -215,22 +220,28 @@ try {
 		network.value = 'mainnet'
 		network.dispatchEvent(new Event('change', { bubbles: true }))
 	})()`)
-	await Bun.sleep(1_300)
-	await evaluate(`(() => {
+	await Bun.sleep(2_200)
+	const networkSubmission = await evaluate(`(async () => {
 		const form = document.querySelector('#network-form')
 		const readRpc = document.querySelector('#read-rpc-url')
 		const publicRpcs = document.querySelector('#public-rpc-urls')
 		const quorumRpcs = document.querySelector('#quorum-rpc-urls')
-		if (!(form instanceof HTMLFormElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement)) throw new Error('Network configuration controls missing')
+		const rpcQuorum = document.querySelector('#rpc-quorum')
+		if (!(form instanceof HTMLFormElement) || !(readRpc instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement) || !(rpcQuorum instanceof HTMLSelectElement)) throw new Error('Network configuration controls missing')
 		readRpc.value = 'https://read.example'
 		publicRpcs.value = 'https://rpc.example'
-		quorumRpcs.value = 'https://quorum.example'
-		form.requestSubmit()
+		quorumRpcs.value = 'https://quorum-a.example\\nhttps://quorum-b.example'
+		rpcQuorum.value = '2'
+		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		await new Promise(resolve => setTimeout(resolve, 250))
+		return { disabled: document.querySelector('#network-fields')?.disabled, status: document.querySelector('#network-status')?.textContent }
 	})()`)
+	if (typeof networkSubmission !== 'object' || networkSubmission === null || Reflect.get(networkSubmission, 'status') !== 'Chain and RPCs passed validation, were saved, and apply to the next scan.') throw new Error(`Mainnet RPC fixture submission failed: ${JSON.stringify(networkSubmission)}`)
 	await Bun.sleep(700)
 	const configuredNetwork = await evaluate(`({
 		attention: document.querySelector('#attention-badge')?.textContent,
 		badge: document.querySelector('#network-badge')?.textContent,
+		rpcQuorum: document.querySelector('#rpc-quorum')?.value,
 		status: document.querySelector('#network-status')?.textContent
 	})`)
 	if (
@@ -247,12 +258,14 @@ try {
 		!('badge' in configuredNetwork) ||
 		configuredNetwork.badge !== 'Mainnet · chain 1' ||
 		!('attention' in configuredNetwork) ||
-		configuredNetwork.attention !== '2 actions'
+		configuredNetwork.attention !== '2 actions' ||
+		!('rpcQuorum' in configuredNetwork) ||
+		configuredNetwork.rpcQuorum !== '2'
 	) {
 		throw new Error(`Network safety badge did not update from unconfigured to mainnet: ${JSON.stringify({ configuredNetwork, unconfiguredNetworkState })}`)
 	}
-	const configuredNetworkDesktop = await capture('liquidator-network-mainnet-desktop', 1440, 900)
-	const configuredNetworkMobile = await capture('liquidator-network-mainnet-mobile', 390, 844)
+	const configuredNetworkDesktop = await capture('liquidator-network-mainnet-desktop', 1440, 900, 0, 'settings')
+	const configuredNetworkMobile = await capture('liquidator-network-mainnet-mobile', 390, 844, 0, 'settings')
 	const mobileSafetyActionPositions = await readSafetyActionPositions()
 	const networkStates = {
 		configured: configuredNetwork,
@@ -264,6 +277,7 @@ try {
 	}
 	if (process.env['LIQUIDATOR_CAPTURE_CHAIN_PROFILES'] === '1') {
 		await evaluate(`(() => {
+			history.replaceState(null, '', '/settings?qaProfile=pending')
 			const network = document.querySelector('#network-name')
 			if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
 			network.value = 'sepolia'
@@ -273,7 +287,29 @@ try {
 		const sepoliaSwitching = {
 			desktop: await capture('liquidator-network-sepolia-switching-desktop', 1440, 900, 0, 'settings'),
 			mobile: await capture('liquidator-network-sepolia-switching-mobile', 390, 844, 0, 'settings'),
+			state: await evaluate(`({
+				activeProfile: document.querySelector('#network-name')?.value,
+				fieldsDisabled: document.querySelector('#network-fields')?.disabled,
+				readRpcUrl: document.querySelector('#read-rpc-url')?.value,
+				rpcQuorum: document.querySelector('#rpc-quorum')?.value,
+				scope: document.querySelector('#settings-chain-scope')?.textContent,
+				status: document.querySelector('#network-status')?.textContent
+			})`),
 		}
+		const switchingState = sepoliaSwitching.state
+		if (
+			typeof switchingState !== 'object' ||
+			switchingState === null ||
+			Reflect.get(switchingState, 'activeProfile') !== 'mainnet' ||
+			Reflect.get(switchingState, 'fieldsDisabled') !== true ||
+			Reflect.get(switchingState, 'readRpcUrl') !== 'https://read.example' ||
+			Reflect.get(switchingState, 'rpcQuorum') !== '2' ||
+			!String(Reflect.get(switchingState, 'scope')).includes('Ethereum mainnet') ||
+			!String(Reflect.get(switchingState, 'status')).includes('Switching to the Sepolia profile')
+		) {
+			throw new Error(`Pending profile switch mixed chain contexts: ${JSON.stringify(switchingState)}`)
+		}
+		await evaluate(`window.__qaReleaseProfile?.()`)
 		await Bun.sleep(1_300)
 		const sepoliaUnconfigured = {
 			desktop: await capture('liquidator-network-sepolia-unconfigured-desktop', 1440, 900, 0, 'settings'),

@@ -1193,6 +1193,7 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 	profileRequestEpoch += 1
 	pendingNetworkProfile = requestedNetwork
 	pendingProfileStateConfirmed = false
+	select.value = previousNetwork ?? requestedNetwork
 	select.disabled = true
 	setControlsEnabled(connected)
 	setText('connectivity-status', `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)
