@@ -8,6 +8,8 @@ import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Sta
 import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { shareBalanceScope } from '../protocol/live.js'
 import * as commonCopy from '../copy/common.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import * as appCopy from '../copy/app.js'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
@@ -35,11 +37,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 	const yesPercent = initialized ? bigintToSafeNumber((market.noReserve * 1_000n) / (market.yesReserve + market.noReserve), 'Conditional YES tenths') / 10 : 0
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<h1>Markets</h1>
-				</div>
-			</header>
+			<RouteHeader title={appCopy.markets} />
 			<section class='market-list'>
 				<article class='market-row'>
 					<div class='market-row__main'>
@@ -125,14 +123,7 @@ export function Liquidity({ market }: { market: DemoMarket }) {
 	}
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<span class='eyebrow'>Separate INVALID accounting</span>
-					<h1>Liquidity</h1>
-					<p>LP tokens represent only YES and NO reserves.</p>
-				</div>
-				<Status tone={liquidityStatusTone}>{actionAvailability.remove ? 'Removal preview' : liquidityStatus}</Status>
-			</header>
+			<RouteHeader eyebrow={appCopy.separateInvalidAccounting} title={appCopy.liquidity} description={appCopy.liquidityDescription} badge={<Status tone={liquidityStatusTone}>{actionAvailability.remove ? appCopy.removalPreview : liquidityStatus}</Status>} />
 			<div class='two-column'>
 				{closedReason !== undefined && !actionAvailability.remove ? (
 					<section class='section'>
@@ -338,15 +329,7 @@ export function SecurityPoolDetails({ market }: { market: DemoMarket }) {
 	const scope = shareBalanceScope(market)
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<a class='eyebrow' href='#/markets'>
-						← Markets
-					</a>
-					<h1>Security pool</h1>
-					<p>{market.question}</p>
-				</div>
-			</header>
+			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.question} />
 			<section class='section'>
 				<dl class='fact-list'>
 					<div>
@@ -410,11 +393,7 @@ export function SecurityPoolDetails({ market }: { market: DemoMarket }) {
 export function Portfolio({ market }: { market: DemoMarket }) {
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<h1>Portfolio</h1>
-				</div>
-			</header>
+			<RouteHeader title={appCopy.portfolio} />
 			<div class='portfolio-groups'>
 				<DemoPortfolioGroup market={market} balances={demoWalletBalances} />
 			</div>
@@ -425,12 +404,7 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 export function Help() {
 	return (
 		<main class='route prose-route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<span class='eyebrow'>Project guide</span>
-					<h1>How the market works</h1>
-				</div>
-			</header>
+			<RouteHeader eyebrow={appCopy.projectGuide} title={appCopy.marketGuide} />
 			<section class='explanation-flow'>
 				<article>
 					<span>01</span>

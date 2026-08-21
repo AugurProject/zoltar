@@ -28,7 +28,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button aria-label={ariaLabel} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
+			<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
 				{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{shouldShowDisabledReason ? (

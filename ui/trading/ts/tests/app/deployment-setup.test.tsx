@@ -143,7 +143,7 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Ready to deploy')
-		expect(rendered.container.querySelector('h1')?.textContent).toBe('Deploy')
+		expect(rendered.container.querySelector('.route-header h2')?.textContent).toBe('Deploy')
 		expect(rendered.container.textContent).toContain('Deploy and verify the shared deterministic contracts that back the application.')
 		expect(rendered.container.textContent).not.toContain('No bundled or wallet-deployed trading configuration was found.')
 		expect(rendered.container.textContent).toContain('Trading contracts')

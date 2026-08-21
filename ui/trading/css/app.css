@@ -473,7 +473,7 @@ nav a[aria-current="page"] {
 	background: transparent;
 	box-shadow: none;
 }
-.route-header h1 {
+.route-header h2 {
 	max-width: 820px;
 	margin: 0.35rem 0 0.55rem;
 	font:
@@ -1320,6 +1320,9 @@ summary {
 .scalar-fork-picker .secondary-action {
 	min-width: 160px;
 }
+.scalar-fork-picker > .market-scalar-deploy {
+	grid-column: 1 / -1;
+}
 .fork-invalid-option {
 	display: flex;
 	align-items: center;
@@ -1806,7 +1809,7 @@ summary {
 		display: grid;
 		gap: 1rem;
 	}
-	.route-header h1 {
+	.route-header h2 {
 		font-size: 2rem;
 	}
 	.detail-grid {

@@ -6,10 +6,13 @@ import type { RouteTabDefinition } from '../../types/components.js'
 import type { ComponentChildren } from 'preact'
 
 type AppHeaderShellProps = {
-	overview: ComponentChildren
+	mainElementId?: string
+	header?: ComponentChildren
+	renderHeader?: (simulationBanner: ComponentChildren) => ComponentChildren
+	overview?: ComponentChildren
 	simulationController: SimulationController | undefined
 	subNavigation?: ComponentChildren
-	tabNavigation: {
+	tabNavigation?: {
 		route: string
 		tabs: readonly RouteTabDefinition[]
 		onRouteChange: (route: string) => void
@@ -18,25 +21,38 @@ type AppHeaderShellProps = {
 	onRefresh: () => Promise<void>
 }
 
-export function AppHeaderShell({ overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh }: AppHeaderShellProps) {
+export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh }: AppHeaderShellProps) {
 	const focusAppContent = () => {
-		const appContent = document.getElementById('app-content')
-		if (appContent instanceof HTMLElement) appContent.focus()
+		const appContent = document.getElementById(mainElementId)
+		if (!(appContent instanceof HTMLElement)) return
+		appContent.tabIndex = -1
+		appContent.focus()
 	}
+
+	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
+	const shellHeader = header ?? (
+		<div className='top-shell'>
+			<div className='top-shell-content'>{overview}</div>
+			<div className='app-nav-stack'>
+				{tabNavigation === undefined ? undefined : <TabNavigation {...tabNavigation} />}
+				{subNavigation}
+			</div>
+		</div>
+	)
 
 	return (
 		<>
 			<button className='skip-link' type='button' onClick={focusAppContent}>
 				{appCopy.skipToMainContent}
 			</button>
-			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />}
-			<div className='top-shell'>
-				<div className='top-shell-content'>{overview}</div>
-				<div className='app-nav-stack'>
-					<TabNavigation {...tabNavigation} />
-					{subNavigation}
-				</div>
-			</div>
+			{renderHeader === undefined ? (
+				<>
+					{simulationBanner}
+					{shellHeader}
+				</>
+			) : (
+				renderHeader(simulationBanner)
+			)}
 		</>
 	)
 }

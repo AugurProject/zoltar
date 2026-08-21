@@ -9,6 +9,8 @@ import { SecurityPoolAddressLink, Status } from '../components/Status.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage } from './LiveTrading.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from './ForkMigrationTargets.js'
 import { createExclusiveWorkflowGuard } from '../lib/latestRequest.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import * as appCopy from '../copy/app.js'
 
 type TransactionState = 'idle' | 'preparing' | 'approval' | 'submitting' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
 
@@ -319,15 +321,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<a class='eyebrow' href='#/markets'>
-						← Markets
-					</a>
-					<h1>{market.question}</h1>
-				</div>
-				<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>
-			</header>
+			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={market.question} badge={<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>} />
 
 			<div class='detail-grid'>
 				{!initialized ? (

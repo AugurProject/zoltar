@@ -4,6 +4,7 @@ import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundS
 import { OpenOracleSection } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOracleSection.js'
 import { SecurityPoolsSection } from '../../features/security-pools/components/SecurityPoolsSection.js'
 import type { Route } from '../../types/app.js'
+import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
@@ -14,8 +15,7 @@ type Props = {
 }
 
 function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
-	if (route !== 'deploy' && readBackendMessage !== undefined) return false
-	return true
+	return shouldRenderAppRouteContent(route, readBackendMessage)
 }
 
 export function AppRouteContent({ deploy, openOracle, readBackendMessage, route, securityPools }: Props) {

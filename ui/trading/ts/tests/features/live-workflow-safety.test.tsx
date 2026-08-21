@@ -513,6 +513,8 @@ describe('live workflow safety boundary', () => {
 		await act(async () => button('Enter').click())
 		await act(async () => button('Preview trade').click())
 		await settleAsyncWorkflow()
+		expect(button('Enter YES').classList.contains('tx-action-button')).toBeTrue()
+		expect(document.querySelector('.transaction-review-primary')).not.toBeNull()
 		deferPositionBroadcast = true
 		waitForPositionReceipt = true
 		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
@@ -530,6 +532,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES pending on-chain')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(document.querySelector('.transaction-hash-link')).not.toBeNull()
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
@@ -550,7 +553,7 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
 		await act(async () => button('Exit').click())
-		const positionAction = document.querySelector('.operation-block .primary-action')
+		const positionAction = document.querySelector('.operation-block .tx-action-button')
 		const poolMechanics = document.querySelector('.operation-block .pool-mechanics')
 		if (positionAction === null || poolMechanics === null) throw new Error('Missing position action or pool mechanics disclosure')
 		expect(positionAction.compareDocumentPosition(poolMechanics) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
@@ -560,7 +563,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Insured YES exit approval pending on-chain')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(button('Approve router for all outcome tokens').getAttribute('aria-busy')).toBe('true')
+		expect(button('Approving router…').getAttribute('aria-busy')).toBe('true')
 		contextApprovalReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Insured YES exit approval confirmed on-chain')

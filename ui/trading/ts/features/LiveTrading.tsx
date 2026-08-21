@@ -30,6 +30,13 @@ import {
 import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
+import * as appCopy from '../copy/app.js'
+import * as workflowCopy from '../copy/workflows.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
+import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import {
 	approvalFailureTransition,
 	broadcastUncertainMessage,
@@ -165,40 +172,36 @@ type ExitSummaryValue = Readonly<{
 type LiveTradeSummaryQuote = Readonly<{ kind: 'entry'; value: EntrySummaryValue }> | Readonly<{ kind: 'exit'; value: ExitSummaryValue }>
 
 export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES' | 'NO') {
-	if (quote.kind === 'entry')
-		return (
-			<div class='trade-summary' aria-label='Trade summary'>
-				<div>
-					<span>You pay</span>
-					<strong>{formatUnits(quote.value.amount)} ETH</strong>
-					<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
-				</div>
-				<span class='trade-summary__arrow' aria-hidden='true'>
-					→
-				</span>
-				<div>
-					<span>You receive</span>
-					<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
-					<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
-				</div>
-			</div>
-		)
+	const primary =
+		quote.kind === 'entry'
+			? [
+					{ label: workflowCopy.youPay, value: `${formatUnits(quote.value.amount)} ETH` },
+					{ label: workflowCopy.youReceive, value: formatOutcomeAmount(quote.value.result.totalLongShares, side) },
+				]
+			: [
+					{ label: workflowCopy.youUse, value: formatOutcomeAmount(quote.value.result.totalLongShares, side) },
+					{ label: workflowCopy.youReceive, value: `${formatUnits(quote.value.result.ethOut)} ETH` },
+				]
 	return (
-		<div class='trade-summary' aria-label='Trade summary'>
-			<div>
-				<span>You use</span>
-				<strong>{formatOutcomeAmount(quote.value.result.totalLongShares, side)}</strong>
-				<small>+ {formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID')}</small>
-				<small>Trading fee {formatUnits(quote.value.market.feeBps, 2, 2)}%</small>
-			</div>
-			<span class='trade-summary__arrow' aria-hidden='true'>
-				→
-			</span>
-			<div>
-				<span>You receive</span>
-				<strong>{formatUnits(quote.value.result.ethOut)} ETH</strong>
-			</div>
+		<div class='trade-summary' aria-label={workflowCopy.tradeSummary}>
+			<TransactionReview
+				variant='inline'
+				primary={primary}
+				details={[
+					{ label: workflowCopy.invalidOutcome, value: formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') },
+					{ label: workflowCopy.tradingFee, value: `${formatUnits(quote.value.market.feeBps, 2, 2)}%` },
+				]}
+			/>
 		</div>
+	)
+}
+
+function TradingTransactionHash({ hash }: { hash: Hash }) {
+	return (
+		<p class='transaction-hash'>
+			<span>{workflowCopy.transaction}</span>
+			<TransactionHashLink hash={hash} />
+		</p>
 	)
 }
 
@@ -340,16 +343,7 @@ export function LiveSecurityPoolDetails({
 	else if (refreshError !== undefined) errorMessage = `SecurityPool refresh failed; showing the last successful result: ${refreshError}`
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<a class='eyebrow' href='#/markets'>
-						← Markets
-					</a>
-					<h1>Security pool</h1>
-					<p>{market.title}</p>
-				</div>
-				{market.loadError === undefined ? null : <Status tone='warn'>Pool data unavailable</Status>}
-			</header>
+			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.title} badge={market.loadError === undefined ? undefined : <Status tone='warn'>{appCopy.poolDataUnavailable}</Status>} />
 			{connectionMessage === undefined ? null : (
 				<p class='error' role='alert'>
 					{connectionMessage}
@@ -548,20 +542,22 @@ export function LiveTrading({
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
-				<header class='route-header'>
-					<div>
-						<span class='eyebrow'>Standalone live client</span>
-						<h1>Trading contracts unavailable</h1>
-						<p class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
-							{configurationError ?? message ?? 'Checking deterministic trading contracts…'}
-						</p>
-						{configurationError === undefined ? null : (
+				<RouteHeader
+					eyebrow={appCopy.standaloneLiveClient}
+					title={appCopy.contractsUnavailable}
+					description={
+						<span class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
+							{configurationError ?? message ?? appCopy.checkingContracts}
+						</span>
+					}
+					actions={
+						configurationError === undefined ? undefined : (
 							<button class='secondary-action' type='button' onClick={onDeploymentRetry}>
 								Retry deployment
 							</button>
-						)}
-					</div>
-				</header>
+						)
+					}
+				/>
 			</main>
 		)
 	let discoveryContent
@@ -616,14 +612,7 @@ export function LiveTrading({
 			)
 		return (
 			<main class='route' id='main-content'>
-				<header class='route-header'>
-					<div>
-						<a class='eyebrow' href='#/markets'>
-							← Markets
-						</a>
-						<h1>Security pool</h1>
-					</div>
-				</header>
+				<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
 				{connectionMessage === undefined ? null : (
 					<p class='error' role='alert'>
 						{connectionMessage}
@@ -639,18 +628,18 @@ export function LiveTrading({
 		const subtitle = portfolioRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)
 		return (
 			<main class='route' id='main-content'>
-				<header class='route-header'>
-					<div>
-						<span class='eyebrow'>Positions by SecurityPool</span>
-						<h1>Portfolio</h1>
-						{subtitle === undefined ? null : <p>{subtitle}</p>}
-					</div>
-					{walletConnectRequestNonce === undefined ? (
-						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-							{account === undefined ? 'Connect wallet' : shortAddress(account)}
-						</button>
-					) : null}
-				</header>
+				<RouteHeader
+					eyebrow={appCopy.positionsByPool}
+					title={appCopy.portfolio}
+					description={subtitle}
+					actions={
+						walletConnectRequestNonce === undefined ? (
+							<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+								{account === undefined ? appCopy.connectWallet : shortAddress(account)}
+							</button>
+						) : undefined
+					}
+				/>
 				{message === undefined ? null : (
 					<p class='error' role='alert'>
 						{message}
@@ -677,17 +666,17 @@ export function LiveTrading({
 	}
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<h1>Markets</h1>
-					<p>{marketRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)}</p>
-				</div>
-				{walletConnectRequestNonce === undefined ? (
-					<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-						{account === undefined ? 'Connect wallet' : shortAddress(account)}
-					</button>
-				) : null}
-			</header>
+			<RouteHeader
+				title={appCopy.markets}
+				description={marketRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)}
+				actions={
+					walletConnectRequestNonce === undefined ? (
+						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+							{account === undefined ? appCopy.connectWallet : shortAddress(account)}
+						</button>
+					) : undefined
+				}
+			/>
 			{message === undefined && parsedAmount.error === undefined ? null : (
 				<p class='error' role='alert'>
 					{message ?? parsedAmount.error}
@@ -1313,43 +1302,30 @@ function LiveLiquidityControls({
 					</dl>
 				</>
 			)}
-			{transactionHash === undefined ? null : (
-				<p class='transaction-hash'>
-					<span>Transaction</span>
-					<code title={transactionHash}>{transactionHash}</code>
-				</p>
-			)}
-			{receiptWarning === undefined ? null : (
-				<p class='error broadcast-warning' role='alert'>
-					{receiptWarning}
-				</p>
-			)}
-			{error === undefined ? null : (
-				<p class='error' role='alert'>
-					{error}
-				</p>
-			)}
+			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
+			<ErrorNotice message={receiptWarning} />
+			<ErrorNotice message={error} />
 			<p role='status' aria-live='polite'>
-				{stateLabel(state, 'Liquidity transaction')}
+				{stateLabel(state, workflowCopy.liquidityTransaction)}
 			</p>
-			{needsLpApproval ? (
-				<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked} onClick={approveLp}>
-					Approve exact LP amount
-				</button>
-			) : null}
+			{needsLpApproval ? <TransactionActionButton disabled={workflowLocked} idleLabel={workflowCopy.approveExactLp} pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'} pendingLabel={workflowCopy.approvingExactLp} onClick={approveLp} /> : null}
 			{!needsLpApproval && quote === undefined ? (
-				<button
-					class='primary-action'
-					disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || state === 'simulating' || workflowLocked}
+				<TransactionActionButton
+					disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || workflowLocked}
+					idleLabel={workflowCopy.simulateLiquidity}
+					pending={state === 'simulating'}
+					pendingLabel={workflowCopy.simulatingLiquidity}
 					onClick={simulateCurrent}
-				>
-					Simulate liquidity transaction
-				</button>
+				/>
 			) : null}
 			{!needsLpApproval && quote !== undefined ? (
-				<button class='primary-action' aria-busy={state === 'preparing' || state === 'submitting' || state === 'pending'} disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)} onClick={submit}>
-					Submit liquidity transaction
-				</button>
+				<TransactionActionButton
+					disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)}
+					idleLabel={workflowCopy.submitLiquidity}
+					pending={state === 'preparing' || state === 'submitting' || state === 'pending'}
+					pendingLabel={workflowCopy.submittingLiquidity}
+					onClick={submit}
+				/>
 			) : null}
 		</div>
 	)
@@ -1926,12 +1902,7 @@ export function LiveSettlementControls({
 					</>
 				)
 			})()}
-			{transactionHash === undefined ? null : (
-				<p class='transaction-hash'>
-					<span>Transaction</span>
-					<code title={transactionHash}>{transactionHash}</code>
-				</p>
-			)}
+			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 			{operation === 'redeem-complete-set' ? (
 				<ExecutionProtectionFields
 					slippage={slippage}
@@ -1947,17 +1918,9 @@ export function LiveSettlementControls({
 					}}
 				/>
 			) : null}
-			{receiptWarning === undefined ? null : (
-				<p class='error broadcast-warning' role='alert'>
-					{receiptWarning}
-				</p>
-			)}
+			<ErrorNotice message={receiptWarning} />
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? 'Wallet balances are unavailable'} retry={retryBalances} disabled={workflowLocked} /> : null}
-			{state === 'error' && error !== undefined ? (
-				<p class='error' role='alert'>
-					{error}
-				</p>
-			) : null}
+			<ErrorNotice message={state === 'error' ? error : undefined} />
 			{!(state === 'error' && error !== undefined) && (balanceState !== 'error' || state === 'confirmed' || state === 'approval-confirmed') && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
 				<p class={state === 'error' ? 'error' : undefined} role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'}>
 					{settlementStatus}
@@ -1966,20 +1929,32 @@ export function LiveSettlementControls({
 			{approvalRequired ? (
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool's share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
-					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined} onClick={() => void approveCompleteSetRouter()}>
-						Approve router for complete-set redemption
-					</button>
+					<TransactionActionButton
+						disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined}
+						idleLabel={workflowCopy.approveSettlement}
+						pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'}
+						pendingLabel={workflowCopy.approvingRouter}
+						onClick={() => void approveCompleteSetRouter()}
+					/>
 				</>
 			) : null}
 			{!approvalRequired && actionableQuote === undefined ? (
-				<button class='primary-action' disabled={inputBlocker !== undefined || balanceState !== 'ready' || walletClient === undefined || account === undefined || state === 'simulating' || workflowLocked} onClick={() => void simulateCurrent()}>
-					Simulate authoritative settlement
-				</button>
+				<TransactionActionButton
+					disabled={inputBlocker !== undefined || balanceState !== 'ready' || walletClient === undefined || account === undefined || workflowLocked}
+					idleLabel={workflowCopy.simulateSettlement}
+					pending={state === 'simulating'}
+					pendingLabel={workflowCopy.simulatingSettlement}
+					onClick={() => void simulateCurrent()}
+				/>
 			) : null}
 			{!approvalRequired && actionableQuote !== undefined ? (
-				<button class='primary-action' aria-busy={state === 'preparing' || state === 'submitting' || state === 'pending'} disabled={workflowLocked || state !== 'ready'} onClick={() => void submitCurrent()}>
-					{actionableQuote.operation === 'migrate-shares' ? `Submit migration to ${actionableQuote.targetOutcomeIndexes.length.toString()} child ${actionableQuote.targetOutcomeIndexes.length === 1 ? 'branch' : 'branches'}` : 'Submit settlement transaction'}
-				</button>
+				<TransactionActionButton
+					disabled={workflowLocked || state !== 'ready'}
+					idleLabel={actionableQuote.operation === 'migrate-shares' ? workflowCopy.migrationSubmission(actionableQuote.targetOutcomeIndexes.length) : workflowCopy.submitSettlement}
+					pending={state === 'preparing' || state === 'submitting' || state === 'pending'}
+					pendingLabel={workflowCopy.submittingSettlement}
+					onClick={() => void submitCurrent()}
+				/>
 			) : null}
 		</div>
 	)
@@ -2111,40 +2086,24 @@ function LivePositionControls({
 			{mode === 'exit' && balances?.approved === false ? (
 				<>
 					<p>This ERC-1155 approval covers every token ID in the pool’s share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed.</p>
-					<button class='primary-action' aria-busy={state === 'preparing' || state === 'approval' || state === 'approval-pending'} disabled={closed || balanceState !== 'ready' || workflowLocked} onClick={approve}>
-						Approve router for all outcome tokens
-					</button>
+					<TransactionActionButton disabled={closed || balanceState !== 'ready' || workflowLocked} idleLabel={workflowCopy.approveOutcomeTokens} pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'} pendingLabel={workflowCopy.approvingRouter} onClick={approve} />
 				</>
 			) : null}
 			{!(mode === 'exit' && balances?.approved === false) && quote === undefined ? (
-				<button
-					class='primary-action'
-					aria-busy={state === 'simulating'}
-					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || state === 'simulating' || workflowLocked}
+				<TransactionActionButton
+					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || workflowLocked}
+					idleLabel={workflowCopy.previewTrade}
+					pending={state === 'simulating'}
+					pendingLabel={workflowCopy.simulatingTrade(mode, side)}
 					onClick={simulate}
-				>
-					{state === 'simulating' ? `Simulating ${mode === 'entry' ? `Enter ${side}` : `insured ${side} exit`}…` : 'Preview trade'}
-				</button>
+				/>
 			) : null}
-			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? (
-				<button class='primary-action' aria-busy={state === 'submitting' || state === 'pending'} disabled={workflowLocked || closed || state !== 'ready'} onClick={submit}>
-					{submitLabel}
-				</button>
-			) : null}
+			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? <TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
 			<p role='status' aria-live='polite'>
 				{stateLabel(state, mode === 'entry' ? `Enter ${side}` : `Insured ${side} exit`)}
 			</p>
-			{transactionHash === undefined ? null : (
-				<p class='transaction-hash'>
-					<span>Transaction</span>
-					<code title={transactionHash}>{transactionHash}</code>
-				</p>
-			)}
-			{receiptWarning === undefined ? null : (
-				<p class='error broadcast-warning' role='alert'>
-					{receiptWarning}
-				</p>
-			)}
+			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
+			<ErrorNotice message={receiptWarning} />
 			<details class='trade-breakdown pool-mechanics'>
 				<summary>Pool and reserve details</summary>
 				{mode === 'entry' ? (

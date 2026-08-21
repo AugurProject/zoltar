@@ -9,17 +9,9 @@ import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierVal
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
-import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
 import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-function humanizeAction(action: string) {
-	return action
-		.replace(/([A-Z])/g, ' $1')
-		.replace(/^./, value => value.toUpperCase())
-		.replaceAll(/\bRep\b/g, commonCopy.rep)
-		.replaceAll(/\bEth\b/g, commonCopy.eth)
-		.replaceAll(/\bWeth\b/g, commonCopy.weth)
-}
-
 export function createDeploymentTransactionIntent(stepLabel: string) {
 	return buildIntent({
 		action: 'deploy',
@@ -181,16 +173,6 @@ export function createZoltarMigrationWarningPresentation(result: ZoltarMigration
 	return withWarning(createZoltarMigrationSuccessPresentation(result), message)
 }
 
-type PoolUniverseTransactionContext = {
-	securityPoolAddress?: string | undefined
-	universeId?: bigint | undefined
-}
-
-function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined) {
-	if (context === undefined) return undefined
-	return [...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }])]
-}
-
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
 	outcome?: ReportingActionResult['outcome'] | undefined
 }
@@ -204,7 +186,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 		action: actionName,
 		rows: getReportingTransactionRows(context),
 		source: 'reporting',
-		submittedTitle: humanizeAction(actionName),
+		submittedTitle: humanizeTransactionAction(actionName),
 		universeId: context?.universeId,
 	})
 }
@@ -218,7 +200,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
-		title: humanizeAction(result.action),
+		title: humanizeTransactionAction(result.action),
 		tone: 'success',
 		universeId: result.universeId,
 	})
@@ -295,7 +277,7 @@ function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'
 	if (actionName === 'createReportInstance') return openOracleCopy.createReport
 	if (actionName === 'settle') return openOracleCopy.settlingReportTitle
 	if (actionName === 'withdrawBalance') return openOracleCopy.withdrawBalance(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
-	return humanizeAction(actionName)
+	return humanizeTransactionAction(actionName)
 }
 
 function getOpenOracleSuccessTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
@@ -304,7 +286,7 @@ function getOpenOracleSuccessTitle(actionName: OpenOracleActionResult['action'],
 	if (actionName === 'createReportInstance') return openOracleCopy.reportCreated
 	if (actionName === 'settle') return openOracleCopy.reportSettled
 	if (actionName === 'withdrawBalance') return openOracleCopy.formatTokenWithdrawn(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
-	return humanizeAction(actionName)
+	return humanizeTransactionAction(actionName)
 }
 
 export function createOpenOracleTransactionIntent(actionName: OpenOracleActionResult['action'], context?: OpenOracleTransactionContext) {

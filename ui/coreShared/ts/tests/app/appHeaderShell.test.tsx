@@ -86,4 +86,22 @@ describe('AppHeaderShell', () => {
 			domEnvironment.cleanup()
 		}
 	})
+
+	test('supports an injected application header and custom main-content target', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
+		const appContent = document.createElement('main')
+		appContent.id = 'main-content'
+		document.body.appendChild(appContent)
+		const rendered = await renderIntoDocument(<AppHeaderShell mainElementId='main-content' renderHeader={simulationBanner => <header>{simulationBanner}Trading navigation</header>} simulationController={undefined} onRefresh={async () => undefined} />)
+
+		try {
+			expect(rendered.container.textContent).toContain('Trading navigation')
+			fireEvent.click(within(rendered.container).getByRole('button', { name: 'Skip to main content' }))
+			expect(document.activeElement).toBe(appContent)
+		} finally {
+			await rendered.cleanup()
+			appContent.remove()
+			domEnvironment.cleanup()
+		}
+	})
 })

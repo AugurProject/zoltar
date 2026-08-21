@@ -15,7 +15,7 @@ function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
 }
 
-export function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
+export function ScalarOutcomePicker({ action, clampExactTickInput = true, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
 	const sliderLabelId = useId()
 	const scalarValueErrorId = useId()
 	const selectedTickValue = clampScalarTickIndex(getSafeSelectedTickValue(selectedTick), details.numTicks)
@@ -87,7 +87,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 								setExactTickInputValue(nextInputValue)
 								const parsedTick = tryParseBigIntInput(nextInputValue)
 								if (parsedTick === undefined) return
-								onSelectedTickChange(clampScalarTickIndex(parsedTick, details.numTicks).toString())
+								onSelectedTickChange((clampExactTickInput ? clampScalarTickIndex(parsedTick, details.numTicks) : parsedTick).toString())
 							}}
 						/>
 					)}

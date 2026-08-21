@@ -149,6 +149,13 @@ const scenarios = [
 		assertExpression: `document.querySelector('.universe-selector') === null && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Deploy trading contracts' && button.disabled && button.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= document.documentElement.clientWidth`,
 	},
 	{ name: 'wrong-network', width: 1440, height: 900, path: '/?demo=1&scenario=wrong-network#/markets', assertExpression: `document.documentElement.scrollWidth <= document.documentElement.clientWidth` },
+	...([['live-simulation-market-desktop', 1440, 900], ['live-simulation-market-mobile', 390, 844]] as const).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: '/?simulate=1&simScenario=trading#/markets',
+		assertExpression: `(async () => { for (let attempt = 0; attempt < 200; attempt++) { const mounted = document.querySelector('#main-content .route-header h2')?.textContent === 'Markets'; const ready = document.body.textContent?.includes('SecurityPools') === true && document.body.textContent?.includes('Simulation') === true; if (mounted && ready) return document.title === 'Markets · Statoblast trading' && document.querySelector('.site-header')?.textContent?.includes('Statoblast trading') === true && document.documentElement.scrollWidth <= innerWidth; await new Promise(resolve => setTimeout(resolve, 100)); } throw new Error('Live Trading simulation did not mount: ' + (document.body.textContent ?? '').slice(0, 400)); })()`,
+	})),
 	{
 		name: 'market-list-desktop',
 		width: 1440,

@@ -12,7 +12,12 @@ import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } fro
 import { formatUnits, shortAddress } from '../lib/format.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
-import { SimulationBanner } from '@zoltar/ui-core-shared/components/SimulationBanner.js'
+import * as appCopy from '../copy/app.js'
+import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
+import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 
 const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'deploy', 'help'] as const
 type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
@@ -25,28 +30,23 @@ export function currentRoute(): TradingRoute {
 
 export function tradingDocumentTitle(route: TradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
-	if (route === 'not-found') label = 'Not found'
-	if (route === 'market') label = 'Market'
-	if (route.startsWith('security-pool/')) label = 'Security pool'
-	return `${label} · Statoblast trading`
+	if (route === 'not-found') label = appCopy.notFound
+	if (route === 'market') label = appCopy.market
+	if (route.startsWith('security-pool/')) label = appCopy.securityPool
+	return appCopy.documentTitle(label)
+}
+
+function tradingPageTitle(route: TradingRoute) {
+	return tradingDocumentTitle(route).replace(` · ${appCopy.appName}`, '')
 }
 
 function DemoSecurityPoolUnavailable() {
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<a class='eyebrow' href='#/markets'>
-						← Markets
-					</a>
-					<h1>Security pool</h1>
-				</div>
-			</header>
-			<section class='section'>
-				<p class='error' role='alert'>
-					This security pool is not available in the selected universe.
-				</p>
-			</section>
+			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
+			<SectionBlock className='section'>
+				<ErrorNotice message={appCopy.unavailablePool} />
+			</SectionBlock>
 		</main>
 	)
 }
@@ -61,13 +61,9 @@ function renderRoute(route: string, scenario: string, market: ReturnType<typeof 
 	if (route === 'markets') return <MarketList market={market} />
 	return (
 		<main class='route' id='main-content'>
-			<header class='route-header'>
-				<div>
-					<h1>Page not found</h1>
-				</div>
-			</header>
+			<RouteHeader title={appCopy.pageNotFound} />
 			<a class='primary-link' href='#/markets'>
-				Return to markets
+				{appCopy.returnToMarkets}
 			</a>
 		</main>
 	)
@@ -374,10 +370,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		return () => window.removeEventListener('hashchange', update)
 	}, [demo, selectedUniverseId])
 	useEffect(() => {
-		window.scrollTo(0, 0)
-		document.title = tradingDocumentTitle(displayedRoute)
-	}, [displayedRoute])
-	useEffect(() => {
 		if (demo) return
 		let active = true
 		setLiveDeploymentStatus('loading')
@@ -444,12 +436,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	} else if (route !== 'not-found' && scenario === 'loading')
 		content = (
 			<main class='route' id='main-content'>
-				<header class='route-header'>
-					<div>
-						<h1>Loading markets</h1>
-						<p>Reading the current factory index, lifecycle state, and pair reserves…</p>
-					</div>
-				</header>
+				<RouteHeader title={appCopy.loadingMarkets} description={appCopy.loadingMarketsDescription} />
 				<section class='section' aria-busy='true'>
 					<div class='loading-line' />
 					<div class='loading-line loading-line--short' />
@@ -460,77 +447,72 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const simulationController = getActiveSimulationController()
 	return (
 		<div class='app-shell'>
-			<a
-				class='skip-link'
-				href='#main-content'
-				onClick={event => {
-					event.preventDefault()
-					const main = document.getElementById('main-content')
-					if (!(main instanceof HTMLElement)) return
-					main.tabIndex = -1
-					main.focus()
-				}}
-			>
-				Skip to content
-			</a>
-			<div class='site-chrome'>
-				{banner}
-				{simulationController === undefined ? null : <SimulationBanner controller={simulationController} onRefresh={async () => window.location.reload()} />}
-				<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
-					<a class='brand' href='#/markets' aria-label='Statoblast trading home' aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-						<span class='brand__mark'>S</span>
-						<span>
-							<strong>Statoblast trading</strong>
-						</span>
-					</a>
-					<nav aria-label='Primary'>
-						{!demo && liveDeploymentStatus !== 'verified' ? (
-							<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-								Deploy
+			<AppPageHeading mainElementId='main-content' formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(displayedRoute)} />
+			<AppHeaderShell
+				mainElementId='main-content'
+				simulationController={simulationController}
+				onRefresh={async () => window.location.reload()}
+				renderHeader={simulationBanner => (
+					<div class='site-chrome'>
+						{banner}
+						{simulationBanner}
+						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
+							<a class='brand' href='#/markets' aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<span class='brand__mark'>{appCopy.brandMark}</span>
+								<span>
+									<strong>{appCopy.appName}</strong>
+								</span>
 							</a>
-						) : null}
-						<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Markets
-						</a>
-						<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Liquidity
-						</a>
-						<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Portfolio
-						</a>
-						<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-							Help
-						</a>
-					</nav>
-					<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
-						<span class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`}>
-							<span />
-							{tradingNetworkLabel(scenario, demo, liveDeploymentStatus)}
-						</span>
-						{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
-						{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
-						{deploymentSetupActive ? (
-							<button
-								class='wallet-button'
-								type='button'
-								disabled={workflowLocked || deploymentWalletState.connecting || !deploymentWalletState.ready}
-								aria-busy={deploymentWalletState.connecting}
-								aria-label={deploymentWalletState.account === undefined ? undefined : `Disconnect wallet ${deploymentWalletState.account}`}
-								title={deploymentWalletState.account === undefined ? undefined : 'Disconnect wallet'}
-								onClick={() => setDeploymentWalletRequestNonce(current => current + 1)}
-							>
-								{deploymentWalletLabel(deploymentWalletState)}
-							</button>
-						) : null}
-						{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
-						{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
-							<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
-								{walletSummary.account === undefined ? 'Connect wallet' : shortAddress(walletSummary.account)}
-							</button>
-						) : null}
+							<nav aria-label={appCopy.primaryNavigationLabel}>
+								{!demo && liveDeploymentStatus !== 'verified' ? (
+									<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+										{appCopy.deploy}
+									</a>
+								) : null}
+								<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									{appCopy.markets}
+								</a>
+								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									{appCopy.liquidity}
+								</a>
+								<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									{appCopy.portfolio}
+								</a>
+								<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									{appCopy.help}
+								</a>
+							</nav>
+							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
+								<span class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`}>
+									<span />
+									{tradingNetworkLabel(scenario, demo, liveDeploymentStatus)}
+								</span>
+								{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
+								{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
+								{deploymentSetupActive ? (
+									<button
+										class='wallet-button'
+										type='button'
+										disabled={workflowLocked || deploymentWalletState.connecting || !deploymentWalletState.ready}
+										aria-busy={deploymentWalletState.connecting}
+										aria-label={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWalletLabel(deploymentWalletState.account)}
+										title={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWallet}
+										onClick={() => setDeploymentWalletRequestNonce(current => current + 1)}
+									>
+										{deploymentWalletLabel(deploymentWalletState)}
+									</button>
+								) : null}
+								{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
+								{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
+									<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
+										{walletSummary.account === undefined ? appCopy.connectWallet : shortAddress(walletSummary.account)}
+									</button>
+								) : null}
+							</div>
+						</header>
 					</div>
-				</header>
-			</div>
+				)}
+			/>
 			{content}
 		</div>
 	)

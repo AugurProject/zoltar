@@ -5,30 +5,12 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
-import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
-import type { GlobalTransactionRow, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
-
-function humanizeAction(action: string) {
-	return action
-		.replace(/([A-Z])/g, ' $1')
-		.replace(/^./, value => value.toUpperCase())
-		.replaceAll(/\bRep\b/g, commonCopy.rep)
-		.replaceAll(/\bEth\b/g, commonCopy.eth)
-		.replaceAll(/\bWeth\b/g, commonCopy.weth)
-}
-
-type PoolUniverseTransactionContext = {
-	securityPoolAddress?: string | undefined
-	universeId?: bigint | undefined
-}
-
-function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
-	if (context === undefined) return undefined
-	return [...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }])]
-}
 
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeGwei?: string | undefined
@@ -93,7 +75,7 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action']) {
 	if (actionName === 'depositRepToVault') return securityPoolCopy.depositRepToVault
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.withdrawRep
-	return humanizeAction(actionName)
+	return humanizeTransactionAction(actionName)
 }
 
 export function createSecurityVaultTransactionIntent(actionName: SecurityVaultActionResult['action'], context?: SecurityVaultTransactionContext) {
@@ -138,7 +120,7 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 		action: actionName,
 		rows: getTradingTransactionRows(context),
 		source: 'trading',
-		submittedTitle: humanizeAction(actionName),
+		submittedTitle: humanizeTransactionAction(actionName),
 		universeId: context?.universeId,
 	})
 }
@@ -158,7 +140,7 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
-		title: humanizeAction(result.action),
+		title: humanizeTransactionAction(result.action),
 		tone: 'success',
 		universeId: result.universeId,
 	})
@@ -228,7 +210,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 		} else if (actionName === 'claimParentEscalationDeposits') {
 			resolvedSubmittedTitle = transactionCopy.claimParentEscalationDeposits
 		} else {
-			resolvedSubmittedTitle = humanizeAction(actionName)
+			resolvedSubmittedTitle = humanizeTransactionAction(actionName)
 		}
 	}
 	return buildIntent({
@@ -241,7 +223,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
-	let title = humanizeAction(result.action)
+	let title = humanizeTransactionAction(result.action)
 	if (result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund') {
 		title = transactionCopy.settleFinalizedRefunds
 	} else if (result.action === 'migrateUnresolvedEscalation') {

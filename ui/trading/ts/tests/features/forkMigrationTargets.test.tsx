@@ -43,6 +43,14 @@ function Harness({ context }: { context: ForkMigrationContext }) {
 function inputByLabel(container: HTMLElement, labelText: string) {
 	const directlyLabelled = Array.from(container.querySelectorAll('input')).find(candidate => candidate.getAttribute('aria-label') === labelText)
 	if (directlyLabelled instanceof HTMLInputElement) return directlyLabelled
+	const indirectlyLabelled = Array.from(container.querySelectorAll('input')).find(
+		candidate =>
+			candidate
+				.getAttribute('aria-labelledby')
+				?.split(' ')
+				.some(id => container.querySelector(`#${id}`)?.textContent === labelText) === true,
+	)
+	if (indirectlyLabelled instanceof HTMLInputElement) return indirectlyLabelled
 	const label = Array.from(container.querySelectorAll('label')).find(candidate => candidate.textContent?.includes(labelText) === true)
 	const input = label?.querySelector('input')
 	if (!(input instanceof HTMLInputElement)) throw new Error(`Missing input labeled ${labelText}`)
@@ -76,7 +84,7 @@ describe('fork migration target selection', () => {
 		const submit = buttonByText(rendered.container, 'Submit migration to 2 child branches')
 		expect(submit.disabled).toBeFalse()
 		expect(rendered.container.textContent).toContain('Authoritative migration simulation ready')
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection strong')).map(target => target.textContent)).toEqual(['-2.5 °C', '0 °C'])
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label')).map(target => target.textContent)).toEqual(['-2.5 °C', '0 °C'])
 	})
 
 	test('adds many arbitrary scalar outcomes and the invalid branch without raw packed input', async () => {
@@ -89,15 +97,15 @@ describe('fork migration target selection', () => {
 			await input(tickInput, tick)
 			await click(buttonByText(rendered.container, 'Add scalar target'))
 		}
-		await click(inputByLabel(rendered.container, 'Invalid fork outcome'))
+		await click(inputByLabel(rendered.container, 'Invalid'))
 		await click(buttonByText(rendered.container, 'Add scalar target'))
 
-		expect(Array.from(rendered.container.querySelectorAll('button')).filter(button => button.textContent?.includes('Remove target') === true)).toHaveLength(6)
+		expect(rendered.container.querySelectorAll('.fork-target-selection button')).toHaveLength(6)
 		expect(rendered.container.textContent).toContain('Invalid')
 		expect(rendered.container.textContent).toContain('-50 °C')
 		expect(rendered.container.textContent).toContain('50 °C')
 		expect(rendered.container.textContent).not.toContain(getScalarOutcomeIndex(context, 50n).toString())
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection strong')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
 	})
 
 	test('rejects a scalar tick beyond the fork question range instead of silently changing it', async () => {
@@ -140,11 +148,21 @@ describe('fork migration target selection', () => {
 		const rendered = await renderIntoDocument(<Harness context={context} />)
 		cleanup = rendered.cleanup
 
-		await click(inputByLabel(rendered.container, 'Red fork branch'))
-		await click(inputByLabel(rendered.container, 'Blue fork branch'))
+		expect(rendered.container.querySelector('.migration-outcome-list')).not.toBeNull()
 
-		expect(inputByLabel(rendered.container, 'Red fork branch').checked).toBeTrue()
-		expect(inputByLabel(rendered.container, 'Blue fork branch').checked).toBeTrue()
+		await click(buttonByText(rendered.container, 'Red'))
+		await click(buttonByText(rendered.container, 'Blue'))
+
+		expect(buttonByText(rendered.container, 'Red').getAttribute('aria-pressed')).toBe('true')
+		expect(buttonByText(rendered.container, 'Blue').getAttribute('aria-pressed')).toBe('true')
 		expect(rendered.container.textContent).toContain('2 targets selected')
+	})
+
+	test('uses the shared scalar outcome picker while keeping fork target conversion local', async () => {
+		const rendered = await renderIntoDocument(<Harness context={scalarContext()} />)
+		cleanup = rendered.cleanup
+
+		expect(rendered.container.querySelector('.market-scalar-deploy')).not.toBeNull()
+		expect(inputByLabel(rendered.container, 'Scalar fork tick').getAttribute('type')).toBe('range')
 	})
 })

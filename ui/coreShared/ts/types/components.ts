@@ -244,6 +244,7 @@ export type OutcomeChipRowProps = {
 
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
+	clampExactTickInput?: boolean
 	details: {
 		answerUnit?: string
 		displayValueMax?: bigint

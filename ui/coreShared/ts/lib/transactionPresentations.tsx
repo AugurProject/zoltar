@@ -5,6 +5,26 @@ import type { Hash } from '@zoltar/shared/ethereum'
 import { formatCurrencyBalanceWithUnit } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
+import { AddressValue } from '../components/AddressValue.js'
+
+export type PoolUniverseTransactionContext = {
+	securityPoolAddress?: string | undefined
+	universeId?: bigint | undefined
+}
+
+export function humanizeTransactionAction(action: string) {
+	return action
+		.replace(/([A-Z])/g, ' $1')
+		.replace(/^./, value => value.toUpperCase())
+		.replaceAll(/\bRep\b/g, commonCopy.rep)
+		.replaceAll(/\bEth\b/g, commonCopy.eth)
+		.replaceAll(/\bWeth\b/g, commonCopy.weth)
+}
+
+export function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
+	if (context === undefined) return undefined
+	return context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]
+}
 
 export function buildPresentation({
 	detail,

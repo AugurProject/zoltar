@@ -10,6 +10,8 @@ import { isKnownDefaultRpcUrl, loadCoreDeployments } from '../protocol/coreDeplo
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
 import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, walletChainId } from '../protocol/live.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import * as appCopy from '../copy/app.js'
 
 export type TradingDeploymentSetupServices = Readonly<{
 	createPublicClient(rpcUrl: string): PublicClient
@@ -465,14 +467,7 @@ export function TradingDeploymentSetup({
 	return (
 		<main class='route' id='main-content'>
 			{settingsHost === undefined ? null : createPortal(settingsPanel, settingsHost)}
-			<header class='route-header'>
-				<div>
-					<span class='eyebrow'>Standalone live client</span>
-					<h1>Deploy</h1>
-					<p>Deploy and verify the shared deterministic contracts that back the application.</p>
-				</div>
-				{standaloneWalletButton}
-			</header>
+			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} description={appCopy.deploymentDescription} actions={standaloneWalletButton} />
 			<section class='section deployment-setup'>
 				{settingsHost === undefined ? settingsPanel : null}
 				{registryError === undefined ? null : (

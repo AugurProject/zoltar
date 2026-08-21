@@ -59,6 +59,11 @@ describe('universe selector', () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
+		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
+		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
+		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
+		await act(() => skipButton.click())
+		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
 		expect(document.title).toBe(tradingDocumentTitle('not-found'))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
