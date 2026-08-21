@@ -117,13 +117,14 @@ describe('fork migration target selection', () => {
 		expect(rendered.container.textContent).toContain('Enter an exact tick')
 	})
 
-	test('distinguishes an uncommitted candidate and exposes selected child shortcuts as pressed', async () => {
+	test('exposes selected child shortcuts without redundant candidate status copy', async () => {
 		const context = scalarContext()
 		const readyTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}` }
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={{ ...context, availableTargets: [readyTarget] }} selectedTargets={[readyTarget]} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Branch to add')
+		expect(rendered.container.textContent).not.toContain('Branch to add')
+		expect(rendered.container.textContent).not.toContain('Selected branch')
 		const shortcut = buttonByText(rendered.container, '-25 °C')
 		expect(shortcut.getAttribute('aria-pressed')).toBe('true')
 	})

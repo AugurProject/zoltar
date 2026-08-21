@@ -60,9 +60,6 @@ function ScalarTargets({ context, selectedTargets, disabled, onChange }: { conte
 
 	return (
 		<div class='scalar-fork-picker'>
-			<p class='fork-scalar-preview' aria-live='polite'>
-				<span>{candidateSelected ? forkCopy.selectedBranch : forkCopy.branchToAdd}</span>
-			</p>
 			<ScalarOutcomePicker
 				action={
 					<button type='button' class='secondary-action' disabled={disabled || candidate === undefined} onClick={() => candidate === undefined || onChange(toggleTarget(selectedTargets, candidate))}>
