@@ -508,6 +508,13 @@ async function checkInteractiveToolControls(): Promise<void> {
 				<input data-example-input="requestedInitialWeth" value="2">
 				<div class="example-output-grid"><output>Default output</output></div>
 			</details>
+			<details class="interactive-example" id="binary-censorship-example">
+				<summary>Binary censorship</summary>
+				<input data-example-input="censorshipDuration" value="24">
+				<input data-example-input="externalPayoff" value="1000">
+				<input data-example-input="oracleReportLiquidity" value="4000">
+				<div class="example-output-grid"><output>Default output</output></div>
+			</details>
 		`)
 		window.document.close()
 		let inputEventCount = 0
@@ -576,6 +583,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 			{ expected: '47.5', input: 'forkSettlementCollateralReceived', presetIndex: '0', toolId: 'collateral-repair-example' },
 			{ expected: '50', input: 'parentSettlementCollateral', presetIndex: '0', toolId: 'collateral-repair-example' },
 			{ expected: '25', input: 'requestedInitialWeth', presetIndex: '1', toolId: 'initial-report-estimator-example' },
+			{ expected: '168', input: 'censorshipDuration', presetIndex: '2', toolId: 'binary-censorship-example' },
 		] as const) {
 			const presetTool = window.document.getElementById(presetCase.toolId)
 			if (!(presetTool instanceof window.HTMLDetailsElement)) throw new Error(`Missing preset tool: ${presetCase.toolId}`)
@@ -784,6 +792,32 @@ async function checkDynamicWethReportExample(): Promise<void> {
 	}
 }
 
+async function checkBinaryCensorshipExample(): Promise<void> {
+	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'binary-censorship-example')
+
+	try {
+		assertEqual(example.output('executionErrorThreshold'), '12.22%', 'binary censorship default execution threshold')
+		assertEqual(example.output('manipulatedPriceError'), '13.00%', 'binary censorship default price error')
+		assertEqual(example.output('liquidationExecutable'), 'yes', 'binary censorship default liquidation state')
+		assertEqual(example.valueFor('honestDisputeBarrierFraction'), '1.10%', 'binary censorship default fee barrier')
+		assertEqual(example.output('attackerPayoff'), '1000.00 ETH', 'binary censorship default outside payoff')
+		assertEqual(example.output('censorshipCost'), '11424.00 ETH', 'binary censorship default cost')
+		assertEqual(example.output('safeCensorshipDuration'), '4.20', 'binary censorship default duration bound')
+
+		example.setInput('manipulatedPrice', 108)
+		assertEqual(example.output('liquidationExecutable'), 'no', 'distance guard should block a small manipulation')
+		assertEqual(example.output('attackerPayoff'), '0.00 ETH', 'blocked liquidation should have no outside payoff')
+		assertEqual(example.output('safeCensorshipDuration'), 'not applicable without attacker payoff', 'blocked liquidation should have no payoff-relative duration threshold')
+
+		example.setInput('manipulatedPrice', 113)
+		example.setInput('honestDisputeBarrierFraction', 0.13)
+		assertEqual(example.output('censorshipCost'), '0.00 ETH', 'a calibrated barrier above the fixed-fee floor should remove censorship pressure at equal price error')
+		assertEqual(example.output('safeCensorshipDuration'), 'unbounded when censorship rate is zero', 'zero censorship pressure should have no finite duration bound')
+	} finally {
+		example.close()
+	}
+}
+
 function checkExactRepCapEquality(): void {
 	const precision = 10n ** 18n
 	const ethAtTick = 1n * precision
@@ -835,6 +869,7 @@ await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', 
 ])
 
 await checkDynamicWethReportExample()
+await checkBinaryCensorshipExample()
 await checkMmrProofPlannerStates()
 checkDiagramControlStates()
 await checkInteractiveToolControls()

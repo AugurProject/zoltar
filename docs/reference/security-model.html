@@ -220,13 +220,13 @@
 						<h3>Deadline transactions can obtain Ethereum inclusion</h3>
 						<p>Honest users can submit competitively priced Ethereum transactions and obtain canonical inclusion within every relevant dispute, escalation, migration, auction, staging, and settlement window.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Censorship or congestion lasting through a deadline can finalize a wrong report or prevent a supported action.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">deadline invariants</a>, <a href="../explanation/truth-auctions.html#lifecycle">auction windows</a>, and <a href="../explanation/open-oracle.html#security-guarantee">oracle censorship model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">deadline invariants</a>, <a href="../explanation/truth-auctions.html#lifecycle">auction windows</a>, and <a href="../explanation/open-oracle.html#attack-model">oracle censorship model</a>.</p>
 					</li>
 					<li id="assumption-a17" value="17" data-assumption="A17">
 						<h3>OpenOracle has an available, adequately capitalized corrector</h3>
 						<p>At least one OpenOracle participant continuously monitors pending REP/ETH reports, can identify candidate errors using the reference market in <a href="#assumption-a19">A19</a>, can fund the scenario-dependent WETH and REP replacement position plus transaction costs, and can obtain inclusion before settlement. The participant's net incentive to perform the correction is the separate boundary in <a href="#assumption-a18">A18</a>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An incorrect report can settle and authorize price-sensitive pool actions when no capable participant detects, funds, and includes a correction.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#oracle">REP/ETH oracle</a>, <a href="../explanation/open-oracle.html#security-guarantee">correction incentives</a>, and <a href="../explanation/open-oracle.html#security-guarantee">attack model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#oracle">REP/ETH oracle</a>, <a href="../explanation/open-oracle.html#security-guarantee">correction incentives</a>, and <a href="../explanation/open-oracle.html#attack-model">attack model</a>.</p>
 					</li>
 					<li id="assumption-a18" value="18" data-assumption="A18">
 						<h3>At least one available corrector has an independent net incentive</h3>
@@ -238,7 +238,7 @@
 						<h3>A robust reference market makes harmful REP/ETH errors correctable</h3>
 						<p>Independent participants can observe a manipulation-resistant reference REP/ETH price. Every price error large enough to unlock a security-relevant pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A harmful deviation below the profitable correction threshold, or a manipulated/illiquid reference market, can settle without an economically rational challenge.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/open-oracle.html#security-guarantee">report sizing</a>, <a href="../explanation/open-oracle.html#security-guarantee">external-payoff model</a>, and <a href="../explanation/open-oracle.html#settlement-validation-scope">settlement limits</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/open-oracle.html#security-guarantee">report sizing</a>, <a href="../explanation/open-oracle.html#attack-model">external-payoff model</a>, and <a href="../explanation/open-oracle.html#settlement-validation-scope">settlement limits</a>.</p>
 					</li>
 					<li id="assumption-a20" value="20" data-assumption="A20">
 						<h3>Canonical chain data and proof construction remain available</h3>
@@ -281,7 +281,7 @@
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
 						<p>The selected parameter relationships keep the fork threshold and haircut economically meaningful, the initial escalation deposit affordable, the pool multiplier and effective pool-held vault REP backing multiplier large enough for their distinct coverage roles, the effective pool-held vault REP backing multiplier at least the 10,500-BPS liquidation-award reserve, the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is distinct from <code>openOracleSecurityMultiplierBps</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or internally inconsistent immutable parameters can defeat the economic or liveness argument even when the canonical contracts function exactly as configured.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#oracle">Statoblast parameters</a>, <a href="../explanation/zoltar.html#economics">fork economics</a>, <a href="../explanation/liquidations.html#punitive-liquidation">liquidation economics</a>, <a href="../explanation/open-oracle.html#parameters">oracle parameters</a>, and <a href="../explanation/open-oracle.html#security-guarantee">oracle attack model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#oracle">Statoblast parameters</a>, <a href="../explanation/zoltar.html#economics">fork economics</a>, <a href="../explanation/liquidations.html#punitive-liquidation">liquidation economics</a>, <a href="../explanation/open-oracle.html#parameters">oracle parameters</a>, and <a href="../explanation/open-oracle.html#attack-model">oracle attack model</a>.</p>
 					</li>
 					<li id="assumption-a26" value="26" data-assumption="A26">
 						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
