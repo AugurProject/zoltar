@@ -286,7 +286,8 @@ settings, signer, deployment addresses, tokens, strategy, submission policy, and
 history, price, and position journals are independent from mainnet. Configure its
 Sepolia RPCs and reviewed deployment addresses, then set
 `centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`.
-Switching back to Mainnet restores the exact saved mainnet profile and journals.
+Switching back to Mainnet restores the saved mainnet profile and journals, but the
+bot remains paused until you explicitly resume it.
 
 Profiles are private sibling files beside the active operator file. Docker keeps
 them in the existing named volume, and direct Bun uses the same behavior. Only the

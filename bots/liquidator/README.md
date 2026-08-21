@@ -57,7 +57,8 @@ To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector. The
 saves the current profile, pauses at a safe scan boundary, releases its current
 chain and state locks, and loads Sepolia without exiting the process or restarting
 the container. The first switch creates a clean profile with a chain-named durable
-state file. Switching back restores the exact mainnet settings and recovery state.
+state file. Switching back restores the saved mainnet settings and recovery state,
+but the bot remains paused until you explicitly resume it.
 Only the selected profile is active at one time. In-place switching requires both
 profiles to use the same `runtime.once`, `runtime.ui`, `runtime.uiHost`, and
 `runtime.uiPort` values so the running process and browser retain their operating
