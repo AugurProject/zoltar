@@ -5,7 +5,7 @@ import { LivePortfolio, LiveSecurityPoolDetails, PairInitializationAction, Secur
 import { Portfolio } from '../../features/Routes.js'
 import { demoMarket } from '../../demo/markets.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const pool: Address = `0x${'12'.repeat(20)}`
 const shareToken: Address = `0x${'34'.repeat(20)}`

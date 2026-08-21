@@ -4,7 +4,6 @@ import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useRef, useState } from 'preact/hooks'
-import type { Hash } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
@@ -18,6 +17,7 @@ import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlow.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
+import { useTransactionTrayController } from '@zoltar/ui-core-shared/app/hooks/useTransactionTrayController.js'
 import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
 import { useZoltarOperations } from '../features/universes/hooks/useZoltarOperations.js'
 import { useRepPrices } from '../features/open-oracle/hooks/useRepPrices.js'
@@ -30,9 +30,7 @@ import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionTrayState } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import { getTransactionActionLockReason } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -41,14 +39,13 @@ import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-sha
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
-import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 
 export function App() {
-	const transactionState = useSignal<TransactionTrayState>(createInitialTransactionTrayState())
 	const deployNextMissingPending = useSignal(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const followSupportedWalletNetwork = shouldFollowWalletNetwork()
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
+	const { onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPrepared, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, transactionState } = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
 	const supportedNetworkChangeCoordinator =
 		supportedNetworkChangeCoordinatorRef.current ??
 		createSupportedNetworkChangeCoordinator({
@@ -69,28 +66,6 @@ export function App() {
 	supportedNetworkChangeCoordinatorRef.current = supportedNetworkChangeCoordinator
 	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setZoltarView, zoltarView } = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
-	const onTransactionRequested = (intent: TransactionIntent) => {
-		transactionState.value = markTransactionRequested(transactionState.value, intent)
-	}
-	const onTransactionPrepared = (preview: TransactionRequestPreview) => {
-		transactionState.value = markTransactionPrepared(transactionState.value, preview)
-	}
-	const onTransactionSubmitted = (hash: Hash) => {
-		transactionState.value = markTransactionSubmitted(transactionState.value, hash)
-	}
-	const onTransactionFailed = (message: string) => {
-		transactionState.value = markTransactionFailed(transactionState.value, message)
-	}
-	const onTransactionCanceled = () => {
-		transactionState.value = markTransactionCanceled(transactionState.value)
-	}
-	const onTransactionPresented = (presentation: GlobalTransactionPresentation) => {
-		transactionState.value = markTransactionPresented(transactionState.value, presentation)
-	}
-	const onTransactionFinished = () => {
-		transactionState.value = markTransactionFinished(transactionState.value)
-		void supportedNetworkChangeCoordinator.handleTransactionFinished()
-	}
 	const { navigate, route } = useHashRoute()
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
 	const {

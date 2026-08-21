@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, PublicClient, WalletClient } from '@zoltar/shared/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined, shortAddress } from '../lib/format.js'
-import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../lib/latestRequest.js'
+import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'

@@ -6,7 +6,7 @@ import { demoMarket } from '../../demo/markets.js'
 import { MarketDetail } from '../../features/MarketDetail.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTrading.js'
 import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../../features/Routes.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const forbiddenCopy = [
 	'Binary shares for',
@@ -164,7 +164,7 @@ describe('essential trading copy', () => {
 	})
 
 	test('does not preserve removed developer-route behavior', () => {
-		window.history.replaceState(undefined, '', '/?demo=1#/developer')
+		window.history.replaceState(undefined, '', '/?demo=1#/developer?simulate=1')
 		expect(currentRoute()).toBe('markets')
 	})
 })

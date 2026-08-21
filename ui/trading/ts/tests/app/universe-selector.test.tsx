@@ -5,7 +5,7 @@ import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, currentRoute, 
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/LiveTrading.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('universe selector', () => {
 	let cleanupDom: (() => void) | undefined
@@ -65,6 +65,21 @@ describe('universe selector', () => {
 		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
 		expect(document.title).toBe(tradingDocumentTitle('not-found'))
 		expect(document.title).toBe('Not found · Statoblast trading')
+	})
+
+	test('accepts only addressed security-pool routes', () => {
+		window.history.replaceState(undefined, '', '/#/security-pool')
+		expect(currentRoute()).toBe('not-found')
+		const address = `0x${'44'.repeat(20)}`
+		window.history.replaceState(undefined, '', `/#/security-pool/${address}`)
+		expect(currentRoute()).toBe(`security-pool/${address}`)
+		window.history.replaceState(undefined, '', `/#security-pool/${address}`)
+		expect(currentRoute()).toBe(`security-pool/${address}`)
+	})
+
+	test('preserves slashless top-level route bookmarks', () => {
+		window.history.replaceState(undefined, '', '/#markets')
+		expect(currentRoute()).toBe('markets')
 	})
 
 	test('uses Statoblast branding without the removed footer disclaimers', async () => {

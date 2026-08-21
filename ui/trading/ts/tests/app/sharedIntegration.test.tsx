@@ -4,7 +4,7 @@ import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulat
 import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
 import { AddressValue, Status } from '../../components/Status.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

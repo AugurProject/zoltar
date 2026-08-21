@@ -7,7 +7,7 @@ import { LiveSettlementControls } from '../../features/LiveTrading.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const pool = getAddress(`0x${'22'.repeat(20)}`)

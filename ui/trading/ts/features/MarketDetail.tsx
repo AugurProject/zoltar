@@ -8,7 +8,7 @@ import { bigintToSafeNumber, formatOutcomeAmount, formatShareAmount, formatUnits
 import { SecurityPoolAddressLink, Status } from '../components/Status.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage } from './LiveTrading.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from './ForkMigrationTargets.js'
-import { createExclusiveWorkflowGuard } from '../lib/latestRequest.js'
+import { createExclusiveWorkflowGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref } from '../lib/routing.js'

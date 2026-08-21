@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../../lib/latestRequest.js'
+import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 
 function deferred<T>() {
 	let resolvePromise: (value: T) => void = () => undefined

@@ -3,7 +3,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
@@ -20,6 +20,7 @@ import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/univer
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js'
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
+import { useTransactionTrayController } from '@zoltar/ui-core-shared/app/hooks/useTransactionTrayController.js'
 import { useOpenOracleOperations } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { usePriceOracleManager } from '@zoltar/ui-zoltar/features/open-oracle/hooks/usePriceOracleManager.js'
 import { useRepPrices } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useRepPrices.js'
@@ -38,9 +39,7 @@ import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionTrayState } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import { getTransactionActionLockReason } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
@@ -49,7 +48,7 @@ import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
-import type { GlobalTransactionPresentation, RouteTabDefinition, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 
 const getRouteHashForRoute = (route: 'deploy' | 'open-oracle' | 'security-pools') => {
 	if (route === 'deploy') return '#/deploy'
@@ -58,12 +57,12 @@ const getRouteHashForRoute = (route: 'deploy' | 'open-oracle' | 'security-pools'
 }
 
 export function App() {
-	const transactionState = useSignal<TransactionTrayState>(createInitialTransactionTrayState())
 	const deployNextMissingPending = useSignal(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const followSupportedWalletNetwork = shouldFollowWalletNetwork()
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
+	const { onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPrepared, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, transactionState } = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
 	const supportedNetworkChangeCoordinator =
 		supportedNetworkChangeCoordinatorRef.current ??
 		createSupportedNetworkChangeCoordinator({
@@ -99,28 +98,6 @@ export function App() {
 		setSecurityPoolQuestionId,
 		setSelectedPoolView,
 	} = useUrlState()
-	const onTransactionRequested = (intent: TransactionIntent) => {
-		transactionState.value = markTransactionRequested(transactionState.value, intent)
-	}
-	const onTransactionPrepared = (preview: TransactionRequestPreview) => {
-		transactionState.value = markTransactionPrepared(transactionState.value, preview)
-	}
-	const onTransactionSubmitted = (hash: Hash) => {
-		transactionState.value = markTransactionSubmitted(transactionState.value, hash)
-	}
-	const onTransactionFailed = (message: string) => {
-		transactionState.value = markTransactionFailed(transactionState.value, message)
-	}
-	const onTransactionCanceled = () => {
-		transactionState.value = markTransactionCanceled(transactionState.value)
-	}
-	const onTransactionPresented = (presentation: GlobalTransactionPresentation) => {
-		transactionState.value = markTransactionPresented(transactionState.value, presentation)
-	}
-	const onTransactionFinished = () => {
-		transactionState.value = markTransactionFinished(transactionState.value)
-		void supportedNetworkChangeCoordinator.handleTransactionFinished()
-	}
 	const { navigate, route } = useHashRoute()
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {

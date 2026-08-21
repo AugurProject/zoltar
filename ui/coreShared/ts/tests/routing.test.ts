@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '../lib/routing.js'
+import { buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting } from '../lib/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { installTestRouting } from './testUtils/testRouting.js'
 
@@ -37,6 +37,26 @@ describe('routing', () => {
 		expect(getRouteHashSearch('')).toBe('')
 
 		window.location.hash = '#/does-not-exist?simulate=1'
+		expect(getCurrentRoute()).toBe('not-found')
+	})
+
+	test('resolves parameterized routes with a configured matcher', () => {
+		installRouting({
+			defaultRoute: 'markets',
+			routes: [
+				{ hash: '#/markets', name: 'markets' },
+				{
+					match: routeHash => {
+						const match = /^#\/market\/(\d+)$/.exec(routeHash)
+						return match === null ? undefined : `market/${match[1]}`
+					},
+				},
+			],
+		})
+		window.location.hash = '#/market/42'
+
+		expect(getCurrentRoute()).toBe('market/42')
+		window.location.hash = '#/market'
 		expect(getCurrentRoute()).toBe('not-found')
 	})
 

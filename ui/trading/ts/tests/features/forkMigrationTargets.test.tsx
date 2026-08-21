@@ -5,7 +5,7 @@ import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
 import { DemoScalarForkMigration } from '../../features/MarketDetail.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 let cleanup: (() => Promise<void>) | undefined
 let cleanupDom: (() => void) | undefined

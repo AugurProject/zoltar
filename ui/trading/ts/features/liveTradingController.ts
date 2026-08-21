@@ -1,7 +1,8 @@
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { parseUnits, parseUnitsOrUndefined } from '../lib/format.js'
-import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '../lib/latestRequest.js'
+import type { WalletSummaryState } from '../lib/walletSummaryState.js'
+import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.js'
 import {
 	approveRouter,
@@ -39,15 +40,7 @@ export type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{
 export type TransactionState = 'idle' | 'simulating' | 'ready' | 'preparing' | 'approval' | 'approval-pending' | 'approval-confirmed' | 'submitting' | 'pending' | 'confirmed' | 'error'
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
-export type WalletSummaryState = Readonly<{
-	account: Address | undefined
-	ethAttoEth: bigint | undefined
-	repAttoRep: bigint | undefined
-	status: 'disconnected' | 'loading' | 'ready' | 'error'
-	error: string | undefined
-	errorLabel: string | undefined
-	universeId: string | undefined
-}>
+export type { WalletSummaryState } from '../lib/walletSummaryState.js'
 
 export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 type WorkflowOwner = 'position' | 'liquidity'
