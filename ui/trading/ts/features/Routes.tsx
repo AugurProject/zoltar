@@ -9,13 +9,14 @@ import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { shareBalanceScope } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import * as appCopy from '../copy/app.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 export { Help } from './Help.js'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
 	if (initialized)
 		return (
-			<a class='row-action' href='#/market'>
+			<a class='row-action' href={getTradingRouteHref('#/market')}>
 				Open market →
 			</a>
 		)
@@ -26,7 +27,7 @@ function MarketListAction({ market }: { market: DemoMarket }) {
 			</button>
 		)
 	return (
-		<a class='row-action' href='#/liquidity'>
+		<a class='row-action' href={getTradingRouteHref('#/liquidity')}>
 			{market.pair === undefined ? 'Create + initialize →' : 'Initialize pair →'}
 		</a>
 	)
@@ -46,7 +47,7 @@ export function MarketList({ market }: { market: DemoMarket }) {
 							<span>{market.endTime}</span>
 						</div>
 						<h2>
-							<a href='#/market'>{market.question}</a>
+							<a href={getTradingRouteHref('#/market')}>{market.question}</a>
 						</h2>
 					</div>
 					<div class='market-row__price'>{initialized ? <ProbabilityBar yesPercent={yesPercent} /> : <p class='muted'>Conditional price available after initialization.</p>}</div>
@@ -329,7 +330,7 @@ export function SecurityPoolDetails({ market }: { market: DemoMarket }) {
 	const scope = shareBalanceScope(market)
 	return (
 		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.question} />
+			<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.question} />
 			<section class='section'>
 				<dl class='fact-list'>
 					<div>

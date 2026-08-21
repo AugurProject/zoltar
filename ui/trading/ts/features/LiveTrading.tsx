@@ -31,6 +31,7 @@ import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
 import * as appCopy from '../copy/app.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -309,7 +310,7 @@ export function PairInitializationAction({ market, nowSeconds, onSelect = () => 
 					? `This SecurityPool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`
 					: `The trading pool exists but needs initial liquidity before trading can open. Trading fee: ${formatUnits(market.feeBps, 2, 2)}%.`}
 			</p>
-			<a class='primary-action' href='#/liquidity' onClick={() => onSelect(market)}>
+			<a class='primary-action' href={getTradingRouteHref('#/liquidity')} onClick={() => onSelect(market)}>
 				{market.pair === undefined ? 'Deploy trading pool' : 'Initialize trading pool'}
 			</a>
 		</div>
@@ -343,7 +344,7 @@ export function LiveSecurityPoolDetails({
 	else if (refreshError !== undefined) errorMessage = `SecurityPool refresh failed; showing the last successful result: ${refreshError}`
 	return (
 		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.title} badge={market.loadError === undefined ? undefined : <Status tone='warn'>{appCopy.poolDataUnavailable}</Status>} />
+			<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.title} badge={market.loadError === undefined ? undefined : <Status tone='warn'>{appCopy.poolDataUnavailable}</Status>} />
 			{connectionMessage === undefined ? null : (
 				<p class='error' role='alert'>
 					{connectionMessage}
@@ -612,7 +613,7 @@ export function LiveTrading({
 			)
 		return (
 			<main class='route' id='main-content'>
-				<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
+				<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
 				{connectionMessage === undefined ? null : (
 					<p class='error' role='alert'>
 						{connectionMessage}

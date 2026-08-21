@@ -14,12 +14,14 @@ import * as appCopy from '../copy/app.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
+import { getTradingEnvironmentLocationKey, getTradingRouteHref, getTradingRoutePath } from '../lib/routing.js'
 
 const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'deploy', 'help'] as const
 type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
 
 export function currentRoute(): TradingRoute {
-	const route = window.location.hash.replace(/^#\/?/, '') || 'markets'
+	const route = getTradingRoutePath(window.location.hash).replace(/^#\/?/, '') || 'markets'
 	if (route === 'developer') return 'markets'
 	return tradingRoutes.find(candidate => candidate === route) ?? (/^security-pool\/0x[0-9a-f]{40}$/i.test(route) ? `security-pool/${route.slice('security-pool/'.length)}` : 'not-found')
 }
@@ -40,7 +42,7 @@ function renderNotFoundRoute() {
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader title={appCopy.pageNotFound} />
-			<a class='primary-link' href='#/markets'>
+			<a class='primary-link' href={getTradingRouteHref('#/markets')}>
 				{appCopy.returnToMarkets}
 			</a>
 		</main>
@@ -218,7 +220,15 @@ function deploymentWalletLabel(state: DeploymentWalletState) {
 	return shortAddress(state.account)
 }
 
-export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveDeployment }: { deploymentSetupServices?: TradingDeploymentSetupServices; loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
+export function App({
+	deploymentSetupServices,
+	initializeEnvironment = initializeTradingActiveEnvironment,
+	loadLiveDeployment = resolveLiveDeployment,
+}: {
+	deploymentSetupServices?: TradingDeploymentSetupServices
+	initializeEnvironment?: () => Promise<unknown>
+	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
+} = {}) {
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
@@ -232,6 +242,8 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, ready: false })
 	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
+	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
+	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
 	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
 	routeRef.current = route
@@ -262,10 +274,29 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const displayedRoute = deploymentSetupActive ? 'deploy' : route
+	const refreshActiveEnvironment = useCallback(async () => {
+		const previousLocationKey = activeEnvironmentLocationRef.current
+		const nextLocationKey = getTradingEnvironmentLocationKey()
+		if (nextLocationKey === previousLocationKey) return
+		activeEnvironmentLocationRef.current = nextLocationKey
+		setLiveDeploymentStatus('loading')
+		setLiveConfiguration(undefined)
+		setLiveConfigurationError(undefined)
+		setSelectedUniverseId(undefined)
+		setLiveUniverseOptions([])
+		setLiveWalletSummary({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
+		try {
+			await initializeEnvironment()
+		} catch (error) {
+			activeEnvironmentLocationRef.current = previousLocationKey
+			throw error
+		}
+		setActiveEnvironmentNonce(current => current + 1)
+	}, [initializeEnvironment])
 	useEffect(() => {
 		const update = () => {
 			if (workflowLockedRef.current) {
-				window.history.replaceState(undefined, '', `${window.location.pathname}${window.location.search}#/${routeRef.current}`)
+				window.history.replaceState(undefined, '', getTradingRouteHref(`#/${routeRef.current}`))
 				return
 			}
 			const nextRoute = currentRoute()
@@ -276,6 +307,20 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		window.addEventListener('hashchange', update)
 		return () => window.removeEventListener('hashchange', update)
 	}, [selectedUniverseId])
+	useEffect(() => {
+		const synchronizeEnvironment = () => {
+			queueMicrotask(() => {
+				if (getTradingEnvironmentLocationKey() === activeEnvironmentLocationRef.current) return
+				void refreshActiveEnvironment().catch(error => {
+					setLiveConfiguration(undefined)
+					setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading environment'))
+					setLiveDeploymentStatus('unavailable')
+				})
+			})
+		}
+		window.addEventListener('popstate', synchronizeEnvironment)
+		return () => window.removeEventListener('popstate', synchronizeEnvironment)
+	}, [refreshActiveEnvironment])
 	useEffect(() => {
 		let active = true
 		setLiveDeploymentStatus('loading')
@@ -296,7 +341,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		return () => {
 			active = false
 		}
-	}, [loadLiveDeployment])
+	}, [activeEnvironmentNonce, loadLiveDeployment])
 	let content
 	if (route === 'not-found') content = renderNotFoundRoute()
 	else if (route === 'help') content = <Help />
@@ -326,6 +371,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	else
 		content = (
 			<LiveTrading
+				key={activeEnvironmentNonce}
 				route={route}
 				configuration={liveConfiguration}
 				configurationError={liveConfigurationError}
@@ -344,12 +390,13 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 			<AppHeaderShell
 				mainElementId='main-content'
 				simulationController={simulationController}
+				onEnvironmentChanged={refreshActiveEnvironment}
 				onRefresh={async () => window.location.reload()}
 				renderHeader={simulationBanner => (
 					<div class='site-chrome'>
 						{simulationBanner}
 						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
-							<a class='brand' href='#/markets' aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+							<a class='brand' href={getTradingRouteHref('#/markets')} aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 								<span class='brand__mark'>{appCopy.brandMark}</span>
 								<span>
 									<strong>{appCopy.appName}</strong>
@@ -357,20 +404,20 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 							</a>
 							<nav aria-label={appCopy.primaryNavigationLabel}>
 								{liveDeploymentStatus !== 'verified' ? (
-									<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/deploy')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 										{appCopy.deploy}
 									</a>
 								) : null}
-								<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/markets' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/markets')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.markets}
 								</a>
-								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/liquidity' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/liquidity')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.liquidity}
 								</a>
-								<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/portfolio' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/portfolio')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.portfolio}
 								</a>
-								<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/help' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/help')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.help}
 								</a>
 							</nav>

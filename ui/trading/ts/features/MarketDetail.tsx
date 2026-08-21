@@ -11,6 +11,7 @@ import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from
 import { createExclusiveWorkflowGuard } from '../lib/latestRequest.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import * as appCopy from '../copy/app.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 
 type TransactionState = 'idle' | 'preparing' | 'approval' | 'submitting' | 'pending' | 'confirmed' | 'rejected' | 'reverted'
 
@@ -308,7 +309,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 	)
 	if (!initialized && closedReason === undefined)
 		primaryAction = (
-			<a class='primary-action' href='#/liquidity'>
+			<a class='primary-action' href={getTradingRouteHref('#/liquidity')}>
 				{market.pair === undefined ? 'Create and initialize this market in Liquidity' : 'Initialize this pair in Liquidity'}
 			</a>
 		)
@@ -321,7 +322,7 @@ export function MarketDetail({ market, scenario, onWorkflowLockChange = () => un
 
 	return (
 		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={market.question} badge={<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>} />
+			<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={market.question} badge={<Status tone={closedReason === undefined ? 'good' : 'warn'}>{lifecycleLabel(market.lifecycle)}</Status>} />
 
 			<div class='detail-grid'>
 				{!initialized ? (

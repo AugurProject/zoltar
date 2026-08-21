@@ -1,10 +1,11 @@
 import { promises as fs } from 'node:fs'
 
-type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown>; error?: unknown }>
+type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown>; error?: unknown; sessionId?: string }>
 
 const outputDirectory = process.env.TRADING_QA_OUTPUT ?? '/tmp/zoltar-trading-qa'
 const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:4163'
 const selectedNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
+const injectedFailure = process.env.TRADING_QA_INJECT_FAILURE
 const debuggingPort = 9227
 const simulationPath = '/?simulate=1&simScenario=trading'
 await fs.mkdir(outputDirectory, { recursive: true })
@@ -58,6 +59,7 @@ socket.addEventListener('message', event => {
 		return
 	}
 	if (message.method === 'Runtime.exceptionThrown') runtimeErrors.push(JSON.stringify(message.params ?? {}))
+	if (message.method === 'Runtime.consoleAPICalled' && message.params?.type === 'error') runtimeErrors.push(JSON.stringify(message.params))
 	if (message.method === 'Log.entryAdded') {
 		const entry = message.params?.entry
 		if (typeof entry === 'object' && entry !== null && 'level' in entry && entry.level === 'error') runtimeErrors.push(JSON.stringify(entry))
@@ -67,20 +69,36 @@ socket.addEventListener('message', event => {
 		const response = message.params?.response
 		if (typeof response === 'object' && response !== null && 'status' in response && typeof response.status === 'number' && response.status >= 400) failedRequests.push(JSON.stringify(response))
 	}
+	if (message.method === 'Target.attachedToTarget') {
+		const sessionId = message.params?.sessionId
+		const targetInfo = message.params?.targetInfo
+		if (typeof sessionId !== 'string') return
+		if (typeof targetInfo !== 'object' || targetInfo === null || !('type' in targetInfo) || !['worker', 'shared_worker', 'service_worker'].includes(String(targetInfo.type))) {
+			void command('Runtime.runIfWaitingForDebugger', {}, sessionId)
+			return
+		}
+		void attachWorkerSession(sessionId).catch(error => runtimeErrors.push(`Could not attach QA collection to worker: ${String(error)}`))
+	}
 })
 
-function command(method: string, params: Record<string, unknown> = {}) {
+function command(method: string, params: Record<string, unknown> = {}, sessionId?: string) {
 	const id = nextId++
 	return new Promise<Record<string, unknown>>((resolve, reject) => {
 		pending.set(id, { resolve, reject })
-		socket.send(JSON.stringify({ id, method, params }))
+		socket.send(JSON.stringify({ id, method, params, ...(sessionId === undefined ? {} : { sessionId }) }))
 	})
+}
+
+async function attachWorkerSession(sessionId: string) {
+	await Promise.all([command('Runtime.enable', {}, sessionId), command('Log.enable', {}, sessionId), command('Network.enable', {}, sessionId)])
+	await command('Runtime.runIfWaitingForDebugger', {}, sessionId)
 }
 
 await command('Page.enable')
 await command('Runtime.enable')
 await command('Log.enable')
 await command('Network.enable')
+await command('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true })
 
 const waitForSeededMarket = `(async () => {
 	for (let attempt = 0; attempt < 600; attempt++) {
@@ -102,7 +120,7 @@ const selectSeededMarket = `(async () => {
 	}
 	return false
 })()`
-const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.brand')?.textContent?.includes('Statoblast trading') === true && document.querySelector('.network-pill')?.textContent?.includes('Deployment verified') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && !document.body.textContent?.includes('Loading...') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.brand')?.textContent?.includes('Statoblast trading') === true && document.querySelector('.network-pill')?.textContent?.includes('Deployment verified') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 
 const scenarios = [
 	...(
@@ -143,6 +161,74 @@ const scenarios = [
 		evaluate: `(async () => { if (!(await (${selectSeededMarket}))) return false; const link = document.querySelector('a[href="#/liquidity"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); for (let attempt = 0; attempt < 100; attempt++) { if (location.hash === '#/liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')) return true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 		assertExpression: `(${commonAssertion}) && location.hash === '#/liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
 	})),
+	{
+		name: 'simulation-scenario-navigation-desktop',
+		width: 1440,
+		height: 900,
+		path: `${simulationPath}#/markets`,
+			evaluate: `(async () => {
+			await (${waitForSeededMarket})
+			const details = document.querySelector('.simulation-banner-details')
+			if (!(details instanceof HTMLDetailsElement)) throw new Error('Simulation details are unavailable')
+			details.open = true
+			const select = document.querySelector('.simulation-control-select')
+			if (!(select instanceof HTMLSelectElement)) throw new Error('Simulation scenario selector is unavailable')
+			select.value = 'scenario:baseline'
+			select.dispatchEvent(new Event('change', { bubbles: true }))
+			for (let attempt = 0; attempt < 600; attempt++) {
+				const currentSelect = document.querySelector('.simulation-control-select')
+				if (location.hash.includes('simScenario=baseline') && document.querySelector('.simulation-banner-compact-summary')?.textContent?.includes('Baseline') === true && currentSelect instanceof HTMLSelectElement && !currentSelect.disabled) break
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			const updatedSelect = document.querySelector('.simulation-control-select')
+			if (!(updatedSelect instanceof HTMLSelectElement)) throw new Error('Simulation scenario selector disappeared after selecting Baseline')
+			if (updatedSelect.value !== 'scenario:baseline') throw new Error('Trading did not activate the Baseline environment')
+			history.back()
+			for (let attempt = 0; attempt < 600; attempt++) {
+				const currentSelect = document.querySelector('.simulation-control-select')
+				if (location.href.includes('simScenario=trading') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:trading' && document.querySelector('.live-market-button') !== null) break
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			if (!location.href.includes('simScenario=trading') || document.querySelector('.simulation-control-select')?.value !== 'scenario:trading' || document.querySelector('.live-market-button') === null) throw new Error('Browser Back did not restore the seeded Trading environment: ' + location.href + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
+			history.forward()
+			for (let attempt = 0; attempt < 600; attempt++) {
+				const currentSelect = document.querySelector('.simulation-control-select')
+				if (location.hash.includes('simScenario=baseline') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:baseline' && !currentSelect.disabled) break
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			if (!location.hash.includes('simScenario=baseline') || document.querySelector('.simulation-control-select')?.value !== 'scenario:baseline') throw new Error('Browser Forward did not restore the Baseline environment')
+			const liquidityLink = document.querySelector('a[href^="#/liquidity?"]')
+			if (!(liquidityLink instanceof HTMLAnchorElement)) throw new Error('Liquidity navigation did not preserve the Baseline scenario')
+			liquidityLink.click()
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (location.hash.startsWith('#/liquidity?') && location.hash.includes('simScenario=baseline') && document.querySelector('a[aria-current="page"]')?.textContent === 'Liquidity') break
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			if (!location.hash.startsWith('#/liquidity?') || document.body.textContent?.includes('Page not found')) throw new Error('Liquidity navigation lost the Baseline scenario')
+			history.back()
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (location.hash.startsWith('#/markets?') && location.hash.includes('simScenario=baseline') && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets') break
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			const restoredSelect = document.querySelector('.simulation-control-select')
+			if (!(restoredSelect instanceof HTMLSelectElement) || restoredSelect.value !== 'scenario:baseline') throw new Error('Browser Back did not restore the Baseline markets route')
+			restoredSelect.value = 'scenario:trading'
+			restoredSelect.dispatchEvent(new Event('change', { bubbles: true }))
+			for (let attempt = 0; attempt < 600; attempt++) {
+				if (location.hash.includes('simScenario=trading') && document.querySelector('.live-market-button') !== null) return true
+				await new Promise(resolve => setTimeout(resolve, 100))
+			}
+			throw new Error('Trading did not restore its seeded environment after scenario navigation: ' + location.hash + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
+		})()`,
+		assertExpression: `(${commonAssertion}) && location.hash.includes('simScenario=trading') && document.querySelector('.live-market-button') !== null`,
+	},
+	{
+		name: 'simulation-scenario-direct-reload-desktop',
+		width: 1440,
+		height: 900,
+		path: '/#/markets?simulate=1&simScenario=trading',
+		assertExpression: `(async () => { await (${waitForSeededMarket}); return ${commonAssertion} && location.hash === '#/markets?simulate=1&simScenario=trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets' && !document.body.textContent?.includes('Page not found') })()`,
+	},
 ] as const
 
 const selectedScenarios = selectedNames.size === 0 ? scenarios : scenarios.filter(scenario => selectedNames.has(scenario.name))
@@ -161,6 +247,9 @@ try {
 		const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true, awaitPromise: true })
 		const result = evaluated.result
 		if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
+		if (injectedFailure === 'page-console') await command('Runtime.evaluate', { expression: `console.error('injected Trading QA page failure')` })
+		if (injectedFailure === 'worker-runtime') await command('Runtime.evaluate', { expression: `new Worker(URL.createObjectURL(new Blob(["console.error('injected Trading QA worker failure'); throw new Error('injected Trading QA worker failure')"], { type: 'text/javascript' })))` })
+		if (injectedFailure !== undefined) await Bun.sleep(500)
 		const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
 		if (typeof screenshot.data !== 'string') throw new Error(`Screenshot data missing for ${scenario.name}`)
 		await fs.writeFile(`${outputDirectory}/${scenario.name}.png`, Buffer.from(screenshot.data, 'base64'))

@@ -8,14 +8,73 @@ import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { tradingNetworkLabel } from '../../app/App.js'
-import { App } from '../../app/App.js'
+import { App, currentRoute, tradingNetworkLabel } from '../../app/App.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
+import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/lib/routing.js'
+import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {
 	registerTradingSimulationScenario()
 	expect(tradingActiveEnvironmentDependencies.appId).toBe('trading')
 	expect(getRegisteredSimulationScenarios()).toContain(TRADING_SIMULATION_SCENARIO)
+})
+
+test('Trading installs shared routing for simulation scenario navigation', () => {
+	const dom = installDomEnvironment('http://localhost/#/liquidity?simulate=1&simScenario=trading')
+	try {
+		installTradingRouting()
+		expect(getCurrentRouteHash()).toBe('#/liquidity')
+		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=trading')
+		expect(currentRoute()).toBe('liquidity')
+		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=trading')
+	} finally {
+		resetRoutingForTesting()
+		dom.cleanup()
+	}
+})
+
+test('Trading production links preserve the active simulation route query', async () => {
+	const productionSources = ['app/App.tsx', 'components/Status.tsx', 'features/LiveTrading.tsx', 'features/MarketDetail.tsx', 'features/Routes.tsx']
+	for (const source of productionSources) {
+		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
+		expect(contents).not.toMatch(/href=['"]#\//)
+	}
+})
+
+test('Trading refreshes the active environment when history changes the simulation scenario', async () => {
+	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=trading')
+	installTradingRouting()
+	let environmentInitializations = 0
+	const configuration: DeploymentConfiguration = {
+		chainId: 31_337,
+		chainName: 'Browser Simulation',
+		factory: `0x${'22'.repeat(20)}`,
+		feeBps: 30,
+		router: `0x${'33'.repeat(20)}`,
+		rpcUrl: 'http://127.0.0.1/',
+		securityPoolFactory: `0x${'11'.repeat(20)}`,
+	}
+	const rendered = await renderIntoDocument(
+		<App
+			initializeEnvironment={async () => {
+				environmentInitializations += 1
+			}}
+			loadLiveDeployment={async () => configuration}
+		/>,
+	)
+	try {
+		window.history.pushState({}, '', '#/markets?simulate=1&simScenario=baseline')
+		window.dispatchEvent(new Event('popstate'))
+		await new Promise(resolve => setTimeout(resolve, 10))
+		expect(environmentInitializations).toBe(1)
+		window.dispatchEvent(new Event('popstate'))
+		await new Promise(resolve => setTimeout(resolve, 10))
+		expect(environmentInitializations).toBe(1)
+	} finally {
+		await rendered.cleanup()
+		resetRoutingForTesting()
+		dom.cleanup()
+	}
 })
 
 test('Trading status and address presentation use coreShared primitives', async () => {

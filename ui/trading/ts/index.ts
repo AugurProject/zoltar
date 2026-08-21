@@ -3,6 +3,7 @@ import { createPublicClient, custom, getAddress } from '@zoltar/shared/ethereum'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'
+import { installTradingRouting } from './lib/routing.js'
 import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from './simulation/index.js'
 import type { TradingDeploymentSetupServices } from './features/TradingDeploymentSetup.js'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from './protocol/deployment.js'
@@ -51,7 +52,9 @@ function pendingDeploymentFixture() {
 	}
 }
 
+document.querySelector('body > main')?.remove()
 const root = document.querySelector('#app') ?? document.body
+installTradingRouting()
 registerTradingSimulationScenario()
 if (new URLSearchParams(window.location.search).get('simulate') === '1' && !new URLSearchParams(window.location.search).has('simScenario')) {
 	const url = new URL(window.location.href)

@@ -1,5 +1,6 @@
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 
 export function Status({ tone, children }: { tone: 'good' | 'warn' | 'bad' | 'neutral'; children: preact.ComponentChildren }) {
 	const badgeTones = { bad: 'blocked', good: 'ok', neutral: 'muted', warn: 'warning' } as const
@@ -16,7 +17,7 @@ export function AddressValue({ value }: { value: string }) {
 }
 
 function securityPoolHref(value: string) {
-	return `#/security-pool/${value}`
+	return getTradingRouteHref(`#/security-pool/${value}`)
 }
 
 export function SecurityPoolAddressLink({ value, disabled = false }: { value: string; disabled?: boolean }) {
