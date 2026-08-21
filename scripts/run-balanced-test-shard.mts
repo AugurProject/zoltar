@@ -6,19 +6,19 @@ import { getHistoricalTestWeights, readTestTimingHistory, writeTestTimingObserva
 
 const repositoryRoot = process.cwd()
 
-const knownFileWeights = new Map<string, number>([
-	['ui/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
+export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
+	['ui/statoblast/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
 	['solidity/ts/tests/statoblast/forkMigration.test.ts', 37],
 	['solidity/ts/tests/statoblast/truthAuction.test.ts', 19],
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 15],
 	['solidity/ts/tests/escalationGame.test.ts', 15],
-	['ui/ts/tests/simulation/activeEnvironment.test.ts', 15],
+	['ui/zoltar/ts/tests/integration/activeEnvironment.test.ts', 15],
 	['solidity/ts/tests/auction.test.ts', 14],
 	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 9],
-	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
+	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
 	['solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts', 5],
 	['solidity/ts/tests/statoblast/vaultAccounting.test.ts', 5],
-	['ui/ts/tests/simulation/deployedEnvironment.test.ts', 4],
+	['ui/zoltar/ts/tests/integration/deployedEnvironment.test.ts', 4],
 	['solidity/ts/tests/statoblastInvariant.test.ts', 4],
 	['solidity/ts/tests/statoblast/receiveGuards.test.ts', 2],
 ])
@@ -80,7 +80,7 @@ export async function getWeightedTestFiles(historyPath?: string) {
 		.map(
 			(filePath): WeightedTestFile => ({
 				filePath,
-				weight: knownFileWeights.get(filePath) ?? 1,
+				weight: KNOWN_FILE_WEIGHTS.get(filePath) ?? 1,
 			}),
 		)
 		.sort((left, right) => right.weight - left.weight || left.filePath.localeCompare(right.filePath))

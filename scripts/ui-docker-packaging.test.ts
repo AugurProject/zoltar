@@ -1,25 +1,50 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
 const dockerfile = join(import.meta.dir, '..', 'ui', 'Dockerfile')
+const dockerignore = join(import.meta.dir, '..', '.dockerignore')
 const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'ipfs-deploy.yml')
 const versionDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'version-deploy.yml')
-const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'scripts', 'docker-entrypoint.sh')
+const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'coreShared', 'scripts', 'docker-entrypoint.sh')
 const rootPackage = join(import.meta.dir, '..', 'package.json')
-const staticServer = join(import.meta.dir, '..', 'ui', 'build', 'dockerServe.mts')
-const windowsLauncher = join(import.meta.dir, '..', 'ui', 'start.bat')
+const staticServer = join(import.meta.dir, '..', 'ui', 'coreShared', 'build', 'dockerServe.mts')
 
 describe('UI Docker packaging', () => {
+	test('only copies tracked build inputs and invokes existing UI build scripts', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		for (const match of source.matchAll(/^COPY\s+(?!.*--from=)(?:--[^ ]+\s+)*(\.\/\S+)\s+\S+$/gm)) {
+			const copiedPath = match[1]
+			if (copiedPath === undefined || copiedPath.includes('*')) continue
+			const repositoryPath = join(dirname(dockerfile), '..', copiedPath)
+			expect(Bun.file(repositoryPath).size > 0 || (await Bun.file(repositoryPath).exists())).toBe(true)
+		}
+		expect(source).not.toContain('ui/coreShared/tsconfig.vendor.json')
+		expect(source).not.toContain('bun run vendor')
+		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast')
+		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(source).toContain(`bun ./scripts/install-frozen.mts ui/${packageId}`)
+		expect(source).not.toMatch(/cd \/source\/ui\/\w+ && bun install/)
+		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('ui/coreShared/build')
+	})
+
 	test('copies every deployment manifest required by the production build', async () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json')
 		expect(source).toContain('COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json')
 	})
 
+	test('excludes every split-package generated tree from the Docker source context', async () => {
+		const source = await readFile(dockerignore, 'utf8')
+		for (const generatedPath of ['ui/*/dist', 'ui/*/js', 'ui/*/vendor', 'ui/*/ts/abis.ts', 'ui/*/ts/contractArtifact.ts', 'ui/*/ts/deploymentArtifacts.ts', 'ui/*/ts/deploymentsArtifacts.ts']) {
+			expect(source.split('\n')).toContain(generatedPath)
+		}
+		expect(source).not.toMatch(/^ui\/(?:dist|js|vendor)$/m)
+		expect(source).not.toMatch(/^ui\/ts\//m)
+	})
+
 	test('uses a tracked Unix publisher entrypoint instead of a line-ending-sensitive heredoc', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		expect(source).toContain('COPY --chmod=755 ./ui/scripts/docker-entrypoint.sh /entrypoint.sh')
+		expect(source).toContain('COPY --chmod=755 ./ui/coreShared/scripts/docker-entrypoint.sh /entrypoint.sh')
 		expect(source).not.toContain("COPY <<'EOF' /entrypoint.sh")
 		for (const entrypoint of [publisherEntrypoint]) {
 			const entrypointSource = await readFile(entrypoint, 'utf8')
@@ -31,12 +56,8 @@ describe('UI Docker packaging', () => {
 	})
 
 	test('keeps local serving and host IPFS publishing as separate commands', async () => {
-		const launcher = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
 		const packageSource = await readFile(rootPackage, 'utf8')
-		const localRunCommand = 'docker run --rm -p 8080:8080 zoltar-ui'
 		const publishRunCommand = 'docker run --rm --add-host=host.docker.internal:host-gateway zoltar-ui-publisher'
-		expect(launcher).toContain(localRunCommand)
-		expect(launcher).toContain('docker build --target local-runtime -f ui/Dockerfile . -t zoltar-ui')
 		expect(packageSource).toContain(`"ui:publish:ipfs": "docker build --target publisher -f ui/Dockerfile . -t zoltar-ui-publisher && ${publishRunCommand}"`)
 		expect(packageSource).not.toContain('"ui:docker"')
 		const dockerSource = await readFile(dockerfile, 'utf8')
@@ -48,7 +69,6 @@ describe('UI Docker packaging', () => {
 		const server = await readFile(staticServer, 'utf8')
 		expect(server).toContain('http://localhost:${port}/')
 		expect(server).not.toContain('ipfs')
-		expect(launcher).not.toContain('ipfs')
 	})
 
 	test('keeps the default release image on the final IPFS publisher target', async () => {

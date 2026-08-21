@@ -35,8 +35,45 @@ type DeploymentManifest = {
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..')
+const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar', 'js', 'protocol', 'deployment.js')] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
+
+async function pathExists(filePath: string) {
+	try {
+		await fs.access(filePath)
+		return true
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+		throw error
+	}
+}
+
+async function runRepositoryCommand(args: readonly string[], label: string) {
+	const child = Bun.spawn({
+		cmd: [process.execPath, ...args],
+		cwd: repositoryRootPath,
+		stderr: 'inherit',
+		stdin: 'inherit',
+		stdout: 'inherit',
+	})
+	const exitCode = await child.exited
+	if (exitCode !== 0) throw new Error(`${label} exited with code ${exitCode.toString()}`)
+}
+
+async function buildDeploymentRuntimeDependencies() {
+	await runRepositoryCommand(['run', 'ensure-shared-build'], 'Shared TypeScript prerequisite build')
+	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/coreShared/tsconfig.json'], 'coreShared TypeScript prerequisite build')
+	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/zoltar/tsconfig.json'], 'Zoltar TypeScript prerequisite build')
+	await runRepositoryCommand(['./scripts/install-frozen.mts', 'ui/statoblast'], 'Statoblast frozen dependency refresh')
+}
+
+export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () => Promise<boolean> = async () => (await Promise.all(deploymentRuntimeOutputPaths.map(pathExists))).every(Boolean), buildRuntimeDependencies: () => Promise<void> = buildDeploymentRuntimeDependencies) {
+	if (await hasRuntimeOutput()) return
+	console.log('Building missing coreShared JavaScript required by deployment manifest checks')
+	await buildRuntimeDependencies()
+	if (!(await hasRuntimeOutput())) throw new Error(`Deployment manifest prerequisite build did not create ${deploymentRuntimeOutputPaths.map(outputPath => path.relative(repositoryRootPath, outputPath)).join(' and ')}`)
+}
 
 function getManifestPath(manifestId: ManifestId) {
 	return path.join(repositoryRootPath, 'docs', `${manifestId}-deployment-addresses.json`)
@@ -113,12 +150,13 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 }
 
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deployment.ts')
-	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'protocol', 'deploymentHelpers.ts')
-	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'ts', 'lib', 'networkProfile.ts')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblast', 'ts', 'protocol', 'deployment.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltar', 'ts', 'protocol', 'deploymentHelpers.ts')
+	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'lib', 'networkProfile.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 
 	try {
+		await ensureDeploymentRuntimeDependencies()
 		const deploymentModule = await import(url.pathToFileURL(deploymentModulePath).href)
 		const deploymentHelpersModule = await import(url.pathToFileURL(deploymentHelpersModulePath).href)
 		const networkProfileModule = await import(url.pathToFileURL(networkProfileModulePath).href)
@@ -137,6 +175,26 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 			protocolConfig: readProtocolConfig(getMainnetProtocolConfig()),
 			deploymentSteps: readDeploymentSteps(getDeploymentSteps(profile)),
 			derivedContracts: [
+				{
+					id: 'securityPoolForker',
+					label: 'Security Pool Forker',
+					address: readStringField(infraContractAddresses, 'securityPoolForker', 'infraContractAddresses.securityPoolForker'),
+				},
+				{
+					id: 'escalationGameClaimDelegate',
+					label: 'Escalation Claim Checkpoint Delegate',
+					address: readStringField(infraContractAddresses, 'escalationGameClaimDelegate', 'infraContractAddresses.escalationGameClaimDelegate'),
+				},
+				{
+					id: 'escalationGameFactory',
+					label: 'Escalation Game Factory',
+					address: readStringField(infraContractAddresses, 'escalationGameFactory', 'infraContractAddresses.escalationGameFactory'),
+				},
+				{
+					id: 'securityPoolFactory',
+					label: 'Security Pool Factory',
+					address: readStringField(infraContractAddresses, 'securityPoolFactory', 'infraContractAddresses.securityPoolFactory'),
+				},
 				{
 					id: 'escalationGameProofVerifier',
 					label: 'Escalation Game Proof Verifier',

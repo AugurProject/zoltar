@@ -1,0 +1,141 @@
+import * as commonCopy from '../copy/common.js'
+
+import { DataGrid } from '../components/DataGrid.js'
+import { FormInput } from '../components/FormInput.js'
+import { MetricField } from '../components/MetricField.js'
+import { tryParseBigIntInput } from '../lib/integerInput.js'
+import type { ScalarOutcomePickerProps } from '../types/components.js'
+import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { useEffect, useId, useState } from 'preact/hooks'
+import type * as preact from 'preact'
+import { tryParseDecimalInput } from '../lib/decimal.js'
+import { formatScalarDisplayValue, getScalarDisplayValue, getScalarTickIndexForDisplayValue } from '@zoltar/shared/scalarOutcome'
+
+function getSafeSelectedTickValue(selectedTick: string) {
+	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
+}
+
+export function ScalarOutcomePicker({ action, clampExactTickInput = true, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
+	const sliderLabelId = useId()
+	const scalarValueErrorId = useId()
+	const rawSelectedTickValue = getSafeSelectedTickValue(selectedTick)
+	const selectedTickIsInRange = rawSelectedTickValue >= 0n && rawSelectedTickValue <= details.numTicks
+	const selectedTickValue = clampScalarTickIndex(rawSelectedTickValue, details.numTicks)
+	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
+	const resolvedSelectedTick = (!canUseNativeSlider && !clampExactTickInput ? rawSelectedTickValue : selectedTickValue).toString()
+	const [exactTickInputValue, setExactTickInputValue] = useState(resolvedSelectedTick)
+	const scalarQuestionDetails = details.displayValueMin === undefined || details.displayValueMax === undefined ? undefined : { answerUnit: details.answerUnit ?? '', displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, numTicks: details.numTicks }
+	const selectedScalarValue = scalarQuestionDetails === undefined || (!clampExactTickInput && !selectedTickIsInRange) ? undefined : getScalarDisplayValue(scalarQuestionDetails, selectedTickValue)
+	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatScalarDisplayValue(selectedScalarValue)
+	const [scalarValueInput, setScalarValueInput] = useState(resolvedScalarValueInput ?? '')
+	const [scalarValueError, setScalarValueError] = useState<string | undefined>(undefined)
+	useEffect(() => {
+		setExactTickInputValue(resolvedSelectedTick)
+	}, [resolvedSelectedTick])
+	useEffect(() => {
+		if (isInvalid || resolvedScalarValueInput === undefined) return
+		setScalarValueInput(resolvedScalarValueInput)
+		setScalarValueError(undefined)
+	}, [details.displayValueMax, details.displayValueMin, details.numTicks, isInvalid, resolvedScalarValueInput])
+	const updateScalarValue = (value: string) => {
+		setScalarValueInput(value)
+		const parsedValue = tryParseDecimalInput(value)
+		if (parsedValue === undefined || scalarQuestionDetails === undefined) {
+			setScalarValueError(commonCopy.scalarValueInvalid)
+			return
+		}
+		const tickIndex = getScalarTickIndexForDisplayValue(scalarQuestionDetails, parsedValue)
+		if (tickIndex === undefined) {
+			setScalarValueError(commonCopy.scalarValueInvalid)
+			return
+		}
+		setScalarValueError(undefined)
+		onSelectedTickChange(tickIndex.toString())
+	}
+
+	return (
+		<div className='market-scalar-deploy workflow-subsection'>
+			<div className='field scalar-slider-field'>
+				<span id={sliderLabelId}>{label}</span>
+				<div className='scalar-slider-with-invalid'>
+					{canUseNativeSlider ? (
+						<div className={`scalar-slider-rail ${isInvalid ? 'is-disabled' : ''}`}>
+							<div className='scalar-slider-track' />
+							<div className='scalar-slider-input-wrapper'>
+								<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(selectedTickValue, details.numTicks) }} />
+								<input
+									aria-labelledby={sliderLabelId}
+									disabled={disabled || isInvalid}
+									type='range'
+									min='0'
+									max={details.numTicks.toString()}
+									step='1'
+									value={resolvedSelectedTick}
+									aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined}
+									onInput={event => onSelectedTickChange(event.currentTarget.value)}
+								/>
+							</div>
+						</div>
+					) : (
+						<FormInput
+							aria-labelledby={sliderLabelId}
+							className='scalar-exact-tick-input'
+							disabled={disabled || isInvalid}
+							inputMode='numeric'
+							value={exactTickInputValue}
+							onBlur={() => setExactTickInputValue(resolvedSelectedTick)}
+							onInput={(event: preact.JSX.TargetedEvent<HTMLInputElement>) => {
+								const nextInputValue = event.currentTarget.value
+								setExactTickInputValue(nextInputValue)
+								const parsedTick = tryParseBigIntInput(nextInputValue)
+								if (parsedTick === undefined) return
+								onSelectedTickChange((clampExactTickInput ? clampScalarTickIndex(parsedTick, details.numTicks) : parsedTick).toString())
+							}}
+						/>
+					)}
+					<span className='scalar-or-divider'>{commonCopy.or}</span>
+					<label className='scalar-invalid-toggle'>
+						<input type='checkbox' disabled={disabled} checked={isInvalid} onChange={event => onInvalidChange(event.currentTarget.checked)} />
+						<span>{commonCopy.invalid}</span>
+					</label>
+				</div>
+			</div>
+			<DataGrid className='scalar-slider-stats'>
+				{showMinMax ? <MetricField label={commonCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
+				<MetricField label={commonCopy.selectedTick}>{selectedTickLabel}</MetricField>
+				<MetricField label={showMinMax ? commonCopy.selectedOutcome : commonCopy.currentValue} valueTagName='span'>
+					{isInvalid || resolvedScalarValueInput === undefined ? (
+						selectedOutcomeLabel
+					) : (
+						<span className='scalar-value-editor'>
+							<span className='scalar-value-input-row'>
+								<FormInput
+									aria-label={commonCopy.scalarValue}
+									aria-describedby={scalarValueError === undefined ? undefined : scalarValueErrorId}
+									disabled={disabled || isInvalid}
+									inputMode='decimal'
+									invalid={scalarValueError !== undefined}
+									onBlur={() => {
+										setScalarValueInput(resolvedScalarValueInput)
+										setScalarValueError(undefined)
+									}}
+									onInput={event => updateScalarValue(event.currentTarget.value)}
+									value={scalarValueInput}
+								/>
+								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span className='scalar-value-unit'>{details.answerUnit}</span>}
+							</span>
+							{scalarValueError === undefined ? <span className='field-help'>{commonCopy.scalarValueHelpText}</span> : undefined}
+							{scalarValueError === undefined ? undefined : (
+								<span className='field-error' id={scalarValueErrorId}>
+									{scalarValueError}
+								</span>
+							)}
+						</span>
+					)}
+				</MetricField>
+				{showMinMax ? <MetricField label={commonCopy.maxValue}>{details.maxValueLabel}</MetricField> : undefined}
+			</DataGrid>
+			{action === undefined ? undefined : <div className='actions'>{action}</div>}
+		</div>
+	)
+}

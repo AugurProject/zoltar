@@ -1,0 +1,439 @@
+/// <reference types="bun-types" />
+
+import { describe, expect, test } from 'bun:test'
+import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import {
+	getOpenOracleAddress,
+	getOpenOracleDisputeSwapToken,
+	invalidateLiquidationApprovalNonce,
+	loadLiquidationApproval,
+	loadLiquidationApprovalRegistry,
+	loadOpenOracleReportDetails,
+	loadOpenOracleWithdrawableBalances,
+	loadOracleManagerDetails,
+	loadOpenOracleReportSummaries,
+	permitLiquidationApproval,
+	revokeLiquidationApproval,
+	setLiquidationApproval,
+	settleOracleReport,
+	withdrawOpenOracleBalance,
+	type LiquidationApprovalParams,
+} from '../../protocol/index.js'
+import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+
+const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
+const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
+const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
+const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
+const wethAddress = getAddress(MAINNET_WETH_ADDRESS)
+const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+
+function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
+	return {
+		game: {
+			callbackContract: zeroAddress,
+			callbackGasLimit: 0n,
+			currentAmount1: 100n,
+			currentAmount2: 10n,
+			currentReporter: initialReporter,
+			disputeDelay: 0n,
+			escalationHalt: 0n,
+			feePercentage: 0n,
+			flags: OPEN_ORACLE_FLAG_TIME_TYPE,
+			lastReportOppoTime: 1n,
+			multiplier: 100n,
+			numReports: 1n,
+			protocolFee: 0n,
+			protocolFeeRecipient: zeroAddress,
+			reportTimestamp: 1n,
+			settlementTime: 10n,
+			settlementTimestamp: 0n,
+			settlerRewardAttoEth: 0n,
+			token1: token1Address,
+			token2: token2Address,
+		},
+		helper: { blockNumber: 1n, blockTimestamp: 1n, creator: initialReporter, reportId },
+	}
+}
+
+function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, logIndex = 0n) {
+	return {
+		address: getOpenOracleAddress(),
+		blockNumber: 1n,
+		data: encodeOpenOracleStatePreimagePacked(preimage),
+		logIndex,
+		removed: false,
+		topics: [topic, toHex(preimage.helper.reportId, { size: 32 })],
+		transactionIndex: 0n,
+	}
+}
+
+describe('openOracle protocol client', () => {
+	test('derives the dispute contribution token from the strict proposed-price direction', () => {
+		const game = createOpenOraclePreimage().game
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 11n)).toBe(token2Address)
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 9n)).toBe(token1Address)
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 10n)).toBe(token1Address)
+	})
+
+	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
+		const initial = createOpenOraclePreimage()
+		initial.game.flags = 0n
+		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 0n }),
+			getLogs: async () => [createOpenOracleStateLog(initial), createOpenOracleStateLog(disputed, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, 1n)],
+			multicall: async request => {
+				const contracts = request.contracts
+				const firstContract = contracts[0]
+				const functionName = getContractFunctionName(firstContract)
+				if (functionName === 'reportMeta') {
+					return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
+				}
+				if (functionName === 'reportStatus') {
+					return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				}
+				if (functionName === 'extraData') {
+					return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 2, 0, zeroAddress, false]]
+				}
+				if (functionName === 'decimals') return [18n, 18n]
+				if (functionName === 'symbol') return ['REP', 'WETH']
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const page = await loadOpenOracleReportSummaries(client, 0, 10)
+		const [report] = page.reports
+		if (report === undefined) throw new Error('Expected one open oracle report summary')
+
+		expect(report.currentReporter).toBe(initialReporter)
+		expect(report.disputeOccurred).toBe(true)
+		expect(report.timeType).toBe(false)
+	})
+
+	test('loadOpenOracleReportDetails rejects invalid token decimals', async () => {
+		const preimage = createOpenOraclePreimage()
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 0n }),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') {
+					return [
+						[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0],
+						[100n, 10n, initialReporter, 1, 0, initialReporter, 0],
+						['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false],
+					]
+				}
+				if (firstFunctionName === 'decimals') return [256n, 18n, 'REP', 'TOK']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'oracleGame') return hashOpenOracleStatePreimage(preimage)
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow(`Token metadata for ${token1Address} returned invalid decimals`)
+	})
+
+	test('loadOpenOracleReportSummaries rejects empty token symbols', async () => {
+		const preimage = createOpenOraclePreimage()
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
+				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
+				if (firstFunctionName === 'decimals') return [18n, 18n]
+				if (firstFunctionName === 'symbol') return [' ', 'TOK']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`Token metadata for ${token1Address} returned an empty symbol`)
+	})
+
+	test('loadOpenOracleReportSummaries rejects mismatched configured WETH metadata', async () => {
+		const preimage = createOpenOraclePreimage()
+		preimage.game.token2 = wethAddress
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, wethAddress, true, 0, 0, 0, 0]]
+				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
+				if (firstFunctionName === 'decimals') return [18n, 18n]
+				if (firstFunctionName === 'symbol') return ['REP', 'ETH']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`WETH metadata is invalid for ${wethAddress}`)
+	})
+
+	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const pendingOperationSlotId = 12n
+		const previewOperationIds = Array.from({ length: 25 }, (_, index) => 40n - BigInt(index))
+		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
+		const requestedFunctionNames: string[] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				for (const contract of request.contracts) {
+					requestedFunctionNames.push(getContractFunctionName(contract))
+				}
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n, 60n]
+			},
+			readContract: async request => {
+				if (request.functionName === 'getActiveStagedOperations') {
+					const args = request.args
+					if (args === undefined) throw new Error('Expected getActiveStagedOperations args')
+					const startIndex = args[0]
+					const count = args[1]
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint staged operation args')
+					capturedActiveOperationArgs = [startIndex, count]
+					return [
+						previewOperationIds,
+						previewOperationIds.map(operationId => ({
+							operationAmountAttoRepOrAttoEth: operationId,
+							operator: vaultAddress,
+							operation: 1,
+							queuedAt: 0n,
+							snapshotTotalRepBackingUnits: 0n,
+							snapshotTargetCapacityOwnershipAttoRep: 0n,
+							snapshotTargetBackingUnits: 0n,
+							snapshotTotalPoolHeldAttoRep: 0n,
+							targetVault: vaultAddress,
+							validForSeconds: 60n,
+						})),
+					]
+				}
+				if (request.functionName === 'getPendingOperationSlot') {
+					return {
+						operationAmountAttoRepOrAttoEth: 999n,
+						operator: vaultAddress,
+						operation: 0,
+						queuedAt: 0n,
+						snapshotTotalRepBackingUnits: 0n,
+						snapshotTargetCapacityOwnershipAttoRep: 0n,
+						snapshotTargetBackingUnits: 0n,
+						snapshotTotalPoolHeldAttoRep: 0n,
+						targetVault: alternateSecurityPoolAddress,
+						validForSeconds: 60n,
+					}
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		const details = await loadOracleManagerDetails(client, managerAddress)
+
+		expect(requestedFunctionNames).toEqual([
+			'lastPrice',
+			'pendingOperationSlotId',
+			'getPendingSettlementOperationIds',
+			'MAX_PENDING_SETTLEMENT_OPERATIONS',
+			'pendingReportId',
+			'getQueuedOperationCostAttoEth',
+			'getRequestPriceCostAttoEth',
+			'isPriceValid',
+			'lastSettlementTimestamp',
+			'getActiveStagedOperationCount',
+			'settlementTime',
+		])
+		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
+		expect(details.activeStagedOperationCount).toBe(40n)
+		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
+		expect(details.pendingSettlementOperationIds).toEqual([pendingOperationSlotId, 13n])
+		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
+		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
+		expect(details.stagedOperations).toHaveLength(26)
+	})
+
+	test('settleOracleReport sends settle with an explicit gas limit', async () => {
+		const reporter = getAddress('0x00000000000000000000000000000000000000e1')
+		let capturedData: Hex | undefined
+		let capturedGas: bigint | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(request => {
+			capturedData = request.data
+			capturedGas = request.gas
+			capturedTo = request.to
+		})
+
+		await settleOracleReport(client, getOpenOracleAddress(), 7n, {
+			game: {
+				callbackContract: zeroAddress,
+				callbackGasLimit: 0n,
+				currentAmount1: 1n,
+				currentAmount2: 2n,
+				currentReporter: reporter,
+				disputeDelay: 0n,
+				escalationHalt: 0n,
+				feePercentage: 0n,
+				flags: 0n,
+				lastReportOppoTime: 1n,
+				multiplier: 100n,
+				numReports: 1n,
+				protocolFee: 0n,
+				protocolFeeRecipient: zeroAddress,
+				reportTimestamp: 1n,
+				settlementTime: 1n,
+				settlementTimestamp: 0n,
+				settlerRewardAttoEth: 0n,
+				token1: token1Address,
+				token2: token2Address,
+			},
+			helper: { blockNumber: 1n, blockTimestamp: 1n, creator: reporter, reportId: 7n },
+		})
+
+		expect(capturedTo).toBe(getOpenOracleAddress())
+		expect(capturedGas).toBe(5_000_000n)
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('settle')
+		expect(decodedCall.args?.[0]).toBe(7n)
+	})
+
+	test('loads sentinel-adjusted balances and keeps a failed withdrawal retryable', async () => {
+		const holder = getAddress('0x00000000000000000000000000000000000000f1')
+		const requestedTokens: Address[] = []
+		const readClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				if (request.functionName !== 'tokenHolder') throw new Error(`Unexpected read ${request.functionName}`)
+				const token = request.args?.[1]
+				if (typeof token !== 'string') throw new Error('Expected tokenHolder token')
+				requestedTokens.push(getAddress(token))
+				if (token === zeroAddress) return 6n
+				if (token === token1Address) return 8n
+				if (token === token2Address) return 10n
+				throw new Error(`Unexpected token ${token}`)
+			},
+		})
+
+		await expect(loadOpenOracleWithdrawableBalances(readClient, getOpenOracleAddress(), holder, token1Address, token2Address)).resolves.toEqual({
+			ethAttoEth: 5n,
+			token1: 7n,
+			token2: 9n,
+		})
+		expect(requestedTokens).toEqual([zeroAddress, token1Address, token2Address])
+
+		let withdrawalAttempts = 0
+		const writeClient = createMockWriteClient(request => {
+			withdrawalAttempts += 1
+			if (withdrawalAttempts === 1) throw new Error('wallet rejected withdrawal')
+			const data = request.data
+			if (data === undefined) throw new Error('Expected withdrawal calldata')
+			const decodedCall = decodeFunctionData({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, data })
+			expect(decodedCall.functionName).toBe('withdrawTo')
+			expect(decodedCall.args).toEqual([token1Address, 7n, holder])
+		})
+
+		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, 7n, holder)).rejects.toThrow('wallet rejected withdrawal')
+		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, 7n, holder)).resolves.toMatchObject({ action: 'withdrawBalance' })
+		expect(withdrawalAttempts).toBe(2)
+	})
+
+	test('loads the liquidation approval registry and encodes approval lifecycle writes', async () => {
+		const coordinatorAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const registryAddress = getAddress('0x00000000000000000000000000000000000000a2')
+		const receiverVault = getAddress('0x00000000000000000000000000000000000000a3')
+		const operator = getAddress('0x00000000000000000000000000000000000000a4')
+		const securityPool = getAddress('0x00000000000000000000000000000000000000a5')
+		const params = {
+			securityPool,
+			receiverVault,
+			operator,
+			targetVault: zeroAddress,
+			maxCumulativeDebtAttoEth: 10n,
+			maxDebtPerLiquidationAttoEth: 2n,
+			minPostLiquidationHealthFactorBps: 12_000n,
+			validAfter: 1n,
+			validUntil: 100n,
+			nonce: 7n,
+		} satisfies LiquidationApprovalParams
+		const approvalId = toHex(9n, { size: 32 })
+		const signature = '0x1234' satisfies Hex
+		const readClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				expect(request.functionName).toBe('liquidationApprovalRegistry')
+				return registryAddress
+			},
+		})
+		await expect(loadLiquidationApprovalRegistry(readClient, coordinatorAddress)).resolves.toBe(registryAddress)
+		const approvalState = {
+			params,
+			availableDebtAttoEth: 8n,
+			reservedDebtAttoEth: 1n,
+			consumedDebtAttoEth: 1n,
+			revoked: false,
+		}
+		const approvalReadClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				switch (request.functionName) {
+					case 'liquidationApprovalRegistry':
+						return registryAddress
+					case 'getLiquidationApproval':
+						return approvalState
+					case 'minimumLiquidationApprovalNonce':
+						expect(request.args).toEqual([receiverVault])
+						return 9n
+					default:
+						throw new Error(`Unexpected approval read ${request.functionName}`)
+				}
+			},
+		})
+		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
+
+		const calls: { data: Hex; to: Address }[] = []
+		const writeClient = createMockWriteClient(request => {
+			if (request.data === undefined || request.to === undefined || request.to === null) throw new Error('Expected approval calldata and destination')
+			calls.push({ data: request.data, to: request.to })
+		})
+		await setLiquidationApproval(asWriteClient(writeClient), registryAddress, params)
+		await permitLiquidationApproval(asWriteClient(writeClient), registryAddress, params, signature)
+		await revokeLiquidationApproval(asWriteClient(writeClient), registryAddress, approvalId)
+		await invalidateLiquidationApprovalNonce(asWriteClient(writeClient), registryAddress, 9n)
+
+		expect(calls.map(call => call.to)).toEqual([registryAddress, registryAddress, registryAddress, registryAddress])
+		expect(
+			calls.map(
+				call =>
+					decodeFunctionData({
+						abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
+						data: call.data,
+					}).functionName,
+			),
+		).toEqual(['setLiquidationApproval', 'permitLiquidationApproval', 'revokeLiquidationApproval', 'invalidateLiquidationApprovalNonce'])
+	})
+})

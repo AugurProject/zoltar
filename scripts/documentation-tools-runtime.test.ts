@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { installDomEnvironment } from '../ui/ts/tests/testUtils/domEnvironment.ts'
+import { installDomEnvironment } from '../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLOutputElement'] as const
 

@@ -15,6 +15,8 @@
 		["0x26CA07838f50Fd03d9b586f8780F42De9877286f", "Escalation Claim Checkpoint Delegate", "escalationGameClaimDelegate"],
 		["0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249", "Escalation Game Factory", "escalationGameFactory"],
 		["0x3A7b70613E86908a4494D3cBf627C62342c96990", "Security Pool Factory", "securityPoolFactory"],
+		["0xdCC03cc07Ec0c633079446Be13b52371104ff0d7", "Security Pool Forker", "securityPoolForker"],
+		["0x5dae4d3F03A59a51F01e52920a76Cb4013D15c70", "Security Pool Factory", "securityPoolFactory"],
 		["0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x221657776846890989a759ba2973e427dff5c9bb", "Genesis REP", "reputationToken"],
 		["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "Wrapped Ether", "weth"],
