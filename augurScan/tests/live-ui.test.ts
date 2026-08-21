@@ -40,6 +40,7 @@ import {
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
+	showIndexerSyncDetails,
 	transactionRetryMode,
 } from '../browser/live-update.ts'
 
@@ -583,6 +584,34 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 		eta: 'Estimating ETA',
 		sample: { indexedBlock: 999, sampledAt: 1_000, blocksPerSecond: undefined },
 	})
+})
+
+test('hides completed sync details only while the live indexer is current and caught up', () => {
+	const now = Date.parse('2026-08-17T12:00:00.000Z')
+	expect(
+		showIndexerSyncDetails(
+			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' },
+			now,
+		),
+	).toBeFalse()
+	expect(
+		showIndexerSyncDetails(
+			{ start_block: '100', indexed_block: '999', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' },
+			now,
+		),
+	).toBeTrue()
+	expect(
+		showIndexerSyncDetails(
+			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' },
+			now,
+		),
+	).toBeTrue()
+	expect(
+		showIndexerSyncDetails(
+			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'backfilling' },
+			now,
+		),
+	).toBeTrue()
 })
 
 test('warns when a caught-up chain head is more than one minute old', () => {
