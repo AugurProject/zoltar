@@ -633,17 +633,21 @@ describe('network indexer lifecycle', () => {
 			url: 'https://rpc.example/rate-limit/',
 		})
 		expect(isSplittableLogRangeError(structuredRangeFailure)).toBe(true)
-		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe(
+			'RpcRequestError; code -32600 (Invalid Request); message: provider rejected the requested block range',
+		)
 		const unrelatedStructuredFailure = new RpcRequestError({
 			body: { method: 'eth_getLogs', params: ['request timed out'] },
 			error: { code: -32600, message: 'upstream rejected query' },
 			url: 'https://rpc.example/response-size/',
 		})
 		expect(isSplittableLogRangeError(unrelatedStructuredFailure)).toBe(false)
-		expect(safeIndexerFailureReason(unrelatedStructuredFailure)).toBe('RpcRequestError; code -32600')
+		expect(safeIndexerFailureReason(unrelatedStructuredFailure)).toBe('RpcRequestError; code -32600 (Invalid Request)')
 		const conflictingCause = new Error('request rate exceeded', { cause: structuredRangeFailure })
 		expect(isSplittableLogRangeError(conflictingCause)).toBe(false)
-		expect(safeIndexerFailureReason(conflictingCause)).toBe('Error caused by RpcRequestError; code -32600; message: provider rate limit exceeded')
+		expect(safeIndexerFailureReason(conflictingCause)).toBe(
+			'Error caused by RpcRequestError; code -32600 (Invalid Request); message: provider rate limit exceeded',
+		)
 
 		for (const details of ['more than 10 requests per second', 'request limit exceeded', 'please reduce your request rate']) {
 			const attempts: Array<readonly [bigint, bigint]> = []
@@ -662,7 +666,7 @@ describe('network indexer lifecycle', () => {
 				),
 			).rejects.toBe(failure)
 			expect(attempts).toEqual([[0n, 100n]])
-			expect(safeIndexerFailureReason(failure)).toBe('RpcRequestError; code -32600; message: provider rate limit exceeded')
+			expect(safeIndexerFailureReason(failure)).toBe('RpcRequestError; code -32600 (Invalid Request); message: provider rate limit exceeded')
 		}
 
 		for (const [details, expectedMessage] of [
@@ -688,7 +692,7 @@ describe('network indexer lifecycle', () => {
 				[0n, 50n],
 				[0n, 25n],
 			])
-			expect(safeIndexerFailureReason(failure)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+			expect(safeIndexerFailureReason(failure)).toBe(`RpcRequestError; code -32600 (Invalid Request); message: ${expectedMessage}`)
 		}
 	})
 
@@ -852,6 +856,18 @@ describe('network indexer lifecycle', () => {
 		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
 		expect(await findContractDeploymentBlock(0n, 0n, async () => '0x01')).toBeUndefined()
 		expect(await findContractDeploymentBlock(0n, 100n, async () => '0x01')).toBeUndefined()
+	})
+
+	test('moves deployment bisection forward across pruned historical state', async () => {
+		const checkedBlocks: bigint[] = []
+		const deployment = await findContractDeploymentBlock(1n, 100n, async (block) => {
+			checkedBlocks.push(block)
+			if (block <= 50n) throw new RpcRequestError({ body: {}, error: { code: -32603, message: `state at block #${block} is pruned` }, url: '' })
+			return block >= 70n ? '0x01' : undefined
+		})
+		expect(deployment).toEqual({ block: 70n, exact: false })
+		expect(checkedBlocks.filter((block) => block === 1n)).toHaveLength(1)
+		expect(checkedBlocks.slice(2).every((block) => block > 1n)).toBeTrue()
 	})
 
 	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
@@ -1487,7 +1503,7 @@ describe('network indexer lifecycle', () => {
 		}
 
 		expect(rejected).toBe(failure)
-		expect(diagnostics.failureReason(rejected)).toBe('RPC #2: RpcRequestError: upstream rejected query; code -32000')
+		expect(diagnostics.failureReason(rejected)).toBe('RPC #2: RpcRequestError: upstream rejected query; code -32000 (Server error)')
 		expect(diagnostics.activeEndpoint()).toBe('#2 https://rpc-two.example')
 	})
 
@@ -1508,7 +1524,7 @@ describe('network indexer lifecycle', () => {
 			error: { code: -32600, message: 'block range limit is 10 blocks' },
 			url: `https://rpc.example/${secret}?token=${secret}`,
 		})
-		expect(safeIndexerFailureReason(rangeError)).toBe('RpcRequestError; code -32600; message: provider rejected the requested block range')
+		expect(safeIndexerFailureReason(rangeError)).toBe('RpcRequestError; code -32600 (Invalid Request); message: provider rejected the requested block range')
 
 		const numericCredential = '123456'
 		const numericRangeError = new RpcRequestError({
@@ -1538,7 +1554,7 @@ describe('network indexer lifecycle', () => {
 			url: 'https://rpc.example',
 		})
 		const reason = safeIndexerFailureReason(unsafeMessage)
-		expect(reason).toBe('RpcRequestError; code -32600')
+		expect(reason).toBe('RpcRequestError; code -32600 (Invalid Request)')
 		expect(reason).not.toContain(secret)
 		expect(reason).not.toContain('rpc.example')
 
@@ -1557,7 +1573,7 @@ describe('network indexer lifecycle', () => {
 				error: { code: -32600, message: details },
 				url: 'https://rpc.example',
 			})
-			expect(safeIndexerFailureReason(diagnosticError)).toBe(`RpcRequestError; code -32600; message: ${expectedMessage}`)
+			expect(safeIndexerFailureReason(diagnosticError)).toBe(`RpcRequestError; code -32600 (Invalid Request); message: ${expectedMessage}`)
 			expect(isSplittableLogRangeError(diagnosticError)).toBe(splittable)
 		}
 
@@ -1570,7 +1586,7 @@ describe('network indexer lifecycle', () => {
 			url: 'https://rpc.example',
 		})
 		const quotedReason = safeIndexerFailureReason(quotedSecrets)
-		expect(quotedReason).toBe('RpcRequestError; code -32600')
+		expect(quotedReason).toBe('RpcRequestError; code -32600 (Invalid Request)')
 		expect(quotedReason).not.toContain(secret)
 		expect(quotedReason).not.toContain('rpc.example')
 		expect(quotedReason).not.toContain('\n')
@@ -1625,7 +1641,7 @@ describe('network indexer lifecycle', () => {
 					url: 'https://rpc.example',
 				}),
 			)
-			expect(escapedReason).toBe('RpcRequestError; code -32600')
+			expect(escapedReason).toBe('RpcRequestError; code -32600 (Invalid Request)')
 			expect(escapedReason).not.toContain(secret)
 			expect(escapedReason).not.toContain('rpc.example')
 		}

@@ -41,12 +41,16 @@ services:
       SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS: ${SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-10000}
+      RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
+    volumes:
+      - augurscan-logs:/var/log/augurscan
     ports:
       - "${AUGURSCAN_PORT:-3000}:3000"
     stop_grace_period: 30s
 
 volumes:
   augurscan-data:
+  augurscan-logs:
 
 networks:
   default:

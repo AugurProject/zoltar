@@ -22,6 +22,7 @@ COPY augurScan/schema.sql ./augurScan/schema.sql
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
 COPY augurScan/src ./augurScan/src
 COPY shared/ts/ethereum.ts ./shared/ts/ethereum.ts
+RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 CMD ["bun", "-e", "const r=await fetch('http://127.0.0.1:3000/health/ready');if(!r.ok)process.exit(1)"]

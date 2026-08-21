@@ -305,11 +305,32 @@ export type IndexerLease = {
 	readonly release: () => Promise<void>
 }
 
+const pendingLeaseOperations = new WeakMap<object, Promise<void>>()
+
+export const runSerializedIndexerLeaseOperation = async <T>(lease: object, operation: () => Promise<T>): Promise<T> => {
+	const previous = pendingLeaseOperations.get(lease) ?? Promise.resolve()
+	const result = previous.then(operation)
+	const completion = result.then(
+		() => {},
+		() => {},
+	)
+	pendingLeaseOperations.set(lease, completion)
+	try {
+		return await result
+	} finally {
+		if (pendingLeaseOperations.get(lease) === completion) pendingLeaseOperations.delete(lease)
+	}
+}
+
 const withIndexerLease = async <T>(lease: IndexerLease, operation: (transaction: TransactionSQL) => Promise<T>): Promise<T> =>
-	await runFencedIndexerTransaction(
-		async (fencedOperation) => await lease.connection.begin(fencedOperation),
-		async (transaction) => await lease.assertHeld(transaction),
-		operation,
+	await runSerializedIndexerLeaseOperation(
+		lease,
+		async () =>
+			await runFencedIndexerTransaction(
+				async (fencedOperation) => await lease.connection.begin(fencedOperation),
+				async (transaction) => await lease.assertHeld(transaction),
+				operation,
+			),
 	)
 
 const withOptionalIndexerLease = async <T>(sql: SQL, lease: IndexerLease | undefined, operation: (sql: SQL) => Promise<T>): Promise<T> =>
