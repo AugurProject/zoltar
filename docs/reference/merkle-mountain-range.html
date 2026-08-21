@@ -58,7 +58,7 @@
 			<section id="encoding">
 				<h2>Normative Encoding</h2>
 				<p>The leaf ABI types are <code>(address,uint8,uint256,uint256,uint256,uint256)</code>, in the order <code>depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId</code>. <code>outcome</code> is the Solidity enum ordinal. Leaf hashing uses standard ABI word padding through <code>abi.encode</code>; parent hashing uses the 64 raw bytes from <code>abi.encodePacked(left, right)</code>. There is no additional domain separator.</p>
-				<pre><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
+				<pre class="code-scroll" tabindex="0"><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
     parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId))
 parentHash = keccak256(abi.encodePacked(left, right))
 root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
@@ -150,46 +150,56 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 				<details class="interactive-example" id="mmr-proof-planner" open>
 					<summary>Plan a carry proof</summary>
 					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the peak-local index bound and the exact sibling-array lengths enforced by the verifier. It does not construct hashes or replace an offchain proof builder.</p>
-					<div class="example-grid">
-						<label>
-							Snapshot leaf count
-							<input type="text" inputmode="numeric" pattern="[0-9]+" value="13" data-tool-input="leafCount" />
-						</label>
-						<label>
-							Occupied peak height
-							<select data-tool-input="peakHeight">
-								<option value="2" selected>Height 2</option>
-							</select>
-						</label>
-						<label>
-							Peak-local leaf index
-							<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
-						</label>
+					<div class="tool-outcome-strip">
+						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid peak-local index</output></div>
+						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; local indexes 0…3</output></div>
 					</div>
-					<div class="example-output-grid" data-tool-output-region>
-						<div>
-							<span>Binary leaf count</span>
-							<output data-mmr-output="binary">1101₂</output>
+					<div class="tool-workspace">
+						<div class="tool-control-stack tool-workspace-controls">
+							<details class="tool-control-group" data-group-tone="system">
+								<summary>Snapshot</summary>
+								<div class="example-grid">
+									<label>
+										Snapshot leaf count
+										<input type="text" inputmode="numeric" pattern="[0-9]+" value="13" data-tool-input="leafCount" />
+									</label>
+									<label>
+										Occupied peak height
+										<select data-tool-input="peakHeight">
+											<option value="2" selected>Height 2</option>
+										</select>
+									</label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="action" data-mobile-open open>
+								<summary>Proof position</summary>
+								<div class="example-grid">
+									<label>
+										Peak-local leaf index
+										<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
+									</label>
+								</div>
+							</details>
 						</div>
-						<div>
-							<span>Occupied peak heights</span>
-							<output data-mmr-output="peaks">0, 2, 3</output>
-						</div>
-						<div>
-							<span>Selected peak capacity</span>
-							<output data-mmr-output="capacity">4 leaves; local indexes 0…3</output>
-						</div>
-						<div>
-							<span>MMR sibling hashes required</span>
-							<output data-mmr-output="mmrSiblings">4</output>
-						</div>
-						<div>
-							<span>Nullifier sibling hashes required</span>
-							<output data-mmr-output="nullifierSiblings">64</output>
-						</div>
-						<div>
-							<span>Selection</span>
-							<output data-mmr-output="selection">Valid peak-local index</output>
+						<div class="tool-workspace-view">
+							<div class="example-output-grid tool-detail-grid mmr-proof-profile" data-tool-output-region>
+								<div class="mmr-proof-length" style="--widget-meter: 6.25%" data-widget-meter="true">
+									<span>MMR sibling hashes required</span>
+									<output data-mmr-output="mmrSiblings">4</output>
+								</div>
+								<div class="mmr-proof-length" style="--widget-meter: 100%" data-widget-meter="true">
+									<span>Nullifier sibling hashes required</span>
+									<output data-mmr-output="nullifierSiblings">64</output>
+								</div>
+								<div>
+									<span>Binary leaf count</span>
+									<output data-mmr-output="binary">1101₂</output>
+								</div>
+								<div>
+									<span>Occupied peak heights</span>
+									<output data-mmr-output="peaks">0, 2, 3</output>
+								</div>
+							</div>
 						</div>
 					</div>
 				</details>
