@@ -51,7 +51,10 @@
 				"docs/assets/js/responsiveDocs.js",
 				"docs/assets/js/interactiveTools.js",
 				"docs/assets/js/invariantExplorer.js",
-				"docs/assets/js/mmrProofPlanner.js"
+				"docs/assets/js/mmrProofPlanner.js",
+				"docs/assets/js/auctionClearing.js",
+				"docs/assets/js/deploymentMaskDecoder.js",
+				"docs/assets/js/openOracleTools.js"
 			],
 			"formatter": {
 				"enabled": false

@@ -322,31 +322,47 @@ pool-held REP ≥ max(migration security multiplier, liquidation reserve multipl
 				<p class="lede">After migration, a child pool may still have less ETH than it needs to support its open interest. A Truth Auction can sell some child-universe REP for ETH to repair that shortfall.</p>
 				<p>The auction has an ETH raise target and a cap on how much REP it may sell. The cap depends on migrated REP, pool-held REP, and unresolved dispute-staked REP; it may allow the full auctionable amount, reserve a small amount, apply a migration haircut, or be zero.</p>
 				<p>The child resumes with the collateral actually migrated and raised. See the <a href="../explanation/truth-auctions.html">Truth Auction design</a> for timing, caps, rounding, bidding, and settlement.</p>
+				<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
+					<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction compares received settlement collateral with the parent settlement target and shows any remaining shortfall.</p>
+				</figure>
 				<details class="interactive-example technical-details" id="collateral-repair-example">
 					<summary>See the collateral-repair illustrations</summary>
-					<div class="example-grid">
-						<label>Parent settlement collateral <input type="range" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" /><span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span></label>
-						<label>Migration-routed collateral <input type="range" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" /><span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span></label>
-						<label>Auction ETH raised <input type="range" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
+					<div class="tool-outcome-strip">
+						<div data-primary-output><span>Repair status</span><output data-example-output="repairStatus">fully repaired</output></div>
+						<div data-primary-output><span>Remaining shortfall</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
 					</div>
-					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>
-						<p class="diagram-caption"><span class="figure-label">Truth Auction Balance Sheet</span>The auction compares received settlement collateral with the parent settlement target and shows any remaining shortfall.</p>
-					</figure>
-					<div class="example-visual">
-						<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
-						<p class="diagram-caption"><span class="figure-label">Collateral Repair Progress</span>Blue shows settlement collateral routed during migration, green shows auction repair, and the dashed line marks the parent settlement target.</p>
-						<div class="legend" aria-label="Collateral repair chart key">
-							<span class="legend-item"><span class="legend-swatch blue" aria-hidden="true"></span>Migration-routed collateral</span>
-							<span class="legend-item"><span class="legend-swatch green" aria-hidden="true"></span>Auction repair</span>
-							<span class="legend-item">Dashed line: parent settlement target</span>
+					<div class="tool-workspace">
+						<div class="tool-control-stack tool-workspace-controls">
+							<details class="tool-control-group" data-group-tone="system">
+								<summary>Settlement target</summary>
+								<div class="example-grid">
+									<label>Parent settlement collateral <input type="number" inputmode="decimal" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" /><span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span></label>
+								</div>
+							</details>
+							<details class="tool-control-group" data-group-tone="action" data-mobile-open open>
+								<summary>Child funding</summary>
+								<div class="example-grid">
+									<label>Migration-routed collateral <input type="number" inputmode="decimal" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" /><span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span></label>
+									<label>Auction ETH raised <input type="number" inputmode="decimal" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
+								</div>
+							</details>
 						</div>
-					</div>
-					<div class="example-output-grid">
-						<div><span>Routed collateral</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
-						<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
-						<div><span>Remaining shortfall</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
-						<div><span>Repair status</span><output data-example-output="repairStatus">no contribution required</output></div>
+						<div class="tool-workspace-view">
+							<div class="example-visual">
+								<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
+								<p class="diagram-caption"><span class="figure-label">Collateral Repair Progress</span>Blue shows settlement collateral routed during migration, green shows auction repair, and the dashed line marks the parent settlement target.</p>
+								<div class="legend" aria-label="Collateral repair chart key">
+									<span class="legend-item"><span class="legend-swatch blue" aria-hidden="true"></span>Migration-routed collateral</span>
+									<span class="legend-item"><span class="legend-swatch green" aria-hidden="true"></span>Auction repair</span>
+									<span class="legend-item">Dashed line: parent settlement target</span>
+								</div>
+							</div>
+							<div class="example-output-grid tool-detail-grid">
+								<div><span>Routed collateral</span><output data-example-output="routedCollateral">47.50 ETH</output></div>
+								<div><span>Initial shortfall</span><output data-example-output="initialShortfall">2.50 ETH</output></div>
+							</div>
+						</div>
 					</div>
 				</details>
 			</section>

@@ -62,15 +62,10 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 	window.document.write(html)
 	window.document.close()
 
-	const script = window.document.querySelector('script:not([src])')
-	const scriptText = script?.textContent
-	if (scriptText === undefined || scriptText.trim().length === 0) {
-		window.close()
-		throw new Error(`${filePath} is missing an inline auction example script`)
-	}
-
-	const runScript = new Function('window', 'document', 'SVGCircleElement', 'SVGElement', 'SVGLineElement', 'SVGPolylineElement', 'SVGRectElement', 'SVGTextElement', scriptText)
-	runScript(window, window.document, window.SVGCircleElement, window.SVGElement, window.SVGLineElement, window.SVGPolylineElement, window.SVGRectElement, window.SVGTextElement)
+	const runtimeName = exampleId === 'simple-auction-example' ? 'auctionClearing' : 'openOracleTools'
+	const runtimeSource = await readFile(`docs/assets/js/${runtimeName}.js`, 'utf8')
+	const runScript = new Function('document', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', runtimeSource)
+	runScript(window.document, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement)
 
 	const example = window.document.getElementById(exampleId)
 	if (example === null) {
@@ -188,11 +183,7 @@ async function renderDeploymentMapping(
 		window.document.write(html)
 		window.document.close()
 
-		const script = window.document.querySelector('script[type="module"]:not([src])')
-		const scriptText = script?.textContent
-		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error(`${filePath} is missing its manifest-rendering script`)
-		}
+		const runtimeSource = await readFile('docs/assets/js/deploymentMaskDecoder.js', 'utf8')
 
 		const responses = retryResponse === undefined ? [response] : [response, retryResponse]
 		let fetchCount = 0
@@ -218,7 +209,7 @@ async function renderDeploymentMapping(
 			fetchCount += 1
 			return selectedResponse
 		}
-		const runScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `return (async () => { ${scriptText} })()`)
+		const runScript = new Function('CustomEvent', 'document', 'fetch', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', `${runtimeSource}\nreturn deploymentMaskDecoderReady`)
 		await runScript(window.CustomEvent, window.document, fetchManifest, window.HTMLButtonElement, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement, window.HTMLTableCellElement, window.HTMLTableSectionElement)
 
 		const interactiveToolsSource = await readFile('docs/assets/js/interactiveTools.js', 'utf8')
@@ -343,6 +334,11 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 			if (!(element instanceof window.HTMLOutputElement)) throw new Error(`Missing MMR planner output: ${name}`)
 			return element.value
 		}
+		const meter = (name: string) => {
+			const card = planner.querySelector(`[data-mmr-output="${name}"]`)?.parentElement
+			if (!(card instanceof window.HTMLElement)) throw new Error(`Missing MMR planner meter: ${name}`)
+			return card
+		}
 		const setInput = (input: typeof leafCount | typeof leafIndex, value: string) => {
 			input.value = value
 			input.dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -419,19 +415,28 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 		setInput(leafIndex, String((1n << 63n) - 1n))
 		assert.equal(peakHeight.options.length, 64, 'the maximum uint64 leaf count must occupy all 64 peaks')
 		assert.equal(output('mmrSiblings'), '126', 'the maximum uint64 leaf count at height 63 must require 126 MMR siblings')
+		assert.equal(output('peaks'), '0–63', 'consecutive occupied peak heights must stay compact at the uint64 maximum')
 		assert.equal(output('selection'), 'Valid peak-local index', 'the maximum local index below a height-63 peak capacity must be valid')
+		assert.equal(peakHeight.classList.contains('visually-hidden-control'), false, 'large occupied-peak sets must use the compact native select')
+		assert.equal(peakHeight.tabIndex, 0, 'the large occupied-peak select must remain keyboard accessible')
+		assert.equal(window.document.querySelectorAll('.peak-choice-control button').length, 0, 'large occupied-peak sets must not render a button for every height')
+		assert.equal(meter('mmrSiblings').style.getPropertyValue('--widget-meter'), '100%', 'the longer 126-sibling MMR proof must fill its comparison meter')
+		assert.ok(Math.abs(Number.parseFloat(meter('nullifierSiblings').style.getPropertyValue('--widget-meter')) - (64 / 126) * 100) < 1e-9, 'the fixed 64-sibling nullifier proof must stay proportional to a longer MMR proof')
 
 		for (const invalidLeafCount of ['0', String(1n << 64n)]) {
 			setInput(leafCount, invalidLeafCount)
-			assert.equal(output('binary'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must be outside the supported leaf-count domain`)
-			assert.equal(output('selection'), 'Enter an integer from 1 through 2⁶⁴ − 1', `${invalidLeafCount} must clear the prior selection result`)
+			assert.equal(output('binary'), '—', `${invalidLeafCount} must mark calculated output unavailable without repeating the validation message`)
+			assert.equal(output('selection'), '—', `${invalidLeafCount} must clear the prior selection result`)
 			assert.equal(output('nullifierSiblings'), '64', 'invalid MMR input must not change the protocol-fixed nullifier depth')
+			assert.equal(meter('mmrSiblings').style.getPropertyValue('--widget-meter'), '', `${invalidLeafCount} must clear the stale MMR proof meter`)
+			assert.equal(meter('nullifierSiblings').style.getPropertyValue('--widget-meter'), '', `${invalidLeafCount} must clear the comparison meter when the MMR proof is unavailable`)
 			assert.equal(leafCount.getAttribute('aria-invalid'), 'true', `${invalidLeafCount} must expose the invalid leaf-count state`)
 			assert.equal(peakHeight.disabled, true, `${invalidLeafCount} must disable the occupied-peak selector`)
-			assert.deepEqual(
-				Array.from(peakHeight.options, option => ({ text: option.textContent, value: option.value })),
-				[{ text: 'Enter a valid leaf count', value: '' }],
-				`${invalidLeafCount} must replace stale occupied peaks with one invalid-state option`,
+			assert.equal(peakHeight.options.length, 64, `${invalidLeafCount} must retain the dependent peak choices for layout stability`)
+			assert.equal(
+				Array.from(window.document.querySelectorAll('.peak-choice-control button')).every(button => button instanceof window.HTMLButtonElement && button.disabled),
+				true,
+				`${invalidLeafCount} must visibly disable every dependent peak choice`,
 			)
 		}
 		setInput(leafCount, '13')
@@ -577,7 +582,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 			},
 			'a calculator preset must apply its complete input scenario',
 		)
-		assert.equal(status.textContent, 'Weak demand applied; results updated.', 'preset application must announce completion')
+		assert.equal(status.textContent, '', 'preset application must avoid redundant status narration')
 
 		for (const presetCase of [
 			{ expected: '47.5', input: 'forkSettlementCollateralReceived', presetIndex: '0', toolId: 'collateral-repair-example' },
@@ -615,7 +620,7 @@ async function checkInteractiveToolControls(): Promise<void> {
 			},
 			'Reset must restore the calculator values that were present before linked state was applied',
 		)
-		assert.equal(status.textContent, 'Default values restored.', 'Reset must announce completion')
+		assert.equal(status.textContent, '', 'Reset must avoid redundant status narration')
 
 		copy.click()
 		await Promise.resolve()
@@ -732,11 +737,12 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 
 async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourceSnippets: string[]): Promise<void> {
 	const html = await readFile(filePath, 'utf8')
+	const runtimeSource = await readFile('docs/runtime/auctionClearing.ts', 'utf8')
 	assert.match(html, /<span>ETH retained<\/span/, `${filePath} should label retained ETH explicitly`)
 	assert.match(html, /<span>Winning ETH kept<\/span/, `${filePath} should label winning ETH kept explicitly`)
 	assert.match(html, /qualification threshold as <code>clearingTick<\/code>[\s\S]*Only bids at or above/, `${filePath} should describe the underfunded winner boundary with clearingTick`)
 	for (const snippet of requiredSourceSnippets) {
-		assert.match(html, new RegExp(escapeRegExp(snippet)), `${filePath} is missing expected source snippet: ${snippet}`)
+		assert.match(runtimeSource, new RegExp(escapeRegExp(snippet)), `${filePath} runtime is missing expected source snippet: ${snippet}`)
 	}
 }
 
@@ -747,7 +753,7 @@ async function checkDynamicWethReportExample(): Promise<void> {
 		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
 		assertEqual(example.output('openInterestEscalationHalt'), '1.000000000000000000 WETH', 'dynamic report default open-interest escalation halt floor')
 		assertEqual(example.output('estimatedMinimumWethReport'), '3.230769230769230770 WETH', 'dynamic report default minimum WETH')
-		assertEqual(example.output('selectedInitialWethReport'), '3.230769230769230770 WETH', 'dynamic report default selected WETH')
+		assertEqual(example.output('selectedInitialWethReport'), '3.2308 WETH', 'dynamic report default selected WETH headline')
 		assertEqual(example.output('selectedEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default escalation halt')
 		assertEqual(example.output('disputeGasCost'), '0.012000 ETH', 'dynamic report default dispute gas cost')
 		assertEqual(example.output('bufferedGasCost'), '0.120000 ETH', 'dynamic report default buffered gas cost')
@@ -768,7 +774,7 @@ async function checkDynamicWethReportExample(): Promise<void> {
 
 		example.setInput('requestedInitialWeth', 6)
 		assertEqual(example.output('estimatedMinimumWethReport'), '5.653846153846153847 WETH', 'caller-selected WETH should not change the computed minimum')
-		assertEqual(example.output('selectedInitialWethReport'), '6.000000000000000000 WETH', 'caller can select WETH above the computed minimum')
+		assertEqual(example.output('selectedInitialWethReport'), '6 WETH', 'caller-selected WETH headline stays compact')
 		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
 		example.setInput('blockBaseFeeGwei', 0)
@@ -859,13 +865,12 @@ for (const scenario of scenarios) {
 }
 
 await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', [
-	'write("clearingMode", "underfunded qualification clearing")',
-	'write("bindingCondition", "underfunded")',
-	'write("thresholdInputEth", formatEth(winningEthAmount))',
-	'const threshold = ethRaiseCap / repInventory',
-	'bid.price >= threshold',
-	'repResults[bid.key] = (bid.eth * repInventory) / winningEthAmount',
-	'accumulatedBidEth = winningEthAmount',
+	"import { type AuctionBidInput, calculateAuctionModel } from '../charts/chartModels'",
+	'const model = calculateAuctionModel(ethRaiseCap, repInventory, bids)',
+	"write('clearingMode', 'underfunded qualification clearing')",
+	"write('bindingCondition', 'underfunded')",
+	"write('thresholdInputEth', formatEth(model.ethRaised))",
+	"write('underfundedThreshold', `${formatFixed(model.qualificationPrice)} ETH/REP`)",
 ])
 
 await checkDynamicWethReportExample()
