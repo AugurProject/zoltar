@@ -95,6 +95,7 @@ function state(
 		paused?: boolean
 		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 		pendingTransactions?: PendingTransaction[]
+		rpcEndpointHealth?: { consecutiveFailures: number; latencyMilliseconds?: number; status: string; target: string }[]
 		universes?: DashboardUniverse[]
 	} = {},
 ) {
@@ -120,6 +121,7 @@ function state(
 		paused: options.paused ?? false,
 		pendingStagedOperations: options.pendingStagedOperations ?? [],
 		pendingTransactions: options.pendingTransactions ?? [],
+		rpcEndpointHealth: options.rpcEndpointHealth ?? [],
 		pools: [
 			{
 				knownVaultCount: '0',
@@ -543,12 +545,13 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps the requested chain locked and visible while stale profile polls drain', async () => {
-		const page = await dashboard(mainnetConfiguration(), state())
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }))
 		page.setStaleProfilePolls(3)
 		const networkName = page.window.document.getElementById('network-name')
 		const networkFields = page.window.document.getElementById('network-fields')
 		const strategyFields = page.window.document.getElementById('strategy-fields')
 		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement)) throw new Error('Expected chain-profile controls')
+		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
 
 		page.suspendNextStateRequest()
 		const staleStateRefresh = page.refresh()
@@ -571,7 +574,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(networkFields.disabled).toBe(false)
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
-		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Profile saved. The bot is switching chains in place; settings will reload automatically.')
+		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Sepolia profile loaded; RPC setup required.')
+		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(0)
 	})
 
 	test('keeps resume locked when configuration and network identity are unavailable', async () => {

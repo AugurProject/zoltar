@@ -989,6 +989,12 @@ function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 	)
 }
 
+function renderCurrentRpcEndpointHealth(snapshot = currentSnapshot) {
+	const configuredNetwork = currentConfiguration?.network?.name
+	const health = snapshot !== undefined && currentConfiguration?.networkConfigured === true && snapshot.network === configuredNetwork ? snapshot.rpcEndpointHealth : undefined
+	renderRpcEndpointHealth(health)
+}
+
 function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	renderBlockStatus(snapshot)
@@ -1018,7 +1024,7 @@ function render(snapshot: Snapshot) {
 	renderUniverses(snapshot)
 	renderPools(snapshot)
 	renderActivities(snapshot.activities)
-	renderRpcEndpointHealth(snapshot.rpcEndpointHealth)
+	renderCurrentRpcEndpointHealth(snapshot)
 	if (!initialFragmentApplied) {
 		initialFragmentApplied = true
 		const fragment = decodeURIComponent(window.location.hash.slice(1))
@@ -1091,6 +1097,7 @@ function populateConfiguration(configuration: Configuration) {
 		renderUniverses(currentSnapshot)
 		renderPools(currentSnapshot)
 	}
+	renderCurrentRpcEndpointHealth()
 	setMutationControlsEnabled(stateConnected)
 	if (window.location.hash !== '') syncSectionNavigation(true)
 }
@@ -1589,6 +1596,10 @@ async function loadConfiguration() {
 			pendingProfileStateConfirmed = false
 		}
 		populateConfiguration(configuration)
+		if (expectedNetwork !== undefined) {
+			const networkLabel = expectedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
+			actionStatus(networkStatus, configuration.networkConfigured === true ? `${networkLabel} profile loaded. Its saved settings are active.` : `${networkLabel} profile loaded; RPC setup required.`)
+		}
 		return true
 	} catch (error) {
 		if (profileRequestEpoch !== requestEpoch || pendingNetworkProfile !== expectedNetwork) return false
