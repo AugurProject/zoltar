@@ -904,6 +904,39 @@ export const isProtocolActivitySource = (contract: ContractMetadata | undefined)
 	contract.kind !== 'proxyDeployer' &&
 	contract.kind !== 'scalarOutcomes'
 
+export const indexerLogSources = (contracts: readonly ContractMetadata[]): readonly ContractMetadata[] =>
+	contracts.filter((contract) => isProtocolActivitySource(contract) || contract.kind === 'reputationToken')
+
+export const discoveryLogAddresses = (discoveredAddresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): readonly Address[] => {
+	const sources = discoveredAddresses.filter((address) => {
+		const contract = contracts.get(address.toLowerCase())
+		return isProtocolActivitySource(contract) || contract?.kind === 'reputationToken'
+	})
+	if (!sources.some((address) => contracts.get(address.toLowerCase())?.kind === 'reputationToken')) return sources
+	const addresses = [
+		...sources,
+		...[...contracts.values()]
+			.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
+			.map(({ address }) => address),
+	]
+	return [...new Map(addresses.map((address) => [address.toLowerCase(), address])).values()]
+}
+
+export const scanDiscoveredLogCoverage = async (
+	blockNumber: bigint,
+	segmentEnd: bigint,
+	discoveredAddresses: readonly Address[],
+	contracts: ReadonlyMap<string, ContractMetadata>,
+	getCurrentBlockLogs: (addresses: readonly Address[]) => Promise<readonly Log[]>,
+	getRemainingLogs: (fromBlock: bigint, toBlock: bigint, addresses: readonly Address[]) => Promise<readonly Log[]>,
+): Promise<{ readonly currentBlockLogs: readonly Log[]; readonly remainingLogs: readonly Log[] }> => {
+	const addresses = discoveryLogAddresses(discoveredAddresses, contracts)
+	if (addresses.length === 0) return { currentBlockLogs: [], remainingLogs: [] }
+	const currentBlockLogs = await getCurrentBlockLogs(addresses)
+	const remainingLogs = blockNumber < segmentEnd ? await getRemainingLogs(blockNumber + 1n, segmentEnd, addresses) : []
+	return { currentBlockLogs, remainingLogs }
+}
+
 export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
 	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth' || contract?.kind === 'usdc'
 
