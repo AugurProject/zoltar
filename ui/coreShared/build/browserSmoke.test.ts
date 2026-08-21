@@ -152,7 +152,7 @@ test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out 
 	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '${address.port.toString()}\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
-		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 50, pollMilliseconds: 1 })).rejects.toThrow(/timed out/)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out/)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
 		expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
@@ -219,7 +219,7 @@ test.skipIf(process.platform === 'win32')('page target deadline identifies the p
 	const server = createFakeDevToolsServer(Number.MAX_SAFE_INTEGER)
 	await writeFakeChromium(executablePath, server.port, '0')
 	try {
-		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 50, pollMilliseconds: 1 })).rejects.toThrow(/timed out while waiting for the Chromium page target/)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out while waiting for the Chromium page target/)
 	} finally {
 		server.stop(true)
 		await rm(fixtureRoot, { force: true, recursive: true })
