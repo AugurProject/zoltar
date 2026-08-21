@@ -395,6 +395,176 @@
 				<p>The selected initial amount is <code>max(minimumToken1ReportAttoEth(), requestedInitialAttoWeth)</code>. One escalation-halt candidate is that amount multiplied by the configured halt multiplier. The other is <code>⌈settlementCollateralAttoEth / OPEN_INTEREST_DIVIDER⌉</code>. The actual halt is the greater of the two, as shown in <a href="#eq-openoracle-initial-report-size">Dynamic Report and Escalation Threshold</a>.</p>
 			</section>
 
+			<section id="attack-model">
+				<h2>External-payoff and censorship model</h2>
+
+				<p>This stress test models an attacker that posts a manipulated REP/ETH report, excludes a correcting transaction until settlement, and receives an outside payoff if the accepted price makes a liquidation executable. It is a continuous approximation for reasoning about incentives, not a contract-enforced exposure cap or a guarantee that a correction will obtain inclusion.</p>
+
+				<p>The payoff is binary: the attacker receives <code>externalPayoff</code> only when the manipulated price is strictly above the liquidation threshold and far enough beyond the configured liquidation-distance guard. The cost side grows with the report's WETH-denominated liquidity, the duration of censorship, and the price error above the modeled honest-dispute barrier.</p>
+
+				<p><code>honestDisputeBarrierFraction</code> is a model input that abstracts the cost an honest corrector must overcome before the model assigns censorship pressure. It is not a coordinator field or a separately configured OpenOracle parameter. The calculator's illustrative <code>1.1%</code> default is only the fixed-fee floor: the configured <code>1%</code> protocol fee plus <code>0.1%</code> reporter fee. A deployment analysis must replace it with a full scenario-specific barrier. OpenOracle's <a href="https://docs.openoracle.org/openoracle/oracle-accuracy-cost#cost">report-cost derivation</a> also depends on volatility over the settlement horizon and expected loss under adversarial disputes; gas, priority fees, price impact, and capital lockup can raise the barrier further.</p>
+
+				<div class="equation" id="eq-openoracle-binary-payoff-cost">
+					<math aria-label="binary liquidation payoff and modeled censorship cost" data-source="discountedHonestPrice = honestPrice \cdot (1 - minLiquidationPriceDistanceBps / 10000); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice); liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerPayoff = liquidationExecutable ? externalPayoff : 0; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity" display="block">
+						<mtable>
+							<mtr>
+								<mtd><mi>executionErrorThreshold</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+									><mfrac
+										><mi>liquidationThresholdPrice</mi
+										><mrow
+											><mi>honestPrice</mi><mo>⋅</mo><mo>(</mo><mn>1</mn><mo>-</mo><mfrac><mi>minLiquidationPriceDistanceBps</mi><mn>10000</mn></mfrac
+											><mo>)</mo></mrow
+										></mfrac
+									><mo>-</mo><mn>1</mn><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>manipulatedPriceError</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo
+									><mfrac
+										><mrow><mi>manipulatedPrice</mi><mo>-</mo><mi>honestPrice</mi></mrow
+										><mi>honestPrice</mi></mfrac
+									><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>liquidationExecutable</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>manipulatedPrice</mi><mo>&gt;</mo><mi>liquidationThresholdPrice</mi><mo>∧</mo><mi>manipulatedPriceError</mi><mo>≥</mo><mi>executionErrorThreshold</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>attackerPayoff</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>liquidationExecutable</mi><mo>?</mo><mi>externalPayoff</mi><mo>:</mo><mn>0</mn></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>censorshipRate</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>manipulatedPriceError</mi><mo>-</mo><mi>honestDisputeBarrierFraction</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>censorshipCost</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>censorshipDuration</mi><mo>⋅</mo><mi>censorshipRate</mi><mo>⋅</mo><mi>oracleReportLiquidity</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-note">Price errors and the dispute barrier are fractions of the honest price. <code>externalPayoff</code> and <code>oracleReportLiquidity</code> use the same ETH-denominated unit. The liquidation design owns the exact integer threshold and distance checks.</p>
+				</div>
+
+				<p>The derived duration threshold applies only when the manipulated price unlocks the outside payoff. It asks how many abstract model steps are required for censorship cost to reach a chosen multiple of that payoff. <code>targetGriefRatio</code> is the desired attacker loss after subtracting <code>externalPayoff</code>, divided by that payoff. A value of <code>1</code> therefore targets censorship cost equal to twice the payoff, leaving a modeled net loss equal to the payoff. One censorship step is the interval over which the chosen <code>censorshipRate</code> and report-liquidity cost accrue; it is not inherently a block, second, or dispute round. A deployment analysis must define that time mapping before applying the threshold. When a payoff is unlocked, the result is unbounded if the modeled censorship rate is zero; otherwise it shrinks as price-error pressure or report liquidity relative to the outside payoff increases.</p>
+
+				<div class="equation" id="eq-openoracle-safe-censorship-duration">
+					<math aria-label="safe censorship duration from report liquidity and outside payoff" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio) when liquidationExecutable and censorshipRate > 0; safeCensorshipDuration = infinity when liquidationExecutable and censorshipRate = 0; safeCensorshipDuration = not applicable otherwise" display="block">
+						<mtable>
+							<mtr>
+								<mtd><mi>oracleLiquidityRatio</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd
+									><mfrac><mi>oracleReportLiquidity</mi><mi>externalPayoff</mi></mfrac></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>safeCensorshipDuration</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd>
+									<mo>{</mo>
+									<mtable>
+										<mtr>
+											<mtd
+												><mfrac
+													><mrow><mi>targetGriefRatio</mi><mo>+</mo><mn>1</mn></mrow
+													><mrow><mi>censorshipRate</mi><mo>⋅</mo><mi>oracleLiquidityRatio</mi></mrow></mfrac
+												></mtd
+											>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>liquidationExecutable</mi><mo>∧</mo><mi>censorshipRate</mi><mo>&gt;</mo><mn>0</mn></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mo>∞</mo></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mi>liquidationExecutable</mi><mo>∧</mo><mi>censorshipRate</mi><mo>=</mo><mn>0</mn></mtd>
+										</mtr>
+										<mtr>
+											<mtd><mtext>not applicable</mtext></mtd>
+											<mtd><mo>,</mo></mtd>
+											<mtd><mtext>otherwise</mtext></mtd>
+										</mtr>
+									</mtable>
+								</mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-note"><code>safeCensorshipDuration</code> is the model's historical name for this cost threshold; it does not establish a maximum protocol delay. Repeated funded disputes can restart the settlement window as described under <a href="#intentional-economic-tradeoffs">Economic tradeoffs and limits</a>.</p>
+				</div>
+
+				<details class="interactive-example" id="binary-censorship-example">
+					<summary>Binary censorship stress test</summary>
+					<p>Adjust the liquidation boundary, outside payoff, report liquidity, and censorship assumptions. The barrier starts at the fixed-fee floor and must be calibrated for the modeled deployment. Presets provide executable, guarded, and long-censorship scenarios.</p>
+					<div class="example-grid">
+						<label>
+							Honest price
+							<input data-example-input="honestPrice" max="200" min="50" step="1" type="range" value="100" />
+							<span class="example-value" data-example-value="honestPrice">100</span>
+						</label>
+						<label>
+							Manipulated price
+							<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="range" value="113" />
+							<span class="example-value" data-example-value="manipulatedPrice">113</span>
+						</label>
+						<label>
+							Liquidation threshold
+							<input data-example-input="liquidationThresholdPrice" max="200" min="50" step="1" type="range" value="101" />
+							<span class="example-value" data-example-value="liquidationThresholdPrice">101</span>
+						</label>
+						<label>
+							Liquidation distance
+							<input data-example-input="minLiquidationPriceDistanceBps" max="3000" min="0" step="100" type="range" value="1000" />
+							<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
+						</label>
+						<label>
+							External payoff
+							<input data-example-input="externalPayoff" max="10000" min="100" step="100" type="range" value="1000" />
+							<span class="example-value" data-example-value="externalPayoff">1000.00 ETH</span>
+						</label>
+						<label>
+							Report liquidity
+							<input data-example-input="oracleReportLiquidity" max="20000" min="100" step="100" type="range" value="4000" />
+							<span class="example-value" data-example-value="oracleReportLiquidity">4000.00 ETH</span>
+						</label>
+						<label>
+							Honest dispute barrier (model)
+							<input data-example-input="honestDisputeBarrierFraction" max="0.5" min="0" step="0.001" type="range" value="0.011" />
+							<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.10%</span>
+						</label>
+						<label>
+							Censorship duration (model steps)
+							<input data-example-input="censorshipDuration" max="168" min="0" step="1" type="range" value="24" />
+							<span class="example-value" data-example-value="censorshipDuration">24 steps</span>
+						</label>
+						<label>
+							Target excess-cost ratio
+							<input data-example-input="targetGriefRatio" max="5" min="0" step="0.1" type="range" value="1" />
+							<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
+						</label>
+					</div>
+					<div class="example-output-grid" aria-live="polite">
+						<div><span>Execution error threshold</span><output data-example-output="executionErrorThreshold">12.22%</output></div>
+						<div><span>Manipulated price error</span><output data-example-output="manipulatedPriceError">13.00%</output></div>
+						<div><span>Liquidation executable</span><output data-example-output="liquidationExecutable">yes</output></div>
+						<div><span>Attacker payoff</span><output data-example-output="attackerPayoff">1000.00 ETH</output></div>
+						<div><span>Censorship cost</span><output data-example-output="censorshipCost">11424.00 ETH</output></div>
+						<div><span>Oracle liquidity ratio</span><output data-example-output="oracleLiquidityRatio">4.00</output></div>
+						<div><span>Duration to target cost (model steps)</span><output data-example-output="safeCensorshipDuration">4.20</output></div>
+					</div>
+				</details>
+			</section>
+
 			<section id="parameters">
 				<h2>OpenOracle parameters used</h2>
 
@@ -477,8 +647,8 @@
 							<td><code>feePercentage</code> / <code>protocolFee</code></td>
 							<td><code>10000</code> / <code>100000</code></td>
 							<td>
-								Configures OpenOracle reporter and protocol fee accounting, and creates the fee boundary behind the
-								<code>honestDisputeBarrierFraction</code> dispute barrier in the attack model.
+								Configures OpenOracle reporter and protocol fee accounting. Those fees contribute to the correction friction abstracted by
+								<a href="#attack-model"><code>honestDisputeBarrierFraction</code> in the external-payoff model</a>.
 							</td>
 						</tr>
 						<tr>
@@ -520,8 +690,6 @@
 				const inputs = collect("[data-example-input]", "exampleInput");
 				const outputs = collect("[data-example-output]", "exampleOutput");
 				const values = collect("[data-example-value]", "exampleValue");
-				const rects = collect("[data-example-rect]", "exampleRect");
-				const texts = collect("[data-example-text]", "exampleText");
 				const read = (inputName) => {
 					const inputElement = inputs[inputName];
 					if (!inputElement) {
@@ -542,31 +710,10 @@
 						valueElement.textContent = value;
 					}
 				};
-				const writeText = (textName, value) => {
-					const textElement = texts[textName];
-					if (textElement) {
-						textElement.textContent = value;
-					}
-				};
-				const setRect = (rectName, attributes) => {
-					const rectElement = rects[rectName];
-					if (!rectElement) {
-						return;
-					}
-					for (const [attributeName, attributeValue] of Object.entries(attributes)) {
-						rectElement.setAttribute(attributeName, String(attributeValue));
-					}
-				};
-				const setRectWidth = (rectName, width) => setRect(rectName, { width: Math.max(0, width) });
-				const setRectX = (rectName, x) => setRect(rectName, { x });
 				return {
 					inputs,
 					read,
-					setRect,
-					setRectWidth,
-					setRectX,
 					writeOutput,
-					writeText,
 					writeValue,
 				};
 			};
@@ -589,6 +736,9 @@
 				return formatPercent(thresholdValue);
 			};
 			const formatDuration = (durationValue) => {
+				if (durationValue === undefined) {
+					return "not applicable without attacker payoff";
+				}
 				if (!Number.isFinite(durationValue)) {
 					return "unbounded when censorship rate is zero";
 				}
@@ -700,11 +850,14 @@
 				const executionErrorThreshold = discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1);
 				const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice);
 				const liquidationExecutable = manipulatedPrice > liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold;
-				const attackerProfit = liquidationExecutable ? externalPayoff : 0;
+				const attackerPayoff = liquidationExecutable ? externalPayoff : 0;
 				const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction);
 				const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity;
 				const oracleLiquidityRatio = oracleReportLiquidity / externalPayoff;
-				const safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio);
+				let safeCensorshipDuration;
+				if (liquidationExecutable) {
+					safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio);
+				}
 				context.writeValue("honestPrice", honestPrice.toFixed(0));
 				context.writeValue("manipulatedPrice", manipulatedPrice.toFixed(0));
 				context.writeValue("liquidationThresholdPrice", liquidationThresholdPrice.toFixed(0));
@@ -717,18 +870,10 @@
 				context.writeOutput("executionErrorThreshold", formatExecutionThreshold(executionErrorThreshold));
 				context.writeOutput("manipulatedPriceError", formatPercent(manipulatedPriceError));
 				context.writeOutput("liquidationExecutable", liquidationExecutable ? "yes" : "no");
-				context.writeOutput("attackerProfit", formatEth(attackerProfit));
+				context.writeOutput("attackerPayoff", formatEth(attackerPayoff));
 				context.writeOutput("censorshipCost", formatEth(censorshipCost));
 				context.writeOutput("oracleLiquidityRatio", oracleLiquidityRatio.toFixed(2));
 				context.writeOutput("safeCensorshipDuration", formatDuration(safeCensorshipDuration));
-				const thresholdForVisual = Number.isFinite(executionErrorThreshold) ? executionErrorThreshold : manipulatedPriceError;
-				const priceErrorScale = Math.max(thresholdForVisual, manipulatedPriceError, 0.01);
-				context.setRectWidth("executionErrorThreshold", Math.min((thresholdForVisual / priceErrorScale) * 520, 520));
-				context.setRectWidth("manipulatedPriceError", Math.min((manipulatedPriceError / priceErrorScale) * 520, 520));
-				context.setRectWidth("censorshipCost", Math.min((censorshipCost / Math.max(externalPayoff, 1)) * 520, 520));
-				context.writeText("thresholdText", `threshold ${formatExecutionThreshold(executionErrorThreshold)}`);
-				context.writeText("errorText", `error ${formatPercent(manipulatedPriceError)}`);
-				context.writeText("payoffText", `payoff ${formatEth(attackerProfit)}`);
 			});
 		</script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>

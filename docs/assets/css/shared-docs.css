@@ -1058,6 +1058,9 @@ body.doc-openoracle td math {
 }
 
 @media (max-width: 42rem) {
+	.interactive-tool-toolbar label {
+		flex: 1 0 100%;
+	}
 	body.doc-openoracle main {
 		padding-top: 1rem;
 	}
