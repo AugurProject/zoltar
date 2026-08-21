@@ -117,7 +117,7 @@ type Configuration = {
 	approvedUniverses: string[]
 	childMarketConfigurations: unknown[]
 	centralizedMarkets: unknown
-	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
@@ -139,6 +139,7 @@ const networkName = element('network-name', HTMLSelectElement)
 const readRpcUrl = element('read-rpc-url', HTMLInputElement)
 const publicRpcUrls = element('public-rpc-urls', HTMLTextAreaElement)
 const quorumRpcUrls = element('quorum-rpc-urls', HTMLTextAreaElement)
+const rpcQuorum = element('rpc-quorum', HTMLSelectElement)
 const networkStatus = element('network-status', HTMLSpanElement)
 const networkScopeSummary = element('network-scope-summary', HTMLElement)
 const centralizedMarketRows = element('centralized-market-rows', HTMLTableSectionElement)
@@ -1077,6 +1078,7 @@ function populateConfiguration(configuration: Configuration) {
 		readRpcUrl.value = configuration.connectivity?.readRpcUrl ?? ''
 		publicRpcUrls.value = configuration.connectivity?.publicRpcUrls.join('\n') ?? ''
 		quorumRpcUrls.value = configuration.connectivity?.quorumRpcUrls.join('\n') ?? ''
+		rpcQuorum.value = configuration.connectivity?.rpcQuorum?.toString() ?? '1'
 	} else {
 		settingsChainScope.textContent = 'Select a chain profile first. Every other setting is locked until its chain is verified, and the saved configuration and recovery state belong only to that chain.'
 		networkScopeSummary.textContent = 'No profile selected'
@@ -1084,6 +1086,7 @@ function populateConfiguration(configuration: Configuration) {
 		readRpcUrl.value = ''
 		publicRpcUrls.value = ''
 		quorumRpcUrls.value = ''
+		rpcQuorum.value = '1'
 	}
 	networkFields.disabled = pendingNetworkProfile !== undefined
 	marketConfigurationJson.value = JSON.stringify({ children: configuration.childMarketConfigurations, desiredPools: configuration.desiredPools, root: configuration.centralizedMarkets }, undefined, 2) ?? ''
@@ -1154,7 +1157,7 @@ networkForm.addEventListener('submit', async event => {
 				.map(entry => entry.trim())
 				.filter(Boolean)
 		const configuration = await put<Configuration>('/api/network-connectivity', {
-			connectivity: { publicRpcUrls: lines(publicRpcUrls.value), quorumRpcUrls: lines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim() },
+			connectivity: { publicRpcUrls: lines(publicRpcUrls.value), quorumRpcUrls: lines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
 			network: networkName.value,
 		})
 		populateConfiguration(configuration)

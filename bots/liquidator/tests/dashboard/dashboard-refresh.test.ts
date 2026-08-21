@@ -40,7 +40,7 @@ type DashboardConfiguration = {
 	approvedUniverses: string[]
 	centralizedMarkets: unknown
 	childMarketConfigurations: unknown[]
-	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 }
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
 	networkConfigured?: boolean
@@ -274,7 +274,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		if (url.pathname === '/api/network-connectivity') {
 			currentConfiguration = {
 				...currentConfiguration,
-				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example' },
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example', rpcQuorum: 1 },
 				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
 				networkConfigured: true,
 			}
@@ -284,7 +284,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			snapshot = { ...snapshot, network: 'sepolia' }
 			pendingProfileConfiguration = {
 				...currentConfiguration,
-				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: '' },
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: '', rpcQuorum: 1 },
 				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
 				networkConfigured: false,
 			}
@@ -555,12 +555,17 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps the requested chain locked and visible while stale profile polls drain', async () => {
-		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }))
+		const page = await dashboard(
+			{ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://mainnet-public.example'], quorumRpcUrls: ['https://mainnet-quorum-a.example', 'https://mainnet-quorum-b.example'], readRpcUrl: 'https://mainnet-read.example', rpcQuorum: 2 } },
+			state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }),
+		)
 		page.setStaleProfilePolls(3)
 		const networkName = page.window.document.getElementById('network-name')
 		const networkFields = page.window.document.getElementById('network-fields')
 		const strategyFields = page.window.document.getElementById('strategy-fields')
-		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement)) throw new Error('Expected chain-profile controls')
+		const rpcQuorum = page.window.document.getElementById('rpc-quorum')
+		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement) || !(rpcQuorum instanceof page.window.HTMLSelectElement)) throw new Error('Expected chain-profile controls')
+		expect(rpcQuorum.value).toBe('2')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
 		const testSources = page.window.document.getElementById('test-market-sources')
 		if (!(testSources instanceof page.window.HTMLButtonElement)) throw new Error('Expected source test control')
@@ -598,6 +603,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Sepolia profile loaded; RPC setup required.')
+		expect(rpcQuorum.value).toBe('1')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(0)
 	})
 

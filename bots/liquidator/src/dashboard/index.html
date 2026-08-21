@@ -229,7 +229,14 @@
 									>
 									<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
 									<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
-									<label><span>Independent quorum RPC URLs · optional; quorum 2 requires two</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
+									<label
+										><span>RPC agreement requirement</span
+										><select id="rpc-quorum">
+											<option value="1">1 · primary RPC only</option>
+											<option value="2">2 · require two agreeing independent RPCs</option>
+										</select></label
+									>
+									<label><span>Independent quorum RPC URLs · required when agreement is 2</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
 								</div>
 								<div class="form-actions"><span id="network-status" class="muted" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
 							</fieldset>

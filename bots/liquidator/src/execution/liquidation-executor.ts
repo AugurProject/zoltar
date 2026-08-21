@@ -70,6 +70,7 @@ async function agreedErc20Balance(wallet: WriteClient, settings: OperatorSetting
 	return settledQuorumValue(
 		'wallet token balance',
 		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: erc20Abi, address: token, args: [wallet.account.address], functionName: 'balanceOf' }) })),
+		settings.connectivity.rpcQuorum,
 	)
 }
 
@@ -77,6 +78,7 @@ async function agreedErc20Allowance(wallet: WriteClient, settings: OperatorSetti
 	return settledQuorumValue(
 		'wallet token allowance',
 		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: erc20Abi, address: token, args: [wallet.account.address, spender], functionName: 'allowance' }) })),
+		settings.connectivity.rpcQuorum,
 	)
 }
 
@@ -92,6 +94,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 			const candidate = await client.getBlock()
 			return { endpoint, value: { baseFeePerGas: candidate.baseFeePerGas, hash: candidate.hash, number: candidate.number } }
 		}),
+		settings.connectivity.rpcQuorum,
 	)
 	if (block.number === undefined || block.baseFeePerGas === undefined) {
 		throw new Error('Latest block is missing number or base fee')
@@ -104,6 +107,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 			endpoint,
 			value: await client.call({ account, data: call.data, gas: call.gas, to: call.to, value: call.value }),
 		})),
+		settings.connectivity.rpcQuorum,
 	)
 	assertExecutionActive(state)
 	recordActivity(state, {
@@ -260,6 +264,7 @@ async function agreedPendingNonce(wallet: WriteClient, settings: OperatorSetting
 				transport: pool.transportFor(endpoint),
 			}).getTransactionCount({ address, blockTag: 'pending' }),
 		})),
+		settings.connectivity.rpcQuorum,
 	)
 }
 

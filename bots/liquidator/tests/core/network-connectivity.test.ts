@@ -6,11 +6,12 @@ async function exampleSettings() {
 	return parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 }
 
-const request = (network: 'mainnet' | 'sepolia', quorumRpcUrls = ['https://quorum-a.example/', 'https://quorum-b.example/']) => ({
+const request = (network: 'mainnet' | 'sepolia', quorumRpcUrls = ['https://quorum-a.example/', 'https://quorum-b.example/'], rpcQuorum: 1 | 2 = 1) => ({
 	connectivity: {
 		publicRpcUrls: ['https://public.example/'],
 		quorumRpcUrls,
 		readRpcUrl: 'https://read.example/',
+		rpcQuorum,
 	},
 	network,
 })
@@ -33,6 +34,29 @@ describe('network connectivity updates', () => {
 			value: request('mainnet', []),
 		})
 		expect(next.connectivity.quorumRpcUrls).toEqual([])
+		expect(next.connectivity.rpcQuorum).toBe(1)
+	})
+
+	test('enforces and persists the selected profile RPC quorum', async () => {
+		const settings = await exampleSettings()
+		settings.runtime.execute = true
+		await expect(
+			updateNetworkConnectivity({
+				apply: () => undefined,
+				checks: { checkConnectivity: async () => healthyChecks(1), readRpcChainId: async () => 1 },
+				persist: async update => update(settings),
+				settings,
+				value: request('mainnet', [], 2),
+			}),
+		).rejects.toThrow('at least two independent quorum RPCs')
+		const next = await updateNetworkConnectivity({
+			apply: () => undefined,
+			checks: { checkConnectivity: async () => healthyChecks(1), readRpcChainId: async () => 1 },
+			persist: async update => update(settings),
+			settings,
+			value: request('mainnet', ['https://quorum-a.example/', 'https://quorum-b.example/'], 2),
+		})
+		expect(next.connectivity.rpcQuorum).toBe(2)
 	})
 
 	test('checks, persists, and applies initial network configuration with every market chain ID coupled', async () => {

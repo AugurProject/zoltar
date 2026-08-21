@@ -41,11 +41,12 @@ password. Compose publishes the port only on host loopback, so connect from anot
 machine through a trusted tunnel to the host rather than changing the port binding.
 Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that `127.0.0.1` mapping.
 
-Compose passes `ZOLTAR_BOT_RPC_QUORUM`, which defaults to `1`, so the primary read
-RPC is sufficient and independent quorum RPCs are optional. To require two agreeing
-readers, put `ZOLTAR_BOT_RPC_QUORUM=2` in this directory's `.env` before starting
-Compose and configure two independent quorum RPC URLs in addition to the primary
-reader so one endpoint may be unavailable. Values other than `1` or `2` stop startup.
+Each chain profile saves its own RPC agreement requirement. The default is `1`, so
+the primary read RPC is sufficient and independent quorum RPCs are optional. Select
+agreement `2` in **Chain and RPC connectivity** and configure two independent quorum
+RPC URLs when that chain must retain a two-reader policy. `ZOLTAR_BOT_RPC_QUORUM`
+only supplies the migration default for an older profile that has no saved policy;
+values other than `1` or `2` stop that migration.
 
 Save the chain and RPCs in **Chain and RPC connectivity**, finish the remaining
 configuration, and resume only after reviewing the saved settings. Run
@@ -101,8 +102,8 @@ created profile receives a separate chain-named recovery state path. This preven
 transactions, staged operations, and scan state from crossing chains. Docker and
 direct Bun use the same in-process switching behavior.
 
-The primary read RPC is sufficient by default. Independent quorum RPCs become
-mandatory only when `ZOLTAR_BOT_RPC_QUORUM=2`.
+The primary read RPC is sufficient when the active chain profile uses agreement `1`.
+Independent quorum RPCs become mandatory when that profile uses agreement `2`.
 
 A configured bot keeps its dashboard available when retryable RPC transport
 unavailability prevents startup validation. It reports `connectivity-degraded`, shows
@@ -127,8 +128,9 @@ endpoints, gas limits, and REP limits have been reviewed. When execution is
 enabled:
 
 - `connectivity.readRpcUrl` supplies the local operational view.
-- `connectivity.quorumRpcUrls` is optional by default. When
-  `ZOLTAR_BOT_RPC_QUORUM=2`, it must contain at least two independent read RPCs.
+- `connectivity.rpcQuorum` is `1` or `2` and belongs to the selected chain profile.
+- `connectivity.quorumRpcUrls` is optional for agreement `1`. For agreement `2`, it
+  must contain at least two independent read RPCs.
 - For a critical pool, price, vault, or candidate snapshot, only a retryable
   transport failure makes a reader unavailable. The configured number of readers
   must respond, and every responding reader must agree exactly before a transaction

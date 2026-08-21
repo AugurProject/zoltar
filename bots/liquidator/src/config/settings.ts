@@ -6,7 +6,7 @@ import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
@@ -75,6 +75,7 @@ export type OperatorSettings = {
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings & {
 		quorumRpcUrls: string[]
+		rpcQuorum: RpcQuorumRequirement
 	}
 	deployment: {
 		securityPoolFactory: Address
@@ -256,11 +257,13 @@ function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
 			return value
 		}),
 	)
-	return { ...parsed, quorumRpcUrls }
+	const configuredRpcQuorum = connectivity['rpcQuorum']
+	const rpcQuorum = configuredRpcQuorum === undefined ? rpcQuorumRequirement() : integer(configuredRpcQuorum, 'connectivity.rpcQuorum', 1, 2)
+	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('connectivity.rpcQuorum must be 1 or 2')
+	return { ...parsed, quorumRpcUrls, rpcQuorum }
 }
 
 export function parseSettings(value: unknown): OperatorSettings {
-	rpcQuorumRequirement()
 	const root = record(value, 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const deployment = record(root['deployment'], 'deployment')
@@ -269,7 +272,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
 	const network = root['network'] === undefined ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : record(root['network'], 'network')
 	const runtime = record(root['runtime'], 'runtime')
-	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
+	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
 	const approvedUniverses = root['approvedUniverses']
@@ -339,7 +342,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
-	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum()) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) throw new Error('Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)')
 	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
 	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
 	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')

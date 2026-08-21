@@ -28,6 +28,7 @@ const settings = {
 		publicRpcUrls: ['https://public.example'],
 		quorumRpcUrls: [],
 		readRpcUrl: 'https://read.example',
+		rpcQuorum: 1,
 	},
 	deployment: {
 		securityPoolFactory: '0x0000000000000000000000000000000000000000',
@@ -93,6 +94,7 @@ describe('liquidator settings', () => {
 			const mainnet = parseSettings({
 				...settings,
 				centralizedMarkets: { ...settings.centralizedMarkets, assetChainId: 1 },
+				connectivity: { ...settings.connectivity, quorumRpcUrls: ['https://mainnet-quorum-a.example', 'https://mainnet-quorum-b.example'], rpcQuorum: 2 },
 				network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 				runtime: { ...settings.runtime, stateFile: join(directory, 'mainnet-state.json') },
 				strategy: { ...settings.strategy, maximumGasCostEth: '0.777' },
@@ -101,11 +103,23 @@ describe('liquidator settings', () => {
 			const sepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
 			expect(sepolia.settings).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false, paused: true, privateKey: undefined })
 			expect(sepolia.settings.runtime.stateFile).toContain('.sepolia.')
-			await saveSettings(path, { ...sepolia.settings, strategy: { ...sepolia.settings.strategy, maximumGasCostAttoEth: 333n } }, sepolia.revision)
+			await saveSettings(
+				path,
+				{
+					...sepolia.settings,
+					connectivity: { publicRpcUrls: ['https://sepolia-public.example'], quorumRpcUrls: [], readRpcUrl: 'https://sepolia-read.example', rpcQuorum: 1 },
+					networkConfigured: true,
+					strategy: { ...sepolia.settings.strategy, maximumGasCostAttoEth: 333n },
+				},
+				sepolia.revision,
+			)
 			const restored = await switchSettingsNetworkProfile(path, 'mainnet', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
 			expect(restored.settings.strategy.maximumGasCostAttoEth).toBe(777_000_000_000_000_000n)
+			expect(restored.settings.connectivity.rpcQuorum).toBe(2)
 			expect(restored.settings.runtime.stateFile).toBe(mainnet.runtime.stateFile)
-			expect((await loadSettings(path)).settings.network.name).toBe('mainnet')
+			const restoredSepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
+			expect(restoredSepolia.settings.connectivity.rpcQuorum).toBe(1)
+			expect((await loadSettings(path)).settings.network.name).toBe('sepolia')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -260,6 +274,7 @@ describe('liquidator settings', () => {
 			publicRpcUrls: ['https://public.example/'],
 			quorumRpcUrls: [],
 			readRpcUrl: 'https://read.example/',
+			rpcQuorum: 1,
 		})
 		expect(serialized.runtime.stateFile.endsWith('/bots/liquidator/.state/operator-state.json')).toBe(true)
 		expect(serialized.runtime).toMatchObject({ historicalLogRecovery: false, logLookbackBlocks: 256 })
@@ -294,7 +309,8 @@ describe('liquidator settings', () => {
 		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
 		try {
 			process.env['ZOLTAR_BOT_RPC_QUORUM'] = ''
-			expect(() => parseSettings(settings)).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
+			const { rpcQuorum: _rpcQuorum, ...legacyConnectivity } = settings.connectivity
+			expect(() => parseSettings({ ...settings, connectivity: legacyConnectivity })).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
 		} finally {
 			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
 			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
@@ -322,6 +338,7 @@ describe('liquidator settings', () => {
 			expect(() =>
 				parseSettings({
 					...settings,
+					connectivity: { ...settings.connectivity, rpcQuorum: 2 },
 					privateKey: `0x${'11'.repeat(32)}`,
 					runtime: { ...settings.runtime, execute: true },
 				}),

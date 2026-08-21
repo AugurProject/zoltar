@@ -8,7 +8,7 @@ let approvedUniverses = ['101', longUniverseId]
 let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
 let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 let networkConfigured = false
-let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
+let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
 const centralizedMarkets = {
 	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 	assetChainId: 1,
@@ -280,11 +280,14 @@ const server = startDashboardServer(4183, {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected network-connectivity object')
 		const requestedNetwork = Reflect.get(value, 'network')
 		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
+		const requestedConnectivity = Reflect.get(value, 'connectivity')
+		const requestedRpcQuorum = typeof requestedConnectivity === 'object' && requestedConnectivity !== null ? Reflect.get(requestedConnectivity, 'rpcQuorum') : undefined
 		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
 		connectivity = {
 			publicRpcUrls: ['https://rpc.example'],
 			quorumRpcUrls: ['https://quorum.example'],
 			readRpcUrl: 'https://read.example',
+			rpcQuorum: requestedRpcQuorum === 2 ? 2 : 1,
 		}
 		networkConfigured = true
 		return currentConfiguration()
