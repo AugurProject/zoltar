@@ -861,13 +861,14 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 export const isProtocolActivitySource = (contract: ContractMetadata | undefined): boolean =>
 	contract !== undefined &&
 	contract.kind !== 'weth' &&
+	contract.kind !== 'usdc' &&
 	contract.kind !== 'reputationToken' &&
 	contract.kind !== 'multicall3' &&
 	contract.kind !== 'proxyDeployer' &&
 	contract.kind !== 'scalarOutcomes'
 
 export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
-	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth'
+	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth' || contract?.kind === 'usdc'
 
 export const isProtocolEvidenceEmitter = (contract: ContractMetadata | undefined): contract is ContractMetadata => contract !== undefined
 

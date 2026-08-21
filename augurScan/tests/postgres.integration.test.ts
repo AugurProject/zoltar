@@ -17,7 +17,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
-import { migrate } from '../src/migrate.ts'
+import { initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -294,15 +294,45 @@ describe('database checkpoint fencing', () => {
 	})
 })
 
-postgresTest('migrates, resumes, retains an orphan, and serves only its canonical replacement', async () => {
+postgresTest('rejects every public namespace object before fresh schema initialization', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const resetPublicSchema = async (): Promise<void> => {
+		await database.sql.unsafe('DROP SCHEMA public CASCADE')
+		await database.sql.unsafe('CREATE SCHEMA public')
+	}
+	const applicationTableCount = async (): Promise<number> => {
+		const rows = await database.sql`
+			SELECT count(*)::integer AS count FROM pg_catalog.pg_tables WHERE schemaname = 'public'
+		`
+		return Number(rows[0]?.count)
+	}
+	try {
+		await resetPublicSchema()
+		await database.sql.unsafe("CREATE COLLATION public.legacy_collation (provider = libc, locale = 'C')")
+		await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		expect(await applicationTableCount()).toBe(0)
+
+		await resetPublicSchema()
+		await database.sql.unsafe('CREATE OPERATOR public.## (FUNCTION = pg_catalog.int4pl, LEFTARG = int4, RIGHTARG = int4)')
+		await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		expect(await applicationTableCount()).toBe(0)
+	} finally {
+		await resetPublicSchema()
+		await initializeSchema(database.sql)
+		await database.close()
+	}
+})
+
+postgresTest('initializes, resumes, retains an orphan, and serves only its canonical replacement', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
 	try {
-		await migrate(database.sql)
+		await initializeSchema(database.sql)
 		const concurrentMigrator = new ScannerDatabase(postgresUrl)
 		try {
-			await Promise.all([migrate(database.sql), migrate(concurrentMigrator.sql)])
-			await migrate(concurrentMigrator.sql)
+			await Promise.all([initializeSchema(database.sql), initializeSchema(concurrentMigrator.sql)])
+			await initializeSchema(concurrentMigrator.sql)
 		} finally {
 			await concurrentMigrator.close()
 		}
@@ -1157,3 +1187,532 @@ postgresTest('migrates, resumes, retains an orphan, and serves only its canonica
 		await database.close()
 	}
 })
+
+postgresTest(
+	'stores operations snapshots, paginates entity evidence, and explains indexed access paths',
+	async () => {
+		if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+		const database = new ScannerDatabase(postgresUrl)
+		const operationsChainId = chainId + 20 + process.pid
+		const oracle = discoveredAddress
+		const hash = blockHash('operations-completion')
+		const network: NetworkConfig = {
+			id: `operations-integration-${operationsChainId}`,
+			name: 'Operations integration chain',
+			chainId: operationsChainId,
+			rpcUrls: ['http://127.0.0.1:8545'],
+			startBlock: 1n,
+			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
+			confirmationDepth: 0n,
+			contracts: [[oracle, 'OpenOracle', 'openOracle']],
+		}
+		try {
+			await initializeSchema(database.sql)
+			const schemaState = await database.sql`
+				SELECT
+					(SELECT count(*)::integer FROM live_event_state WHERE singleton AND pruned_through_id = 0) AS live_state_count,
+					current_setting('search_path') AS search_path
+			`
+			expect(schemaState[0]).toMatchObject({ live_state_count: 1, search_path: '"$user", public' })
+			await database.seedNetwork(network)
+			const awaitingResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
+			if (awaitingResponse === undefined) throw new Error('awaiting operations endpoint did not return a response')
+			expect(awaitingResponse.status).toBe(200)
+			expect(await awaitingResponse.json()).toMatchObject({
+				asOf: { blockNumber: '0', blockTimestamp: '0', availability: 'Awaiting indexed evidence' },
+				data: { reports: [], escalations: [], auctions: [] },
+			})
+			const lease = await database.tryAcquireIndexerLock(operationsChainId)
+			if (lease === undefined) throw new Error('operations integration writer did not acquire its lock')
+			try {
+				const storedTransaction = { ...transaction(), hash: transactionHash, to: oracle }
+				const reportData = {
+					reportId: '7',
+					numReports: '1',
+					flags: '1',
+					reportTimestamp: '1767225600',
+					disputeDelay: '10',
+					settlementTime: '30',
+					currentAmount1: '100',
+					currentAmount2: '5',
+				}
+				const submitted = { ...decodedLog(hash, 0, oracle, 'ReportSubmitted', reportData), blockNumber: 1n }
+				const disputed = { ...decodedLog(hash, 1, oracle, 'ReportDisputed', { ...reportData, numReports: '2' }), blockNumber: 1n, transactionHash }
+				const approvalId = `0x${'a'.repeat(64)}`
+				const approvalEvidence: Array<{ name: string; argumentsValue: Record<string, unknown> }> = [
+					{
+						name: 'LiquidationApprovalSet',
+						argumentsValue: { approvalId, receiverVault: address, operator: discoveredAddress, securityPool: oracle, targetVault: address },
+					},
+					{ name: 'LiquidationApprovalReserved', argumentsValue: { approvalId, operationId: '1', reservedDebtAttoEth: 10n.toString() } },
+					{ name: 'LiquidationApprovalReleased', argumentsValue: { approvalId, operationId: '1', releasedDebtAttoEth: 2n.toString() } },
+					{ name: 'LiquidationApprovalConsumed', argumentsValue: { approvalId, operationId: '1', consumedDebtAttoEth: 8n.toString() } },
+					{ name: 'LiquidationApprovalRevoked', argumentsValue: { approvalId, receiverVault: address } },
+					{ name: 'LiquidationApprovalNonceInvalidated', argumentsValue: { receiverVault: address, previousNonce: '1', newNonce: '2' } },
+				]
+				const approvalEvents = approvalEvidence.map(({ name, argumentsValue }, index) => ({
+					...decodedLog(hash, index + 2, oracle, name, argumentsValue),
+					blockNumber: 1n,
+				}))
+				await database.storeBlock(
+					operationsChainId,
+					{
+						number: 1n,
+						hash,
+						parentHash: blockHash('operations-parent'),
+						timestamp: new Date('2026-01-01T00:00:20Z'),
+						observedHead: 1n,
+						finalizedThrough: 1n,
+						contracts: [],
+						tokenMetadata: [],
+						transactions: [storedTransaction],
+						logs: [submitted, disputed, ...approvalEvents],
+						addressActivity: [],
+						contractDeploymentObservations: [],
+						logScanCursors: [],
+					},
+					lease,
+				)
+				const storedApprovalEvents = await database.sql`
+					SELECT event_name FROM liquidation_approval_events
+					WHERE chain_id = ${operationsChainId} AND canonical ORDER BY log_index
+				`
+				expect(storedApprovalEvents.map((row: Record<string, unknown>) => row['event_name'])).toEqual([
+					'LiquidationApprovalSet',
+					'LiquidationApprovalReserved',
+					'LiquidationApprovalReleased',
+					'LiquidationApprovalConsumed',
+					'LiquidationApprovalRevoked',
+					'LiquidationApprovalNonceInvalidated',
+				])
+				const indexedOperationsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
+				if (indexedOperationsResponse === undefined) throw new Error('indexed operations endpoint did not return a response')
+				const indexedOperations = (await indexedOperationsResponse.json()) as {
+					data: { risk: { approvalEvents: Array<{ event_name: string }> } }
+				}
+				expect(indexedOperations.data.risk.approvalEvents).toHaveLength(6)
+				expect(indexedOperations.data.risk.approvalEvents.map((event) => event.event_name)).toContain('LiquidationApprovalNonceInvalidated')
+				await database.storeEntityStateSnapshots(
+					operationsChainId,
+					1n,
+					hash,
+					new Date('2026-01-01T00:00:20Z'),
+					[
+						{
+							entityType: 'auction',
+							entityIdentity: oracle.toLowerCase(),
+							sourceMethod: 'augurscan.auction-state.v1',
+							readStatus: 'success',
+							readResult: { finalized: false, activeTickCount: '2' },
+						},
+					],
+					lease,
+				)
+			} finally {
+				await lease.release()
+			}
+
+			await database.sql`
+			INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical, finalized)
+			SELECT ${operationsChainId}, item,
+				'0x' || lpad(to_hex(item), 64, '0'),
+				'0x' || lpad(to_hex(item - 1), 64, '0'),
+				timestamptz '2026-01-01 00:00:20+00' + make_interval(secs => item), true, true
+			FROM generate_series(2, 10003) item
+		`
+			await database.sql`
+			INSERT INTO transactions (
+				chain_id, hash, block_hash, block_number, transaction_index,
+				from_address, to_address, value, input, status, gas_used, receipt, canonical
+			)
+			SELECT ${operationsChainId}, '0x' || lpad(to_hex(item + 20000), 64, '0'),
+				'0x' || lpad(to_hex(item), 64, '0'), item, 0,
+				${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true
+			FROM generate_series(2, 10003) item
+		`
+			await database.sql`
+			INSERT INTO logs (
+				chain_id, tx_hash, block_hash, block_number, transaction_index, log_index,
+				emitter_address, topics, data, event_name, arguments, argument_schema,
+				decode_status, summary, canonical, finalized
+			)
+			SELECT ${operationsChainId}, '0x' || lpad(to_hex(item + 20000), 64, '0'),
+				'0x' || lpad(to_hex(item), 64, '0'), item, 0, 0,
+				${oracle.toLowerCase()}, '[]'::jsonb, '0x', 'Swap',
+				jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1', 'feeAmount', '1',
+					'resultingYesReserve', item::text, 'resultingNoReserve', (item * 2)::text),
+				'[]'::jsonb, 'decoded', 'Swap', true, true
+			FROM generate_series(2, 10003) item
+		`
+			await database.sql`
+			INSERT INTO amm_trade_events (
+				chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+			)
+			SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'),
+				'0x' || lpad(to_hex(item + 20000), 64, '0'), 0, item, ${oracle.toLowerCase()}, 'Swap',
+				jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1', 'feeAmount', '1',
+					'resultingYesReserve', item::text, 'resultingNoReserve', (item * 2)::text), true
+			FROM generate_series(2, 10003) item
+		`
+			await database.sql`
+			UPDATE networks SET indexed_block = 10003,
+				indexed_hash = ${`0x${(10003).toString(16).padStart(64, '0')}`},
+				indexed_timestamp = timestamptz '2026-01-01 00:00:20+00' + make_interval(secs => 10003),
+				observed_block = 10003, finalized_block = 10003
+			WHERE chain_id = ${operationsChainId}
+		`
+			await database.sql`
+			INSERT INTO pools (
+				chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
+				universe_id, question_id, truth_auction_address, coordinator_address, share_token_address,
+				security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
+				initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+			) VALUES (
+				${operationsChainId}, ${hash}, ${transactionHash}, 0, 1, ${oracle.toLowerCase()}, ${address.toLowerCase()},
+				1, 1, ${address.toLowerCase()}, ${oracle.toLowerCase()}, ${address.toLowerCase()},
+				15000, 0, 0, 0, true
+			)
+		`
+			await database.sql`
+			INSERT INTO vault_snapshots (
+				chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address,
+				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index,
+				vault_fee_remainder, resulting_total_rep_backing_units,
+				resulting_fee_eligible_capacity_ownership_atto_rep, canonical
+			) VALUES (
+				${operationsChainId}, ${hash}, ${transactionHash}, 1, 1, ${oracle.toLowerCase()}, ${address.toLowerCase()},
+				100, 100, 0, 0, 0, 100, 100, true
+			)
+		`
+			await database.sql`
+			INSERT INTO entity_state_snapshots (
+				chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
+				source_method, read_status, read_result, canonical
+			) VALUES
+			(
+				${operationsChainId}, 'pool', ${oracle.toLowerCase()}, 1, ${hash}, timestamptz '2026-01-01 00:00:20+00',
+				'augurscan.pool-risk.v1', 'success',
+				jsonb_build_object('settlementCollateralAttoEth', '1', 'currentMintingCapacityAttoEth', '2',
+					'totalBadDebtAttoEth', '0', 'systemState', '1',
+					'price', jsonb_build_object('repPerEth1e18', '100')), true
+			),
+			(
+				${operationsChainId}, 'vault', ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}, 2,
+				${`0x${(2).toString(16).padStart(64, '0')}`}, timestamptz '2026-01-01 00:00:22+00',
+				'augurscan.vault-risk.v1', 'success',
+				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '0',
+					'openInterestAttoEth', '1000000000000000000', 'securityMultiplierBps', '15000',
+					'targetHealthFactorBps', '12000', 'badDebtAttoEth', '0'), true
+			)
+		`
+
+			const firstResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1`),
+				database.sql,
+			)
+			if (firstResponse === undefined) throw new Error('report detail endpoint did not return a response')
+			const first = (await firstResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean; nextCursor: string } } }
+			expect(first.data.rounds).toMatchObject({ hasMore: true })
+			expect(first.data.rounds.items).toHaveLength(1)
+			const secondResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(first.data.rounds.nextCursor)}`,
+				),
+				database.sql,
+			)
+			if (secondResponse === undefined) throw new Error('report detail continuation did not return a response')
+			const second = (await secondResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean } } }
+			expect(second.data.rounds).toMatchObject({ hasMore: false })
+			expect(second.data.rounds.items).toHaveLength(1)
+
+			await database.sql`
+			INSERT INTO transactions (
+				chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address,
+				value, input, status, gas_used, receipt, canonical
+			) VALUES
+			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 2, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true),
+			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 1, ${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
+		`
+			await database.sql`
+			INSERT INTO logs (
+				chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address,
+				topics, data, event_name, arguments, argument_schema, decode_status, summary, canonical, finalized
+			) VALUES
+			(${operationsChainId}, ${`0x${'e'.repeat(64)}`}, ${hash}, 1, 2, 2, ${oracle.toLowerCase()}, '[]'::jsonb,
+				'0x', 'ReportSettled', jsonb_build_object('reportId', '7'), '[]'::jsonb, 'decoded', 'Report 7 settled', true, true),
+			(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${hash}, 1, 1, 1, ${oracle.toLowerCase()}, '[]'::jsonb,
+				'0x', 'ReportSubmitted', jsonb_build_object('reportId', '8'), '[]'::jsonb, 'decoded', 'Report 8', true, true)
+		`
+			await database.sql`
+			INSERT INTO open_oracle_report_events (
+				chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address,
+				report_id, event_name, round_number, report_data, canonical
+			) VALUES
+			(${operationsChainId}, ${hash}, ${`0x${'e'.repeat(64)}`}, 2, 1, ${oracle.toLowerCase()}, 7,
+				'ReportSettled', 2, jsonb_build_object('reportId', '7'), true),
+			(${operationsChainId}, ${hash}, ${`0x${'f'.repeat(64)}`}, 1, 1, ${oracle.toLowerCase()}, 8,
+				'ReportSubmitted', 1, jsonb_build_object('reportId', '8'), true)
+		`
+			const firstCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1`), database.sql)
+			if (firstCatalogResponse === undefined) throw new Error('report catalog did not return a response')
+			const firstCatalog = (await firstCatalogResponse.json()) as {
+				data: { items: Array<{ report_id: string; tx_hash: string }>; nextCursor: string }
+			}
+			expect(firstCatalog.data.items).toHaveLength(1)
+			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '7', tx_hash: `0x${'e'.repeat(64)}` })
+			const secondCatalogResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`),
+				database.sql,
+			)
+			if (secondCatalogResponse === undefined) throw new Error('report catalog continuation did not return a response')
+			const secondCatalog = (await secondCatalogResponse.json()) as { data: { items: Array<{ report_id: string }> } }
+			expect(secondCatalog.data.items.map((item) => item.report_id)).toEqual(['8'])
+
+			const tradingResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
+			if (tradingResponse === undefined) throw new Error('trading endpoint did not return a response')
+			const trading = (await tradingResponse.json()) as {
+				data: {
+					summary: { swaps_7d: number; input_volume_7d: string; fees_7d: string }
+					twap7d: { state: string }
+					observationsTruncated: boolean
+					observationRange: { firstTimestamp: string; lastTimestamp: string; count: number }
+				}
+			}
+			expect(trading.data).toMatchObject({
+				summary: { swaps_7d: 10002, input_volume_7d: '10002', fees_7d: '10002' },
+				twap7d: { state: 'Partial coverage' },
+				observationsTruncated: true,
+				observationRange: { firstTimestamp: '1767225624', lastTimestamp: '1767235623', count: 10000 },
+			})
+
+			await database.sql`DELETE FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND block_number IN (2, 3)`
+			await database.sql`
+			INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical, finalized)
+			VALUES (${operationsChainId}, 0, ${`0x${'f'.repeat(64)}`}, ${`0x${'e'.repeat(64)}`},
+				timestamptz '2025-12-24 23:59:59+00', true, true)
+		`
+			await database.sql`
+			INSERT INTO transactions (
+				chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address,
+				value, input, status, gas_used, receipt, canonical
+			) VALUES (${operationsChainId}, ${`0x${'d'.repeat(64)}`}, ${`0x${'f'.repeat(64)}`}, 0, 0,
+				${address.toLowerCase()}, ${oracle.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
+		`
+			await database.sql`
+			INSERT INTO logs (
+				chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address,
+				topics, data, event_name, arguments, argument_schema, decode_status, summary, canonical, finalized
+			) VALUES (${operationsChainId}, ${`0x${'d'.repeat(64)}`}, ${`0x${'f'.repeat(64)}`}, 0, 0, 0,
+				${oracle.toLowerCase()}, '[]'::jsonb, '0x', 'Swap', '{}'::jsonb, '[]'::jsonb, 'decoded', 'Swap', true, true)
+		`
+			await database.sql`
+			INSERT INTO amm_trade_events (
+				chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+			) VALUES (${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0,
+				${oracle.toLowerCase()}, 'Swap',
+				jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1', 'feeAmount', '1',
+					'resultingYesReserve', '1', 'resultingNoReserve', '2'), true)
+		`
+			const boundaryResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
+			if (boundaryResponse === undefined) throw new Error('boundary trading endpoint did not return a response')
+			const boundary = (await boundaryResponse.json()) as {
+				data: { summary: { swaps_7d: number }; observationsTruncated: boolean; observationRange: { firstTimestamp: string; count: number } }
+			}
+			expect(boundary.data).toMatchObject({
+				summary: { swaps_7d: 10000 },
+				observationsTruncated: true,
+				observationRange: { firstTimestamp: '1767225624', count: 10000 },
+			})
+
+			const uniswapOnlyMarket = getAddress('0x9999999999999999999999999999999999999999').toLowerCase()
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				) VALUES (${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0,
+					${uniswapOnlyMarket}, 'Swap', jsonb_build_object('sqrtPriceX96', '79228162514264337593543950336', 'liquidity', '100'), true)
+			`
+			const uniswapOnlyResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapOnlyMarket}`), database.sql)
+			expect(uniswapOnlyResponse?.status).toBe(404)
+
+			const uniswapSyncOnlyMarket = getAddress('0x9999999999999999999999999999999999999998').toLowerCase()
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				) VALUES (${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0,
+					${uniswapSyncOnlyMarket}, 'Sync', jsonb_build_object('reserve0', '300', 'reserve1', '700'), true)
+			`
+			await database.sql`
+				INSERT INTO protocol_timeline_entries (
+					chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity,
+					semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical
+				) VALUES
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'trading', ${uniswapSyncOnlyMarket},
+						'Sync', jsonb_build_object('reserve0', '300', 'reserve1', '700'), '[]'::jsonb, ${uniswapSyncOnlyMarket}, 'Sync', true),
+					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'amm', ${uniswapOnlyMarket},
+						'Swap', jsonb_build_object('sqrtPriceX96', '79228162514264337593543950336'), '[]'::jsonb, ${uniswapOnlyMarket}, 'Swap', true)
+			`
+			const uniswapSyncOnlyResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapSyncOnlyMarket}`),
+				database.sql,
+			)
+			expect(uniswapSyncOnlyResponse?.status).toBe(404)
+			await database.sql`
+				DELETE FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId}
+					AND entity_identity IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})
+			`
+			await database.sql`
+				DELETE FROM amm_trade_events WHERE chain_id = ${operationsChainId}
+					AND market_address IN (${uniswapOnlyMarket}, ${uniswapSyncOnlyMarket})
+			`
+
+			await database.sql`
+				INSERT INTO liquidation_approval_events (
+					chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address,
+					approval_identity, receiver_vault, event_name, event_data, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'),
+					'0x' || lpad(to_hex(item + 20000), 64, '0'), 0, 0, item, ${oracle.toLowerCase()},
+					'0x' || lpad(to_hex(item), 64, '0'), ${address.toLowerCase()}::text, 'LiquidationApprovalSet',
+					jsonb_build_object(
+						'approvalId', '0x' || lpad(to_hex(item), 64, '0'),
+						'receiverVault', ${address.toLowerCase()}::text,
+						'securityPool', CASE WHEN item = 102 THEN ${uniswapOnlyMarket}::text ELSE ${oracle.toLowerCase()}::text END,
+						'targetVault', ${address.toLowerCase()}::text
+					), true
+				FROM generate_series(2, 102) item
+			`
+			const linkedApprovalId = `0x${'b'.repeat(64)}`
+			await database.sql`
+				INSERT INTO liquidation_approval_events (
+					chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address,
+					approval_identity, receiver_vault, event_name, event_data, canonical
+				) VALUES
+				(
+					${operationsChainId}, ${`0x${(10002).toString(16).padStart(64, '0')}`},
+					${`0x${(30002).toString(16).padStart(64, '0')}`}, 0, 0, 10002, ${uniswapOnlyMarket},
+					${linkedApprovalId}, ${uniswapOnlyMarket}, 'LiquidationApprovalSet',
+					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'receiverVault', ${uniswapOnlyMarket}::text,
+						'securityPool', ${oracle.toLowerCase()}::text, 'targetVault', ${address.toLowerCase()}::text), true
+				),
+				(
+					${operationsChainId}, ${`0x${(10003).toString(16).padStart(64, '0')}`},
+					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${uniswapOnlyMarket},
+					${linkedApprovalId}, NULL, 'LiquidationApprovalReserved',
+					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'operationId', '42'), true
+				),
+				(
+					${operationsChainId}, ${`0x${(10003).toString(16).padStart(64, '0')}`},
+					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${oracle.toLowerCase()},
+					${linkedApprovalId}, ${uniswapOnlyMarket}, 'LiquidationApprovalSet',
+					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'receiverVault', ${uniswapOnlyMarket}::text,
+						'securityPool', ${uniswapOnlyMarket}::text, 'targetVault', ${uniswapOnlyMarket}::text), true
+				)
+			`
+			const boundedApprovalsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
+			if (boundedApprovalsResponse === undefined) throw new Error('bounded operations endpoint did not return a response')
+			const boundedApprovals = (await boundedApprovalsResponse.json()) as { data: { risk: { approvalEvents: unknown[] } } }
+			expect(boundedApprovals.data.risk.approvalEvents).toHaveLength(100)
+
+			const riskResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
+				database.sql,
+			)
+			if (riskResponse === undefined) throw new Error('vault risk endpoint did not return a response')
+			const risk = (await riskResponse.json()) as {
+				data: Record<string, unknown> & { approvalEvents: Array<{ approval_identity: string; event_name: string; event_data: Record<string, unknown> }> }
+			}
+			expect(risk.data).toMatchObject({
+				protocol_state: 'unavailable',
+				scanner_severity: 'unavailable',
+				snapshot_evidence: {
+					vaultSnapshot: { blockNumber: '2', blockHash: `0x${(2).toString(16).padStart(64, '0')}` },
+					poolSnapshot: { blockNumber: '1', blockHash: hash },
+				},
+			})
+			expect(risk.data['scanner_reason']).toContain('different evidence blocks')
+			expect(risk.data.approvalEvents).toHaveLength(100)
+			expect(risk.data.approvalEvents).toContainEqual(
+				expect.objectContaining({ approval_identity: linkedApprovalId, event_name: 'LiquidationApprovalReserved' }),
+			)
+			expect(risk.data.approvalEvents.some((event) => event.event_data['securityPool'] === uniswapOnlyMarket)).toBe(false)
+
+			await database.sql`
+				UPDATE entity_state_snapshots SET
+					block_number = 1, block_hash = ${hash}, block_timestamp = timestamptz '2026-01-01 00:00:20+00'
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+			`
+			await database.sql`
+				UPDATE entity_state_snapshots SET read_result = jsonb_set(read_result, '{price,protocolValid}', 'false'::jsonb, true)
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool'
+			`
+			const invalidPriceResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
+				database.sql,
+			)
+			if (invalidPriceResponse === undefined) throw new Error('invalid-price risk endpoint did not return a response')
+			const invalidPrice = (await invalidPriceResponse.json()) as { data: Record<string, unknown> }
+			expect(invalidPrice.data).toMatchObject({ protocol_state: 'unavailable', scanner_severity: 'unavailable' })
+			expect(invalidPrice.data['scanner_reason']).toContain('invalid accounting price')
+
+			await database.sql`
+				UPDATE entity_state_snapshots SET read_result =
+					CASE entity_type
+						WHEN 'pool' THEN jsonb_set(read_result, '{totalBadDebtAttoEth}', '"7"'::jsonb, true)
+						ELSE jsonb_set(read_result, '{badDebtAttoEth}', '"9"'::jsonb, true)
+					END
+				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+			`
+			const badDebtPoolResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`),
+				database.sql,
+			)
+			const badDebtVaultResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
+				database.sql,
+			)
+			if (badDebtPoolResponse === undefined || badDebtVaultResponse === undefined) throw new Error('bad-debt risk endpoint did not return a response')
+			const badDebtPool = (await badDebtPoolResponse.json()) as { data: Record<string, unknown> }
+			const badDebtVault = (await badDebtVaultResponse.json()) as { data: Record<string, unknown> }
+			expect(badDebtPool.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
+			expect(badDebtVault.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
+
+			const snapshotRows = await database.sql`
+			SELECT read_status, read_result, canonical FROM entity_state_snapshots
+			WHERE chain_id = ${operationsChainId} AND entity_type = 'auction'
+		`
+			expect(snapshotRows[0]).toMatchObject({ read_status: 'success', canonical: true, read_result: { finalized: false, activeTickCount: '2' } })
+
+			const explainQueries = [
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM open_oracle_report_events WHERE chain_id = ${operationsChainId} AND open_oracle_address = ${oracle.toLowerCase()} AND report_id = 7 AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM escalation_game_events WHERE chain_id = ${operationsChainId} AND game_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM truth_auction_events WHERE chain_id = ${operationsChainId} AND auction_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId} AND entity_type = 'open-oracle-report' AND entity_identity = ${`${oracle.toLowerCase()}:7`} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND market_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number, log_index, tx_hash LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM fork_migration_events WHERE chain_id = ${operationsChainId} AND universe_identity = '7' AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+				database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM entity_state_snapshots WHERE chain_id = ${operationsChainId} AND entity_type = 'auction' AND entity_identity = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC LIMIT 1`,
+			]
+			const plans = await Promise.all(explainQueries)
+			expect(plans).toHaveLength(7)
+			for (const plan of plans) expect(JSON.stringify(plan)).toContain('Plan')
+
+			const resetLease = await database.tryAcquireIndexerLock(operationsChainId)
+			if (resetLease === undefined) throw new Error('operations manifest-reset writer did not acquire its lock')
+			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] }, resetLease, true)).toBe(true)
+			await resetLease.release()
+			const staleSnapshots = await database.sql`
+				SELECT DISTINCT read_status, canonical FROM entity_state_snapshots WHERE chain_id = ${operationsChainId}
+			`
+			expect(staleSnapshots).toEqual([{ read_status: 'stale', canonical: false }])
+
+			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${operationsChainId} AND hash = ${hash}`
+			for (const table of ['pools', 'pool_state_events', 'vault_snapshots', 'escalation_game_events', 'truth_auction_events'])
+				await database.sql.unsafe(`UPDATE ${table} SET canonical = true WHERE chain_id = $1`, [operationsChainId])
+			const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n)
+			expect(new Set(resampleTargets.map((target) => target.entityType))).toEqual(new Set(['pool', 'vault']))
+		} finally {
+			await database.close()
+		}
+	},
+	60_000,
+)

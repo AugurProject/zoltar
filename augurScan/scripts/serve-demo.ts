@@ -39,10 +39,8 @@ const server = Bun.serve({
 				},
 			})
 		}
-		const name =
-			url.pathname === '/' || url.pathname === '/system' || url.pathname === '/contracts' || url.pathname === '/richlist' || url.pathname === '/address'
-				? 'index.html'
-				: url.pathname.slice(1)
+		const requested = url.pathname === '/' ? 'index.html' : url.pathname.slice(1)
+		const name = requested.includes('.') ? requested : 'index.html'
 		const file = Bun.file(path.join(root, name))
 		if (!(await file.exists())) return new Response('Not found', { status: 404 })
 		const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'

@@ -22,6 +22,7 @@
 			<div class="header-actions">
 				<nav class="product-nav" aria-label="Primary navigation">
 					<a href="/">Activity</a>
+					<a href="/operations">Operations</a>
 					<a href="/system">System state</a>
 					<a href="/contracts">Contracts</a>
 					<a href="/richlist">Rich list</a>
@@ -46,7 +47,7 @@
 				<div id="network-cards" class="network-cards" aria-busy="true"></div>
 			</section>
 
-			<section id="activity" class="activity" aria-labelledby="activity-heading">
+			<section id="activity" class="activity" aria-labelledby="activity-heading" hidden>
 				<div class="section-heading activity-heading">
 					<div>
 						<p class="eyebrow">Event stream</p>
@@ -107,6 +108,24 @@
 						</div>
 					</article>
 				</div>
+			</section>
+
+			<section id="operations" class="operations" aria-labelledby="operations-heading" hidden>
+				<div class="section-heading operations-heading">
+					<div>
+						<p class="eyebrow">Protocol operations</p>
+						<h2 id="operations-heading">Evidence-first protocol status</h2>
+					</div>
+				</div>
+				<nav class="operations-nav" aria-label="Operations sections">
+					<a href="/operations">Overview</a>
+					<a href="/operations/reports">Reports</a>
+					<a href="/operations/escalations">Escalations</a>
+					<a href="/operations/auctions">Auctions</a>
+					<a href="/operations/risk">Risk</a>
+				</nav>
+				<div id="operations-status" class="system-status" role="status" aria-live="polite">Loading protocol operations…</div>
+				<div id="operations-content" class="operations-content" aria-busy="true"></div>
 			</section>
 
 			<section id="richlist" class="richlist" aria-labelledby="richlist-heading" hidden>

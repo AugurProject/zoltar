@@ -27,6 +27,8 @@ describe('Docker packaging', () => {
 		expect(source).toContain('RUN bun run build')
 		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.3.14-alpine AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
+		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
+		expect(runtimeStage).not.toContain('COPY augurScan/migrations')
 		expect(runtimeStage).not.toContain('COPY augurScan/browser')
 		expect(runtimeStage).not.toContain('COPY --from=browser-build /workspace/augurScan/node_modules')
 	})

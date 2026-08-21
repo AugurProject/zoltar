@@ -17,6 +17,7 @@
 		["0x49De932c947343ADb87508280f99251A3b326283", "Security Pool Factory", "securityPoolFactory"],
 		["0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x13CD80A6741A6349d2FeBDd65991108eCfD4f283", "Genesis REP", "reputationToken"],
-		["0x65156FD21726b8efcB627fa38c506E3f3542F601", "Wrapped Ether", "weth"]
+		["0x65156FD21726b8efcB627fa38c506E3f3542F601", "Wrapped Ether", "weth"],
+		["0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", "USD Coin", "usdc"]
 	]
 }

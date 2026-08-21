@@ -3,10 +3,12 @@ import { requiredElementRole } from '../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
+	approvalTransitionFields,
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
 	compactIndexerDuration,
+	compareCanonicalEventPosition,
 	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
@@ -23,6 +25,9 @@ import {
 	isCurrentLiveRequest,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
+	operationsCatalogRecordKey,
+	operationsDetailRecordKey,
+	operationsLoadDisposition,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -31,11 +36,149 @@ import {
 	refreshPresentation,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
+	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	transactionRetryMode,
 } from '../browser/live-update.ts'
+
+test('retains every distinct catalog record across a delayed 251-record live refresh', async () => {
+	const first = Array.from({ length: 100 }, (_, index) => ({ auction_address: `0x${index.toString(16).padStart(40, '0')}` }))
+	const second = Array.from({ length: 100 }, (_, index) => ({ auction_address: `0x${(index + 100).toString(16).padStart(40, '0')}` }))
+	const third = Array.from({ length: 51 }, (_, index) => ({ auction_address: `0x${(index + 200).toString(16).padStart(40, '0')}` }))
+	const key = (item: Readonly<Record<string, unknown>>) => operationsCatalogRecordKey('auctions', item)
+	const pages = [first, second, third]
+	const requestedLimits: number[] = []
+	const snapshot = await collectCanonicalPages<Readonly<Record<string, unknown>>, number>(
+		async (cursor = 0, limit = 100) => {
+			await Promise.resolve()
+			requestedLimits.push(limit)
+			const items = pages[cursor]
+			if (items === undefined) throw new Error(`Unexpected catalog page ${cursor}`)
+			return { items, ...(cursor + 1 < pages.length ? { nextCursor: cursor + 1 } : {}) }
+		},
+		251,
+		key,
+	)
+	expect(requestedLimits).toEqual([100, 100, 51])
+	expect(snapshot.items).toHaveLength(251)
+	expect(new Set(snapshot.items.map(key)).size).toBe(251)
+	expect(snapshot.nextCursor).toBeUndefined()
+})
+
+test('retains detail evidence to the prior visible depth using canonical log identity', async () => {
+	const records = Array.from({ length: 151 }, (_, index) => ({
+		block_hash: '0xblock',
+		tx_hash: `0x${Math.floor(index / 3)
+			.toString(16)
+			.padStart(64, '0')}`,
+		log_index: index % 3,
+		event_name: index % 2 === 0 ? 'ReportSubmitted' : 'ReportDisputed',
+	}))
+	const requestedLimits: number[] = []
+	const snapshot = await collectCanonicalPages<Readonly<Record<string, unknown>>, number>(
+		async (cursor = 0, limit = 100) => {
+			requestedLimits.push(limit)
+			const items = records.slice(cursor, cursor + limit)
+			return { items, ...(cursor + limit < records.length ? { nextCursor: cursor + limit } : {}) }
+		},
+		151,
+		operationsDetailRecordKey,
+	)
+	expect(requestedLimits).toEqual([100, 51])
+	expect(snapshot.items).toHaveLength(151)
+	expect(new Set(snapshot.items.map(operationsDetailRecordKey)).size).toBe(151)
+	expect(snapshot.nextCursor).toBeUndefined()
+})
+
+test('orders lifecycle evidence by canonical block, transaction, and log position', () => {
+	const consumed = { event_name: 'LiquidationApprovalConsumed', block_number: '23184712', transaction_index: 0, log_index: 0 }
+	const released = { event_name: 'LiquidationApprovalReleased', block_number: '23184711', transaction_index: 2, tx_hash: '0x01', log_index: 2 }
+	const reserved = { event_name: 'LiquidationApprovalReserved', block_number: '23184711', transaction_index: 1, tx_hash: '0xff', log_index: 3 }
+	expect([consumed, released, reserved].sort(compareCanonicalEventPosition).map((event) => event.event_name)).toEqual([
+		'LiquidationApprovalReserved',
+		'LiquidationApprovalReleased',
+		'LiquidationApprovalConsumed',
+	])
+})
+
+test('labels every approval transition field without hiding consumed debt', () => {
+	const maxCumulativeDebtAttoEth = '10'
+	const maxDebtPerLiquidationAttoEth = '7'
+	const consumedDebtAttoEth = '6'
+	const releasedDebtAttoEth = '2'
+	const resultingAvailableDebtAttoEth = '4'
+	const resultingReservedDebtAttoEth = '0'
+	const resultingConsumedDebtAttoEth = '6'
+	expect(approvalTransitionFields({ maxCumulativeDebtAttoEth, maxDebtPerLiquidationAttoEth })).toEqual([
+		{ label: 'maximum cumulative debt', value: '10', unit: 'attoETH' },
+		{ label: 'maximum debt per liquidation', value: '7', unit: 'attoETH' },
+	])
+	expect(
+		approvalTransitionFields({
+			consumedDebtAttoEth,
+			releasedDebtAttoEth,
+			resultingAvailableDebtAttoEth,
+			resultingReservedDebtAttoEth,
+			resultingConsumedDebtAttoEth,
+		}),
+	).toEqual([
+		{ label: 'consumed debt', value: '6', unit: 'attoETH' },
+		{ label: 'released debt', value: '2', unit: 'attoETH' },
+		{ label: 'resulting available debt', value: '4', unit: 'attoETH' },
+		{ label: 'resulting reserved debt', value: '0', unit: 'attoETH' },
+		{ label: 'resulting consumed debt', value: '6', unit: 'attoETH' },
+	])
+	expect(approvalTransitionFields({ receiverVault: '0xvault' })).toEqual([])
+	expect(approvalTransitionFields({ previousNonce: '41', newNonce: '42' })).toEqual([
+		{ label: 'previous nonce', value: '41', unit: '' },
+		{ label: 'new nonce', value: '42', unit: '' },
+	])
+})
+
+test('supersedes cross-network catalog appends and queues same-route live refreshes', () => {
+	expect(operationsLoadDisposition('1:/operations/reports', '11155111:/operations/reports', false, false)).toBe('supersede')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', true, false)).toBe('queue')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, true)).toBe('queue')
+	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, false)).toBe('join')
+})
+
+test('serializes pagination ahead of multiple queued live refreshes', async () => {
+	const state: { promise?: Promise<boolean>; context?: string } = {}
+	const context = '1:/operations/reports'
+	const started: string[] = []
+	let finishInitial: (result: boolean) => void = unexpectedCall
+	const execute = (label: string, live: boolean, hasTarget: boolean, run: () => Promise<boolean>) =>
+		runSerializedOperationsLoad(
+			state,
+			context,
+			live,
+			hasTarget,
+			() => context,
+			() => undefined,
+			async () => {
+				started.push(label)
+				return await run()
+			},
+		)
+	const initial = execute(
+		'initial',
+		false,
+		false,
+		() =>
+			new Promise<boolean>((resolve) => {
+				finishInitial = resolve
+			}),
+	)
+	const pagination = execute('pagination', false, true, async () => true)
+	const liveOne = execute('live-one', true, false, async () => true)
+	const liveTwo = execute('live-two', true, false, async () => true)
+	expect(started).toEqual(['initial'])
+	finishInitial(true)
+	expect(await Promise.all([initial, pagination, liveOne, liveTwo])).toEqual([true, true, true, true])
+	expect(started).toEqual(['initial', 'pagination', 'live-one', 'live-two'])
+})
 
 const unexpectedCall = (): never => {
 	throw new Error('Expected asynchronous test callback to be assigned')
@@ -482,10 +625,10 @@ test('schedules the stale-head transition without waiting for another network re
 
 test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: true })).toEqual({ label: 'Deployed', tone: 'live' })
-	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Code present at #42', tone: 'live' })
+	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Deployed at or before #42', tone: 'live' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'No code at #100', tone: 'error' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: null })).toEqual({ label: 'Checking deployment', tone: 'pending' })
-	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Code present at')
+	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Deployed at or before')
 	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')

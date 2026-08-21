@@ -15,7 +15,9 @@ test('provides distinct V2, V3, and V4 REP price observations', () => {
 	const prices = demoUniswapRepEthPriceHistory(Date.parse('2026-08-12T00:00:00.000Z'))
 	expect(new Set(prices.map(({ venue }) => venue))).toEqual(new Set(['v2', 'v3', 'v4']))
 	expect(prices.filter(({ venue }) => venue === 'v4').every(({ quote_symbol }) => quote_symbol === 'ETH')).toBeTrue()
-	expect(prices.filter(({ venue }) => venue !== 'v4').every(({ quote_symbol }) => quote_symbol === 'WETH')).toBeTrue()
+	expect(prices.filter(({ venue }) => venue !== 'v4').every(({ quote_symbol }) => quote_symbol === 'WETH' || quote_symbol === 'USDC')).toBeTrue()
+	expect(prices.some(({ quote_symbol }) => quote_symbol === 'USDC')).toBeTrue()
+	expect(prices.every(({ liquidity_value }) => liquidity_value !== undefined)).toBeTrue()
 })
 
 test('provides eight distinct Uniswap markets for dense visual QA', () => {
