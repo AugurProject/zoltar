@@ -118,15 +118,10 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						const network = Reflect.get(value, 'network')
 						if (network !== 'mainnet' && network !== 'sepolia') throw new Error('Chain profile must be mainnet or sepolia')
 						if (network === settings.network.name) return serializedSettings(settings, true)
+						const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname)
 						state.paused = true
 						requestProfileSwitch()
-						try {
-							const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname)
-							return serializedSettings(switched.settings, true)
-						} catch (error) {
-							profileSwitchRequested = false
-							throw error
-						}
+						return serializedSettings(switched.settings, true)
 					}),
 				reconcileTransaction: value =>
 					configurationMutationGate.run(async () => {
