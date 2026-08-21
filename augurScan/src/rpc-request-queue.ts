@@ -10,6 +10,7 @@ export class RpcRequestMethodError extends Error {
 	constructor(
 		readonly method: string,
 		cause: unknown,
+		readonly endpoint?: string,
 	) {
 		super('RPC method failed', { cause })
 	}
@@ -90,13 +91,13 @@ export const createRpcRequestQueue = (concurrency: number, maximumPending = 100)
 	}
 }
 
-export const withRpcRequestQueue = (transport: Transport, queue: RpcRequestQueue): Transport => ({
+export const withRpcRequestQueue = (transport: Transport, queue: RpcRequestQueue, endpoint?: string): Transport => ({
 	...transport,
 	requestScheduler: async <TValue>(method: string, operation: () => Promise<TValue>): Promise<TValue> => {
 		try {
 			return await queue.run(() => (transport.requestScheduler === undefined ? operation() : transport.requestScheduler(method, operation)))
 		} catch (error) {
-			throw new RpcRequestMethodError(method, error)
+			throw new RpcRequestMethodError(method, error, endpoint)
 		}
 	},
 })

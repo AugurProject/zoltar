@@ -24,6 +24,9 @@ type NetworkFile = {
 
 const configRoot = path.resolve(import.meta.dir, '../config')
 
+export const resolveRpcLogPath = (configuredPath: string | undefined): string =>
+	configuredPath === undefined ? path.resolve(import.meta.dir, '../logs/rpc.jsonl') : path.resolve(configuredPath)
+
 const requirePositiveInteger = (value: string, name: string, allowZero = false): number => {
 	const parsed = Number(value)
 	if (!Number.isSafeInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0))
@@ -124,5 +127,6 @@ export const runtimeConfig = {
 	pollIntervalMs: requirePositiveInteger(process.env['POLL_INTERVAL_MS'] ?? '12000', 'POLL_INTERVAL_MS'),
 	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '10000', 'LOG_SCAN_RANGE_SIZE'),
 	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
+	rpcLogPath: resolveRpcLogPath(process.env['RPC_LOG_PATH']),
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
 }

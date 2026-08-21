@@ -6,7 +6,10 @@ import { indexerHealthUnavailableResponse, liveStreamResponse, staticAssetRespon
 import { indexerOwnershipStatuses, startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
+import { installConsoleTimestamps } from './logging.ts'
 import { initializeSchema } from './schema.ts'
+
+installConsoleTimestamps()
 
 const database = new ScannerDatabase(runtimeConfig.postgresUrl)
 await initializeSchema(database.sql)

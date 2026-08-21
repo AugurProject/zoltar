@@ -18,6 +18,7 @@ import {
 	isPermanentHistoricalCodeError,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
+	isPrunedHistoricalStateError,
 	isSplittableLogRangeError,
 	jsonEvidence,
 	LeaseLostError,
@@ -37,6 +38,7 @@ import {
 	safeIndexerFailure,
 	withVerifiedProvider,
 } from './indexer-runtime.ts'
+import { createRpcLoggingFetch, RotatingJsonLog } from './logging.ts'
 import { createRpcRequestQueue, rpcQueueSaturationFrom, withRpcRequestQueue } from './rpc-request-queue.ts'
 
 export {
@@ -206,7 +208,17 @@ export const findContractDeploymentBlock = async (
 		return code !== undefined && code !== '0x'
 	}
 	if (!(await hasCode(observedHead))) return undefined
-	if (!startBlockKnownAbsent && (await hasCode(startBlock))) {
+	let crossedPrunedHistory = false
+	const historicalHasCode = async (block: bigint): Promise<boolean> => {
+		try {
+			return await hasCode(block)
+		} catch (error) {
+			if (!isPrunedHistoricalStateError(error)) throw error
+			crossedPrunedHistory = true
+			return false
+		}
+	}
+	if (!startBlockKnownAbsent && (await historicalHasCode(startBlock))) {
 		// Code at genesis for these manifest contracts is overwhelmingly evidence
 		// that the RPC ignored or could not serve the historical block selector.
 		// A genuine genesis deployment can still be configured explicitly.
@@ -216,10 +228,10 @@ export const findContractDeploymentBlock = async (
 	let upper = observedHead
 	while (lower + 1n < upper) {
 		const middle = lower + (upper - lower) / 2n
-		if (await hasCode(middle)) upper = middle
+		if (await historicalHasCode(middle)) upper = middle
 		else lower = middle
 	}
-	return { block: upper, exact: true }
+	return { block: upper, exact: !crossedPrunedHistory }
 }
 
 const chunks = <T>(items: readonly T[], size: number): T[][] => {
@@ -229,6 +241,7 @@ const chunks = <T>(items: readonly T[], size: number): T[][] => {
 }
 
 const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY, RPC_MAX_PENDING)
+const rpcExchangeLog = new RotatingJsonLog(runtimeConfig.rpcLogPath)
 
 export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
@@ -511,9 +524,14 @@ class NetworkIndexer {
 		this.#database = database
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
-			const transport = http(rpcUrl, { requestTimeout: 20_000, retryCount: 2 })
-			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue) })
-			return { client, endpoint: rpcProviderLabel(rpcUrl, index), getChainId: () => client.getChainId(), number: index + 1 }
+			const endpoint = rpcProviderLabel(rpcUrl, index)
+			const transport = http(rpcUrl, {
+				fetchFn: createRpcLoggingFetch(rpcUrl, endpoint, runtimeConfig.rpcLogPath, rpcExchangeLog),
+				requestTimeout: 20_000,
+				retryCount: 2,
+			})
+			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue, endpoint) })
+			return { client, endpoint, getChainId: () => client.getChainId(), number: index + 1 }
 		})
 		const firstProvider = this.#providers[0]
 		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
