@@ -129,6 +129,17 @@ type UniswapPriceProjection = {
 	reserve0?: string
 	reserve1?: string
 	sqrtPriceX96?: string
+	liquidity?: string
+}
+
+type DomainEventProjection = {
+	type: 'domainEvent'
+	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'approval' | 'trading' | 'fork'
+	entityType: string
+	entityIdentity: string
+	semanticEventKind: string
+	data: Readonly<Record<string, unknown>>
+	relatedEntities: readonly string[]
 }
 
 export type Projection =
@@ -143,6 +154,7 @@ export type Projection =
 	| RepEthPriceProjection
 	| UniswapMarketProjection
 	| UniswapPriceProjection
+	| DomainEventProjection
 
 const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
@@ -195,7 +207,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	TotalRepBackingUnitsSet: ['totalRepBackingUnits'],
 }
 
-export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
+const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 	const name = log.decoded.name
 	const args = log.decoded.arguments
 	if (name === undefined || args === undefined || log.decoded.status !== 'decoded') return []
@@ -343,6 +355,7 @@ export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
 				marketId: args['id'] === undefined ? log.address.toLowerCase() : bytes32(args['id'], 'id'),
 				eventName: 'Swap',
 				sqrtPriceX96: integerString(args['sqrtPriceX96'], 'sqrtPriceX96'),
+				...(args['liquidity'] === undefined ? {} : { liquidity: integerString(args['liquidity'], 'liquidity') }),
 			},
 		]
 	if (name === 'Swap') return []
@@ -482,4 +495,185 @@ export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
 			},
 		]
 	return []
+}
+
+type EventDomainDefinition = {
+	readonly domain: DomainEventProjection['domain']
+	readonly entityType: string
+	readonly identityFields?: readonly string[]
+}
+
+const definitions = (
+	domain: DomainEventProjection['domain'],
+	entityType: string,
+	eventNames: readonly string[],
+	identityFields?: readonly string[],
+): Readonly<Record<string, EventDomainDefinition>> =>
+	Object.fromEntries(eventNames.map((eventName) => [eventName, { domain, entityType, ...(identityFields === undefined ? {} : { identityFields }) }]))
+
+// This is the scanner's explicit semantic taxonomy. It intentionally excludes
+// generic ERC approvals/transfers while covering every protocol lifecycle event
+// emitted by the contracts represented in the operations views.
+const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
+	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
+	...definitions('oracle', 'price-coordinator', [
+		'CoordinatorStateCheckpoint',
+		'ExecutedStagedOperation',
+		'LiquidationRouteStaged',
+		'PendingReportRecovered',
+		'PriceReportRejected',
+		'PriceReported',
+		'PriceRequested',
+		'RepEthPriceSet',
+		'SecurityPoolSet',
+		'StagedOperationQueued',
+	]),
+	...definitions('escalation', 'escalation', [
+		'CarryDepositConsumed',
+		'ClaimDeposit',
+		'DepositOnOutcome',
+		'ForkCarryCheckpoint',
+		'ForkContinuationResumed',
+		'ForkedEscrowClaimed',
+		'ForkedEscrowExported',
+		'ForkedEscrowRecorded',
+		'GameContinuedFromFork',
+		'GameStarted',
+		'InheritedThresholdTie',
+		'LocalDepositAppended',
+		'NonDecisionReached',
+		'ResidualRepSweptToSecurityPool',
+		'TruthAuctionHaircutApplied',
+		'VaultEscrowUpdated',
+		'VaultUnresolvedTotalsExported',
+	]),
+	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundDeferred', 'PendingEthRefundWithdrawn']),
+	...definitions('risk', 'pool', [
+		'AwaitingForkContinuationSet',
+		'CompleteSetCreated',
+		'CompleteSetRedeemed',
+		'EscalationGameSet',
+		'PoolAccountingCheckpoint',
+		'PoolForkModeActivated',
+		'ShareTokenSupplySet',
+		'SharesRedeemed',
+		'SystemStateSet',
+		'TotalRepBackingUnitsSet',
+	]),
+	...definitions(
+		'risk',
+		'vault',
+		[
+			'DepositToEscalationGame',
+			'RepDepositedToVault',
+			'RepRedeemedFromVault',
+			'RepWithdrawnFromVault',
+			'VaultAccountingCheckpoint',
+			'VaultBadDebtRecorded',
+			'VaultLiquidated',
+			'VaultTargetHealthFactorSet',
+		],
+		['vault', 'targetVault'],
+	),
+	...definitions(
+		'approval',
+		'liquidation-approval',
+		[
+			'LiquidationApprovalSet',
+			'LiquidationApprovalReserved',
+			'LiquidationApprovalReleased',
+			'LiquidationApprovalConsumed',
+			'LiquidationApprovalRevoked',
+			'LiquidationApprovalNonceInvalidated',
+		],
+		['approvalId', 'receiverVault'],
+	),
+	...definitions('trading', 'amm', ['LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync']),
+	...definitions(
+		'fork',
+		'fork',
+		[
+			'UniverseForked',
+			'DeployChild',
+			'MigrationRepAdded',
+			'MigrationRepSplit',
+			'RepBurned',
+			'ChildDisputeStakedRepMaterialized',
+			'ChildPoolLinked',
+			'ChildRepSplit',
+			'ClaimAuctionProceeds',
+			'ClaimForkedEscalationDepositsToWallet',
+			'DisputeStakedRepDrainedAtFork',
+			'ParentRepLocked',
+			'PoolHeldRepSweptToChild',
+			'SecurityPoolForkSnapshot',
+			'TruthAuctionFinalized',
+			'TruthAuctionStarted',
+			'VaultBadDebtMigrated',
+			'VaultMigrationCheckpoint',
+			'Migrate',
+		],
+		['childUniverseId', 'universeId', 'childPool', 'parentPool', 'securityPool'],
+	),
+}
+
+const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
+	const eventName = log.decoded.name
+	const data = log.decoded.arguments
+	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
+	const definition = eventDomains[eventName]
+	if (definition === undefined) return undefined
+	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4
+	// also emit an event named Swap, but their sqrt-price shape belongs to the
+	// dedicated Uniswap projection and cannot be interpreted as Augur reserves.
+	if (
+		eventName === 'Swap' &&
+		!(
+			typeof data['yesForNo'] === 'boolean' &&
+			typeof data['amountIn'] === 'string' &&
+			typeof data['amountOut'] === 'string' &&
+			typeof data['resultingYesReserve'] === 'string' &&
+			typeof data['resultingNoReserve'] === 'string'
+		)
+	)
+		return undefined
+	// Uniswap V2 also emits Sync, but its reserve0/reserve1 payload does not
+	// describe Augur YES/NO reserves and must remain in the dedicated Uniswap
+	// observation path only.
+	if (eventName === 'Sync' && !(typeof data['yesReserve'] === 'string' && typeof data['noReserve'] === 'string')) return undefined
+	const reportId = data['reportId']
+	const approvalId = data['approvalId']
+	const approvalIdentity =
+		typeof approvalId === 'string'
+			? approvalId.toLowerCase()
+			: typeof data['receiverVault'] === 'string'
+				? `nonce:${data['receiverVault'].toLowerCase()}`
+				: undefined
+	const fieldIdentity = definition.identityFields?.map((field) => data[field]).find((value) => typeof value === 'string')
+	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
+	const entityIdentity =
+		definition.domain === 'report' && typeof reportId === 'string'
+			? `${log.address.toLowerCase()}:${reportId}`
+			: definition.entityType === 'vault' && identitySuffix !== undefined
+				? `${log.address.toLowerCase()}:${identitySuffix}`
+				: definition.entityType === 'liquidation-approval' && approvalIdentity !== undefined
+					? `${log.address.toLowerCase()}:${approvalIdentity}`
+					: definition.domain === 'fork' && identitySuffix !== undefined
+						? identitySuffix
+						: log.address.toLowerCase()
+	return {
+		type: 'domainEvent',
+		domain: definition.domain,
+		entityType: definition.entityType,
+		entityIdentity,
+		semanticEventKind: eventName,
+		data,
+		relatedEntities: log.decoded.referencedAddresses?.map((item) => item.toLowerCase()) ?? [],
+	}
+}
+
+export const projectionsFrom = (log: StoredLog): readonly Projection[] => {
+	const eventProjections = eventProjectionsFrom(log)
+	const domainProjection = domainProjectionFrom(log)
+	return domainProjection === undefined ? eventProjections : [...eventProjections, domainProjection]
 }

@@ -133,6 +133,7 @@ const protocolTokenUnit: Readonly<Record<string, { readonly decimals: number; re
 	reputationToken: { decimals: 18, symbol: 'REP' },
 	shareToken: { decimals: 18, symbol: 'shares' },
 	weth: { decimals: 18, symbol: 'WETH' },
+	usdc: { decimals: 6, symbol: 'USDC' },
 }
 
 type TokenAmountRule = { readonly tokenPath: string; readonly amountPaths: readonly string[] }
@@ -524,12 +525,16 @@ const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	EscalationGameSet: [{ argument: 'escalationGame', kind: 'escalationGame', label: 'Escalation Game' }],
 }
 
-const isKnownRepWethPair = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata>): boolean => {
+const knownUniswapQuoteKind = (kind: string | undefined): kind is 'weth' | 'usdc' => kind === 'weth' || kind === 'usdc'
+
+const knownRepQuotePair = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata>): 'WETH' | 'USDC' | undefined => {
 	const token0 = decoded.arguments?.['token0']
 	const token1 = decoded.arguments?.['token1']
-	if (typeof token0 !== 'string' || !isAddress(token0) || typeof token1 !== 'string' || !isAddress(token1)) return false
+	if (typeof token0 !== 'string' || !isAddress(token0) || typeof token1 !== 'string' || !isAddress(token1)) return undefined
 	const kinds = [contracts.get(token0.toLowerCase())?.kind, contracts.get(token1.toLowerCase())?.kind]
-	return kinds.includes('reputationToken') && kinds.includes('weth')
+	if (!kinds.includes('reputationToken')) return undefined
+	const quoteKind = kinds.find(knownUniswapQuoteKind)
+	return quoteKind === 'weth' ? 'WETH' : quoteKind === 'usdc' ? 'USDC' : undefined
 }
 
 export const discoveriesFrom = (
@@ -539,14 +544,16 @@ export const discoveriesFrom = (
 	if (decoded.name === undefined || decoded.arguments === undefined) return []
 	if (decoded.name === 'PairCreated' && decoded.arguments['token0'] !== undefined) {
 		const pair = decoded.arguments['pair']
-		return isKnownRepWethPair(decoded, contracts) && typeof pair === 'string' && isAddress(pair)
-			? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / WETH Pair' }]
+		const quote = knownRepQuotePair(decoded, contracts)
+		return quote !== undefined && typeof pair === 'string' && isAddress(pair)
+			? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: `Uniswap V2 REP / ${quote} Pair` }]
 			: []
 	}
 	if (decoded.name === 'PoolCreated') {
 		const pool = decoded.arguments['pool']
-		return isKnownRepWethPair(decoded, contracts) && typeof pool === 'string' && isAddress(pool)
-			? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / WETH Pool' }]
+		const quote = knownRepQuotePair(decoded, contracts)
+		return quote !== undefined && typeof pool === 'string' && isAddress(pool)
+			? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: `Uniswap V3 REP / ${quote} Pool` }]
 			: []
 	}
 	return (discoveries[decoded.name] ?? []).flatMap((rule) => {

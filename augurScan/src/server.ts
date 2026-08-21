@@ -6,10 +6,10 @@ import { indexerHealthUnavailableResponse, liveStreamResponse, staticAssetRespon
 import { indexerOwnershipStatuses, startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
-import { migrate } from './migrate.ts'
+import { initializeSchema } from './schema.ts'
 
 const database = new ScannerDatabase(runtimeConfig.postgresUrl)
-await migrate(database.sql)
+await initializeSchema(database.sql)
 const API_DATABASE_CONNECTIONS = 10
 const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)

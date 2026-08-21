@@ -95,6 +95,8 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 	databases.push(database)
 	for (const path of [
 		'logs?chainId=1e2',
+		'operations?chainId=1e2',
+		'state/reports?chainId=0x10',
 		'logs?limit=0x10',
 		'state/catalog?chainId=0x10',
 		'state/catalog?limit=-1',
@@ -104,6 +106,34 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 		'address-interactions?chainId=1e2&address=0x1111111111111111111111111111111111111111',
 		'richlist?offset=-1',
 		'richlist?chainId=0x10',
+	]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+	}
+})
+
+test('validates operations catalogs and timeline identities before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	for (const path of ['operations', 'state/reports', 'state/escalations', 'state/auctions', 'state/risk', 'state/forks']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'chainId is required' })
+	}
+	for (const path of ['state/timeline/not-a-chain/report/id', 'state/timeline/1/INVALID/id', 'state/timeline/1/report']) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'Invalid timeline identifier' })
+	}
+	for (const path of [
+		'state/reports/1/0x1234/7',
+		'state/reports/1/0x1111111111111111111111111111111111111111/not-decimal',
+		'state/escalations/1/0x1234',
+		'state/auctions/1/0x1234',
+		'state/trading/1/0x1234',
+		'state/risk/pools/1/0x1234',
+		'state/risk/vaults/1/0x1111111111111111111111111111111111111111/0x1234',
+		'state/forks/1/',
 	]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)

@@ -72,7 +72,8 @@ export const isUniswapPriceValue = (value: unknown): boolean =>
 	isString(value['fee_hundredths_bip']) &&
 	isString(value['quote_symbol']) &&
 	isString(value['event_name']) &&
-	isString(value['rep_per_eth_1e18'])
+	isString(value['rep_per_eth_1e18']) &&
+	(value['liquidity_value'] === undefined || isNullableString(value['liquidity_value']))
 
 export const isArgumentDefinition = (value: unknown): boolean =>
 	isRecord(value) &&
@@ -220,7 +221,9 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	Array.isArray(value['pool_associations']) &&
 	value['pool_associations'].every(isPoolAssociationValue) &&
 	Array.isArray(value['vault_positions']) &&
-	value['vault_positions'].every(isVaultPositionValue)
+	value['vault_positions'].every(isVaultPositionValue) &&
+	(value['escalation_claims'] === undefined || (Array.isArray(value['escalation_claims']) && value['escalation_claims'].every(isJsonRecord))) &&
+	(value['auction_claims'] === undefined || (Array.isArray(value['auction_claims']) && value['auction_claims'].every(isJsonRecord)))
 
 const hasStringFields = (value: Record<string, unknown>, fields: readonly string[]): boolean => fields.every((field) => isString(value[field]))
 const hasNullableStringFields = (value: Record<string, unknown>, fields: readonly string[]): boolean => fields.every((field) => isNullableString(value[field]))
