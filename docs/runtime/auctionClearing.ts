@@ -125,7 +125,15 @@ if (auctionExample instanceof HTMLElement) {
 			auctionExample.dataset['widgetState'] = winningEthAmount > 0 ? 'warning' : 'unsafe'
 		}
 		write('ethRaised', formatEth(accumulatedBidEth))
-		for (const bid of bids) write(`${bid.key}Receives`, formatRep(repResults[bid.key]))
+		for (const bid of bids) {
+			const outputName = `${bid.key}Receives`
+			write(outputName, formatRep(repResults[bid.key]))
+			const card = outputs[outputName]?.parentElement
+			if (card !== null && card !== undefined) {
+				card.dataset['widgetMeter'] = 'true'
+				card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (repResults[bid.key] / repInventory) * 100))}%`)
+			}
+		}
 		write('totalRepAllocated', formatRep(repResults.alice + repResults.bob + repResults.carol))
 		write('refunds', formatEth(refunds))
 	}

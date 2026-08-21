@@ -104,41 +104,53 @@
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>
 					<p>The simplified calculator visualizes both finalized branches with three fixed price levels and real-number arithmetic. The <a href="#clearing">clearing section</a> specifies the contract's exact tick and cumulative-floor behavior.</p>
-					<div class="example-grid">
-						<label>
-							ETH raise cap
-							<input type="number" inputmode="decimal" min="1" max="30" step="1" value="12" data-example-input="ethRaiseCap" />
-							<span class="example-value" data-example-value="ethRaiseCap">12 ETH</span>
-						</label>
-						<label>
-							REP inventory
-							<input type="number" inputmode="decimal" min="1" max="12" step="1" value="4" data-example-input="repInventory" />
-							<span class="example-value" data-example-value="repInventory">4 REP</span>
-						</label>
-						<label>
-							Alice bid near 5 ETH/REP
-							<input type="number" inputmode="decimal" min="0" max="20" step="1" value="3" data-example-input="aliceEth" />
-							<span class="example-value" data-example-value="aliceEth">3 ETH</span>
-						</label>
-						<label>
-							Bob bid near 4 ETH/REP
-							<input type="number" inputmode="decimal" min="0" max="20" step="1" value="4" data-example-input="bobEth" />
-							<span class="example-value" data-example-value="bobEth">4 ETH</span>
-						</label>
-						<label>
-							Carol bid near 3 ETH/REP
-							<input type="number" inputmode="decimal" min="0" max="20" step="1" value="6" data-example-input="carolEth" />
-							<span class="example-value" data-example-value="carolEth">6 ETH</span>
-						</label>
+					<div class="tool-outcome-strip">
+						<div data-primary-output><span>Mode</span><output data-example-output="clearingMode">uniform clearing near 3 ETH/REP</output></div>
+						<div data-primary-output><span>ETH retained</span><output data-example-output="ethRaised">12 ETH</output></div>
+					</div>
+					<div class="tool-control-stack">
+						<fieldset class="tool-control-group" data-group-tone="system">
+							<legend>Auction settings</legend>
+							<div class="example-grid">
+								<label>
+									ETH raise cap
+									<input type="number" inputmode="decimal" min="1" max="30" step="1" value="12" data-example-input="ethRaiseCap" />
+									<span class="example-value" data-example-value="ethRaiseCap">12 ETH</span>
+								</label>
+								<label>
+									REP inventory
+									<input type="number" inputmode="decimal" min="1" max="12" step="1" value="4" data-example-input="repInventory" />
+									<span class="example-value" data-example-value="repInventory">4 REP</span>
+								</label>
+							</div>
+						</fieldset>
+						<fieldset class="tool-control-group" data-group-tone="players">
+							<legend>Player bids</legend>
+							<div class="example-grid">
+								<label>
+									Alice bid near 5 ETH/REP
+									<input type="number" inputmode="decimal" min="0" max="20" step="1" value="3" data-example-input="aliceEth" />
+									<span class="example-value" data-example-value="aliceEth">3 ETH</span>
+								</label>
+								<label>
+									Bob bid near 4 ETH/REP
+									<input type="number" inputmode="decimal" min="0" max="20" step="1" value="4" data-example-input="bobEth" />
+									<span class="example-value" data-example-value="bobEth">4 ETH</span>
+								</label>
+								<label>
+									Carol bid near 3 ETH/REP
+									<input type="number" inputmode="decimal" min="0" max="20" step="1" value="6" data-example-input="carolEth" />
+									<span class="example-value" data-example-value="carolEth">6 ETH</span>
+								</label>
+							</div>
+						</fieldset>
 					</div>
 					<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 						<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
 						<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing or qualification price, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates from the auction controls directly above it.</p>
 					</figure>
-					<div class="example-output-grid">
-						<div data-primary-output><span>Mode</span><output data-example-output="clearingMode">uniform clearing near 3 ETH/REP</output></div>
+					<div class="example-output-grid tool-detail-grid">
 						<div><span>Binding condition</span><output data-example-output="bindingCondition">both caps</output></div>
-						<div><span>ETH retained</span><output data-example-output="ethRaised">12 ETH</output></div>
 						<div><span>Winning ETH kept</span><output data-example-output="thresholdInputEth">not underfunded</output></div>
 						<div><span>Threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
 						<div><span>Approximate Alice REP</span><output data-example-output="aliceReceives">1.00 REP</output></div>

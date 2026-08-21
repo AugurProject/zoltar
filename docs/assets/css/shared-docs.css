@@ -3688,6 +3688,196 @@ body.paper-zoltar .footer-note {
 		margin: 0;
 	}
 
+	body.docs-shell-page .tool-outcome-strip {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.55rem;
+		margin: 0.9rem 0 1rem;
+		padding: 0.55rem;
+		border: 1px solid color-mix(in srgb, var(--widget-state, var(--accent)) 34%, var(--line));
+		border-radius: 0.8rem;
+		background: linear-gradient(135deg, color-mix(in srgb, var(--widget-state, var(--accent)) 10%, var(--paper)), var(--paper) 58%), var(--paper);
+		box-shadow: 0 0.5rem 1.2rem rgb(23 32 29 / 7%);
+	}
+
+	body.docs-shell-page .tool-outcome-strip-single {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	body.docs-shell-page .tool-outcome-strip > div {
+		position: relative;
+		min-width: 0;
+		padding: 0.72rem 0.78rem;
+		border-left: 0.22rem solid var(--widget-state, var(--accent));
+		border-radius: 0.55rem;
+		background: color-mix(in srgb, var(--paper) 92%, var(--widget-state, var(--accent)));
+		overflow: hidden;
+	}
+
+	body.docs-shell-page .tool-outcome-strip span,
+	body.docs-shell-page .tool-detail-grid span {
+		display: block;
+		color: var(--muted);
+		font-size: 0.76rem;
+		font-weight: 800;
+		letter-spacing: 0.025em;
+	}
+
+	body.docs-shell-page .tool-outcome-strip output {
+		display: block;
+		margin-top: 0.22rem;
+		color: var(--ink);
+		font-size: clamp(0.96rem, 2vw, 1.12rem);
+		font-weight: 850;
+		line-height: 1.3;
+		overflow-wrap: anywhere;
+	}
+
+	body.docs-shell-page .tool-outcome-strip .invariant-result-count {
+		margin: 0.22rem 0 0;
+		color: var(--ink);
+	}
+
+	body.docs-shell-page .tool-control-stack {
+		display: grid;
+		gap: 0.85rem;
+		margin: 0.8rem 0 1rem;
+	}
+
+	body.docs-shell-page .tool-control-group {
+		min-width: 0;
+		padding: 0.75rem;
+		border: 1px solid var(--soft-line);
+		border-left: 0.24rem solid var(--group-accent, var(--accent));
+		border-radius: 0.72rem;
+		background: color-mix(in srgb, var(--group-accent, var(--accent)) 4%, var(--paper));
+	}
+
+	body.docs-shell-page .tool-control-group[data-group-tone="system"] {
+		--group-accent: var(--blue);
+	}
+
+	body.docs-shell-page .tool-control-group[data-group-tone="players"] {
+		--group-accent: var(--gold);
+	}
+
+	body.docs-shell-page .tool-control-group[data-group-tone="action"] {
+		--group-accent: var(--green);
+	}
+
+	body.docs-shell-page .tool-control-group[data-group-tone="time"] {
+		--group-accent: var(--muted);
+	}
+
+	body.docs-shell-page .tool-control-group legend {
+		width: auto;
+		padding: 0.18rem 0.5rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--group-accent, var(--accent)) 12%, var(--paper));
+		color: var(--ink);
+		font-size: 0.76rem;
+		font-weight: 850;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	body.docs-shell-page .tool-control-group .example-grid {
+		margin: 0;
+	}
+
+	body.docs-shell-page .tool-detail-grid {
+		gap: 1px;
+		padding: 1px;
+		border: 1px solid var(--soft-line);
+		border-radius: 0.72rem;
+		background: var(--soft-line);
+		overflow: hidden;
+	}
+
+	body.docs-shell-page .tool-detail-grid > div {
+		border: 0;
+		border-radius: 0;
+		background: var(--paper);
+	}
+
+	body.docs-shell-page .escalation-arena {
+		display: grid;
+		gap: 0.55rem;
+		margin-top: 0.75rem;
+		padding: 0.72rem;
+		border-radius: 0.65rem;
+		background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 42%), var(--section-bg);
+	}
+
+	body.docs-shell-page .escalation-arena-row {
+		--arena-color: var(--accent);
+		display: grid;
+		grid-template-columns: 4rem minmax(5rem, 1fr) minmax(5.5rem, auto);
+		gap: 0.55rem;
+		align-items: center;
+		min-width: 0;
+		padding: 0.42rem 0.52rem;
+		border: 1px solid transparent;
+		border-radius: 0.5rem;
+	}
+
+	body.docs-shell-page .escalation-arena-row[data-escalation-arena="yes"] {
+		--arena-color: var(--green);
+	}
+
+	body.docs-shell-page .escalation-arena-row[data-escalation-arena="no"] {
+		--arena-color: var(--blue);
+	}
+
+	body.docs-shell-page .escalation-arena-row[data-escalation-arena="invalid"] {
+		--arena-color: var(--red);
+	}
+
+	body.docs-shell-page .escalation-arena-row[data-selected="true"] {
+		border-color: color-mix(in srgb, var(--arena-color) 45%, var(--line));
+		background: color-mix(in srgb, var(--arena-color) 7%, var(--paper));
+	}
+
+	body.docs-shell-page .escalation-arena-row > span:first-child,
+	body.docs-shell-page .escalation-arena-row output {
+		font-size: 0.8rem;
+		font-weight: 850;
+		font-variant-numeric: tabular-nums;
+	}
+
+	body.docs-shell-page .escalation-arena-row output {
+		text-align: right;
+	}
+
+	body.docs-shell-page .escalation-balance-track {
+		position: relative;
+		display: block;
+		height: 0.8rem;
+		border-radius: 999px;
+		background: var(--soft);
+		overflow: hidden;
+	}
+
+	body.docs-shell-page .escalation-balance-track :is(i, b) {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		display: block;
+		border-radius: inherit;
+	}
+
+	body.docs-shell-page .escalation-balance-track b {
+		width: var(--balance-after, 0%);
+		background: color-mix(in srgb, var(--arena-color) 38%, var(--paper));
+	}
+
+	body.docs-shell-page .escalation-balance-track i {
+		z-index: 1;
+		width: var(--balance-before, 0%);
+		background: var(--arena-color);
+	}
+
 	body.docs-shell-page :is(.example-grid) {
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 		gap: 0.9rem;
@@ -3756,7 +3946,7 @@ body.paper-zoltar .footer-note {
 		margin: 0.7rem 0 0.35rem;
 	}
 
-	body.docs-shell-page :is(.interactive-example, .interactive-tool)[data-inputs-valid="false"] :is(.example-output-grid, .example-output, [data-tool-output-region]) {
+	body.docs-shell-page :is(.interactive-example, .interactive-tool)[data-inputs-valid="false"] :is(.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]) {
 		opacity: 0.62;
 	}
 
@@ -3868,7 +4058,7 @@ body.paper-zoltar .footer-note {
 		box-shadow: inset 0.22rem 0 var(--widget-state, var(--accent));
 	}
 
-	body.docs-shell-page .example-output-grid > div[data-widget-meter="true"]::after {
+	body.docs-shell-page :is(.example-output-grid, .tool-outcome-strip) > div[data-widget-meter="true"]::after {
 		position: absolute;
 		bottom: 0;
 		left: 0;
@@ -3942,6 +4132,44 @@ body.paper-zoltar .footer-note {
 	.plot-chart-toolbar button {
 		min-height: 2.75rem;
 		padding: 0.55rem 0.75rem;
+	}
+
+	body.docs-shell-page .tool-outcome-strip {
+		position: sticky;
+		z-index: 6;
+		top: calc(var(--docs-shell-header-height) + 0.75rem);
+		margin-inline: -0.25rem;
+		padding: 0.38rem;
+		box-shadow: 0 0.55rem 1.3rem rgb(23 32 29 / 14%);
+	}
+
+	body.docs-shell-page .tool-outcome-strip > div {
+		padding: 0.55rem;
+	}
+
+	body.docs-shell-page .tool-outcome-strip span {
+		font-size: 0.67rem;
+	}
+
+	body.docs-shell-page .tool-outcome-strip output {
+		font-size: 0.85rem;
+	}
+
+	body.docs-shell-page .tool-control-group {
+		padding: 0.62rem;
+	}
+
+	body.doc-openoracle .invariant-explorer {
+		position: static;
+	}
+
+	body.docs-shell-page .escalation-arena-row {
+		grid-template-columns: 3.25rem minmax(4rem, 1fr);
+	}
+
+	body.docs-shell-page .escalation-arena-row output {
+		grid-column: 1 / -1;
+		text-align: left;
 	}
 
 	body.docs-shell-page .interactive-tool-toolbar {

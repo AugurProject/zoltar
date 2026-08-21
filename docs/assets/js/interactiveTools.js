@@ -413,7 +413,7 @@ function validateNumberControl(input, wrapper) {
         }
     }
     if (tool !== null) {
-        const outputRegion = tool.querySelector('.example-output-grid, .example-output, [data-tool-output-region]');
+        const outputRegion = tool.querySelector('.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]');
         const existingCue = tool.querySelector('.interactive-tool-results-cue');
         if (firstInvalidInput !== undefined && firstInvalidInput !== null) {
             tool.dataset['inputsValid'] = 'false';
@@ -514,11 +514,27 @@ function enhanceSegmentedSelect(select) {
     update();
 }
 function makeOutputsLive(tool) {
-    const outputRegion = tool.querySelector('.example-output-grid, .example-output, [data-tool-output-region]');
+    const outputRegion = tool.querySelector('.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]');
     if (!(outputRegion instanceof HTMLElement))
         return;
     outputRegion.setAttribute('aria-live', 'polite');
     outputRegion.setAttribute('aria-atomic', 'false');
+}
+function keepFocusedControlVisible(tool) {
+    tool.addEventListener('focusin', event => {
+        if (!window.matchMedia('(max-width: 640px)').matches || !(event.target instanceof Element))
+            return;
+        const label = event.target.closest('label');
+        const outcome = tool.querySelector('.tool-outcome-strip');
+        if (!(label instanceof HTMLElement) || !(outcome instanceof HTMLElement))
+            return;
+        window.requestAnimationFrame(() => {
+            const labelTop = label.getBoundingClientRect().top;
+            const minimumTop = outcome.getBoundingClientRect().bottom + 12;
+            if (labelTop < minimumTop)
+                window.scrollBy({ behavior: 'auto', top: labelTop - minimumTop });
+        });
+    });
 }
 let linkedScenarioHandled = false;
 function isToolState(value) {
@@ -579,6 +595,7 @@ for (const tool of document.querySelectorAll('details.interactive-example[id], d
     }
     tool.querySelector('summary')?.insertAdjacentElement('afterend', createToolbar(tool));
     makeOutputsLive(tool);
+    keepFocusedControlVisible(tool);
 }
 applyLinkedScenario();
 window.dispatchEvent(new CustomEvent('docs:tools-ready'));

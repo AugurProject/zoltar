@@ -89,10 +89,12 @@
 				<p>The manifest's <code>derivedContracts</code> list is separate. Those addresses are not part of the deployment-status mask unless they also appear in the constructor array.</p>
 				<details id="deployment-mask-decoder" class="interactive-tool">
 					<summary>Decode a deployment mask</summary>
+					<div class="tool-outcome-strip tool-outcome-strip-single">
+						<div data-primary-output><span>Decoded status</span><output data-deployment-mask-summary aria-live="polite">Loading the canonical mapping…</output></div>
+					</div>
 					<label for="deployment-mask-input">Mask value</label>
 					<input id="deployment-mask-input" data-tool-input="deploymentMask" inputmode="numeric" value="0x0" aria-describedby="deployment-mask-guidance" />
 					<div class="deployment-bit-grid" data-deployment-bit-grid aria-label="Tracked deployment bits"></div>
-					<output data-deployment-mask-summary aria-live="polite">Loading the canonical mapping…</output>
 					<p id="deployment-mask-guidance" data-deployment-mask-guidance>Decoder controls will be available when the mapping loads.</p>
 					<button type="button" data-deployment-mask-retry hidden>Retry loading the canonical mapping</button>
 				</details>

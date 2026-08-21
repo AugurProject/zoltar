@@ -50,7 +50,7 @@ test('interactive tools load shared state and preserve preset and reset behavior
 		expect(tool.open).toBeTrue()
 		expect(alice.value).toBe('9')
 		expect(status.textContent).toBe('Shared scenario loaded; results updated.')
-		expect(tool.querySelector('.example-output-grid, .example-output, [data-tool-output-region]')?.getAttribute('aria-live')).toBe('polite')
+		expect(tool.querySelector('.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]')?.getAttribute('aria-live')).toBe('polite')
 		expect(scenario.closest('.interactive-tool-preset-select')).not.toBeNull()
 		expect(scenario.tabIndex).toBe(-1)
 		expect(scenario.getAttribute('aria-hidden')).toBe('true')
@@ -159,6 +159,38 @@ test('escalation controls use an outcome segment and retain one timeline scrubbe
 		depositAmount.dispatchEvent(new Event('input', { bubbles: true }))
 		leaderPreset.click()
 		expect(depositAmount.value).toBe('1')
+	} finally {
+		cleanup()
+	}
+})
+
+test('OpenOracle controls separate coordinator policy from the report request and expose the fee bound', async () => {
+	const cleanup = await loadDocument('docs/explanation/open-oracle.html', 'http://localhost/docs/explanation/open-oracle.html')
+	try {
+		await runGeneratedRuntime('openOracleTools')
+		await runGeneratedRuntime('interactiveTools')
+		const groups = Array.from(document.querySelectorAll<HTMLFieldSetElement>('#initial-report-estimator-example .tool-control-group'))
+		const group = (legend: string) => groups.find(candidate => candidate.querySelector('legend')?.textContent === legend)
+		const feeBound = document.querySelector<HTMLOutputElement>('[data-example-output="estimatorSafetyState"]')
+		const target = document.querySelector<HTMLInputElement>('[data-example-input="targetPriceErrorForDispute"]')
+		const reporterFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleReporterFee"]')
+		const protocolFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleProtocolFee"]')
+		if (feeBound === null || target === null || reporterFee === null || protocolFee === null) throw new Error('OpenOracle grouping fixture is incomplete')
+		expect(group('Oracle fees')?.dataset['groupTone']).toBe('system')
+		expect(group('Coordinator policy')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).not.toBeNull()
+		expect(group('Report request')?.querySelector('[data-example-input="requestedInitialWeth"]')).not.toBeNull()
+		expect(group('Report request')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).toBeNull()
+		expect(feeBound.value).toBe('fees below target error')
+
+		target.value = '1.2'
+		target.dispatchEvent(new Event('input', { bubbles: true }))
+		reporterFee.value = '0.2'
+		reporterFee.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(feeBound.value).toBe('unsafe: fees meet or exceed target error')
+		protocolFee.value = ''
+		protocolFee.dispatchEvent(new Event('input', { bubbles: true }))
+		expect(protocolFee.getAttribute('aria-invalid')).toBe('true')
+		expect(feeBound.value).toBe('unsafe: fees meet or exceed target error')
 	} finally {
 		cleanup()
 	}
@@ -458,6 +490,38 @@ for (const scenario of [
 			const input = tool?.querySelector<HTMLInputElement>(`[data-example-input="${scenario.input}"]`)
 			const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${scenario.mount}"]`)
 			if (!(tool instanceof HTMLDetailsElement) || input === null || input === undefined || mount === null) throw new Error(`${scenario.name} resize fixture is incomplete`)
+			if (scenario.name === 'escalation') {
+				const yesArena = tool.querySelector<HTMLElement>('[data-escalation-arena="yes"]')
+				const yesValue = tool.querySelector<HTMLOutputElement>('[data-escalation-arena-value="yes"]')
+				const state = tool.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')
+				const threshold = tool.querySelector<HTMLInputElement>('[data-example-input="nonDecisionThreshold"]')
+				const yes = tool.querySelector<HTMLInputElement>('[data-example-input="yes"]')
+				const no = tool.querySelector<HTMLInputElement>('[data-example-input="no"]')
+				const outcome = tool.querySelector<HTMLSelectElement>('[data-example-input="depositOutcome"]')
+				const deposit = tool.querySelector<HTMLInputElement>('[data-example-input="depositAmount"]')
+				const days = tool.querySelector<HTMLInputElement>('[data-example-input="days"]')
+				if (yesArena === null || yesValue === null || state === null || threshold === null || yes === null || no === null || outcome === null || deposit === null || days === null) throw new Error('Escalation arena fixture is incomplete')
+				expect(yesArena.dataset['selected']).toBe('true')
+				expect(yesArena.style.getPropertyValue('--balance-before')).not.toBe('')
+				expect(yesArena.style.getPropertyValue('--balance-after')).not.toBe('')
+				expect(yesValue.value).toBe('1 → 2 REP')
+
+				threshold.value = '2'
+				yes.value = '2'
+				no.value = '1'
+				outcome.value = 'no'
+				deposit.value = '1'
+				deposit.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(state.value).toBe('non-decision: fork path')
+
+				threshold.value = '10'
+				yes.value = '1'
+				no.value = '1'
+				outcome.value = 'yes'
+				days.value = '56'
+				days.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(state.value).toBe('locally resolvable: Yes')
+			}
 			input.value = ''
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 			expect(tool.dataset['inputsValid']).toBe('false')

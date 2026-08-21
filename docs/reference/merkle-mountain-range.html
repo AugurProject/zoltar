@@ -150,23 +150,37 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 				<details class="interactive-example" id="mmr-proof-planner" open>
 					<summary>Plan a carry proof</summary>
 					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the peak-local index bound and the exact sibling-array lengths enforced by the verifier. It does not construct hashes or replace an offchain proof builder.</p>
-					<div class="example-grid">
-						<label>
-							Snapshot leaf count
-							<input type="text" inputmode="numeric" pattern="[0-9]+" value="13" data-tool-input="leafCount" />
-						</label>
-						<label>
-							Occupied peak height
-							<select data-tool-input="peakHeight">
-								<option value="2" selected>Height 2</option>
-							</select>
-						</label>
-						<label>
-							Peak-local leaf index
-							<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
-						</label>
+					<div class="tool-outcome-strip">
+						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid peak-local index</output></div>
+						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; local indexes 0…3</output></div>
 					</div>
-					<div class="example-output-grid" data-tool-output-region>
+					<div class="tool-control-stack">
+						<fieldset class="tool-control-group" data-group-tone="system">
+							<legend>Snapshot</legend>
+							<div class="example-grid">
+								<label>
+									Snapshot leaf count
+									<input type="text" inputmode="numeric" pattern="[0-9]+" value="13" data-tool-input="leafCount" />
+								</label>
+								<label>
+									Occupied peak height
+									<select data-tool-input="peakHeight">
+										<option value="2" selected>Height 2</option>
+									</select>
+								</label>
+							</div>
+						</fieldset>
+						<fieldset class="tool-control-group" data-group-tone="action">
+							<legend>Proof position</legend>
+							<div class="example-grid">
+								<label>
+									Peak-local leaf index
+									<input type="text" inputmode="numeric" pattern="[0-9]+" value="0" data-tool-input="leafIndex" />
+								</label>
+							</div>
+						</fieldset>
+					</div>
+					<div class="example-output-grid tool-detail-grid" data-tool-output-region>
 						<div>
 							<span>Binary leaf count</span>
 							<output data-mmr-output="binary">1101₂</output>
@@ -176,20 +190,12 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 							<output data-mmr-output="peaks">0, 2, 3</output>
 						</div>
 						<div>
-							<span>Selected peak capacity</span>
-							<output data-mmr-output="capacity">4 leaves; local indexes 0…3</output>
-						</div>
-						<div>
 							<span>MMR sibling hashes required</span>
 							<output data-mmr-output="mmrSiblings">4</output>
 						</div>
 						<div>
 							<span>Nullifier sibling hashes required</span>
 							<output data-mmr-output="nullifierSiblings">64</output>
-						</div>
-						<div data-primary-output>
-							<span>Selection</span>
-							<output data-mmr-output="selection">Valid peak-local index</output>
 						</div>
 					</div>
 				</details>

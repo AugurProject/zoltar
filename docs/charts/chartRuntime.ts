@@ -1025,13 +1025,6 @@ function updateEscalationSimulator(): void {
 	}
 	if (error !== null) error.hidden = true
 	const balances: { Invalid: number; No: number; Yes: number } = { Yes: Math.min(read('yes', 1), nonDecisionThreshold), No: Math.min(read('no', 1), nonDecisionThreshold), Invalid: Math.min(read('invalid', 0), nonDecisionThreshold) }
-	const ordered = (
-		[
-			['Yes', balances.Yes],
-			['No', balances.No],
-			['Invalid', balances.Invalid],
-		] as [string, number][]
-	).sort((left, right) => right[1] - left[1])
 	const balanceValues = [balances.Yes, balances.No, balances.Invalid]
 	const median = [...balanceValues].sort((left, right) => left - right)[1] ?? 0
 	const daysSinceStart = read('days', 0)
@@ -1043,6 +1036,27 @@ function updateEscalationSimulator(): void {
 	const afterBalances = projection === undefined ? balances : { Invalid: attoRepToNumber(projection.projectedBalancesAttoRep[0]), Yes: attoRepToNumber(projection.projectedBalancesAttoRep[1]), No: attoRepToNumber(projection.projectedBalancesAttoRep[2]) }
 	const projectedMedian = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid].sort((left, right) => left - right)[1] ?? 0
 	const afterDeadlineDays = computeCanonicalEscalationDeadlineDays(startBond, nonDecisionThreshold, projectedMedian)
+	const afterOrdered = (
+		[
+			['Yes', afterBalances.Yes],
+			['No', afterBalances.No],
+			['Invalid', afterBalances.Invalid],
+		] as [string, number][]
+	).sort((left, right) => right[1] - left[1])
+	const afterBalanceValues = [afterBalances.Yes, afterBalances.No, afterBalances.Invalid]
+	const arenaScale = Math.max(nonDecisionThreshold, 0.000001)
+	for (const [name, before, after] of [
+		['yes', balances.Yes, afterBalances.Yes],
+		['no', balances.No, afterBalances.No],
+		['invalid', balances.Invalid, afterBalances.Invalid],
+	] as const) {
+		const row = simulator.querySelector<HTMLElement>(`[data-escalation-arena="${name}"]`)
+		const value = simulator.querySelector<HTMLOutputElement>(`[data-escalation-arena-value="${name}"]`)
+		row?.style.setProperty('--balance-before', `${Math.min(100, Math.max(0, (before / arenaScale) * 100))}%`)
+		row?.style.setProperty('--balance-after', `${Math.min(100, Math.max(0, (after / arenaScale) * 100))}%`)
+		if (row !== null && row !== undefined) row.dataset['selected'] = String(name === depositOutcome)
+		value?.replaceChildren(`${before.toLocaleString(undefined, { maximumFractionDigits: 2 })} → ${after.toLocaleString(undefined, { maximumFractionDigits: 2 })} REP`)
+	}
 	for (const [name, balance] of Object.entries(balances)) simulator.querySelector<HTMLElement>(`[data-escalation-value="${name.toLowerCase()}"]`)?.replaceChildren(`${balance} REP`)
 	simulator.querySelector<HTMLElement>('[data-example-value="startBond"]')?.replaceChildren(`${startBond} REP`)
 	simulator.querySelector<HTMLElement>('[data-example-value="nonDecisionThreshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
@@ -1050,8 +1064,8 @@ function updateEscalationSimulator(): void {
 	simulator.querySelector<HTMLElement>('[data-escalation-value="days"]')?.replaceChildren(`${daysSinceStart} days`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="startBond"]')?.replaceChildren(`${startBond} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="threshold"]')?.replaceChildren(`${nonDecisionThreshold} REP`)
-	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(ordered[0]?.[1] === ordered[1]?.[1] ? 'No strict leader' : (ordered[0]?.[0] ?? 'None'))
-	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${median} REP`)
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="leader"]')?.replaceChildren(afterOrdered[0]?.[1] === afterOrdered[1]?.[1] ? 'No strict leader' : (afterOrdered[0]?.[0] ?? 'None'))
+	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="median"]')?.replaceChildren(`${projectedMedian} REP`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="balances"]')?.replaceChildren(`Yes ${balances.Yes} → ${afterBalances.Yes} REP; No ${balances.No} → ${afterBalances.No} REP; Invalid ${balances.Invalid} → ${afterBalances.Invalid} REP`)
 	const accepted = projection === undefined ? 0 : attoRepToNumber(projection.acceptedAmountAttoRep)
 	let depositState = 'rejected'
@@ -1063,12 +1077,12 @@ function updateEscalationSimulator(): void {
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deposit"]')?.replaceChildren(`${depositState}${projection?.reachesNonDecision === true ? ' (non-decision reached)' : ''}`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="activation"]')?.replaceChildren(daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS ? `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (${ESCALATION_ACTIVATION_DELAY_DAYS - daysSinceStart} days remaining)` : `day ${ESCALATION_ACTIVATION_DELAY_DAYS} (active)`)
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')?.replaceChildren(`day ${deadlineDays.toFixed(1)} → day ${afterDeadlineDays.toFixed(1)}`)
-	const thresholdReached = balanceValues.filter(balance => balance >= nonDecisionThreshold).length >= 2
+	const thresholdReached = afterBalanceValues.filter(balance => balance >= nonDecisionThreshold).length >= 2
 	let state = 'deadline pending'
 	if (thresholdReached) state = 'non-decision: fork path'
 	else if (daysSinceStart < ESCALATION_ACTIVATION_DELAY_DAYS) state = 'activation pending'
-	else if (daysSinceStart > deadlineDays && (ordered[0]?.[1] ?? 0) > (ordered[1]?.[1] ?? 0)) state = `locally resolvable: ${ordered[0]?.[0] ?? 'None'}`
-	else if (daysSinceStart > deadlineDays) state = balanceValues.every(balance => balance === 0) ? 'resolved: Invalid' : 'unresolved tie'
+	else if (daysSinceStart > afterDeadlineDays && (afterOrdered[0]?.[1] ?? 0) > (afterOrdered[1]?.[1] ?? 0)) state = `locally resolvable: ${afterOrdered[0]?.[0] ?? 'None'}`
+	else if (daysSinceStart > afterDeadlineDays) state = afterBalanceValues.every(balance => balance === 0) ? 'resolved: Invalid' : 'unresolved tie'
 	simulator.querySelector<HTMLOutputElement>('[data-escalation-output="state"]')?.replaceChildren(state)
 	let widgetState = 'neutral'
 	if (state.startsWith('locally resolvable') || state.startsWith('resolved')) widgetState = 'safe'
