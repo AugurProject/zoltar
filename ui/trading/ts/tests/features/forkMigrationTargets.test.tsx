@@ -111,10 +111,19 @@ describe('fork migration target selection', () => {
 	test('rejects a scalar tick beyond the fork question range instead of silently changing it', async () => {
 		const rendered = await renderIntoDocument(<Harness context={{ ...scalarContext(), numTicks: BigInt(Number.MAX_SAFE_INTEGER) + 1n }} />)
 		cleanup = rendered.cleanup
-		await input(inputByLabel(rendered.container, 'Scalar fork tick'), (BigInt(Number.MAX_SAFE_INTEGER) + 2n).toString())
+		const tickInput = inputByLabel(rendered.container, 'Scalar fork tick')
+		const outOfRangeTick = (BigInt(Number.MAX_SAFE_INTEGER) + 2n).toString()
+		await input(tickInput, outOfRangeTick)
+		const selectedOutcomeLabel = Array.from(rendered.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Selected Outcome')
+		const selectedOutcomeValue = selectedOutcomeLabel?.parentElement?.querySelector('.metric-field-value')
 
+		expect(tickInput.value).toBe(outOfRangeTick)
 		expect(buttonByText(rendered.container, 'Add scalar target').disabled).toBeTrue()
 		expect(rendered.container.textContent).toContain('Enter an exact tick')
+		expect(selectedOutcomeValue?.textContent).toBe('Enter an exact tick')
+		await act(() => tickInput.dispatchEvent(new Event('blur', { bubbles: true })))
+		expect(tickInput.value).toBe(outOfRangeTick)
+		expect(selectedOutcomeValue?.textContent).toBe('Enter an exact tick')
 	})
 
 	test('exposes selected child shortcuts without redundant candidate status copy', async () => {

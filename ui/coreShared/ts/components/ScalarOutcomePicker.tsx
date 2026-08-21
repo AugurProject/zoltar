@@ -18,12 +18,14 @@ function getSafeSelectedTickValue(selectedTick: string) {
 export function ScalarOutcomePicker({ action, clampExactTickInput = true, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
 	const sliderLabelId = useId()
 	const scalarValueErrorId = useId()
-	const selectedTickValue = clampScalarTickIndex(getSafeSelectedTickValue(selectedTick), details.numTicks)
-	const resolvedSelectedTick = selectedTickValue.toString()
+	const rawSelectedTickValue = getSafeSelectedTickValue(selectedTick)
+	const selectedTickIsInRange = rawSelectedTickValue >= 0n && rawSelectedTickValue <= details.numTicks
+	const selectedTickValue = clampScalarTickIndex(rawSelectedTickValue, details.numTicks)
 	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
+	const resolvedSelectedTick = (!canUseNativeSlider && !clampExactTickInput ? rawSelectedTickValue : selectedTickValue).toString()
 	const [exactTickInputValue, setExactTickInputValue] = useState(resolvedSelectedTick)
 	const scalarQuestionDetails = details.displayValueMin === undefined || details.displayValueMax === undefined ? undefined : { answerUnit: details.answerUnit ?? '', displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, numTicks: details.numTicks }
-	const selectedScalarValue = scalarQuestionDetails === undefined ? undefined : getScalarDisplayValue(scalarQuestionDetails, selectedTickValue)
+	const selectedScalarValue = scalarQuestionDetails === undefined || (!clampExactTickInput && !selectedTickIsInRange) ? undefined : getScalarDisplayValue(scalarQuestionDetails, selectedTickValue)
 	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatScalarDisplayValue(selectedScalarValue)
 	const [scalarValueInput, setScalarValueInput] = useState(resolvedScalarValueInput ?? '')
 	const [scalarValueError, setScalarValueError] = useState<string | undefined>(undefined)

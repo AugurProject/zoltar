@@ -183,12 +183,12 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 					{ label: workflowCopy.youReceive, value: `${formatUnits(quote.value.result.ethOut)} ETH` },
 				]
 	return (
-		<div class='trade-summary' aria-label={workflowCopy.tradeSummary}>
+		<div class='trade-summary trade-summary--review' aria-label={workflowCopy.tradeSummary}>
 			<TransactionReview
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: workflowCopy.invalidOutcome, value: formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') },
+					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') },
 					{ label: workflowCopy.tradingFee, value: `${formatUnits(quote.value.market.feeBps, 2, 2)}%` },
 				]}
 			/>

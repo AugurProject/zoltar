@@ -133,11 +133,15 @@ describe('essential trading copy', () => {
 		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n } } }, 'YES'))
 		expect(entry.container.textContent).toContain('Trading fee')
 		expect(entry.container.textContent).toContain('1.25%')
+		expect(entry.container.textContent).toContain('INVALID received')
+		expect(entry.container.textContent).not.toContain('INVALID required')
 		await entry.cleanup()
 		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
 		cleanupRendered = exit.cleanup
 		expect(exit.container.textContent).toContain('Trading fee')
 		expect(exit.container.textContent).toContain('1.25%')
+		expect(exit.container.textContent).toContain('INVALID required')
+		expect(exit.container.textContent).not.toContain('INVALID received')
 	})
 
 	test('shows configurable slippage and transaction-validity controls', async () => {
