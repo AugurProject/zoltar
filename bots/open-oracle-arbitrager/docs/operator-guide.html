@@ -113,7 +113,7 @@ bun run run</code></pre>
 							<tr>
 								<td><code>runtime.lookbackBlocks</code></td>
 								<td>Bounds coordinator-free event discovery to the latest blocks.</td>
-								<td><code>0</code> disables fallback event discovery; <code>1–256</code> scans that many latest blocks, newest first. Approved-coordinator mode reads current pending reports instead.</td>
+								<td><code>0</code> disables fallback event discovery; <code>1–256</code> scans that many latest blocks, newest first. The exact version 4 default <code>50000</code> loads as <code>256</code> and is persisted on the next settings save or chain switch; other values above <code>256</code> are invalid. Approved-coordinator mode reads current pending reports instead.</td>
 							</tr>
 							<tr>
 								<td><code>runtime.once</code></td>

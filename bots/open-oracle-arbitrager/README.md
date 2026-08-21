@@ -255,6 +255,11 @@ Coordinator-free diagnostic mode is an explicitly bounded fallback. Set
 walks back toward genesis. The bounded response prevents permissionless event
 volume from producing an unbounded RPC request.
 
+Version 4 used `50000` as its Docker default. For that exact legacy value, the bot
+starts with `256` instead of failing; other values above `256` remain invalid. The
+normalized `256` is written to disk on the next successful settings save or chain
+profile switch.
+
 ### Data freshness and retention
 
 The price file can retain a sample from a block displaced by a reorganization. The
@@ -665,18 +670,23 @@ security.
 
 ## Persistent operator settings
 
-`.state/operator.json` is the source of persisted bot settings. The bot accepts no
-command-line arguments and does not read chain, RPC URL, or quorum settings from
-environment variables. Copy the example before first startup:
+`.state/operator.json` is the active compatibility file. Complete settings for each
+chain are retained in `.state/operator.json.mainnet.profile` and
+`.state/operator.json.sepolia.profile` while that profile is inactive. Back up all
+three files so both chain profiles can be restored. The bot accepts no command-line
+arguments and does not read chain, RPC URL, or quorum settings from environment
+variables. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
 ```
 
-`OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
-any value inside the document. This locator is useful for service managers and
-tests. Select the chain and enter the read and public RPC URLs in **RPC
+`OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different active compatibility file;
+it does not override any value inside the document. Its chain profiles use the
+`<operator-config>.mainnet.profile` and `<operator-config>.sepolia.profile` sibling
+paths. This locator is useful for service managers and tests. Select the chain and
+enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
 saved. Initial chain selection applies immediately, while quorum and RPC changes
 apply at the next scan boundary. To operate another chain, select its saved chain
