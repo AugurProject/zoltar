@@ -429,6 +429,29 @@ describe('file-only startup configuration', () => {
 		expect(resumedState['paused']).toBe(false)
 		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resume queued', reason: 'Saved and queued for the next scan boundary' })]))
 		const configuredContents = await Bun.file(path).text()
+		const mainnetProfilePath = operatorProfilePath(path, 'mainnet')
+		const compatibleMainnetProfile = await Bun.file(mainnetProfilePath).text()
+		const incompatibleMainnetProfile = JSON.parse(compatibleMainnetProfile) as Record<string, unknown>
+		const incompatibleMainnetRuntime = Reflect.get(incompatibleMainnetProfile, 'runtime')
+		if (typeof incompatibleMainnetRuntime !== 'object' || incompatibleMainnetRuntime === null || Array.isArray(incompatibleMainnetRuntime)) throw new Error('Mainnet profile runtime is missing')
+		Reflect.set(incompatibleMainnetRuntime, 'uiPort', dashboardPort + 1)
+		await writeFile(mainnetProfilePath, JSON.stringify(incompatibleMainnetProfile), 'utf8')
+		const incompatibleSwitch = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(incompatibleSwitch.status, await incompatibleSwitch.clone().text()).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		await Bun.sleep(50)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		const mutationAfterRejectedSwitch = await fetch(`${origin}/api/settings`, {
+			body: JSON.stringify(sepoliaStrategy),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(mutationAfterRejectedSwitch.status, await mutationAfterRejectedSwitch.clone().text()).toBe(200)
+		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },

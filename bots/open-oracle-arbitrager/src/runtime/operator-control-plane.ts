@@ -227,10 +227,10 @@ export function startOperatorControlPlane(parameters: {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || (value.network !== 'mainnet' && value.network !== 'sepolia')) throw new Error('Chain profile must be mainnet or sepolia')
 				if (value.network === config.network.name) return { network: config.network.name, networkConfigured: config.networkConfigured }
 				await requireNoPendingExecutorDeployment(config.settingsFile)
-				state.paused = true
 				profileSwitchInProgress = true
 				try {
 					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, value.network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json')))
+					state.paused = true
 					pending.profileSwitch = true
 					if (parameters.onNetworkProfileSwitch !== undefined) setTimeout(parameters.onNetworkProfileSwitch, 0)
 					return { network: switched.settings.network, networkConfigured: switched.settings.networkConfigured }
