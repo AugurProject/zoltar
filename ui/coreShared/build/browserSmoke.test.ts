@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getChromiumPath } from './chromiumPath.js'
-import { isBrowserSmokeReady, runBrowserSmoke, waitForBrowserExit } from './browserSmoke.mts'
+import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, waitForBrowserExit } from './browserSmoke.mts'
 
 const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
@@ -40,6 +43,54 @@ test('browser cleanup handles a Chromium process that already exited', async () 
 		browser.once('exit', () => resolve())
 	})
 	await expect(waitForBrowserExit(browser)).resolves.toBeUndefined()
+})
+
+test('browser commands reject when Chromium exits after the DevTools socket opens', async () => {
+	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
+	const socket = Object.assign(new EventTarget(), { send: () => undefined })
+	const send = createBrowserSmokeCommandSender(socket, browser, 1_000)
+	const command = send('Runtime.evaluate')
+	browser.kill()
+	await expect(command).rejects.toThrow(/Chromium exited/)
+	await waitForBrowserExit(browser)
+})
+
+test('browser commands reject when the DevTools socket closes', async () => {
+	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
+	const socket = Object.assign(new EventTarget(), { send: () => undefined })
+	const send = createBrowserSmokeCommandSender(socket, browser, 1_000)
+	const command = send('Runtime.evaluate')
+	socket.dispatchEvent(new Event('close'))
+	await expect(command).rejects.toThrow(/connection closed/)
+	browser.kill()
+	await waitForBrowserExit(browser)
+})
+
+test('browser commands bound a stalled DevTools response', async () => {
+	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
+	const socket = Object.assign(new EventTarget(), { send: () => undefined })
+	const send = createBrowserSmokeCommandSender(socket, browser, 5)
+	await expect(send('Runtime.evaluate')).rejects.toThrow(/did not complete within 5ms/)
+	browser.kill()
+	await waitForBrowserExit(browser)
+})
+
+test.skipIf(process.platform === 'win32')('browser initialization failure reaps Chromium and removes its profile', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-fixture-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const pidPath = join(fixtureRoot, 'pid')
+	const profilesBefore = new Set((await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-')))
+	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '9\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
+	await chmod(executablePath, 0o755)
+	try {
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { pollMilliseconds: 1, targetAttempts: 1 })).rejects.toThrow(/connect/i)
+		const pid = Number((await readFile(pidPath, 'utf8')).trim())
+		expect(() => process.kill(pid, 0)).toThrow()
+		const profilesAfter = (await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
+		expect(profilesAfter.filter(entry => !profilesBefore.has(entry))).toEqual([])
+	} finally {
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
 })
 
 const chromiumPath = getChromiumPath()

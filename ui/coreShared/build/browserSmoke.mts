@@ -7,6 +7,7 @@ import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
+const DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS = 15_000
 
 type PageIssue = {
 	readonly kind: 'pageerror' | 'console-error' | 'import-map' | 'request-failed' | 'worker' | 'mount'
@@ -16,6 +17,7 @@ type PageIssue = {
 type NetworkRequest = { readonly resourceType: string; readonly url: string }
 
 type ChromiumCommand = (method: string, params?: Record<string, unknown>, sessionId?: string) => Promise<unknown>
+type ChromiumCommandSocket = EventTarget & { send(data: string): void }
 
 type BrowserSmokeState = {
 	body: string
@@ -31,6 +33,57 @@ export async function waitForBrowserExit(browser: ChildProcess): Promise<void> {
 		browser.once('error', reject)
 		browser.once('exit', () => resolve())
 	})
+}
+
+export function createBrowserSmokeCommandSender(socket: ChromiumCommandSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): ChromiumCommand {
+	let requestId = 0
+	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
+	const rejectPending = (message: string) => {
+		for (const request of pending.values()) request.reject(new Error(message))
+		pending.clear()
+	}
+
+	socket.addEventListener('message', event => {
+		if (!(event instanceof MessageEvent) || typeof event.data !== 'string') return
+		const message: unknown = JSON.parse(event.data)
+		if (typeof message !== 'object' || message === null || !('id' in message) || typeof message.id !== 'number') return
+		const request = pending.get(message.id)
+		if (request === undefined) return
+		pending.delete(message.id)
+		if ('error' in message) request.reject(new Error(`Chromium DevTools command failed: ${JSON.stringify(message.error)}`))
+		else request.resolve('result' in message ? message.result : undefined)
+	})
+	socket.addEventListener('close', () => rejectPending('Chromium DevTools connection closed while commands were pending'))
+	socket.addEventListener('error', () => rejectPending('Chromium DevTools connection failed while commands were pending'))
+	browser.once('exit', (exitCode, signalCode) => rejectPending(`Chromium exited with ${signalCode === null ? `code ${String(exitCode)}` : `signal ${signalCode}`} while commands were pending`))
+
+	return async (method, params = {}, sessionId) => {
+		if (browser.exitCode !== null || browser.signalCode !== null) throw new Error(`Chromium already exited before DevTools command ${method}`)
+		requestId += 1
+		const id = requestId
+		return await new Promise<unknown>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				pending.delete(id)
+				reject(new Error(`Chromium DevTools command ${method} did not complete within ${timeoutMilliseconds.toString()}ms`))
+			}, timeoutMilliseconds)
+			pending.set(id, {
+				reject: error => {
+					clearTimeout(timeoutId)
+					reject(error)
+				},
+				resolve: value => {
+					clearTimeout(timeoutId)
+					resolve(value)
+				},
+			})
+			try {
+				socket.send(JSON.stringify({ id, method, params, ...(sessionId === undefined ? {} : { sessionId }) }))
+			} catch (error) {
+				pending.get(id)?.reject(error instanceof Error ? error : new Error(String(error)))
+				pending.delete(id)
+			}
+		})
+	}
 }
 
 export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, readyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
@@ -58,155 +111,152 @@ function parseViewport(candidate: string | undefined) {
 	return { height, width }
 }
 
-async function createDevToolsSession(chromiumPath: string, pageUrl: string, viewport: { readonly height: number; readonly width: number }) {
+export async function createDevToolsSession(
+	chromiumPath: string,
+	pageUrl: string,
+	viewport: { readonly height: number; readonly width: number },
+	{ devToolsPortAttempts = 300, pollMilliseconds = 50, targetAttempts = 200 }: { readonly devToolsPortAttempts?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
+) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
 	const browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, `--window-size=${viewport.width.toString()},${viewport.height.toString()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
+	let socket: WebSocket | undefined
+	let cleanedUp = false
+	const cleanup = async () => {
+		if (cleanedUp) return
+		cleanedUp = true
+		socket?.close()
+		browser.kill()
+		try {
+			await waitForBrowserExit(browser)
+		} finally {
+			await fs.rm(profilePath, { force: true, recursive: true })
+		}
+	}
 	let stderrData = ''
 	browser.stderr.on('data', chunk => {
 		stderrData += String(chunk)
 	})
-	let devToolsPort: number | undefined
-	for (let attempt = 0; attempt < 300; attempt++) {
-		try {
-			devToolsPort = Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
-			break
-		} catch (error) {
-			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
-			await Bun.sleep(50)
-		}
-	}
-	if (devToolsPort === undefined) {
-		browser.kill()
-		await waitForBrowserExit(browser)
-		throw new Error(`Chromium DevTools port did not open. stderr: ${stderrData.trim()}`)
-	}
-
-	const issues: PageIssue[] = []
-	const networkRequests = new Map<string, NetworkRequest>()
-	const workerTargets = new Map<string, string>()
-	let lastNetworkActivity = Date.now()
-	let workerStarted = false
-	let requestId = 0
-	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
-	const socket = await (async () => {
-		for (let attempt = 0; attempt < 200; attempt++) {
+	try {
+		let devToolsPort: number | undefined
+		for (let attempt = 0; attempt < devToolsPortAttempts; attempt++) {
 			try {
-				const targets = (await (await fetch(`http://127.0.0.1:${devToolsPort}/json/list`)).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>
-				const page = targets.find(target => target.type === 'page')
-				if (page !== undefined) {
-					const ws = new WebSocket(page.webSocketDebuggerUrl)
-					await new Promise((resolve, reject) => {
-						ws.addEventListener('open', resolve, { once: true })
-						ws.addEventListener('error', reject, { once: true })
-					})
-					return ws
-				}
+				devToolsPort = Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
+				break
 			} catch (error) {
-				if (!(error instanceof TypeError)) throw error
-				// Chromium target list not ready yet.
+				if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
+				await Bun.sleep(pollMilliseconds)
 			}
-			await Bun.sleep(50)
 		}
-		throw new Error('Could not connect to the Chromium page target')
-	})()
+		if (devToolsPort === undefined) throw new Error(`Chromium DevTools port did not open. stderr: ${stderrData.trim()}`)
 
-	socket.addEventListener('message', event => {
-		if (typeof event.data !== 'string') return
-		const message: unknown = JSON.parse(event.data)
-		if (typeof message !== 'object' || message === null) return
-		if ('method' in message) {
-			const { method, params, sessionId } = message as { method: string; params?: Record<string, unknown>; sessionId?: string }
-			const networkRequestKey = (requestId: unknown) => `${sessionId ?? 'page'}:${String(requestId)}`
-			if (method === 'Runtime.exceptionThrown') {
-				const exceptionDetails = params?.['exceptionDetails'] as { text?: string; exception?: { description?: string } } | undefined
-				const detail = exceptionDetails?.exception?.description ?? exceptionDetails?.text ?? 'Unknown page error'
-				issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'pageerror', detail })
+		const issues: PageIssue[] = []
+		const networkRequests = new Map<string, NetworkRequest>()
+		const workerTargets = new Map<string, string>()
+		let lastNetworkActivity = Date.now()
+		let workerStarted = false
+		socket = await (async () => {
+			for (let attempt = 0; attempt < targetAttempts; attempt++) {
+				try {
+					const targets = (await (await fetch(`http://127.0.0.1:${devToolsPort}/json/list`)).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>
+					const page = targets.find(target => target.type === 'page')
+					if (page !== undefined) {
+						const ws = new WebSocket(page.webSocketDebuggerUrl)
+						await new Promise((resolve, reject) => {
+							ws.addEventListener('open', resolve, { once: true })
+							ws.addEventListener('error', reject, { once: true })
+						})
+						return ws
+					}
+				} catch (error) {
+					if (!(error instanceof TypeError)) throw error
+					// Chromium target list not ready yet.
+				}
+				await Bun.sleep(pollMilliseconds)
 			}
-			if (method === 'Runtime.consoleAPICalled' && params?.['type'] === 'error') {
-				const args = (params['args'] as Array<{ value?: unknown; description?: string }> | undefined) ?? []
-				const detail = args.map(arg => String(arg.value ?? arg.description ?? '')).join(' ') || 'console.error()'
-				issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'console-error', detail })
-			}
-			if (method === 'Log.entryAdded') {
-				const entry = params?.['entry'] as { level?: string; text?: string; url?: string } | undefined
-				if (entry?.level === 'error') {
-					const detail = `${entry.text ?? 'Browser log error'}${entry.url === undefined ? '' : ` (${entry.url})`}`
+			throw new Error('Could not connect to the Chromium page target')
+		})()
+
+		const send = createBrowserSmokeCommandSender(socket, browser)
+		socket.addEventListener('message', event => {
+			if (typeof event.data !== 'string') return
+			const message: unknown = JSON.parse(event.data)
+			if (typeof message !== 'object' || message === null) return
+			if ('method' in message) {
+				const { method, params, sessionId } = message as { method: string; params?: Record<string, unknown>; sessionId?: string }
+				const networkRequestKey = (requestId: unknown) => `${sessionId ?? 'page'}:${String(requestId)}`
+				if (method === 'Runtime.exceptionThrown') {
+					const exceptionDetails = params?.['exceptionDetails'] as { text?: string; exception?: { description?: string } } | undefined
+					const detail = exceptionDetails?.exception?.description ?? exceptionDetails?.text ?? 'Unknown page error'
+					issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'pageerror', detail })
+				}
+				if (method === 'Runtime.consoleAPICalled' && params?.['type'] === 'error') {
+					const args = (params['args'] as Array<{ value?: unknown; description?: string }> | undefined) ?? []
+					const detail = args.map(arg => String(arg.value ?? arg.description ?? '')).join(' ') || 'console.error()'
 					issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'console-error', detail })
 				}
-			}
-			if (method === 'Network.requestWillBeSent') {
-				const requestId = params?.['requestId']
-				const request = params?.['request'] as { url?: string } | undefined
-				if (typeof requestId === 'string' && typeof request?.url === 'string') networkRequests.set(networkRequestKey(requestId), { resourceType: String(params?.['type'] ?? ''), url: request.url })
-				lastNetworkActivity = Date.now()
-			}
-			if (method === 'Network.responseReceived') {
-				const requestId = params?.['requestId']
-				const response = params?.['response'] as { status?: number; url?: string } | undefined
-				const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
-				const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
-				const resourceUrl = response?.url ?? request?.url ?? 'unknown URL'
-				if (typeof response?.status === 'number' && response.status >= 400 && isRequiredBrowserResource(resourceUrl, resourceType)) issues.push({ kind: 'request-failed', detail: `${response.status.toString()} ${resourceType || 'resource'} ${resourceUrl}` })
-				lastNetworkActivity = Date.now()
-			}
-			if (method === 'Network.loadingFailed') {
-				const requestId = params?.['requestId']
-				const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
-				const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
-				const detail = `${String(params?.['errorText'] ?? 'request failed')} ${resourceType || 'resource'} ${request?.url ?? 'unknown URL'}`
-				const isBenignCanceledImage = params?.['canceled'] === true && resourceType === 'Image'
-				if (!isBenignCanceledImage) issues.push({ kind: 'request-failed', detail })
-				lastNetworkActivity = Date.now()
-			}
-			if (method === 'Target.targetCreated') {
-				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
-				if (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker') {
-					workerStarted = true
-					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+				if (method === 'Log.entryAdded') {
+					const entry = params?.['entry'] as { level?: string; text?: string; url?: string } | undefined
+					if (entry?.level === 'error') {
+						const detail = `${entry.text ?? 'Browser log error'}${entry.url === undefined ? '' : ` (${entry.url})`}`
+						issues.push({ kind: /import.?map/i.test(detail) ? 'import-map' : 'console-error', detail })
+					}
 				}
-			}
-			if (method === 'Target.attachedToTarget') {
-				const childSessionId = params?.['sessionId']
-				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
-				if (typeof childSessionId === 'string' && (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker')) {
-					workerStarted = true
-					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
-					void Promise.all([send('Network.enable', {}, childSessionId), send('Log.enable', {}, childSessionId), send('Runtime.enable', {}, childSessionId)]).catch(error => {
-						if (!(error instanceof Error) || !error.message.includes('Session with given id not found')) issues.push({ kind: 'worker', detail: error instanceof Error ? error.message : String(error) })
-					})
+				if (method === 'Network.requestWillBeSent') {
+					const requestId = params?.['requestId']
+					const request = params?.['request'] as { url?: string } | undefined
+					if (typeof requestId === 'string' && typeof request?.url === 'string') networkRequests.set(networkRequestKey(requestId), { resourceType: String(params?.['type'] ?? ''), url: request.url })
+					lastNetworkActivity = Date.now()
 				}
+				if (method === 'Network.responseReceived') {
+					const requestId = params?.['requestId']
+					const response = params?.['response'] as { status?: number; url?: string } | undefined
+					const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
+					const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
+					const resourceUrl = response?.url ?? request?.url ?? 'unknown URL'
+					if (typeof response?.status === 'number' && response.status >= 400 && isRequiredBrowserResource(resourceUrl, resourceType)) issues.push({ kind: 'request-failed', detail: `${response.status.toString()} ${resourceType || 'resource'} ${resourceUrl}` })
+					lastNetworkActivity = Date.now()
+				}
+				if (method === 'Network.loadingFailed') {
+					const requestId = params?.['requestId']
+					const request = typeof requestId === 'string' ? networkRequests.get(networkRequestKey(requestId)) : undefined
+					const resourceType = String(params?.['type'] ?? request?.resourceType ?? '')
+					const detail = `${String(params?.['errorText'] ?? 'request failed')} ${resourceType || 'resource'} ${request?.url ?? 'unknown URL'}`
+					const isBenignCanceledImage = params?.['canceled'] === true && resourceType === 'Image'
+					if (!isBenignCanceledImage) issues.push({ kind: 'request-failed', detail })
+					lastNetworkActivity = Date.now()
+				}
+				if (method === 'Target.targetCreated') {
+					const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
+					if (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker') {
+						workerStarted = true
+						if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+					}
+				}
+				if (method === 'Target.attachedToTarget') {
+					const childSessionId = params?.['sessionId']
+					const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
+					if (typeof childSessionId === 'string' && (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker')) {
+						workerStarted = true
+						if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+						void Promise.all([send('Network.enable', {}, childSessionId), send('Log.enable', {}, childSessionId), send('Runtime.enable', {}, childSessionId)]).catch(error => {
+							if (!(error instanceof Error) || !error.message.includes('Session with given id not found')) issues.push({ kind: 'worker', detail: error instanceof Error ? error.message : String(error) })
+						})
+					}
+				}
+				if (method === 'Target.targetDestroyed') {
+					const targetId = params?.['targetId']
+					const workerUrl = typeof targetId === 'string' ? workerTargets.get(targetId) : undefined
+					if (workerUrl !== undefined) issues.push({ kind: 'worker', detail: `Worker terminated before smoke completion: ${workerUrl}` })
+				}
+				return
 			}
-			if (method === 'Target.targetDestroyed') {
-				const targetId = params?.['targetId']
-				const workerUrl = typeof targetId === 'string' ? workerTargets.get(targetId) : undefined
-				if (workerUrl !== undefined) issues.push({ kind: 'worker', detail: `Worker terminated before smoke completion: ${workerUrl}` })
-			}
-			return
-		}
-		if (!('id' in message) || typeof message.id !== 'number') return
-		const pendingRequest = pending.get(message.id)
-		if (pendingRequest === undefined) return
-		pending.delete(message.id)
-		if ('error' in message) pendingRequest.reject(new Error(`Chromium DevTools command failed: ${JSON.stringify(message.error)}`))
-		else pendingRequest.resolve('result' in message ? message.result : undefined)
-	})
+		})
 
-	const send: ChromiumCommand = async (method, params = {}, sessionId) => {
-		requestId += 1
-		const id = requestId
-		const response = new Promise<unknown>((resolve, reject) => pending.set(id, { reject, resolve }))
-		socket.send(JSON.stringify({ id, method, params, ...(sessionId === undefined ? {} : { sessionId }) }))
-		return await response
+		return { close: cleanup, getLastNetworkActivity: () => lastNetworkActivity, hasWorkerStarted: () => workerStarted, issues, send, pageUrl }
+	} catch (error) {
+		await cleanup()
+		throw error
 	}
-
-	const close = async () => {
-		socket.close()
-		browser.kill()
-		await waitForBrowserExit(browser)
-		await fs.rm(profilePath, { force: true, recursive: true })
-	}
-
-	return { close, getLastNetworkActivity: () => lastNetworkActivity, hasWorkerStarted: () => workerStarted, issues, send, pageUrl }
 }
 
 export function isRequiredBrowserResource(resourceUrl: string, resourceType: string) {
