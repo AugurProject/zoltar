@@ -79,11 +79,16 @@ import {
 } from '../src/indexer.ts'
 import {
 	contractDeploymentCandidateFrom,
+	createNonRetryingLogClient,
 	discoveryLogAddresses,
+	findEarliestAvailableLogBlock,
 	indexerLogSources,
+	isPermanentHistoricalLogError,
 	readHistoricalCodeWithPermanentFallback,
+	recoverPrunedLogScan,
 	scanDiscoveredLogCoverage,
 } from '../src/indexer-runtime.ts'
+import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
 import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
@@ -466,6 +471,19 @@ describe('network indexer lifecycle', () => {
 		expect(reasonFrom(results[1])).toContain('method eth_chainId')
 	})
 
+	test('sends a pruned historical log request only once', async () => {
+		let fetches = 0
+		const client = createNonRetryingLogClient('https://rpc.example', '#1 https://rpc.example', createRpcRequestQueue(5), async (_input, init) => {
+			fetches++
+			const request = parseRpcRequestBody(JSON.parse(String(init?.body)))
+			return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: request.id, jsonrpc: '2.0' })
+		})
+
+		const failure = await client.getLogs({ address, fromBlock: 1n, toBlock: 1n }).catch((error) => error)
+		expect(isPermanentHistoricalLogError(failure)).toBe(true)
+		expect(fetches).toBe(1)
+	})
+
 	test('schedules concurrent adapter requests independently through the RPC queue', async () => {
 		const queue = createRpcRequestQueue(5)
 		let fetches = 0
@@ -620,6 +638,105 @@ describe('network indexer lifecycle', () => {
 		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
 		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
 		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('locates the earliest retrievable log block without retrying the pruned range', async () => {
+		const attempts: bigint[] = []
+		const availableStart = await findEarliestAvailableLogBlock(
+			10n,
+			100n,
+			async (blockNumber) => {
+				attempts.push(blockNumber)
+				if (blockNumber < 42n)
+					throw new RpcRequestMethodError(
+						'eth_getLogs',
+						new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+						'#1 http://reth:8545',
+					)
+			},
+			true,
+		)
+		expect(availableStart).toBe(42n)
+		expect(attempts).not.toContain(10n)
+		expect(attempts.length).toBeLessThanOrEqual(8)
+	})
+
+	test('only treats pruned eth_getLogs history as a recoverable availability boundary', () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		expect(isPermanentHistoricalLogError(prunedLogs)).toBe(true)
+		expect(isSplittableLogRangeError(prunedLogs)).toBe(false)
+		expect(
+			isPermanentHistoricalLogError(
+				new RpcRequestMethodError('eth_getCode', new RpcError('pruned history unavailable', { code: 4444 }), '#1 http://reth:8545'),
+			),
+		).toBe(false)
+		expect(isPermanentHistoricalLogError(new RpcRequestMethodError('eth_getLogs', new RpcError('temporary failure'), '#1 http://reth:8545'))).toBe(false)
+	})
+
+	test('advances coverage once for pruned logs while preserving transient failures', async () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		const advanced: bigint[] = []
+		const recovered = await recoverPrunedLogScan(
+			prunedLogs,
+			10n,
+			100n,
+			async (blockNumber) => {
+				if (blockNumber < 42n) throw prunedLogs
+			},
+			async (blockNumber) => {
+				advanced.push(blockNumber)
+			},
+		)
+		expect(recovered).toBe(42n)
+		expect(advanced).toEqual([42n])
+		expect(
+			await recoverPrunedLogScan(
+				new Error('connection reset'),
+				10n,
+				100n,
+				async () => {},
+				async () => {},
+			),
+		).toBeUndefined()
+	})
+
+	test('recovers pruned log coverage without recording a lifecycle failure', async () => {
+		const controller = new AbortController()
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		let polls = 0
+		let recoveries = 0
+		let failures = 0
+		await runNetworkLifecycle({
+			verify: async () => {},
+			poll: async () => {
+				polls++
+				throw prunedLogs
+			},
+			recover: async (error) => {
+				expect(error).toBe(prunedLogs)
+				recoveries++
+				controller.abort()
+				return true
+			},
+			failure: async () => {
+				failures++
+			},
+			intervalMs: 1,
+			signal: controller.signal,
+		})
+		expect({ polls, recoveries, failures }).toEqual({ polls: 1, recoveries: 1, failures: 0 })
 	})
 
 	test('does not split HTTP rate-limit failures', async () => {
@@ -974,6 +1091,28 @@ describe('network indexer lifecycle', () => {
 			new Set([address.toLowerCase()]),
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
+	})
+
+	test('does not claim log coverage before the active retrievable boundary', async () => {
+		const contract = {
+			address,
+			deploymentBlock: 25n,
+			deploymentBlockExact: true,
+			label: 'Older contract',
+			kind: 'openOracle',
+			provenance: 'manifest',
+		} satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			50n,
+			100n,
+			42n,
+			async () => {
+				throw new Error('Known deployment should not read code')
+			},
+			async () => new Date(0),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 42n }], observations: [] })
 	})
 
 	test('skips a periodically refreshed pruned candidate without starving later candidates', async () => {

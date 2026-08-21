@@ -1,8 +1,18 @@
 import { type AddressActivity, DatabaseConsistencyError, databaseConsistencyDiagnosticMessage, type IndexerLease, type StoredTransaction } from './database.ts'
 import { errorChainIncludes } from './error-chain.ts'
-import { type Address, type Hash, type Log, type PublicClient, type TransactionReceipt, zeroAddress } from './ethereum.ts'
+import {
+	type Address,
+	createPublicClient,
+	type Hash,
+	http,
+	type Log,
+	type PublicClient,
+	type RpcFetchFn,
+	type TransactionReceipt,
+	zeroAddress,
+} from './ethereum.ts'
 import { jsonRpcErrorName, safeRpcProviderMessage } from './logging.ts'
-import { RpcRequestMethodError, rpcQueueSaturationFrom } from './rpc-request-queue.ts'
+import { RpcRequestMethodError, type RpcRequestQueue, rpcQueueSaturationFrom, withRpcRequestQueue } from './rpc-request-queue.ts'
 import { bigintToSafeNumber } from './time.ts'
 import type { ContractMetadata, StoredLog } from './types.ts'
 
@@ -158,6 +168,24 @@ export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
 	return false
 }
 
+export const isPermanentHistoricalLogError = (error: unknown): boolean => {
+	const seen = new Set<unknown>()
+	let getLogsRequest = false
+	let prunedHistory = false
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		if (current instanceof RpcRequestMethodError && current.method === 'eth_getLogs') getLogsRequest = true
+		if ('code' in current && current.code === 4444) prunedHistory = true
+		for (const description of preferredRpcDescriptions(current)) {
+			const normalized = classifiedRpcDescription(description)
+			if (normalized.includes('pruned history unavailable') || normalized.includes('historical logs unavailable')) prunedHistory = true
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return getLogsRequest && prunedHistory
+}
+
 const isPrunedHistoricalStateError = (error: unknown): boolean => {
 	const seen = new Set<unknown>()
 	let current: unknown = error
@@ -179,8 +207,63 @@ const isPrunedHistoricalStateError = (error: unknown): boolean => {
 }
 
 export const isSplittableLogRangeError = (error: unknown): boolean => {
+	if (isPermanentHistoricalLogError(error)) return false
 	const category = rpcErrorCategory(error)
 	return category !== undefined && category !== 'rate-limit'
+}
+
+export const createNonRetryingLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequestQueue, fetchFn: RpcFetchFn): PublicClient =>
+	createPublicClient({
+		transport: withRpcRequestQueue(
+			http(rpcUrl, {
+				fetchFn,
+				requestTimeout: 20_000,
+				retryCount: 0,
+			}),
+			queue,
+			endpoint,
+		),
+	})
+
+export const findEarliestAvailableLogBlock = async (
+	startBlock: bigint,
+	observedHead: bigint,
+	logsAt: (blockNumber: bigint) => Promise<void>,
+	startBlockKnownUnavailable = false,
+): Promise<bigint> => {
+	if (startBlock > observedHead) throw new Error('The log availability search start must not exceed the observed head')
+	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
+		try {
+			await logsAt(blockNumber)
+			return true
+		} catch (error) {
+			if (isPermanentHistoricalLogError(error)) return false
+			throw error
+		}
+	}
+	if (!startBlockKnownUnavailable && (await isAvailable(startBlock))) return startBlock
+	if (!(await isAvailable(observedHead))) throw new ChainConfigurationError(`RPC cannot serve logs at observed head #${observedHead}`)
+	let lower = startBlock
+	let upper = observedHead
+	while (lower + 1n < upper) {
+		const middle = lower + (upper - lower) / 2n
+		if (await isAvailable(middle)) upper = middle
+		else lower = middle
+	}
+	return upper
+}
+
+export const recoverPrunedLogScan = async (
+	error: unknown,
+	startBlock: bigint,
+	observedHead: bigint,
+	logsAt: (blockNumber: bigint) => Promise<void>,
+	advanceStartBlock: (blockNumber: bigint) => Promise<void>,
+): Promise<bigint | undefined> => {
+	if (!isPermanentHistoricalLogError(error)) return undefined
+	const availableStart = await findEarliestAvailableLogBlock(startBlock, observedHead, logsAt, true)
+	await advanceStartBlock(availableStart)
+	return availableStart
 }
 
 export const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
@@ -627,6 +710,7 @@ type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
 	readonly failure: (message: string, nextRetryAt: Date, reason: string) => Promise<void>
+	readonly recover?: (error: unknown) => Promise<boolean>
 	readonly intervalMs: number
 	readonly signal: AbortSignal
 	readonly random?: () => number
@@ -650,7 +734,7 @@ export const retryDelayMs = (consecutiveFailures: number, intervalMs: number, ra
 	return Math.min(Math.round(base * (0.8 + random() * 0.4)), 300_000)
 }
 
-export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, signal, random, shouldRethrow }: NetworkLifecycle): Promise<void> => {
+export const runNetworkLifecycle = async ({ verify, poll, failure, recover, intervalMs, signal, random, shouldRethrow }: NetworkLifecycle): Promise<void> => {
 	let verified = false
 	let consecutiveFailures = 0
 	while (!signal.aborted) {
@@ -666,14 +750,19 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, intervalMs, s
 			consecutiveFailures = 0
 		} catch (error) {
 			if (error instanceof LeaseLostError || shouldRethrow?.(error) === true) throw error
-			consecutiveFailures++
-			delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
-			try {
-				const failureMessage = safeIndexerFailure(error)
-				const failureReason = failureMessage === 'RPC request failed; retrying' ? rpcIndexerFailureReason(error) : safeIndexerFailureReason(error)
-				await failure(failureMessage, new Date(Date.now() + delayAfterFailure), failureReason)
-			} catch (failureError) {
-				throw new IndexerOwnershipStageError('record-failure', failureError)
+			if ((await recover?.(error)) === true) {
+				consecutiveFailures = 0
+				caughtUp = false
+			} else {
+				consecutiveFailures++
+				delayAfterFailure = retryDelayMs(consecutiveFailures, intervalMs, random)
+				try {
+					const failureMessage = safeIndexerFailure(error)
+					const failureReason = failureMessage === 'RPC request failed; retrying' ? rpcIndexerFailureReason(error) : safeIndexerFailureReason(error)
+					await failure(failureMessage, new Date(Date.now() + delayAfterFailure), failureReason)
+				} catch (failureError) {
+					throw new IndexerOwnershipStageError('record-failure', failureError)
+				}
 			}
 		}
 		await waitForIndexerDelay(delayAfterFailure ?? (caughtUp ? Math.max(0, intervalMs - (Date.now() - startedAt)) : 0), signal)

@@ -8,6 +8,7 @@ import {
 	confirmCanonicalBlock,
 	contractDeploymentCandidateFrom,
 	contractDeploymentScanDue,
+	createNonRetryingLogClient,
 	createRpcDiagnosticContext,
 	databaseFailureMessage,
 	deploymentReadBudget,
@@ -18,6 +19,7 @@ import {
 	indexingCompletion,
 	isLocalIndexerFailure,
 	isPermanentHistoricalCodeError,
+	isPermanentHistoricalLogError,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
 	isSplittableLogRangeError,
@@ -29,6 +31,7 @@ import {
 	type RpcProvider,
 	readHistoricalCodeWithPermanentFallback,
 	recordOwnershipEvent,
+	recoverPrunedLogScan,
 	requireLogPosition,
 	requireReceiptPosition,
 	requiresManifestHistoryCoverage,
@@ -122,6 +125,8 @@ type RpcBlockHeader = {
 	readonly parentHash: Hash
 	readonly timestamp: bigint
 }
+
+type IndexerRpcProvider = RpcProvider & { readonly logClient: PublicClient }
 
 const requireRpcBlockHeader = (block: Block, blockNumber: bigint): RpcBlockHeader => {
 	if (block.hash === undefined || block.parentHash === undefined || block.number !== blockNumber) {
@@ -386,8 +391,12 @@ export const planDeploymentAwareLogScan = async (
 	const planned = await mapLimit(contracts, 4, async (contract): Promise<DeploymentAwareLogPlan> => {
 		const knownStart = contract.deploymentBlock ?? contract.discoveryBlock
 		if (knownStart !== undefined) {
+			const coverageStart = knownStart > configuredStartBlock ? knownStart : configuredStartBlock
 			return {
-				inputs: knownStart > toBlock ? [] : [{ address: contract.address, fromBlock: knownStart > fromBlock ? knownStart : fromBlock, startBlock: knownStart }],
+				inputs:
+					coverageStart > toBlock
+						? []
+						: [{ address: contract.address, fromBlock: coverageStart > fromBlock ? coverageStart : fromBlock, startBlock: coverageStart }],
 				observations: [],
 			}
 		}
@@ -516,9 +525,10 @@ class NetworkIndexer {
 	#network: NetworkConfig
 	readonly #configuredStartBlock: bigint
 	readonly #database: ScannerDatabase
-	readonly #providers: readonly RpcProvider[]
-	readonly #verifiedProviders = new WeakSet<RpcProvider>()
+	readonly #providers: readonly IndexerRpcProvider[]
+	readonly #verifiedProviders = new WeakSet<IndexerRpcProvider>()
 	#client: PublicClient
+	#logClient: PublicClient
 	readonly #rpcDiagnostics: ReturnType<typeof createRpcDiagnosticContext>
 	#indexingStartReported = false
 	#lastProgressLogAt: number | undefined
@@ -536,17 +546,20 @@ class NetworkIndexer {
 		this.#signal = signal
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
 			const endpoint = rpcProviderLabel(rpcUrl, index)
+			const loggingFetch = createRpcLoggingFetch(rpcUrl, endpoint, runtimeConfig.rpcLogPath, rpcExchangeLog)
 			const transport = http(rpcUrl, {
-				fetchFn: createRpcLoggingFetch(rpcUrl, endpoint, runtimeConfig.rpcLogPath, rpcExchangeLog),
+				fetchFn: loggingFetch,
 				requestTimeout: 20_000,
 				retryCount: 2,
 			})
 			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue, endpoint) })
-			return { client, endpoint, getChainId: () => client.getChainId(), number: index + 1 }
+			const logClient = createNonRetryingLogClient(rpcUrl, endpoint, rpcRequestQueue, loggingFetch)
+			return { client, endpoint, getChainId: () => client.getChainId(), logClient, number: index + 1 }
 		})
 		const firstProvider = this.#providers[0]
 		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
 		this.#client = firstProvider.client
+		this.#logClient = firstProvider.logClient
 		this.#rpcDiagnostics = createRpcDiagnosticContext(firstProvider)
 	}
 
@@ -598,6 +611,7 @@ class NetworkIndexer {
 						poll: () => this.#poll(),
 						runWithProvider: (operation) => this.#withProviderFailover(operation),
 						failure: (message, nextRetryAt, reason) => this.#recordFailure(message, nextRetryAt, this.#requireLease(), reason),
+						recover: (error) => this.#recoverPrunedLogFailure(error),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.#signal,
 					})
@@ -684,8 +698,9 @@ class NetworkIndexer {
 		return await withVerifiedProvider(
 			this.#providers,
 			this.#network.chainId,
-			async ({ client }) => {
+			async ({ client, logClient }) => {
 				this.#client = client
+				this.#logClient = logClient
 				return await operation()
 			},
 			isLocalIndexerFailure,
@@ -706,6 +721,45 @@ class NetworkIndexer {
 			: rpcFailureLogMessage(message, this.#rpcDiagnostics.activeEndpoint(), reason)
 		this.#lastReportedPhase = 'degraded'
 		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
+	}
+
+	async #advancePastPrunedLogs(error: unknown, unavailableStart: bigint, observedHead: bigint, probeAddress: Address): Promise<boolean> {
+		const availableStart = await recoverPrunedLogScan(
+			error,
+			unavailableStart,
+			observedHead,
+			async (blockNumber) => {
+				await this.#logClient.getLogs({ address: probeAddress, fromBlock: blockNumber, toBlock: blockNumber })
+			},
+			async (blockNumber) => {
+				await this.#assertLease()
+				await this.#database.advanceNetworkStartBlock(this.#network.chainId, blockNumber, this.#requireLease())
+			},
+		)
+		if (availableStart === undefined) return false
+		const previousStart = this.#network.startBlock
+		this.#network = { ...this.#network, startBlock: availableStart }
+		this.#historicalCodeUnavailable.clear()
+		this.#indexingStartReported = false
+		this.#lastProgressLogAt = undefined
+		this.#progressSample = undefined
+		this.#lastReportedPhase = undefined
+		this.#lastDeploymentScanAt = undefined
+		console.warn(
+			`[${this.#network.id}] RPC log history before block #${availableStart} is pruned; advanced index coverage from block #${previousStart} to earliest retrievable block #${availableStart} and continuing`,
+		)
+		return true
+	}
+
+	async #recoverPrunedLogFailure(error: unknown): Promise<boolean> {
+		if (!isPermanentHistoricalLogError(error)) return false
+		const observedHead = await this.#client.getBlockNumber()
+		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
+		const unavailableStart = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
+		const contracts = this.#withManifestDeploymentBlocks(await this.#database.contracts(this.#network.chainId, this.#requireLease()))
+		const probeAddress = indexerLogSources([...contracts.values()])[0]?.address
+		if (probeAddress === undefined) return false
+		return await this.#advancePastPrunedLogs(error, unavailableStart, observedHead, probeAddress)
 	}
 
 	#reportProgress(startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
@@ -1019,23 +1073,23 @@ class NetworkIndexer {
 		const inputsOfKind = (kind: string): readonly LogScanInput[] => inputs.filter(({ address }) => contracts.get(address.toLowerCase())?.kind === kind)
 		const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
 		const groups = rpcLogQueryGroups(ordinaryInputs)
-		const ordinaryPages = await mapLimit(groups, 3, (group) => this.#client.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
+		const ordinaryPages = await mapLimit(groups, 3, (group) => this.#logClient.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
 		const tokenPairs = uniswapV2V3TokenPairs(contracts.values())
 		const v2Queries = inputsOfKind('uniswapV2Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
 		const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) =>
-			this.#client.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+			this.#logClient.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
 		)
 		const v3Queries = inputsOfKind('uniswapV3Factory').flatMap((input) => tokenPairs.map((tokens) => ({ input, ...tokens })))
 		const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) =>
-			this.#client.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
+			this.#logClient.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }),
 		)
 		const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
 		const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap((input) => poolIdGroups.map((ids) => ({ input, ids })))
 		const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
-			this.#client.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+			this.#logClient.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
 		)
 		const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) =>
-			this.#client.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
+			this.#logClient.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }),
 		)
 		const unique = new Map<string, Log>()
 		for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {

@@ -324,6 +324,46 @@ postgresTest('rejects every public namespace object before fresh schema initiali
 	}
 })
 
+postgresTest('advances the canonical coverage floor when RPC log history is pruned', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const boundaryChainId = chainId + 10 + process.pid
+	const network: NetworkConfig = {
+		id: `pruned-log-boundary-${boundaryChainId}`,
+		name: 'Pruned log boundary',
+		chainId: boundaryChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 1n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [[address, 'OpenOracle', 'openOracle']],
+	}
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork(network)
+		const lease = await database.tryAcquireIndexerLock(boundaryChainId)
+		if (lease === undefined) throw new Error('pruned-log boundary writer did not acquire its lock')
+		try {
+			await database.storeBlock(boundaryChainId, indexedBlock('block-one', blockHash('genesis')), lease)
+			expect(await database.advanceNetworkStartBlock(boundaryChainId, 42n, lease)).toBe(true)
+			expect(await database.networkStartBlock(boundaryChainId)).toBe(42n)
+			expect(await database.checkpoint(boundaryChainId)).toBeUndefined()
+			const canonicalRows = await database.sql`SELECT count(*)::integer AS count FROM blocks WHERE chain_id = ${boundaryChainId} AND canonical`
+			expect(canonicalRows[0]?.['count']).toBe(0)
+			const statusRows = await database.sql`
+				SELECT phase, consecutive_failures, next_retry_at, last_error FROM networks WHERE chain_id = ${boundaryChainId}
+			`
+			expect(statusRows[0]).toMatchObject({ phase: 'backfilling', consecutive_failures: 0, next_retry_at: null, last_error: null })
+		} finally {
+			await lease.release()
+		}
+	} finally {
+		await database.sql`DELETE FROM networks WHERE chain_id = ${boundaryChainId}`
+		await database.close()
+	}
+})
+
 postgresTest('initializes, resumes, retains an orphan, and serves only its canonical replacement', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
