@@ -1,50 +1,27 @@
 import { describe, expect, test } from 'bun:test'
-import { access, cp, mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const repositoryRoot = join(import.meta.dir, '..')
-const ciWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
-const deployTestnetWorkflowPath = join(repositoryRoot, 'workflow-changes', 'deploy-testnet.yml')
-const setupActionPath = join(repositoryRoot, 'workflow-changes', 'setup-ci-action.yml')
-const setupComponentActionPath = join(repositoryRoot, 'workflow-changes', 'setup-component-action.yml')
-const ipfsDeployWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ipfs-deploy.yml')
-const versionDeployWorkflowPath = join(repositoryRoot, 'workflow-changes', 'version-deploy.yml')
-const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
-const stagedCiWorkflowPath = join(repositoryRoot, 'workflows', 'ci.yml')
-const activeSetupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
-const activeSetupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
+const ciWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
+const setupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
+const setupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
+const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')
+const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },
 	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
 ]
-
-const getActivatableCiWorkflowPath = async () => {
-	try {
-		await access(stagedCiWorkflowPath)
-		return stagedCiWorkflowPath
-	} catch (error) {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return activeCiWorkflowPath
-		throw error
-	}
-}
+const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
+const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 describe('split UI workflow paths', () => {
-	test('the activatable CI file uses the reviewed split-package workflow handoff', async () => {
-		const activatableCiWorkflowPath = await getActivatableCiWorkflowPath()
-		for (const [activePath, handoffPath] of [
-			[activatableCiWorkflowPath, ciWorkflowPath],
-			[activeSetupActionPath, setupActionPath],
-			[activeSetupComponentActionPath, setupComponentActionPath],
-		] as const) {
-			expect(await readFile(activePath, 'utf8')).toBe(await readFile(handoffPath, 'utf8'))
-		}
-	})
-
 	test('split CI remains callable by the version release workflow', async () => {
-		const workflow = await readFile(await getActivatableCiWorkflowPath(), 'utf8')
+		const workflow = await readFile(ciWorkflowPath, 'utf8')
 		expect(workflow).toContain('on:\n  workflow_call:\n')
 		const releaseWorkflow = await readFile(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'), 'utf8')
 		expect(releaseWorkflow).toContain('uses: ./.github/workflows/ci.yml')
@@ -106,31 +83,27 @@ describe('split UI workflow paths', () => {
 		expect(dockerfile.match(/bun install --frozen-lockfile/g)?.length).toBeGreaterThanOrEqual(3)
 	})
 
-	test('the workflow handoff replaces every stale monolithic UI setup command', async () => {
-		const temporaryRoot = await mkdtemp(join(tmpdir(), 'zoltar-workflow-handoff-'))
-		try {
-			await cp(join(repositoryRoot, '.github'), join(temporaryRoot, '.github'), { recursive: true })
-			for (const [source, destination] of [
-				[ciWorkflowPath, join(temporaryRoot, '.github', 'workflows', 'ci.yml')],
-				[deployTestnetWorkflowPath, join(temporaryRoot, '.github', 'workflows', 'deploy-testnet.yml')],
-				[ipfsDeployWorkflowPath, join(temporaryRoot, '.github', 'workflows', 'ipfs-deploy.yml')],
-				[versionDeployWorkflowPath, join(temporaryRoot, '.github', 'workflows', 'version-deploy.yml')],
-				[setupActionPath, join(temporaryRoot, '.github', 'actions', 'setup-ci', 'action.yml')],
-				[setupComponentActionPath, join(temporaryRoot, '.github', 'actions', 'setup-component', 'action.yml')],
-			] as const) {
-				await cp(source, destination)
-			}
-			const activeSources = await Promise.all([
-				readFile(join(temporaryRoot, '.github', 'workflows', 'ci.yml'), 'utf8'),
-				readFile(join(temporaryRoot, '.github', 'workflows', 'deploy-testnet.yml'), 'utf8'),
-				readFile(join(temporaryRoot, '.github', 'actions', 'setup-ci', 'action.yml'), 'utf8'),
-				readFile(join(temporaryRoot, '.github', 'actions', 'setup-component', 'action.yml'), 'utf8'),
-			])
-			for (const source of activeSources) {
-				expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
-			}
-		} finally {
-			await rm(temporaryRoot, { force: true, recursive: true })
+	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {
+		for (const packagePath of tevmPackagePaths) {
+			const parsed: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
+			expect(isRecord(parsed)).toBe(true)
+			if (!isRecord(parsed)) throw new Error(`${packagePath} must contain a JSON object`)
+			const overrides = parsed['overrides']
+			expect(isRecord(overrides)).toBe(true)
+			if (!isRecord(overrides)) throw new Error(`${packagePath} must define dependency overrides`)
+			for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+
+			const lockPath = packagePath === 'package.json' ? join(repositoryRoot, 'bun.lock') : join(repositoryRoot, packagePath, '..', 'bun.lock')
+			const lock = await readFile(lockPath, 'utf8')
+			expect(lock).toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.151"')
+			expect(lock).not.toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.153"')
+		}
+	})
+
+	test('active workflows replace every stale monolithic UI setup command', async () => {
+		const activeSources = await Promise.all([readFile(ciWorkflowPath, 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
+		for (const source of activeSources) {
+			expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
 		}
 	})
 

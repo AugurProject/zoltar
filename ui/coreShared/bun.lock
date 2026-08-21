@@ -25,6 +25,9 @@
     },
   },
   "overrides": {
+    "@tevm/actions": "1.0.0-rc.151",
+    "@tevm/node": "1.0.0-rc.151",
+    "@tevm/server": "1.0.0-rc.151",
     "brace-expansion": "5.0.9",
     "fast-uri": "3.1.5",
     "nanoid": "3.3.18",
@@ -211,7 +214,7 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@tevm/actions": ["@tevm/actions@1.0.0-rc.153", "", { "dependencies": { "@evmts/zevm": "0.0.0", "@tevm/address": "^1.0.0-rc.151", "@tevm/block": "^1.0.0-rc.151", "@tevm/blockchain": "^1.0.0-rc.151", "@tevm/common": "^1.0.0-rc.151", "@tevm/consensus": "^1.0.0-rc.152", "@tevm/contract": "^1.0.0-rc.151", "@tevm/errors": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/node": "^1.0.0-rc.153", "@tevm/receipt-manager": "^1.0.0-rc.151", "@tevm/state": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "@tevm/vm": "^1.0.0-rc.151" }, "peerDependencies": { "viem": "^2.49.3", "zod": "^4.1.11" } }, "sha512-ZpxxaVfoxfEhP+A4Wd3Md18fdxAygTpe8OhaNgBEFxS8FvolCGFdGCwxh4utjPBH5BT770pKLRTqJwYqu8wN5w=="],
+    "@tevm/actions": ["@tevm/actions@1.0.0-rc.151", "", { "dependencies": { "@evmts/zevm": "0.0.0", "@tevm/address": "^1.0.0-rc.151", "@tevm/block": "^1.0.0-rc.151", "@tevm/blockchain": "^1.0.0-rc.151", "@tevm/common": "^1.0.0-rc.151", "@tevm/consensus": "^1.0.0-rc.152", "@tevm/contract": "^1.0.0-rc.151", "@tevm/errors": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/node": "^1.0.0-rc.151", "@tevm/receipt-manager": "^1.0.0-rc.151", "@tevm/state": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "@tevm/vm": "^1.0.0-rc.151" }, "peerDependencies": { "viem": "^2.49.3", "zod": "^4.1.11" } }, "sha512-A1ICMc83VK/cauNu/47QPg5pj5vcqvNjl+5JdXJMJKFTkisYqTOkwujoh2tabiylCdkOQL0LATP+BmUt4xPUuA=="],
 
     "@tevm/address": ["@tevm/address@1.0.0-rc.151", "", { "dependencies": { "@tevm/errors": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151" }, "peerDependencies": { "viem": "^2.49.3" } }, "sha512-w86dds+px4s/KHfbgxYheyuEk+ZPCayzLWIUzEU/vkvpR7hXLwbolFmogncBPv4zfFOB95ZnopVWxyP2TEbFug=="],
 
@@ -255,7 +258,7 @@
 
     "@tevm/memory-client": ["@tevm/memory-client@1.0.0-rc.151", "", { "dependencies": { "@tevm/actions": "^1.0.0-rc.151", "@tevm/address": "^1.0.0-rc.151", "@tevm/common": "^1.0.0-rc.151", "@tevm/contract": "^1.0.0-rc.151", "@tevm/decorators": "^1.0.0-rc.151", "@tevm/errors": "^1.0.0-rc.151", "@tevm/node": "^1.0.0-rc.151", "@tevm/predeploys": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "kzg-wasm": "^1.0.0", "vitest": "^4.1.6" }, "peerDependencies": { "viem": "^2.49.3" } }, "sha512-l7SG85t5OLZv17Gu73pVUnG+Y7D+WCp5tkYYiMn0INtbHG5q3MU1iaeubXcNvSSyZAxxwHtX/I7J9X5I7GL/tA=="],
 
-    "@tevm/node": ["@tevm/node@1.0.0-rc.153", "", { "dependencies": { "@evmts/zevm": "0.0.0", "@tevm/address": "^1.0.0-rc.151", "@tevm/block": "^1.0.0-rc.151", "@tevm/blockchain": "^1.0.0-rc.151", "@tevm/common": "^1.0.0-rc.151", "@tevm/consensus": "^1.0.0-rc.152", "@tevm/evm": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/logger": "^1.0.0-rc.151", "@tevm/precompiles": "^1.0.0-rc.151", "@tevm/predeploys": "^1.0.0-rc.151", "@tevm/receipt-manager": "^1.0.0-rc.151", "@tevm/state": "^1.0.0-rc.151", "@tevm/sync-storage-persister": "^1.0.0-rc.151", "@tevm/txpool": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "@tevm/vm": "^1.0.0-rc.151" }, "peerDependencies": { "viem": "^2.49.3" } }, "sha512-vdFIDRqCbRHO4v6YPwaawS1ltDS02WihpN+l8MIEg1fBbcJTPeZ0vLDqp3gAuqKoRF0KyediUSG55i8x0ZKI5Q=="],
+    "@tevm/node": ["@tevm/node@1.0.0-rc.151", "", { "dependencies": { "@evmts/zevm": "0.0.0", "@tevm/address": "^1.0.0-rc.151", "@tevm/block": "^1.0.0-rc.151", "@tevm/blockchain": "^1.0.0-rc.151", "@tevm/common": "^1.0.0-rc.151", "@tevm/consensus": "^1.0.0-rc.152", "@tevm/evm": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/logger": "^1.0.0-rc.151", "@tevm/precompiles": "^1.0.0-rc.151", "@tevm/predeploys": "^1.0.0-rc.151", "@tevm/receipt-manager": "^1.0.0-rc.151", "@tevm/state": "^1.0.0-rc.151", "@tevm/sync-storage-persister": "^1.0.0-rc.151", "@tevm/txpool": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "@tevm/vm": "^1.0.0-rc.151" }, "peerDependencies": { "viem": "^2.49.3" } }, "sha512-lJLaX1QARvwzWhG6ly/l1ZP6jK5XnBmARUM9dUYCP+9S/owixjd7CrI4k+AVCVBEi9yajT45o4j2qa0Opcl+BQ=="],
 
     "@tevm/precompiles": ["@tevm/precompiles@1.0.0-rc.151", "", { "dependencies": { "@evmts/zevm": "0.0.0", "@noble/curves": "^2.2.0", "@tevm/address": "^1.0.0-rc.151", "@tevm/contract": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151" } }, "sha512-mABFuxsZ2OhQPKIMAocwkT42cD1G9OI3vBGuQ0dbpheHdbm7hmClmazySd1fV22exBcC+IIhgJYdtOQT3mozCw=="],
 
@@ -271,7 +274,7 @@
 
     "@tevm/runtime": ["@tevm/runtime@1.0.0-rc.151", "", { "dependencies": { "@tevm/tsconfig": "^1.0.0-rc.151", "@tevm/tsupconfig": "^1.0.0-rc.151", "effect": "3.21.2" } }, "sha512-eZi4g01PPmTIeS6uBfJQX31YxLEXE3LoRV2z63XcKBrEpe8WwAp/M4Ob90+9+qxtd4hS8mv0CkX1JE5eLhTroQ=="],
 
-    "@tevm/server": ["@tevm/server@1.0.0-rc.153", "", { "dependencies": { "@tevm/common": "^1.0.0-rc.151", "@tevm/decorators": "^1.0.0-rc.151", "@tevm/errors": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/memory-client": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "commander": "^14.0.3", "ws": "^8.20.1", "zod": "^4.4.3" } }, "sha512-hszN3nDKYmtGgEnDTzL/JMLFanjFaE13QKOnnIbls3o7JraFpUmrzfuQRSwhp8UYOwCf0Pe7AiNDzMdfGeQfew=="],
+    "@tevm/server": ["@tevm/server@1.0.0-rc.151", "", { "dependencies": { "@tevm/common": "^1.0.0-rc.151", "@tevm/decorators": "^1.0.0-rc.151", "@tevm/errors": "^1.0.0-rc.151", "@tevm/jsonrpc": "^1.0.0-rc.151", "@tevm/memory-client": "^1.0.0-rc.151", "@tevm/utils": "^1.0.0-rc.151", "commander": "^14.0.3", "zod": "^4.4.3" } }, "sha512-3BBNPReFgKUnycYzQs0YdgnQ+NXXrTyqSUjoPel6MEic4Iaq/VOqpzq16ykgK+zhryEkVloFAz7oSd7QXOlypw=="],
 
     "@tevm/solc": ["@tevm/solc@1.0.0-rc.151", "", { "dependencies": { "@tevm/tsconfig": "^1.0.0-rc.151", "@tevm/tsupconfig": "^1.0.0-rc.151", "abitype": "^1.2.4", "solidity-ast": "^0.4.61" } }, "sha512-LYNDMNz9JyS+NBMQJJqeSbzaazrDnJ5r2iFtTISFmdGHCDFoXJVNgCMx5ZmpvhrE0XOPueZQGUri1nV25Jsecg=="],
 
