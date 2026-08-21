@@ -8,10 +8,11 @@ import {
 	confirmCanonicalBlock,
 	contractDeploymentCandidateFrom,
 	contractDeploymentScanDue,
-	createNonRetryingLogClient,
+	createLogClient,
 	createRpcDiagnosticContext,
 	databaseFailureMessage,
 	deploymentReadBudget,
+	findEarliestAvailableLogProvider,
 	indexerLogSources,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
@@ -31,7 +32,6 @@ import {
 	type RpcProvider,
 	readHistoricalCodeWithPermanentFallback,
 	recordOwnershipEvent,
-	recoverPrunedLogScan,
 	requireLogPosition,
 	requireReceiptPosition,
 	requiresManifestHistoryCoverage,
@@ -266,7 +266,9 @@ export const planManifestBackfill = async (
 		checkpoint: bigint,
 		startBlockKnownAbsent: boolean,
 	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+	coverageStartBlock = configuredStartBlock,
 ): Promise<bigint | undefined> => {
+	const activeStartBlock = coverageStartBlock > configuredStartBlock ? coverageStartBlock : configuredStartBlock
 	let replayStart: bigint | undefined
 	for (const [address, label, kind, configuredDeploymentBlock] of manifestContracts) {
 		const storedContract = contracts.get(address.toLowerCase())
@@ -284,7 +286,8 @@ export const planManifestBackfill = async (
 			storedContract !== undefined &&
 			storedContract.deploymentBlockExact !== true &&
 			(storedContract.provenance !== 'manifest' || !requiresManifestHistoryCoverage(storedContract))
-		let deploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch ? undefined : contract.deploymentBlock)
+		const knownDeploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch ? undefined : contract.deploymentBlock)
+		let deploymentBlock = knownDeploymentBlock === undefined || knownDeploymentBlock > activeStartBlock ? knownDeploymentBlock : activeStartBlock
 		if (
 			!requiresFreshDeploymentSearch &&
 			cursor !== undefined &&
@@ -293,14 +296,16 @@ export const planManifestBackfill = async (
 		)
 			continue
 		if (deploymentBlock === undefined) {
-			const searchStart = requiresFreshDeploymentSearch ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			const previousSearchStart = requiresFreshDeploymentSearch ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			const searchStart = previousSearchStart > activeStartBlock ? previousSearchStart : activeStartBlock
 			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch) continue
 			const deployment = await findDeployment(address, searchStart, checkpoint, !requiresFreshDeploymentSearch && contract.deploymentCheckedBlock !== undefined)
 			if (deployment === undefined) continue
-			deploymentBlock = deployment.block
+			deploymentBlock = deployment.block > activeStartBlock ? deployment.block : activeStartBlock
 		}
 		if (deploymentBlock > checkpoint) continue
-		const missingStart = cursor === undefined || cursor.startBlock > deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
+		const cursorMissingStart = cursor === undefined || cursor.startBlock > deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
+		const missingStart = cursorMissingStart > activeStartBlock ? cursorMissingStart : activeStartBlock
 		if (missingStart <= checkpoint && (replayStart === undefined || missingStart < replayStart)) replayStart = missingStart
 	}
 	return replayStart
@@ -344,7 +349,8 @@ export const logScanCursorUpdates = (
 		if (!tracksFilteredHistory && (!isProtocolActivitySource(contract) || (scanInput === undefined && contract.discoveryBlock === undefined))) return []
 		const startBlock =
 			scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
-		return startBlock > endBlock ? [] : [{ contractAddress: contract.address, startBlock, lastRetrievedBlock: endBlock }]
+		const coveredStartBlock = startBlock > configuredStartBlock ? startBlock : configuredStartBlock
+		return coveredStartBlock > endBlock ? [] : [{ contractAddress: contract.address, startBlock: coveredStartBlock, lastRetrievedBlock: endBlock }]
 	})
 
 export const rpcLogQueryGroups = (inputs: readonly LogScanInput[]): readonly LogQueryGroup[] => {
@@ -401,12 +407,15 @@ export const planDeploymentAwareLogScan = async (
 			}
 		}
 		if (historicalCodeUnavailable.has(contract.address.toLowerCase())) {
-			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
+			const candidateStart = contract.discoveryBlock ?? configuredStartBlock
+			const fallbackStart = candidateStart > configuredStartBlock ? candidateStart : configuredStartBlock
 			return { inputs: [{ address: contract.address, fromBlock, startBlock: fallbackStart }], observations: [] }
 		}
 		let deployment: { readonly block: bigint; readonly exact: boolean } | undefined
 		try {
 			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
+			if (toBlock <= searchStart && contract.deploymentCheckedBlock === undefined)
+				return { inputs: [{ address: contract.address, fromBlock, startBlock: configuredStartBlock }], observations: [] }
 			deployment = await findContractDeploymentBlock(
 				searchStart,
 				toBlock,
@@ -416,7 +425,8 @@ export const planDeploymentAwareLogScan = async (
 		} catch (error) {
 			if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
 			onDetectionFailure(contract, error)
-			const fallbackStart = contract.discoveryBlock ?? configuredStartBlock
+			const candidateStart = contract.discoveryBlock ?? configuredStartBlock
+			const fallbackStart = candidateStart > configuredStartBlock ? candidateStart : configuredStartBlock
 			return {
 				inputs: [{ address: contract.address, fromBlock, startBlock: fallbackStart }],
 				observations: [],
@@ -433,7 +443,7 @@ export const planDeploymentAwareLogScan = async (
 				{
 					address: contract.address,
 					fromBlock: deployment.block > fromBlock ? deployment.block : fromBlock,
-					startBlock: deployment.block,
+					startBlock: deployment.block > configuredStartBlock ? deployment.block : configuredStartBlock,
 				},
 			],
 			observations: [observation],
@@ -516,7 +526,15 @@ export const manifestChangeRequiresFullReplay = async (
 ): Promise<boolean> => {
 	const storedManifest = [...storedContracts.values()].filter(({ provenance }) => provenance === 'manifest')
 	if (!manifestContractSetChanged(manifestContracts, storedManifest)) return false
-	const replayStart = await planManifestBackfill(manifestContracts, storedContracts, cursors, checkpoint, configuredStartBlock, findDeployment)
+	const replayStart = await planManifestBackfill(
+		manifestContracts,
+		storedContracts,
+		cursors,
+		checkpoint,
+		configuredStartBlock,
+		findDeployment,
+		storedStartBlock,
+	)
 	if (replayStart !== undefined) manifestReplayAncestor(replayStart, storedStartBlock)
 	return true
 }
@@ -527,6 +545,7 @@ class NetworkIndexer {
 	readonly #database: ScannerDatabase
 	readonly #providers: readonly IndexerRpcProvider[]
 	readonly #verifiedProviders = new WeakSet<IndexerRpcProvider>()
+	#failoverSawPrunedLogFailure = false
 	#client: PublicClient
 	#logClient: PublicClient
 	readonly #rpcDiagnostics: ReturnType<typeof createRpcDiagnosticContext>
@@ -553,7 +572,7 @@ class NetworkIndexer {
 				retryCount: 2,
 			})
 			const client = createPublicClient({ transport: withRpcRequestQueue(transport, rpcRequestQueue, endpoint) })
-			const logClient = createNonRetryingLogClient(rpcUrl, endpoint, rpcRequestQueue, loggingFetch)
+			const logClient = createLogClient(rpcUrl, endpoint, rpcRequestQueue, loggingFetch)
 			return { client, endpoint, getChainId: () => client.getChainId(), logClient, number: index + 1 }
 		})
 		const firstProvider = this.#providers[0]
@@ -695,6 +714,7 @@ class NetworkIndexer {
 	}
 
 	async #withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
+		this.#failoverSawPrunedLogFailure = false
 		return await withVerifiedProvider(
 			this.#providers,
 			this.#network.chainId,
@@ -706,6 +726,9 @@ class NetworkIndexer {
 			isLocalIndexerFailure,
 			(provider) => this.#rpcDiagnostics.select(provider),
 			this.#verifiedProviders,
+			(_provider, error) => {
+				if (isPermanentHistoricalLogError(error)) this.#failoverSawPrunedLogFailure = true
+			},
 		)
 	}
 
@@ -723,21 +746,19 @@ class NetworkIndexer {
 		console.error(`[${this.#network.id}] indexer state: degraded; ${logMessage}`)
 	}
 
-	async #advancePastPrunedLogs(error: unknown, unavailableStart: bigint, observedHead: bigint, probeAddress: Address): Promise<boolean> {
-		const availableStart = await recoverPrunedLogScan(
-			error,
-			unavailableStart,
-			observedHead,
-			async (blockNumber) => {
-				await this.#logClient.getLogs({ address: probeAddress, fromBlock: blockNumber, toBlock: blockNumber })
-			},
-			async (blockNumber) => {
-				await this.#assertLease()
-				await this.#database.advanceNetworkStartBlock(this.#network.chainId, blockNumber, this.#requireLease())
-			},
-		)
-		if (availableStart === undefined) return false
+	async #advancePastPrunedLogs(provider: IndexerRpcProvider, availableStart: bigint): Promise<void> {
 		const previousStart = this.#network.startBlock
+		this.#client = provider.client
+		this.#logClient = provider.logClient
+		this.#rpcDiagnostics.select(provider)
+		if (availableStart === previousStart) {
+			console.warn(
+				`[${this.#network.id}] selected ${provider.endpoint}, which can serve the existing log coverage floor #${availableStart}; continuing without changing coverage`,
+			)
+			return
+		}
+		await this.#assertLease()
+		await this.#database.advanceNetworkStartBlock(this.#network.chainId, availableStart, this.#requireLease())
 		this.#network = { ...this.#network, startBlock: availableStart }
 		this.#historicalCodeUnavailable.clear()
 		this.#indexingStartReported = false
@@ -746,20 +767,32 @@ class NetworkIndexer {
 		this.#lastReportedPhase = undefined
 		this.#lastDeploymentScanAt = undefined
 		console.warn(
-			`[${this.#network.id}] RPC log history before block #${availableStart} is pruned; advanced index coverage from block #${previousStart} to earliest retrievable block #${availableStart} and continuing`,
+			`[${this.#network.id}] RPC log history before block #${availableStart} is pruned; advanced index coverage from block #${previousStart} to earliest retrievable block #${availableStart} using ${provider.endpoint} and continuing`,
 		)
-		return true
 	}
 
 	async #recoverPrunedLogFailure(error: unknown): Promise<boolean> {
-		if (!isPermanentHistoricalLogError(error)) return false
-		const observedHead = await this.#client.getBlockNumber()
-		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
-		const unavailableStart = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
-		const contracts = this.#withManifestDeploymentBlocks(await this.#database.contracts(this.#network.chainId, this.#requireLease()))
-		const probeAddress = indexerLogSources([...contracts.values()])[0]?.address
-		if (probeAddress === undefined) return false
-		return await this.#advancePastPrunedLogs(error, unavailableStart, observedHead, probeAddress)
+		if (isLocalIndexerFailure(error)) return false
+		if (!isPermanentHistoricalLogError(error) && !this.#failoverSawPrunedLogFailure) return false
+		const availability = await findEarliestAvailableLogProvider(
+			this.#providers,
+			this.#network.startBlock,
+			async (provider) => {
+				if (!this.#verifiedProviders.has(provider)) {
+					const remoteChainId = await provider.getChainId()
+					if (remoteChainId !== this.#network.chainId)
+						throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.#network.chainId}, received ${remoteChainId}`)
+					this.#verifiedProviders.add(provider)
+				}
+				return await provider.client.getBlockNumber()
+			},
+			async ({ logClient }, blockNumber) => {
+				await logClient.getLogs({ fromBlock: blockNumber, toBlock: blockNumber })
+			},
+		)
+		if (availability === undefined) return false
+		await this.#advancePastPrunedLogs(availability.provider, availability.startBlock)
+		return true
 	}
 
 	#reportProgress(startBlock: bigint, endBlock: bigint, observedHead: bigint): void {
@@ -826,6 +859,7 @@ class NetworkIndexer {
 			this.#configuredStartBlock,
 			(address, startBlock, indexedBoundary, startBlockKnownAbsent) =>
 				this.#findManifestDeployment(address, startBlock, indexedBoundary, startBlockKnownAbsent),
+			this.#network.startBlock,
 		)
 		if (replayStart === undefined) return
 		const ancestor = manifestReplayAncestor(replayStart, this.#network.startBlock)

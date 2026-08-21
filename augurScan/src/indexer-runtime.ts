@@ -212,13 +212,14 @@ export const isSplittableLogRangeError = (error: unknown): boolean => {
 	return category !== undefined && category !== 'rate-limit'
 }
 
-export const createNonRetryingLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequestQueue, fetchFn: RpcFetchFn): PublicClient =>
+export const createLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequestQueue, fetchFn: RpcFetchFn, retryDelay?: number): PublicClient =>
 	createPublicClient({
 		transport: withRpcRequestQueue(
 			http(rpcUrl, {
 				fetchFn,
 				requestTimeout: 20_000,
-				retryCount: 0,
+				retryCount: 2,
+				...(retryDelay === undefined ? {} : { retryDelay }),
 			}),
 			queue,
 			endpoint,
@@ -253,17 +254,25 @@ export const findEarliestAvailableLogBlock = async (
 	return upper
 }
 
-export const recoverPrunedLogScan = async (
-	error: unknown,
+export const findEarliestAvailableLogProvider = async <TProvider>(
+	providers: readonly TProvider[],
 	startBlock: bigint,
-	observedHead: bigint,
-	logsAt: (blockNumber: bigint) => Promise<void>,
-	advanceStartBlock: (blockNumber: bigint) => Promise<void>,
-): Promise<bigint | undefined> => {
-	if (!isPermanentHistoricalLogError(error)) return undefined
-	const availableStart = await findEarliestAvailableLogBlock(startBlock, observedHead, logsAt, true)
-	await advanceStartBlock(availableStart)
-	return availableStart
+	observedHead: (provider: TProvider) => Promise<bigint>,
+	logsAt: (provider: TProvider, blockNumber: bigint) => Promise<void>,
+): Promise<{ readonly provider: TProvider; readonly startBlock: bigint } | undefined> => {
+	let earliest: { readonly provider: TProvider; readonly startBlock: bigint } | undefined
+	for (const provider of providers) {
+		try {
+			const head = await observedHead(provider)
+			if (head < startBlock) continue
+			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, (blockNumber) => logsAt(provider, blockNumber))
+			if (earliest === undefined || availableStart < earliest.startBlock) earliest = { provider, startBlock: availableStart }
+		} catch {
+			// Recovery is best-effort across providers. The lifecycle retains the
+			// original failure when none can establish a usable log boundary.
+		}
+	}
+	return earliest
 }
 
 export const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
@@ -372,6 +381,7 @@ export const withVerifiedProvider = async <TProvider extends ChainProvider, TRes
 	stopFailover = (_error: unknown): boolean => false,
 	onAttempt = (_provider: TProvider): void => {},
 	verifiedProviders?: WeakSet<TProvider>,
+	onFailure = (_provider: TProvider, _error: unknown): void => {},
 ): Promise<TResult> => {
 	let lastFailure: unknown
 	for (const provider of providers) {
@@ -384,6 +394,7 @@ export const withVerifiedProvider = async <TProvider extends ChainProvider, TRes
 			}
 			return await operation(provider)
 		} catch (error) {
+			onFailure(provider, error)
 			if (stopFailover(error)) throw error
 			lastFailure = error
 		}
