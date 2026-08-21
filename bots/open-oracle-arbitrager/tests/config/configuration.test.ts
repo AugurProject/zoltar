@@ -223,14 +223,19 @@ describe('file-only startup configuration', () => {
 		}
 	})
 
-	test('makes the saved quorum authoritative for deploy-executor endpoint validation', async () => {
+	test('makes the selected chain profile quorum authoritative for deploy-executor endpoint validation', async () => {
 		const directory = await temporaryDirectory()
-		for (const [rpcQuorum, environmentQuorum] of [
-			[1, '2'],
-			[2, '1'],
+		for (const [activeRpcQuorum, sepoliaRpcQuorum, environmentQuorum] of [
+			[1, 2, '1'],
+			[2, 1, '2'],
 		] as const) {
-			const path = join(directory, `deploy-${rpcQuorum.toString()}.json`)
-			await saveOperatorSettings(path, { ...settings('http://127.0.0.1:1/', 4173), rpcQuorum })
+			const path = join(directory, `deploy-${activeRpcQuorum.toString()}-${sepoliaRpcQuorum.toString()}.json`)
+			await saveOperatorSettings(path, { ...settings('http://127.0.0.1:1/', 4173), rpcQuorum: activeRpcQuorum })
+			const sepoliaSettings = settings('http://127.0.0.1:1/', 4173)
+			sepoliaSettings.centralizedMarkets = { ...sepoliaSettings.centralizedMarkets, assetChainId: 11_155_111 }
+			sepoliaSettings.network = 'sepolia'
+			sepoliaSettings.rpcQuorum = sepoliaRpcQuorum
+			await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepoliaSettings)
 			const child = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
 				env: {
 					...process.env,
@@ -244,9 +249,20 @@ describe('file-only startup configuration', () => {
 			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 			const output = `${stdout}${stderr}`
 			expect(exitCode).toBe(1)
-			if (rpcQuorum === 1) expect(output).not.toContain('does not satisfy the saved RPC agreement requirement')
+			if (sepoliaRpcQuorum === 1) expect(output).not.toContain('does not satisfy the saved RPC agreement requirement')
 			else expect(output).toContain('does not satisfy the saved RPC agreement requirement')
 		}
+		const mismatchedPath = join(directory, 'deploy-mismatched-profile.json')
+		await saveOperatorSettings(mismatchedPath, settings('http://127.0.0.1:1/', 4173))
+		await saveOperatorSettings(operatorProfilePath(mismatchedPath, 'sepolia'), settings('http://127.0.0.1:1/', 4173))
+		const mismatched = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
+			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: mismatchedPath, PRIVATE_KEY: `0x${'11'.repeat(32)}` },
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		const [mismatchedExitCode, mismatchedStderr] = await Promise.all([mismatched.exited, new Response(mismatched.stderr).text()])
+		expect(mismatchedExitCode).toBe(1)
+		expect(mismatchedStderr).toContain('The sepolia profile contains mainnet settings')
 	})
 
 	test('defaults deploy-executor to one reader when the operator file is missing', async () => {
