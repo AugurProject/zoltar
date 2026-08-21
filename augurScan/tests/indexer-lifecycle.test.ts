@@ -858,6 +858,18 @@ describe('network indexer lifecycle', () => {
 		expect(await findContractDeploymentBlock(0n, 100n, async () => '0x01')).toBeUndefined()
 	})
 
+	test('moves deployment bisection forward across pruned historical state', async () => {
+		const checkedBlocks: bigint[] = []
+		const deployment = await findContractDeploymentBlock(1n, 100n, async (block) => {
+			checkedBlocks.push(block)
+			if (block <= 50n) throw new RpcRequestError({ body: {}, error: { code: -32603, message: `state at block #${block} is pruned` }, url: '' })
+			return block >= 70n ? '0x01' : undefined
+		})
+		expect(deployment).toEqual({ block: 70n, exact: false })
+		expect(checkedBlocks.filter((block) => block === 1n)).toHaveLength(1)
+		expect(checkedBlocks.slice(2).every((block) => block > 1n)).toBeTrue()
+	})
+
 	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
 		const deployed = { address, label: 'Deployed', kind: 'openOracle', provenance: 'manifest', deploymentCheckedBlock: 49n } satisfies ContractMetadata
 		const absent = {

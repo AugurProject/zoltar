@@ -13,6 +13,20 @@ const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 export const jsonRpcErrorName = (code: number): string | undefined =>
 	JSON_RPC_ERROR_NAMES.get(code) ?? (code >= -32099 && code <= -32000 ? 'Server error' : undefined)
 
+export const safeRpcProviderMessage = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined
+	const message = [...value]
+		.map((character) => {
+			const codePoint = character.codePointAt(0)
+			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
+		})
+		.join('')
+		.replace(/\p{Cf}/gu, ' ')
+		.replace(/\s+/gu, ' ')
+		.trim()
+	return /^state at block (?:#[0-9]+|0x[0-9a-f]+) is pruned[.!]?$/iu.test(message) ? message : undefined
+}
+
 export const timestampedLogArguments = (values: readonly unknown[], now = new Date()): readonly unknown[] => [`[${now.toISOString()}]:`, ...values]
 
 let consoleTimestampsInstalled = false
@@ -70,8 +84,11 @@ export class RotatingJsonLog {
 }
 
 type RpcEnvelope = {
+	readonly id?: unknown
+	readonly jsonrpc?: unknown
 	readonly method?: unknown
 	readonly error?: unknown
+	readonly result?: unknown
 }
 
 const parseEnvelope = (body: unknown): RpcEnvelope | undefined => {
@@ -91,6 +108,15 @@ const rpcErrorFrom = (envelope: RpcEnvelope | undefined): { readonly code: numbe
 	const message = 'message' in envelope.error ? envelope.error.message : undefined
 	return typeof code === 'number' && Number.isInteger(code) ? { code, ...(typeof message === 'string' ? { message } : {}) } : undefined
 }
+
+const isRpcIdentifier = (value: unknown): value is number | string | null => value === null || typeof value === 'number' || typeof value === 'string'
+
+const isSuccessfulRpcResponse = (request: RpcEnvelope | undefined, response: RpcEnvelope | undefined): boolean =>
+	response?.jsonrpc === '2.0' &&
+	isRpcIdentifier(request?.id) &&
+	response.id === request.id &&
+	Object.hasOwn(response, 'result') &&
+	!Object.hasOwn(response, 'error')
 
 const responseHeaders = (response: Response): Record<string, string> => Object.fromEntries(response.headers.entries())
 
@@ -112,17 +138,20 @@ export const createRpcLoggingFetch =
 			const response = await fetchFn(input, init)
 			const responseBody = await response.clone().text()
 			const responseEnvelope = parseEnvelope(responseBody)
-			await appendRpcRecord(log, logPath, {
-				timestamp: startedAt.toISOString(),
-				rpcServer: rpcUrl,
-				request: { body: requestBody, headers: init?.headers, method: init?.method },
-				response: { body: responseBody, headers: responseHeaders(response), status: response.status, statusText: response.statusText },
-			})
 			const rpcError = rpcErrorFrom(responseEnvelope)
+			if (!response.ok || !isSuccessfulRpcResponse(requestEnvelope, responseEnvelope)) {
+				await appendRpcRecord(log, logPath, {
+					timestamp: startedAt.toISOString(),
+					rpcServer: rpcUrl,
+					request: { body: requestBody, headers: init?.headers, method: init?.method },
+					response: { body: responseBody, headers: responseHeaders(response), status: response.status, statusText: response.statusText },
+				})
+			}
 			if (rpcError !== undefined) {
 				const name = jsonRpcErrorName(rpcError.code)
+				const providerMessage = safeRpcProviderMessage(rpcError.message)
 				console.error(
-					`RPC error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}; full exchange logged to ${logPath}`,
+					`RPC error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`,
 				)
 			}
 			return response

@@ -1,7 +1,7 @@
 import { type AddressActivity, DatabaseConsistencyError, databaseConsistencyDiagnosticMessage, type IndexerLease, type StoredTransaction } from './database.ts'
 import { errorChainIncludes } from './error-chain.ts'
 import { type Address, type Hash, type Log, type PublicClient, type TransactionReceipt, zeroAddress } from './ethereum.ts'
-import { jsonRpcErrorName } from './logging.ts'
+import { jsonRpcErrorName, safeRpcProviderMessage } from './logging.ts'
 import { RpcRequestMethodError, rpcQueueSaturationFrom } from './rpc-request-queue.ts'
 import { bigintToSafeNumber } from './time.ts'
 import type { ContractMetadata, StoredLog } from './types.ts'
@@ -121,6 +121,7 @@ const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined =>
 }
 
 export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
+	if (isPrunedHistoricalStateError(error)) return true
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
@@ -149,6 +150,26 @@ export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
 				normalized.includes('method not found') ||
 				normalized.includes('method not supported') ||
 				normalized.includes('unsupported method')
+			)
+				return true
+		}
+		current = 'cause' in current ? current.cause : undefined
+	}
+	return false
+}
+
+export const isPrunedHistoricalStateError = (error: unknown): boolean => {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (typeof current === 'object' && current !== null && !seen.has(current)) {
+		seen.add(current)
+		for (const description of preferredRpcDescriptions(current)) {
+			const normalized = classifiedRpcDescription(description)
+			if (
+				normalized.includes('missing trie node') ||
+				normalized.includes('pruned historical state') ||
+				normalized.includes('historical state pruned') ||
+				/^state at block (?:[0-9]+|0x[0-9a-f]+) is pruned$/u.test(normalized)
 			)
 				return true
 		}
@@ -435,7 +456,7 @@ const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, string>> 
 const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 	if (typeof value !== 'string') return undefined
 	const normalized = normalizedRpcDescription(value)
-	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, ''))
+	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, '')) ?? safeRpcProviderMessage(value)
 }
 
 const safeRpcRequestMethod = (value: unknown): string | undefined =>
@@ -503,6 +524,12 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 			status = current.status
 		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
 		if (rpcEndpoint === undefined && current instanceof RpcRequestMethodError) rpcEndpoint = current.endpoint
+		if (standardMessage === undefined) {
+			for (const description of preferredRpcDescriptions(current)) {
+				standardMessage = safeRpcProviderMessage(description)
+				if (standardMessage !== undefined) break
+			}
+		}
 		if (standardMessage === undefined && name === 'RpcRequestError' && 'details' in current) standardMessage = safeStandardRpcProviderMessage(current.details)
 		current = 'cause' in current ? current.cause : undefined
 	}

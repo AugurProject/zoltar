@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { resolveRpcLogPath } from '../src/config.ts'
@@ -33,6 +33,18 @@ describe('AugurScan runtime logging', () => {
 		const wrapped = new RpcRequestMethodError('eth_getCode', rpcError, '#1 https://*.tenderly.co')
 		expect(safeIndexerFailureReason(wrapped)).toBe(
 			'RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 https://*.tenderly.co; code -32603 (Internal error)',
+		)
+		const pruned = Object.assign(new Error('state at block #1 is pruned'), {
+			code: -32603,
+			details: 'state at block #1 is pruned',
+			name: 'RpcRequestError',
+		})
+		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', pruned, '#1 http://reth:8545'))).toBe(
+			'RpcRequestMethodError caused by RpcRequestError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned',
+		)
+		const wrappedRpcError = Object.assign(new Error('state at block #1 is pruned'), { code: -32603, name: 'RpcError' })
+		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', wrappedRpcError, '#1 http://reth:8545'))).toBe(
+			'RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned',
 		)
 	})
 
@@ -95,6 +107,66 @@ describe('AugurScan runtime logging', () => {
 			const consoleOutput = consoleError.mock.calls.flat().join(' ')
 			expect(consoleOutput).not.toContain('private-key')
 			expect(consoleOutput).not.toContain('injected line')
+		} finally {
+			consoleError.mockRestore()
+		}
+	})
+
+	test('does not log successful RPC exchanges', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
+			Response.json({ id: 1, jsonrpc: '2.0', result: '0xaa36a7' }),
+		)
+		await loggingFetch('http://reth:8545', {
+			body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_chainId', params: [] }),
+			method: 'POST',
+		})
+		await expect(access(filename)).rejects.toMatchObject({ code: 'ENOENT' })
+	})
+
+	test('logs invalid JSON and malformed JSON-RPC error responses as failures', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const responses = [new Response('not json'), Response.json({ error: { message: 'missing error code' }, id: 2, jsonrpc: '2.0' })]
+		const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () => {
+			const response = responses.shift()
+			if (response === undefined) throw new Error('Unexpected RPC request')
+			return response
+		})
+		for (const id of [1, 2]) {
+			await loggingFetch('http://reth:8545', {
+				body: JSON.stringify({ id, jsonrpc: '2.0', method: 'eth_chainId', params: [] }),
+				method: 'POST',
+			})
+		}
+		const records = (await readFile(filename, 'utf8'))
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line))
+		expect(records).toHaveLength(2)
+		expect(records[0]).toMatchObject({ request: { body: expect.stringContaining('"id":1') }, response: { body: 'not json', status: 200 } })
+		expect(records[1]).toMatchObject({
+			request: { body: expect.stringContaining('"id":2') },
+			response: { body: JSON.stringify({ error: { message: 'missing error code' }, id: 2, jsonrpc: '2.0' }), status: 200 },
+		})
+	})
+
+	test('shows an allowlisted pruned-state message without exposing arbitrary provider text', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
+				Response.json({ error: { code: -32603, message: 'state at block #1 is pruned' }, id: 1, jsonrpc: '2.0' }),
+			)
+			await loggingFetch('http://reth:8545', {
+				body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getCode', params: ['0x1234', '0x1'] }),
+				method: 'POST',
+			})
+			expect(consoleError).toHaveBeenCalledWith(
+				`RPC error from #1 http://reth:8545; method eth_getCode; code -32603 (Internal error); message: state at block #1 is pruned; full exchange logged to ${filename}`,
+			)
 		} finally {
 			consoleError.mockRestore()
 		}
