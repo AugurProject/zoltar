@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { spawn } from 'node:child_process'
 import { getChromiumPath } from './chromiumPath.js'
-import { isBrowserSmokeReady, runBrowserSmoke } from './browserSmoke.mts'
+import { isBrowserSmokeReady, runBrowserSmoke, waitForBrowserExit } from './browserSmoke.mts'
 
 const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
@@ -30,6 +31,15 @@ test('an explicit route-ready marker overrides stale bootstrap copy outside the 
 test('browser smoke readiness requires the exact requested CSS viewport', () => {
 	expect(isBrowserSmokeReady({ ...mountedState, width: 500 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 	expect(isBrowserSmokeReady({ ...mountedState, height: 701 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
+})
+
+test('browser cleanup handles a Chromium process that already exited', async () => {
+	const browser = spawn(process.execPath, ['--eval', ''])
+	await new Promise<void>((resolve, reject) => {
+		browser.once('error', reject)
+		browser.once('exit', () => resolve())
+	})
+	await expect(waitForBrowserExit(browser)).resolves.toBeUndefined()
 })
 
 const chromiumPath = getChromiumPath()

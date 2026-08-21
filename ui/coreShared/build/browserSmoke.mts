@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { getChromiumPath } from './chromiumPath.js'
+import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
@@ -23,6 +23,14 @@ type BrowserSmokeState = {
 	hasMain: boolean
 	title: string
 	width: number
+}
+
+export async function waitForBrowserExit(browser: ChildProcess): Promise<void> {
+	if (browser.exitCode !== null || browser.signalCode !== null) return
+	await new Promise<void>((resolve, reject) => {
+		browser.once('error', reject)
+		browser.once('exit', () => resolve())
+	})
 }
 
 export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: string, readyText: string | undefined, viewport: { readonly height: number; readonly width: number }) {
@@ -69,7 +77,7 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string, view
 	}
 	if (devToolsPort === undefined) {
 		browser.kill()
-		await new Promise(resolve => browser.once('exit', resolve))
+		await waitForBrowserExit(browser)
 		throw new Error(`Chromium DevTools port did not open. stderr: ${stderrData.trim()}`)
 	}
 
@@ -194,7 +202,7 @@ async function createDevToolsSession(chromiumPath: string, pageUrl: string, view
 	const close = async () => {
 		socket.close()
 		browser.kill()
-		await new Promise(resolve => browser.once('exit', resolve))
+		await waitForBrowserExit(browser)
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
 
@@ -205,7 +213,7 @@ export function isRequiredBrowserResource(resourceUrl: string, resourceType: str
 	return resourceType === 'Script' || resourceType === 'Stylesheet' || /(?:\.m?js|\.css)(?:[?#]|$)/i.test(resourceUrl) || /worker/i.test(resourceUrl)
 }
 
-export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: { readonly mountTimeoutMilliseconds?: number; readonly requireWorker?: boolean } = {}) {
+async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options: { readonly mountTimeoutMilliseconds?: number; readonly requireWorker?: boolean } = {}) {
 	const chromiumPath = getChromiumPath()
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the browser smoke check. Set CHROMIUM_PATH or install Chromium.')
 	const route = process.env['UI_BROWSER_ROUTE'] ?? ''
@@ -278,6 +286,10 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 	} finally {
 		await session.close()
 	}
+}
+
+export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: { readonly mountTimeoutMilliseconds?: number; readonly requireWorker?: boolean } = {}) {
+	await withChromiumTestLock(async () => await runBrowserSmokeUnlocked(appId, baseUrl, options))
 }
 
 async function main() {
