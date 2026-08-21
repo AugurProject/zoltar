@@ -1,6 +1,7 @@
 import { type ReservedSQL, SQL, type TransactionSQL } from 'bun'
-import { type Address, getAddress, type Hash, type Hex } from './ethereum.ts'
+import { type Address, getAddress, type Hash, type Hex, zeroAddress } from './ethereum.ts'
 import { projectionsFrom } from './projections.ts'
+import { type EntityStateSnapshot, normalizeSnapshotTarget, type StateSnapshotTarget } from './snapshots.ts'
 import type { ContractMetadata, DecodedRecord, ManifestContract, NetworkConfig, StoredLog, TokenMetadata } from './types.ts'
 import { isSupportedUniswapV4Market } from './uniswap.ts'
 
@@ -336,7 +337,8 @@ export class ScannerDatabase {
 		return await this.sql.begin(async (transaction) => {
 			await transaction.unsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
 			await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
-			await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
+			const versions = await transaction`SELECT current_setting('server_version_num')::integer AS version`
+			if (Number(versions[0]?.['version'] ?? 0) >= 170_000) await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
 			return await operation(transaction)
 		})
 	}
@@ -569,11 +571,19 @@ export class ScannerDatabase {
 					'rep_eth_price_snapshots',
 					'uniswap_rep_eth_markets',
 					'uniswap_rep_eth_price_observations',
+					'protocol_timeline_entries',
+					'open_oracle_report_events',
+					'escalation_game_events',
+					'truth_auction_events',
+					'amm_trade_events',
+					'fork_migration_events',
+					'liquidation_approval_events',
 					'address_activity',
 					'address_balance_snapshots',
 					'token_metadata',
 				])
 					await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [network.chainId])
+				await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${network.chainId} AND canonical`
 				await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${network.chainId}`
 				await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${network.chainId}`
@@ -592,7 +602,7 @@ export class ScannerDatabase {
 				await lockLiveEventWriter(transaction)
 				await transaction`
 					INSERT INTO live_events (event, payload)
-					VALUES ('reorg', ${JSON.stringify({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: (previousBlock - network.startBlock + 1n).toString() })}::jsonb)
+					VALUES ('reorg', (${JSON.stringify({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: (previousBlock - network.startBlock + 1n).toString() })}::text)::jsonb)
 				`
 			}
 			return manifestChanged
@@ -740,6 +750,88 @@ export class ScannerDatabase {
 		})
 	}
 
+	async stateSnapshotTargets(chainId: number, throughBlock: bigint, limit = 25, lease?: IndexerLease): Promise<readonly StateSnapshotTarget[]> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`
+				WITH latest_pools AS (
+					SELECT DISTINCT ON (pool_address) pool_address, coordinator_address
+					FROM pools WHERE chain_id = ${chainId} AND canonical
+					ORDER BY pool_address, block_number DESC, log_index DESC
+				), pool_escalations AS (
+					SELECT DISTINCT ON (pool_address) pool_address, NULLIF(state->>'escalationGame', '0x0000000000000000000000000000000000000000') AS escalation_address
+					FROM pool_state_events WHERE chain_id = ${chainId} AND canonical AND event_name = 'EscalationGameSet'
+					ORDER BY pool_address, block_number DESC, log_index DESC
+				), latest_vaults AS (
+					SELECT DISTINCT ON (pool_address, vault_address) pool_address, vault_address
+					FROM vault_snapshots WHERE chain_id = ${chainId} AND canonical
+					ORDER BY pool_address, vault_address, block_number DESC, log_index DESC
+				), candidates AS (
+					SELECT 'pool'::text AS entity_type, pool.pool_address AS entity_identity,
+						pool.pool_address AS address, NULL::text AS pool_address,
+						pool.coordinator_address, escalation.escalation_address
+					FROM latest_pools pool LEFT JOIN pool_escalations escalation USING (pool_address)
+					UNION ALL
+					SELECT 'vault', vault.pool_address || ':' || vault.vault_address, vault.vault_address,
+						vault.pool_address, pool.coordinator_address, escalation.escalation_address
+					FROM latest_vaults vault JOIN latest_pools pool USING (pool_address)
+					LEFT JOIN pool_escalations escalation USING (pool_address)
+					UNION ALL
+					SELECT 'escalation', game_address, game_address, NULL, NULL, game_address
+					FROM (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical) game
+					UNION ALL
+					SELECT 'auction', auction_address, auction_address, NULL, NULL, NULL
+					FROM (SELECT DISTINCT auction_address FROM truth_auction_events WHERE chain_id = ${chainId} AND canonical) auction
+				), ranked AS (
+					SELECT candidate.*, latest.block_number AS latest_snapshot_block
+					FROM candidates candidate
+					LEFT JOIN LATERAL (
+						SELECT snapshot.block_number FROM entity_state_snapshots snapshot
+						JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash AND block.canonical
+						WHERE snapshot.chain_id = ${chainId} AND snapshot.entity_type = candidate.entity_type
+							AND snapshot.entity_identity = candidate.entity_identity AND snapshot.canonical
+						ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
+					) latest ON true
+				)
+				SELECT entity_type, entity_identity, address, pool_address, coordinator_address, escalation_address
+				FROM ranked WHERE latest_snapshot_block IS NULL OR latest_snapshot_block < ${throughBlock.toString()}
+				ORDER BY latest_snapshot_block NULLS FIRST, entity_type, entity_identity LIMIT ${limit}
+			`
+			return rows.map((row: Record<string, unknown>) => normalizeSnapshotTarget(row))
+		})
+	}
+
+	async storeEntityStateSnapshots(
+		chainId: number,
+		blockNumber: bigint,
+		blockHash: Hash,
+		blockTimestamp: Date,
+		snapshots: readonly EntityStateSnapshot[],
+		lease: IndexerLease,
+	): Promise<void> {
+		await withIndexerLease(lease, async (transaction) => {
+			const canonicalRows = await transaction`
+				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${blockNumber.toString()}
+					AND hash = ${blockHash} AND canonical
+			`
+			if (canonicalRows.length !== 1) throw new DatabaseConsistencyError('Cannot store entity snapshots for a noncanonical block')
+			for (const snapshot of snapshots) {
+				await transaction`
+					INSERT INTO entity_state_snapshots (
+						chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
+						source_method, read_status, read_result, read_failure_reason, canonical, observed_at
+					) VALUES (
+						${chainId}, ${snapshot.entityType}, ${snapshot.entityIdentity}, ${blockNumber.toString()}, ${blockHash}, ${blockTimestamp},
+						${snapshot.sourceMethod}, ${snapshot.readStatus}, (${snapshot.readResult === undefined ? null : JSON.stringify(snapshot.readResult)}::text)::jsonb,
+						${snapshot.readFailureReason ?? null}, true, now()
+					)
+					ON CONFLICT (chain_id, entity_type, entity_identity, block_hash, source_method) DO UPDATE SET
+						read_status = EXCLUDED.read_status, read_result = EXCLUDED.read_result,
+						read_failure_reason = EXCLUDED.read_failure_reason, canonical = true, observed_at = now()
+				`
+			}
+		})
+	}
+
 	async storeRichListBalances(chainId: number, blockNumber: bigint, blockHash: Hash, balances: readonly RichListBalance[], lease: IndexerLease): Promise<void> {
 		if (balances.length === 0) return
 		await withIndexerLease(lease, async (transaction) => {
@@ -831,6 +923,14 @@ export class ScannerDatabase {
 			await transaction`UPDATE rep_eth_price_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE uniswap_rep_eth_markets SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE uniswap_rep_eth_price_observations SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE protocol_timeline_entries SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE open_oracle_report_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE escalation_game_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE truth_auction_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE amm_trade_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE fork_migration_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE liquidation_approval_events SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
+			await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_activity SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE address_balance_snapshots SET canonical = false WHERE chain_id = ${chainId} AND block_number > ${ancestor.toString()} AND canonical`
 			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND read_block > ${ancestor.toString()} AND canonical`
@@ -894,7 +994,7 @@ export class ScannerDatabase {
 			await lockLiveEventWriter(transaction)
 			await transaction`
 				INSERT INTO live_events (event, payload)
-				VALUES ('reorg', ${JSON.stringify({ chainId, previousBlock: previousBlock.toString(), ancestor: ancestor.toString(), depth: reorgDepth.toString() })}::jsonb)
+				VALUES ('reorg', (${JSON.stringify({ chainId, previousBlock: previousBlock.toString(), ancestor: ancestor.toString(), depth: reorgDepth.toString() })}::text)::jsonb)
 			`
 		})
 	}
@@ -960,12 +1060,12 @@ export class ScannerDatabase {
 			for (const item of block.transactions) {
 				await transaction`
 					INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
-					VALUES (${chainId}, ${item.hash}, ${block.hash}, ${block.number.toString()}, ${item.transactionIndex}, ${item.from.toLowerCase()}, ${item.to?.toLowerCase() ?? null}, ${item.value.toString()}, ${item.input}, ${item.status}, ${item.gasUsed.toString()}, ${JSON.stringify(item.receipt)}, true)
+					VALUES (${chainId}, ${item.hash}, ${block.hash}, ${block.number.toString()}, ${item.transactionIndex}, ${item.from.toLowerCase()}, ${item.to?.toLowerCase() ?? null}, ${item.value.toString()}, ${item.input}, ${item.status}, ${item.gasUsed.toString()}, (${JSON.stringify(item.receipt)}::text)::jsonb, true)
 					ON CONFLICT (chain_id, block_hash, hash) DO UPDATE SET canonical = true
 				`
 				await transaction`
 					INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary)
-					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, ${JSON.stringify(item.decoded.arguments ?? null)}, ${JSON.stringify(item.decoded.displayArguments ?? null)}, ${JSON.stringify(item.decoded.argumentSchema ?? [])}, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary})
+					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${JSON.stringify(item.decoded.arguments ?? null)}::text)::jsonb, (${JSON.stringify(item.decoded.displayArguments ?? null)}::text)::jsonb, (${JSON.stringify(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary})
 					ON CONFLICT (chain_id, block_hash, tx_hash) DO UPDATE SET function_name = EXCLUDED.function_name, function_signature = EXCLUDED.function_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
 			}
@@ -979,15 +1079,66 @@ export class ScannerDatabase {
 			for (const item of block.logs) {
 				await transaction`
 					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
-					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, ${JSON.stringify(item.topics)}, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, ${JSON.stringify(item.decoded.arguments ?? null)}, ${JSON.stringify(item.decoded.displayArguments ?? null)}, ${JSON.stringify(item.decoded.argumentSchema ?? [])}, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})
+					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, (${JSON.stringify(item.topics)}::text)::jsonb, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${JSON.stringify(item.decoded.arguments ?? null)}::text)::jsonb, (${JSON.stringify(item.decoded.displayArguments ?? null)}::text)::jsonb, (${JSON.stringify(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})
 					ON CONFLICT (chain_id, block_hash, tx_hash, log_index) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized, event_name = EXCLUDED.event_name, event_signature = EXCLUDED.event_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
 				for (const projection of projectionsFrom(item)) {
 					const position = [chainId, item.blockHash, item.transactionHash, item.logIndex, item.blockNumber.toString()] as const
+					if (projection.type === 'domainEvent') {
+						await transaction`
+							INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, related_entities, source_contract, source_event, canonical)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityType}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, (${JSON.stringify(projection.relatedEntities)}::text)::jsonb, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, true)
+							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, entity_type, entity_identity) DO UPDATE SET canonical = true, summary_data = EXCLUDED.summary_data, related_entities = EXCLUDED.related_entities
+						`
+						if (projection.domain === 'report') {
+							const reportId = projection.data['reportId']
+							const roundNumber = projection.data['numReports']
+							if (typeof reportId !== 'string') throw new Error(`${projection.semanticEventKind} is missing reportId`)
+							await transaction`
+								INSERT INTO open_oracle_report_events (chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address, report_id, event_name, round_number, report_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${reportId}, ${projection.semanticEventKind}, ${typeof roundNumber === 'string' ? roundNumber : null}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, open_oracle_address, report_id) DO UPDATE SET canonical = true, report_data = EXCLUDED.report_data
+							`
+						}
+						if (projection.domain === 'escalation')
+							await transaction`
+								INSERT INTO escalation_game_events (chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, game_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'auction')
+							await transaction`
+								INSERT INTO truth_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, auction_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'trading')
+							await transaction`
+								INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'fork')
+							await transaction`
+								INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, universe_identity) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						if (projection.domain === 'approval') {
+							const approvalId = projection.data['approvalId']
+							const receiverVault = projection.data['receiverVault']
+							await transaction`
+								INSERT INTO liquidation_approval_events (chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address, approval_identity, receiver_vault, event_name, event_data, canonical)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${item.transactionIndex}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${typeof approvalId === 'string' ? approvalId.toLowerCase() : `nonce:${String(receiverVault ?? 'unknown').toLowerCase()}`}, ${typeof receiverVault === 'string' ? receiverVault.toLowerCase() : null}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, registry_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
+							`
+						}
+						continue
+					}
 					if (projection.type === 'question') {
 						await transaction`
 							INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, created_timestamp, title, description, start_time, end_time, num_ticks, display_value_min, display_value_max, answer_unit, outcome_options, canonical)
-							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.questionId}, ${projection.createdTimestamp}, ${projection.title}, ${projection.description}, ${projection.startTime}, ${projection.endTime}, ${projection.numTicks}, ${projection.displayValueMin}, ${projection.displayValueMax}, ${projection.answerUnit}, ${JSON.stringify(projection.outcomeOptions)}, true)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.questionId}, ${projection.createdTimestamp}, ${projection.title}, ${projection.description}, ${projection.startTime}, ${projection.endTime}, ${projection.numTicks}, ${projection.displayValueMin}, ${projection.displayValueMax}, ${projection.answerUnit}, (${JSON.stringify(projection.outcomeOptions)}::text)::jsonb, true)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, question_id) DO UPDATE SET canonical = true
 						`
 						continue
@@ -1019,7 +1170,7 @@ export class ScannerDatabase {
 					if (projection.type === 'poolState') {
 						await transaction`
 							INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical)
-							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.eventName}, ${JSON.stringify(projection.state)}, true)
+							VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.eventName}, (${JSON.stringify(projection.state)}::text)::jsonb, true)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true, state = EXCLUDED.state
 						`
 						continue
@@ -1056,24 +1207,31 @@ export class ScannerDatabase {
 							WHERE (
 								${projection.venue} IN ('v2', 'v3') AND (
 									EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'reputationToken' AND canonical)
-									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'weth' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind IN ('weth', 'usdc') AND canonical)
 									OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
-									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'weth' AND canonical)
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind IN ('weth', 'usdc') AND canonical)
 								)
-							) OR (
-								${projection.venue} = 'v4'
-								AND ${supportedV4Market}
-								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.contractAddress} AND kind = 'uniswapV4PoolManager' AND canonical)
-								AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
-							)
+								) OR (
+									${projection.venue} = 'v4'
+									AND ${supportedV4Market}
+									AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.contractAddress} AND kind = 'uniswapV4PoolManager' AND canonical)
+									AND (
+										${projection.token0Address} = ${zeroAddress}
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+										OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'reputationToken' AND canonical)
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'usdc' AND canonical)
+										OR EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token1Address} AND kind = 'reputationToken' AND canonical)
+										AND EXISTS (SELECT 1 FROM contracts WHERE chain_id = ${chainId} AND address = ${projection.token0Address} AND kind = 'usdc' AND canonical)
+									)
+								)
 							ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_id) DO UPDATE SET canonical = true
 						`
 						continue
 					}
 					if (projection.type === 'uniswapPrice') {
 						await transaction`
-							INSERT INTO uniswap_rep_eth_price_observations (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, event_name, reserve0, reserve1, sqrt_price_x96, canonical)
-							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.eventName}, ${projection.reserve0 ?? null}, ${projection.reserve1 ?? null}, ${projection.sqrtPriceX96 ?? null}, true
+							INSERT INTO uniswap_rep_eth_price_observations (chain_id, block_hash, tx_hash, log_index, block_number, venue, market_id, event_name, reserve0, reserve1, sqrt_price_x96, liquidity, canonical)
+							SELECT ${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.venue}, ${projection.marketId}, ${projection.eventName}, ${projection.reserve0 ?? null}, ${projection.reserve1 ?? null}, ${projection.sqrtPriceX96 ?? null}, ${projection.liquidity ?? null}, true
 							WHERE EXISTS (
 								SELECT 1 FROM uniswap_rep_eth_markets
 								WHERE chain_id = ${chainId} AND venue = ${projection.venue} AND market_id = ${projection.marketId} AND canonical
@@ -1110,7 +1268,7 @@ export class ScannerDatabase {
 			await lockLiveEventWriter(transaction)
 			await transaction`
 				INSERT INTO live_events (event, payload)
-				VALUES ('block', ${JSON.stringify({ chainId, blockNumber: block.number.toString(), logs: block.logs.length })}::jsonb)
+				VALUES ('block', (${JSON.stringify({ chainId, blockNumber: block.number.toString(), logs: block.logs.length })}::text)::jsonb)
 			`
 		})
 	}
@@ -1119,7 +1277,7 @@ export class ScannerDatabase {
 		await withIndexerLease(lease, async (transaction) => {
 			await transaction`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now() WHERE chain_id = ${chainId}`
 			await lockLiveEventWriter(transaction)
-			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', ${JSON.stringify({ chainId, blockNumber: head.toString() })}::jsonb)`
+			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', (${JSON.stringify({ chainId, blockNumber: head.toString() })}::text)::jsonb)`
 		})
 	}
 
@@ -1135,7 +1293,7 @@ export class ScannerDatabase {
 			await lockLiveEventWriter(transaction)
 			await transaction`
 				INSERT INTO live_events (event, payload)
-				VALUES ('status', ${JSON.stringify({ chainId, phase: 'degraded', nextRetryAt: nextRetryAt.toISOString(), failures: Number(rows[0]?.['consecutive_failures'] ?? 1) })}::jsonb)
+				VALUES ('status', (${JSON.stringify({ chainId, phase: 'degraded', nextRetryAt: nextRetryAt.toISOString(), failures: Number(rows[0]?.['consecutive_failures'] ?? 1) })}::text)::jsonb)
 			`
 		})
 	}

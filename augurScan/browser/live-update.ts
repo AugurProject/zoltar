@@ -55,6 +55,89 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
+export const operationsCatalogRecordKey = (section: 'auctions' | 'escalations' | 'reports', record: Readonly<Record<string, unknown>>): string => {
+	if (section === 'reports') return `${String(record['open_oracle_address'] ?? '')}:${String(record['report_id'] ?? '')}`
+	return String(record[section === 'auctions' ? 'auction_address' : 'game_address'] ?? '')
+}
+
+export const operationsDetailRecordKey = (record: Readonly<Record<string, unknown>>): string =>
+	`${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['event_name'] ?? record['semantic_event_kind'] ?? '')}`
+
+const approvalFieldDefinitions = [
+	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'attoETH'],
+	['maxDebtPerLiquidationAttoEth', 'maximum debt per liquidation', 'attoETH'],
+	['reservedDebtAttoEth', 'reserved debt', 'attoETH'],
+	['consumedDebtAttoEth', 'consumed debt', 'attoETH'],
+	['releasedDebtAttoEth', 'released debt', 'attoETH'],
+	['resultingAvailableDebtAttoEth', 'resulting available debt', 'attoETH'],
+	['resultingReservedDebtAttoEth', 'resulting reserved debt', 'attoETH'],
+	['resultingConsumedDebtAttoEth', 'resulting consumed debt', 'attoETH'],
+	['previousNonce', 'previous nonce', ''],
+	['newNonce', 'new nonce', ''],
+] as const
+
+export const approvalTransitionFields = (
+	data: Readonly<Record<string, unknown>>,
+): Array<{ readonly label: string; readonly value: string; readonly unit: string }> =>
+	approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
+
+export const operationsLoadDisposition = (
+	activeContext: string,
+	requestedContext: string,
+	live: boolean,
+	hasPaginationTarget: boolean,
+): 'join' | 'queue' | 'supersede' => {
+	if (activeContext !== requestedContext) return 'supersede'
+	return live || hasPaginationTarget ? 'queue' : 'join'
+}
+
+export type OperationsLoadState = { promise?: Promise<boolean>; context?: string }
+
+export const runSerializedOperationsLoad = async (
+	state: OperationsLoadState,
+	requestedContext: string,
+	live: boolean,
+	hasPaginationTarget: boolean,
+	currentContext: () => string,
+	supersede: () => void,
+	run: () => Promise<boolean>,
+): Promise<boolean> => {
+	while (state.promise !== undefined) {
+		const active = state.promise
+		const disposition = operationsLoadDisposition(state.context ?? '', requestedContext, live, hasPaginationTarget)
+		if (disposition === 'supersede') supersede()
+		const activeResult = await active
+		if (disposition === 'join') return activeResult
+		if (currentContext() !== requestedContext) return false
+	}
+	const promise = run().finally(() => {
+		if (state.promise === promise) {
+			state.promise = undefined
+			state.context = undefined
+		}
+	})
+	state.promise = promise
+	state.context = requestedContext
+	return await promise
+}
+
+const canonicalEventPosition = (record: Readonly<Record<string, unknown>>, key: 'block_number' | 'transaction_index' | 'log_index'): bigint => {
+	const value = record[key]
+	return (typeof value === 'string' && /^\d+$/.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value)) ? BigInt(value) : 0n
+}
+
+export const compareCanonicalEventPosition = (left: Readonly<Record<string, unknown>>, right: Readonly<Record<string, unknown>>): number => {
+	const leftBlock = canonicalEventPosition(left, 'block_number')
+	const rightBlock = canonicalEventPosition(right, 'block_number')
+	if (leftBlock !== rightBlock) return leftBlock < rightBlock ? -1 : 1
+	const leftTransaction = canonicalEventPosition(left, 'transaction_index')
+	const rightTransaction = canonicalEventPosition(right, 'transaction_index')
+	if (leftTransaction !== rightTransaction) return leftTransaction < rightTransaction ? -1 : 1
+	const leftLog = canonicalEventPosition(left, 'log_index')
+	const rightLog = canonicalEventPosition(right, 'log_index')
+	return leftLog === rightLog ? 0 : leftLog < rightLog ? -1 : 1
+}
+
 export const canonicalPageLimit = (targetCount: number, loadedCount: number, pageSize: number): number =>
 	targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize
 
@@ -327,7 +410,7 @@ export const indexerProgressEstimate = (
 export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => {
 	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
 		return contract.deployment_block_exact === false
-			? { label: `Code present at #${contract.deployment_block}`, tone: 'live' }
+			? { label: `Deployed at or before #${contract.deployment_block}`, tone: 'live' }
 			: { label: 'Deployed', tone: 'live' }
 	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
 		return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
@@ -335,7 +418,7 @@ export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => 
 }
 
 export const contractDeploymentTimestampLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Code present at' : 'Deployed at'
+	contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'
 
 export const contractDeploymentBlockActionLabel = (contract: ContractDeploymentRecord): string =>
 	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'

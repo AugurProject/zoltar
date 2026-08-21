@@ -21,6 +21,7 @@ export interface RepEthPriceHistoryRecord {
 interface DemoUniswapMarket {
 	venue: 'v2' | 'v3' | 'v4'
 	fee: string
+	quote?: 'ETH' | 'USDC' | 'WETH'
 }
 
 const demoRepEthValues = [
@@ -61,7 +62,7 @@ export const demoRepEthPriceHistory = (now = Date.now()): RepEthPriceHistoryReco
 	})
 
 const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number): UniswapPriceObservation[] =>
-	markets.flatMap(({ venue, fee }, venueIndex) =>
+	markets.flatMap(({ venue, fee, quote }, venueIndex) =>
 		demoRepEthValues.slice(1).map((value, index) => ({
 			timestamp: new Date(now - (4 - index) * 8 * 86_400_000 + venueIndex * 9_000_000).toISOString(),
 			block_number: String(23_110_000 + index * 12_000 + venueIndex * 120),
@@ -69,9 +70,13 @@ const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number):
 			market_id: venue === 'v4' ? `0x${(venueIndex + 7).toString(16).repeat(64)}` : `0x${(venueIndex + 7).toString(16).repeat(40)}`,
 			contract_address: `0x${(venueIndex + 4).toString(16).repeat(40)}`,
 			fee_hundredths_bip: fee,
-			quote_symbol: venue === 'v4' ? 'ETH' : 'WETH',
+			quote_symbol: quote ?? (venue === 'v4' ? 'ETH' : 'WETH'),
 			event_name: index === 0 && venue !== 'v2' ? 'Initialize' : venue === 'v2' ? 'Sync' : 'Swap',
-			rep_per_eth_1e18: (BigInt(value) + (BigInt(venueIndex) - 1n) * 300_000_000_000_000_000n).toString(),
+			rep_per_eth_1e18:
+				quote === 'USDC'
+					? (4_200_000_000_000_000n + BigInt(index) * 90_000_000_000_000n).toString()
+					: (BigInt(value) + (BigInt(venueIndex) - 1n) * 300_000_000_000_000_000n).toString(),
+			liquidity_value: (10n ** 24n + BigInt(venueIndex * 7 + index) * 10n ** 22n).toString(),
 		})),
 	)
 
@@ -80,6 +85,7 @@ export const demoUniswapRepEthPriceHistory = (now = Date.now()): UniswapPriceObs
 		[
 			{ venue: 'v2', fee: '3000' },
 			{ venue: 'v3', fee: '500' },
+			{ venue: 'v3', fee: '500', quote: 'USDC' },
 			{ venue: 'v4', fee: '3000' },
 		],
 		now,

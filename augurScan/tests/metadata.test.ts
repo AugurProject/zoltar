@@ -318,12 +318,14 @@ describe('ABI metadata', () => {
 		expect(discoveriesFrom(decoded)).toEqual([{ address: pair, kind: 'ammPair', label: 'Augur AMM Pair' }])
 	})
 
-	test('discovers only known REP/WETH Uniswap V2 and V3 markets', () => {
+	test('discovers only known REP/quote Uniswap V2 and V3 markets', () => {
 		const pair = getAddress('0x3333333333333333333333333333333333333333')
 		const unrelated = getAddress('0x4444444444444444444444444444444444444444')
+		const usdc = getAddress('0x5555555555555555555555555555555555555555')
 		const contracts = new Map([
 			[account.toLowerCase(), { address: account, kind: 'reputationToken', label: 'REP', provenance: 'manifest' }],
 			[childToken.toLowerCase(), { address: childToken, kind: 'weth', label: 'WETH', provenance: 'manifest' }],
+			[usdc.toLowerCase(), { address: usdc, kind: 'usdc', label: 'USDC', provenance: 'manifest' }],
 		])
 		const v2Abi = abiForKind('uniswapV2Factory')
 		const v3Abi = abiForKind('uniswapV3Factory')
@@ -351,6 +353,14 @@ describe('ABI metadata', () => {
 			new Map(),
 		)
 		expect(discoveriesFrom(v3, contracts)).toEqual([{ address: pair, kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / WETH Pool' }])
+
+		const usdcV3 = decodeLogRecord(
+			'uniswapV3Factory',
+			requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: usdc, fee: 3000 } })),
+			encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [60, pair]),
+			new Map(),
+		)
+		expect(discoveriesFrom(usdcV3, contracts)).toEqual([{ address: pair, kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / USDC Pool' }])
 	})
 
 	test('retains unknown event evidence without throwing', () => {
