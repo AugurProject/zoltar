@@ -42,6 +42,7 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 		validateResponsiveRuntime(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
 		validateInteractiveCatalogs(parsedDocument, failures)
+		validateBoundExampleTargets(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
 		validatePlotMounts(parsedDocument, failures)
 		const hasMetaRefresh = Array.from(parsedDocument.document.querySelectorAll('meta[http-equiv]')).some(meta => meta.getAttribute('http-equiv')?.trim().toLowerCase() === 'refresh')
@@ -93,6 +94,19 @@ async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> 
 		relativePath: relativeToRepository(filePath),
 		text,
 		window,
+	}
+}
+
+function validateBoundExampleTargets(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const bindExampleSelectorPattern = /\bbindExample\s*\(\s*(['"])(#[^'"]+)\1\s*,/g
+	for (const script of Array.from(parsedDocument.document.querySelectorAll('script:not([src])'))) {
+		const scriptText = script.textContent ?? ''
+		for (const match of scriptText.matchAll(bindExampleSelectorPattern)) {
+			const selector = match[2]
+			if (selector !== undefined && !parsedDocument.ids.has(selector.slice(1))) {
+				addFailure(parsedDocument, `bindExample selector "${selector}" references a missing document element`, failures)
+			}
+		}
 	}
 }
 
