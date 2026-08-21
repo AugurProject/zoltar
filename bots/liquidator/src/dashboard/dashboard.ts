@@ -1114,6 +1114,7 @@ networkName.addEventListener('change', async () => {
 	pendingNetworkProfile = requestedNetwork
 	pendingProfileStateConfirmed = false
 	if (activeNetwork !== undefined) networkName.value = activeNetwork
+	if (activeNetwork !== undefined) networkScopeSummary.textContent = `${activeNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile · switching to ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'}`
 	marketSourceProbeRows = undefined
 	marketSourceCaption.textContent = 'Configured source admission'
 	showActiveAdmissionButton.classList.add('hidden')
@@ -1134,7 +1135,10 @@ networkName.addEventListener('change', async () => {
 			pendingProfileStateConfirmed = false
 		}
 		actionStatus(networkStatus, publicFailure(error, 'Could not switch chain profiles.'), true)
-		if (currentConfiguration?.network !== undefined) networkName.value = currentConfiguration.network.name
+		if (currentConfiguration?.network !== undefined) {
+			networkName.value = currentConfiguration.network.name
+			networkScopeSummary.textContent = `${currentConfiguration.network.name === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile · switchable`
+		}
 		networkFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration === undefined
 	}
 })

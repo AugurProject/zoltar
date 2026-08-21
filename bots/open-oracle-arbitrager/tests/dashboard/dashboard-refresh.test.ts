@@ -175,6 +175,8 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	await Bun.sleep(20)
 
 	expect(networkSelect.value).toBe('mainnet')
+	expect(element(window, 'network-target-status', window.HTMLElement).hidden).toBe(false)
+	expect(element(window, 'network-target-status', window.HTMLElement).textContent).toBe('Switching from mainnet to sepolia. Existing chain settings remain visible until the new profile loads.')
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(true)
 	releaseState?.()
@@ -193,6 +195,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	await Bun.sleep(50)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Sepolia')
 	expect(element(window, 'network-name', window.HTMLSelectElement).value).toBe('sepolia')
+	expect(element(window, 'network-target-status', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'configuration-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)

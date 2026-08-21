@@ -150,6 +150,11 @@ function updateManualRefreshState() {
 
 function updateNetworkTargetStatus() {
 	const target = element('network-target-status')
+	if (pendingNetworkProfile !== undefined) {
+		target.hidden = false
+		setText('network-target-status', `Switching from ${persistedNetwork ?? 'the active chain'} to ${pendingNetworkProfile}. Existing chain settings remain visible until the new profile loads.`)
+		return
+	}
 	const status = networkTargetStatus(latestSnapshot?.network, persistedNetwork)
 	target.hidden = status === undefined
 	if (status !== undefined) setText('network-target-status', status)
@@ -240,6 +245,7 @@ function finishPendingProfileIfReady(network: 'mainnet' | 'sepolia') {
 	if (pendingNetworkProfile !== network || !pendingProfileStateConfirmed || persistedNetwork !== network) return false
 	pendingNetworkProfile = undefined
 	pendingProfileStateConfirmed = false
+	updateNetworkTargetStatus()
 	setText('connectivity-status', 'Chain profile loaded. All settings shown belong to this chain.')
 	setControlsEnabled(connected)
 	return true
@@ -1195,8 +1201,9 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 	pendingProfileStateConfirmed = false
 	select.value = previousNetwork ?? requestedNetwork
 	select.disabled = true
+	updateNetworkTargetStatus()
 	setControlsEnabled(connected)
-	setText('connectivity-status', `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)
+	setText('connectivity-status', '')
 	try {
 		await api('/api/network-profile', { body: JSON.stringify({ network: requestedNetwork }), headers: { 'content-type': 'application/json' }, method: 'PUT' })
 		setText('connectivity-status', 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
@@ -1207,6 +1214,7 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 		pendingProfileStateConfirmed = false
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		select.value = previousNetwork ?? 'mainnet'
+		updateNetworkTargetStatus()
 		setControlsEnabled(connected)
 	}
 })

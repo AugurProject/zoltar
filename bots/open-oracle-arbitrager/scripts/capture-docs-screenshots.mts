@@ -399,10 +399,14 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							return {
 								activeProfile: document.querySelector('#network-name')?.value,
 								bodyScrollWidth: document.body.scrollWidth,
+								disabledInputOpacity: getComputedStyle(document.querySelector('#read-rpc-url')).opacity,
+								disabledTextareaBorderStyle: getComputedStyle(document.querySelector('#public-rpc-urls')).borderStyle,
 								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
 								readRpcUrl: document.querySelector('#read-rpc-url')?.value,
 								rpcQuorum: document.querySelector('#rpc-quorum')?.value,
 								scope: document.querySelector('#settings-chain-scope')?.textContent,
+								targetStatus: document.querySelector('#network-target-status')?.textContent,
+								targetStatusHidden: document.querySelector('#network-target-status')?.hidden,
 								status: document.querySelector('#connectivity-status')?.textContent
 							}
 						})()`,
@@ -416,6 +420,10 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					pendingValue === null ||
 					!('activeProfile' in pendingValue) ||
 					pendingValue.activeProfile !== 'mainnet' ||
+					!('disabledInputOpacity' in pendingValue) ||
+					pendingValue.disabledInputOpacity !== '0.65' ||
+					!('disabledTextareaBorderStyle' in pendingValue) ||
+					pendingValue.disabledTextareaBorderStyle !== 'dashed' ||
 					!('fieldsetDisabled' in pendingValue) ||
 					pendingValue.fieldsetDisabled !== true ||
 					!('readRpcUrl' in pendingValue) ||
@@ -424,8 +432,12 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					pendingValue.rpcQuorum !== '2' ||
 					!('scope' in pendingValue) ||
 					!String(pendingValue.scope).includes('Ethereum mainnet') ||
+					!('targetStatus' in pendingValue) ||
+					pendingValue.targetStatus !== 'Switching from mainnet to sepolia. Existing chain settings remain visible until the new profile loads.' ||
+					!('targetStatusHidden' in pendingValue) ||
+					pendingValue.targetStatusHidden !== false ||
 					!('status' in pendingValue) ||
-					!String(pendingValue.status).includes('Switching to the Sepolia profile') ||
+					pendingValue.status !== '' ||
 					!('bodyScrollWidth' in pendingValue) ||
 					typeof pendingValue.bodyScrollWidth !== 'number' ||
 					pendingValue.bodyScrollWidth > width

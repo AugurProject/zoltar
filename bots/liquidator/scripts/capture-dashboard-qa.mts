@@ -289,10 +289,13 @@ try {
 			mobile: await capture('liquidator-network-sepolia-switching-mobile', 390, 844, 0, 'settings'),
 			state: await evaluate(`({
 				activeProfile: document.querySelector('#network-name')?.value,
+				disabledInputOpacity: getComputedStyle(document.querySelector('#read-rpc-url')).opacity,
+				disabledTextareaBorderStyle: getComputedStyle(document.querySelector('#public-rpc-urls')).borderStyle,
 				fieldsDisabled: document.querySelector('#network-fields')?.disabled,
 				readRpcUrl: document.querySelector('#read-rpc-url')?.value,
 				rpcQuorum: document.querySelector('#rpc-quorum')?.value,
 				scope: document.querySelector('#settings-chain-scope')?.textContent,
+				summary: document.querySelector('#network-scope-summary')?.textContent,
 				status: document.querySelector('#network-status')?.textContent
 			})`),
 		}
@@ -301,10 +304,13 @@ try {
 			typeof switchingState !== 'object' ||
 			switchingState === null ||
 			Reflect.get(switchingState, 'activeProfile') !== 'mainnet' ||
+			Reflect.get(switchingState, 'disabledInputOpacity') !== '0.65' ||
+			Reflect.get(switchingState, 'disabledTextareaBorderStyle') !== 'dashed' ||
 			Reflect.get(switchingState, 'fieldsDisabled') !== true ||
 			Reflect.get(switchingState, 'readRpcUrl') !== 'https://read.example' ||
 			Reflect.get(switchingState, 'rpcQuorum') !== '2' ||
 			!String(Reflect.get(switchingState, 'scope')).includes('Ethereum mainnet') ||
+			Reflect.get(switchingState, 'summary') !== 'Ethereum mainnet profile · switching to Sepolia' ||
 			!String(Reflect.get(switchingState, 'status')).includes('Switching to the Sepolia profile')
 		) {
 			throw new Error(`Pending profile switch mixed chain contexts: ${JSON.stringify(switchingState)}`)
