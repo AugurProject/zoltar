@@ -1187,10 +1187,12 @@ marketConfigurationForm.addEventListener('submit', async event => {
 })
 
 testMarketSourcesButton.addEventListener('click', async () => {
+	const requestEpoch = profileRequestEpoch
 	testMarketSourcesButton.disabled = true
 	actionStatus(marketSourceTestStatus, 'Testing saved CEX and DEX sources…')
 	try {
 		const result = await put<{ assets: { assetId: string; sources: { id: string; kind: 'cex' | 'dex'; market: string; reason?: string; status: 'failed' | 'observed' }[] }[]; blockNumber: string }>('/api/test-market-sources', {})
+		if (requestEpoch !== profileRequestEpoch) return
 		marketSourceProbeRows = result.assets.flatMap(asset =>
 			asset.sources.map(source => ({
 				...source,
@@ -1203,6 +1205,7 @@ testMarketSourcesButton.addEventListener('click', async () => {
 		renderMarketSources(marketSourceProbeRows)
 		actionStatus(marketSourceTestStatus, `Source test completed at block ${result.blockNumber}`)
 	} catch (error) {
+		if (requestEpoch !== profileRequestEpoch) return
 		marketSourceProbeRows = undefined
 		marketSourceCaption.textContent = 'Configured source admission'
 		showActiveAdmissionButton.classList.add('hidden')

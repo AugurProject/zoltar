@@ -209,6 +209,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let hangNextStateRequest = false
 	let releaseStateRequest: (() => void) | undefined
 	let releasePauseRequest: (() => void) | undefined
+	let releaseMarketSourceRequest: (() => void) | undefined
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
@@ -242,6 +243,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			return new window.Response(JSON.stringify(capturedSnapshot), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/test-market-sources') {
+			if (releaseMarketSourceRequest !== undefined) await new Promise<void>(resolve => (releaseMarketSourceRequest = resolve))
 			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/paused' && rejectPause) {
@@ -343,6 +345,14 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		releasePauseRequest: () => {
 			const release = releasePauseRequest
 			releasePauseRequest = undefined
+			release?.()
+		},
+		suspendNextMarketSourceRequest: () => {
+			releaseMarketSourceRequest = () => undefined
+		},
+		releaseMarketSourceRequest: () => {
+			const release = releaseMarketSourceRequest
+			releaseMarketSourceRequest = undefined
 			release?.()
 		},
 		suspendNextApprovedUniverseRequest: () => {
@@ -554,10 +564,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
 		const testSources = page.window.document.getElementById('test-market-sources')
 		if (!(testSources instanceof page.window.HTMLButtonElement)) throw new Error('Expected source test control')
+		page.suspendNextMarketSourceRequest()
 		testSources.click()
-		await page.waitUntilComplete()
-		await Bun.sleep(1)
-		expect(page.window.document.getElementById('market-source-rows')?.textContent).toContain('Observed')
+		await Bun.sleep(10)
 
 		page.suspendNextStateRequest()
 		const staleStateRefresh = page.refresh()
@@ -570,6 +579,11 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
+		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
+		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
+		page.releaseMarketSourceRequest()
+		await Bun.sleep(20)
 		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
 		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
 		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
