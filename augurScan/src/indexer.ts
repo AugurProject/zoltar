@@ -10,6 +10,7 @@ import {
 	createRpcDiagnosticContext,
 	databaseFailureMessage,
 	deploymentReadBudget,
+	indexerLogSources,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
 	indexerWaitingMessage,
@@ -36,6 +37,7 @@ import {
 	runIndexerOwnershipLifecycle,
 	runOwnedNetworkLifecycle,
 	safeIndexerFailure,
+	scanDiscoveredLogCoverage,
 	withVerifiedProvider,
 } from './indexer-runtime.ts'
 import { createRpcLoggingFetch, RotatingJsonLog } from './logging.ts'
@@ -859,7 +861,7 @@ class NetworkIndexer {
 		let contracts = this.#withManifestDeploymentBlocks(await this.#database.contracts(this.#network.chainId, this.#requireLease()))
 		let tokenMetadata = await this.#database.tokenMetadata(this.#network.chainId, this.#requireLease())
 		const storedCursors = await this.#database.logScanCursors(this.#network.chainId, this.#requireLease())
-		const initialContracts = [...contracts.values()].filter(isProtocolActivitySource)
+		const initialContracts = indexerLogSources([...contracts.values()])
 		const initialAddresses = initialContracts.map(({ address }) => address)
 		for (const address of initialAddresses) {
 			const cursor = storedCursors.get(address.toLowerCase())
@@ -916,43 +918,40 @@ class NetworkIndexer {
 		while (nextBlock <= end && !this.#signal.aborted) {
 			const header = headers[bigintToSafeNumber(nextBlock - batchStart, 'Block header offset')]
 			if (header === undefined) throw new Error(`RPC did not return block ${nextBlock}`)
-			const contractsBeforeBlock = new Set(contracts.keys())
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 			try {
-				indexed = await this.#indexBlock(nextBlock, observedHead, contracts, tokenMetadata, expectedParentHash, header, logsByBlock.get(nextBlock) ?? [])
+				indexed = await this.#indexBlock(
+					nextBlock,
+					observedHead,
+					contracts,
+					tokenMetadata,
+					expectedParentHash,
+					header,
+					logsByBlock.get(nextBlock) ?? [],
+					async (discoveredAddresses, discoveredContracts) => {
+						const coverage = await scanDiscoveredLogCoverage(
+							nextBlock,
+							end,
+							discoveredAddresses,
+							discoveredContracts,
+							(addresses) => this.#getKnownLogs(nextBlock, addresses, discoveredContracts, header.hash),
+							(fromBlock, toBlock, addresses) =>
+								this.#getAllLogs(fromBlock, toBlock, addresses, discoveredContracts, (blockNumber) => {
+									const expected = headers[bigintToSafeNumber(blockNumber - batchStart, 'Log block header offset')]
+									if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
+									return expected.hash
+								}),
+						)
+						this.#mergeLogs(logsByBlock, coverage.remainingLogs)
+						return coverage.currentBlockLogs
+					},
+				)
 			} catch (error) {
 				if (error instanceof ChainContinuityError) {
 					await this.#reconcileReorg()
 					return false
 				}
 				throw error
-			}
-			const newlyDiscoveredActivityAddresses = [...indexed.contracts]
-				.filter(([address, contract]) => !contractsBeforeBlock.has(address) && isProtocolActivitySource(contract))
-				.map(([, contract]) => contract.address)
-			const discoveredRep = [...indexed.contracts].some(([address, contract]) => !contractsBeforeBlock.has(address) && contract.kind === 'reputationToken')
-			const additionalAddresses = [
-				...newlyDiscoveredActivityAddresses,
-				...(discoveredRep
-					? [...indexed.contracts.values()]
-							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
-							.map(({ address }) => address)
-					: []),
-			]
-			if (additionalAddresses.length > 0 && nextBlock < end) {
-				try {
-					this.#mergeLogs(
-						logsByBlock,
-						await this.#getAllLogs(nextBlock + 1n, end, additionalAddresses, indexed.contracts, (blockNumber) => {
-							const expected = headers[bigintToSafeNumber(blockNumber - batchStart, 'Log block header offset')]
-							if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
-							return expected.hash
-						}),
-					)
-				} catch (error) {
-					if (error instanceof ChainContinuityError) return false
-					throw error
-				}
 			}
 			const isSegmentEnd = nextBlock === end
 			const block = isSegmentEnd
@@ -1176,6 +1175,7 @@ class NetworkIndexer {
 		expectedParentHash: Hash | undefined,
 		block: RpcBlockHeader,
 		prefetchedLogs: readonly Log[],
+		getDiscoveredLogs: (addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>) => Promise<readonly Log[]>,
 	): Promise<{ block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }> {
 		if (expectedParentHash !== undefined && block.parentHash !== expectedParentHash) {
 			throw new ChainContinuityError(`Block ${number} does not extend the indexed canonical chain`)
@@ -1258,17 +1258,7 @@ class NetworkIndexer {
 				}
 			}
 			if (discoveredAddresses.length === 0) break
-			const activityAddresses = discoveredAddresses.filter((address) => isProtocolActivitySource(contracts.get(address.toLowerCase())))
-			const discoveredRep = discoveredAddresses.some((address) => contracts.get(address.toLowerCase())?.kind === 'reputationToken')
-			const queryAddresses = [
-				...activityAddresses,
-				...(discoveredRep
-					? [...contracts.values()]
-							.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
-							.map(({ address }) => address)
-					: []),
-			]
-			for (const log of queryAddresses.length === 0 ? [] : await this.#getKnownLogs(number, queryAddresses, contracts, block.hash)) {
+			for (const log of await getDiscoveredLogs(discoveredAddresses, contracts)) {
 				relevantHashes.add(requireLogPosition(log).transactionHash)
 			}
 			await fetchMissingEvidence()
