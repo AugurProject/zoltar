@@ -421,7 +421,7 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 			assert.equal(peakHeight.disabled, true, `${invalidLeafCount} must disable the occupied-peak selector`)
 			assert.equal(peakHeight.options.length, 64, `${invalidLeafCount} must retain the dependent peak choices for layout stability`)
 			assert.equal(
-				Array.from(window.document.querySelectorAll<HTMLButtonElement>('.peak-choice-control button')).every(button => button.disabled),
+				Array.from(window.document.querySelectorAll('.peak-choice-control button')).every(button => button instanceof window.HTMLButtonElement && button.disabled),
 				true,
 				`${invalidLeafCount} must visibly disable every dependent peak choice`,
 			)
