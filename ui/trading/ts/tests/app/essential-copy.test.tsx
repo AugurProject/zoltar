@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { App } from '../../app/App.js'
+import { App, currentRoute } from '../../app/App.js'
 import { demoMarket } from '../../demo/markets.js'
 import { MarketDetail } from '../../features/MarketDetail.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTrading.js'
@@ -67,17 +67,18 @@ describe('essential trading copy', () => {
 		expect(rendered.container.textContent).not.toContain('Fork continuation')
 	})
 
-	test('keeps live-only deployment out of demo navigation without exposing pool internals outside the security pool view', async () => {
+	test('does not let the removed demo query hide live deployment or invent pool data', async () => {
 		const market = demoMarket('baseline')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Developer')
-		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deploy')
+		expect(rendered.container.querySelector('nav')?.textContent).toContain('Deploy')
+		expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('Outcome token IDs')
 		expect(rendered.container.textContent).not.toContain('System state')
 		expect(rendered.container.textContent).not.toContain('Security multiplier')
 		const poolLink = rendered.container.querySelector(`a[href="#/security-pool/${market.pool}"]`)
-		expect(poolLink).not.toBeNull()
+		expect(poolLink).toBeNull()
 	})
 
 	test('shows technical identifiers and resolved outcome only in security pool details', async () => {
@@ -162,11 +163,8 @@ describe('essential trading copy', () => {
 		expect(invalidInputs[1]?.getAttribute('aria-describedby')).toBe(alerts[1]?.id)
 	})
 
-	test('does not preserve removed developer-route selector behavior', async () => {
+	test('does not preserve removed developer-route behavior', () => {
 		window.history.replaceState(undefined, '', '/?demo=1#/developer')
-		const rendered = await renderIntoDocument(<App />)
-		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.universe-selector')).not.toBeNull()
-		expect(rendered.container.querySelector('main')?.textContent).toContain('Markets')
+		expect(currentRoute()).toBe('markets')
 	})
 })

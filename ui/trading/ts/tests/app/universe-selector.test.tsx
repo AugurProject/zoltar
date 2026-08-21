@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, compactUniverseId, currentRoute, routeOwnsLiveWallet, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../app/App.js'
-import { demoMarket } from '../../demo/markets.js'
+import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, currentRoute, routeOwnsLiveWallet, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../app/App.js'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/LiveTrading.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
@@ -13,7 +12,7 @@ describe('universe selector', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/?demo=1#/markets').cleanup
+		cleanupDom = installDomEnvironment('http://localhost/#/markets').cleanup
 	})
 
 	afterEach(async () => {
@@ -54,7 +53,7 @@ describe('universe selector', () => {
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
-		window.history.replaceState(undefined, '', '/?demo=1&scenario=loading#/missing')
+		window.history.replaceState(undefined, '', '/#/missing')
 		expect(currentRoute()).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
@@ -154,78 +153,6 @@ describe('universe selector', () => {
 		expect(options[2]?.accessibleLabel).toBe(`Universe ${firstCollision.toString()}`)
 		expect(options[3]?.accessibleLabel).toBe(`Universe ${secondCollision.toString()}`)
 		expect(() => compactUniqueUniverseIds(['7', '7'])).toThrow('Universe IDs must be unique')
-	})
-
-	test('uses the header selection as the demo portfolio universe context', async () => {
-		window.history.replaceState(undefined, '', '/?demo=1#/portfolio')
-		const rendered = await renderIntoDocument(<App />)
-		cleanupRendered = rendered.cleanup
-		const select = rendered.container.querySelector<HTMLSelectElement>('.universe-selector select')
-		const main = rendered.container.querySelector('main')
-		const walletAddress = rendered.container.querySelector('.wallet-summary__address')
-		const ethDisplay = rendered.container.querySelector('[data-wallet-asset="ETH"]')
-		const repBalance = rendered.container.querySelector('[data-wallet-asset="REP"]')
-		expect(walletAddress?.textContent).toBe('0x8ba1f109551bD432803012645Ac136ddd64DBA72')
-		expect(walletAddress?.textContent).not.toContain('…')
-		expect(rendered.container.querySelector('.wallet-summary__address--compact')?.textContent).toBe('0x8ba1…BA72')
-		expect(rendered.container.querySelector('.wallet-summary__details')?.textContent).toContain('Connected account0x8ba1f109551bD432803012645Ac136ddd64DBA72')
-		expect(ethDisplay?.textContent).toBe('ETH64')
-		expect(repBalance?.textContent).toBe('REP12,500')
-		expect(main?.textContent).toContain(demoMarket('baseline').pool)
-		expect(main?.textContent).not.toContain('Genesis universe')
-		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(1)
-		await act(() => {
-			if (select === null) throw new Error('Universe selector is unavailable')
-			select.value = demoMarket('truth-auction').universeId.toString()
-			select.dispatchEvent(new Event('change', { bubbles: true }))
-		})
-		expect(main?.textContent).toContain(demoMarket('truth-auction').pool)
-		expect(main?.textContent).not.toContain(demoMarket('baseline').pool)
-		expect(repBalance?.textContent).toBe('REP1,750')
-	})
-
-	test('keeps an unknown demo pool deep link scoped to its unavailable state', async () => {
-		const unknownPool = `0x${'99'.repeat(20)}`
-		window.history.replaceState(undefined, '', `/?demo=1#/security-pool/${unknownPool}`)
-		const rendered = await renderIntoDocument(<App />)
-		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('main')?.textContent).toContain('This security pool is not available in the selected universe.')
-		expect(rendered.container.querySelector('main')?.textContent).not.toContain('MarketsTrading open')
-		expect(window.location.hash).toBe(`#/security-pool/${unknownPool}`)
-	})
-
-	test('shows scoped unavailability when the selected universe does not contain the routed demo pool', async () => {
-		const routedPool = demoMarket('baseline').pool
-		window.history.replaceState(undefined, '', `/?demo=1#/security-pool/${routedPool}`)
-		const rendered = await renderIntoDocument(<App />)
-		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain('Security multiplier2×')
-		const select = rendered.container.querySelector<HTMLSelectElement>('.universe-selector select')
-		if (select === null) throw new Error('Universe selector is unavailable')
-		await act(() => {
-			select.value = select.options[1]?.value ?? ''
-			select.dispatchEvent(new Event('change', { bubbles: true }))
-		})
-		expect(rendered.container.querySelector('main')?.textContent).toContain('This security pool is not available in the selected universe.')
-		expect(rendered.container.querySelector('main')?.textContent).not.toContain('Security multiplier')
-		expect(window.location.hash).toBe(`#/security-pool/${routedPool}`)
-	})
-
-	test('initializes the selector from the scenario universe', async () => {
-		window.history.replaceState(undefined, '', '/?demo=1&scenario=max-token-ids#/portfolio')
-		const rendered = await renderIntoDocument(<App />)
-		cleanupRendered = rendered.cleanup
-		const selected = demoMarket('max-token-ids').universeId.toString()
-		const selector = rendered.container.querySelector<HTMLSelectElement>('.universe-selector select')
-		expect(selector?.value).toBe(selected)
-		expect(selector?.selectedOptions[0]?.textContent).toBe(`Universe ${compactUniverseId(selected)}`)
-		expect(selector?.selectedOptions[0]?.getAttribute('aria-label')).toBe(`Universe ${selected}`)
-		const longOptions = Array.from(selector?.options ?? []).filter(option => option.value.length > 18)
-		expect(longOptions).toHaveLength(2)
-		expect(longOptions[0]?.textContent).not.toBe(longOptions[1]?.textContent)
-		expect(longOptions.every(option => option.textContent?.includes('…') === true)).toBeTrue()
-		expect(rendered.container.querySelector('main')?.textContent).not.toContain(((1n << 256n) - 256n).toString())
-		expect(rendered.container.querySelector(`a[href="#/security-pool/${demoMarket('max-token-ids').pool}"]`)).not.toBeNull()
 	})
 
 	test('keeps wallet balance failures visible without abbreviating the account', async () => {

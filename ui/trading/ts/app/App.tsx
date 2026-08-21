@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/shared/ethereum'
-import { demoMarket, demoWalletAccount, demoWalletEthAttoEth, demoWalletRepAttoRep } from '../demo/markets.js'
-import { MarketDetail } from '../features/MarketDetail.js'
-import { Help, Liquidity, MarketList, Portfolio, SecurityPoolDetails } from '../features/Routes.js'
+import { Help } from '../features/Help.js'
 import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
@@ -16,8 +14,6 @@ import * as appCopy from '../copy/app.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 
 const tradingRoutes = ['markets', 'market', 'liquidity', 'portfolio', 'deploy', 'help'] as const
 type TradingRoute = (typeof tradingRoutes)[number] | `security-pool/${string}` | 'not-found'
@@ -40,25 +36,7 @@ function tradingPageTitle(route: TradingRoute) {
 	return tradingDocumentTitle(route).replace(` · ${appCopy.appName}`, '')
 }
 
-function DemoSecurityPoolUnavailable() {
-	return (
-		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={<a href='#/markets'>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
-			<SectionBlock className='section'>
-				<ErrorNotice message={appCopy.unavailablePool} />
-			</SectionBlock>
-		</main>
-	)
-}
-
-function renderRoute(route: string, scenario: string, market: ReturnType<typeof demoMarket>, onWorkflowLockChange: (locked: boolean) => void) {
-	if (route.toLowerCase() === `security-pool/${market.pool}`.toLowerCase()) return <SecurityPoolDetails market={market} />
-	if (/^security-pool\/0x[0-9a-f]{40}$/i.test(route)) return <DemoSecurityPoolUnavailable />
-	if (route === 'market') return <MarketDetail market={market} scenario={scenario} onWorkflowLockChange={onWorkflowLockChange} />
-	if (route === 'liquidity') return <Liquidity market={market} />
-	if (route === 'portfolio') return <Portfolio market={market} />
-	if (route === 'help') return <Help />
-	if (route === 'markets') return <MarketList market={market} />
+function renderNotFoundRoute() {
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader title={appCopy.pageNotFound} />
@@ -66,28 +44,6 @@ function renderRoute(route: string, scenario: string, market: ReturnType<typeof 
 				{appCopy.returnToMarkets}
 			</a>
 		</main>
-	)
-}
-
-function renderBanner(scenario: string, demo: boolean) {
-	let runtimeBanner
-	if (scenario === 'wrong-network')
-		runtimeBanner = (
-			<div class='runtime-banner' role='alert'>
-				<strong>Unsupported network</strong>
-				<span>Switch to the configured chain before simulating or submitting.</span>
-			</div>
-		)
-	return (
-		<>
-			{demo ? (
-				<div class='demo-banner' role='status'>
-					<strong>SIMULATED DATA</strong>
-					<span>Demo mode · no live chain claims or transactions</span>
-				</div>
-			) : null}
-			{runtimeBanner}
-		</>
 	)
 }
 
@@ -123,17 +79,15 @@ async function resolveLiveDeployment() {
 	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
-export function tradingNetworkLabel(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
-	if (scenario === 'wrong-network') return 'Unsupported · requires Anvil 31337'
-	if (demo) return 'Anvil 31337'
+export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus) {
 	if (liveDeploymentStatus === 'verified') return commonCopy.deploymentVerified
 	if (liveDeploymentStatus === 'unavailable') return 'Deployment unavailable'
 	return 'Checking deployment'
 }
 
-function networkToneClass(scenario: string, demo: boolean, liveDeploymentStatus: LiveDeploymentStatus) {
-	if (scenario === 'wrong-network' || (!demo && liveDeploymentStatus === 'unavailable')) return ' network-pill--warn'
-	if (!demo && liveDeploymentStatus !== 'verified') return ' network-pill--neutral'
+function networkToneClass(liveDeploymentStatus: LiveDeploymentStatus) {
+	if (liveDeploymentStatus === 'unavailable') return ' network-pill--warn'
+	if (liveDeploymentStatus !== 'verified') return ' network-pill--neutral'
 	return ''
 }
 
@@ -223,22 +177,6 @@ export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryStat
 	)
 }
 
-function demoUniverseChoices(scenario: string) {
-	const choices = scenario === 'max-token-ids' ? [demoMarket(scenario), demoMarket('max-token-ids-alt'), demoMarket('baseline'), demoMarket('truth-auction')] : [demoMarket(scenario), demoMarket('baseline'), demoMarket('truth-auction')]
-	return choices.filter((market, index) => choices.findIndex(candidate => candidate.universeId === market.universeId) === index)
-}
-
-function demoWalletSummary(scenario: string, universeId: bigint, retrySucceeded: boolean): WalletSummaryState {
-	const selectedUniverseId = universeId.toString()
-	if (scenario === 'wallet-balance-loading') return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
-	if (scenario === 'wallet-balance-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'Wallet balance RPC request failed', errorLabel: 'Wallet balance read failed', universeId: selectedUniverseId }
-	if (scenario === 'wallet-discovery-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'No SecurityPool is available in the selected universe', errorLabel: 'No SecurityPool in this universe', universeId: selectedUniverseId }
-	if (scenario === 'wallet-pool-error' && !retrySucceeded) return { account: demoWalletAccount, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'The selected SecurityPool could not be read', errorLabel: 'SecurityPool unavailable', universeId: selectedUniverseId }
-	if (scenario === 'wallet-max-balances') return { account: demoWalletAccount, ethAttoEth: 2n ** 256n - 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
-	if (scenario === 'wallet-small-balances') return { account: demoWalletAccount, ethAttoEth: 1n, repAttoRep: 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
-	return { account: demoWalletAccount, ethAttoEth: demoWalletEthAttoEth, repAttoRep: demoWalletRepAttoRep(universeId), status: 'ready', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
-}
-
 export function walletSummaryForUniverse(summary: WalletSummaryState, selectedUniverseId: string | undefined): WalletSummaryState {
 	if (summary.universeId === selectedUniverseId) return summary
 	return { account: summary.account, ethAttoEth: undefined, repAttoRep: undefined, status: summary.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
@@ -251,11 +189,6 @@ export function routeOwnsLiveWallet(route: string) {
 export function walletSummaryAfterRouteChange(summary: WalletSummaryState, previousRoute: string, nextRoute: string, selectedUniverseId: string | undefined): WalletSummaryState {
 	if (routeOwnsLiveWallet(previousRoute) === routeOwnsLiveWallet(nextRoute)) return summary
 	return { account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }
-}
-
-export function compactUniverseId(universeId: string) {
-	if (universeId.length <= 18) return universeId
-	return `${universeId.slice(0, 3)}…${universeId.slice(-3)}`
 }
 
 export function compactUniqueUniverseIds(universeIds: readonly string[]) {
@@ -279,13 +212,6 @@ export function buildLiveUniverseOptions(universeIds: readonly bigint[]): readon
 	})
 }
 
-function demoUniverseLabel(market: ReturnType<typeof demoMarket>, compactId: string) {
-	if (market.universeId === 1n && market.universe === 'Genesis universe') return 'Genesis universe'
-	if (market.universeId === 1n && market.universe === 'Parent universe · forked') return 'Universe 1 · forked'
-	if (market.universeId === 2n && market.universe === 'Child universe · YES branch') return 'Universe 2 · YES branch'
-	return `Universe ${compactId}`
-}
-
 function deploymentWalletLabel(state: DeploymentWalletState) {
 	if (state.connecting) return 'Connecting wallet…'
 	if (state.account === undefined) return 'Connect wallet'
@@ -293,16 +219,12 @@ function deploymentWalletLabel(state: DeploymentWalletState) {
 }
 
 export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveDeployment }: { deploymentSetupServices?: TradingDeploymentSetupServices; loadLiveDeployment?: () => Promise<DeploymentConfiguration> } = {}) {
-	const query = new URLSearchParams(window.location.search)
-	const demo = query.get('demo') === '1'
-	const scenario = query.get('scenario') ?? 'baseline'
-	const initialDemoMarket = demoMarket(scenario)
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
 	const [workflowLocked, setWorkflowLocked] = useState(false)
-	const [selectedUniverseId, setSelectedUniverseId] = useState<string | undefined>(demo ? initialDemoMarket.universeId.toString() : undefined)
+	const [selectedUniverseId, setSelectedUniverseId] = useState<string>()
 	const [liveUniverseOptions, setLiveUniverseOptions] = useState<readonly UniverseOption[]>([])
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
@@ -310,7 +232,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, ready: false })
 	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
-	const [demoWalletRetrySucceeded, setDemoWalletRetrySucceeded] = useState(false)
 	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
 	routeRef.current = route
@@ -327,25 +248,11 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 			return authoritativeSelection?.toString()
 		})
 	}, [])
-	const demoMarkets = demoUniverseChoices(scenario)
-	const demoCompactUniverseIds = compactUniqueUniverseIds(demoMarkets.map(choice => choice.universeId.toString()))
-	const demoUniverseOptions = demoMarkets.map((choice, index) => {
-		const id = choice.universeId.toString()
-		const compactId = demoCompactUniverseIds[index]
-		if (compactId === undefined) throw new Error('Demo universe label generation failed')
-		const label = demoUniverseLabel(choice, compactId)
-		return { id, label, accessibleLabel: label.includes('…') ? `Universe ${id}` : label }
-	})
-	const market = demoMarkets.find(choice => choice.universeId.toString() === selectedUniverseId) ?? initialDemoMarket
-	const universeOptions = demo ? demoUniverseOptions : liveUniverseOptions
-	const showUniverseSelector = route !== 'deploy' && route !== 'help' && (demo || liveDeploymentStatus !== 'unavailable')
-	const walletSummary = demo ? demoWalletSummary(scenario, market.universeId, demoWalletRetrySucceeded) : walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
+	const showUniverseSelector = route !== 'deploy' && route !== 'help' && liveDeploymentStatus !== 'unavailable'
+	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
-		if (demo) setDemoWalletRetrySucceeded(true)
-		else {
-			setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
-			setWalletSummaryRetryNonce(current => current + 1)
-		}
+		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
+		setWalletSummaryRetryNonce(current => current + 1)
 	}
 	const completeWalletDeployment = useCallback((configuration: DeploymentConfiguration) => {
 		setLiveConfiguration(configuration)
@@ -353,7 +260,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		setLiveDeploymentStatus('verified')
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
-	const deploymentSetupActive = !demo && route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
+	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const displayedRoute = deploymentSetupActive ? 'deploy' : route
 	useEffect(() => {
 		const update = () => {
@@ -362,15 +269,14 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 				return
 			}
 			const nextRoute = currentRoute()
-			if (!demo) setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, routeRef.current, nextRoute, selectedUniverseId))
+			setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, routeRef.current, nextRoute, selectedUniverseId))
 			routeRef.current = nextRoute
 			setRoute(nextRoute)
 		}
 		window.addEventListener('hashchange', update)
 		return () => window.removeEventListener('hashchange', update)
-	}, [demo, selectedUniverseId])
+	}, [selectedUniverseId])
 	useEffect(() => {
-		if (demo) return
 		let active = true
 		setLiveDeploymentStatus('loading')
 		void (async () => {
@@ -390,60 +296,47 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 		return () => {
 			active = false
 		}
-	}, [demo, loadLiveDeployment])
-	const resolvedContent = renderRoute(route, scenario, market, updateWorkflowLock)
-	let content = resolvedContent
-	if (!demo) {
-		if (route === 'not-found') content = resolvedContent
-		else if (route === 'help') content = <Help />
-		else if (route === 'deploy')
-			content = (
-				<TradingDeploymentSetup
-					onComplete={completeWalletDeployment}
-					onWorkflowLockChange={updateWorkflowLock}
-					onWalletStateChange={updateDeploymentWalletState}
-					{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
-					walletControlRequestNonce={deploymentWalletRequestNonce}
-					{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
-					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
-				/>
-			)
-		else if (liveDeploymentStatus === 'unavailable')
-			content = (
-				<TradingDeploymentSetup
-					onComplete={completeWalletDeployment}
-					onWorkflowLockChange={updateWorkflowLock}
-					onWalletStateChange={updateDeploymentWalletState}
-					{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
-					walletControlRequestNonce={deploymentWalletRequestNonce}
-					{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
-				/>
-			)
-		else
-			content = (
-				<LiveTrading
-					route={route}
-					configuration={liveConfiguration}
-					configurationError={liveConfigurationError}
-					selectedUniverseId={selectedUniverseId}
-					onUniversesChange={updateLiveUniverses}
-					onWorkflowLockChange={updateWorkflowLock}
-					onWalletSummaryChange={setLiveWalletSummary}
-					walletSummaryRetryNonce={walletSummaryRetryNonce}
-					walletConnectRequestNonce={walletConnectRequestNonce}
-				/>
-			)
-	} else if (route !== 'not-found' && scenario === 'loading')
+	}, [loadLiveDeployment])
+	let content
+	if (route === 'not-found') content = renderNotFoundRoute()
+	else if (route === 'help') content = <Help />
+	else if (route === 'deploy')
 		content = (
-			<main class='route' id='main-content'>
-				<RouteHeader title={appCopy.loadingMarkets} description={appCopy.loadingMarketsDescription} />
-				<section class='section' aria-busy='true'>
-					<div class='loading-line' />
-					<div class='loading-line loading-line--short' />
-				</section>
-			</main>
+			<TradingDeploymentSetup
+				onComplete={completeWalletDeployment}
+				onWorkflowLockChange={updateWorkflowLock}
+				onWalletStateChange={updateDeploymentWalletState}
+				{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
+				walletControlRequestNonce={deploymentWalletRequestNonce}
+				{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
+				{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
+			/>
 		)
-	const banner = renderBanner(scenario, demo)
+	else if (liveDeploymentStatus === 'unavailable')
+		content = (
+			<TradingDeploymentSetup
+				onComplete={completeWalletDeployment}
+				onWorkflowLockChange={updateWorkflowLock}
+				onWalletStateChange={updateDeploymentWalletState}
+				{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
+				walletControlRequestNonce={deploymentWalletRequestNonce}
+				{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
+			/>
+		)
+	else
+		content = (
+			<LiveTrading
+				route={route}
+				configuration={liveConfiguration}
+				configurationError={liveConfigurationError}
+				selectedUniverseId={selectedUniverseId}
+				onUniversesChange={updateLiveUniverses}
+				onWorkflowLockChange={updateWorkflowLock}
+				onWalletSummaryChange={setLiveWalletSummary}
+				walletSummaryRetryNonce={walletSummaryRetryNonce}
+				walletConnectRequestNonce={walletConnectRequestNonce}
+			/>
+		)
 	const simulationController = getActiveSimulationController()
 	return (
 		<div class='app-shell'>
@@ -454,7 +347,6 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 				onRefresh={async () => window.location.reload()}
 				renderHeader={simulationBanner => (
 					<div class='site-chrome'>
-						{banner}
 						{simulationBanner}
 						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
 							<a class='brand' href='#/markets' aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
@@ -464,7 +356,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 								</span>
 							</a>
 							<nav aria-label={appCopy.primaryNavigationLabel}>
-								{!demo && liveDeploymentStatus !== 'verified' ? (
+								{liveDeploymentStatus !== 'verified' ? (
 									<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href='#/deploy' onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 										{appCopy.deploy}
 									</a>
@@ -483,12 +375,12 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 								</a>
 							</nav>
 							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
-								<span class={`network-pill${networkToneClass(scenario, demo, liveDeploymentStatus)}`}>
+								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
 									<span />
-									{tradingNetworkLabel(scenario, demo, liveDeploymentStatus)}
+									{tradingNetworkLabel(liveDeploymentStatus)}
 								</span>
-								{demo || showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
-								{showUniverseSelector ? <UniverseSelector options={universeOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
+								{showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
+								{showUniverseSelector ? <UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
 								{deploymentSetupActive ? (
 									<button
 										class='wallet-button'
@@ -503,7 +395,7 @@ export function App({ deploymentSetupServices, loadLiveDeployment = resolveLiveD
 									</button>
 								) : null}
 								{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
-								{!demo && liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
+								{liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
 									<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
 										{walletSummary.account === undefined ? appCopy.connectWallet : shortAddress(walletSummary.account)}
 									</button>

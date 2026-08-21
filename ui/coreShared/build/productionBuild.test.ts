@@ -122,6 +122,11 @@ for (const appId of UI_APP_IDS) {
 		expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
 		expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
 		expect(appBundle).toContain(expectedRoute)
+		if (appId === 'trading') {
+			expect(appBundle).not.toContain('SIMULATED DATA')
+			expect(appBundle).not.toContain('Demo mode')
+			expect(appBundle).not.toContain('demo-banner')
+		}
 	})
 
 	test(`${appId} production build can be served as static files`, async () => {

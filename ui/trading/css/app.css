@@ -68,30 +68,6 @@ summary:focus-visible {
 .skip-link:focus {
 	transform: translateY(0);
 }
-.demo-banner,
-.runtime-banner {
-	min-height: 34px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.65rem;
-	border-bottom: 1px solid #48541f;
-	background: #20280e;
-	color: #dff797;
-	font:
-		11px / 1.2 ui-monospace,
-		monospace;
-	letter-spacing: 0.04em;
-}
-.runtime-banner {
-	border-color: #59461f;
-	background: #2b2211;
-	color: #f2d99d;
-}
-.demo-banner strong,
-.runtime-banner strong {
-	letter-spacing: 0.12em;
-}
 .site-chrome {
 	position: sticky;
 	top: 0;
@@ -1652,13 +1628,6 @@ summary {
 		position: relative;
 		isolation: isolate;
 		background: #090d12;
-	}
-	.demo-banner,
-	.runtime-banner {
-		align-items: flex-start;
-		flex-direction: column;
-		gap: 0.15rem;
-		padding: 0.45rem 1rem;
 	}
 	.site-header {
 		grid-template-columns: auto 1fr;

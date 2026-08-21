@@ -9,6 +9,8 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tradingNetworkLabel } from '../../app/App.js'
+import { App } from '../../app/App.js'
+import type { DeploymentConfiguration } from '../../protocol/config.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {
 	registerTradingSimulationScenario()
@@ -35,6 +37,26 @@ test('Trading preserves its route headers and does not restyle shared disclosure
 })
 
 test('verified deployment status stays accurate in live and simulated environments', () => {
-	expect(tradingNetworkLabel('baseline', false, 'verified')).toBe('Deployment verified')
-	expect(tradingNetworkLabel('baseline', true, 'verified')).toBe('Anvil 31337')
+	expect(tradingNetworkLabel('verified')).toBe('Deployment verified')
+})
+
+test('the removed demo query cannot select a parallel simulated-data application', async () => {
+	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/markets')
+	const configuration: DeploymentConfiguration = {
+		chainId: 31_337,
+		chainName: 'Browser Simulation',
+		factory: `0x${'22'.repeat(20)}`,
+		feeBps: 30,
+		router: `0x${'33'.repeat(20)}`,
+		rpcUrl: 'http://127.0.0.1/',
+		securityPoolFactory: `0x${'11'.repeat(20)}`,
+	}
+	const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
+	await new Promise(resolve => setTimeout(resolve, 10))
+	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
+	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
+	expect(rendered.container.textContent).not.toContain('Demo mode')
+	expect(rendered.container.textContent).toContain('SecurityPools')
+	await rendered.cleanup()
+	dom.cleanup()
 })

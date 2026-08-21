@@ -7,9 +7,9 @@ import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { AddressValue, SecurityPoolAddressLink, Status } from '../components/Status.js'
 import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
 import { shareBalanceScope } from '../protocol/live.js'
-import * as commonCopy from '../copy/common.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import * as appCopy from '../copy/app.js'
+export { Help } from './Help.js'
 
 function MarketListAction({ market }: { market: DemoMarket }) {
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n && market.yesReserve > 0n && market.noReserve > 0n
@@ -397,48 +397,6 @@ export function Portfolio({ market }: { market: DemoMarket }) {
 			<div class='portfolio-groups'>
 				<DemoPortfolioGroup market={market} balances={demoWalletBalances} />
 			</div>
-		</main>
-	)
-}
-
-export function Help() {
-	return (
-		<main class='route prose-route' id='main-content'>
-			<RouteHeader eyebrow={appCopy.projectGuide} title={appCopy.marketGuide} />
-			<section class='explanation-flow'>
-				<article>
-					<span>01</span>
-					<h2>Create a complete set</h2>
-					<p>Your ETH is sent to the selected Statoblast security pool, which creates equal amounts of INVALID, YES, and NO at its current exchange rate.</p>
-				</article>
-				<article>
-					<span>02</span>
-					<h2>Trade one direction</h2>
-					<p>The opposite share enters the constant-product pair. You receive extra shares of your selected outcome.</p>
-				</article>
-				<article>
-					<span>03</span>
-					<h2>Retain INVALID</h2>
-					<p>Matching INVALID stays in your wallet and is required alongside YES and NO to redeem a complete set.</p>
-				</article>
-				<article>
-					<span>04</span>
-					<h2>Exit a covered amount</h2>
-					<p>The router buys the missing opposite share, combines a full set, and redeems current collateral value to ETH.</p>
-				</article>
-			</section>
-			<section class='section prose'>
-				<h2>What the price means</h2>
-				<p>Conditional YES and NO prices sum to 100% because the pair compares only valid outcomes. This does not say INVALID has zero probability; the AMM has no invalidity estimate at all.</p>
-				<h2>Why profit can remain as shares</h2>
-				<p>
-					An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable but cannot be converted into complete sets without acquiring more INVALID. After resolution, those excess shares redeem
-					collateral only if their outcome won.
-				</p>
-				<p>
-					{commonCopy.developerDocumentation} <code>{commonCopy.developerDocumentationPath}</code>.
-				</p>
-			</section>
 		</main>
 	)
 }
