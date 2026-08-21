@@ -3616,9 +3616,9 @@ body.paper-zoltar .footer-note {
 	body.docs-shell-page .interactive-tool-toolbar {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 0.65rem 0.8rem;
+		gap: 0.5rem 0.65rem;
 		align-items: center;
-		padding: 0.75rem;
+		padding: 0.6rem;
 	}
 
 	body.docs-shell-page .interactive-tool-preset-select,
@@ -3691,9 +3691,9 @@ body.paper-zoltar .footer-note {
 	body.docs-shell-page .tool-outcome-strip {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.55rem;
-		margin: 0.9rem 0 1rem;
-		padding: 0.55rem;
+		gap: 0.4rem;
+		margin: 0.65rem 0 0.75rem;
+		padding: 0.42rem;
 		border: 1px solid color-mix(in srgb, var(--widget-state, var(--accent)) 34%, var(--line));
 		border-radius: 0.8rem;
 		background: linear-gradient(135deg, color-mix(in srgb, var(--widget-state, var(--accent)) 10%, var(--paper)), var(--paper) 58%), var(--paper);
@@ -3707,7 +3707,7 @@ body.paper-zoltar .footer-note {
 	body.docs-shell-page .tool-outcome-strip > div {
 		position: relative;
 		min-width: 0;
-		padding: 0.72rem 0.78rem;
+		padding: 0.58rem 0.65rem;
 		border-left: 0.22rem solid var(--widget-state, var(--accent));
 		border-radius: 0.55rem;
 		background: color-mix(in srgb, var(--paper) 92%, var(--widget-state, var(--accent)));
@@ -3740,13 +3740,13 @@ body.paper-zoltar .footer-note {
 
 	body.docs-shell-page .tool-control-stack {
 		display: grid;
-		gap: 0.85rem;
-		margin: 0.8rem 0 1rem;
+		gap: 0.55rem;
+		margin: 0.6rem 0 0.75rem;
 	}
 
 	body.docs-shell-page .tool-control-group {
 		min-width: 0;
-		padding: 0.75rem;
+		padding: 0.45rem 0.55rem 0.55rem;
 		border: 1px solid var(--soft-line);
 		border-left: 0.24rem solid var(--group-accent, var(--accent));
 		border-radius: 0.72rem;
@@ -3769,16 +3769,33 @@ body.paper-zoltar .footer-note {
 		--group-accent: var(--muted);
 	}
 
-	body.docs-shell-page .tool-control-group legend {
-		width: auto;
-		padding: 0.18rem 0.5rem;
+	body.docs-shell-page .tool-control-group > summary {
+		width: fit-content;
+		min-height: 2rem;
+		padding: 0.22rem 0.5rem;
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--group-accent, var(--accent)) 12%, var(--paper));
 		color: var(--ink);
 		font-size: 0.76rem;
 		font-weight: 850;
 		letter-spacing: 0.06em;
+		line-height: 1.4;
+		list-style-position: inside;
 		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	body.docs-shell-page .tool-control-group > summary::marker {
+		color: var(--group-accent, var(--accent));
+	}
+
+	body.docs-shell-page .tool-control-group > summary:focus-visible {
+		outline: 2px solid var(--group-accent, var(--accent));
+		outline-offset: 2px;
+	}
+
+	body.docs-shell-page .tool-control-group[open] > summary {
+		margin-bottom: 0.45rem;
 	}
 
 	body.docs-shell-page .tool-control-group .example-grid {
@@ -3802,9 +3819,9 @@ body.paper-zoltar .footer-note {
 
 	body.docs-shell-page .escalation-arena {
 		display: grid;
-		gap: 0.55rem;
-		margin-top: 0.75rem;
-		padding: 0.72rem;
+		gap: 0.35rem;
+		margin-top: 0.5rem;
+		padding: 0.5rem;
 		border-radius: 0.65rem;
 		background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 42%), var(--section-bg);
 	}
@@ -3813,10 +3830,10 @@ body.paper-zoltar .footer-note {
 		--arena-color: var(--accent);
 		display: grid;
 		grid-template-columns: 4rem minmax(5rem, 1fr) minmax(5.5rem, auto);
-		gap: 0.55rem;
+		gap: 0.45rem;
 		align-items: center;
 		min-width: 0;
-		padding: 0.42rem 0.52rem;
+		padding: 0.32rem 0.42rem;
 		border: 1px solid transparent;
 		border-radius: 0.5rem;
 	}
@@ -3880,13 +3897,13 @@ body.paper-zoltar .footer-note {
 
 	body.docs-shell-page :is(.example-grid) {
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-		gap: 0.9rem;
+		gap: 0.6rem;
 	}
 
 	body.docs-shell-page .example-grid label {
 		min-width: 0;
 		align-content: start;
-		padding: 0.7rem;
+		padding: 0.55rem;
 		border: 1px solid var(--soft-line);
 		border-radius: 0.65rem;
 		background: var(--paper);
@@ -4045,7 +4062,7 @@ body.paper-zoltar .footer-note {
 	body.docs-shell-page .example-output-grid > div {
 		position: relative;
 		min-width: 0;
-		padding: 0.78rem;
+		padding: 0.62rem;
 		border: 1px solid var(--soft-line);
 		border-radius: 0.65rem;
 		background: var(--paper);
@@ -4156,7 +4173,7 @@ body.paper-zoltar .footer-note {
 	}
 
 	body.docs-shell-page .tool-control-group {
-		padding: 0.62rem;
+		padding: 0.4rem 0.45rem 0.5rem;
 	}
 
 	body.doc-openoracle .invariant-explorer {

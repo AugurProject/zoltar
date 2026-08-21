@@ -325,23 +325,23 @@ pool-held REP ≥ max(migration security multiplier, liquidation reserve multipl
 				<details class="interactive-example technical-details" id="collateral-repair-example">
 					<summary>See the collateral-repair illustrations</summary>
 					<div class="tool-outcome-strip">
-						<div data-primary-output><span>Repair status</span><output data-example-output="repairStatus">no contribution required</output></div>
+						<div data-primary-output><span>Repair status</span><output data-example-output="repairStatus">fully repaired</output></div>
 						<div data-primary-output><span>Remaining shortfall</span><output data-example-output="remainingShortfall">0.00 ETH</output></div>
 					</div>
 					<div class="tool-control-stack">
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Settlement target</legend>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Settlement target</summary>
 							<div class="example-grid">
 								<label>Parent settlement collateral <input type="number" inputmode="decimal" min="10" max="200" step="1" value="50" data-example-input="parentSettlementCollateral" /><span class="example-value" data-example-value="parentSettlementCollateral">50 ETH</span></label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="action">
-							<legend>Child funding</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="action" open>
+							<summary>Child funding</summary>
 							<div class="example-grid">
 								<label>Migration-routed collateral <input type="number" inputmode="decimal" min="0" max="200" step="0.5" value="47.5" data-example-input="forkSettlementCollateralReceived" /><span class="example-value" data-example-value="forkSettlementCollateralReceived">47.5 ETH</span></label>
 								<label>Auction ETH raised <input type="number" inputmode="decimal" min="0" max="100" step="0.5" value="2.5" data-example-input="auctionRaised" /><span class="example-value" data-example-value="auctionRaised">2.5 ETH</span></label>
 							</div>
-						</fieldset>
+						</details>
 					</div>
 					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
 						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after weak auction demand settles at the collateral actually raised.</span></div>

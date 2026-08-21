@@ -37,18 +37,18 @@
 					<p>This simulator uses the contract model: a three-day activation delay, a 49-day escalation interval, and the fixed-point attrition curve. Change the configuration, then choose an outcome and requested deposit to see clipping, tie adjustment, acceptance, or rejection.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Deposit result</span><output data-escalation-output="deposit">accepted: 1 REP</output></div>
-						<div data-primary-output><span>Contract-model state</span><output data-escalation-output="state">deadline pending</output></div>
+						<div data-primary-output><span>Contract-model state</span><output data-escalation-output="state">activation pending</output></div>
 					</div>
 					<div class="tool-control-stack">
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Game settings</legend>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Game settings</summary>
 							<div class="example-grid">
 								<label>Start bond <input type="number" inputmode="decimal" min="0.1" max="20" value="1" step="0.1" data-example-input="startBond" /><span class="example-value" data-example-value="startBond">1 REP</span></label>
 								<label>Non-decision threshold <input type="number" inputmode="decimal" min="1.1" max="100" value="10" step="0.1" data-example-input="nonDecisionThreshold" /><span class="example-value" data-example-value="nonDecisionThreshold">10 REP</span></label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="players">
-							<legend>Player positions</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="players" open>
+							<summary>Player positions</summary>
 							<div class="example-grid">
 								<label>Current Yes balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="yes" /><span class="example-value" data-escalation-value="yes">1 REP</span></label>
 								<label>Current No balance <input type="number" inputmode="decimal" min="0" max="100" value="1" step="1" data-example-input="no" /><span class="example-value" data-escalation-value="no">1 REP</span></label>
@@ -65,9 +65,9 @@
 									<span>Invalid</span><span class="escalation-balance-track" aria-hidden="true"><i></i><b></b></span><output data-escalation-arena-value="invalid">0 → 0 REP</output>
 								</div>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="action">
-							<legend>Player move</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="action" open>
+							<summary>Player move</summary>
 							<div class="example-grid">
 								<label
 									>Deposit outcome
@@ -79,13 +79,13 @@
 								>
 								<label>Requested deposit <input type="number" inputmode="decimal" min="0" max="100" value="1" step="0.1" data-example-input="depositAmount" /><span class="example-value" data-example-value="depositAmount">1 REP</span></label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="time">
-							<legend>Timeline</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="time" open>
+							<summary>Timeline</summary>
 							<div class="example-grid">
 								<label>Days since start <input type="range" min="0" max="56" value="0" step="1" data-example-input="days" /><span class="example-value" data-escalation-value="days">0 days</span></label>
 							</div>
-						</fieldset>
+						</details>
 					</div>
 					<p class="example-error" role="alert" data-escalation-error hidden></p>
 					<div class="example-output-grid tool-detail-grid">

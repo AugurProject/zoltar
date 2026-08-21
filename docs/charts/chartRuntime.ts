@@ -705,7 +705,10 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 		example.querySelector('[data-example-output="routedCollateral"]')?.replaceChildren(`${model.received.toFixed(2)} ETH`)
 		example.querySelector('[data-example-output="initialShortfall"]')?.replaceChildren(`${model.initialShortfall.toFixed(2)} ETH`)
 		example.querySelector('[data-example-output="remainingShortfall"]')?.replaceChildren(`${model.remainingShortfall.toFixed(2)} ETH`)
-		example.querySelector('[data-example-output="repairStatus"]')?.replaceChildren(model.remainingShortfall === 0 ? 'no contribution required' : 'shortfall remains')
+		let repairStatus = 'shortfall remains'
+		if (model.initialShortfall === 0) repairStatus = 'no repair needed'
+		else if (model.remainingShortfall === 0) repairStatus = 'fully repaired'
+		example.querySelector('[data-example-output="repairStatus"]')?.replaceChildren(repairStatus)
 	}
 	const parts = [
 		{ kind: 'Migration-routed', x1: 0, x2: model.received },

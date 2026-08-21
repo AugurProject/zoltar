@@ -147,8 +147,13 @@ test('escalation controls use an outcome segment and retain one timeline scrubbe
 		const numericInputs = Array.from(document.querySelectorAll<HTMLInputElement>('#escalation-game-example input[type="number"]'))
 		const depositAmount = document.querySelector<HTMLInputElement>('[data-example-input="depositAmount"]')
 		const leaderPreset = Array.from(document.querySelectorAll<HTMLButtonElement>('#escalation-game-example .interactive-tool-presets button')).find(button => button.textContent === 'Leader deposit does not extend')
-		if (outcome === null || noButton === undefined || days === null || depositAmount === null || leaderPreset === undefined) throw new Error('Escalation control fixture is incomplete')
+		const groups = Array.from(document.querySelectorAll<HTMLDetailsElement>('#escalation-game-example .tool-control-group'))
+		if (outcome === null || noButton === undefined || days === null || depositAmount === null || leaderPreset === undefined || groups.length !== 4) throw new Error('Escalation control fixture is incomplete')
 		expect(numericInputs.length).toBe(6)
+		expect(groups.every(group => group.open)).toBeTrue()
+		groups[0]?.querySelector('summary')?.click()
+		expect(groups[0]?.open).toBeFalse()
+		expect(groups.slice(1).every(group => group.open)).toBeTrue()
 		expect(days.type).toBe('range')
 		expect(outcome.tabIndex).toBe(-1)
 		expect(outcome.getAttribute('aria-hidden')).toBe('true')
@@ -169,17 +174,21 @@ test('OpenOracle controls separate coordinator policy from the report request an
 	try {
 		await runGeneratedRuntime('openOracleTools')
 		await runGeneratedRuntime('interactiveTools')
-		const groups = Array.from(document.querySelectorAll<HTMLFieldSetElement>('#initial-report-estimator-example .tool-control-group'))
-		const group = (legend: string) => groups.find(candidate => candidate.querySelector('legend')?.textContent === legend)
+		const groups = Array.from(document.querySelectorAll<HTMLDetailsElement>('#initial-report-estimator-example .tool-control-group'))
+		const group = (summary: string) => groups.find(candidate => candidate.querySelector('summary')?.textContent === summary)
 		const feeBound = document.querySelector<HTMLOutputElement>('[data-example-output="estimatorSafetyState"]')
 		const target = document.querySelector<HTMLInputElement>('[data-example-input="targetPriceErrorForDispute"]')
 		const reporterFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleReporterFee"]')
 		const protocolFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleProtocolFee"]')
 		if (feeBound === null || target === null || reporterFee === null || protocolFee === null) throw new Error('OpenOracle grouping fixture is incomplete')
+		expect(groups.every(candidate => candidate.open)).toBeTrue()
 		expect(group('Oracle fees')?.dataset['groupTone']).toBe('system')
 		expect(group('Coordinator policy')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).not.toBeNull()
 		expect(group('Report request')?.querySelector('[data-example-input="requestedInitialWeth"]')).not.toBeNull()
 		expect(group('Report request')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).toBeNull()
+		const manipulatedPrice = document.querySelector<HTMLInputElement>('[data-example-input="manipulatedPrice"]')
+		if (manipulatedPrice === null) throw new Error('Censorship attacker fixture is incomplete')
+		expect(manipulatedPrice.closest('.tool-control-group')?.querySelector('summary')?.textContent).toBe('Attacker inputs')
 		expect(feeBound.value).toBe('fees below target error')
 
 		target.value = '1.2'
@@ -521,6 +530,21 @@ for (const scenario of [
 				days.value = '56'
 				days.dispatchEvent(new Event('input', { bubbles: true }))
 				expect(state.value).toBe('locally resolvable: Yes')
+			}
+			if (scenario.name === 'collateral repair') {
+				const routed = tool.querySelector<HTMLInputElement>('[data-example-input="forkSettlementCollateralReceived"]')
+				const raised = tool.querySelector<HTMLInputElement>('[data-example-input="auctionRaised"]')
+				const status = tool.querySelector<HTMLOutputElement>('[data-example-output="repairStatus"]')
+				if (routed === null || raised === null || status === null) throw new Error('Collateral repair status fixture is incomplete')
+				expect(status.value).toBe('fully repaired')
+				routed.value = '50'
+				raised.value = '0'
+				routed.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(status.value).toBe('no repair needed')
+				routed.value = '47.5'
+				raised.value = '1'
+				routed.dispatchEvent(new Event('input', { bubbles: true }))
+				expect(status.value).toBe('shortfall remains')
 			}
 			input.value = ''
 			input.dispatchEvent(new Event('input', { bubbles: true }))

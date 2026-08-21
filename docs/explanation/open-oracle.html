@@ -278,8 +278,8 @@
 						<div data-primary-output><span>Fee bound</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
 					</div>
 					<div class="tool-control-stack">
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Network costs</legend>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Network costs</summary>
 							<div class="example-grid">
 								<label>
 									Block base fee
@@ -297,9 +297,9 @@
 									<span class="example-value" data-example-value="gasUnitsForOneDispute">300,000 gas</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Pool security</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Pool security</summary>
 							<div class="example-grid">
 								<label>
 									Pool open interest
@@ -317,9 +317,9 @@
 									<span class="example-value" data-example-value="targetPriceErrorForDispute">5.0%</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Oracle fees</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Oracle fees</summary>
 							<div class="example-grid">
 								<label>
 									OpenOracle protocol fee
@@ -332,9 +332,9 @@
 									<span class="example-value" data-example-value="openOracleReporterFee">0.1%</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Coordinator policy</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Coordinator policy</summary>
 							<div class="example-grid">
 								<label>
 									Escalation halt multiplier
@@ -342,9 +342,9 @@
 									<span class="example-value" data-example-value="escalationHaltMultiplier">10x</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="action">
-							<legend>Report request</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="action" open>
+							<summary>Report request</summary>
 							<div class="example-grid">
 								<label>
 									Requested initial WETH
@@ -352,7 +352,7 @@
 									<span class="example-value" data-example-value="requestedInitialWeth">0.00 WETH</span>
 								</label>
 							</div>
-						</fieldset>
+						</details>
 					</div>
 					<div class="example-output-grid tool-detail-grid">
 						<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">32.307692307692307700 WETH</output></div>
@@ -538,18 +538,13 @@
 						<div data-primary-output><span>Censorship cost</span><output data-example-output="censorshipCost">11424.00 ETH</output></div>
 					</div>
 					<div class="tool-control-stack">
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Market boundary</legend>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Market boundary</summary>
 							<div class="example-grid">
 								<label>
 									Honest price
 									<input data-example-input="honestPrice" max="200" min="50" step="1" type="number" inputmode="decimal" value="100" />
 									<span class="example-value" data-example-value="honestPrice">100</span>
-								</label>
-								<label>
-									Manipulated price
-									<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="number" inputmode="decimal" value="113" />
-									<span class="example-value" data-example-value="manipulatedPrice">113</span>
 								</label>
 								<label>
 									Liquidation threshold
@@ -562,19 +557,24 @@
 									<span class="example-value" data-example-value="minLiquidationPriceDistanceBps">1000 bps</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="players">
-							<legend>Attacker payoff</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="players" open>
+							<summary>Attacker inputs</summary>
 							<div class="example-grid">
+								<label>
+									Manipulated price
+									<input data-example-input="manipulatedPrice" max="250" min="50" step="1" type="number" inputmode="decimal" value="113" />
+									<span class="example-value" data-example-value="manipulatedPrice">113</span>
+								</label>
 								<label>
 									External payoff
 									<input data-example-input="externalPayoff" max="10000" min="100" step="100" type="number" inputmode="decimal" value="1000" />
 									<span class="example-value" data-example-value="externalPayoff">1000.00 ETH</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="system">
-							<legend>Oracle defense</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="system" open>
+							<summary>Oracle defense</summary>
 							<div class="example-grid">
 								<label>
 									Report liquidity
@@ -587,9 +587,9 @@
 									<span class="example-value" data-example-value="honestDisputeBarrierFraction">1.10%</span>
 								</label>
 							</div>
-						</fieldset>
-						<fieldset class="tool-control-group" data-group-tone="time">
-							<legend>Censorship scenario</legend>
+						</details>
+						<details class="tool-control-group" data-group-tone="time" open>
+							<summary>Censorship scenario</summary>
 							<div class="example-grid">
 								<label>
 									Censorship duration (model steps)
@@ -602,7 +602,7 @@
 									<span class="example-value" data-example-value="targetGriefRatio">1.0</span>
 								</label>
 							</div>
-						</fieldset>
+						</details>
 					</div>
 					<div class="example-output-grid tool-detail-grid" aria-live="polite">
 						<div><span>Execution error threshold</span><output data-example-output="executionErrorThreshold">12.22%</output></div>
