@@ -8,7 +8,7 @@ import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
 const DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS = 15_000
-const DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS = 15_000
+const DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS = 60_000
 const BROWSER_TERMINATION_TIMEOUT_MILLISECONDS = 2_000
 
 type PageIssue = {
@@ -37,20 +37,32 @@ export async function waitForBrowserExit(browser: ChildProcess): Promise<void> {
 	})
 }
 
-const waitForBrowserExitWithin = async (browser: ChildProcess, timeoutMilliseconds: number): Promise<boolean> => {
-	if (browser.exitCode !== null || browser.signalCode !== null || browser.pid === undefined) return true
+type BrowserExitOutcome = { readonly exited: boolean; readonly processError?: Error }
+
+const waitForBrowserExitWithin = async (browser: ChildProcess, timeoutMilliseconds: number): Promise<BrowserExitOutcome> => {
+	if (browser.exitCode !== null || browser.signalCode !== null || browser.pid === undefined) return { exited: true }
 	return await new Promise(resolve => {
+		let processError: Error | undefined
 		const finish = (exited: boolean) => {
 			clearTimeout(timeoutId)
-			browser.off('error', handleTermination)
+			browser.off('error', handleProcessError)
 			browser.off('exit', handleTermination)
-			resolve(exited)
+			resolve({ exited, ...(processError === undefined ? {} : { processError }) })
 		}
 		const handleTermination = () => finish(true)
+		const handleProcessError = (error: Error) => {
+			processError = error
+		}
 		const timeoutId = setTimeout(() => finish(false), timeoutMilliseconds)
-		browser.once('error', handleTermination)
+		browser.on('error', handleProcessError)
 		browser.once('exit', handleTermination)
 	})
+}
+
+const signalBrowserAndWait = async (browser: ChildProcess, signal: NodeJS.Signals, timeoutMilliseconds: number): Promise<BrowserExitOutcome> => {
+	const exitOutcome = waitForBrowserExitWithin(browser, timeoutMilliseconds)
+	browser.kill(signal)
+	return await exitOutcome
 }
 
 export async function terminateBrowserProcess(
@@ -59,10 +71,14 @@ export async function terminateBrowserProcess(
 	{ forceTimeoutMilliseconds = BROWSER_TERMINATION_TIMEOUT_MILLISECONDS, gracefulTimeoutMilliseconds = BROWSER_TERMINATION_TIMEOUT_MILLISECONDS }: { readonly forceTimeoutMilliseconds?: number; readonly gracefulTimeoutMilliseconds?: number } = {},
 ): Promise<void> {
 	try {
-		if (browser.exitCode === null && browser.signalCode === null && browser.pid !== undefined) browser.kill('SIGTERM')
-		if (await waitForBrowserExitWithin(browser, gracefulTimeoutMilliseconds)) return
-		browser.kill('SIGKILL')
-		if (!(await waitForBrowserExitWithin(browser, forceTimeoutMilliseconds))) throw new Error(`Chromium did not exit after SIGKILL within ${forceTimeoutMilliseconds.toString()}ms`)
+		if (browser.exitCode !== null || browser.signalCode !== null || browser.pid === undefined) return
+		const gracefulOutcome = await signalBrowserAndWait(browser, 'SIGTERM', gracefulTimeoutMilliseconds)
+		if (gracefulOutcome.exited) return
+		const forceOutcome = await signalBrowserAndWait(browser, 'SIGKILL', forceTimeoutMilliseconds)
+		if (!forceOutcome.exited) {
+			const processError = forceOutcome.processError ?? gracefulOutcome.processError
+			throw new Error(`Chromium did not exit after SIGKILL within ${forceTimeoutMilliseconds.toString()}ms${processError === undefined ? '' : `: ${processError.message}`}`)
+		}
 	} finally {
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
@@ -102,6 +118,28 @@ const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline:
 	} finally {
 		if (!succeeded) cancel()
 	}
+}
+
+export async function waitForDevToolsPort({
+	assertBrowserAvailable,
+	maxAttempts,
+	pollMilliseconds,
+	readPort,
+	wait = Bun.sleep,
+}: {
+	readonly assertBrowserAvailable: () => void
+	readonly maxAttempts?: number
+	readonly pollMilliseconds: number
+	readonly readPort: () => Promise<number | undefined>
+	readonly wait?: (milliseconds: number) => Promise<unknown>
+}): Promise<number | undefined> {
+	for (let attempt = 0; maxAttempts === undefined || attempt < maxAttempts; attempt++) {
+		assertBrowserAvailable()
+		const port = await readPort()
+		if (port !== undefined) return port
+		await wait(pollMilliseconds)
+	}
+	return undefined
 }
 
 export function createBrowserSmokeCommandSender(socket: ChromiumCommandSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): ChromiumCommand {
@@ -184,12 +222,7 @@ export async function createDevToolsSession(
 	chromiumPath: string,
 	pageUrl: string,
 	viewport: { readonly height: number; readonly width: number },
-	{
-		devToolsPortAttempts = 300,
-		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
-		pollMilliseconds = 50,
-		targetAttempts = 200,
-	}: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
+	{ devToolsPortAttempts, initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS, pollMilliseconds = 50, targetAttempts }: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
 ) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
 	let browser: ChildProcess | undefined
@@ -213,23 +246,25 @@ export async function createDevToolsSession(
 			stderrData += String(chunk)
 		})
 		const initializationDeadline = Date.now() + initializationTimeoutMilliseconds
-		const assertBrowserAvailable = () => {
+		const assertBrowserAvailable = (initializationPhase: string) => {
 			if (launchError !== undefined) throw new Error(`Could not launch Chromium: ${launchError.message}`)
 			if (browser?.exitCode !== null || browser.signalCode !== null) throw new Error(`Chromium exited before DevTools initialized. stderr: ${stderrData.trim()}`)
-			if (Date.now() >= initializationDeadline) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
+			if (Date.now() >= initializationDeadline) throw new Error(`Chromium initialization timed out while ${initializationPhase}`)
 		}
-		let devToolsPort: number | undefined
-		for (let attempt = 0; attempt < devToolsPortAttempts; attempt++) {
-			assertBrowserAvailable()
-			try {
-				devToolsPort = Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
-				break
-			} catch (error) {
-				if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
-				await Bun.sleep(pollMilliseconds)
-			}
-		}
-		assertBrowserAvailable()
+		const devToolsPort = await waitForDevToolsPort({
+			assertBrowserAvailable: () => assertBrowserAvailable('waiting for the DevTools port'),
+			...(devToolsPortAttempts === undefined ? {} : { maxAttempts: devToolsPortAttempts }),
+			pollMilliseconds,
+			readPort: async () => {
+				try {
+					return Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
+				} catch (error) {
+					if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
+					return undefined
+				}
+			},
+		})
+		assertBrowserAvailable('waiting for the DevTools port')
 		if (devToolsPort === undefined) throw new Error(`Chromium DevTools port did not open. stderr: ${stderrData.trim()}`)
 
 		const issues: PageIssue[] = []
@@ -238,9 +273,9 @@ export async function createDevToolsSession(
 		let lastNetworkActivity = Date.now()
 		let workerStarted = false
 		socket = await (async () => {
-			for (let attempt = 0; attempt < targetAttempts; attempt++) {
+			for (let attempt = 0; targetAttempts === undefined || attempt < targetAttempts; attempt++) {
 				try {
-					assertBrowserAvailable()
+					assertBrowserAvailable('waiting for the Chromium page target')
 					const fetchController = new AbortController()
 					const targets = (await awaitInitializationStep(
 						browser,

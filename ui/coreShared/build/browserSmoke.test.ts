@@ -5,7 +5,7 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, terminateBrowserProcess, waitForBrowserExit } from './browserSmoke.mts'
+import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, terminateBrowserProcess, waitForBrowserExit, waitForDevToolsPort } from './browserSmoke.mts'
 
 const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
@@ -111,6 +111,28 @@ test.skipIf(process.platform === 'win32')('browser cleanup escalates when Chromi
 	await expect(withChromiumTestLock(async () => 'released', { port: await getAvailablePort() })).resolves.toBe('released')
 })
 
+test.skipIf(process.platform === 'win32')('browser cleanup escalates when sending SIGTERM emits an error', async () => {
+	const profilePath = await mkdtemp(join(tmpdir(), 'zoltar-browser-smoke-'))
+	const browser = spawn(process.execPath, ['--eval', "console.log('ready'); setInterval(() => {}, 1_000)"])
+	await new Promise<void>((resolve, reject) => {
+		browser.once('error', reject)
+		browser.stdout.once('data', () => resolve())
+	})
+	const originalKill = browser.kill.bind(browser)
+	const signals: Array<NodeJS.Signals | number | undefined> = []
+	browser.kill = signal => {
+		signals.push(signal)
+		if (signal === 'SIGTERM') {
+			queueMicrotask(() => browser.emit('error', new Error('simulated SIGTERM failure')))
+			return false
+		}
+		return originalKill(signal)
+	}
+	await expect(terminateBrowserProcess(browser, profilePath, { forceTimeoutMilliseconds: 1_000, gracefulTimeoutMilliseconds: 10 })).resolves.toBeUndefined()
+	expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
+	expect(await Bun.file(profilePath).exists()).toBe(false)
+})
+
 test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out and reaps Chromium', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-stall-fixture-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
@@ -137,6 +159,69 @@ test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out 
 	} finally {
 		for (const socket of sockets) socket.destroy()
 		await new Promise<void>((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
+const createFakeDevToolsServer = (emptyTargetResponses: number) => {
+	let targetRequests = 0
+	const server = Bun.serve({
+		hostname: '127.0.0.1',
+		port: 0,
+		fetch(request, bunServer) {
+			if (new URL(request.url).pathname === '/ws' && bunServer.upgrade(request)) return undefined
+			targetRequests += 1
+			const targets = targetRequests <= emptyTargetResponses ? [] : [{ type: 'page', webSocketDebuggerUrl: `ws://127.0.0.1:${server.port.toString()}/ws` }]
+			return Response.json(targets)
+		},
+		websocket: { message: () => undefined },
+	})
+	return server
+}
+
+const writeFakeChromium = async (executablePath: string, devToolsPort: number, portDelaySeconds: string) => {
+	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nsleep ${portDelaySeconds}\nprintf '${devToolsPort.toString()}\\n' > "$profile/DevToolsActivePort"\nexec sleep 60\n`)
+	await chmod(executablePath, 0o755)
+}
+
+test('default DevTools port polling continues beyond the former 300-attempt limit', async () => {
+	let probes = 0
+	const port = await waitForDevToolsPort({
+		assertBrowserAvailable: () => undefined,
+		pollMilliseconds: 0,
+		readPort: async () => {
+			probes += 1
+			return probes === 301 ? 9222 : undefined
+		},
+		wait: async () => undefined,
+	})
+	expect(port).toBe(9222)
+	expect(probes).toBe(301)
+})
+
+test.skipIf(process.platform === 'win32')('default initialization waits beyond the former page target retry limit', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-delayed-target-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const server = createFakeDevToolsServer(220)
+	await writeFakeChromium(executablePath, server.port, '0')
+	try {
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 5_000, pollMilliseconds: 1 })
+		await session.close()
+	} finally {
+		server.stop(true)
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
+test.skipIf(process.platform === 'win32')('page target deadline identifies the phase that timed out', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-target-timeout-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const server = createFakeDevToolsServer(Number.MAX_SAFE_INTEGER)
+	await writeFakeChromium(executablePath, server.port, '0')
+	try {
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 50, pollMilliseconds: 1 })).rejects.toThrow(/timed out while waiting for the Chromium page target/)
+	} finally {
+		server.stop(true)
 		await rm(fixtureRoot, { force: true, recursive: true })
 	}
 })
