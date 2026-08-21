@@ -119,6 +119,7 @@ const presetDefinitions: Record<string, ToolPreset[]> = {
 }
 
 const toolInputSelector = '[data-example-input], [data-liquidation-input], [data-path-input], [data-tool-input]'
+let numberControlId = 0
 
 function inputKey(input: ToolInput): string | undefined {
 	return input.dataset['exampleInput'] ?? input.dataset['liquidationInput'] ?? input.dataset['pathInput'] ?? input.dataset['toolInput']
@@ -133,14 +134,41 @@ function dispatchInput(input: ToolInput): void {
 	input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-function applyValues(tool: HTMLDetailsElement, values: Readonly<Record<string, string>>): void {
+function numericInputValueIsValid(input: HTMLInputElement, value: string): boolean {
+	if (input.type !== 'number' && input.type !== 'range') return true
+	if (value.trim().length === 0) return false
+	const numericValue = Number(value)
+	if (!Number.isFinite(numericValue)) return false
+	const minimum = Number(input.min)
+	const maximum = Number(input.max)
+	if (Number.isFinite(minimum) && numericValue < minimum) return false
+	if (Number.isFinite(maximum) && numericValue > maximum) return false
+	const step = Number(input.step)
+	if (!Number.isFinite(step) || step <= 0) return true
+	const base = Number.isFinite(minimum) ? minimum : 0
+	const stepOffset = (numericValue - base) / step
+	return Math.abs(stepOffset - Math.round(stepOffset)) <= 1e-9
+}
+
+function applyValues(tool: HTMLDetailsElement, values: Readonly<Record<string, string>>): boolean {
+	let valid = true
 	for (const input of toolInputs(tool)) {
 		const key = inputKey(input)
 		const value = key === undefined ? undefined : values[key]
 		if (value === undefined) continue
+		if (input instanceof HTMLSelectElement && !Array.from(input.options).some(option => !option.disabled && option.value === value)) {
+			valid = false
+			continue
+		}
+		if (input instanceof HTMLInputElement && !numericInputValueIsValid(input, value)) {
+			valid = false
+			continue
+		}
 		input.value = String(value)
 		dispatchInput(input)
+		if (input instanceof HTMLInputElement && input.getAttribute('aria-invalid') === 'true') valid = false
 	}
+	return valid
 }
 
 function resetTool(tool: HTMLDetailsElement): void {
@@ -199,18 +227,35 @@ function createToolbar(tool: HTMLDetailsElement): HTMLElement {
 
 	const presets = presetDefinitions[tool.id] ?? []
 	const scenarioLabel = document.createElement('label')
+	scenarioLabel.className = 'interactive-tool-preset-select'
 	const scenarioText = document.createElement('span')
 	scenarioText.textContent = 'Scenario'
 	const scenarioSelect = document.createElement('select')
+	scenarioSelect.tabIndex = -1
+	scenarioSelect.setAttribute('aria-hidden', 'true')
 	const placeholder = document.createElement('option')
 	placeholder.value = ''
 	placeholder.textContent = 'Choose a preset'
 	scenarioSelect.append(placeholder)
+	const presetButtons = document.createElement('div')
+	presetButtons.className = 'interactive-tool-presets'
+	presetButtons.setAttribute('aria-label', 'Scenarios')
 	for (const [index, preset] of presets.entries()) {
 		const option = document.createElement('option')
 		option.value = String(index)
 		option.textContent = preset.label
 		scenarioSelect.append(option)
+		const button = document.createElement('button')
+		button.type = 'button'
+		button.dataset['presetIndex'] = String(index)
+		button.textContent = preset.label
+		button.setAttribute('aria-pressed', 'false')
+		button.addEventListener('click', () => {
+			if (button.disabled) return
+			scenarioSelect.value = String(index)
+			scenarioSelect.dispatchEvent(new Event('change', { bubbles: true }))
+		})
+		presetButtons.append(button)
 	}
 	scenarioSelect.disabled = presets.length === 0
 	scenarioLabel.append(scenarioText, scenarioSelect)
@@ -225,6 +270,18 @@ function createToolbar(tool: HTMLDetailsElement): HTMLElement {
 	status.className = 'interactive-tool-status'
 	status.setAttribute('role', 'status')
 	status.setAttribute('aria-live', 'polite')
+	let applyingPreset = false
+	const clearPresetSelection = (): void => {
+		scenarioSelect.value = ''
+		for (const button of presetButtons.querySelectorAll('button')) button.setAttribute('aria-pressed', 'false')
+	}
+	const handleToolChange = (): void => {
+		if (applyingPreset) return
+		clearPresetSelection()
+		if (status.dataset['validationError'] !== 'true') status.replaceChildren()
+	}
+	tool.addEventListener('input', handleToolChange)
+	tool.addEventListener('docs:tool-input-change', handleToolChange)
 
 	scenarioSelect.addEventListener('change', () => {
 		if (scenarioSelect.disabled) {
@@ -234,22 +291,44 @@ function createToolbar(tool: HTMLDetailsElement): HTMLElement {
 		if (scenarioSelect.value.length === 0) return
 		const preset = presets[Number(scenarioSelect.value)]
 		if (preset === undefined) return
-		applyValues(tool, preset.values)
-		status.textContent = `${preset.label} applied; results updated.`
+		applyingPreset = true
+		try {
+			resetTool(tool)
+			applyValues(tool, preset.values)
+		} finally {
+			applyingPreset = false
+		}
+		for (const button of presetButtons.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset['presetIndex'] === scenarioSelect.value))
+		status.textContent = ''
 	})
 	reset.addEventListener('click', () => {
 		if (reset.disabled) return
 		resetTool(tool)
-		scenarioSelect.value = ''
-		status.textContent = 'Default values restored.'
+		clearPresetSelection()
+		status.textContent = ''
 	})
 	copy.addEventListener('click', async () => {
-		const copied = await copyText(scenarioUrl(tool))
-		status.textContent = copied ? 'Scenario link copied.' : 'Copy failed; use the current values to create a link manually.'
+		const url = scenarioUrl(tool)
+		const copied = await copyText(url)
+		if (copied) {
+			status.textContent = 'Scenario link copied.'
+			return
+		}
+		const recoveryLink = document.createElement('a')
+		recoveryLink.href = url
+		recoveryLink.textContent = 'Open scenario link'
+		status.replaceChildren('Copy failed. ', recoveryLink)
+		recoveryLink.focus()
 	})
 	const syncAvailability = (): void => {
 		const unavailable = toolIsUnavailable(tool)
 		scenarioSelect.disabled = unavailable || presets.length === 0
+		for (const button of presetButtons.querySelectorAll('button')) button.disabled = unavailable
+		for (const button of tool.querySelectorAll<HTMLButtonElement>('.segmented-control button')) button.disabled = unavailable
+		for (const input of tool.querySelectorAll<HTMLInputElement>('.number-control input[type="number"]')) {
+			const wrapper = input.closest<HTMLElement>('.number-control')
+			if (wrapper !== null) updateNumberControl(input, wrapper)
+		}
 		reset.disabled = unavailable
 		if (unavailable) {
 			scenarioSelect.value = ''
@@ -262,15 +341,220 @@ function createToolbar(tool: HTMLDetailsElement): HTMLElement {
 	})
 	syncAvailability()
 
-	toolbar.append(scenarioLabel, reset, copy, status)
+	const actions = document.createElement('div')
+	actions.className = 'interactive-tool-actions'
+	actions.append(reset, copy)
+	toolbar.append(scenarioLabel, presetButtons, actions, status)
 	return toolbar
 }
 
+function inputName(input: HTMLInputElement): string {
+	const storedName = input.dataset['controlLabel']
+	if (storedName !== undefined && storedName.length > 0) return storedName
+	const explicitName = input.getAttribute('aria-label')?.trim()
+	if (explicitName !== undefined && explicitName.length > 0) return explicitName
+	const label = input.closest('label')
+	if (label !== null) {
+		const precedingText: string[] = []
+		for (const node of label.childNodes) {
+			if (node === input) break
+			const text = node.textContent?.trim()
+			if (text !== undefined && text.length > 0) precedingText.push(text)
+		}
+		if (precedingText.length > 0) return precedingText.join(' ')
+	}
+	return inputKey(input) ?? 'value'
+}
+
+function decimalPlaces(value: string): number {
+	return value.includes('.') ? (value.split('.')[1]?.length ?? 0) : 0
+}
+
+function updateNumberControl(input: HTMLInputElement, wrapper: HTMLElement): void {
+	const value = Number(input.value)
+	const minimum = Number(input.min)
+	const maximum = Number(input.max)
+	const hasBounds = Number.isFinite(minimum) && Number.isFinite(maximum) && maximum > minimum
+	const progress = hasBounds && Number.isFinite(value) ? ((value - minimum) / (maximum - minimum)) * 100 : 0
+	wrapper.style.setProperty('--control-progress', `${Math.min(100, Math.max(0, progress))}%`)
+	const invalid = input.getAttribute('aria-invalid') === 'true' || !input.validity.valid
+	wrapper.classList.toggle('is-invalid', invalid)
+	const unavailable = input.closest<HTMLDetailsElement>('details.interactive-example, details.interactive-tool')?.dataset['toolUnavailable'] === 'true'
+	const decrement = wrapper.querySelector<HTMLButtonElement>('[data-step-direction="decrement"]')
+	const increment = wrapper.querySelector<HTMLButtonElement>('[data-step-direction="increment"]')
+	if (decrement !== null) decrement.disabled = unavailable || invalid || !Number.isFinite(value) || (Number.isFinite(minimum) && value <= minimum)
+	if (increment !== null) increment.disabled = unavailable || invalid || !Number.isFinite(value) || (Number.isFinite(maximum) && value >= maximum)
+}
+
+function numberControlError(input: HTMLInputElement): string | undefined {
+	const value = Number(input.value)
+	if (input.value.trim().length === 0 || !Number.isFinite(value)) return 'Enter a number.'
+	const minimum = Number(input.min)
+	const maximum = Number(input.max)
+	if (Number.isFinite(minimum) && value < minimum) return `Enter a value of at least ${input.min}.`
+	if (Number.isFinite(maximum) && value > maximum) return `Enter a value of at most ${input.max}.`
+	const step = Number(input.step)
+	if (Number.isFinite(step) && step > 0) {
+		const base = Number.isFinite(minimum) ? minimum : 0
+		const stepOffset = (value - base) / step
+		if (Math.abs(stepOffset - Math.round(stepOffset)) > 1e-9) return `Enter a value in steps of ${input.step}.`
+	}
+	return undefined
+}
+
+function validateNumberControl(input: HTMLInputElement, wrapper: HTMLElement): boolean {
+	const error = numberControlError(input)
+	input.setCustomValidity(error ?? '')
+	if (error === undefined) input.removeAttribute('aria-invalid')
+	else input.setAttribute('aria-invalid', 'true')
+	const inlineErrorId = input.dataset['controlErrorId']
+	const inlineError = inlineErrorId === undefined ? null : document.getElementById(inlineErrorId)
+	if (inlineError instanceof HTMLElement) {
+		inlineError.textContent = error ?? ''
+		inlineError.hidden = error === undefined
+	}
+	const valueChip = input.closest('label')?.querySelector<HTMLElement>('.example-value')
+	if (valueChip !== undefined && valueChip !== null) valueChip.hidden = error !== undefined
+	updateNumberControl(input, wrapper)
+	const tool = input.closest<HTMLDetailsElement>('details.interactive-example, details.interactive-tool')
+	tool?.dispatchEvent(new CustomEvent('docs:tool-input-change'))
+	const status = tool?.querySelector<HTMLElement>('.interactive-tool-status')
+	const firstInvalidInput = tool?.querySelector<HTMLInputElement>('input[aria-invalid="true"]')
+	if (status !== undefined && status !== null) {
+		if (firstInvalidInput !== undefined && firstInvalidInput !== null) {
+			status.dataset['validationError'] = 'true'
+			status.textContent = `${inputName(firstInvalidInput)}: ${numberControlError(firstInvalidInput) ?? 'Enter a valid value.'}`
+		} else if (status.dataset['validationError'] === 'true') {
+			delete status.dataset['validationError']
+			status.textContent = ''
+		}
+	}
+	if (tool !== null) {
+		const outputRegion = tool.querySelector('.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]')
+		const existingCue = tool.querySelector('.interactive-tool-results-cue')
+		if (firstInvalidInput !== undefined && firstInvalidInput !== null) {
+			tool.dataset['inputsValid'] = 'false'
+			tool.dataset['widgetState'] = 'unsafe'
+			if (existingCue === null && outputRegion instanceof HTMLElement) {
+				const cue = document.createElement('p')
+				cue.className = 'interactive-tool-results-cue'
+				cue.setAttribute('role', 'status')
+				cue.textContent = 'Results show the last valid values.'
+				outputRegion.insertAdjacentElement('beforebegin', cue)
+			}
+		} else {
+			delete tool.dataset['inputsValid']
+			existingCue?.remove()
+		}
+	}
+	return firstInvalidInput === null
+}
+
+function stepNumberInput(input: HTMLInputElement, direction: -1 | 1): void {
+	const current = Number(input.value)
+	const step = Number(input.step)
+	const increment = Number.isFinite(step) && step > 0 ? step : 1
+	const minimum = Number(input.min)
+	const maximum = Number(input.max)
+	let next = (Number.isFinite(current) ? current : 0) + increment * direction
+	if (Number.isFinite(minimum)) next = Math.max(minimum, next)
+	if (Number.isFinite(maximum)) next = Math.min(maximum, next)
+	input.value = next.toFixed(decimalPlaces(input.step)).replace(/\.0+$/, '')
+	dispatchInput(input)
+}
+
+function enhanceNumberInput(input: HTMLInputElement): void {
+	if (input.type !== 'number' || input.parentElement?.classList.contains('number-control')) return
+	const wrapper = document.createElement('span')
+	wrapper.className = 'number-control'
+	const accessibleName = inputName(input)
+	input.dataset['controlLabel'] = accessibleName
+	const inlineError = document.createElement('span')
+	inlineError.className = 'number-control-error'
+	inlineError.id = `number-control-error-${++numberControlId}`
+	inlineError.hidden = true
+	input.dataset['controlErrorId'] = inlineError.id
+	const describedBy = input.getAttribute('aria-describedby')?.trim()
+	input.setAttribute('aria-describedby', describedBy === undefined || describedBy.length === 0 ? inlineError.id : `${describedBy} ${inlineError.id}`)
+	const decrement = document.createElement('button')
+	decrement.type = 'button'
+	decrement.className = 'number-control-step'
+	decrement.dataset['stepDirection'] = 'decrement'
+	decrement.textContent = '−'
+	decrement.setAttribute('aria-label', `Decrease ${accessibleName}`)
+	const increment = document.createElement('button')
+	increment.type = 'button'
+	increment.className = 'number-control-step'
+	increment.dataset['stepDirection'] = 'increment'
+	increment.textContent = '+'
+	increment.setAttribute('aria-label', `Increase ${accessibleName}`)
+	input.before(wrapper)
+	wrapper.append(decrement, input, increment)
+	wrapper.insertAdjacentElement('afterend', inlineError)
+	decrement.addEventListener('click', () => stepNumberInput(input, -1))
+	increment.addEventListener('click', () => stepNumberInput(input, 1))
+	input.addEventListener(
+		'input',
+		event => {
+			if (!validateNumberControl(input, wrapper)) event.stopImmediatePropagation()
+		},
+		{ capture: true },
+	)
+	validateNumberControl(input, wrapper)
+}
+
+function enhanceSegmentedSelect(select: HTMLSelectElement): void {
+	if (select.dataset['exampleInput'] !== 'depositOutcome') return
+	const group = document.createElement('span')
+	group.className = 'segmented-control'
+	group.setAttribute('role', 'group')
+	group.setAttribute('aria-label', 'Deposit outcome')
+	const update = (): void => {
+		for (const button of group.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset['value'] === select.value))
+	}
+	for (const option of select.options) {
+		const button = document.createElement('button')
+		button.type = 'button'
+		button.dataset['value'] = option.value
+		button.textContent = option.textContent
+		button.addEventListener('click', () => {
+			select.value = option.value
+			dispatchInput(select)
+		})
+		group.append(button)
+	}
+	select.classList.add('visually-hidden-control')
+	select.tabIndex = -1
+	select.setAttribute('aria-hidden', 'true')
+	select.insertAdjacentElement('afterend', group)
+	select.addEventListener('change', update)
+	update()
+}
+
 function makeOutputsLive(tool: HTMLDetailsElement): void {
-	const outputRegion = tool.querySelector('.example-output-grid, .example-output, [data-tool-output-region]')
+	const outputRegion = tool.querySelector('.tool-outcome-strip, .example-output-grid, .example-output, [data-tool-output-region]')
 	if (!(outputRegion instanceof HTMLElement)) return
 	outputRegion.setAttribute('aria-live', 'polite')
 	outputRegion.setAttribute('aria-atomic', 'false')
+}
+
+function applyResponsiveDisclosureDefaults(tool: HTMLDetailsElement): void {
+	if (!window.matchMedia('(max-width: 640px)').matches) return
+	for (const group of tool.querySelectorAll<HTMLDetailsElement>('.tool-control-group')) group.open = group.hasAttribute('data-mobile-open')
+}
+
+function keepFocusedControlVisible(tool: HTMLDetailsElement): void {
+	tool.addEventListener('focusin', event => {
+		if (!window.matchMedia('(max-width: 640px)').matches || !(event.target instanceof Element)) return
+		const label = event.target.closest('label')
+		const outcome = tool.querySelector('.tool-outcome-strip')
+		if (!(label instanceof HTMLElement) || !(outcome instanceof HTMLElement)) return
+		window.requestAnimationFrame(() => {
+			const labelTop = label.getBoundingClientRect().top
+			const minimumTop = outcome.getBoundingClientRect().bottom + 12
+			if (labelTop < minimumTop) window.scrollBy({ behavior: 'auto', top: labelTop - minimumTop })
+		})
+	})
 }
 
 let linkedScenarioHandled = false
@@ -289,7 +573,7 @@ function applyLinkedScenario(): void {
 		return
 	}
 	const tool = document.getElementById(toolId)
-	if (!(tool instanceof HTMLDetailsElement) || !tool.classList.contains('interactive-example')) {
+	if (!(tool instanceof HTMLDetailsElement) || (!tool.classList.contains('interactive-example') && !tool.classList.contains('interactive-tool'))) {
 		linkedScenarioHandled = true
 		return
 	}
@@ -302,7 +586,11 @@ function applyLinkedScenario(): void {
 			if (status instanceof HTMLElement) status.textContent = 'The shared scenario could not be read; defaults remain active.'
 			return
 		}
-		applyValues(tool, state)
+		if (!applyValues(tool, state)) {
+			resetTool(tool)
+			if (status instanceof HTMLElement) status.textContent = 'The shared scenario contains invalid values; defaults remain active.'
+			return
+		}
 		tool.open = true
 		if (status instanceof HTMLElement) status.textContent = 'Shared scenario loaded; results updated.'
 	} catch (error) {
@@ -311,13 +599,17 @@ function applyLinkedScenario(): void {
 	}
 }
 
-for (const tool of document.querySelectorAll('details.interactive-example[id]')) {
+for (const tool of document.querySelectorAll('details.interactive-example[id], details.interactive-tool[id]')) {
 	if (!(tool instanceof HTMLDetailsElement)) continue
 	for (const input of toolInputs(tool)) {
 		input.dataset['toolDefaultValue'] = input.value
+		if (input instanceof HTMLInputElement) enhanceNumberInput(input)
+		else enhanceSegmentedSelect(input)
 	}
 	tool.querySelector('summary')?.insertAdjacentElement('afterend', createToolbar(tool))
 	makeOutputsLive(tool)
+	applyResponsiveDisclosureDefaults(tool)
+	keepFocusedControlVisible(tool)
 }
 
 applyLinkedScenario()
