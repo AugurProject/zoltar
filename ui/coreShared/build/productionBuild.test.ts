@@ -21,13 +21,13 @@ const productionWorkflowTest = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] =
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
-		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod:current'], {
+		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
 			cwd: repositoryRootPath,
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
 		if (result.exitCode !== 0) {
-			throw new Error(`ui:build:prod:current failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+			throw new Error(`ui:build:prod failed\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
 		}
 	}
 

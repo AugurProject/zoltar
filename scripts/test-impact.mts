@@ -38,7 +38,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun test scripts/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
-		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === 'ci-proposals/workflows/browser-workflow.yml' || filePath === 'ci-proposals/workflows/coverage.yml',
+		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === '.github/workflows/browser-workflow.yml' || filePath === '.github/workflows/coverage.yml',
 	},
 	{
 		command: 'bun run test:browser:smoke',

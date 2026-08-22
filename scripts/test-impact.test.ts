@@ -25,7 +25,7 @@ describe('test impact recommendations', () => {
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
-		expect(commandsFor(['ci-proposals/workflows/browser-workflow.yml', 'ci-proposals/workflows/coverage.yml'])).toEqual(['bun test scripts/ui-split-workflows.test.ts'])
+		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml'])).toEqual(['bun test scripts/ui-split-workflows.test.ts'])
 	})
 
 	test('specialized external integration tiers replace ineffective raw test commands', () => {

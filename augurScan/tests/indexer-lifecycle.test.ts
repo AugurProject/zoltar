@@ -720,6 +720,7 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			() => {},
 		)
 		const earlierProvider = providers[0]
 		if (earlierProvider === undefined) throw new Error('Expected an earlier provider fixture')
@@ -743,6 +744,7 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			() => {},
 		)
 		const recoveredProvider = providers[0]
 		if (recoveredProvider === undefined) throw new Error('Expected a recovered provider fixture')
@@ -759,6 +761,7 @@ describe('network indexer lifecycle', () => {
 			{ chainId: 2, floor: 10n },
 			{ chainId: 1, floor: 42n },
 		]
+		const failures: Array<{ error: unknown; provider: (typeof providers)[number] }> = []
 		const availability = await findEarliestAvailableLogProvider(
 			providers,
 			10n,
@@ -769,10 +772,14 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			(provider, error) => failures.push({ error, provider }),
 		)
 		const correctProvider = providers[1]
 		if (correctProvider === undefined) throw new Error('Expected a correct-chain provider fixture')
 		expect(availability).toEqual({ provider: correctProvider, startBlock: 42n })
+		expect(failures).toHaveLength(1)
+		expect(failures[0]?.provider).toBe(providers[0])
+		expect(failures[0]?.error).toBeInstanceOf(ChainConfigurationError)
 	})
 
 	test('recovers pruned log coverage without recording a lifecycle failure', async () => {
@@ -803,6 +810,7 @@ describe('network indexer lifecycle', () => {
 					async (provider, blockNumber) => {
 						if (blockNumber < provider.floor) throw prunedLogs
 					},
+					() => {},
 				)
 				recoveredStart = availability?.startBlock
 				controller.abort()

@@ -789,6 +789,11 @@ class NetworkIndexer {
 			async ({ logClient }, blockNumber) => {
 				await logClient.getLogs({ fromBlock: blockNumber, toBlock: blockNumber })
 			},
+			(provider, providerError) => {
+				console.warn(
+					`[${this.#network.id}] skipped ${provider.endpoint} while locating retrievable log history; ${safeIndexerFailureReason(providerError)}`,
+				)
+			},
 		)
 		if (availability === undefined) return false
 		await this.#advancePastPrunedLogs(availability.provider, availability.startBlock)
