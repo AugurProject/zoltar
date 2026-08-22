@@ -78,12 +78,18 @@ import {
 	withVerifiedProvider,
 } from '../src/indexer.ts'
 import {
+	ChainConfigurationError,
 	contractDeploymentCandidateFrom,
+	createLogClient,
 	discoveryLogAddresses,
+	findEarliestAvailableLogBlock,
+	findEarliestAvailableLogProvider,
 	indexerLogSources,
+	isPermanentHistoricalLogError,
 	readHistoricalCodeWithPermanentFallback,
 	scanDiscoveredLogCoverage,
 } from '../src/indexer-runtime.ts'
+import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
 import { unixSecondsToDate } from '../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
@@ -466,6 +472,44 @@ describe('network indexer lifecycle', () => {
 		expect(reasonFrom(results[1])).toContain('method eth_chainId')
 	})
 
+	test('sends a pruned historical log request only once', async () => {
+		let fetches = 0
+		const filters: unknown[] = []
+		const client = createLogClient('https://rpc.example', '#1 https://rpc.example', createRpcRequestQueue(5), async (_input, init) => {
+			fetches++
+			const request = parseRpcRequestBody(JSON.parse(String(init?.body)))
+			filters.push(request.params?.[0])
+			return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: request.id, jsonrpc: '2.0' })
+		})
+
+		const failure = await client.getLogs({ fromBlock: 1n, toBlock: 1n }).catch((error) => error)
+		expect(isPermanentHistoricalLogError(failure)).toBe(true)
+		expect(fetches).toBe(1)
+		expect(filters).toEqual([{ fromBlock: '0x1', toBlock: '0x1' }])
+	})
+
+	test('retains rate-limit retries for log requests', async () => {
+		for (const responseFrom of [
+			(_id: string | number | null) => new Response(undefined, { status: 429 }),
+			(id: string | number | null) => Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id, jsonrpc: '2.0' }),
+		]) {
+			let fetches = 0
+			const client = createLogClient(
+				'https://rpc.example',
+				'#1 https://rpc.example',
+				createRpcRequestQueue(5),
+				async (_input, init) => {
+					fetches++
+					const request = parseRpcRequestBody(JSON.parse(String(init?.body)))
+					return fetches === 1 ? responseFrom(request.id) : Response.json({ id: request.id, jsonrpc: '2.0', result: [] })
+				},
+				0,
+			)
+			expect(await client.getLogs({ fromBlock: 1n, toBlock: 1n })).toEqual([])
+			expect(fetches).toBe(2)
+		}
+	})
+
 	test('schedules concurrent adapter requests independently through the RPC queue', async () => {
 		const queue = createRpcRequestQueue(5)
 		let fetches = 0
@@ -620,6 +664,202 @@ describe('network indexer lifecycle', () => {
 		expect(isSplittableLogRangeError({ cause: { code: -32005, message: 'limit exceeded' } })).toBe(true)
 		expect(isSplittableLogRangeError(new Error('401 Unauthorized'))).toBe(false)
 		expect(isSplittableLogRangeError(new Error('connection reset'))).toBe(false)
+	})
+
+	test('locates the earliest retrievable log block without retrying the pruned range', async () => {
+		const attempts: bigint[] = []
+		const availableStart = await findEarliestAvailableLogBlock(
+			10n,
+			100n,
+			async (blockNumber) => {
+				attempts.push(blockNumber)
+				if (blockNumber < 42n)
+					throw new RpcRequestMethodError(
+						'eth_getLogs',
+						new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+						'#1 http://reth:8545',
+					)
+			},
+			true,
+		)
+		expect(availableStart).toBe(42n)
+		expect(attempts).not.toContain(10n)
+		expect(attempts.length).toBeLessThanOrEqual(8)
+	})
+
+	test('only treats pruned eth_getLogs history as a recoverable availability boundary', () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		expect(isPermanentHistoricalLogError(prunedLogs)).toBe(true)
+		expect(isSplittableLogRangeError(prunedLogs)).toBe(false)
+		expect(
+			isPermanentHistoricalLogError(
+				new RpcRequestMethodError('eth_getCode', new RpcError('pruned history unavailable', { code: 4444 }), '#1 http://reth:8545'),
+			),
+		).toBe(false)
+		expect(isPermanentHistoricalLogError(new RpcRequestMethodError('eth_getLogs', new RpcError('temporary failure'), '#1 http://reth:8545'))).toBe(false)
+	})
+
+	test('chooses the earliest complete log boundary across providers', async () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		const providers = [
+			{ id: 'earlier', floor: 42n },
+			{ id: 'later', floor: 75n },
+		]
+		const availability = await findEarliestAvailableLogProvider(
+			providers,
+			10n,
+			async () => 100n,
+			async (provider, blockNumber) => {
+				if (blockNumber < provider.floor) throw prunedLogs
+			},
+		)
+		const earlierProvider = providers[0]
+		if (earlierProvider === undefined) throw new Error('Expected an earlier provider fixture')
+		expect(availability).toEqual({ provider: earlierProvider, startBlock: 42n })
+	})
+
+	test('keeps the existing coverage floor when a recovered provider can serve it', async () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#2 http://reth:8545',
+		)
+		const providers = [
+			{ id: 'temporarily unavailable during polling', floor: 10n },
+			{ id: 'pruned', floor: 75n },
+		]
+		const availability = await findEarliestAvailableLogProvider(
+			providers,
+			10n,
+			async () => 100n,
+			async (provider, blockNumber) => {
+				if (blockNumber < provider.floor) throw prunedLogs
+			},
+		)
+		const recoveredProvider = providers[0]
+		if (recoveredProvider === undefined) throw new Error('Expected a recovered provider fixture')
+		expect(availability).toEqual({ provider: recoveredProvider, startBlock: 10n })
+	})
+
+	test('excludes wrong-chain providers from log boundary discovery', async () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#2 http://reth:8545',
+		)
+		const providers = [
+			{ chainId: 2, floor: 10n },
+			{ chainId: 1, floor: 42n },
+		]
+		const availability = await findEarliestAvailableLogProvider(
+			providers,
+			10n,
+			async (provider) => {
+				if (provider.chainId !== 1) throw new ChainConfigurationError('RPC chain mismatch')
+				return 100n
+			},
+			async (provider, blockNumber) => {
+				if (blockNumber < provider.floor) throw prunedLogs
+			},
+		)
+		const correctProvider = providers[1]
+		if (correctProvider === undefined) throw new Error('Expected a correct-chain provider fixture')
+		expect(availability).toEqual({ provider: correctProvider, startBlock: 42n })
+	})
+
+	test('recovers pruned log coverage without recording a lifecycle failure', async () => {
+		const controller = new AbortController()
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		let polls = 0
+		let recoveries = 0
+		let failures = 0
+		let recoveredStart: bigint | undefined
+		await runNetworkLifecycle({
+			verify: async () => {},
+			poll: async () => {
+				polls++
+				throw prunedLogs
+			},
+			recover: async (error) => {
+				expect(error).toBe(prunedLogs)
+				recoveries++
+				const providers = [{ floor: 42n }, { floor: 75n }]
+				const availability = await findEarliestAvailableLogProvider(
+					providers,
+					10n,
+					async () => 100n,
+					async (provider, blockNumber) => {
+						if (blockNumber < provider.floor) throw prunedLogs
+					},
+				)
+				recoveredStart = availability?.startBlock
+				controller.abort()
+				return availability !== undefined
+			},
+			failure: async () => {
+				failures++
+			},
+			intervalMs: 1,
+			signal: controller.signal,
+		})
+		expect({ polls, recoveries, failures, recoveredStart }).toEqual({ polls: 1, recoveries: 1, failures: 0, recoveredStart: 42n })
+	})
+
+	test('recovers when any failed provider reports pruned logs regardless of failure order', async () => {
+		const prunedLogs = new RpcRequestMethodError(
+			'eth_getLogs',
+			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
+			'#1 http://reth:8545',
+		)
+		for (const errors of [
+			[prunedLogs, new Error('timeout')],
+			[new Error('timeout'), prunedLogs],
+		]) {
+			const controller = new AbortController()
+			let sawPrunedLogs = false
+			let failures = 0
+			await runNetworkLifecycle({
+				verify: async () => {},
+				poll: async () => {
+					sawPrunedLogs = false
+					await withVerifiedProvider(
+						errors.map((error) => ({ getChainId: async () => 1, read: async () => Promise.reject(error) })),
+						1,
+						(provider) => provider.read(),
+						() => false,
+						() => {},
+						undefined,
+						(_provider, error) => {
+							if (isPermanentHistoricalLogError(error)) sawPrunedLogs = true
+						},
+					)
+					return false
+				},
+				recover: async (error) => {
+					if (!isPermanentHistoricalLogError(error) && !sawPrunedLogs) return false
+					controller.abort()
+					return true
+				},
+				failure: async () => {
+					failures++
+				},
+				intervalMs: 1,
+				signal: controller.signal,
+			})
+			expect(failures).toBe(0)
+		}
 	})
 
 	test('does not split HTTP rate-limit failures', async () => {
@@ -976,6 +1216,73 @@ describe('network indexer lifecycle', () => {
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 0n }], observations: [] })
 	})
 
+	test('does not claim log coverage before the active retrievable boundary', async () => {
+		const contract = {
+			address,
+			deploymentBlock: 25n,
+			deploymentBlockExact: true,
+			label: 'Older contract',
+			kind: 'openOracle',
+			provenance: 'manifest',
+		} satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			50n,
+			100n,
+			42n,
+			async () => {
+				throw new Error('Known deployment should not read code')
+			},
+			async () => new Date(0),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 42n }], observations: [] })
+	})
+
+	test('conservatively scans an unknown contract when only the recovered floor block is available', async () => {
+		const contract = { address, label: 'Unknown at floor', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			42n,
+			42n,
+			42n,
+			async () => {
+				throw new Error('A single floor block should not be used for deployment detection')
+			},
+			async () => new Date(0),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 42n, startBlock: 42n }], observations: [] })
+		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 42n, 42n)).toEqual([
+			{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 42n },
+		])
+	})
+
+	test('stores retained dynamic contract coverage from the active retrievable floor', async () => {
+		const contract = {
+			address,
+			discoveryBlock: 25n,
+			discoveryTxHash: `0x${'12'.repeat(32)}`,
+			label: 'Retained pool',
+			kind: 'securityPool',
+			provenance: 'Factory.DeploySecurityPool',
+		} satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			50n,
+			100n,
+			42n,
+			async () => {
+				throw new Error('Retained discovery should not read historical code')
+			},
+			async () => new Date(0),
+			undefined,
+			new Set([address.toLowerCase()]),
+		)
+		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 42n }], observations: [] })
+		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 100n, 42n)).toEqual([
+			{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 100n },
+		])
+	})
+
 	test('skips a periodically refreshed pruned candidate without starving later candidates', async () => {
 		const availableAddress = '0x2000000000000000000000000000000000000002'
 		const unavailable = { address, label: 'Unavailable', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
@@ -1219,6 +1526,23 @@ describe('network indexer lifecycle', () => {
 		expect(detection).not.toHaveBeenCalled()
 	})
 
+	test('resumes a pre-boundary manifest contract from the active retrievable floor', async () => {
+		const contract = { address, label: 'Pre-boundary source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const detection = mock(async () => ({ block: 50n, exact: true }))
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind, 50n]],
+				new Map([[address.toLowerCase(), contract]]),
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]),
+				100n,
+				0n,
+				detection,
+				75n,
+			),
+		).toBe(81n)
+		expect(detection).not.toHaveBeenCalled()
+	})
+
 	test('backfills when an exact manifest boundary moves earlier than a complete cursor', async () => {
 		const contract = { address, label: 'Promoted manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		expect(
@@ -1256,13 +1580,13 @@ describe('network indexer lifecycle', () => {
 		expect(manifestReplayAncestor(80n, 75n)).toBe(79n)
 	})
 
-	test('validates newly added manifest history before allowing a canonical replay', async () => {
+	test('clamps newly added manifest history to the stored coverage floor', async () => {
 		const replacement = '0x2000000000000000000000000000000000000002' as const
 		const storedContract = { address, label: 'Zoltar', kind: 'zoltar', provenance: 'manifest' } satisfies ContractMetadata
 		const storedContracts = new Map([[address.toLowerCase(), storedContract]])
 		const cursors = new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]])
-		await expect(
-			manifestChangeRequiresFullReplay(
+		expect(
+			await manifestChangeRequiresFullReplay(
 				[
 					[address, storedContract.label, storedContract.kind],
 					[replacement, 'OpenOracle v2', 'openOracle'],
@@ -1274,7 +1598,7 @@ describe('network indexer lifecycle', () => {
 				75n,
 				async (candidate) => ({ block: candidate === replacement ? 50n : 75n, exact: true }),
 			),
-		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		).toBe(true)
 		expect(
 			await manifestChangeRequiresFullReplay(
 				[
@@ -1292,12 +1616,12 @@ describe('network indexer lifecycle', () => {
 		const storedHelper = new Map([
 			[address.toLowerCase(), { address, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' } satisfies ContractMetadata],
 		])
-		await expect(
-			manifestChangeRequiresFullReplay([[address, 'OpenOracle', 'openOracle']], storedHelper, new Map(), 100n, 0n, 75n, async () => ({
+		expect(
+			await manifestChangeRequiresFullReplay([[address, 'OpenOracle', 'openOracle']], storedHelper, new Map(), 100n, 0n, 75n, async () => ({
 				block: 50n,
 				exact: true,
 			})),
-		).rejects.toThrow('deployment block 50 predates the stored index start 75')
+		).toBe(true)
 		const inexactStoredHelper = new Map([
 			[
 				address.toLowerCase(),
@@ -1313,8 +1637,8 @@ describe('network indexer lifecycle', () => {
 			],
 		])
 		const searches: Array<{ start: bigint; knownAbsent: boolean }> = []
-		await expect(
-			manifestChangeRequiresFullReplay(
+		expect(
+			await manifestChangeRequiresFullReplay(
 				[[address, 'OpenOracle', 'openOracle']],
 				inexactStoredHelper,
 				new Map(),
@@ -1326,8 +1650,8 @@ describe('network indexer lifecycle', () => {
 					return { block: 50n, exact: true }
 				},
 			),
-		).rejects.toThrow('deployment block 50 predates the stored index start 75')
-		expect(searches).toEqual([{ start: 0n, knownAbsent: false }])
+		).toBe(true)
+		expect(searches).toEqual([{ start: 75n, knownAbsent: false }])
 		const promotedDiscovery = new Map([
 			[
 				address.toLowerCase(),
@@ -1343,8 +1667,8 @@ describe('network indexer lifecycle', () => {
 			],
 		])
 		const promotionSearches: bigint[] = []
-		await expect(
-			manifestChangeRequiresFullReplay(
+		expect(
+			await manifestChangeRequiresFullReplay(
 				[[address, 'Promoted pool', 'securityPool']],
 				promotedDiscovery,
 				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
@@ -1356,8 +1680,8 @@ describe('network indexer lifecycle', () => {
 					return { block: 50n, exact: true }
 				},
 			),
-		).rejects.toThrow('deployment block 50 predates the stored index start 75')
-		expect(promotionSearches).toEqual([0n])
+		).toBe(true)
+		expect(promotionSearches).toEqual([75n])
 	})
 
 	test('gives each manifest deployment search an independent read budget', async () => {

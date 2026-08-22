@@ -175,6 +175,29 @@ describe('AugurScan runtime logging', () => {
 		}
 	})
 
+	test('reports pruned log history as recoverable boundary discovery', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
+		try {
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
+				Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: 1, jsonrpc: '2.0' }),
+			)
+			await loggingFetch('http://reth:8545', {
+				body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getLogs', params: [{ fromBlock: '0x1', toBlock: '0x1' }] }),
+				method: 'POST',
+			})
+			expect(consoleWarn).toHaveBeenCalledWith(
+				`Historical log history unavailable from #1 http://reth:8545; method eth_getLogs; message: pruned history unavailable; locating earliest retrievable block; full exchange logged to ${filename}`,
+			)
+			expect(consoleError).not.toHaveBeenCalled()
+		} finally {
+			consoleError.mockRestore()
+			consoleWarn.mockRestore()
+		}
+	})
+
 	test('rotates the current RPC log before it exceeds its configured size', async () => {
 		const directory = await temporaryDirectory()
 		const filename = path.join(directory, 'rpc.jsonl')
