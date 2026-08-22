@@ -1859,13 +1859,20 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		if (fixtureAttention === 'error') return { ...transaction, failedTargets: [{ error: rawRelayFailure, target: 'https://relay.example' }], status: 'submission-failed' as const }
 		return transaction
 	})
+	const expectedChainId = fixtureNetwork === 'mainnet' ? 1 : 11_155_111
+	const endpointChecks = snapshot.endpointChecks.map(check => ({
+		...check,
+		chainId: expectedChainId,
+		target: fixtureNetwork === 'mainnet' ? check.target : check.target.replace('read.example', 'sepolia-read.example').replace('rpc.example', 'sepolia-rpc.example').replace('relay.flashbots.net', 'sepolia-relay.example'),
+	}))
 	return {
 		...snapshot,
-		expectedChainId: fixtureNetwork === 'mainnet' ? 1 : 11_155_111,
+		expectedChainId,
 		explorerUrl: fixtureNetwork === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
 		network: fixtureNetwork,
 		networkConfigured: fixtureNetworkConfigured,
-		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
+		endpointChecks: fixtureAttention === 'error' ? endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : endpointChecks,
+		rpcEndpointHealth: snapshot.rpcEndpointHealth?.map(endpoint => ({ ...endpoint, target: fixtureNetwork === 'mainnet' ? endpoint.target : endpoint.target.replace('rpc.example', 'sepolia-rpc.example').replace('quorum.example', 'sepolia-quorum.example') })),
 		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
 		lastPollFailureAt: fixtureAttention === 'error' && fixturePollFailureMetadata ? new Date(Date.now() - 2_000).toISOString() : undefined,
 		lastRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && fixtureRetryInProgress ? new Date(Date.now() - 1_000).toISOString() : undefined,

@@ -631,13 +631,15 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 	const container = element('endpoint-checks')
 	container.replaceChildren()
-	if (snapshot.endpointChecks.length > 0) {
+	const endpointChecksMatchActiveChain = snapshot.endpointChecks.every(check => check.chainId === undefined || check.chainId === snapshot.expectedChainId)
+	const endpointChecks = endpointChecksMatchActiveChain ? snapshot.endpointChecks : []
+	if (endpointChecks.length > 0) {
 		const heading = document.createElement('h3')
 		heading.className = 'endpoint-check-heading'
 		heading.textContent = 'Configuration validation'
 		container.append(heading)
 	}
-	for (const check of snapshot.endpointChecks) {
+	for (const check of endpointChecks) {
 		const item = document.createElement('div')
 		item.className = 'endpoint-check'
 		item.dataset['status'] = check.status
@@ -651,7 +653,7 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 		item.append(status, target, detail)
 		container.append(item)
 	}
-	const runtimeHealth = snapshot.rpcEndpointHealth ?? []
+	const runtimeHealth = endpointChecksMatchActiveChain ? (snapshot.rpcEndpointHealth ?? []) : []
 	if (runtimeHealth.length > 0) {
 		const heading = document.createElement('h3')
 		heading.className = 'endpoint-check-heading'

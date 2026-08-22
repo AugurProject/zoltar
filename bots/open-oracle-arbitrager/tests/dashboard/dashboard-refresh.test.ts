@@ -95,8 +95,11 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		submission,
 		tokenAddresses: [],
 	})
-	const snapshot = () =>
-		operatorSnapshot(operatorState(), currentStrategy, submission, connectivity, {
+	const snapshot = () => {
+		const state = operatorState()
+		state.endpointChecks = [{ chainId: 1, checkedAt: new Date().toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://mainnet-rpc.example' }]
+		state.rpcEndpointHealth = [{ consecutiveFailures: 0, error: undefined, lastFailureAt: undefined, lastSuccessAt: new Date().toISOString(), latencyMilliseconds: 1, nextRetryAt: undefined, status: 'healthy', target: 'https://mainnet-live.example' }]
+		return operatorSnapshot(state, currentStrategy, submission, connectivity, {
 			deployment,
 			execute: false,
 			executor: undefined,
@@ -108,6 +111,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			savedWallet: undefined,
 			wallet: undefined,
 		})
+	}
 	const server = startDashboardServer(0, {
 		getConfiguration: async () => {
 			const captured = { configuration: configuration(), revision: `${network}-revision` }
@@ -209,6 +213,8 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'configuration-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)
+	expect(element(window, 'endpoint-checks', window.HTMLElement).textContent).not.toContain('Chain 1')
+	expect(element(window, 'endpoint-checks', window.HTMLElement).textContent).not.toContain('mainnet')
 	const loadedProfitInput = window.document.querySelector('[name="minimumProfitBps"]')
 	if (!(loadedProfitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
 	expect(loadedProfitInput.value).toBe('222')

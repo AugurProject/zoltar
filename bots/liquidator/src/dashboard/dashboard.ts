@@ -1296,7 +1296,8 @@ function renderNetworkBadge() {
 		return
 	}
 	if (currentConfiguration?.network === undefined || currentConfiguration.networkConfigured !== true) {
-		networkBadge.textContent = currentConfiguration?.network === undefined ? 'Choose chain' : 'RPC setup required'
+		const networkLabel = currentConfiguration?.network?.name === 'mainnet' ? 'Mainnet' : currentConfiguration?.network?.name === 'sepolia' ? 'Sepolia' : undefined
+		networkBadge.textContent = networkLabel === undefined ? 'Choose chain' : `${networkLabel} · RPC setup required`
 		networkBadge.className = 'badge warning'
 		return
 	}

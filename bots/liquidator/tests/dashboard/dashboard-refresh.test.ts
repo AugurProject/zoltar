@@ -530,7 +530,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 	test('keeps network identity visible and updates it after configuration', async () => {
 		const unconfigured = await dashboard(configuration(), state())
-		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('RPC setup required')
+		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · RPC setup required')
 		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
 		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toContain('Ethereum mainnet profile')
 		expect(unconfigured.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
@@ -630,6 +630,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(strategyFields.disabled).toBe(true)
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
 		expect(page.window.document.getElementById('network-scope-summary')?.textContent).toBe('Sepolia profile · switchable')
+		expect(page.window.document.getElementById('network-badge')?.textContent).toBe('Sepolia · RPC setup required')
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Sepolia profile loaded; RPC setup required.')
 		expect(rpcQuorum.value).toBe('1')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(0)
