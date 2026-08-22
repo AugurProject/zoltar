@@ -13,7 +13,7 @@ import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
-import { getWrongNetworkMessage, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -34,7 +34,7 @@ function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateCh
 	const selectedChildUniverse = zoltarUniverse.childUniverses.find(child => child.outcomeIndex === selectedChildOutcomeIndex)
 	const childDeploymentAvailabilityReason = (() => {
 		if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (!hasForked) return marketCopy.childUniversesNotForkedReason
 		return undefined
 	})()

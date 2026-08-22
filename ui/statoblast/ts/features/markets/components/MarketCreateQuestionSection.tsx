@@ -25,7 +25,7 @@ import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
-import { getWrongNetworkMessage } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
 import { tryParseTimestampInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 
@@ -507,7 +507,7 @@ export function MarketCreateQuestionSection({
 									disabled: !canCreateQuestion,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-										if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+										if (!isOnActiveAppChain) return getWrongNetworkReason()
 
 										if (marketFormValidation.isValid) return undefined
 										return marketFormValidation.notice

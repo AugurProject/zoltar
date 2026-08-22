@@ -113,6 +113,17 @@ export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
 	return units === 18 ? formatEther(value) : formatUnits(value, units)
 }
 
+export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFractionDigits: number = 4) {
+	assertNonNegativeInteger(units, 'Units')
+	assertNonNegativeInteger(maximumFractionDigits, 'Maximum fraction digits')
+	const negative = value < 0n
+	const absoluteValue = negative ? -value : value
+	const base = 10n ** BigInt(units)
+	const whole = absoluteValue / base
+	const fraction = (absoluteValue % base).toString().padStart(units, '0').slice(0, maximumFractionDigits).replace(/0+$/, '')
+	return `${negative ? '-' : ''}${whole.toLocaleString()}${fraction.length > 0 ? `.${fraction}` : ''}`
+}
+
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
 	if (value === undefined) return '—'
 	assertNonNegativeInteger(units, 'Units')

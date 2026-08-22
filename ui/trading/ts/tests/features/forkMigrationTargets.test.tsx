@@ -4,8 +4,7 @@ import { act } from 'preact/test-utils'
 import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
-import { DemoScalarForkMigration } from '../../features/MarketDetail.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 let cleanup: (() => Promise<void>) | undefined
 let cleanupDom: (() => void) | undefined
@@ -75,18 +74,6 @@ async function click(element: HTMLElement) {
 }
 
 describe('fork migration target selection', () => {
-	test('keeps display-ordered scalar targets eligible for the simulated submit state', async () => {
-		const rendered = await renderIntoDocument(<DemoScalarForkMigration />)
-		cleanup = rendered.cleanup
-
-		await click(buttonByText(rendered.container, 'Simulate migration to 2 branches'))
-
-		const submit = buttonByText(rendered.container, 'Submit migration to 2 child branches')
-		expect(submit.disabled).toBeFalse()
-		expect(rendered.container.textContent).toContain('Authoritative migration simulation ready')
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label')).map(target => target.textContent)).toEqual(['-2.5 °C', '0 °C'])
-	})
-
 	test('adds many arbitrary scalar outcomes and the invalid branch without raw packed input', async () => {
 		const context = scalarContext()
 		const rendered = await renderIntoDocument(<Harness context={context} />)

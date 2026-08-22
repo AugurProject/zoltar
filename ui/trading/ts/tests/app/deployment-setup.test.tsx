@@ -6,7 +6,7 @@ import { App, resolveCanonicalLiveDeployment } from '../../app/App.js'
 import { createDeploymentReadClient, TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const core = {
 	chainId: 11_155_111,

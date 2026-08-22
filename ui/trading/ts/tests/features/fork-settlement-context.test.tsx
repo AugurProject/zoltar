@@ -3,11 +3,11 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/shared/ethereum'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { LiveSettlementControls } from '../../features/LiveTrading.js'
+import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const pool = getAddress(`0x${'22'.repeat(20)}`)

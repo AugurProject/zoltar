@@ -4,11 +4,14 @@ import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { LiveTrading as ProductionLiveTrading, liveLiquidityServices, liveSettlementServices, type WalletSummaryState } from '../../features/LiveTrading.js'
-import { liveTradingControllerServices } from '../../features/liveTradingController.js'
+import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
+import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
+import { liveSettlementServices } from '../../features/LiveSettlementControls.js'
+import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
+import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -60,6 +63,10 @@ function button(label: string) {
 	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
 	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
 	return match
+}
+
+function hasButton(label: string) {
+	return Array.from(document.querySelectorAll('button')).some(candidate => candidate.textContent?.trim() === label)
 }
 
 describe('live workflow safety boundary', () => {
@@ -616,6 +623,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(async () => button('Remove').click())
 		rejectBalanceRefresh = true
+		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action')
 		await act(async () => button('Approve exact LP amount').click())
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
@@ -629,6 +637,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(async () => button('Remove').click())
 		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action after reconnecting')
 		await act(async () => button('Approve exact LP amount').click())
 		await act(async () => {
 			walletListeners.get('accountsChanged')?.([`0x${'96'.repeat(20)}`])

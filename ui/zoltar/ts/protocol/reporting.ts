@@ -7,18 +7,10 @@ import { requireAddressValue, requireArrayValue, requireBigintValue, requireBool
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getEscalationSideLabel, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp, requireSecurityVaultTupleArray } from './helpers.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { loadMarketDetails } from './zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
-const QUESTION_OUTCOME_ABI = [
-	{
-		inputs: [{ name: 'securityPool', type: 'address' }],
-		name: 'getQuestionOutcome',
-		outputs: [{ name: 'outcome', type: 'uint8' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 	{
 		inputs: [
@@ -739,7 +731,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 		{
-			abi: QUESTION_OUTCOME_ABI,
+			abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
 			functionName: 'getQuestionOutcome',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
@@ -830,7 +822,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		}),
 		client.readContract({
-			abi: QUESTION_OUTCOME_ABI,
+			abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
 			functionName: 'getQuestionOutcome',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],

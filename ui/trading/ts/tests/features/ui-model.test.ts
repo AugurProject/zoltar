@@ -1,30 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { demoAttoEthToAttoShares, demoAttoSharesToAttoEth, demoMarket, demoWalletBalances, lifecycleLabel, tradingClosedReason } from '../../demo/markets.js'
-import { demoPreviewPresentation, quoteDemoEnterPosition, transactionMessage } from '../../features/MarketDetail.js'
-import {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	forkMigrationBatchBlocker,
-	forkMigrationBatchWarning,
-	insuredExitLimitMessage,
-	liquidityApprovalRequired,
-	liquidityOperationAvailable,
-	livePairInitialized,
-	marketRouteSubtitle,
-	marketSelectionAfterDiscovery,
-	migrationSimulationSummary,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	portfolioRouteSubtitle,
-	securityPoolAddressFromRoute,
-	settlementBalanceLabel,
-	settlementInputBlocker,
-} from '../../features/LiveTrading.js'
-import { liquidityActionAvailability, parseConditionalProbabilityBps, quoteDemoEthLiquidity, quoteDemoRemoval } from '../../features/Routes.js'
+import { marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
+import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
 	collateMarketDiscoveryResults,
@@ -51,8 +29,19 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
-import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/liveTradingController.js'
+import {
+	approvalFailureTransition,
+	broadcastUncertainMessage,
+	discoveryCommitAllowed,
+	failedSubmissionTransition,
+	livePairInitialized,
+	marketSelectionAfterDiscovery,
+	parseSlippageBps,
+	parseTransactionValidityMinutes,
+	positionControlsWorkflowLocked,
+	securityPoolAddressFromRoute,
+} from '../../features/liveTradingControllerHelpers.js'
+import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
 
 describe('standalone trading UI model', () => {
 	test('uses the deterministic chain timestamp instead of the host wall clock in simulation', () => {
@@ -124,20 +113,6 @@ describe('standalone trading UI model', () => {
 		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
 	})
 
-	test('derives exact lifecycle reasons', () => {
-		expect(tradingClosedReason(demoMarket('ended').lifecycle)).toBe('Question ended')
-		expect(tradingClosedReason(demoMarket('forked').lifecycle)).toBe('Parent universe forked')
-		expect(lifecycleLabel(demoMarket('resolved-invalid').lifecycle)).toBe('Resolved INVALID')
-		expect(tradingClosedReason(demoMarket('truth-auction').lifecycle)).toBe('Truth auction in progress')
-		expect(demoMarket('truth-auction').securityPool.systemState).toBe('Fork truth auction')
-		expect(demoMarket('truth-auction').universe).toBe('Child universe · YES branch')
-		expect(demoMarket('truth-auction').pool).not.toBe(demoMarket('baseline').pool)
-	})
-
-	test('keeps truth-auction liquidity removal available while create and add are closed', () => {
-		expect(liquidityActionAvailability(demoMarket('truth-auction'))).toEqual({ initialize: false, add: false, remove: true })
-	})
-
 	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
 		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
 		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
@@ -146,40 +121,9 @@ describe('standalone trading UI model', () => {
 		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
 	})
 
-	test('keeps demo liquidity states mutually exclusive', () => {
-		expect(liquidityActionAvailability(demoMarket('baseline'))).toEqual({ initialize: false, add: true, remove: true })
-		expect(liquidityActionAvailability(demoMarket('missing-pair'))).toEqual({ initialize: true, add: false, remove: false })
-		expect(liquidityActionAvailability(demoMarket('uninitialized-pair'))).toEqual({ initialize: true, add: false, remove: false })
-		expect(liquidityActionAvailability(demoMarket('ended-missing-pair'))).toEqual({ initialize: false, add: false, remove: false })
-		expect(quoteDemoEthLiquidity(demoMarket('missing-pair'), 7_000n).added).toBeUndefined()
-	})
-
-	test('parses demo conditional prices as bounded two-decimal fixed point', () => {
-		expect(parseConditionalProbabilityBps('70.25')).toEqual({ value: 7_025n, error: undefined })
-		expect(parseConditionalProbabilityBps('0').error).toContain('above 0%')
-		expect(parseConditionalProbabilityBps('100').error).toContain('below 100%')
-		expect(parseConditionalProbabilityBps('70.251').error).toContain('at most two decimal places')
-		expect(parseConditionalProbabilityBps('not-a-price').error).toContain('at most two decimal places')
-		expect(parseConditionalProbabilityBps('9'.repeat(1_000)).error).toContain('below 100%')
-	})
-
 	test('keeps displayed conditional prices complementary after rounding', () => {
 		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
 		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
-	})
-
-	test('announces nonterminal demo transaction progress', () => {
-		expect(transactionMessage('approval')).toContain('approval')
-		expect(transactionMessage('pending')).toContain('pending')
-	})
-
-	test('explains the actual blocker when a demo quote is unavailable', () => {
-		expect(demoPreviewPresentation({ scenario: 'baseline', hasQuote: false, pairExists: false, closedReason: undefined, inputValid: true, capacityAvailable: true })).toEqual({ tone: 'warn', label: 'Pair initialization required', message: 'Create and initialize the pair before previewing a trade.' })
-		expect(demoPreviewPresentation({ scenario: 'ended', hasQuote: false, pairExists: true, closedReason: 'Question ended', inputValid: true, capacityAvailable: true })).toEqual({
-			tone: 'warn',
-			label: 'Trading closed',
-			message: 'Trading and added liquidity are unavailable: Question ended. Raw LP removal remains available.',
-		})
 	})
 
 	test('requires LP approval only after authoritative balances are ready', () => {
@@ -187,16 +131,6 @@ describe('standalone trading UI model', () => {
 		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeTrue()
 		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
 		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
-	})
-
-	test('uses the live SecurityPool rate for ETH-funded liquidity previews', () => {
-		const market = demoMarket('baseline')
-		const { initial, added, addedCompleteSetShares } = quoteDemoEthLiquidity(market, 7_000n)
-		if (added === undefined) throw new Error('Initialized demo market must quote added liquidity')
-		expect(formatShareAmount(initial.invalidReturned)).toBe('1.0127 shares')
-		expect(formatShareAmount(addedCompleteSetShares)).toBe('0.1012 shares')
-		expect(added.yesUsed).toBeLessThanOrEqual(addedCompleteSetShares)
-		expect(added.noUsed).toBeLessThanOrEqual(addedCompleteSetShares)
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
@@ -224,32 +158,6 @@ describe('standalone trading UI model', () => {
 		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
 		expect(formatUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
-	})
-
-	test('converts ETH to share units using the live SecurityPool exchange rate once', () => {
-		const market = demoMarket('baseline')
-		const shares = demoAttoEthToAttoShares(250_000_000_000_000_000n, market)
-		expect(formatShareAmount(shares)).toBe('0.2531 shares')
-		expect((shares * market.securityPool.settlementCollateralAttoEth) / market.securityPool.shareTokenSupplyAttoShares).toBeLessThanOrEqual(250_000_000_000_000_000n)
-	})
-
-	test('wires the live-rate complete-set amount into the enter quote', () => {
-		const quote = quoteDemoEnterPosition(demoMarket('baseline'), 'YES', 250_000_000_000_000_000n)
-		expect(formatShareAmount(quote.completeSetShares)).toBe('0.2531 shares')
-		expect(quote.completeSetShares).toBeGreaterThan(250_000_000_000_000_000n)
-	})
-
-	test('derives exit ETH from the current SecurityPool redemption rate', () => {
-		const market = demoMarket('baseline')
-		const shares = demoAttoEthToAttoShares(250_000_000_000_000_000n, market)
-		expect(demoAttoSharesToAttoEth(shares, market)).toBeLessThanOrEqual(250_000_000_000_000_000n)
-		expect(demoAttoSharesToAttoEth(shares * 2n, market)).toBeGreaterThan(demoAttoSharesToAttoEth(shares, market))
-	})
-
-	test('uses the authoritative LP supply for removal previews', () => {
-		const removed = quoteDemoRemoval(demoMarket('baseline'), 100n * 10n ** 18n)
-		expect(formatShareAmount(removed.yesOut)).toBe('100 shares')
-		expect(formatShareAmount(removed.noOut)).toBe('233.3335 shares')
 	})
 
 	test('derives displayed transaction bounds with LP-favoring rounding', () => {
@@ -481,7 +389,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('keeps maximum universe outcome token IDs within uint256', () => {
-		const scope = shareBalanceScope(demoMarket('max-token-ids'))
+		const scope = shareBalanceScope({ pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: (1n << 248n) - 1n })
 		expect(scope.invalidTokenId).toBe((1n << 256n) - 256n)
 		expect(scope.yesTokenId).toBe((1n << 256n) - 255n)
 		expect(scope.noTokenId).toBe((1n << 256n) - 254n)
@@ -593,28 +501,5 @@ describe('standalone trading UI model', () => {
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
 		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n)).toContain('long-share balance and pair liquidity')
 		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n)).toContain('INVALID balance covers only 4 complete sets')
-	})
-
-	test('derives both demo exits and LP coverage from one wallet fixture', () => {
-		const market = demoMarket('baseline')
-		const maximumYes = maximumInsuredExit({ longOutcome: 'YES', longBalance: demoWalletBalances.yes, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-		const maximumNo = maximumInsuredExit({ longOutcome: 'NO', longBalance: demoWalletBalances.no, invalidBalance: demoWalletBalances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
-		expect(maximumYes).toBe(demoWalletBalances.invalid)
-		expect(maximumNo).toBeLessThan(demoWalletBalances.no)
-		const yesClaim = (market.yesReserve * demoWalletBalances.lp) / market.lpTotalSupply
-		const noClaim = (market.noReserve * demoWalletBalances.lp) / market.lpTotalSupply
-		expect(yesClaim).toBe(demoWalletBalances.lp)
-		expect(noClaim).toBeGreaterThan(yesClaim)
-		expect(demoWalletBalances.invalid).toBeGreaterThan(yesClaim)
-	})
-
-	test('keeps every represented outcome balance within demo outstanding supply', () => {
-		const market = demoMarket('baseline')
-		const supply = market.securityPool.shareTokenSupplyAttoShares
-		expect(market.yesReserve).toBeLessThanOrEqual(supply)
-		expect(market.noReserve).toBeLessThanOrEqual(supply)
-		expect(market.yesReserve + demoWalletBalances.yes).toBeLessThanOrEqual(supply)
-		expect(market.noReserve + demoWalletBalances.no).toBeLessThanOrEqual(supply)
-		expect(demoWalletBalances.invalid).toBeLessThanOrEqual(supply)
 	})
 })

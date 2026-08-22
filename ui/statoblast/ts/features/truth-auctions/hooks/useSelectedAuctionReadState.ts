@@ -8,7 +8,7 @@ import { getCurrentSelectedPoolForkAuctionDetails, shouldReloadSelectedPoolDetai
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
+export type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
 
 type UseSelectedAuctionReadStateParameters = {
 	accountAddress: Address | undefined

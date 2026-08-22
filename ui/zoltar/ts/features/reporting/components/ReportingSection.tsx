@@ -20,7 +20,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
-import { getWrongNetworkMessage, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
@@ -372,7 +372,7 @@ export function ReportingSection({
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
-	const reportActionDisabledReason = !isOnActiveAppChain ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : reportButtonGuardMessage
+	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({

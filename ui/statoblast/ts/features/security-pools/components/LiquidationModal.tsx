@@ -33,7 +33,7 @@ import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkMessage } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -386,7 +386,7 @@ export function LiquidationModal({
 		queueLiquidationEthGuardMessage,
 	)
 	const liquidationButtonDisabledReason = (() => {
-		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (accountAddress === undefined) return commonCopy.walletConnectionRequired
 		if (!liquidationEnabled) return undefined
 		return liquidationActionReason

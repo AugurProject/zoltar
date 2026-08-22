@@ -4,6 +4,7 @@ import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 
 const deploymentComponents = [
 	{ name: 'securityPool', type: 'address' },
@@ -64,8 +65,6 @@ const securityPoolAbi = [
 ] as const satisfies Abi
 
 const erc20BalanceAbi = [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
-
-const securityPoolForkerAbi = [{ type: 'function', name: 'getQuestionOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address' }], outputs: [{ type: 'uint8' }] }] as const satisfies Abi
 
 const zoltarAbi = [{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 
@@ -522,7 +521,7 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } = poolSettings
 	const [question, questionOutcome, universeForkTime] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
-		client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
+		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
 		client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
 	])
 	const questionFields = liveQuestionFields(question)
