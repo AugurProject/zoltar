@@ -57,6 +57,42 @@ describe('liquidator durable state', () => {
 		}
 	})
 
+	test('rejects a chain-bound state containing a transaction signed for another chain', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-transaction-chain-'))
+		const path = join(directory, 'state.json')
+		try {
+			const account = privateKeyToAccount(`0x${'10'.repeat(32)}`)
+			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
+			const serializedTransaction = await account.signTransaction({
+				chainId: 1,
+				gas: 21_000n,
+				maxFeePerGas: 2n,
+				maxPriorityFeePerGas: 1n,
+				nonce: 4n,
+				to: getAddress('0x0000000000000000000000000000000000000020'),
+				value: 0n,
+			})
+			const state = initialRuntimeState(false, account.address, 11_155_111)
+			state.pendingTransactions.push({
+				hash: keccak256(serializedTransaction),
+				kind: 'fees',
+				label: 'Redeem fees',
+				maxBlockNumber: 125n,
+				mode: 'public',
+				nonce: 4n,
+				receiptExpectation: { type: 'transaction' },
+				requiresMarketEvidence: false,
+				sender: account.address,
+				serializedTransaction,
+				submissionBlock: 100n,
+			})
+			await saveDurableState(path, state)
+			await expect(loadDurableState(path, 11_155_111)).rejects.toThrow('belongs to chain 1, expected chain 11155111')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
 	test('never resubmits a recovered price-dependent intent without fresh evidence', () => {
 		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: true })).toBe(false)
 		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: false })).toBe(true)

@@ -635,6 +635,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
 				const parsedNonce = BigInt(nonce)
 				const parsedTransaction = parseTransaction(serializedTransaction as Hex)
+				if (parsedTransaction.chainId !== BigInt(expectedChainId)) throw new Error(`Pending transaction intent belongs to chain ${parsedTransaction.chainId?.toString() ?? 'unknown'}, expected chain ${expectedChainId.toString()}`)
 				if (parsedTransaction.nonce !== parsedNonce) throw new Error('Pending transaction intent nonce does not match its serialized transaction')
 				const normalizedSender = getAddress(sender)
 				const recoveredSender = await recoverTransactionAddress({ serializedTransaction: serializedTransaction as Hex })
