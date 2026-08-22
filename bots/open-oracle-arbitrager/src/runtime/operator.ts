@@ -31,7 +31,7 @@ import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticat
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
 import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorControlPlane } from './operator-control-plane.ts'
-import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
@@ -158,7 +158,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
 	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
-	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorIntentPath)
+	const pendingExecutorDeployment = await loadExecutorDeploymentIntentForChain(executorIntentPath, config.network.chain.id)
 	const deploymentRecovery = {
 		pending: pendingExecutorDeployment !== undefined,
 	}

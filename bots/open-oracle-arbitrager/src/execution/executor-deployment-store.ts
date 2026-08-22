@@ -89,6 +89,12 @@ export async function loadExecutorDeploymentIntent(path: string, filesystem: Dep
 	return parseExecutorDeploymentIntent(JSON.parse(contents))
 }
 
+export async function loadExecutorDeploymentIntentForChain(path: string, expectedChainId: number, filesystem: DeploymentIntentReadFilesystem = { open, readFile }) {
+	const intent = await loadExecutorDeploymentIntent(path, filesystem)
+	if (intent !== undefined && intent.chainId !== expectedChainId) throw new Error(`Executor deployment intent targets chain ${intent.chainId.toString()}; expected chain ${expectedChainId.toString()}`)
+	return intent
+}
+
 type DeploymentIntentWriteFilesystem = {
 	mkdir(path: string, options: { mode: number; recursive: true }): Promise<unknown>
 	openDirectory(path: string): Promise<{ close(): Promise<void>; sync(): Promise<void> }>

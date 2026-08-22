@@ -535,6 +535,39 @@ describe('file-only startup configuration', () => {
 			expect(child.exitCode).toBeNull()
 		}
 		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
+		const mainnetIntentPath = executorDeploymentIntentPath(path, 'mainnet')
+		await writeFile(mainnetIntentPath, '{', 'utf8')
+		const malformedIntentSwitch = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(malformedIntentSwitch.status, await malformedIntentSwitch.clone().text()).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		expect(await Bun.file(mainnetProfilePath).text()).toBe(compatibleMainnetProfile)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		expect(child.exitCode).toBeNull()
+		const wrongChainDeployment = await deploymentAccount.signTransaction({ chainId: 11_155_111, data: deploymentPlan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		await saveExecutorDeploymentIntent(mainnetIntentPath, {
+			account: deploymentAccount.address,
+			address: deploymentPlan.address,
+			chainId: 11_155_111,
+			salt: deploymentSalt,
+			serializedTransaction: wrongChainDeployment,
+			transactionHash: keccak256(wrongChainDeployment),
+			version: 1,
+		})
+		const wrongChainIntentSwitch = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(wrongChainIntentSwitch.status, await wrongChainIntentSwitch.clone().text()).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		expect(await Bun.file(mainnetProfilePath).text()).toBe(compatibleMainnetProfile)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		expect(child.exitCode).toBeNull()
+		await clearExecutorDeploymentIntent(mainnetIntentPath)
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },

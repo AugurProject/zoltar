@@ -5,7 +5,7 @@ import { defaultConfigurationFile } from '#config/configuration'
 import { loadOperatorSettings, operatorProfilePath } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
 import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -63,7 +63,7 @@ try {
 	signerLock = await acquireExecutionSignerLock(network.chain.id, account.address)
 	const deployment = await deployExecutorCreate2({
 		chain: network.chain,
-		existingIntent: await loadExecutorDeploymentIntent(intentPath),
+		existingIntent: await loadExecutorDeploymentIntentForChain(intentPath, network.chain.id),
 		persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
 		privateKey: privateKeyValue as Hex,
 		readRpcUrls: [rpcUrl, ...quorumRpcUrls],
