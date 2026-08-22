@@ -83,6 +83,29 @@ describe('split UI workflow paths', () => {
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(dockerfile).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
 	})
 
+	test('dead-code CI installs every bot workspace before analyzing it', async () => {
+		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		const deadCodeJobStart = workflow.indexOf('  knip:\n')
+		const auditJobStart = workflow.indexOf('  audit:\n', deadCodeJobStart)
+		expect(deadCodeJobStart).toBeGreaterThan(0)
+		expect(auditJobStart).toBeGreaterThan(deadCodeJobStart)
+		const deadCodeJob = workflow.slice(deadCodeJobStart, auditJobStart)
+		const setupIndex = deadCodeJob.indexOf('uses: ./.github/actions/setup-ci')
+		const knipIndex = deadCodeJob.indexOf('bun run knip')
+		expect(setupIndex).toBeGreaterThan(0)
+		expect(knipIndex).toBeGreaterThan(0)
+		expect(setupIndex).toBeLessThan(knipIndex)
+
+		const setupAction = await readFile(setupActionPath, 'utf8')
+		const botInstallStep = setupAction.indexOf('name: Install bot workspace dependencies for dead code analysis')
+		expect(botInstallStep).toBeGreaterThan(0)
+		expect(setupAction.slice(botInstallStep)).toContain("if: github.job == 'knip'")
+		for (const packageId of ['shared', 'open-oracle-arbitrager', 'liquidator']) {
+			const installIndex = setupAction.indexOf(`bun ./scripts/install-frozen.mts bots/${packageId}`, botInstallStep)
+			expect(installIndex).toBeGreaterThan(0)
+		}
+	})
+
 	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {
 		for (const packagePath of tevmPackagePaths) {
 			const parsed: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
