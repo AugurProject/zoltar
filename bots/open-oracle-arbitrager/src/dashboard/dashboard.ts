@@ -1200,7 +1200,7 @@ element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
 element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
 	const button = event.currentTarget
-	if (pendingNetworkProfile === undefined || !profileSwitchTimedOut || button.disabled) return
+	if (!(button instanceof HTMLButtonElement) || pendingNetworkProfile === undefined || !profileSwitchTimedOut || button.disabled) return
 	button.disabled = true
 	button.setAttribute('aria-busy', 'true')
 	button.textContent = 'Retrying profile load…'

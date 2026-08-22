@@ -12,7 +12,11 @@ const children: Bun.Subprocess[] = []
 
 async function waitForJson(origin: string, path: string, child?: Bun.Subprocess) {
 	for (let attempt = 0; attempt < 2_000; attempt++) {
-		if (child !== undefined && child.exitCode !== null) throw new Error(`Liquidator exited while waiting for ${path}: ${await new Response(child.stderr).text()}`)
+		if (child !== undefined && child.exitCode !== null) {
+			const stderr = child.stderr
+			const detail = stderr instanceof ReadableStream ? await new Response(stderr).text() : ''
+			throw new Error(`Liquidator exited while waiting for ${path}: ${detail}`)
+		}
 		try {
 			const response = await fetch(`${origin}${path}`)
 			if (response.ok) return (await response.json()) as Record<string, unknown>

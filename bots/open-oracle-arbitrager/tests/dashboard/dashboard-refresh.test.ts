@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { Browser } from 'happy-dom'
+import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
 import type { Address } from '#ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -140,18 +140,21 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, decodeURIComponent })) Reflect.set(window, name, value)
-	window.setInterval = () => 1
+	window.setInterval = () => {
+		const timeout = window.setTimeout(() => undefined, 1)
+		window.clearTimeout(timeout)
+		return timeout
+	}
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
 	window.fetch = async (input, init) => {
 		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
-		const headers = new Headers(init?.headers)
-		if (init?.method !== undefined && init.method !== 'GET') headers.set('origin', server.url.origin)
-		const response = await fetch(new URL(inputUrl, server.url), { ...init, headers })
-		return new window.Response(await response.text(), { headers: response.headers, status: response.status })
+		const url = new URL(inputUrl, server.url)
+		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
+		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
 	}
-	const dashboardBuild = await Bun.build({ entrypoints: [join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')], target: 'browser', write: false })
+	const dashboardBuild = await Bun.build({ entrypoints: [join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')], target: 'browser' })
 	if (!dashboardBuild.success) throw new Error('Could not build the dashboard fixture')
 	const dashboardOutput = dashboardBuild.outputs[0]
 	if (dashboardOutput === undefined) throw new Error('Dashboard fixture build returned no output')
@@ -211,7 +214,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(profitInput.value).toBe('222')
 })
 
-function element<T extends Element>(window: { document: Document }, id: string, constructor: { new (): T }): T {
+function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {
 	const found = window.document.getElementById(id)
 	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element ${id}`)
 	return found
