@@ -339,34 +339,19 @@
 				<div>
 					<p class="eyebrow">Operator controls</p>
 					<h2>Settings</h2>
+					<p id="settings-chain-scope" class="section-note">Select a chain profile first. Every setting and durable journal is stored separately for that chain.</p>
 					<p class="section-note">Coordinator-free event discovery scans newest first within <code>runtime.lookbackBlocks</code>: <code>0</code> disables it, and <code>1–256</code> scans that many latest blocks. Configure the value in Complete bot configuration. Approved coordinators use current contract state instead.</p>
 				</div>
 			</div>
 			<div id="settings-load-state" class="notice settings-load-state" data-page-content="settings"><span id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span><button id="retry-settings-button" class="button button-secondary" type="button" hidden>Retry</button></div>
 			<div class="settings-stack" data-page-content="settings">
-				<details class="settings-group panel">
-					<summary>
-						<span class="settings-summary-copy"><strong>Strategy</strong><small>Profit threshold, price safety, timing, and polling</small></span>
-					</summary>
-					<div class="settings-body">
-						<form id="strategy-form">
-							<fieldset id="strategy-fieldset" disabled>
-								<div class="field-grid">
-									<label><span>Minimum profit (WETH)</span><input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required /></label><label><span>Minimum return (bps)</span><input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required /></label><label><span>Maximum spot/TWAP ticks</span><input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required /></label><label><span>TWAP window (seconds)</span><input name="twapSeconds" type="number" min="60" max="86400" required /></label><label><span>Minimum remaining blocks</span><input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required /></label><label><span>Minimum remaining seconds</span><input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required /></label><label><span>Poll interval (milliseconds)</span><input name="pollMilliseconds" type="number" min="1000" max="3600000" required /></label>
-								</div>
-								<div class="form-actions"><span id="form-status" class="muted" aria-live="polite">Changes do not enable execution.</span><button class="button" type="submit">Apply strategy</button></div>
-							</fieldset>
-						</form>
-					</div>
-				</details>
-
 				<details id="network-connectivity" class="settings-group panel">
 					<summary>
 						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small id="network-value">Unknown network</small></span>
 					</summary>
 					<div class="settings-body">
 						<p id="network-target-status" class="muted" role="status" aria-live="polite" hidden></p>
-						<p class="muted">The chain is locked after initial setup. Use separate operator configuration and journal paths for another chain.</p>
+						<p class="muted">Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process.</p>
 						<form id="connectivity-form">
 							<fieldset id="connectivity-fieldset" disabled>
 								<div class="connectivity-grid">
@@ -386,8 +371,25 @@
 								</div>
 								<div class="form-actions"><span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain.</span><button class="button" type="submit">Check &amp; apply network</button></div>
 							</fieldset>
+							<div id="profile-switch-retry-actions" class="form-actions" hidden><button id="profile-switch-retry-button" class="button button-secondary" type="button" hidden>Retry profile load</button></div>
 						</form>
 						<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
+					</div>
+				</details>
+
+				<details class="settings-group panel">
+					<summary>
+						<span class="settings-summary-copy"><strong>Strategy</strong><small>Profit threshold, price safety, timing, and polling</small></span>
+					</summary>
+					<div class="settings-body">
+						<form id="strategy-form">
+							<fieldset id="strategy-fieldset" disabled>
+								<div class="field-grid">
+									<label><span>Minimum profit (WETH)</span><input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required /></label><label><span>Minimum return (bps)</span><input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required /></label><label><span>Maximum spot/TWAP ticks</span><input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required /></label><label><span>TWAP window (seconds)</span><input name="twapSeconds" type="number" min="60" max="86400" required /></label><label><span>Minimum remaining blocks</span><input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required /></label><label><span>Minimum remaining seconds</span><input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required /></label><label><span>Poll interval (milliseconds)</span><input name="pollMilliseconds" type="number" min="1000" max="3600000" required /></label>
+								</div>
+								<div class="form-actions"><span id="form-status" class="muted" aria-live="polite">Changes do not enable execution.</span><button class="button" type="submit">Apply strategy</button></div>
+							</fieldset>
+						</form>
 					</div>
 				</details>
 

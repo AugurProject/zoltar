@@ -177,7 +177,7 @@ describe('operator connectivity updates', () => {
 				submission: settings.submission,
 				value: request('sepolia'),
 			}),
-		).rejects.toThrow('separate operator configuration and durable journal paths')
+		).rejects.toThrow('Select the chain profile before saving its RPC settings')
 		expect(checked).toBe(false)
 		expect(persisted).toBeUndefined()
 		expect(settings).toEqual(before)
@@ -202,7 +202,7 @@ describe('operator connectivity updates', () => {
 				submission: settings.submission,
 				value: request('sepolia'),
 			}),
-		).rejects.toThrow('separate operator configuration and durable journal paths')
+		).rejects.toThrow('Select the chain profile before saving its RPC settings')
 		expect(persisted).toBe(false)
 	})
 

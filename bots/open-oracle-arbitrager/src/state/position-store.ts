@@ -458,7 +458,8 @@ export function manuallyReconcilePosition(
 	}
 }
 
-export async function loadPositionJournal(path: string) {
+export async function loadPositionJournal(path: string, expectedChainId: number) {
+	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected position journal chain ID must be a positive integer')
 	let contents: string
 	try {
 		contents = await readFile(path, 'utf8')
@@ -475,7 +476,8 @@ export async function loadPositionJournal(path: string) {
 	}
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Invalid position journal root')
 	const root = parsed as Record<string, unknown>
-	if (root['version'] !== 1 || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
+	if (root['version'] !== 2 || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
+	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const positions = root['positions'].map(parsePosition)
 	const ids = new Set<string>()
 	for (const position of positions) {
@@ -493,7 +495,8 @@ export function acquireExecutionSignerLock(chainId: number, account: Address) {
 	return acquireSharedExecutionSignerLock(chainId, account)
 }
 
-export async function savePositionJournal(path: string, positions: readonly PositionRecord[], filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+export async function savePositionJournal(path: string, positions: readonly PositionRecord[], chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Position journal chain ID must be a positive integer')
 	const ids = new Set<string>()
 	for (const position of positions) {
 		parsePosition(position)
@@ -505,7 +508,7 @@ export async function savePositionJournal(path: string, positions: readonly Posi
 	try {
 		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
 		try {
-			await fileHandle.writeFile(`${JSON.stringify({ positions, version: 1 }, undefined, 2)}\n`, { encoding: 'utf8' })
+			await fileHandle.writeFile(`${JSON.stringify({ chainId, positions, version: 2 }, undefined, 2)}\n`, { encoding: 'utf8' })
 			await fileHandle.chmod(0o600)
 			await fileHandle.sync()
 		} finally {

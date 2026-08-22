@@ -1,25 +1,26 @@
 import { resolve } from 'node:path'
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
-import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
+import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
-import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { assertStoredExecutorDeploymentIntent, deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '#execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
-import { operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import type { ExclusiveProcessLock, PositionRecord } from '#state/position-store'
+import { loadExecutionHistory, operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { networkConfiguration } from '#config/network'
 import { positionConsumesRisk, type RiskLimits } from '#core/safety-controls'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { loadPriceHistory } from '#monitoring/market-monitor'
 
 export type PendingOperatorUpdates = {
 	centralizedMarkets: CentralizedMarketSettings | undefined
@@ -31,6 +32,7 @@ export type PendingOperatorUpdates = {
 	network: Configuration['network'] | undefined
 	operatorSettings: PersistedOperatorSettings | undefined
 	paused: boolean | undefined
+	profileSwitch: boolean
 	privateKey: Hex | undefined
 	persistedPrivateKey: Hex | undefined
 	persistedTokenAddresses: Address[] | undefined
@@ -108,8 +110,34 @@ export function requirePausedExecutorDeployment(execute: boolean, paused: boolea
 	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
 }
 
-export async function requireNoPendingExecutorDeployment(settingsFile: string) {
-	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+export async function requireNoPendingExecutorDeployment(settingsFile: string, network: PersistedOperatorSettings['network']) {
+	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile, network))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
+}
+
+async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
+	const chain = runnableOperatorSettings(settingsFile, target).network.chain
+	const deploymentIntent = await loadExecutorDeploymentIntentForChain(executorDeploymentIntentPath(settingsFile, target.network), chain.id)
+	if (deploymentIntent !== undefined) await assertStoredExecutorDeploymentIntent(deploymentIntent, chain.id)
+	if (target.networkConfigured) {
+		await checkConnectivity(target.connectivity, chain.id)
+		await checkIndependentRpcChains(target.deployment.quorumRpcUrls, chain.id)
+		await checkSubmissionEndpoints(target.submission, chain.id)
+	}
+	let journalLock: ExclusiveProcessLock | undefined
+	let signerLock: ExclusiveProcessLock | undefined
+	try {
+		if (target.runtime.execute || target.runtime.ui) journalLock = await acquirePositionJournalLock(target.runtime.positionFile)
+		if (target.runtime.execute) {
+			if (target.privateKey === undefined) throw new Error('Execution requires an active signer')
+			signerLock = await acquireExecutionSignerLock(chain.id, privateKeyToAccount(target.privateKey).address)
+		}
+		await Promise.all([loadPositionJournal(target.runtime.positionFile, chain.id), loadExecutionHistory(target.runtime.historyFile, chain.id), loadPriceHistory(target.runtime.priceHistoryFile, chain.id)])
+	} finally {
+		const releases = [signerLock, journalLock].filter(lock => lock !== undefined).map(lock => lock.release())
+		const results = await Promise.allSettled(releases)
+		const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
+		if (errors.length !== 0) throw new AggregateError(errors, 'Failed to release target chain profile preflight locks')
+	}
 }
 
 export type DeploymentRecoveryState = { pending: boolean }
@@ -138,6 +166,15 @@ export async function acquireConfigurationSignerOperation(signerOperationGate: S
 	while (!signerOperationGate.acquire('configuration')) await Bun.sleep(10)
 }
 
+export async function runConfigurationSignerOperation<T>(signerOperationGate: SignerOperationGate, operation: () => Promise<T>) {
+	await acquireConfigurationSignerOperation(signerOperationGate)
+	try {
+		return await operation()
+	} finally {
+		signerOperationGate.release('configuration')
+	}
+}
+
 export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
 	deploymentRecovery.pending = true
 	await saveExecutorDeploymentIntent(path, intent)
@@ -149,6 +186,7 @@ export function startOperatorControlPlane(parameters: {
 	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
 	getCursor: () => SyncCursor | undefined
 	lockManager: ExecutionLockManager | undefined
+	onNetworkProfileSwitch?: () => void
 	signerOperationGate: SignerOperationGate
 	state: OperatorState
 }) {
@@ -163,6 +201,7 @@ export function startOperatorControlPlane(parameters: {
 		network: undefined,
 		operatorSettings: undefined,
 		paused: undefined,
+		profileSwitch: false,
 		privateKey: undefined,
 		persistedPrivateKey: undefined,
 		persistedTokenAddresses: undefined,
@@ -183,8 +222,12 @@ export function startOperatorControlPlane(parameters: {
 		return next
 	}
 	let settingsUpdateQueue = Promise.resolve()
+	let profileSwitchInProgress = false
 	const queueSettingsUpdate = <T>(update: () => Promise<T>) => {
-		const result = settingsUpdateQueue.then(update)
+		const result = settingsUpdateQueue.then(async () => {
+			if (profileSwitchInProgress || pending.profileSwitch) throw new Error('Chain profile switching is in progress; retry after the dashboard reconnects')
+			return await update()
+		})
 		settingsUpdateQueue = result.then(
 			() => undefined,
 			() => undefined,
@@ -202,9 +245,28 @@ export function startOperatorControlPlane(parameters: {
 			}
 		},
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, fixedState, config.riskLimits),
+		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
+		switchNetworkProfile: value =>
+			queueSettingsUpdate(async () => {
+				if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || (value.network !== 'mainnet' && value.network !== 'sepolia')) throw new Error('Chain profile must be mainnet or sepolia')
+				const network = value.network
+				if (network === config.network.name) return { network: config.network.name, networkConfigured: config.networkConfigured }
+				await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
+				profileSwitchInProgress = true
+				try {
+					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json'), target => preflightOperatorProfile(config.settingsFile, target)))
+					state.paused = true
+					pending.profileSwitch = true
+					if (parameters.onNetworkProfileSwitch !== undefined) setTimeout(parameters.onNetworkProfileSwitch, 0)
+					return { network: switched.settings.network, networkConfigured: switched.settings.networkConfigured }
+				} catch (error) {
+					profileSwitchInProgress = false
+					throw error
+				}
+			}),
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
@@ -213,7 +275,7 @@ export function startOperatorControlPlane(parameters: {
 				if (latest === undefined || latest.revision !== revision) throw configurationRevisionConflict()
 				const next = parseOperatorSettings(value.configuration, latest.settings.privateKey)
 				assertDistinctPersistentPaths(config.settingsFile, next.runtime)
-				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+				if (latest.settings.networkConfigured && (!next.networkConfigured || next.network !== latest.settings.network)) throw new Error('Switch chain profiles with the Chain selector before editing that profile')
 				if (
 					resolve(next.runtime.historyFile) !== config.historyFile ||
 					next.runtime.once !== config.once ||
@@ -230,7 +292,7 @@ export function startOperatorControlPlane(parameters: {
 					await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
 					await checkSubmissionEndpoints(next.submission, expectedChainId)
 				}
-				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile)
+				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				const signer = next.privateKey === undefined ? { address: undefined, privateKey: undefined } : signerCandidate(next.privateKey)
 				if (next.runtime.execute && signer.address === undefined) throw new Error('Execution requires an active signer')
 				const keepsActiveSigner = fixedState.execute && signer.address !== undefined && fixedState.wallet !== undefined && signer.address.toLowerCase() === fixedState.wallet.toLowerCase()
@@ -310,7 +372,7 @@ export function startOperatorControlPlane(parameters: {
 		setPaused: paused =>
 			queueSettingsUpdate(async () => {
 				if (!paused && !config.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
-				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile)
+				if (!paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				await persistFocusedSettings(settings => ({ ...settings, paused }))
 				pending.paused = paused
 				if (paused) {
@@ -331,10 +393,10 @@ export function startOperatorControlPlane(parameters: {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
 				if (latest.settings.networkConfigured) {
-					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Select the chain profile before saving its RPC settings')
 				}
 				const next = await updateOperatorConnectivity({
-					activeNetwork: config.networkConfigured ? config.network.name : undefined,
+					activeNetwork: latest.settings.network,
 					activeRpcQuorum: config.rpcQuorum,
 					deployment: latest.settings.deployment,
 					endpointState: state,
@@ -424,7 +486,7 @@ export function startOperatorControlPlane(parameters: {
 			const privateKey = config.privateKey
 			const plan = executorDeploymentPlan(value['salt'])
 			return await queueSettingsUpdate(async () => {
-				const intentPath = executorDeploymentIntentPath(config.settingsFile)
+				const intentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
 				const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 				let deploymentSignerLock: ExclusiveProcessLock | undefined
 				let signerOperationAcquired = false

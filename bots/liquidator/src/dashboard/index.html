@@ -208,12 +208,13 @@
 				<div>
 					<p class="eyebrow">Operator controls</p>
 					<h2>Settings</h2>
+					<p id="settings-chain-scope" class="muted">Select a chain profile first. Every setting and durable recovery record is stored separately for that chain.</p>
 				</div>
 			</div>
 			<div class="settings-stack" data-page-content="settings">
 				<details id="network-connectivity" class="settings-group">
 					<summary>
-						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small>Network safety · chain locks after initial setup</small></span>
+						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small id="network-scope-summary">No profile selected</small></span>
 					</summary>
 					<div class="settings-body">
 						<form id="network-form">
@@ -228,7 +229,14 @@
 									>
 									<label><span>Read RPC URL</span><input id="read-rpc-url" type="url" spellcheck="false" required /></label>
 									<label><span>Public submission RPC URLs · one per line</span><textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea></label>
-									<label><span>Independent quorum RPC URLs · optional; quorum 2 requires two</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
+									<label
+										><span>RPC agreement requirement</span
+										><select id="rpc-quorum">
+											<option value="1">1 · primary RPC only</option>
+											<option value="2">2 · require two agreeing independent RPCs</option>
+										</select></label
+									>
+									<label><span>Independent quorum RPC URLs · required when agreement is 2</span><textarea id="quorum-rpc-urls" rows="3" spellcheck="false"></textarea></label>
 								</div>
 								<div class="form-actions"><span id="network-status" class="muted" role="status" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span><button type="submit">Check &amp; apply network</button></div>
 							</fieldset>

@@ -209,7 +209,7 @@ describe('fork migration strategy', () => {
 		expect(isVaultMigrationSourceEligible(parent, deadline + 1n)).toBe(false)
 		expect(isVaultMigrationSourceEligible({ ...parent, forkActivationTime: 0n }, 0n)).toBe(false)
 
-		const state = initialRuntimeState(false, wallet)
+		const state = initialRuntimeState(false, wallet, 1)
 		state.pools = [parent]
 		state.universes = [rootUniverse, approvedChildUniverse]
 		state.lastScannedTimestamp = deadline
@@ -225,7 +225,7 @@ describe('fork migration strategy', () => {
 		const childRep = getAddress('0x0000000000000000000000000000000000000088')
 		const rootPool = { ...parent, lastPrice: 10n * 10n ** 18n, repToken: rootRep }
 		const childPool = { ...approvedChild, lastPrice: 10n * 10n ** 18n, repToken: childRep }
-		const state = initialRuntimeState(false, wallet)
+		const state = initialRuntimeState(false, wallet, 1)
 		state.pools = [rootPool, childPool]
 		state.centralizedMarket = {
 			assetId: rootRep,

@@ -7,7 +7,8 @@ const longUniverseId = '45231284858326638837332416019018714005183587760015845327
 let approvedUniverses = ['101', longUniverseId]
 let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
 let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
-let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string } | undefined
+let networkConfigured = false
+let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
 const centralizedMarkets = {
 	assetAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 	assetChainId: 1,
@@ -147,7 +148,7 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
+	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
 }
 
 const server = startDashboardServer(4183, {
@@ -201,6 +202,7 @@ const server = startDashboardServer(4183, {
 			walletEth: '2.184',
 			walletRep: '2508.19',
 		},
+		network: network?.name,
 		paused,
 		rpcEndpointHealth: [
 			{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://rpc-primary.example' },
@@ -254,6 +256,7 @@ const server = startDashboardServer(4183, {
 			'0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb': '2508.19',
 		},
 	}),
+	isNetworkConfigured: () => true,
 	hostname: '127.0.0.1',
 	reconcileTransaction: value => {
 		if (!paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -277,12 +280,26 @@ const server = startDashboardServer(4183, {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected network-connectivity object')
 		const requestedNetwork = Reflect.get(value, 'network')
 		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
+		const requestedConnectivity = Reflect.get(value, 'connectivity')
+		const requestedRpcQuorum = typeof requestedConnectivity === 'object' && requestedConnectivity !== null ? Reflect.get(requestedConnectivity, 'rpcQuorum') : undefined
+		const requestedQuorumRpcUrls = typeof requestedConnectivity === 'object' && requestedConnectivity !== null ? Reflect.get(requestedConnectivity, 'quorumRpcUrls') : undefined
+		if (!Array.isArray(requestedQuorumRpcUrls) || !requestedQuorumRpcUrls.every((url): url is string => typeof url === 'string')) throw new Error('Expected quorum RPC URL list')
 		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
 		connectivity = {
 			publicRpcUrls: ['https://rpc.example'],
-			quorumRpcUrls: ['https://quorum.example'],
+			quorumRpcUrls: [...requestedQuorumRpcUrls],
 			readRpcUrl: 'https://read.example',
+			rpcQuorum: requestedRpcQuorum === 2 ? 2 : 1,
 		}
+		networkConfigured = true
+		return currentConfiguration()
+	},
+	switchNetworkProfile: value => {
+		const requestedNetwork = Reflect.get(value as object, 'network')
+		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Expected supported network')
+		network = requestedNetwork === 'mainnet' ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
+		connectivity = undefined
+		networkConfigured = false
 		return currentConfiguration()
 	},
 	setMarketConfiguration: value => {

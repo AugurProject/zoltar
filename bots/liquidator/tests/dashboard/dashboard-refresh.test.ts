@@ -40,9 +40,10 @@ type DashboardConfiguration = {
 	approvedUniverses: string[]
 	centralizedMarkets: unknown
 	childMarketConfigurations: unknown[]
-	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 }
 	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
+	networkConfigured?: boolean
 	runtime: { historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPools: string[]
 	strategy: Record<string, string | number | boolean>
@@ -71,11 +72,16 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		centralizedMarkets: {},
 		childMarketConfigurations: [],
 		desiredPools: [],
-		...(network === undefined ? {} : { network }),
+		network: network ?? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
+		networkConfigured: network !== undefined,
 		runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 },
 		selectedPools: ['0x1111111111111111111111111111111111111111'],
 		strategy: {},
 	}
+}
+
+function mainnetConfiguration(approvedUniverses = ['1']) {
+	return configuration(approvedUniverses, { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' })
 }
 
 function state(
@@ -85,9 +91,11 @@ function state(
 		execute?: boolean
 		lastScannedBlock?: string
 		lastScannedTimestamp?: string
+		network?: 'mainnet' | 'sepolia'
 		paused?: boolean
 		pendingStagedOperations?: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 		pendingTransactions?: PendingTransaction[]
+		rpcEndpointHealth?: { consecutiveFailures: number; latencyMilliseconds?: number; status: string; target: string }[]
 		universes?: DashboardUniverse[]
 	} = {},
 ) {
@@ -109,9 +117,11 @@ function state(
 			walletEth: '1',
 			walletRep: '2',
 		},
+		network: options.network ?? 'mainnet',
 		paused: options.paused ?? false,
 		pendingStagedOperations: options.pendingStagedOperations ?? [],
 		pendingTransactions: options.pendingTransactions ?? [],
+		rpcEndpointHealth: options.rpcEndpointHealth ?? [],
 		pools: [
 			{
 				knownVaultCount: '0',
@@ -140,11 +150,12 @@ function state(
 	}
 }
 
-async function dashboard(initialConfiguration = configuration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false, initialConfigurationRequestFailure = false) {
+async function dashboard(initialConfiguration = mainnetConfiguration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false, initialConfigurationRequestFailure = false) {
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
 		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
 		setApprovedUniverses: value => value,
 		setPaused: value => value,
 		setSelectedPools: value => value,
@@ -186,7 +197,11 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	}
 	let snapshot = initialState
 	let currentConfiguration = initialConfiguration
+	let pendingProfileConfiguration: DashboardConfiguration | undefined
+	let staleProfilePolls = 0
 	let configurationRequestFailure = initialConfigurationRequestFailure
+	let hangNextConfigurationRequest = false
+	let hangNextProfileResponse = false
 	let rejectPause = false
 	const pauseRequests: unknown[] = []
 	const approvedUniverseRequests: string[][] = []
@@ -196,6 +211,7 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 	let hangNextStateRequest = false
 	let releaseStateRequest: (() => void) | undefined
 	let releasePauseRequest: (() => void) | undefined
+	let releaseMarketSourceRequest: (() => void) | undefined
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
@@ -203,13 +219,27 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/configuration') {
+			if (hangNextConfigurationRequest) {
+				hangNextConfigurationRequest = false
+				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new Error('fixture configuration request aborted')), { once: true })
+				})
+			}
 			if (configurationRequestFailure) return new window.Response(JSON.stringify({ error: 'configuration fixture unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 })
+			if (pendingProfileConfiguration !== undefined) {
+				if (staleProfilePolls === 0) {
+					currentConfiguration = pendingProfileConfiguration
+					pendingProfileConfiguration = undefined
+					snapshot = { ...snapshot, network: 'sepolia' }
+				} else staleProfilePolls -= 1
+			}
 			return new window.Response(JSON.stringify(currentConfiguration), {
 				headers: { 'content-type': 'application/json' },
 			})
 		}
 		if (url.pathname === '/api/state') {
 			stateRequestCount += 1
+			const capturedSnapshot = snapshot
 			if (hangNextStateRequest) {
 				hangNextStateRequest = false
 				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
@@ -218,9 +248,10 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 			}
 			if (releaseStateRequest !== undefined) await new Promise<void>(resolve => (releaseStateRequest = resolve))
 			if (stateRequestFailure) return new window.Response(JSON.stringify({ error: 'state fixture unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 })
-			return new window.Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })
+			return new window.Response(JSON.stringify(capturedSnapshot), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/test-market-sources') {
+			if (releaseMarketSourceRequest !== undefined) await new Promise<void>(resolve => (releaseMarketSourceRequest = resolve))
 			return new window.Response(JSON.stringify({ assets: [{ assetId: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sources: [{ id: 'uniswap-v2', kind: 'dex', market: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', status: 'observed' }] }], blockNumber: '42' }), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/paused' && rejectPause) {
@@ -251,10 +282,27 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 		if (url.pathname === '/api/network-connectivity') {
 			currentConfiguration = {
 				...currentConfiguration,
-				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example' },
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example', rpcQuorum: 1 },
 				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
+				networkConfigured: true,
 			}
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
+		if (url.pathname === '/api/network-profile') {
+			snapshot = { ...snapshot, network: 'sepolia' }
+			pendingProfileConfiguration = {
+				...currentConfiguration,
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: '', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
+				networkConfigured: false,
+			}
+			if (hangNextProfileResponse) {
+				hangNextProfileResponse = false
+				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new Error('fixture profile request aborted')), { once: true })
+				})
+			}
+			return new window.Response(JSON.stringify(pendingProfileConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/paused') {
 			const request: unknown = JSON.parse(String(init?.body))
@@ -291,6 +339,15 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 		setConfigurationRequestFailure: (failed: boolean) => {
 			configurationRequestFailure = failed
 		},
+		setStaleProfilePolls: (count: number) => {
+			staleProfilePolls = count
+		},
+		hangNextConfigurationRequest: () => {
+			hangNextConfigurationRequest = true
+		},
+		hangNextProfileResponse: () => {
+			hangNextProfileResponse = true
+		},
 		hangNextStateRequest: () => {
 			hangNextStateRequest = true
 		},
@@ -308,6 +365,14 @@ async function dashboard(initialConfiguration = configuration(), initialState = 
 		releasePauseRequest: () => {
 			const release = releasePauseRequest
 			releasePauseRequest = undefined
+			release?.()
+		},
+		suspendNextMarketSourceRequest: () => {
+			releaseMarketSourceRequest = () => undefined
+		},
+		releaseMarketSourceRequest: () => {
+			const release = releaseMarketSourceRequest
+			releaseMarketSourceRequest = undefined
 			release?.()
 		},
 		suspendNextApprovedUniverseRequest: () => {
@@ -365,7 +430,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps a run-state mutation single-flight across an intervening successful poll', async () => {
-		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
+		const page = await dashboard(mainnetConfiguration(), state())
 		const pauseButton = page.window.document.getElementById('pause-button')
 		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause control')
 		page.suspendNextPauseRequest()
@@ -428,7 +493,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps emergency Pause available while identity-dependent controls fail closed', async () => {
-		const page = await dashboard(configuration(), state())
+		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
 		page.setStateRequestFailure(true)
 		const pauseButton = page.window.document.getElementById('pause-button')
 		if (!(pauseButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected pause control')
@@ -465,7 +530,18 @@ describe('liquidator dashboard refresh behavior', () => {
 
 	test('keeps network identity visible and updates it after configuration', async () => {
 		const unconfigured = await dashboard(configuration(), state())
-		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Network not configured')
+		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · RPC setup required')
+		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
+		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toContain('Ethereum mainnet profile')
+		expect(unconfigured.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
+		for (const id of ['market-configuration-fields', 'strategy-fields']) expect(unconfigured.window.document.getElementById(id)?.hasAttribute('disabled')).toBe(true)
+		const signerInput = unconfigured.window.document.querySelector('#signer-form input[name="privateKey"]')
+		const poolInput = unconfigured.window.document.querySelector('#pool-rows input')
+		const universeInput = unconfigured.window.document.querySelector('#universe-rows input')
+		if (!(signerInput instanceof unconfigured.window.HTMLInputElement) || !(poolInput instanceof unconfigured.window.HTMLInputElement) || !(universeInput instanceof unconfigured.window.HTMLInputElement)) throw new Error('Expected chain-specific settings controls')
+		expect(signerInput.disabled).toBe(true)
+		expect(poolInput.disabled).toBe(true)
+		expect(universeInput.disabled).toBe(true)
 		const attention = unconfigured.window.document.getElementById('attention-badge')
 		expect(attention?.textContent).toBe('1 action')
 		expect(attention?.getAttribute('href')).toBe('/settings#network-connectivity')
@@ -488,9 +564,76 @@ describe('liquidator dashboard refresh behavior', () => {
 			badge: unconfigured.window.document.getElementById('network-badge')?.textContent,
 			status: unconfigured.window.document.getElementById('network-status')?.textContent,
 		}).toEqual({ attention: 'No blockers', badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
+		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
+		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toBe('Sepolia profile · switchable')
+		expect(networkName.disabled).toBe(false)
+		for (const id of ['market-configuration-fields', 'strategy-fields']) expect(unconfigured.window.document.getElementById(id)?.hasAttribute('disabled')).toBe(false)
+		expect(signerInput.disabled).toBe(false)
 
 		const mainnet = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state())
 		expect(mainnet.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
+	})
+
+	test('keeps the active chain visible and locked while a requested profile loads', async () => {
+		const page = await dashboard(
+			{ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://mainnet-public.example'], quorumRpcUrls: ['https://mainnet-quorum-a.example', 'https://mainnet-quorum-b.example'], readRpcUrl: 'https://mainnet-read.example', rpcQuorum: 2 } },
+			state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }),
+		)
+		page.setStaleProfilePolls(3)
+		page.hangNextProfileResponse()
+		page.hangNextConfigurationRequest()
+		const networkName = page.window.document.getElementById('network-name')
+		const networkFields = page.window.document.getElementById('network-fields')
+		const strategyFields = page.window.document.getElementById('strategy-fields')
+		const rpcQuorum = page.window.document.getElementById('rpc-quorum')
+		const readRpcUrl = page.window.document.getElementById('read-rpc-url')
+		if (!(networkName instanceof page.window.HTMLSelectElement) || !(networkFields instanceof page.window.HTMLFieldSetElement) || !(strategyFields instanceof page.window.HTMLFieldSetElement) || !(rpcQuorum instanceof page.window.HTMLSelectElement) || !(readRpcUrl instanceof page.window.HTMLInputElement))
+			throw new Error('Expected chain-profile controls')
+		expect(rpcQuorum.value).toBe('2')
+		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(1)
+		const testSources = page.window.document.getElementById('test-market-sources')
+		if (!(testSources instanceof page.window.HTMLButtonElement)) throw new Error('Expected source test control')
+		page.suspendNextMarketSourceRequest()
+		testSources.click()
+		await Bun.sleep(10)
+
+		page.suspendNextStateRequest()
+		const staleStateRefresh = page.refresh()
+		await Bun.sleep(10)
+		networkName.value = 'sepolia'
+		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await Bun.sleep(50)
+		expect(networkName.value).toBe('mainnet')
+		expect(networkFields.disabled).toBe(true)
+		expect(strategyFields.disabled).toBe(true)
+		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Switching to the Sepolia profile…')
+		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
+		expect(page.window.document.getElementById('network-scope-summary')?.textContent).toBe('Ethereum mainnet profile · switching to Sepolia')
+		expect(readRpcUrl.value).toBe('https://mainnet-read.example')
+		expect(rpcQuorum.value).toBe('2')
+		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
+		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
+		page.releaseMarketSourceRequest()
+		await Bun.sleep(20)
+		expect(page.window.document.getElementById('market-source-rows')?.textContent).not.toContain('Observed')
+		expect(page.window.document.getElementById('market-source-caption')?.textContent).toBe('Configured source admission')
+		expect(page.window.document.getElementById('show-active-admission')?.classList.contains('hidden')).toBe(true)
+
+		page.releaseStateRequest()
+		await Bun.sleep(20)
+		expect(networkName.value).toBe('mainnet')
+		await staleStateRefresh
+		await Bun.sleep(6_000)
+		expect(networkName.value).toBe('sepolia')
+		expect(networkFields.disabled).toBe(false)
+		expect(strategyFields.disabled).toBe(true)
+		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
+		expect(page.window.document.getElementById('network-scope-summary')?.textContent).toBe('Sepolia profile · switchable')
+		expect(page.window.document.getElementById('network-badge')?.textContent).toBe('Sepolia · RPC setup required')
+		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Sepolia profile loaded; RPC setup required.')
+		expect(rpcQuorum.value).toBe('1')
+		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(0)
 	})
 
 	test('keeps resume locked when configuration and network identity are unavailable', async () => {
@@ -509,7 +652,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 	test('prunes approved descendants when changing or clearing a truth path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1')]
-		const siblingPage = await dashboard(configuration(['1', '2', '4']), state(undefined, [], { universes }))
+		const siblingPage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
 		const legend = siblingPage.window.document.querySelector('.truth-options legend')
 		expect(legend?.firstChild?.textContent).toBe('Truth outcome')
 		expect(legend?.textContent).toBe('Truth outcome for universe #1')
@@ -520,7 +663,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await Bun.sleep(1)
 		expect(siblingPage.approvedUniverseRequests.at(-1)?.sort()).toEqual(['1', '3'])
 
-		const nonePage = await dashboard(configuration(['1', '2', '4']), state(undefined, [], { universes }))
+		const nonePage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
 		const none = nonePage.window.document.querySelector('input[data-record-key="universe:none:1"]')
 		if (!(none instanceof nonePage.window.HTMLInputElement)) throw new Error('Expected no-child truth control')
 		none.click()
@@ -531,7 +674,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 	test('switches a nested truth selection across the complete ancestor path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1'), universe('5', '3', '1')]
-		const page = await dashboard(configuration(['1', '2', '4']), state(undefined, [], { universes }))
+		const page = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
 		const destination = page.window.document.querySelector('input[value="5"]')
 		if (!(destination instanceof page.window.HTMLInputElement)) throw new Error('Expected nested truth control')
 
@@ -544,7 +687,7 @@ describe('liquidator dashboard refresh behavior', () => {
 
 	test('serializes full-set universe and pool selection mutations', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2')]
-		const universePage = await dashboard(configuration(['1']), state(undefined, [], { universes }))
+		const universePage = await dashboard(mainnetConfiguration(['1']), state(undefined, [], { universes }))
 		universePage.suspendNextApprovedUniverseRequest()
 		const firstUniverse = universePage.window.document.querySelector('input[value="2"]')
 		const secondUniverse = universePage.window.document.querySelector('input[value="3"]')
@@ -563,7 +706,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		const firstPool = poolSnapshot.pools[0]
 		if (firstPool === undefined) throw new Error('Expected pool fixture')
 		poolSnapshot.pools.push({ ...firstPool, address: '0x2222222222222222222222222222222222222222', selected: false })
-		const poolPage = await dashboard(configuration(), poolSnapshot)
+		const poolPage = await dashboard(mainnetConfiguration(), poolSnapshot)
 		poolPage.suspendNextSelectedPoolRequest()
 		const firstPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x1111111111111111111111111111111111111111"]')
 		const secondPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x2222222222222222222222222222222222222222"]')

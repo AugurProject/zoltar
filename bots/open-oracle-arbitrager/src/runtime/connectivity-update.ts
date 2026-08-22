@@ -30,7 +30,7 @@ export async function updateOperatorConnectivity(parameters: {
 	const rpcQuorum: RpcQuorumRequirement = value.rpcQuorum === 2 ? 2 : 1
 	const networkName = parseNetworkName(value.network)
 	const initializesNetwork = parameters.activeNetwork === undefined
-	if (parameters.activeNetwork !== undefined && networkName !== parameters.activeNetwork) throw new Error('Use a separate operator configuration and durable journal paths to change chains')
+	if (parameters.activeNetwork !== undefined && networkName !== parameters.activeNetwork) throw new Error('Select the chain profile before saving its RPC settings')
 	const selectedNetwork = networkConfiguration(networkName, {
 		factory: parameters.deployment.uniswapFactory,
 		quoter: parameters.deployment.uniswapQuoter,

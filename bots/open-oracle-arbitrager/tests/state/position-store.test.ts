@@ -89,7 +89,7 @@ describe('durable OpenOracle position journal', () => {
 				events.push('rm')
 			},
 		}
-		await savePositionJournal('/positions.json', [], filesystem)
+		await savePositionJournal('/positions.json', [], 1, filesystem)
 		expect(events).toEqual(['mkdir', 'open:wx', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'open:r', 'directory:sync', 'directory:close'])
 	})
 
@@ -155,9 +155,17 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		} satisfies PositionRecord
-		await savePositionJournal(path, [position])
-		expect(await loadPositionJournal(path)).toEqual([position])
+		await savePositionJournal(path, [position], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([position])
 		expect((await readFile(path, 'utf8')).toString()).not.toContain('privateKey')
+	})
+
+	test('rejects a valid position journal bound to another chain', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-chain-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		await savePositionJournal(path, [], 1)
+		await expect(loadPositionJournal(path, 11_155_111)).rejects.toThrow('belongs to chain 1')
 	})
 
 	test('round-trips the hashes and balance snapshot needed for lifecycle crash recovery', async () => {
@@ -235,12 +243,12 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: position.lockedToken,
 			withdrawnWeth: position.lockedWeth,
 		}
-		await savePositionJournal(path, [position, pendingFinality])
-		expect(await loadPositionJournal(path)).toEqual([position, pendingFinality])
-		await Bun.write(path, JSON.stringify({ positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
-		await Bun.write(path, JSON.stringify({ positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
+		await savePositionJournal(path, [position, pendingFinality], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([position, pendingFinality])
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})
 
 	test('round-trips the confirmed-history outbox until its synced append is acknowledged', async () => {
@@ -312,16 +320,16 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		} satisfies PositionRecord
-		await savePositionJournal(path, [position])
-		expect(await loadPositionJournal(path)).toEqual([position])
+		await savePositionJournal(path, [position], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([position])
 	})
 
 	test('rejects an invalid or duplicate report record instead of silently losing recovery state', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
 		directories.push(directory)
 		const path = join(directory, 'positions.json')
-		await Bun.write(path, JSON.stringify({ positions: [{ account: '0x0000000000000000000000000000000000000001', reportId: 'not-an-id' }], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('report id')
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ account: '0x0000000000000000000000000000000000000001', reportId: 'not-an-id' }], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('report id')
 	})
 
 	test('rejects a gas ledger that understates aggregate position gas', async () => {
@@ -361,8 +369,8 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		}
-		await Bun.write(path, JSON.stringify({ positions: [position], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('gas expenditure total')
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [position], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('gas expenditure total')
 	})
 
 	test('rejects noncanonical gas timestamps whose displayed date differs from UTC', async () => {
@@ -402,8 +410,8 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		}
-		await Bun.write(path, JSON.stringify({ positions: [position], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('canonical UTC ISO')
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [position], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('canonical UTC ISO')
 	})
 
 	test('requires the position signer and explicit evidence before manually closing recovery', async () => {
@@ -473,8 +481,8 @@ describe('durable OpenOracle position journal', () => {
 			realizedNetProfitEth: '0.094',
 			status: 'closed',
 		})
-		await savePositionJournal(path, [closed])
-		expect(await loadPositionJournal(path)).toEqual([closed])
+		await savePositionJournal(path, [closed], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([closed])
 	})
 
 	test('allows an auditable close with unavailable P&L when entry evidence never recovered', () => {
@@ -578,7 +586,7 @@ describe('durable OpenOracle position journal', () => {
 				recordedBy: signer,
 			},
 		)
-		await Bun.write(path, JSON.stringify({ positions: [{ ...position, realizedNetProfitEth: '1' }], version: 1 }))
-		await expect(loadPositionJournal(path)).rejects.toThrow('P&L is inconsistent')
+		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ ...position, realizedNetProfitEth: '1' }], version: 2 }))
+		await expect(loadPositionJournal(path, 1)).rejects.toThrow('P&L is inconsistent')
 	})
 })

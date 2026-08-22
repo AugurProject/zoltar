@@ -71,6 +71,14 @@ button:disabled {
 	opacity: 0.55;
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
+	border-style: dashed;
+}
+
 button[aria-busy="true"] {
 	cursor: wait;
 }
@@ -786,6 +794,10 @@ td small {
 
 	.topbar-actions {
 		justify-content: flex-start;
+	}
+
+	#network-badge {
+		font-size: 0.68rem;
 	}
 
 	.topbar-actions .action-status {

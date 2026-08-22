@@ -811,7 +811,8 @@ export function parseExecutionRecord(value: unknown): ExecutionRecord | undefine
 	}
 }
 
-export async function loadExecutionHistory(path: string, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+export async function loadExecutionHistory(path: string, expectedChainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected execution history chain ID must be a positive integer')
 	try {
 		const contents = await filesystem.readFile(path, 'utf8')
 		const records: ExecutionRecord[] = []
@@ -824,7 +825,8 @@ export async function loadExecutionHistory(path: string, filesystem: ExecutionHi
 				if (error instanceof SyntaxError) throw new Error(`Invalid execution history line ${(index + 1).toString()}: ${error.message}`)
 				throw error
 			}
-			const record = parseExecutionRecord(parsed)
+			if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || Reflect.get(parsed, 'chainId') !== expectedChainId) throw new Error(`Execution history record at line ${(index + 1).toString()} belongs to another chain`)
+			const record = parseExecutionRecord(Reflect.get(parsed, 'record'))
 			if (record === undefined) throw new Error(`Invalid execution history record at line ${(index + 1).toString()}`)
 			records.push(record)
 		}
@@ -846,12 +848,13 @@ async function syncExecutionHistoryDirectory(path: string, filesystem: Execution
 	}
 }
 
-export async function appendExecutionHistory(path: string, record: ExecutionRecord, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+export async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Execution history chain ID must be a positive integer')
 	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const handle = await filesystem.open(path, 'a', 0o600)
 	try {
 		await handle.chmod(0o600)
-		await handle.appendFile(`${JSON.stringify(record)}\n`, { encoding: 'utf8' })
+		await handle.appendFile(`${JSON.stringify({ chainId, record })}\n`, { encoding: 'utf8' })
 		await handle.sync()
 	} finally {
 		await handle.close()
@@ -859,10 +862,10 @@ export async function appendExecutionHistory(path: string, record: ExecutionReco
 	await syncExecutionHistoryDirectory(path, filesystem)
 }
 
-export async function appendExecutionHistoryIfMissing(path: string, record: ExecutionRecord, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
-	const history = await loadExecutionHistory(path, filesystem)
+export async function appendExecutionHistoryIfMissing(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	const history = await loadExecutionHistory(path, chainId, filesystem)
 	if (history.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) return false
-	await appendExecutionHistory(path, record, filesystem)
+	await appendExecutionHistory(path, record, chainId, filesystem)
 	return true
 }
 
