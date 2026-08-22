@@ -23,6 +23,7 @@ import {
 	isPermanentHistoricalLogError,
 	isProtocolActivitySource,
 	isProtocolEvidenceEmitter,
+	isPrunedHistoricalStateError,
 	isSplittableLogRangeError,
 	jsonEvidence,
 	LeaseLostError,
@@ -31,6 +32,7 @@ import {
 	queryCanonicalLogRange,
 	type RpcProvider,
 	readHistoricalCodeWithPermanentFallback,
+	readWithPrunedStateFallback,
 	recordOwnershipEvent,
 	requireLogPosition,
 	requireReceiptPosition,
@@ -183,21 +185,31 @@ const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunction
 
 const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
 
-const metadataCall = async <T>(call: () => Promise<T>): Promise<T | undefined> => {
+type MetadataCallResult<T> = { readonly status: 'available'; readonly value: T } | { readonly status: 'pruned' } | { readonly status: 'unavailable' }
+
+const metadataCall = async <T>(call: () => Promise<T>): Promise<MetadataCallResult<T>> => {
 	try {
-		return await call()
+		return { status: 'available', value: await call() }
 	} catch (error) {
-		if (isUnavailableMetadataCall(error)) return undefined
+		if (isPrunedHistoricalStateError(error)) return { status: 'pruned' }
+		if (isUnavailableMetadataCall(error)) return { status: 'unavailable' }
 		throw error
 	}
 }
 
 export const readTokenMetadata = async (address: Address, blockNumber: bigint, calls: TokenMetadataCalls): Promise<TokenMetadata> => {
 	const decimals = await metadataCall(calls.decimals)
-	if (decimals === undefined || !Number.isSafeInteger(decimals) || decimals < 0 || decimals > 255)
+	if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255)
 		return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
 	const [name, symbol] = await Promise.all([metadataCall(calls.name), metadataCall(calls.symbol)])
-	return { address, decimals, ...(name === undefined ? {} : { name }), ...(symbol === undefined ? {} : { symbol }), readBlock: blockNumber }
+	if (name.status === 'pruned' || symbol.status === 'pruned') return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+	return {
+		address,
+		decimals: decimals.value,
+		...(name.status === 'available' ? { name: name.value } : {}),
+		...(symbol.status === 'available' ? { symbol: symbol.value } : {}),
+		readBlock: blockNumber,
+	}
 }
 
 export const findContractDeploymentBlock = async (
@@ -1359,12 +1371,22 @@ class NetworkIndexer {
 				}
 			}
 			for (const coordinator of discovered.filter((contract) => contract.kind === 'priceCoordinator')) {
-				const registryResult = await this.#client.readContract({
-					address: coordinator.address,
-					abi: priceCoordinatorDependenciesAbi,
-					functionName: 'liquidationApprovalRegistry',
-					blockNumber: number,
-				})
+				const registryRead = await readWithPrunedStateFallback(
+					number,
+					observedHead,
+					async (blockNumber) =>
+						await this.#client.readContract({
+							address: coordinator.address,
+							abi: priceCoordinatorDependenciesAbi,
+							functionName: 'liquidationApprovalRegistry',
+							blockNumber,
+						}),
+				)
+				if (registryRead.blockNumber !== number)
+					console.warn(
+						`[${this.#network.id}] historical state unavailable at block #${number} while discovering ${coordinator.label} dependencies; used observed head #${registryRead.blockNumber} instead`,
+					)
+				const registryResult = registryRead.value
 				if (typeof registryResult !== 'string') throw new Error(`${coordinator.label}.liquidationApprovalRegistry returned an invalid address`)
 				const registry = getAddress(registryResult)
 				if (!contracts.has(registry.toLowerCase())) {
