@@ -21,7 +21,7 @@ describe('test impact recommendations', () => {
 	})
 
 	test('deduplicates recommendations shared by multiple changed files', () => {
-		expect(commandsFor(['scripts/test-discovery.mts', 'scripts/test-timings.mts'])).toHaveLength(1)
+		expect(commandsFor(['scripts/test-discovery.mts', 'scripts/test-discovery.test.ts', 'scripts/test-impact.mts', 'scripts/test-impact.test.ts', 'scripts/test-timings.mts'])).toEqual(['bun test scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {

@@ -9,7 +9,20 @@ type TestImpactRule = TestImpactRecommendation & {
 	matches: (filePath: string) => boolean
 }
 
-const TEST_INFRASTRUCTURE_PATHS = new Set(['bun-test-setup-solidity.ts', 'bun-test-setup-ui.ts', 'bunfig.toml', 'scripts/merge-test-timings.mts', 'scripts/run-balanced-test-shard.mts', 'scripts/run-tests.mts', 'scripts/test-discovery.mts', 'scripts/test-impact.mts', 'scripts/test-timings.mts'])
+const TEST_INFRASTRUCTURE_PATHS = new Set([
+	'bun-test-setup-solidity.ts',
+	'bun-test-setup-ui.ts',
+	'bunfig.toml',
+	'scripts/merge-test-timings.mts',
+	'scripts/run-balanced-test-shard.mts',
+	'scripts/run-tests.mts',
+	'scripts/run-tests.test.ts',
+	'scripts/test-discovery.mts',
+	'scripts/test-discovery.test.ts',
+	'scripts/test-impact.mts',
+	'scripts/test-impact.test.ts',
+	'scripts/test-timings.mts',
+])
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
