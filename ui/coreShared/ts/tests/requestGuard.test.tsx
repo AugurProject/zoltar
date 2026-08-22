@@ -5,6 +5,14 @@ import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard, useRequestGuard } from '../lib/requestGuard.js'
 
+function deferred<T>() {
+	let resolvePromise: (value: T) => void = () => undefined
+	const promise = new Promise<T>(resolve => {
+		resolvePromise = resolve
+	})
+	return { promise, resolve: resolvePromise }
+}
+
 describe('request guard', () => {
 	let cleanupDom: (() => void) | undefined
 
@@ -42,6 +50,30 @@ describe('request guard', () => {
 		expect(guard.isCurrent(second)).toBeFalse()
 	})
 
+	test('discards invalidated and out-of-order asynchronous completions', async () => {
+		const guard = createLatestRequestGuard()
+		const firstResponse = deferred<string>()
+		const firstRequest = guard.begin()
+		const secondResponse = deferred<string>()
+		const secondRequest = guard.begin()
+		let visibleValue: string | undefined
+		const firstCompletion = firstResponse.promise.then(value => {
+			if (guard.isCurrent(firstRequest)) visibleValue = value
+		})
+		const secondCompletion = secondResponse.promise.then(value => {
+			if (guard.isCurrent(secondRequest)) visibleValue = value
+		})
+
+		secondResponse.resolve('current value')
+		await secondCompletion
+		firstResponse.resolve('stale value')
+		await firstCompletion
+		expect(visibleValue).toBe('current value')
+
+		guard.invalidate()
+		expect(guard.isCurrent(secondRequest)).toBeFalse()
+	})
+
 	test('serializes exclusive non-component workflows', () => {
 		const guard = createExclusiveWorkflowGuard()
 
@@ -50,5 +82,25 @@ describe('request guard', () => {
 		expect(guard.isActive()).toBeTrue()
 		guard.finish()
 		expect(guard.begin()).toBeTrue()
+	})
+
+	test('prevents duplicate asynchronous work while the first preflight is pending', async () => {
+		const guard = createExclusiveWorkflowGuard()
+		const preflight = deferred<void>()
+		let writes = 0
+		const submit = async () => {
+			if (!guard.begin()) return
+			try {
+				await preflight.promise
+				writes += 1
+			} finally {
+				guard.finish()
+			}
+		}
+		const first = submit()
+		const duplicate = submit()
+		preflight.resolve()
+		await Promise.all([first, duplicate])
+		expect(writes).toBe(1)
 	})
 })

@@ -3,13 +3,10 @@ import * as marketCopy from '../copy/market.js'
 import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
-import { useRef, useState } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
-import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
@@ -17,20 +14,17 @@ import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlow.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
-import { useTransactionTrayController } from '@zoltar/ui-core-shared/app/hooks/useTransactionTrayController.js'
+import { buildProtocolHookConfigs, useProtocolAppRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolAppRuntime.js'
 import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
 import { useZoltarOperations } from '../features/universes/hooks/useZoltarOperations.js'
 import { useRepPrices } from '../features/open-oracle/hooks/useRepPrices.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
-import { getActiveSimulationController, initializeActiveEnvironment, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveSimulationController, initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
-import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
-import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { getTransactionActionLockReason } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -42,28 +36,19 @@ import type { Route } from '../types/app.js'
 
 export function App() {
 	const deployNextMissingPending = useSignal(false)
-	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
-	const followSupportedWalletNetwork = shouldFollowWalletNetwork()
-	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
-	const { onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPrepared, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, transactionState } = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
-	const supportedNetworkChangeCoordinator =
-		supportedNetworkChangeCoordinatorRef.current ??
-		createSupportedNetworkChangeCoordinator({
-			getInFlightCount: () => transactionState.value.inFlightCount,
-			replaceEnvironment: async canCommit => {
-				let commitAllowed = false
-				await initializeActiveEnvironment(window.location, undefined, {
-					shouldCommit: () => {
-						commitAllowed = canCommit()
-						return commitAllowed
-					},
-				})
-				if (!commitAllowed) return false
-				setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
-				return true
-			},
-		})
-	supportedNetworkChangeCoordinatorRef.current = supportedNetworkChangeCoordinator
+	const { activeEnvironmentNonce, followSupportedWalletNetwork, setActiveEnvironmentNonce, supportedNetworkChangeCoordinator, transactionTray } = useProtocolAppRuntime({
+		replaceEnvironment: async canCommit => {
+			let commitAllowed = false
+			await initializeActiveEnvironment(window.location, undefined, {
+				shouldCommit: () => {
+					commitAllowed = canCommit()
+					return commitAllowed
+				},
+			})
+			return commitAllowed
+		},
+	})
+	const { transactionState } = transactionTray
 	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setZoltarView, zoltarView } = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const { navigate, route } = useHashRoute()
@@ -106,21 +91,7 @@ export function App() {
 	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
 	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
 	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
-	const baseHookConfig = {
-		accountAddress: accountState.address,
-		onTransactionCanceled,
-		onTransactionFailed,
-		onTransactionFinished,
-		onTransactionPresented,
-		onTransactionPrepared,
-		onTransactionRequested,
-		onTransactionSubmitted,
-		refreshState,
-	}
-	const walletScopedHookConfig = {
-		...baseHookConfig,
-		accountAddress: walletScopedAccountAddress,
-	}
+	const { baseHookConfig, walletScopedHookConfig } = buildProtocolHookConfigs({ accountAddress: accountState.address, walletScopedAccountAddress, refreshState, transactionTray })
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
 	const {
 		approveZoltarForkRep,
@@ -392,75 +363,71 @@ export function App() {
 	})()
 
 	return (
-		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
-			<ChainTimestampContext.Provider value={currentTimestamp}>
-				<main>
-					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />
-					<AppStatusNotices
-						errorMessages={errorMessages}
-						loadingZoltarUniverse={loadingZoltarUniverse}
-						onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
-						readBackendMessage={readBackendMessage}
-						readBackendStatus={readBackendStatus}
-						simulationBootstrapError={environmentBootstrapError}
-						showApplicationDeploymentWarning={showApplicationDeploymentWarning}
-						zoltarUniverseError={zoltarUniverseError}
-					/>
-					<AppHeaderShell
-						overview={
-							<OverviewPanels
-								applicationTitle={zoltarCopy.applicationTitle}
-								activeUniverseId={activeUniverseId}
-								accountState={accountState}
-								isConnectingWallet={isConnectingWallet}
-								isManagingWallet={isManagingWallet}
-								isLoadingRepPrices={isLoadingRepPrices}
-								isRefreshingRepPrices={isRefreshingRepPrices}
-								isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-								onConnect={() => void connectWallet()}
-								onChangeWallet={() => void changeWallet()}
-								onDisconnectWallet={() => void disconnectWallet()}
-								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-								onRefreshRepPrices={refreshRepPrices}
-								onSwitchNetwork={() => void switchNetwork()}
-								parentUniverseId={zoltarUniverse?.parentUniverseId}
-								repPerEthFailure={repPerEthFailure}
-								repPerEthPrice={repPerEthPrice}
-								repPerEthSource={repPerEthSource}
-								repPerEthSourceUrl={repPerEthSourceUrl}
-								repUsdcFailure={repUsdcFailure}
-								repUsdcPrice={repUsdcPrice}
-								repUsdcSource={repUsdcSource}
-								repUsdcSourceUrl={repUsdcSourceUrl}
-								readBackendStatus={readBackendStatus}
-								universeForkTime={zoltarUniverse?.forkTime}
-								universeHasForked={zoltarUniverse?.hasForked}
-								universePresentation={universePresentation}
-								universeLabel={universeLabel}
-								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
-								isRefreshing={isRefreshing}
-								walletBootstrapComplete={walletBootstrapComplete}
-							/>
-						}
-						simulationController={simulationController}
-						subNavigation={routeSubNavigation}
-						tabNavigation={tabNavigationProps}
-						onEnvironmentChanged={refreshActiveEnvironment}
-						onRefresh={refreshSimulationView}
-					/>
-					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray routeKey={transactionRouteKey} transaction={transactionState.value.active} />
-
-						<div id='app-content' tabIndex={-1}>
-							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
-								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
-								</fieldset>
-							</TransactionActionButtonLockProvider>
-						</div>
-					</GlobalTransactionPresentationProvider>
-				</main>
-			</ChainTimestampContext.Provider>
-		</ChainBlockNumberContext.Provider>
+		<ProtocolAppFrame
+			currentBlockNumber={currentBlockNumber}
+			currentTimestamp={currentTimestamp}
+			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+			notices={
+				<AppStatusNotices
+					errorMessages={errorMessages}
+					loadingZoltarUniverse={loadingZoltarUniverse}
+					onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
+					readBackendMessage={readBackendMessage}
+					readBackendStatus={readBackendStatus}
+					simulationBootstrapError={environmentBootstrapError}
+					showApplicationDeploymentWarning={showApplicationDeploymentWarning}
+					zoltarUniverseError={zoltarUniverseError}
+				/>
+			}
+			header={
+				<AppHeaderShell
+					overview={
+						<OverviewPanels
+							applicationTitle={zoltarCopy.applicationTitle}
+							activeUniverseId={activeUniverseId}
+							accountState={accountState}
+							isConnectingWallet={isConnectingWallet}
+							isManagingWallet={isManagingWallet}
+							isLoadingRepPrices={isLoadingRepPrices}
+							isRefreshingRepPrices={isRefreshingRepPrices}
+							isLoadingUniverseRepBalance={loadingZoltarForkAccess}
+							onConnect={() => void connectWallet()}
+							onChangeWallet={() => void changeWallet()}
+							onDisconnectWallet={() => void disconnectWallet()}
+							onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
+							onRefreshRepPrices={refreshRepPrices}
+							onSwitchNetwork={() => void switchNetwork()}
+							parentUniverseId={zoltarUniverse?.parentUniverseId}
+							repPerEthFailure={repPerEthFailure}
+							repPerEthPrice={repPerEthPrice}
+							repPerEthSource={repPerEthSource}
+							repPerEthSourceUrl={repPerEthSourceUrl}
+							repUsdcFailure={repUsdcFailure}
+							repUsdcPrice={repUsdcPrice}
+							repUsdcSource={repUsdcSource}
+							repUsdcSourceUrl={repUsdcSourceUrl}
+							readBackendStatus={readBackendStatus}
+							universeForkTime={zoltarUniverse?.forkTime}
+							universeHasForked={zoltarUniverse?.hasForked}
+							universePresentation={universePresentation}
+							universeLabel={universeLabel}
+							universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+							isRefreshing={isRefreshing}
+							walletBootstrapComplete={walletBootstrapComplete}
+						/>
+					}
+					simulationController={simulationController}
+					subNavigation={routeSubNavigation}
+					tabNavigation={tabNavigationProps}
+					onEnvironmentChanged={refreshActiveEnvironment}
+					onRefresh={refreshSimulationView}
+				/>
+			}
+			routeContentDisabled={isRouteContentDisabled}
+			transactionRouteKey={transactionRouteKey}
+			transactionState={transactionState.value}
+		>
+			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
+		</ProtocolAppFrame>
 	)
 }

@@ -1,6 +1,7 @@
 export type AppRoute = string
 
 type RouteDefinitionBase = {
+	readonly aliases?: readonly string[]
 	readonly queryParameters?: ReadonlySet<string>
 }
 
@@ -29,6 +30,7 @@ function buildRoutingState<TRoute extends AppRoute>(config: RoutingConfig<TRoute
 	for (const route of config.routes) {
 		if (route.hash !== undefined) {
 			routeByHash[route.hash] = route.name
+			for (const alias of route.aliases ?? []) routeByHash[alias] = route.name
 			hashByRoute[route.name] = route.hash
 			queryParametersByRoute[route.name] = route.queryParameters ?? new Set()
 		}
@@ -38,7 +40,7 @@ function buildRoutingState<TRoute extends AppRoute>(config: RoutingConfig<TRoute
 }
 
 function resolveRoutingStateRoute<TRoute extends AppRoute>(routing: RoutingState<TRoute>, hash: string): TRoute | 'not-found' {
-	const { routeHash } = splitRouteHash(hash)
+	const { routeHash } = parseRouteHash(hash)
 	const exactRoute = routing.routeByHash[routeHash]
 	if (exactRoute !== undefined) return exactRoute
 	if (routeHash === '') return routing.config.defaultRoute
@@ -81,7 +83,7 @@ export function getRouteHashForName(route: AppRoute) {
 	return hash
 }
 
-function splitRouteHash(hash: string) {
+export function parseRouteHash(hash: string) {
 	const queryIndex = hash.indexOf('?')
 	if (queryIndex === -1)
 		return {
@@ -92,6 +94,26 @@ function splitRouteHash(hash: string) {
 	return {
 		routeHash: hash.slice(0, queryIndex),
 		search: hash.slice(queryIndex),
+	}
+}
+
+export function normalizeRouteHash(hash: string) {
+	const { routeHash, search } = parseRouteHash(hash)
+	const routePath = routeHash.replace(/^#\/?/, '')
+	return `${routePath === '' ? '' : `#/${routePath}`}${search}`
+}
+
+export function createRouting<TRoute extends AppRoute>(config: RoutingConfig<TRoute>) {
+	const routing = buildRoutingState(config)
+	return {
+		getHash(route: TRoute) {
+			const hash = routing.hashByRoute[route]
+			if (hash === undefined) throw new Error(`Unknown route: ${route}`)
+			return hash
+		},
+		resolve(hash: string): TRoute | 'not-found' {
+			return resolveRoutingStateRoute(routing, normalizeRouteHash(hash))
+		},
 	}
 }
 
@@ -109,7 +131,7 @@ export function getRouteHash(route: AppRoute) {
 }
 
 export function getRouteHashSearch(hash = window.location.hash) {
-	return splitRouteHash(hash).search
+	return parseRouteHash(hash).search
 }
 
 export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHashSearch(), preservedParameters: ReadonlySet<string> = new Set()) {
@@ -126,7 +148,7 @@ export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHas
 
 export function getCurrentRouteHash() {
 	const routing = requireRouting()
-	const { routeHash } = splitRouteHash(window.location.hash)
+	const { routeHash } = parseRouteHash(window.location.hash)
 	return routeHash === '' ? (routing.hashByRoute[routing.config.defaultRoute] ?? '') : routeHash
 }
 

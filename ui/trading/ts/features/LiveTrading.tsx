@@ -56,8 +56,8 @@ import {
 	type Quote,
 	type QuoteContext,
 	type TransactionState,
-	type WalletSummaryState,
 } from './liveTradingController.js'
+import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 
 export {
 	approvalFailureTransition,
@@ -76,7 +76,7 @@ export {
 	walletSummaryDiscoveryRetryStart,
 	walletSummaryRefreshState,
 } from './liveTradingController.js'
-export type { PortfolioBalanceEntry, WalletSummaryState } from './liveTradingController.js'
+export type { PortfolioBalanceEntry } from './liveTradingController.js'
 
 export type LiveSettlementServices = Readonly<{
 	approveRouter: typeof approveRouter

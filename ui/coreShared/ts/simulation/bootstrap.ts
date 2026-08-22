@@ -6,6 +6,7 @@ import type { DeploymentStep } from '../types/contracts.js'
 import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } from '../lib/networkProfile.js'
 import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
+import { withTimeout } from '../lib/promise.js'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -26,22 +27,6 @@ async function yieldToBrowser() {
 	await new Promise<void>(resolve => {
 		setTimeout(resolve, 0)
 	})
-}
-
-async function withTimeout<TResult>(work: Promise<TResult>, timeoutMilliseconds: number, message: string) {
-	let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
-	try {
-		return await Promise.race([
-			work,
-			new Promise<TResult>((_, reject) => {
-				timeoutId = setTimeout(() => {
-					reject(new Error(message))
-				}, timeoutMilliseconds)
-			}),
-		])
-	} finally {
-		if (timeoutId !== undefined) clearTimeout(timeoutId)
-	}
 }
 
 function clampProgress(value: number) {

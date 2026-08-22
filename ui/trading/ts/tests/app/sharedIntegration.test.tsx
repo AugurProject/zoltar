@@ -34,7 +34,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 })
 
 test('Trading production links preserve the active simulation route query', async () => {
-	const productionSources = ['app/App.tsx', 'components/Status.tsx', 'features/LiveTrading.tsx', 'features/MarketDetail.tsx', 'features/Routes.tsx']
+	const productionSources = ['app/App.tsx', 'components/Status.tsx', 'features/LiveTrading.tsx']
 	for (const source of productionSources) {
 		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
 		expect(contents).not.toMatch(/href=['"]#\//)

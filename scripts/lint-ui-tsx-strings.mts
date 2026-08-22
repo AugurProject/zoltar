@@ -423,7 +423,7 @@ function lintFile(filePath: string) {
 }
 
 if (import.meta.main) {
-	const changedUiTsxFiles = getChangedUiTsxFiles()
+	const changedUiTsxFiles = getChangedUiTsxFiles().filter(existsSync)
 	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot => {
 		if (!existsSync(copyRoot)) return []
 		return readdirSync(copyRoot, { withFileTypes: true })

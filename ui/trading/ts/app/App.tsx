@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/shared/ethereum'
 import { Help } from '../features/Help.js'
-import { LiveTrading, type WalletSummaryState } from '../features/LiveTrading.js'
-import { buildLiveUniverseOptions, routeOwnsLiveWallet, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse, type UniverseOption } from '../components/WalletSummary.js'
-export { buildLiveUniverseOptions, compactUniqueUniverseIds, routeOwnsLiveWallet, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../components/WalletSummary.js'
-export type { UniverseOption } from '../components/WalletSummary.js'
+import { LiveTrading } from '../features/LiveTrading.js'
+import { UniverseSelector } from '../components/UniverseSelector.js'
+import { WalletSummary } from '../components/WalletSummary.js'
+import { buildLiveUniverseOptions, type UniverseOption } from '../lib/universeOptions.js'
+import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
@@ -12,22 +13,19 @@ import { deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDe
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.js'
 import { shortAddress } from '../lib/format.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { resolveRoute } from '@zoltar/ui-core-shared/lib/routing.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as commonCopy from '../copy/common.js'
 import * as appCopy from '../copy/app.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
-import { getTradingEnvironmentLocationKey, getTradingRouteHref, normalizeTradingRouteHash, TRADING_ROUTING_CONFIG, type TradingRoute } from '../lib/routing.js'
+import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, type TradingRoute } from '../lib/routing.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
 export function currentRoute(): ResolvedTradingRoute {
-	const normalizedHash = normalizeTradingRouteHash(window.location.hash)
-	const routeHash = normalizedHash.split('?')[0] ?? ''
-	if (routeHash.replace(/^#\/?/, '') === 'developer') return 'markets'
-	return resolveRoute(TRADING_ROUTING_CONFIG, normalizedHash)
+	return tradingRouting.resolve(window.location.hash)
 }
 
 export function tradingDocumentTitle(route: ResolvedTradingRoute) {
@@ -55,28 +53,14 @@ function renderNotFoundRoute() {
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-async function withDeploymentLoadTimeout<T>(label: string, operation: Promise<T>, milliseconds = 15_000): Promise<T> {
-	let timeout: ReturnType<typeof setTimeout> | undefined
-	try {
-		return await Promise.race([
-			operation,
-			new Promise<T>((_resolve, reject) => {
-				timeout = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds)
-			}),
-		])
-	} finally {
-		if (timeout !== undefined) clearTimeout(timeout)
-	}
-}
-
 export async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
 	const core = coreDeployments[0]
 	if (core === undefined) throw new Error('No canonical network deployment is available')
 	const plan = getTradingDeploymentPlan(core, 30)
 	const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
 	const client = createPublicClient(configuration)
-	validateRpcChainId(await withDeploymentLoadTimeout('Trading RPC chain verification', client.getChainId()), core.chainId)
-	const status = await withDeploymentLoadTimeout('Trading deployment verification', loadTradingDeploymentStatus(client, plan))
+	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
+	const status = await withTimeout(loadTradingDeploymentStatus(client, plan), 15_000, 'Trading deployment verification timed out')
 	if (!status.factory || !status.router) throw new Error('Trading contracts have not been deployed')
 	return configuration
 }
