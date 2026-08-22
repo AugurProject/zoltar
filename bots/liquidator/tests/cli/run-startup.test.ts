@@ -3,6 +3,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { acquireFileProcessLock } from '@zoltar/bot-shared/execution/process-lock'
+import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { initialRuntimeState, saveDurableState } from '../../src/state/operator-state.ts'
 
 const directories: string[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -235,6 +237,40 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	})
 	expect(wrongChain.status, await wrongChain.clone().text()).toBe(400)
 	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+	expect(child.exitCode).toBeNull()
+
+	const targetPrivateKey = `0x${'22'.repeat(32)}` as const
+	const targetAccount = privateKeyToAccount(targetPrivateKey)
+	const wrongChainTransaction = await targetAccount.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to: '0x0000000000000000000000000000000000000020', value: 0n })
+	const targetState = initialRuntimeState(true, targetAccount.address)
+	targetState.pendingTransactions.push({
+		hash: keccak256(wrongChainTransaction),
+		kind: 'fees',
+		label: 'Wrong-chain dormant recovery',
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 0n,
+		receiptExpectation: { type: 'transaction' },
+		requiresMarketEvidence: false,
+		sender: targetAccount.address,
+		serializedTransaction: wrongChainTransaction,
+		submissionBlock: 100n,
+	})
+	await saveDurableState(join(directory, 'sepolia-state.json'), targetState)
+	Reflect.set(incompatibleProfile, 'networkConfigured', false)
+	Reflect.set(incompatibleProfile, 'privateKey', targetPrivateKey)
+	Reflect.set(incompatibleRuntime, 'execute', true)
+	const wrongIntentProfile = JSON.stringify(incompatibleProfile)
+	await writeFile(`${configurationPath}.sepolia.profile`, wrongIntentProfile, 'utf8')
+	const wrongIntent = await fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'sepolia' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(wrongIntent.status, await wrongIntent.clone().text()).toBe(400)
+	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+	expect(await Bun.file(`${configurationPath}.sepolia.profile`).text()).toBe(wrongIntentProfile)
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 	expect(child.exitCode).toBeNull()
 })

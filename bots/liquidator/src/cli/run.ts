@@ -11,7 +11,7 @@ import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseS
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
-import { clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
 import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
@@ -55,7 +55,12 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 		stateFile: target.runtime.stateFile,
 	})
 	try {
-		await loadDurableState(target.runtime.stateFile)
+		const durable = await loadDurableState(target.runtime.stateFile)
+		const configuredSigner = target.privateKey === undefined ? undefined : privateKeyToAccount(target.privateKey).address
+		for (const intent of durable.pendingTransactions) {
+			validateReconciliationIntentChain(intent.serializedTransaction, target.network.chainId)
+			if (configuredSigner !== undefined) assertIntentSender(intent.sender, configuredSigner)
+		}
 	} finally {
 		await locks.release()
 	}

@@ -567,7 +567,7 @@ describe('file-only startup configuration', () => {
 		expect(await Bun.file(mainnetProfilePath).text()).toBe(compatibleMainnetProfile)
 		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 		expect(child.exitCode).toBeNull()
-		const alteredMainnetDeployment = await deploymentAccount.signTransaction({ chainId: 1, data: '0x', gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		const alteredMainnetDeployment = await deploymentAccount.signTransaction({ chainId: 1, data: deploymentPlan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy, value: 1n })
 		await saveExecutorDeploymentIntent(mainnetIntentPath, {
 			account: deploymentAccount.address,
 			address: deploymentPlan.address,

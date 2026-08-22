@@ -222,6 +222,8 @@ test('rejects a mismatched pending intent before externally deployed runtime rec
 	await expect(assertExecutorDeploymentIntent({ ...intent, salt: `0x${'33'.repeat(32)}` }, account.address, 1, plan)).rejects.toThrow('does not match')
 	const altered = await account.signTransaction({ chainId: 1, data: '0x1234', gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
 	await expect(assertExecutorDeploymentIntent({ ...intent, serializedTransaction: altered, transactionHash: keccak256(altered) }, account.address, 1, plan)).rejects.toThrow('expected CREATE2 call')
+	const funded = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy, value: 1n })
+	await expect(assertExecutorDeploymentIntent({ ...intent, serializedTransaction: funded, transactionHash: keccak256(funded) }, account.address, 1, plan)).rejects.toThrow('must not transfer ETH')
 })
 
 test('clearing an absent deployment intent is idempotent when its directory is absent', async () => {

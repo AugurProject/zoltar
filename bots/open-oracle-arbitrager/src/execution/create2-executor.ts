@@ -54,6 +54,7 @@ export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentI
 	if ((await recoverTransactionAddress({ serializedTransaction: intent.serializedTransaction })).toLowerCase() !== account.toLowerCase()) throw new Error('Pending executor deployment intent signed transaction uses a different account')
 	const transaction = parseTransaction(intent.serializedTransaction)
 	if (transaction.chainId !== BigInt(chainId)) throw new Error('Pending executor deployment intent signed transaction uses a different chain')
+	if (transaction.value !== 0n) throw new Error('Pending executor deployment intent must not transfer ETH')
 	if (transaction.to?.toLowerCase() !== deterministicDeploymentProxy.toLowerCase() || transaction.data?.toLowerCase() !== plan.calldata.toLowerCase()) throw new Error('Pending executor deployment intent does not contain the expected CREATE2 call')
 }
 
