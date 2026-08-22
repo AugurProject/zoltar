@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
-import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
+import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
@@ -114,13 +114,8 @@ export async function requireNoPendingExecutorDeployment(settingsFile: string, n
 	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile, network))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
 }
 
-async function preflightOperatorProfile(target: PersistedOperatorSettings) {
-	const chain = networkConfiguration(target.network, {
-		factory: target.deployment.uniswapFactory,
-		quoter: target.deployment.uniswapQuoter,
-		rep: target.deployment.rep,
-		weth: target.deployment.weth,
-	}).chain
+async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
+	const chain = runnableOperatorSettings(settingsFile, target).network.chain
 	if (target.networkConfigured) {
 		await checkConnectivity(target.connectivity, chain.id)
 		await checkIndependentRpcChains(target.deployment.quorumRpcUrls, chain.id)
@@ -260,7 +255,7 @@ export function startOperatorControlPlane(parameters: {
 				await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
 				profileSwitchInProgress = true
 				try {
-					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json'), preflightOperatorProfile))
+					const switched = await runConfigurationSignerOperation(signerOperationGate, () => switchOperatorNetworkProfile(config.settingsFile, network, resolve(import.meta.dir, '..', '..', 'config', 'operator.example.json'), target => preflightOperatorProfile(config.settingsFile, target)))
 					state.paused = true
 					pending.profileSwitch = true
 					if (parameters.onNetworkProfileSwitch !== undefined) setTimeout(parameters.onNetworkProfileSwitch, 0)

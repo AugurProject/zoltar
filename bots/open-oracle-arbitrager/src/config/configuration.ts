@@ -52,6 +52,24 @@ export type Configuration = MutableStrategy & {
 	v4Quoter: Address | undefined
 }
 
+export function runnableOperatorSettings(settingsFile: string, saved: PersistedOperatorSettings) {
+	const deployment = saved.deployment
+	const network = networkConfiguration(saved.network, {
+		factory: deployment.uniswapFactory,
+		quoter: deployment.uniswapQuoter,
+		rep: deployment.rep,
+		weth: deployment.weth,
+	})
+	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
+	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
+	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
+	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
+	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
+	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
+	assertDistinctPersistentPaths(settingsFile, saved.runtime)
+	return { deployment, network, quorumRpcUrls }
+}
+
 export async function loadConfiguration(): Promise<Configuration> {
 	const arguments_ = process.argv.slice(2)
 	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile} or use the operator UI.`)
@@ -60,21 +78,7 @@ export async function loadConfiguration(): Promise<Configuration> {
 	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Copy config/operator.example.json there, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)
 	process.env['ZOLTAR_BOT_RPC_QUORUM'] = saved.rpcQuorum.toString()
-	const deployment = saved.deployment
-	const network = networkConfiguration(saved.network, {
-		factory: deployment.uniswapFactory,
-		quoter: deployment.uniswapQuoter,
-		rep: deployment.rep,
-		weth: deployment.weth,
-	})
-	const savedQuorumRpcUrls = validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const quorumRpcUrls = [...savedQuorumRpcUrls]
-	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
-	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')
-	if (saved.runtime.execute && deployment.uniswapRouter === undefined) throw new Error('Execution is enabled, but deployment.uniswapRouter is not configured')
-	if (saved.runtime.execute && deployment.coordinatorAddresses.length === 0) throw new Error('Execution is enabled, but deployment.coordinatorAddresses is empty')
-	if (saved.runtime.execute && deployment.deploymentManifest === undefined) throw new Error('Execution is enabled, but deployment.deploymentManifest is not configured')
-	assertDistinctPersistentPaths(settingsFile, saved.runtime)
+	const { deployment, network, quorumRpcUrls } = runnableOperatorSettings(settingsFile, saved)
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,

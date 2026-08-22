@@ -496,6 +496,45 @@ describe('file-only startup configuration', () => {
 		} finally {
 			await targetJournalLock.release()
 		}
+		const executableMainnetProfile = JSON.parse(compatibleMainnetProfile) as Record<string, unknown>
+		const executableRuntime = Reflect.get(executableMainnetProfile, 'runtime')
+		const executableDeployment = Reflect.get(executableMainnetProfile, 'deployment')
+		if (typeof executableRuntime !== 'object' || executableRuntime === null || Array.isArray(executableRuntime) || typeof executableDeployment !== 'object' || executableDeployment === null || Array.isArray(executableDeployment)) throw new Error('Executable Mainnet profile fixture is invalid')
+		const executionAddress = '0x0000000000000000000000000000000000000001'
+		Reflect.set(executableRuntime, 'execute', true)
+		Reflect.set(executableMainnetProfile, 'privateKey', `0x${'11'.repeat(32)}`)
+		Reflect.set(executableDeployment, 'executor', executionAddress)
+		Reflect.set(executableDeployment, 'uniswapRouter', executionAddress)
+		Reflect.set(executableDeployment, 'coordinatorAddresses', [executionAddress])
+		Reflect.set(executableDeployment, 'deploymentManifest', {
+			chainId: 1,
+			contracts: [{ address: executionAddress, role: 'open-oracle', runtimeCodeHash: `0x${'00'.repeat(32)}` }],
+			network: 'mainnet',
+			version: 1,
+		})
+		for (const [field, missingValue] of [
+			['executor', undefined],
+			['uniswapRouter', undefined],
+			['coordinatorAddresses', []],
+			['deploymentManifest', undefined],
+		] as const) {
+			const invalidProfile = structuredClone(executableMainnetProfile)
+			const invalidDeployment = Reflect.get(invalidProfile, 'deployment')
+			if (typeof invalidDeployment !== 'object' || invalidDeployment === null || Array.isArray(invalidDeployment)) throw new Error('Executable deployment fixture is missing')
+			if (missingValue === undefined) Reflect.deleteProperty(invalidDeployment, field)
+			else Reflect.set(invalidDeployment, field, missingValue)
+			await writeFile(mainnetProfilePath, JSON.stringify(invalidProfile), 'utf8')
+			const rejectedExecutableSwitch = await fetch(`${origin}/api/network-profile`, {
+				body: JSON.stringify({ network: 'mainnet' }),
+				headers: { 'content-type': 'application/json', origin },
+				method: 'PUT',
+			})
+			expect(rejectedExecutableSwitch.status, await rejectedExecutableSwitch.clone().text()).toBe(400)
+			expect(await Bun.file(path).text()).toBe(configuredContents)
+			expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+			expect(child.exitCode).toBeNull()
+		}
+		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
