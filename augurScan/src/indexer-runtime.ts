@@ -186,7 +186,7 @@ export const isPermanentHistoricalLogError = (error: unknown): boolean => {
 	return getLogsRequest && prunedHistory
 }
 
-const isPrunedHistoricalStateError = (error: unknown): boolean => {
+export const isPrunedHistoricalStateError = (error: unknown): boolean => {
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
@@ -204,6 +204,19 @@ const isPrunedHistoricalStateError = (error: unknown): boolean => {
 		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
+}
+
+export const readWithPrunedStateFallback = async <T>(
+	requestedBlock: bigint,
+	fallbackBlock: bigint,
+	read: (blockNumber: bigint) => Promise<T>,
+): Promise<{ readonly blockNumber: bigint; readonly value: T }> => {
+	try {
+		return { blockNumber: requestedBlock, value: await read(requestedBlock) }
+	} catch (error) {
+		if (!isPrunedHistoricalStateError(error) || fallbackBlock <= requestedBlock) throw error
+		return { blockNumber: fallbackBlock, value: await read(fallbackBlock) }
+	}
 }
 
 export const isSplittableLogRangeError = (error: unknown): boolean => {

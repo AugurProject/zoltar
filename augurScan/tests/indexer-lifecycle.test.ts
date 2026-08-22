@@ -86,7 +86,9 @@ import {
 	findEarliestAvailableLogProvider,
 	indexerLogSources,
 	isPermanentHistoricalLogError,
+	isPrunedHistoricalStateError,
 	readHistoricalCodeWithPermanentFallback,
+	readWithPrunedStateFallback,
 	scanDiscoveredLogCoverage,
 } from '../src/indexer-runtime.ts'
 import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
@@ -2603,6 +2605,17 @@ describe('network indexer lifecycle', () => {
 				symbol: async () => 'TKN',
 			}),
 		).rejects.toThrow('provider unavailable')
+		await expect(
+			readTokenMetadata(address, 10n, {
+				decimals: async () => 18,
+				name: async () => {
+					throw new RpcError('state at block #10 is pruned', { code: -32603, shortMessage: 'state at block #10 is pruned' })
+				},
+				symbol: async () => {
+					throw transportFailure
+				},
+			}),
+		).rejects.toThrow('provider unavailable')
 	})
 
 	test('records a stable fallback for contracts that do not implement token metadata', async () => {
@@ -2629,6 +2642,61 @@ describe('network indexer lifecycle', () => {
 				symbol: async () => 'TKN',
 			}),
 		).toEqual({ address, decimals: 6, symbol: 'TKN', readBlock: 10n })
+	})
+
+	test('records retryable unavailable metadata when any historical metadata field is pruned', async () => {
+		const pruned = new RpcRequestMethodError(
+			'eth_call',
+			new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
+			'#1 http://reth:8545',
+		)
+		for (const prunedField of ['decimals', 'name', 'symbol'] as const) {
+			const metadata = await readTokenMetadata(address, 11_000_001n, {
+				decimals: async () => {
+					if (prunedField === 'decimals') throw pruned
+					return 18
+				},
+				name: async () => {
+					if (prunedField === 'name') throw pruned
+					return 'Token'
+				},
+				symbol: async () => {
+					if (prunedField === 'symbol') throw pruned
+					return 'TKN'
+				},
+			})
+			expect(metadata).toEqual({ address, readError: 'ERC-20 metadata unavailable', readBlock: 11_000_001n })
+			expect(tokenMetadataNeedsRead(metadata, 11_000_025n)).toBe(false)
+			expect(tokenMetadataNeedsRead(metadata, 11_000_026n)).toBe(true)
+		}
+	})
+
+	test('retries an essential historical state read at the observed head only when state is pruned', async () => {
+		const attemptedBlocks: bigint[] = []
+		const result = await readWithPrunedStateFallback(11_000_001n, 12_000_000n, async (blockNumber) => {
+			attemptedBlocks.push(blockNumber)
+			if (blockNumber === 11_000_001n)
+				throw new RpcRequestMethodError(
+					'eth_call',
+					new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
+					'#1 http://reth:8545',
+				)
+			return 'available'
+		})
+		expect(result).toEqual({ blockNumber: 12_000_000n, value: 'available' })
+		expect(attemptedBlocks).toEqual([11_000_001n, 12_000_000n])
+		expect(isPrunedHistoricalStateError(new Error('temporary provider failure'))).toBe(false)
+	})
+
+	test('does not move ordinary historical state failures to another block', async () => {
+		const attemptedBlocks: bigint[] = []
+		await expect(
+			readWithPrunedStateFallback(11_000_001n, 12_000_000n, async (blockNumber) => {
+				attemptedBlocks.push(blockNumber)
+				throw new Error('temporary provider failure')
+			}),
+		).rejects.toThrow('temporary provider failure')
+		expect(attemptedBlocks).toEqual([11_000_001n])
 	})
 
 	test('records metadata fallback from actual zero-data and revert RPC responses', async () => {
