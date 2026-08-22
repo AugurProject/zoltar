@@ -57,6 +57,10 @@ export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentI
 	if (transaction.to?.toLowerCase() !== deterministicDeploymentProxy.toLowerCase() || transaction.data?.toLowerCase() !== plan.calldata.toLowerCase()) throw new Error('Pending executor deployment intent does not contain the expected CREATE2 call')
 }
 
+export async function assertStoredExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, expectedChainId: number) {
+	await assertExecutorDeploymentIntent(intent, intent.account, expectedChainId, executorDeploymentPlan(intent.salt))
+}
+
 const executorPublicSubmissionSettings = validateSubmissionSettings({ minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 
 export async function submitExecutorDeploymentTransaction(parameters: { account: Address; publicRpcUrls: readonly string[]; publicSubmit: (rpcUrl: string, serializedTransaction: Hex) => Promise<Hex>; serializedTransaction: Hex; transactionHash: Hex }) {

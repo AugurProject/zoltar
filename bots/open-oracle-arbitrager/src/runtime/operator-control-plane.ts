@@ -5,7 +5,7 @@ import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, va
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '#config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { assertStoredExecutorDeploymentIntent, deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
@@ -116,7 +116,8 @@ export async function requireNoPendingExecutorDeployment(settingsFile: string, n
 
 async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
 	const chain = runnableOperatorSettings(settingsFile, target).network.chain
-	await loadExecutorDeploymentIntentForChain(executorDeploymentIntentPath(settingsFile, target.network), chain.id)
+	const deploymentIntent = await loadExecutorDeploymentIntentForChain(executorDeploymentIntentPath(settingsFile, target.network), chain.id)
+	if (deploymentIntent !== undefined) await assertStoredExecutorDeploymentIntent(deploymentIntent, chain.id)
 	if (target.networkConfigured) {
 		await checkConnectivity(target.connectivity, chain.id)
 		await checkIndependentRpcChains(target.deployment.quorumRpcUrls, chain.id)

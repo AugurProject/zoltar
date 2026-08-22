@@ -567,6 +567,26 @@ describe('file-only startup configuration', () => {
 		expect(await Bun.file(mainnetProfilePath).text()).toBe(compatibleMainnetProfile)
 		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 		expect(child.exitCode).toBeNull()
+		const alteredMainnetDeployment = await deploymentAccount.signTransaction({ chainId: 1, data: '0x', gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
+		await saveExecutorDeploymentIntent(mainnetIntentPath, {
+			account: deploymentAccount.address,
+			address: deploymentPlan.address,
+			chainId: 1,
+			salt: deploymentSalt,
+			serializedTransaction: alteredMainnetDeployment,
+			transactionHash: keccak256(alteredMainnetDeployment),
+			version: 1,
+		})
+		const alteredIntentSwitch = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(alteredIntentSwitch.status, await alteredIntentSwitch.clone().text()).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		expect(await Bun.file(mainnetProfilePath).text()).toBe(compatibleMainnetProfile)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		expect(child.exitCode).toBeNull()
 		await clearExecutorDeploymentIntent(mainnetIntentPath)
 		const oppositeChain = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
