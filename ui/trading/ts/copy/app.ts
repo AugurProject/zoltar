@@ -6,26 +6,22 @@ export const markets = 'Markets'
 export const market = 'Market'
 export const liquidity = 'Liquidity'
 export const portfolio = 'Portfolio'
-export const deploy = 'Deploy'
+export { connectWallet, deploy, eth, rep, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
 export const securityPool = 'Security pool'
+export const pairNotCreated = 'Not created'
 export const notFound = 'Not found'
 export const pageNotFound = 'Page not found'
 export const returnToMarkets = 'Return to markets'
 export const backToMarkets = '← Markets'
 export const disconnectWallet = 'Disconnect wallet'
-export const connectWallet = 'Connect wallet'
 export const selectUniverse = 'Select universe'
-export const unavailable = 'Unavailable'
 export const connectedWalletBalances = 'Connected wallet balances'
 export const loadingBalances = 'Loading balances…'
-export const eth = 'ETH'
-export const rep = 'REP'
 export const connectedAccount = 'Connected account'
 export const walletBalances = 'Wallet balances'
 export const balancesUnavailable = 'Balances unavailable'
 const walletBalanceReadFailed = 'wallet balance read failed'
-export const retry = 'Retry'
 export const loadingWalletBalances = 'Loading wallet ETH and current-universe REP balances'
 export const genesisUniverse = 'Genesis universe'
 export const positionsByPool = 'Positions by SecurityPool'
@@ -35,7 +31,7 @@ export const checkingContracts = 'Checking deterministic trading contracts…'
 export const poolDataUnavailable = 'Pool data unavailable'
 export const projectGuide = 'Project guide'
 export const marketGuide = 'How the market works'
-export const deploymentDescription = 'Deploy and verify the shared deterministic contracts that back the application.'
+export { deploymentDescription } from '@zoltar/ui-core-shared/copy/app.js'
 export const marketGuideSteps = [
 	{
 		number: '01',
@@ -78,4 +74,8 @@ export function walletBalanceError(errorLabel: string | undefined, error: string
 
 export function universeLabel(id: string) {
 	return `Universe ${id}`
+}
+
+export function openSecurityPoolLabel(address: string) {
+	return `Open security pool ${address}`
 }

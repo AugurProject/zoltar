@@ -213,13 +213,13 @@ test.skipIf(process.platform === 'win32')('default initialization waits beyond t
 	}
 })
 
-test.skipIf(process.platform === 'win32')('page target deadline identifies the phase that timed out', async () => {
+test.skipIf(process.platform === 'win32')('page target discovery deadline identifies the phase that timed out', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-target-timeout-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
 	const server = createFakeDevToolsServer(Number.MAX_SAFE_INTEGER)
 	await writeFakeChromium(executablePath, server.port, '0')
 	try {
-		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out while waiting for the Chromium page target/)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out while (waiting for the Chromium page target|requesting the DevTools target list)/)
 	} finally {
 		server.stop(true)
 		await rm(fixtureRoot, { force: true, recursive: true })

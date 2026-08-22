@@ -18,7 +18,7 @@ import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAsse
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkMessage } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
 	isOnActiveAppChain: boolean
@@ -99,7 +99,7 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 									disabled: accountAddress === undefined || !isOnActiveAppChain || !hasForked || child.exists,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-										if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+										if (!isOnActiveAppChain) return getWrongNetworkReason()
 
 										return (() => {
 											if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -127,7 +127,7 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 									? marketCopy.childDeploymentSelectionRequired
 									: (() => {
 											if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-											if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+											if (!isOnActiveAppChain) return getWrongNetworkReason()
 
 											return (() => {
 												if (!hasForked) return marketCopy.childUniversesNotForkedReason

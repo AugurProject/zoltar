@@ -21,7 +21,7 @@ import { TransactionReview } from '@zoltar/ui-core-shared/components/Transaction
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { getWrongNetworkMessage, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
@@ -170,7 +170,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 
 		return (() => {
-			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -191,7 +191,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetBurnWalletRequiredReason
 
 		return (() => {
-			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
@@ -207,7 +207,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.shareMigrationWalletRequiredReason
 
 		return (() => {
-			if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
 
 			return (() => {
@@ -227,7 +227,7 @@ export function TradingSection({
 		? tradingCopy.shareRedemptionPoolRequiredReason
 		: (() => {
 				if (accountState.address === undefined) return tradingCopy.shareRedemptionWalletRequiredReason
-				if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkReason()
 				if (selectedPool?.questionOutcome === 'none') return tradingCopy.poolResolutionRequired
 
 				return undefined
@@ -237,7 +237,7 @@ export function TradingSection({
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.migrateForkedShares))
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
 	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
-		if (!isOnActiveAppChain) return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (!actionEnabled) return undefined
 		return guardMessage
 	}

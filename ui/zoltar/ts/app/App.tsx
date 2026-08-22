@@ -16,6 +16,7 @@ import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
 import { buildProtocolHookConfigs, useProtocolAppRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolAppRuntime.js'
 import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
+import { getOpenOracleViewOptions } from '../features/open-oracle/lib/openOracleNavigation.js'
 import { useZoltarOperations } from '../features/universes/hooks/useZoltarOperations.js'
 import { useRepPrices } from '../features/open-oracle/hooks/useRepPrices.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
@@ -25,14 +26,15 @@ import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
-import { writeOpenOracleViewQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
+import { zoltarRouting } from '../lib/routing.js'
 
 export function App() {
 	const deployNextMissingPending = useSignal(false)
@@ -314,9 +316,9 @@ export function App() {
 		openOracleWithdrawableBalancesLoading,
 	}
 	const tabNavigationTabs: RouteTabDefinition[] = [
-		...(showDeployTab ? [{ hash: getRouteHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []),
-		{ hash: getRouteHash('zoltar'), label: marketCopy.questions, route: 'zoltar' },
-		{ hash: getRouteHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
+		...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []),
+		{ hash: zoltarRouting.getHash('zoltar'), label: marketCopy.questions, route: 'zoltar' },
+		{ hash: zoltarRouting.getHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
 	]
 	const tabNavigationProps = {
 		route,
@@ -331,30 +333,19 @@ export function App() {
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
-					{ href: buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' },
+					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
+					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' },
 					{
 						label: marketCopy.repMigration,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(getRouteHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
 					},
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
-		routeSubNavigation = (
-			<RouteSubNavigation
-				ariaLabel={appCopy.oracleReportViews}
-				value={activeOpenOracleView}
-				onChange={view => setOpenOracleView(view)}
-				options={[
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
-				]}
-			/>
-		)
+		routeSubNavigation = <RouteSubNavigation ariaLabel={appCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(zoltarRouting.getHash('open-oracle'), getRouteHashSearch())} />
 	}
 	const transactionRouteKey = (() => {
 		if (route === 'zoltar') return `${route}:${activeZoltarView}`

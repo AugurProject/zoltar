@@ -2,7 +2,8 @@ import { expect, test } from 'bun:test'
 import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
-import { AddressValue, Status } from '../../components/Status.js'
+import { Status } from '../../components/Status.js'
+import { TradingAddressValue } from '../../components/TradingAddress.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -34,7 +35,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 })
 
 test('Trading production links preserve the active simulation route query', async () => {
-	const productionSources = ['app/App.tsx', 'components/Status.tsx', 'features/LiveTrading.tsx']
+	const productionSources = ['app/App.tsx', 'components/TradingAddress.tsx', 'features/LiveTrading.tsx']
 	for (const source of productionSources) {
 		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
 		expect(contents).not.toMatch(/href=['"]#\//)
@@ -82,7 +83,7 @@ test('Trading status and address presentation use coreShared primitives', async 
 	const address = '0x00000000000000000000000000000000000000a1'
 	const rendered = await renderIntoDocument(<Status tone='good'>Trading open</Status>)
 	expect(rendered.container.querySelector('.badge.status')?.textContent).toContain('Trading open')
-	expect(AddressValue({ value: address }).type).toBe(ReadOnlyAddressValue)
+	expect(TradingAddressValue({ value: address }).type).toBe(ReadOnlyAddressValue)
 	await rendered.cleanup()
 	dom.cleanup()
 })

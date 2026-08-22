@@ -65,3 +65,7 @@ export function getWrongNetworkMessage() {
 	if (profile.id === 'mainnet') return commonCopy.mainnetRequiredReason
 	return commonCopy.formatNetworkRequiredReason(profile.displayName)
 }
+
+export function getWrongNetworkReason() {
+	return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+}

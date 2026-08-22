@@ -20,6 +20,7 @@ import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.j
 import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
 import { buildProtocolHookConfigs, useProtocolAppRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolAppRuntime.js'
 import { useOpenOracleOperations } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { getOpenOracleViewOptions } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracleNavigation.js'
 import { usePriceOracleManager } from '@zoltar/ui-zoltar/features/open-oracle/hooks/usePriceOracleManager.js'
 import { useRepPrices } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useRepPrices.js'
 import { useReportingOperations } from '@zoltar/ui-zoltar/features/reporting/hooks/useReportingOperations.js'
@@ -35,8 +36,8 @@ import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
-import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
@@ -44,6 +45,7 @@ import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleVie
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
+import { statoblastRouting } from '../lib/routing.js'
 
 export function App() {
 	const deployNextMissingPending = useSignal(false)
@@ -323,9 +325,9 @@ export function App() {
 		walletBootstrapComplete,
 	}
 	const tabs: RouteTabDefinition[] = [
-		{ hash: getRouteHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: getRouteHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
-		{ hash: getRouteHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
+		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+		{ hash: statoblastRouting.getHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
+		{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 	]
 	const tabNavigationProps = {
 		route,
@@ -415,7 +417,7 @@ export function App() {
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
-		deploymentCompleteHref: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
+		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
@@ -672,25 +674,14 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
-					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
-					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
-		routeSubNavigation = (
-			<RouteSubNavigation
-				ariaLabel={appCopy.oracleReportViews}
-				value={activeOpenOracleView}
-				onChange={view => setOpenOracleView(view)}
-				options={[
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
-					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
-				]}
-			/>
-		)
+		routeSubNavigation = <RouteSubNavigation ariaLabel={appCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch())} />
 	}
 	const transactionRouteKey = (() => {
 		if (route === 'security-pools') return `${route}:${activeSecurityPoolsView}`

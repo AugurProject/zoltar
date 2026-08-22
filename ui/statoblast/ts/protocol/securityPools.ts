@@ -9,6 +9,7 @@ import {
 	Zoltar_Zoltar,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { deriveHasForkActivity } from '@zoltar/ui-zoltar/protocol/forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -18,16 +19,6 @@ import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportin
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
-
-const QUESTION_OUTCOME_ABI = [
-	{
-		inputs: [{ name: 'securityPool', type: 'address' }],
-		name: 'getQuestionOutcome',
-		outputs: [{ name: 'outcome', type: 'uint8' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
@@ -394,7 +385,7 @@ async function loadSecurityPoolDetails(
 				args: [],
 			},
 			{
-				abi: QUESTION_OUTCOME_ABI,
+				abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
 				functionName: 'getQuestionOutcome',
 				address: getInfraContractAddresses().securityPoolForker,
 				args: [securityPoolAddress],

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, liquidityApprovalRequired, liquidityOperationAvailable, marketRouteSubtitle, migrationSimulationSummary, portfolioRouteSubtitle, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveTrading.js'
+import { marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
+import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
 	collateMarketDiscoveryResults,
@@ -32,15 +34,14 @@ import {
 	broadcastUncertainMessage,
 	discoveryCommitAllowed,
 	failedSubmissionTransition,
-	initialQuestionClockTimestamp,
 	livePairInitialized,
 	marketSelectionAfterDiscovery,
 	parseSlippageBps,
 	parseTransactionValidityMinutes,
 	positionControlsWorkflowLocked,
-	questionClockShouldPollAgain,
 	securityPoolAddressFromRoute,
-} from '../../features/liveTradingController.js'
+} from '../../features/liveTradingControllerHelpers.js'
+import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
 
 describe('standalone trading UI model', () => {
 	test('uses the deterministic chain timestamp instead of the host wall clock in simulation', () => {
