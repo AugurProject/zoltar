@@ -2,8 +2,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { acquireFileProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { acquireFileProcessLock } from '../../../shared/src/execution/process-lock.ts'
 import { initialRuntimeState, saveDurableState } from '../../src/state/operator-state.ts'
 
 const directories: string[] = []

@@ -4,7 +4,6 @@
 			"entry": ["docs/charts/chartRuntime.ts", "solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/fuzz/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts"],
 			"project": ["docs/charts/**/*.ts", "scripts/uniswap-deployment.mts", "solidity/ts/**/*.ts"],
 			"ignoreIssues": {
-				"bots/liquidator/tests/cli/run-startup.test.ts": ["unlisted"],
 				"solidity/ts/**/*.ts": ["unlisted"]
 			},
 			"ignore": ["docs/charts/virtualModules.d.ts"]
