@@ -5,21 +5,20 @@ import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { availableExecutionObservations } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, type OperatorSettings } from '#config/settings'
+import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { scanPools } from '#monitoring/pool-monitor'
-import { clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
 import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
+import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -40,6 +39,33 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
+async function preflightNetworkProfile(target: OperatorSettings) {
+	if (target.networkConfigured) {
+		await checkConnectivity(target.connectivity, target.network.chainId)
+		for (const rpcUrl of target.connectivity.quorumRpcUrls) {
+			const chainId = await readRpcChainId(rpcUrl)
+			if (chainId !== target.network.chainId) throw new Error(`${endpointLabel(rpcUrl)} returned chain ${chainId.toString()}`)
+		}
+		await checkSubmissionEndpoints(target.submission, target.network.chainId)
+	}
+	const locks = await acquireLiquidatorProcessLocks({
+		chainId: target.network.chainId,
+		execute: target.runtime.execute,
+		privateKey: target.privateKey,
+		stateFile: target.runtime.stateFile,
+	})
+	try {
+		const durable = await loadDurableState(target.runtime.stateFile, target.network.chainId)
+		const configuredSigner = target.privateKey === undefined ? undefined : privateKeyToAccount(target.privateKey).address
+		for (const intent of durable.pendingTransactions) {
+			validateReconciliationIntentChain(intent.serializedTransaction, target.network.chainId)
+			if (configuredSigner !== undefined) assertIntentSender(intent.sender, configuredSigner)
+		}
+	} finally {
+		await locks.release()
+	}
+}
+
 async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks, shutdown: LiquidatorShutdownController) {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
@@ -57,8 +83,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					chain,
 					transport: readPool.transport,
 				})
-	const state = initialRuntimeState(settings.paused, wallet?.account.address)
-	const durable = await loadDurableState(settings.runtime.stateFile)
+	const state = initialRuntimeState(settings.paused, wallet?.account.address, settings.network.chainId)
+	const durable = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)
 	state.pendingStagedOperations = durable.pendingStagedOperations
@@ -71,7 +97,27 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 			return next
 		})
 	}
-	const configurationMutationGate = createConfigurationMutationGate(() => state.scanning)
+	let profileSwitchRequested = false
+	const configurationMutationGate = createConfigurationMutationGate(
+		() => state.scanning,
+		() => profileSwitchRequested,
+	)
+	let wakeProfileSwitchWait: (() => void) | undefined
+	const requestProfileSwitch = () => {
+		profileSwitchRequested = true
+		wakeProfileSwitchWait?.()
+	}
+	const waitForProfileSwitchOrDelay = async (milliseconds: number) => {
+		if (profileSwitchRequested) return
+		await Promise.race([
+			shutdown.wait(milliseconds),
+			new Promise<void>(resolve => {
+				wakeProfileSwitchWait = resolve
+				if (profileSwitchRequested) resolve()
+			}),
+		])
+		wakeProfileSwitchWait = undefined
+	}
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
 			const [token0, token1, reserves] = await Promise.all([
@@ -87,11 +133,23 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				getConfiguration: () => serializedSettings(settings, true),
 				getState: () => {
 					state.rpcEndpointHealth = readPool.snapshot()
-					return operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings))
+					return { ...operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)), network: settings.network.name }
 				},
 				hostname: settings.runtime.uiHost,
+				isNetworkConfigured: () => settings.networkConfigured,
 				loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
+				switchNetworkProfile: value =>
+					configurationMutationGate.run(async () => {
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Chain profile request must be an object')
+						const network = Reflect.get(value, 'network')
+						if (network !== 'mainnet' && network !== 'sepolia') throw new Error('Chain profile must be mainnet or sepolia')
+						if (network === settings.network.name) return serializedSettings(settings, true)
+						const switched = await switchSettingsNetworkProfile(loaded.path, network, new URL('../../config/operator.example.json', import.meta.url).pathname, preflightNetworkProfile)
+						state.paused = true
+						requestProfileSwitch()
+						return serializedSettings(switched.settings, true)
+					}),
 				reconcileTransaction: value =>
 					configurationMutationGate.run(async () => {
 						if (!state.paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -124,13 +182,14 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 									throw error
 								}
 							}),
+							settings.connectivity.rpcQuorum,
 						)
 						const replacement = await verifyFinalizedReplacement(intent, request.replacementHash, PRIVATE_INTENT_FINALITY_BLOCKS, {
 							canonicalBlockHash: async blockNumber => await canonicalBlockHash(settings, blockNumber, readPool),
 							currentHeads: async () => {
 								const settled = await Promise.allSettled(endpoints.map(async endpoint => await createPublicClient({ chain, transport: readPool.transportFor(endpoint) }).getBlockNumber()))
 								const heads = availableSettledValues(settled)
-								if (heads.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError('Replacement reconciliation does not satisfy the configured RPC quorum requirement')
+								if (heads.length < settings.connectivity.rpcQuorum) throw new ConnectivityDegradedError('Replacement reconciliation does not satisfy the configured RPC quorum requirement')
 								return heads
 							},
 							replacement: async () => replacementEvidence,
@@ -192,7 +251,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					if (!paused && !settings.networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
 					if (paused) {
 						state.paused = true
-						await persistSettings(current => ({ ...current, paused: true }))
+						await configurationMutationGate.run(async () => persistSettings(current => ({ ...current, paused: true })))
 					} else {
 						await configurationMutationGate.run(async () => {
 							await persistSettings(current => ({ ...current, paused: false }))
@@ -408,6 +467,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	await pollUntilStopped(
 		async () => {
 			if (shutdown.isRequested()) return true
+			if (profileSwitchRequested) return true
 			if (configurationMutationGate.isActive()) return false
 			if (!settings.networkConfigured) return false
 			state.scanning = true
@@ -440,14 +500,19 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet) }
 						}),
 					)
-					const available = availableExecutionObservations('liquidation execution snapshot', settled, observation => ({
-						endpoint: observation.endpoint,
-						value: {
-							pools: observation.scan.pools,
-							universes: observation.scan.universes,
-							walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
-						},
-					}))
+					const available = availableExecutionObservations(
+						'liquidation execution snapshot',
+						settled,
+						observation => ({
+							endpoint: observation.endpoint,
+							value: {
+								pools: observation.scan.pools,
+								universes: observation.scan.universes,
+								walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
+							},
+						}),
+						settings.connectivity.rpcQuorum,
+					)
 					const selected = available[0]
 					if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
 					client = selected.client
@@ -618,40 +683,44 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.scanning = false
 			}
 		},
-		consecutiveFailures => shutdown.wait(retryDelayMilliseconds(settings.runtime.pollMilliseconds, consecutiveFailures)),
+		consecutiveFailures => waitForProfileSwitchOrDelay(retryDelayMilliseconds(settings.runtime.pollMilliseconds, consecutiveFailures)),
 		settings.runtime.once,
 		error => console.error(`liquidator=${errorMessage(error)}`),
 	)
+	return profileSwitchRequested
 }
 
 async function main() {
 	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
-	const loaded = await loadSettings()
 	using shutdown = createLiquidatorShutdownController()
-	let locks: LiquidatorProcessLocks
-	try {
-		const acquired = await acquireLiquidatorProcessLocksForShutdown(
-			{
-				chainId: loaded.settings.network.chainId,
-				execute: loaded.settings.runtime.execute,
-				privateKey: loaded.settings.privateKey,
-				stateFile: loaded.settings.runtime.stateFile,
-			},
-			shutdown,
-		)
-		if (acquired === undefined) return
-		locks = acquired
-	} catch (error) {
-		if (error instanceof LiquidatorProcessLockAcquisitionError) {
-			await error.releaseProcessLocks()
-			throw error.acquisitionCause
+	for (;;) {
+		const loaded = await loadSettings()
+		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
+		let locks: LiquidatorProcessLocks
+		try {
+			const acquired = await acquireLiquidatorProcessLocksForShutdown(
+				{
+					chainId: loaded.settings.network.chainId,
+					execute: loaded.settings.runtime.execute,
+					privateKey: loaded.settings.privateKey,
+					stateFile: loaded.settings.runtime.stateFile,
+				},
+				shutdown,
+			)
+			if (acquired === undefined) return
+			locks = acquired
+		} catch (error) {
+			if (error instanceof LiquidatorProcessLockAcquisitionError) {
+				await error.releaseProcessLocks()
+				throw error.acquisitionCause
+			}
+			throw error
 		}
-		throw error
-	}
-	try {
-		await runOperator(loaded, locks, shutdown)
-	} finally {
-		await locks.release()
+		try {
+			if (!(await runOperator(loaded, locks, shutdown))) return
+		} finally {
+			await locks.release()
+		}
 	}
 }
 

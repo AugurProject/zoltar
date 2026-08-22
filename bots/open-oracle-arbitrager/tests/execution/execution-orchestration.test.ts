@@ -181,8 +181,8 @@ describe('funded execution orchestration', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-v4-intent-'))
 		const path = join(directory, 'positions.json')
 		try {
-			await savePositionJournal(path, [{ ...lifecyclePosition(), executionIntent: payload.executionIntent }])
-			const reloaded = await loadPositionJournal(path)
+			await savePositionJournal(path, [{ ...lifecyclePosition(), executionIntent: payload.executionIntent }], 1)
+			const reloaded = await loadPositionJournal(path, 1)
 			expect(reloaded[0]?.executionIntent).toEqual(payload.executionIntent)
 			expect(reloaded[0]?.executionIntent?.poolFee).toBe(selectedV4Fee)
 		} finally {
@@ -501,7 +501,7 @@ describe('funded execution orchestration', () => {
 			},
 		}
 		await journaledSubmission(
-			() => savePositionJournal('/positions.json', [], filesystem),
+			() => savePositionJournal('/positions.json', [], 1, filesystem),
 			async () => {
 				calls.push('submit')
 			},

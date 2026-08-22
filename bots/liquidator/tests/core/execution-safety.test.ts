@@ -117,12 +117,12 @@ describe('liquidator execution safety', () => {
 	test('tolerates one offline scan but never hides malformed state behind two agreeing scans', async () => {
 		const agreeing = { endpoint: 'rpc-a', state: { blockHash: '0xabc' } }
 		const healthy = [Promise.resolve(agreeing), Promise.resolve({ ...agreeing, endpoint: 'rpc-b' }), Promise.reject(new TypeError('fetch failed'))]
-		const available = availableExecutionObservations('liquidation snapshot', await Promise.allSettled(healthy), observation => ({ endpoint: observation.endpoint, value: observation.state }))
+		const available = availableExecutionObservations('liquidation snapshot', await Promise.allSettled(healthy), observation => ({ endpoint: observation.endpoint, value: observation.state }), 2)
 		expect(available).toHaveLength(2)
 
 		const malformed = [Promise.resolve(agreeing), Promise.resolve({ ...agreeing, endpoint: 'rpc-b' }), Promise.reject(new Error('Constant-product pair returned malformed state'))]
 		const malformedSettled = await Promise.allSettled(malformed)
-		expect(() => availableExecutionObservations('liquidation snapshot', malformedSettled, observation => ({ endpoint: observation.endpoint, value: observation.state }))).toThrow('malformed state')
+		expect(() => availableExecutionObservations('liquidation snapshot', malformedSettled, observation => ({ endpoint: observation.endpoint, value: observation.state }), 2)).toThrow('malformed state')
 	})
 
 	test('classifies insufficient transport-only scan observations as degraded connectivity under the explicit quorum policy', () => {
@@ -132,25 +132,18 @@ describe('liquidator execution safety', () => {
 			{ reason: unavailable, status: 'rejected' },
 			{ reason: unavailable, status: 'rejected' },
 		]
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
 		try {
-			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-			try {
-				availableExecutionObservations('scan', settled, value => value)
-				throw new Error('Expected an insufficient transport quorum')
-			} catch (error) {
-				expect(error).toBeInstanceOf(Error)
-				if (!(error instanceof Error)) throw error
-				expect(error.name).toBe('ConnectivityDegradedError')
-			}
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+			availableExecutionObservations('scan', settled, value => value, 2)
+			throw new Error('Expected an insufficient transport quorum')
+		} catch (error) {
+			expect(error).toBeInstanceOf(Error)
+			if (!(error instanceof Error)) throw error
+			expect(error.name).toBe('ConnectivityDegradedError')
 		}
 	})
 	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {
 		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] })])
-		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }))).toThrow('RPC disagreement')
+		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }), 2)).toThrow('RPC disagreement')
 	})
 	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
 		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([{ fromBlock: 24_750n, toBlock: 25_005n }])

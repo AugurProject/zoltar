@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { join } from 'node:path'
 
-const requiredArguments = ['--position-file=/tmp/unused-position-journal.json', '--report-id=7', '--confirm-report-id=7', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5'] as const
+const requiredArguments = ['--position-file=/tmp/unused-position-journal.json', '--chain-id=1', '--report-id=7', '--confirm-report-id=7', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5'] as const
 
 async function run(arguments_: readonly string[]) {
 	const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', '..', 'src', 'cli', 'reconcile-position.ts'), ...arguments_], {

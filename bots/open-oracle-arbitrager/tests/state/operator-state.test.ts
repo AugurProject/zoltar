@@ -542,9 +542,9 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await appendExecutionHistory(path, record)
-		await appendExecutionHistory(path, record)
-		const history = await loadExecutionHistory(path)
+		await appendExecutionHistory(path, record, 1)
+		await appendExecutionHistory(path, record, 1)
+		const history = await loadExecutionHistory(path, 1)
 		expect(history).toEqual([record])
 		const state: OperatorState = {
 			activeReportCount: 0,
@@ -578,7 +578,32 @@ describe('operator execution history', () => {
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'history.jsonl')
 		await writeFile(path, '{"transactionHash":"torn"', 'utf8')
-		await expect(loadExecutionHistory(path)).rejects.toThrow('line 1')
+		await expect(loadExecutionHistory(path, 1)).rejects.toThrow('line 1')
+	})
+
+	test('rejects valid execution history bound to another chain', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-history-chain-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'history.jsonl')
+		const record: ExecutionRecord = {
+			actualGasCostEth: '0.002',
+			blockNumber: '100',
+			direction: 'sell-rep',
+			estimatedNetProfitWeth: '0.05',
+			estimatedProfitBeforeGasEth: '0.052',
+			executedAt: '2026-07-24T00:00:00.000Z',
+			pool: address,
+			poolFee: 10_000,
+			reportId: '7',
+			requiredToken: '1',
+			requiredWeth: '2',
+			token: address,
+			tokenSymbol: 'REP',
+			trackedNetProfitEth: '0.05',
+			transactionHash: `0x${'12'.repeat(32)}` as Hex,
+		}
+		await appendExecutionHistory(path, record, 1)
+		await expect(loadExecutionHistory(path, 11_155_111)).rejects.toThrow('belongs to another chain')
 	})
 
 	test('syncs appended history and its parent directory before acknowledging the record', async () => {
@@ -643,6 +668,7 @@ describe('operator execution history', () => {
 				trackedNetProfitEth: '0.05',
 				transactionHash: `0x${'12'.repeat(32)}` as Hex,
 			},
+			1,
 			filesystem,
 		)
 		expect(events).toEqual(['mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
@@ -669,10 +695,10 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		expect(await appendExecutionHistoryIfMissing(path, record)).toBe(true)
-		expect(await appendExecutionHistoryIfMissing(path, record)).toBe(false)
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBe(true)
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBe(false)
 		expect((await readFile(path, 'utf8')).trim().split('\n')).toHaveLength(1)
-		expect(await loadExecutionHistory(path)).toEqual([record])
+		expect(await loadExecutionHistory(path, 1)).toEqual([record])
 	})
 
 	test('preflights and locks down the execution history destination', async () => {
@@ -706,8 +732,8 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.002',
 			transactionHash: `0x${index.toString(16).padStart(64, '0')}` as Hex,
 		}))
-		await writeFile(path, `${records.map(record => JSON.stringify(record)).join('\n')}\n`, 'utf8')
-		const history = await loadExecutionHistory(path)
+		await writeFile(path, `${records.map(record => JSON.stringify({ chainId: 1, record })).join('\n')}\n`, 'utf8')
+		const history = await loadExecutionHistory(path, 1)
 		expect(history).toHaveLength(501)
 		const state: OperatorState = {
 			activeReportCount: 0,

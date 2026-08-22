@@ -5,7 +5,6 @@ import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/ca
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
@@ -121,6 +120,7 @@ export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wal
 				throw error
 			}
 		}),
+		settings.connectivity.rpcQuorum,
 	)
 	if (result.evidence === undefined || result.receipt === undefined) return { observed: false as const, receipt: undefined }
 	const receipt = result.receipt
@@ -131,6 +131,8 @@ export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wal
 			`transaction ${hash}`,
 			receipt,
 			PRIVATE_INTENT_FINALITY_BLOCKS,
+			undefined,
+			settings.connectivity.rpcQuorum,
 		))
 	)
 		return { observed: true as const, receipt: undefined }
@@ -177,13 +179,14 @@ export async function recoverPendingTransactions(settings: OperatorSettings, wal
 					blockTag: 'pending',
 				}),
 			})),
+			settings.connectivity.rpcQuorum,
 		)
 		if (nonce > intent.nonce) {
 			throw new Error(`Transaction ${intent.hash} has no receipt but signer nonce ${intent.nonce.toString()} was consumed; manual reconciliation is required`)
 		}
 		const settledBlocks = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
 		const blocks = availableSettledValues(settledBlocks)
-		if (blocks.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery does not satisfy the configured RPC quorum requirement`)
+		if (blocks.length < settings.connectivity.rpcQuorum) throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery does not satisfy the configured RPC quorum requirement`)
 		const recoveryAction = ambiguousRecoveryAction(intent, blocks)
 		if (recoveryAction === 'expire-private') {
 			await canonicalBlockHash(settings, intent.maxBlockNumber + PRIVATE_INTENT_FINALITY_BLOCKS, pool)
@@ -223,7 +226,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 	for (const pending of [...state.pendingStagedOperations]) {
 		const settledHeads = await Promise.allSettled(clients.map(async ({ client }) => await client.getBlockNumber()))
 		const heads = availableSettledValues(settledHeads)
-		if (heads.length < rpcQuorumRequirement()) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery does not satisfy the configured RPC quorum requirement`)
+		if (heads.length < settings.connectivity.rpcQuorum) throw new ConnectivityDegradedError(`Staged operation ${pending.operationId.toString()} recovery does not satisfy the configured RPC quorum requirement`)
 		const toBlock = heads.reduce((minimum, head) => (head < minimum ? head : minimum))
 		const canonicalRecoveryHash = async (blockNumber: bigint) =>
 			await settledQuorumValue(
@@ -233,6 +236,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 					if (block.hash === null) throw new Error(`Recovery anchor block ${blockNumber.toString()} is missing its hash`)
 					return { endpoint, value: block.hash }
 				}),
+				settings.connectivity.rpcQuorum,
 			)
 		let observedRecoveryAnchor: Hex | undefined
 		if (pending.recoveryAnchorBlock !== undefined && pending.recoveryAnchorBlock <= toBlock) observedRecoveryAnchor = await canonicalRecoveryHash(pending.recoveryAnchorBlock)
@@ -285,6 +289,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 						}),
 					}
 				}),
+				settings.connectivity.rpcQuorum,
 			)
 			if (outcomes.length > 1) throw new Error(`Coordinator returned multiple outcomes for staged operation ${pending.operationId.toString()}`)
 			return outcomes[0]
@@ -324,6 +329,7 @@ export async function reconcilePendingStagedOperations(settings: OperatorSetting
 				outcome,
 				PRIVATE_INTENT_FINALITY_BLOCKS,
 				toBlock,
+				settings.connectivity.rpcQuorum,
 			)
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.includes('receipt is no longer canonical')) throw error

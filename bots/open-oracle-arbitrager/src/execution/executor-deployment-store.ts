@@ -15,8 +15,8 @@ export type ExecutorDeploymentIntent = {
 	version: 1
 }
 
-export function executorDeploymentIntentPath(settingsFile: string) {
-	return `${settingsFile}.executor-deployment.json`
+export function executorDeploymentIntentPath(settingsFile: string, network: 'mainnet' | 'sepolia') {
+	return `${settingsFile}.${network}.executor-deployment.json`
 }
 
 export function acquireExecutorDeploymentIntentLock(path: string) {
@@ -87,6 +87,12 @@ export async function loadExecutorDeploymentIntent(path: string, filesystem: Dep
 		throw error
 	}
 	return parseExecutorDeploymentIntent(JSON.parse(contents))
+}
+
+export async function loadExecutorDeploymentIntentForChain(path: string, expectedChainId: number, filesystem: DeploymentIntentReadFilesystem = { open, readFile }) {
+	const intent = await loadExecutorDeploymentIntent(path, filesystem)
+	if (intent !== undefined && intent.chainId !== expectedChainId) throw new Error(`Executor deployment intent targets chain ${intent.chainId.toString()}; expected chain ${expectedChainId.toString()}`)
+	return intent
 }
 
 type DeploymentIntentWriteFilesystem = {

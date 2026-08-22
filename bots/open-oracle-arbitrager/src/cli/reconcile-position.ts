@@ -6,7 +6,7 @@ import { acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosit
 const usage = `Close one fully investigated recovery-required position without submitting a transaction.
 
 PRIVATE_KEY=0x... bun run reconcile -- \\
-  --position-file=PATH --report-id=ID --confirm-report-id=ID \\
+  --position-file=PATH --chain-id=ID --report-id=ID --confirm-report-id=ID \\
   --evidence=TEXT --note=TEXT --external-cost-eth=ETH \\
   --final-wallet-weth=WETH --final-wallet-token=TOKEN \\
   (--realized-net-profit-eth=ETH --acknowledge-pnl-is-all-in=true |
@@ -33,10 +33,10 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
 	process.exit(0)
 }
 
-const accepted = new Set(['position-file', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token', 'realized-net-profit-eth', 'pnl-unavailable', 'acknowledge-pnl-is-all-in'])
+const accepted = new Set(['position-file', 'chain-id', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token', 'realized-net-profit-eth', 'pnl-unavailable', 'acknowledge-pnl-is-all-in'])
 const values = options(process.argv.slice(2))
 for (const name of values.keys()) if (!accepted.has(name)) throw new Error(`Unknown option --${name}`)
-const required = ['position-file', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token'] as const
+const required = ['position-file', 'chain-id', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token'] as const
 for (const name of required) if (values.get(name) === undefined) throw new Error(`Missing --${name}=...`)
 const pnlUnavailable = values.has('pnl-unavailable')
 if (pnlUnavailable && values.get('pnl-unavailable') !== 'true') throw new Error('--pnl-unavailable must be --pnl-unavailable=true')
@@ -50,9 +50,11 @@ const account = privateKeyToAccount(privateKeyValue as Hex)
 const positionFile = values.get('position-file')
 const reportId = values.get('report-id')
 if (positionFile === undefined || reportId === undefined) throw new Error('Position file and report id are required')
+const chainId = Number(values.get('chain-id'))
+if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('--chain-id must be a positive integer')
 const journalLock = await acquirePositionJournalLock(positionFile)
 try {
-	const positions = await loadPositionJournal(positionFile)
+	const positions = await loadPositionJournal(positionFile, chainId)
 	const index = positions.findIndex(position => position.reportId === reportId)
 	if (index === -1) throw new Error(`Position ${reportId} was not found`)
 	const position = positions[index]
@@ -70,7 +72,7 @@ try {
 	})
 	const updated = [...positions]
 	updated[index] = reconciled
-	await savePositionJournal(positionFile, updated)
+	await savePositionJournal(positionFile, updated, chainId)
 	console.log(`report=${reportId} status=closed signer=${account.address} pnl=${reconciled.manualReconciliation?.pnlStatus ?? 'unavailable'} journal=${positionFile}`)
 } finally {
 	await journalLock.release()

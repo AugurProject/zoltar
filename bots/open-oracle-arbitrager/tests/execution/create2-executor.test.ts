@@ -122,11 +122,20 @@ test('blocks resume while a durable executor deployment intent remains unresolve
 		const plan = executorDeploymentPlan(salt)
 		const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
 		const settingsFile = join(directory, 'operator.json')
-		const intentPath = `${settingsFile}.executor-deployment.json`
+		const intentPath = executorDeploymentIntentPath(settingsFile, 'mainnet')
 		await saveExecutorDeploymentIntent(intentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
-		await expect(requireNoPendingExecutorDeployment(settingsFile)).rejects.toThrow('Recover the pending executor deployment')
+		await expect(requireNoPendingExecutorDeployment(settingsFile, 'mainnet')).rejects.toThrow('Recover the pending executor deployment')
+		await expect(requireNoPendingExecutorDeployment(settingsFile, 'sepolia')).resolves.toBeUndefined()
 		await clearExecutorDeploymentIntent(intentPath)
-		await expect(requireNoPendingExecutorDeployment(settingsFile)).resolves.toBeUndefined()
+		await expect(requireNoPendingExecutorDeployment(settingsFile, 'mainnet')).resolves.toBeUndefined()
+		const dormantIntentPath = executorDeploymentIntentPath(settingsFile, 'sepolia')
+		await saveExecutorDeploymentIntent(dormantIntentPath, { account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 })
+		const activeGate = createSignerOperationGate()
+		const activeScanLock = await acquireScanSignerOperation(activeGate, { pending: false }, intentPath)
+		expect(activeScanLock).toBeDefined()
+		activeGate.release('scan')
+		await activeScanLock?.release()
+		await clearExecutorDeploymentIntent(dormantIntentPath)
 	} finally {
 		await rm(directory, { force: true, recursive: true })
 	}
@@ -213,6 +222,8 @@ test('rejects a mismatched pending intent before externally deployed runtime rec
 	await expect(assertExecutorDeploymentIntent({ ...intent, salt: `0x${'33'.repeat(32)}` }, account.address, 1, plan)).rejects.toThrow('does not match')
 	const altered = await account.signTransaction({ chainId: 1, data: '0x1234', gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
 	await expect(assertExecutorDeploymentIntent({ ...intent, serializedTransaction: altered, transactionHash: keccak256(altered) }, account.address, 1, plan)).rejects.toThrow('expected CREATE2 call')
+	const funded = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy, value: 1n })
+	await expect(assertExecutorDeploymentIntent({ ...intent, serializedTransaction: funded, transactionHash: keccak256(funded) }, account.address, 1, plan)).rejects.toThrow('must not transfer ETH')
 })
 
 test('clearing an absent deployment intent is idempotent when its directory is absent', async () => {
@@ -249,7 +260,7 @@ test('standalone deployment shares the operator signer lock and durable recovery
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-executor-cli-recovery-'))
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
 	const settingsFile = join(directory, 'operator.json')
-	const intentPath = executorDeploymentIntentPath(settingsFile)
+	const intentPath = executorDeploymentIntentPath(settingsFile, 'mainnet')
 	const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 	const lock = await acquireExecutionSignerLock(1, account.address)
 	try {
@@ -267,7 +278,7 @@ test('standalone deployment shares the operator signer lock and durable recovery
 		}
 	}
 	try {
-		await expect(requireNoPendingExecutorDeployment(settingsFile)).rejects.toThrow('Recover the pending executor deployment')
+		await expect(requireNoPendingExecutorDeployment(settingsFile, 'mainnet')).rejects.toThrow('Recover the pending executor deployment')
 	} finally {
 		await clearExecutorDeploymentIntent(intentPath)
 		await rm(directory, { force: true, recursive: true })

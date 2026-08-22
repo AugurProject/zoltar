@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./config/persistent-path": "./src/config/persistent-path.ts",
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/security": "./src/dashboard/security.ts",
 		"./ethereum": "./src/ethereum.ts",

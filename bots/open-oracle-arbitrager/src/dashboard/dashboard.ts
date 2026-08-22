@@ -35,6 +35,10 @@ let submissionLoaded = false
 let connectivityLoaded = false
 let connectivityRequestPending = false
 let persistedNetwork: 'mainnet' | 'sepolia' | undefined
+let pendingNetworkProfile: 'mainnet' | 'sepolia' | undefined
+let pendingProfileStateConfirmed = false
+let profileSwitchTimedOut = false
+let profileRequestEpoch = 0
 let deploymentLoaded = false
 let tokensLoaded = false
 let configurationLoaded = false
@@ -50,6 +54,8 @@ let manualRefreshPending = false
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
 const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -70,9 +76,11 @@ function prettyJson(value: unknown) {
 
 function setControlsEnabled(enabled: boolean) {
 	connected = enabled
-	const focusedSettingsEnabled = enabled && configurationLoaded
+	const mutationsEnabled = enabled && pendingNetworkProfile === undefined
+	const configurationEnabled = mutationsEnabled && configurationLoaded
+	const focusedSettingsEnabled = configurationEnabled && latestSnapshot?.networkConfigured === true
 	const pauseControls = pauseControlState({
-		connected: enabled,
+		connected: mutationsEnabled,
 		networkConfigured: latestSnapshot?.networkConfigured === true,
 		paused: latestSnapshot?.paused === true,
 		snapshotAvailable: latestSnapshot !== undefined,
@@ -87,7 +95,7 @@ function setControlsEnabled(enabled: boolean) {
 	confirmResume.textContent = pauseRequestPending === 'resume' ? 'Resuming…' : 'Resume bot'
 	if (pauseRequestPending === 'resume') confirmResume.setAttribute('aria-busy', 'true')
 	else confirmResume.removeAttribute('aria-busy')
-	if (!enabled) closeResumePreflight()
+	if (!mutationsEnabled) closeResumePreflight()
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
 	fieldset.disabled = !focusedSettingsEnabled || !settingsLoaded
@@ -97,19 +105,24 @@ function setControlsEnabled(enabled: boolean) {
 	for (const id of ['connectivity-fieldset', 'deployment-fieldset', 'create2-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
-		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(focusedSettingsEnabled, connectivityRequestPending) || !connectivityLoaded
+		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
 		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
 		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded
-		else fieldset.disabled = !enabled
+		else fieldset.disabled = !focusedSettingsEnabled
 	}
+	element<HTMLSelectElement>('network-name').disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
 	updateConfigurationControls()
 }
 
 function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
-	fieldset.disabled = !connected || !configurationLoaded || configurationLoading
-	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || configurationLoading
+	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
+	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
+	const profileRetry = element<HTMLButtonElement>('profile-switch-retry-button')
+	profileRetry.hidden = !profileSwitchTimedOut
+	profileRetry.disabled = !connected || configurationLoading
+	element('profile-switch-retry-actions').hidden = !profileSwitchTimedOut
 }
 
 function updateSettingsLoadState() {
@@ -144,12 +157,19 @@ function updateManualRefreshState() {
 
 function updateNetworkTargetStatus() {
 	const target = element('network-target-status')
+	if (pendingNetworkProfile !== undefined) {
+		target.hidden = false
+		setText('network-target-status', `Switching from ${persistedNetwork ?? 'the active chain'} to ${pendingNetworkProfile}. Existing chain settings remain visible until the new profile loads.`)
+		return
+	}
 	const status = networkTargetStatus(latestSnapshot?.network, persistedNetwork)
 	target.hidden = status === undefined
 	if (status !== undefined) setText('network-target-status', status)
 }
 
 function synchronizePersistedConnectivity(configuration: unknown) {
+	const selectedNetwork = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'network') : undefined
+	if (selectedNetwork !== 'mainnet' && selectedNetwork !== 'sepolia') throw new Error('Bot returned an invalid active chain profile')
 	const rpcQuorum = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'rpcQuorum') : undefined
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Bot returned an invalid RPC quorum setting')
 	element<HTMLSelectElement>('rpc-quorum').value = rpcQuorum.toString()
@@ -157,7 +177,10 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	if (focused === undefined) {
 		element<HTMLInputElement>('read-rpc-url').value = ''
 		element<HTMLTextAreaElement>('public-rpc-urls').value = ''
-		persistedNetwork = undefined
+		persistedNetwork = selectedNetwork
+		element<HTMLSelectElement>('network-name').value = selectedNetwork
+		const networkLabel = selectedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
+		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
 		element<HTMLSelectElement>('network-name').disabled = false
 		connectivityLoaded = true
 		updateNetworkTargetStatus()
@@ -165,8 +188,10 @@ function synchronizePersistedConnectivity(configuration: unknown) {
 	}
 	loadConnectivity(focused.connectivity)
 	element<HTMLSelectElement>('network-name').value = focused.network
-	element<HTMLSelectElement>('network-name').disabled = true
+	element<HTMLSelectElement>('network-name').disabled = false
 	persistedNetwork = focused.network
+	const networkLabel = focused.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
+	setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
 	connectivityLoaded = true
 	updateNetworkTargetStatus()
 }
@@ -218,8 +243,25 @@ function isConfigurationEnvelope(value: unknown): value is { configuration: unkn
 	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string'
 }
 
+function configurationNetwork(configuration: unknown) {
+	const network = typeof configuration === 'object' && configuration !== null && !Array.isArray(configuration) ? Reflect.get(configuration, 'network') : undefined
+	return network === 'mainnet' || network === 'sepolia' ? network : undefined
+}
+
+function finishPendingProfileIfReady(network: 'mainnet' | 'sepolia') {
+	if (pendingNetworkProfile !== network || !pendingProfileStateConfirmed || persistedNetwork !== network) return false
+	pendingNetworkProfile = undefined
+	pendingProfileStateConfirmed = false
+	profileSwitchTimedOut = false
+	updateNetworkTargetStatus()
+	setText('connectivity-status', 'Chain profile loaded. All settings shown belong to this chain.')
+	setControlsEnabled(connected)
+	return true
+}
+
 async function loadCompleteConfiguration() {
 	if (configurationLoading) return
+	const requestEpoch = profileRequestEpoch
 	configurationLoading = true
 	configurationLoaded = false
 	configurationLoadError = undefined
@@ -229,23 +271,49 @@ async function loadCompleteConfiguration() {
 	setText('configuration-status', 'Loading complete configuration…')
 	try {
 		const envelope = await requestWithTimeout(signal => api<unknown>('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
+		if (requestEpoch !== profileRequestEpoch) return
 		if (!isConfigurationEnvelope(envelope)) throw new Error('Bot returned an invalid configuration document')
+		const network = configurationNetwork(envelope.configuration)
+		if (pendingNetworkProfile !== undefined && network !== pendingNetworkProfile) return
 		element<HTMLTextAreaElement>('configuration-json').value = prettyJson(envelope.configuration)
 		synchronizeFocusedConfiguration(envelope.configuration)
 		configurationRevision = envelope.revision
 		configurationLoaded = true
 		configurationLoadError = undefined
 		setText('configuration-status', '')
+		if (network !== undefined) finishPendingProfileIfReady(network)
 	} catch (error) {
+		if (requestEpoch !== profileRequestEpoch) return
 		configurationLoaded = false
 		configurationLoadError = error instanceof Error ? error.message : String(error)
 		configurationRevision = undefined
 		setText('configuration-status', `${configurationLoadError} Use Reload configuration to retry.`)
 	} finally {
 		configurationLoading = false
+		if (requestEpoch !== profileRequestEpoch) return
 		updateSettingsLoadState()
 		setControlsEnabled(connected)
 	}
+}
+
+async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
+	const requestEpoch = profileRequestEpoch
+	for (let attempt = 0; attempt < 40; attempt++) {
+		await new Promise(resolve => setTimeout(resolve, 500))
+		if (requestEpoch !== profileRequestEpoch || pendingNetworkProfile !== network) return
+		try {
+			await refresh()
+			if (pendingProfileStateConfirmed) await loadCompleteConfiguration()
+			if (pendingNetworkProfile === undefined) return
+		} catch (error) {
+			// The dashboard is briefly unavailable while the bot releases the old
+			// chain's resources and reopens them for the selected profile.
+			void error
+		}
+	}
+	profileSwitchTimedOut = true
+	setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
+	updateConfigurationControls()
 }
 
 async function api<T>(path: string, init?: RequestInit) {
@@ -563,13 +631,15 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 	const container = element('endpoint-checks')
 	container.replaceChildren()
-	if (snapshot.endpointChecks.length > 0) {
+	const endpointChecksMatchActiveChain = snapshot.endpointChecks.every(check => check.chainId === undefined || check.chainId === snapshot.expectedChainId)
+	const endpointChecks = endpointChecksMatchActiveChain ? snapshot.endpointChecks : []
+	if (endpointChecks.length > 0) {
 		const heading = document.createElement('h3')
 		heading.className = 'endpoint-check-heading'
 		heading.textContent = 'Configuration validation'
 		container.append(heading)
 	}
-	for (const check of snapshot.endpointChecks) {
+	for (const check of endpointChecks) {
 		const item = document.createElement('div')
 		item.className = 'endpoint-check'
 		item.dataset['status'] = check.status
@@ -583,7 +653,7 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 		item.append(status, target, detail)
 		container.append(item)
 	}
-	const runtimeHealth = snapshot.rpcEndpointHealth ?? []
+	const runtimeHealth = endpointChecksMatchActiveChain ? (snapshot.rpcEndpointHealth ?? []) : []
 	if (runtimeHealth.length > 0) {
 		const heading = document.createElement('h3')
 		heading.className = 'endpoint-check-heading'
@@ -1075,11 +1145,19 @@ function clearPollRetry() {
 }
 
 const refresh = singleFlight(async () => {
+	const requestEpoch = profileRequestEpoch
 	try {
 		const value: unknown = await requestWithTimeout(signal => api<unknown>('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
+		if (requestEpoch !== profileRequestEpoch) return
 		if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
+		if (pendingNetworkProfile !== undefined && value.network !== pendingNetworkProfile) return
 		render(value)
+		if (pendingNetworkProfile !== undefined) {
+			pendingProfileStateConfirmed = true
+			finishPendingProfileIfReady(value.network)
+		}
 	} catch (error) {
+		if (requestEpoch !== profileRequestEpoch) return
 		void error
 		setControlsEnabled(false)
 		clearPollRetry()
@@ -1124,6 +1202,56 @@ async function manualRefresh() {
 
 element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
+element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
+	const button = event.currentTarget
+	if (!(button instanceof HTMLButtonElement) || pendingNetworkProfile === undefined || !profileSwitchTimedOut || button.disabled) return
+	button.disabled = true
+	button.setAttribute('aria-busy', 'true')
+	button.textContent = 'Retrying profile load…'
+	try {
+		await refresh()
+		await loadCompleteConfiguration()
+	} finally {
+		button.removeAttribute('aria-busy')
+		button.textContent = 'Retry profile load'
+		updateConfigurationControls()
+	}
+})
+
+element<HTMLSelectElement>('network-name').addEventListener('change', async event => {
+	const select = event.currentTarget
+	if (!(select instanceof HTMLSelectElement) || pendingNetworkProfile !== undefined || (select.value !== 'mainnet' && select.value !== 'sepolia') || select.value === persistedNetwork) return
+	const previousNetwork = persistedNetwork
+	const requestedNetwork = select.value
+	profileRequestEpoch += 1
+	pendingNetworkProfile = requestedNetwork
+	pendingProfileStateConfirmed = false
+	profileSwitchTimedOut = false
+	select.value = previousNetwork ?? requestedNetwork
+	select.disabled = true
+	updateNetworkTargetStatus()
+	setControlsEnabled(connected)
+	setText('connectivity-status', '')
+	try {
+		await requestWithTimeout(signal => api('/api/network-profile', { body: JSON.stringify({ network: requestedNetwork }), headers: { 'content-type': 'application/json' }, method: 'PUT', signal }), PROFILE_SWITCH_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE)
+		setText('connectivity-status', 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
+		void waitForNetworkProfile(requestedNetwork)
+	} catch (error) {
+		if (error instanceof Error && error.message === PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE) {
+			setText('connectivity-status', 'The switch request timed out with an unknown outcome. Existing settings remain locked while the dashboard checks the selected profile.')
+			void waitForNetworkProfile(requestedNetwork)
+			return
+		}
+		profileRequestEpoch += 1
+		pendingNetworkProfile = undefined
+		pendingProfileStateConfirmed = false
+		profileSwitchTimedOut = false
+		setText('connectivity-status', error instanceof Error ? error.message : String(error))
+		select.value = previousNetwork ?? 'mainnet'
+		updateNetworkTargetStatus()
+		setControlsEnabled(connected)
+	}
+})
 element('retry-settings-button').addEventListener('click', () => void loadCompleteConfiguration())
 element<HTMLFormElement>('configuration-form').addEventListener('submit', async event => {
 	event.preventDefault()
@@ -1404,8 +1532,10 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 		})
 		loadConnectivity(response.connectivity)
 		element<HTMLSelectElement>('network-name').value = response.network
-		element<HTMLSelectElement>('network-name').disabled = true
+		element<HTMLSelectElement>('network-name').disabled = false
 		persistedNetwork = response.network
+		const networkLabel = response.network === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'
+		setText('settings-chain-scope', `Editing the ${networkLabel} profile. Every setting and durable journal is retained only for this chain; selecting another chain loads its separate profile.`)
 		element<HTMLSelectElement>('rpc-quorum').value = response.rpcQuorum.toString()
 		updateNetworkTargetStatus()
 		setText('connectivity-status', 'Chain and RPCs passed validation, were saved, and apply to the next scan.')

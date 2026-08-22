@@ -26,4 +26,47 @@ describe('configuration mutation gate', () => {
 		expect(await overlap).toBe('overlap')
 		expect(gate.isActive()).toBe(false)
 	})
+
+	test('rejects queued mutations after a chain profile switch becomes active', async () => {
+		let switching = false
+		let release: (() => void) | undefined
+		const gate = createConfigurationMutationGate(
+			() => false,
+			() => switching,
+		)
+		const profileSwitch = gate.run(async () => {
+			switching = true
+			await new Promise<void>(resolve => {
+				release = resolve
+			})
+		})
+		await Bun.sleep(0)
+		const queuedMutation = gate.run(async () => 'must not run')
+		if (release === undefined) throw new Error('Profile switch did not start')
+		release()
+		await profileSwitch
+		await expect(queuedMutation).rejects.toThrow('Chain profile switching is in progress')
+	})
+
+	test('serializes emergency-pause persistence before a queued profile switch', async () => {
+		let releasePause: () => void = () => undefined
+		let profileSwitchRequested = false
+		const writes: string[] = []
+		const gate = createConfigurationMutationGate(
+			() => false,
+			() => profileSwitchRequested,
+		)
+		const pause = gate.run(async () => {
+			await new Promise<void>(resolve => (releasePause = resolve))
+			writes.push('paused-current-profile')
+		})
+		await Bun.sleep(1)
+		const profileSwitch = gate.run(async () => {
+			profileSwitchRequested = true
+			writes.push('target-profile')
+		})
+		releasePause()
+		await Promise.all([pause, profileSwitch])
+		expect(writes).toEqual(['paused-current-profile', 'target-profile'])
+	})
 })
