@@ -324,6 +324,158 @@ postgresTest('rejects every public namespace object before fresh schema initiali
 	}
 })
 
+postgresTest('advances the canonical coverage floor when RPC log history is pruned', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const boundaryChainId = chainId + 10 + process.pid
+	const network: NetworkConfig = {
+		id: `pruned-log-boundary-${boundaryChainId}`,
+		name: 'Pruned log boundary',
+		chainId: boundaryChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 1n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [[address, 'OpenOracle', 'openOracle']],
+	}
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork(network)
+		const lease = await database.tryAcquireIndexerLock(boundaryChainId)
+		if (lease === undefined) throw new Error('pruned-log boundary writer did not acquire its lock')
+		try {
+			const dynamicContract = {
+				address: discoveredAddress,
+				label: 'Previously discovered pool',
+				kind: 'securityPool',
+				provenance: 'Factory.DeploySecurityPool',
+				discoveryBlock: 1n,
+				discoveryTxHash: transactionHash,
+			} satisfies ContractMetadata
+			const replayableContract = {
+				address: rediscoveredAddress,
+				label: 'Discovery at retrievable floor',
+				kind: 'truthAuction',
+				provenance: 'Factory.DeployTruthAuction',
+				discoveryBlock: 2n,
+				discoveryTxHash: transactionHash,
+			} satisfies ContractMetadata
+			const orphanedContract = {
+				address: orphanOnlyAddress,
+				label: 'Orphaned pre-floor discovery',
+				kind: 'securityPool',
+				provenance: 'Factory.DeploySecurityPool',
+				discoveryBlock: 1n,
+				discoveryTxHash: transactionHash,
+			} satisfies ContractMetadata
+			await database.storeBlock(boundaryChainId, indexedBlock('block-one', blockHash('genesis'), [dynamicContract, orphanedContract]), lease)
+			await database.rewind(boundaryChainId, -1n, undefined, lease)
+			await database.storeBlock(boundaryChainId, indexedBlock('block-one-replacement', blockHash('genesis'), [dynamicContract]), lease)
+			await database.storeBlock(boundaryChainId, indexedBlock('block-two', blockHash('block-one-replacement'), [replayableContract]), lease)
+			expect(await database.advanceNetworkStartBlock(boundaryChainId, 2n, lease)).toBe(true)
+			const boundaryEvents = await database.sql`
+				SELECT event, payload FROM live_events WHERE (payload->>'chainId')::integer = ${boundaryChainId} ORDER BY id DESC LIMIT 1
+			`
+			expect(boundaryEvents[0]).toMatchObject({ event: 'reorg', payload: { ancestor: '-1', depth: '2', startBlock: '2' } })
+			expect(await database.networkStartBlock(boundaryChainId)).toBe(2n)
+			expect(await database.checkpoint(boundaryChainId)).toBeUndefined()
+			const retainedContracts = await database.contracts(boundaryChainId, lease)
+			expect(retainedContracts.get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
+			expect(retainedContracts.has(rediscoveredAddress.toLowerCase())).toBe(false)
+			expect(retainedContracts.has(orphanOnlyAddress.toLowerCase())).toBe(false)
+			const canonicalRows = await database.sql`SELECT count(*)::integer AS count FROM blocks WHERE chain_id = ${boundaryChainId} AND canonical`
+			expect(canonicalRows[0]?.['count']).toBe(0)
+			const retrievableBlock = (name: string, timestamp: Date): IndexedBlock => {
+				const hash = blockHash(name)
+				const forwardLog = { ...log(hash, 'post-boundary activity'), blockHash: hash, blockNumber: 2n }
+				return {
+					...indexedBlock('block-two', blockHash(`${name}-parent`)),
+					number: 2n,
+					hash,
+					parentHash: blockHash(`${name}-parent`),
+					timestamp,
+					observedHead: 2n,
+					transactions: [
+						{
+							...transaction(),
+							receipt: { transactionHash, blockHash: hash, blockNumber: 2n, status: 'success', logs: [forwardLog] },
+						},
+					],
+					logs: [forwardLog],
+					logScanCursors: [{ contractAddress: discoveredAddress, startBlock: 2n, lastRetrievedBlock: 2n }],
+				}
+			}
+			const forwardBlock = retrievableBlock('retrievable-boundary', new Date('2026-02-11T00:00:00Z'))
+			await database.storeBlock(boundaryChainId, forwardBlock, lease)
+			await database.rewind(boundaryChainId, -1n, undefined, lease)
+			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
+			expect((await database.contracts(boundaryChainId, lease)).has(orphanOnlyAddress.toLowerCase())).toBe(false)
+			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-replacement', new Date('2026-02-12T00:00:00Z')), lease)
+			expect(
+				await database.seedNetwork(
+					{
+						...network,
+						startBlock: 2n,
+						contracts: [...network.contracts, [promotedAddress, 'Additional manifest source', 'openOracle']],
+					},
+					lease,
+					true,
+					true,
+				),
+			).toBe(true)
+			const contractsAfterReseed = await database.contracts(boundaryChainId, lease)
+			expect(contractsAfterReseed.get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
+			expect(contractsAfterReseed.has(orphanOnlyAddress.toLowerCase())).toBe(false)
+			const finalBlock = retrievableBlock('retrievable-after-manifest-reset', new Date('2026-02-13T00:00:00Z'))
+			await database.storeBlock(boundaryChainId, finalBlock, lease)
+			const promotedNetwork = {
+				...network,
+				startBlock: 2n,
+				contracts: [
+					...network.contracts,
+					[discoveredAddress, 'Promoted retained pool', 'securityPool'],
+					[orphanOnlyAddress, 'Promoted orphan', 'securityPool'],
+				],
+			} satisfies NetworkConfig
+			expect(await database.seedNetwork(promotedNetwork, lease, true, true)).toBe(true)
+			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({
+				discoveryBlock: 1n,
+				provenance: 'manifest',
+			})
+			expect(await database.seedNetwork(promotedNetwork, lease, true, true)).toBe(false)
+			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({
+				discoveryBlock: 1n,
+				provenance: 'manifest',
+			})
+			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-during-promotion', new Date('2026-02-14T00:00:00Z')), lease)
+			expect(await database.seedNetwork({ ...network, startBlock: 2n }, lease, true, true)).toBe(true)
+			const contractsAfterPromotionRemoval = await database.contracts(boundaryChainId, lease)
+			expect(contractsAfterPromotionRemoval.get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
+			expect(contractsAfterPromotionRemoval.has(orphanOnlyAddress.toLowerCase())).toBe(false)
+			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-after-promotion-removal', new Date('2026-02-15T00:00:00Z')), lease)
+			const retainedLogs = await database.sql`
+				SELECT block_number FROM logs WHERE chain_id = ${boundaryChainId} AND address = ${discoveredAddress.toLowerCase()} AND canonical
+			`
+			expect(retainedLogs).toEqual([{ block_number: '2' }])
+			expect((await database.logScanCursors(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toEqual({
+				contractAddress: discoveredAddress,
+				startBlock: 2n,
+				lastRetrievedBlock: 2n,
+			})
+			const statusRows = await database.sql`
+				SELECT phase, consecutive_failures, next_retry_at, last_error FROM networks WHERE chain_id = ${boundaryChainId}
+			`
+			expect(statusRows[0]).toMatchObject({ phase: 'live', consecutive_failures: 0, next_retry_at: null, last_error: null })
+		} finally {
+			await lease.release()
+		}
+	} finally {
+		await database.sql`DELETE FROM networks WHERE chain_id = ${boundaryChainId}`
+		await database.close()
+	}
+})
+
 postgresTest('initializes, resumes, retains an orphan, and serves only its canonical replacement', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)

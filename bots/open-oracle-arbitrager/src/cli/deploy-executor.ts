@@ -2,10 +2,10 @@
 
 import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
-import { loadOperatorSettings } from '#config/settings-store'
+import { loadOperatorSettings, operatorProfilePath } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
 import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -46,14 +46,16 @@ const network = networkConfiguration(networkName, { rep: networkName === 'sepoli
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
-const savedSettings = await loadOperatorSettings(settingsFile)
-const rpcQuorum = savedSettings?.rpcQuorum ?? 1
+const activeSettings = await loadOperatorSettings(settingsFile)
+const selectedSettings = activeSettings?.network === networkName ? activeSettings : await loadOperatorSettings(operatorProfilePath(settingsFile, networkName))
+if (selectedSettings !== undefined && selectedSettings.network !== networkName) throw new Error(`The ${networkName} profile contains ${selectedSettings.network} settings`)
+const rpcQuorum = selectedSettings?.rpcQuorum ?? 1
 process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const salt = option('salt') ?? `0x${'00'.repeat(32)}`
 const plan = executorDeploymentPlan(salt)
-const intentPath = executorDeploymentIntentPath(settingsFile)
+const intentPath = executorDeploymentIntentPath(settingsFile, networkName)
 console.log(`predicted=${plan.address} network=${networkName} deployer=${account.address}`)
 const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
 let signerLock: Awaited<ReturnType<typeof acquireExecutionSignerLock>> | undefined
@@ -61,7 +63,7 @@ try {
 	signerLock = await acquireExecutionSignerLock(network.chain.id, account.address)
 	const deployment = await deployExecutorCreate2({
 		chain: network.chain,
-		existingIntent: await loadExecutorDeploymentIntent(intentPath),
+		existingIntent: await loadExecutorDeploymentIntentForChain(intentPath, network.chain.id),
 		persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
 		privateKey: privateKeyValue as Hex,
 		readRpcUrls: [rpcUrl, ...quorumRpcUrls],

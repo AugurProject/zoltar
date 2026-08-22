@@ -119,6 +119,7 @@ describe('liquidator dashboard server', () => {
 				walletRep: { protected: calldataMarker },
 			}),
 			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
 			setApprovedUniverses: value => value,
 			setPaused: value => value,
 			setSelectedPools: value => value,
@@ -189,6 +190,7 @@ describe('liquidator dashboard server', () => {
 				error: `RPC ${credential} returned authorization=Bearer-secret`,
 			}),
 			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
 			setApprovedUniverses: value => value,
 			setPaused: () => {
 				throw new Error(`pause write failed at ${credential}`)
@@ -233,6 +235,7 @@ describe('liquidator dashboard server', () => {
 			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
 			getState: () => ({ paused }),
 			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
 			reconcileTransaction: value => {
 				reconciliation = value
 				return value
@@ -276,6 +279,9 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="guarded-market-price"')
 		expect(pageSource).toContain('id="market-configuration-json"')
 		expect(pageSource).toContain('id="network-name"')
+		expect(pageSource).toContain('id="settings-chain-scope"')
+		expect(pageSource).toContain('id="network-scope-summary"')
+		expect(pageSource).toContain('Select a chain profile first')
 		expect(pageSource).toContain('id="network-badge"')
 		expect(pageSource).toContain('id="refresh-button"')
 		expect(pageSource).toContain('id="test-market-sources"')
@@ -346,6 +352,7 @@ describe('liquidator dashboard server', () => {
 				getConfiguration: () => ({}),
 				getState: () => ({}),
 				hostname: '0.0.0.0',
+				isNetworkConfigured: () => true,
 				setApprovedUniverses: value => value,
 				setPaused: value => value,
 				setSelectedPools: value => value,
@@ -357,6 +364,7 @@ describe('liquidator dashboard server', () => {
 			getConfiguration: () => ({}),
 			getState: () => ({ paused }),
 			hostname: '0.0.0.0',
+			isNetworkConfigured: () => true,
 			password,
 			setApprovedUniverses: value => value,
 			setPaused: value => {
@@ -388,11 +396,73 @@ describe('liquidator dashboard server', () => {
 		expect(paused).toBe(true)
 	})
 
+	test('rejects every chain-specific mutation until network connectivity is configured', async () => {
+		let configured = false
+		let chainSpecificMutations = 0
+		let pauseMutations = 0
+		const mutate = (value: unknown) => {
+			chainSpecificMutations += 1
+			return value
+		}
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => ({}),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => configured,
+			reconcileTransaction: mutate,
+			setApprovedUniverses: mutate,
+			setMarketConfiguration: mutate,
+			setNetworkConnectivity: value => {
+				configured = true
+				return value
+			},
+			setPaused: value => {
+				pauseMutations += 1
+				return value
+			},
+			setSelectedPools: mutate,
+			setSigner: mutate,
+			setStrategy: mutate,
+			testMarketSources: mutate,
+		})
+		servers.push(server)
+		const request = async (pathname: string, body: unknown = {}) => {
+			const encoded = JSON.stringify(body)
+			if (encoded === undefined) throw new Error('Test request body must be JSON serializable')
+			return await fetch(new URL(pathname, server.url), {
+				body: encoded,
+				headers: { 'content-type': 'application/json', origin: server.url.origin },
+				method: 'PUT',
+			})
+		}
+		for (const [pathname, body] of [
+			['/api/approved-universes', []],
+			['/api/market-configuration', {}],
+			['/api/paused', { paused: false }],
+			['/api/reconcile-transaction', {}],
+			['/api/selected-pools', []],
+			['/api/signer', {}],
+			['/api/strategy', {}],
+			['/api/test-market-sources', {}],
+		] as const) {
+			expect((await request(pathname, body)).status).toBe(400)
+		}
+		expect(chainSpecificMutations).toBe(0)
+		expect(pauseMutations).toBe(0)
+		expect((await request('/api/paused', { paused: true })).status).toBe(200)
+		expect(pauseMutations).toBe(1)
+		expect((await request('/api/network-connectivity')).status).toBe(200)
+		expect(configured).toBe(true)
+		expect((await request('/api/strategy')).status).toBe(200)
+		expect(chainSpecificMutations).toBe(1)
+	})
+
 	test('allows passwordless access through an explicitly loopback-published container port', async () => {
 		const server = startDashboardServer(0, {
 			getConfiguration: () => ({}),
 			getState: () => ({}),
 			hostname: '0.0.0.0',
+			isNetworkConfigured: () => true,
 			loopbackPublished: true,
 			setApprovedUniverses: value => value,
 			setPaused: value => value,

@@ -284,6 +284,59 @@ export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
 	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
 }
 
+const canonicalHistoryTables = [
+	'blocks',
+	'transactions',
+	'logs',
+	'contract_discoveries',
+	'questions',
+	'pools',
+	'pool_snapshots',
+	'pool_state_events',
+	'vault_snapshots',
+	'universe_events',
+	'amm_markets',
+	'amm_price_snapshots',
+	'rep_eth_price_snapshots',
+	'uniswap_rep_eth_markets',
+	'uniswap_rep_eth_price_observations',
+	'protocol_timeline_entries',
+	'open_oracle_report_events',
+	'escalation_game_events',
+	'truth_auction_events',
+	'amm_trade_events',
+	'fork_migration_events',
+	'liquidation_approval_events',
+	'address_activity',
+	'address_balance_snapshots',
+	'token_metadata',
+] as const
+
+const invalidateCanonicalHistory = async (transaction: TransactionSQL, chainId: number, discoveryRetirementFloor?: bigint): Promise<void> => {
+	for (const table of canonicalHistoryTables) await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [chainId])
+	await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${chainId} AND canonical`
+	await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${chainId}`
+	await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${chainId}`
+	await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${chainId}`
+	await transaction`
+		UPDATE contracts SET deployment_block = NULL, deployment_timestamp = NULL,
+			deployment_block_exact = NULL, deployment_checked_block = NULL
+		WHERE chain_id = ${chainId}
+	`
+	if (discoveryRetirementFloor === undefined)
+		await transaction`
+			UPDATE contracts SET canonical = false
+			WHERE chain_id = ${chainId} AND provenance <> 'manifest'
+				AND (discovery_block IS NULL OR discovery_block >= (SELECT start_block FROM networks WHERE chain_id = ${chainId}))
+		`
+	else
+		await transaction`
+			UPDATE contracts SET canonical = false
+			WHERE chain_id = ${chainId} AND provenance <> 'manifest'
+				AND (discovery_block IS NULL OR discovery_block >= ${discoveryRetirementFloor.toString()})
+		`
+}
+
 export const releaseReservedConnection = async (connection: Pick<ReservedSQL, 'release'>): Promise<void> => {
 	await connection.release()
 }
@@ -572,48 +625,35 @@ export class ScannerDatabase {
 					AND NOT contract.canonical
 			`
 			await transaction`
+				UPDATE contracts AS contract SET
+					label = discovery.label,
+					kind = discovery.kind,
+					provenance = discovery.provenance,
+					canonical = true
+				FROM (
+					SELECT DISTINCT ON (candidate.address)
+						candidate.address, candidate.label, candidate.kind, candidate.provenance
+					FROM contract_discoveries AS candidate
+					JOIN contracts AS retained
+						ON retained.chain_id = candidate.chain_id
+						AND retained.address = candidate.address
+						AND retained.discovery_block = candidate.block_number
+						AND retained.discovery_tx_hash = candidate.tx_hash
+					JOIN networks AS network ON network.chain_id = candidate.chain_id
+					WHERE candidate.chain_id = ${network.chainId} AND candidate.block_number < network.start_block
+					ORDER BY candidate.address, candidate.canonical DESC, candidate.block_hash
+				) AS discovery
+				WHERE contract.chain_id = ${network.chainId}
+					AND contract.address = discovery.address
+					AND contract.provenance = 'manifest'
+					AND NOT contract.canonical
+			`
+			await transaction`
 				UPDATE contracts SET provenance = 'retired-manifest'
 				WHERE chain_id = ${network.chainId} AND provenance = 'manifest' AND NOT canonical
 			`
 			if (manifestChanged && resetCanonicalHistoryOnManifestChange && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
-				for (const table of [
-					'blocks',
-					'transactions',
-					'logs',
-					'contract_discoveries',
-					'questions',
-					'pools',
-					'pool_snapshots',
-					'pool_state_events',
-					'vault_snapshots',
-					'universe_events',
-					'amm_markets',
-					'amm_price_snapshots',
-					'rep_eth_price_snapshots',
-					'uniswap_rep_eth_markets',
-					'uniswap_rep_eth_price_observations',
-					'protocol_timeline_entries',
-					'open_oracle_report_events',
-					'escalation_game_events',
-					'truth_auction_events',
-					'amm_trade_events',
-					'fork_migration_events',
-					'liquidation_approval_events',
-					'address_activity',
-					'address_balance_snapshots',
-					'token_metadata',
-				])
-					await transaction.unsafe(`UPDATE ${table} SET canonical = false WHERE chain_id = $1 AND canonical`, [network.chainId])
-				await transaction`UPDATE entity_state_snapshots SET read_status = 'stale', canonical = false WHERE chain_id = ${network.chainId} AND canonical`
-				await transaction`UPDATE blocks SET finalized = false WHERE chain_id = ${network.chainId}`
-				await transaction`UPDATE logs SET finalized = false WHERE chain_id = ${network.chainId}`
-				await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${network.chainId}`
-				await transaction`
-					UPDATE contracts SET deployment_block = NULL, deployment_timestamp = NULL,
-						deployment_block_exact = NULL, deployment_checked_block = NULL
-					WHERE chain_id = ${network.chainId}
-				`
-				await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance <> 'manifest'`
+				await invalidateCanonicalHistory(transaction, network.chainId)
 				const previousBlock = BigInt(String(existing['indexed_block']))
 				await transaction`
 					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
@@ -640,8 +680,8 @@ export class ScannerDatabase {
 				label = CASE WHEN EXCLUDED.provenance = 'manifest' THEN EXCLUDED.label WHEN contracts.provenance = 'manifest' THEN contracts.label ELSE EXCLUDED.label END,
 				kind = CASE WHEN EXCLUDED.provenance = 'manifest' THEN EXCLUDED.kind WHEN contracts.provenance = 'manifest' THEN contracts.kind ELSE EXCLUDED.kind END,
 				provenance = CASE WHEN EXCLUDED.provenance = 'manifest' OR contracts.provenance = 'manifest' THEN 'manifest' ELSE EXCLUDED.provenance END,
-				discovery_block = CASE WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_block ELSE EXCLUDED.discovery_block END,
-				discovery_tx_hash = CASE WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END,
+				discovery_block = CASE WHEN EXCLUDED.provenance = 'manifest' AND (contracts.canonical OR contracts.provenance = 'manifest') THEN contracts.discovery_block WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_block ELSE EXCLUDED.discovery_block END,
+				discovery_tx_hash = CASE WHEN EXCLUDED.provenance = 'manifest' AND (contracts.canonical OR contracts.provenance = 'manifest') THEN contracts.discovery_tx_hash WHEN EXCLUDED.provenance = 'manifest' THEN NULL WHEN contracts.provenance = 'manifest' THEN contracts.discovery_tx_hash ELSE EXCLUDED.discovery_tx_hash END,
 				canonical = true
 		`
 	}
@@ -969,7 +1009,12 @@ export class ScannerDatabase {
 				WHERE chain_id = ${chainId} AND (deployment_block > ${ancestor.toString()} OR deployment_checked_block > ${ancestor.toString()})
 			`
 			await transaction`UPDATE contracts SET deployment_checked_block = NULL WHERE chain_id = ${chainId} AND deployment_checked_block > ${ancestor.toString()}`
-			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${chainId} AND provenance <> 'manifest' AND discovery_block > ${ancestor.toString()}`
+			await transaction`
+				UPDATE contracts SET canonical = false
+				WHERE chain_id = ${chainId} AND provenance <> 'manifest'
+					AND (discovery_block IS NULL OR discovery_block >= ${String(checkpoint['start_block'])})
+					AND (discovery_block IS NULL OR discovery_block > ${ancestor.toString()})
+			`
 			await transaction`
 				UPDATE contracts AS contract SET
 					label = discovery.label,
@@ -1297,6 +1342,33 @@ export class ScannerDatabase {
 			await transaction`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now() WHERE chain_id = ${chainId}`
 			await lockLiveEventWriter(transaction)
 			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', (${JSON.stringify({ chainId, blockNumber: head.toString() })}::text)::jsonb)`
+		})
+	}
+
+	async advanceNetworkStartBlock(chainId: number, startBlock: bigint, lease: IndexerLease): Promise<boolean> {
+		return await withIndexerLease(lease, async (transaction) => {
+			const rows = await transaction`SELECT start_block, indexed_block FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+			const row = rows[0]
+			if (row === undefined) throw new DatabaseConsistencyError(`Network ${chainId} is not initialized`)
+			const storedStartBlock = BigInt(String(row['start_block']))
+			if (startBlock <= storedStartBlock) return false
+			const previousBlock = row['indexed_block'] === null || row['indexed_block'] === undefined ? undefined : BigInt(String(row['indexed_block']))
+			const invalidatedDepth = previousBlock === undefined ? 0n : previousBlock - storedStartBlock + 1n
+			await invalidateCanonicalHistory(transaction, chainId, startBlock)
+			await transaction`
+				UPDATE networks SET start_block = ${startBlock.toString()}, indexed_block = NULL, indexed_hash = NULL,
+					indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling', last_poll_at = now(),
+					last_success_at = now(), last_error = NULL, failure_started_at = NULL, consecutive_failures = 0,
+					last_reorg_at = now(), last_reorg_depth = ${invalidatedDepth.toString()},
+					next_retry_at = NULL, updated_at = now()
+				WHERE chain_id = ${chainId}
+			`
+			await lockLiveEventWriter(transaction)
+			await transaction`
+				INSERT INTO live_events (event, payload)
+				VALUES ('reorg', (${JSON.stringify({ chainId, previousBlock: previousBlock?.toString(), ancestor: '-1', depth: invalidatedDepth.toString(), startBlock: startBlock.toString() })}::text)::jsonb)
+			`
+			return true
 		})
 	}
 

@@ -304,12 +304,12 @@ async function readPriceHistoryTail(path: string, maximumBytes: number) {
 	}
 }
 
-async function replacePriceHistory(path: string, points: readonly MarketPricePoint[]) {
+async function replacePriceHistory(path: string, points: readonly MarketPricePoint[], chainId: number) {
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
 	try {
 		const handle = await open(temporaryPath, 'wx', 0o600)
 		try {
-			await handle.writeFile(`${points.map(point => JSON.stringify(point)).join('\n')}\n`, { encoding: 'utf8' })
+			await handle.writeFile(`${points.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`, { encoding: 'utf8' })
 			await handle.sync()
 		} finally {
 			await handle.close()
@@ -327,11 +327,12 @@ async function replacePriceHistory(path: string, points: readonly MarketPricePoi
 	}
 }
 
-export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], options?: PriceHistoryLimits) {
+export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], chainId: number, options?: PriceHistoryLimits) {
 	if (points.length === 0) return
+	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Price history chain ID must be a positive integer')
 	const limits = priceHistoryLimits(options)
 	await mkdir(dirname(path), { mode: 0o700, recursive: true })
-	await appendFile(path, `${points.map(point => JSON.stringify(point)).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+	await appendFile(path, `${points.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
 	const handle = await open(path, 'r')
 	let size: number
 	try {
@@ -339,7 +340,7 @@ export async function appendPriceHistory(path: string, points: readonly MarketPr
 	} finally {
 		await handle.close()
 	}
-	if (size > limits.maximumBytes) await replacePriceHistory(path, await loadPriceHistory(path, limits.maximumRecords, limits))
+	if (size > limits.maximumBytes) await replacePriceHistory(path, await loadPriceHistory(path, chainId, limits.maximumRecords, limits), chainId)
 }
 
 function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
@@ -382,24 +383,26 @@ function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
 	}
 }
 
-export async function loadPriceHistory(path: string, maximum = DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS, options?: PriceHistoryLimits) {
+export async function loadPriceHistory(path: string, expectedChainId: number, maximum = DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS, options?: PriceHistoryLimits) {
+	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected price history chain ID must be a positive integer')
 	if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error('Price history maximum must be a positive integer')
 	try {
 		const contents = await readPriceHistoryTail(path, priceHistoryLimits(options).maximumBytes)
 		const points: MarketPricePoint[] = []
 		for (const [index, line] of contents.split('\n').entries()) {
 			if (line.trim().length === 0) continue
+			let parsed: unknown
 			try {
-				const point = parsePriceHistoryPoint(JSON.parse(line))
-				if (point !== undefined) {
-					points.push(point)
-				} else {
-					console.warn(`Skipping invalid price history record at line ${(index + 1).toString()} in ${path}`)
-				}
+				parsed = JSON.parse(line)
 			} catch (error) {
 				const reason = error instanceof Error ? error.message : 'unknown parse error'
 				console.warn(`Skipping malformed price history record at line ${(index + 1).toString()} in ${path}: ${reason}`)
+				continue
 			}
+			if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || Reflect.get(parsed, 'chainId') !== expectedChainId) throw new Error(`Price history record at line ${(index + 1).toString()} belongs to another chain`)
+			const point = parsePriceHistoryPoint(Reflect.get(parsed, 'point'))
+			if (point !== undefined) points.push(point)
+			else console.warn(`Skipping invalid price history record at line ${(index + 1).toString()} in ${path}`)
 		}
 		return points.slice(-maximum)
 	} catch (error) {

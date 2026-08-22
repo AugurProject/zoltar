@@ -89,10 +89,11 @@ export type Activity = {
 
 export type DurableState = {
 	activities: Activity[]
+	chainId: number
 	lastScannedBlock: string | undefined
 	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
-	version: 1
+	version: 2
 }
 
 export type PendingStagedOperation = {
@@ -132,6 +133,7 @@ export type PendingTransactionIntent = {
 
 export type RuntimeState = {
 	activities: Activity[]
+	chainId: number
 	centralizedMarket: CentralizedMarketEstimate | undefined
 	centralizedMarketsByAsset: Map<string, CentralizedMarketEstimate>
 	marketConsensus: MarketConsensusEstimate | undefined
@@ -160,9 +162,11 @@ function isHash(value: unknown): value is Hex {
 	return typeof value === 'string' && isHex(value) && value.length === 66
 }
 
-export function initialRuntimeState(paused: boolean, wallet: Address | undefined): RuntimeState {
+export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number): RuntimeState {
+	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Runtime chain ID must be a positive integer')
 	return {
 		activities: [],
+		chainId,
 		centralizedMarket: undefined,
 		centralizedMarketsByAsset: new Map(),
 		marketConsensus: undefined,
@@ -519,20 +523,23 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	}
 }
 
-export async function loadDurableState(path: string): Promise<DurableState> {
+export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
+	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	const contents = await readFile(path, 'utf8').catch(error => {
 		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
 		throw error
 	})
-	if (contents === undefined) return { activities: [], lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 1 }
+	if (contents === undefined) return { activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
 	const version = Reflect.get(value, 'version')
+	const chainId = Reflect.get(value, 'chainId')
 	const activities = Reflect.get(value, 'activities')
 	const lastScannedBlock = Reflect.get(value, 'lastScannedBlock')
 	const pendingStagedOperations = Reflect.get(value, 'pendingStagedOperations')
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
-	if (version !== 1 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
+	if (version !== 2 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
+	if (chainId !== expectedChainId) throw new Error(`Liquidator state belongs to chain ${String(chainId)}, expected chain ${expectedChainId.toString()}`)
 	if (!Array.isArray(pendingStagedOperations)) throw new Error('pendingStagedOperations must be an array')
 	if (!Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
 	return {
@@ -558,6 +565,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				},
 			]
 		}),
+		chainId,
 		lastScannedBlock: typeof lastScannedBlock === 'string' ? lastScannedBlock : undefined,
 		pendingStagedOperations: pendingStagedOperations.map((operation: unknown) => {
 			if (typeof operation !== 'object' || operation === null || Array.isArray(operation)) throw new Error('Pending staged operation must be an object')
@@ -627,6 +635,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
 				const parsedNonce = BigInt(nonce)
 				const parsedTransaction = parseTransaction(serializedTransaction as Hex)
+				if (parsedTransaction.chainId !== BigInt(expectedChainId)) throw new Error(`Pending transaction intent belongs to chain ${parsedTransaction.chainId?.toString() ?? 'unknown'}, expected chain ${expectedChainId.toString()}`)
 				if (parsedTransaction.nonce !== parsedNonce) throw new Error('Pending transaction intent nonce does not match its serialized transaction')
 				const normalizedSender = getAddress(sender)
 				const recoveredSender = await recoverTransactionAddress({ serializedTransaction: serializedTransaction as Hex })
@@ -665,7 +674,7 @@ export async function loadDurableState(path: string): Promise<DurableState> {
 				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, requiresMarketEvidence, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
 			}),
 		)) as PendingTransactionIntent[],
-		version: 1,
+		version: 2,
 	}
 }
 
@@ -677,6 +686,7 @@ export async function saveDurableState(path: string, state: RuntimeState) {
 		await handle.writeFile(
 			`${JSON.stringify({
 				activities: state.activities,
+				chainId: state.chainId,
 				lastScannedBlock: state.lastScannedBlock?.toString(),
 				pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
 					...operation,
@@ -702,7 +712,7 @@ export async function saveDurableState(path: string, state: RuntimeState) {
 					receiptExpectation: intent.receiptExpectation.type === 'pending-liquidation' ? { ...intent.receiptExpectation, amount: intent.receiptExpectation.amount.toString() } : intent.receiptExpectation,
 					submissionBlock: intent.submissionBlock.toString(),
 				})),
-				version: 1,
+				version: 2,
 			})}\n`,
 			{ encoding: 'utf8' },
 		)

@@ -30,6 +30,7 @@ export async function canonicalBlockHash(settings: OperatorSettings, blockNumber
 			if (block.hash === undefined) throw new Error('Canonical block is missing its hash')
 			return { endpoint, value: block.hash }
 		}),
+		settings.connectivity.rpcQuorum,
 	)
 }
 
@@ -57,6 +58,7 @@ export async function desiredPoolStatus(settings: OperatorSettings, desired: Des
 				),
 			}
 		}),
+		settings.connectivity.rpcQuorum,
 	)
 	return { address, desired }
 }

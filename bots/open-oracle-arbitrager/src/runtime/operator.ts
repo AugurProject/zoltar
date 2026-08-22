@@ -31,7 +31,8 @@ import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticat
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
 import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorControlPlane } from './operator-control-plane.ts'
-import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
+import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
@@ -59,10 +60,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
 	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
-	let positions = await loadPositionJournal(config.positionFile)
-	if (config.execute) await savePositionJournal(config.positionFile, positions)
+	let positions = await loadPositionJournal(config.positionFile, config.network.chain.id)
+	if (config.execute) await savePositionJournal(config.positionFile, positions, config.network.chain.id)
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 	let clientRpcUrl: string | undefined
+	let wakeProfileSwitchWait: (() => void) | undefined
 	const createClient = (rpcUrl?: string) => createContextualPublicClient(config.network.chain, readPool, config.execute ? rpcUrl : undefined)
 	const contextualRpcRead = async <Value>(_method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => await request(createClient(explicitRpcUrl))
 	const contextualLogRead = async <Value>(request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>) => await request(createContextualPublicClient(config.network.chain, readPool))
@@ -79,7 +81,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let wallet = createWallet()
 	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
 	let startupValidated = !config.networkConfigured
-	const executionHistory = await loadExecutionHistory(config.historyFile)
+	const executionHistory = await loadExecutionHistory(config.historyFile, config.network.chain.id)
 	for (const position of positions) {
 		const record = position.historyOutbox
 		if (record !== undefined && !executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) executionHistory.unshift(record)
@@ -110,7 +112,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		status: config.networkConfigured ? 'syncing' : 'paused',
 		tokenAddresses: config.tokenAddresses,
 		tokenMarkets: [],
-		priceHistory: await loadPriceHistory(config.priceHistoryFile),
+		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
 		reportPaths: [],
 		transactionActivity: [],
 	}
@@ -156,7 +158,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let activeSignerLock = initialSignerLock
 	const signerOperationGate = createSignerOperationGate()
 	let cursor: SyncCursor | undefined
-	const pendingExecutorDeployment = await loadExecutorDeploymentIntent(executorDeploymentIntentPath(config.settingsFile))
+	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
+	const pendingExecutorDeployment = await loadExecutorDeploymentIntentForChain(executorIntentPath, config.network.chain.id)
+	if (pendingExecutorDeployment !== undefined) await assertStoredExecutorDeploymentIntent(pendingExecutorDeployment, config.network.chain.id)
 	const deploymentRecovery = {
 		pending: pendingExecutorDeployment !== undefined,
 	}
@@ -189,14 +193,26 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		fixedState,
 		getCursor: () => cursor,
 		lockManager,
+		onNetworkProfileSwitch: () => wakeProfileSwitchWait?.(),
 		signerOperationGate,
 		state,
 	})
 	const { dashboard, pending } = controlPlane
+	const waitForProfileSwitchOrDelay = async (milliseconds: number) => {
+		if (pending.profileSwitch) return
+		await Promise.race([
+			Bun.sleep(milliseconds),
+			new Promise<void>(resolve => {
+				wakeProfileSwitchWait = resolve
+				if (pending.profileSwitch) resolve()
+			}),
+		])
+		wakeProfileSwitchWait = undefined
+	}
 	const reports = new Map<bigint, ActiveReport>()
 	const persistPosition = async (position: PositionRecord) => {
 		const nextPositions = [position, ...positions.filter(existing => existing.reportId !== position.reportId)]
-		await savePositionJournal(config.positionFile, nextPositions)
+		await savePositionJournal(config.positionFile, nextPositions, config.network.chain.id)
 		positions = nextPositions
 		state.positions = nextPositions
 	}
@@ -205,7 +221,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			const record = position.historyOutbox
 			if (record === undefined) continue
 			if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-			await appendExecutionHistoryIfMissing(config.historyFile, record)
+			await appendExecutionHistoryIfMissing(config.historyFile, record, config.network.chain.id)
 			await persistPosition({ ...position, historyOutbox: undefined })
 		}
 	}
@@ -227,8 +243,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	try {
 		await pollUntilStopped(
 			async consecutiveFailures => {
+				if (pending.profileSwitch) return true
 				state.consecutivePollFailures = consecutiveFailures
-				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorDeploymentIntentPath(config.settingsFile))
+				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath)
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
 				state.retryInProgress = consecutiveFailures > 0
@@ -263,7 +280,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (executionActivationPending) {
 							if (lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 							await ensureExecutionHistoryWritable(config.historyFile)
-							await savePositionJournal(config.positionFile, positions)
+							await savePositionJournal(config.positionFile, positions, config.network.chain.id)
 							config.execute = true
 							state.paused = true
 							startupValidated = false
@@ -743,7 +760,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						})
 						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
-						await appendPriceHistory(config.priceHistoryFile, samples)
+						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
 						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
 						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
@@ -1003,7 +1020,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				state.retryInProgress = false
 				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)
 				if (consecutiveFailures > 0) state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()
-				return Bun.sleep(delayMilliseconds)
+				return waitForProfileSwitchOrDelay(delayMilliseconds)
 			},
 			config.once,
 			error => {
@@ -1026,6 +1043,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		)
 	} finally {
 		state.status = 'stopped'
-		dashboard?.stop()
+		await dashboard?.stop(pending.profileSwitch)
 	}
+	return pending.profileSwitch
 }

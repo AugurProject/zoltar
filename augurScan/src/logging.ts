@@ -24,7 +24,7 @@ export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 		.replace(/\p{Cf}/gu, ' ')
 		.replace(/\s+/gu, ' ')
 		.trim()
-	return /^state at block (?:#[0-9]+|0x[0-9a-f]+) is pruned[.!]?$/iu.test(message) ? message : undefined
+	return /^state at block (?:#[0-9]+|0x[0-9a-f]+) is pruned[.!]?$/iu.test(message) || /^pruned history unavailable[.!]?$/iu.test(message) ? message : undefined
 }
 
 export const timestampedLogArguments = (values: readonly unknown[], now = new Date()): readonly unknown[] => [`[${now.toISOString()}]:`, ...values]
@@ -152,7 +152,11 @@ export const createRpcLoggingFetch =
 				const providerMessage = safeRpcProviderMessage(rpcError.message)
 				const method = typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'
 				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`
-				if (method === 'eth_getCode' && providerMessage !== undefined) {
+				if (method === 'eth_getLogs' && rpcError.code === 4444 && providerMessage !== undefined) {
+					console.warn(
+						`Historical log history unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; locating earliest retrievable block; full exchange logged to ${logPath}`,
+					)
+				} else if (method === 'eth_getCode' && providerMessage !== undefined) {
 					console.warn(
 						`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; continuing with conservative log coverage; full exchange logged to ${logPath}`,
 					)

@@ -8,6 +8,7 @@ import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
 type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
+	isNetworkConfigured: () => boolean | Promise<boolean>
 	hostname?: '0.0.0.0' | '127.0.0.1'
 	loopbackPublished?: boolean
 	password?: string | undefined
@@ -18,9 +19,16 @@ type DashboardController = {
 	deployExecutor?: (value: unknown) => { address: string; alreadyDeployed: boolean; transactionHash: string | undefined } | Promise<{ address: string; alreadyDeployed: boolean; transactionHash: string | undefined }>
 	predictExecutor?: (value: unknown) => { address: string; salt: string } | Promise<{ address: string; salt: string }>
 	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
+	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
+}
+
+const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoints before changing chain-specific settings'
+
+async function requireConfiguredChain(controller: DashboardController) {
+	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
 }
 
 function json(value: unknown, status = 200) {
@@ -28,6 +36,10 @@ function json(value: unknown, status = 200) {
 		headers: securityHeaders('application/json; charset=utf-8'),
 		status,
 	})
+}
+
+function closingJson(value: unknown) {
+	return Response.json(value, { headers: { ...securityHeaders('application/json; charset=utf-8'), connection: 'close' } })
 }
 
 function securityHeaders(contentType: string) {
@@ -55,13 +67,13 @@ function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
 	const message = errorMessage(error)
 	if (message === 'Operator settings and runtime persistence files must use distinct paths') return message
 	if (/^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)? returned chain \d+; expected chain \d+$/.test(message)) return message
-	if (message === 'Use a separate operator configuration and durable journal paths to change chains') return message
+	if (message === 'Select the chain profile before saving its RPC settings' || message === 'Switch chain profiles with the Chain selector before editing that profile') return message
 	return 'Configuration could not be saved. Review the submitted values and protected bot logs.'
 }
 
 function publicConnectivityUpdateError(error: unknown) {
 	const message = errorMessage(error)
-	if (message === 'Use a separate operator configuration and durable journal paths to change chains') return message
+	if (message === 'Select the chain profile before saving its RPC settings' || message === 'Switch chain profiles with the Chain selector before editing that profile') return message
 	return 'RPC connectivity checks failed. Review the submitted endpoints and retry.'
 }
 
@@ -220,6 +232,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/configuration') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					if (controller.updateConfiguration === undefined) throw new Error('Complete configuration is unavailable')
 					return json(await controller.updateConfiguration(await boundedDashboardJson(request)))
 				} catch (error) {
@@ -230,6 +243,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return publicError(error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
@@ -238,6 +252,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
 					return publicError(error, 400, 'submission-update', 'Submission settings could not be saved. Review the submitted values and protected bot logs.')
@@ -251,9 +266,19 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return publicError(error, 400, 'connectivity-update', publicConnectivityUpdateError(error))
 				}
 			}
+			if (request.method === 'PUT' && url.pathname === '/api/network-profile') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.switchNetworkProfile === undefined) throw new Error('Chain profile switching is unavailable')
+					return closingJson(await controller.switchNetworkProfile(await boundedDashboardJson(request)))
+				} catch (error) {
+					return publicError(error, 400, 'network-profile-switch', 'The chain profile could not be activated. Review protected bot logs.')
+				}
+			}
 			if (request.method === 'PUT' && url.pathname === '/api/deployment') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					if (controller.updateDeployment === undefined) throw new Error('Deployment configuration is unavailable')
 					return json({ deployment: await controller.updateDeployment(await boundedDashboardJson(request)) })
 				} catch (error) {
@@ -263,6 +288,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'POST' && url.pathname === '/api/executor-deployment') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
 					return json(await controller.deployExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
@@ -272,6 +298,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'POST' && url.pathname === '/api/executor-prediction') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					if (controller.predictExecutor === undefined) throw new Error('Executor prediction is unavailable')
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
@@ -281,6 +308,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					if (controller.updateTokens === undefined) throw new Error('Token configuration is unavailable')
 					return json({ tokenAddresses: await controller.updateTokens(await boundedDashboardJson(request)) })
 				} catch (error) {
@@ -290,6 +318,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/signer') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
+					await requireConfiguredChain(controller)
 					return json(await controller.updateSigner(await boundedDashboardJson(request)))
 				} catch (error) {
 					return publicError(error, 400, 'signer-update', 'Signer settings could not be changed. Review the submitted action and protected bot logs.')
@@ -300,6 +329,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					const value = await boundedDashboardJson(request)
 					if (typeof value !== 'object' || value === null || !('paused' in value) || typeof value['paused'] !== 'boolean') throw new Error('paused must be a boolean')
+					if (!value['paused']) await requireConfiguredChain(controller)
 					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })
 				} catch (error) {

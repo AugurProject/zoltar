@@ -255,6 +255,11 @@ Coordinator-free diagnostic mode is an explicitly bounded fallback. Set
 walks back toward genesis. The bounded response prevents permissionless event
 volume from producing an unbounded RPC request.
 
+Version 4 used `50000` as its Docker default. For that exact legacy value, the bot
+starts with `256` instead of failing; other values above `256` remain invalid. The
+normalized `256` is written to disk on the next successful settings save or chain
+profile switch.
+
 ### Data freshness and retention
 
 The price file can retain a sample from a block displaced by a reorganization. The
@@ -271,31 +276,26 @@ when broader diagnostic event history is operationally important.
 
 ## Run on Sepolia
 
-Use a separate operator configuration and separate history, price, and position
-paths for Sepolia; an existing configured operator file cannot be retargeted to
-another chain. Start the new file paused and unconfigured, then save `sepolia` and
-its RPC URLs in **Chain and RPC connectivity**. Reload the dashboard so **Complete bot
-configuration** contains the persisted network. Replace
-every deployment address with values from the same reviewed test environment, set
-`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`, and
-use separate history, price, and position paths before saving the complete
-configuration:
+Choose Sepolia in **Chain and RPC connectivity**. The bot saves the current chain
+profile, pauses at a safe scan boundary, releases its current chain locks, and loads
+the selected profile without exiting the process or restarting the container. The
+browser reconnects automatically.
 
-```bash
-install -m 600 config/operator.example.json .state/operator-sepolia.json
-OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json bun run run
-```
+The first switch creates a clean Sepolia profile from the reviewed defaults. Its
+settings, signer, deployment addresses, tokens, strategy, submission policy, and
+history, price, and position journals are independent from mainnet. Configure its
+Sepolia RPCs and reviewed deployment addresses, then set
+`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`.
+Switching back to Mainnet restores the saved mainnet profile and journals, but the
+bot remains paused until you explicitly resume it.
 
-Keep `OPEN_ORACLE_ARBITRAGER_CONFIG=.state/operator-sepolia.json` in the service
-definition. Before enabling execution, set the file's
-runtime paths to distinct Sepolia-specific files such as
-`.state/history-sepolia.jsonl`, `.state/prices-sepolia.jsonl`, and
-`.state/positions-sepolia.json`.
-
-Deployment addresses can be changed in the complete JSON editor and apply at the
-next scan boundary. The selected chain cannot be changed after initial configuration,
-because durable records do not contain a chain ID. This prevents cached reports,
-transactions, positions, and profit totals from crossing networks.
+Profiles are private sibling files beside the active operator file. Docker keeps
+them in the existing named volume, and direct Bun uses the same behavior. Only the
+selected profile is active at one time. In-place switching requires both profiles
+to use the same `runtime.once`, `runtime.ui`, `runtime.uiHost`, and `runtime.uiPort`
+values so the running process and browser keep their operating mode and dashboard
+origin. The bot rejects an incompatible profile before changing any file. Resolve
+any pending executor-deployment recovery before switching chains.
 
 ## Execute disputes
 
@@ -317,7 +317,8 @@ PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run 
 When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
-configuration as `<operator-config>.executor-deployment.json`. It also holds the same
+configuration as `<operator-config>.<network>.executor-deployment.json`. Each chain's
+recovery intent is isolated from the other chain. The command also holds the same
 chain-and-signer process lock as the operator. Repeating the command with the same
 signer, chain, and salt recovers or rebroadcasts those exact bytes after a disconnect
 or crash; the journal is removed only after quorum-backed canonical finality. Set
@@ -671,22 +672,27 @@ security.
 
 ## Persistent operator settings
 
-`.state/operator.json` is the source of persisted bot settings. The bot accepts no
-command-line arguments and does not read chain, RPC URL, or quorum settings from
-environment variables. Copy the example before first startup:
+`.state/operator.json` is the active compatibility file. Complete settings for each
+chain are retained in `.state/operator.json.mainnet.profile` and
+`.state/operator.json.sepolia.profile` while that profile is inactive. Back up all
+three files so both chain profiles can be restored. The bot accepts no command-line
+arguments and does not read chain, RPC URL, or quorum settings from environment
+variables. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
 install -m 600 config/operator.example.json .state/operator.json
 ```
 
-`OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different file; it does not override
-any value inside the document. This locator is useful for service managers and
-tests. Select the chain and enter the read and public RPC URLs in **RPC
+`OPEN_ORACLE_ARBITRAGER_CONFIG` may locate a different active compatibility file;
+it does not override any value inside the document. Its chain profiles use the
+`<operator-config>.mainnet.profile` and `<operator-config>.sepolia.profile` sibling
+paths. This locator is useful for service managers and tests. Select the chain and
+enter the read and public RPC URLs in **RPC
 connectivity**. Every endpoint is checked against the selected chain before it is
 saved. Initial chain selection applies immediately, while quorum and RPC changes
-apply at the next scan boundary. To operate another chain, follow
-the [separate-configuration steps](#run-on-sepolia). Configure the reader set required
+apply at the next scan boundary. To operate another chain, select its saved chain
+profile in the dashboard. Configure the reader set required
 by the saved RPC agreement requirement with the deployment controls before enabling
 execution. The default policy uses the primary reader alone. Independent quorum
 readers are required only when the saved requirement is `2`.
@@ -733,8 +739,8 @@ bundle or transaction.
 
 ## Profit and history semantics
 
-Successful dispute submissions are appended to `runtime.historyFile`. The example
-uses `.state/history-mainnet.jsonl`; use separate paths for each network.
+Successful dispute submissions are appended to `runtime.historyFile`. New profiles
+automatically receive chain-named history, price, and position paths.
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
@@ -1189,8 +1195,14 @@ an independently calculated realized P&amp;L or an explicit declaration that P&a
 is unavailable:
 
 ```bash
-PRIVATE_KEY=0x... bun run reconcile -- --position-file=.state/positions-sepolia.json --report-id=42 --confirm-report-id=42 --evidence='receipts and balance snapshots archived under incident-42' --note='residual REP sold manually; balances checked on all configured read RPCs' --external-cost-eth=0.003 --final-wallet-weth=4.2 --final-wallet-token=85 --pnl-unavailable=true
+PRIVATE_KEY=0x... bun run reconcile -- --position-file=.state/positions-mainnet.sepolia.json --chain-id=11155111 --report-id=42 --confirm-report-id=42 --evidence='receipts and balance snapshots archived under incident-42' --note='residual REP sold manually; balances checked on all configured read RPCs' --external-cost-eth=0.003 --final-wallet-weth=4.2 --final-wallet-token=85 --pnl-unavailable=true
 ```
+
+Use the active profile's configured `runtime.positionFile`; switching the supplied
+Mainnet configuration to Sepolia generates
+`.state/positions-mainnet.sepolia.json`. Set `--chain-id=1` for Mainnet or
+`--chain-id=11155111` for Sepolia. The command rejects a journal bound to a
+different chain.
 
 Use `--realized-net-profit-eth=-0.04 --acknowledge-pnl-is-all-in=true` instead of
 `--pnl-unavailable=true` only when entry evidence was recovered and the all-in value

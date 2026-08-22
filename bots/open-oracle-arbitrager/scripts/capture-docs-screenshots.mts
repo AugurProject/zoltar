@@ -42,6 +42,8 @@ let fixtureConfigurationHanging = false
 let fixtureConfigurationUnavailable = false
 let fixtureNetworkConfigured = true
 let fixturePauseHanging = false
+let fixtureProfileHanging = false
+let fixtureNetwork: 'mainnet' | 'sepolia' = 'mainnet'
 const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
@@ -366,6 +368,191 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			if (typeof recoveryValue !== 'object' || recoveryValue === null || !('fieldsetDisabled' in recoveryValue) || recoveryValue.fieldsetDisabled !== false || !('status' in recoveryValue) || recoveryValue.status !== 'Chain and RPCs passed validation, were saved, and apply to the next scan.') {
 				throw new Error(`Connectivity mutation did not recover after retry: ${JSON.stringify(recoveryValue)}`)
 			}
+			fixtureProfileHanging = true
+			await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						const network = document.querySelector('#network-name')
+						if (!(network instanceof HTMLSelectElement)) throw new Error('Network profile control missing')
+						network.value = 'sepolia'
+						network.dispatchEvent(new Event('change', { bubbles: true }))
+					})()`,
+				},
+				sessionId,
+			)
+			await Bun.sleep(100)
+			for (const [name, width, height] of [
+				['profile-switching-desktop.png', 1440, 900],
+				['profile-switching-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const pendingProfile = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const group = document.querySelector('#network-connectivity')
+							if (group instanceof HTMLDetailsElement) group.open = true
+							if (group instanceof HTMLElement) {
+								const offset = (document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0) + 16
+								window.scrollTo(0, Math.max(0, group.getBoundingClientRect().top + window.scrollY - offset))
+							}
+							return {
+								activeProfile: document.querySelector('#network-name')?.value,
+								bodyScrollWidth: document.body.scrollWidth,
+								disabledInputOpacity: getComputedStyle(document.querySelector('#read-rpc-url')).opacity,
+								disabledTextareaBorderStyle: getComputedStyle(document.querySelector('#public-rpc-urls')).borderStyle,
+								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+								readRpcUrl: document.querySelector('#read-rpc-url')?.value,
+								retryActionsHidden: document.querySelector('#profile-switch-retry-actions')?.hidden,
+								rpcQuorum: document.querySelector('#rpc-quorum')?.value,
+								scope: document.querySelector('#settings-chain-scope')?.textContent,
+								targetStatus: document.querySelector('#network-target-status')?.textContent,
+								targetStatusHidden: document.querySelector('#network-target-status')?.hidden,
+								status: document.querySelector('#connectivity-status')?.textContent
+							}
+						})()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const pendingValue = typeof pendingProfile === 'object' && pendingProfile !== null && 'result' in pendingProfile && typeof pendingProfile.result === 'object' && pendingProfile.result !== null && 'value' in pendingProfile.result ? pendingProfile.result.value : undefined
+				if (
+					typeof pendingValue !== 'object' ||
+					pendingValue === null ||
+					!('activeProfile' in pendingValue) ||
+					pendingValue.activeProfile !== 'mainnet' ||
+					!('disabledInputOpacity' in pendingValue) ||
+					pendingValue.disabledInputOpacity !== '0.65' ||
+					!('disabledTextareaBorderStyle' in pendingValue) ||
+					pendingValue.disabledTextareaBorderStyle !== 'dashed' ||
+					!('fieldsetDisabled' in pendingValue) ||
+					pendingValue.fieldsetDisabled !== true ||
+					!('readRpcUrl' in pendingValue) ||
+					pendingValue.readRpcUrl !== 'https://read.example/' ||
+					!('retryActionsHidden' in pendingValue) ||
+					pendingValue.retryActionsHidden !== true ||
+					!('rpcQuorum' in pendingValue) ||
+					pendingValue.rpcQuorum !== '2' ||
+					!('scope' in pendingValue) ||
+					!String(pendingValue.scope).includes('Ethereum mainnet') ||
+					!('targetStatus' in pendingValue) ||
+					pendingValue.targetStatus !== 'Switching from mainnet to sepolia. Existing chain settings remain visible until the new profile loads.' ||
+					!('targetStatusHidden' in pendingValue) ||
+					pendingValue.targetStatusHidden !== false ||
+					!('status' in pendingValue) ||
+					pendingValue.status !== '' ||
+					!('bodyScrollWidth' in pendingValue) ||
+					typeof pendingValue.bodyScrollWidth !== 'number' ||
+					pendingValue.bodyScrollWidth > width
+				) {
+					throw new Error(`Pending arbitrager profile switch mixed chain contexts: ${JSON.stringify(pendingValue)}`)
+				}
+				await settlePaint()
+				await capturePng(name)
+			}
+			fixtureProfileHanging = false
+			await Bun.sleep(20_500)
+			for (const [name, width, height] of [
+				['profile-switch-timeout-desktop.png', 1440, 900],
+				['profile-switch-timeout-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const timeoutState = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => {
+							const retry = document.querySelector('#profile-switch-retry-button')
+							retry?.scrollIntoView({ block: 'center' })
+							return {
+								bodyScrollWidth: document.body.scrollWidth,
+								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+								retryDisabled: retry?.disabled,
+								retryHidden: retry?.hidden,
+								retryVisible: retry instanceof HTMLElement && retry.getBoundingClientRect().top >= 0 && retry.getBoundingClientRect().bottom <= window.innerHeight,
+								status: document.querySelector('#connectivity-status')?.textContent,
+								targetStatusHidden: document.querySelector('#network-target-status')?.hidden
+							}
+						})()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const timeoutValue = typeof timeoutState === 'object' && timeoutState !== null && 'result' in timeoutState && typeof timeoutState.result === 'object' && timeoutState.result !== null && 'value' in timeoutState.result ? timeoutState.result.value : undefined
+				if (
+					typeof timeoutValue !== 'object' ||
+					timeoutValue === null ||
+					!('bodyScrollWidth' in timeoutValue) ||
+					typeof timeoutValue.bodyScrollWidth !== 'number' ||
+					timeoutValue.bodyScrollWidth > width ||
+					!('fieldsetDisabled' in timeoutValue) ||
+					timeoutValue.fieldsetDisabled !== true ||
+					!('retryDisabled' in timeoutValue) ||
+					timeoutValue.retryDisabled !== false ||
+					!('retryHidden' in timeoutValue) ||
+					timeoutValue.retryHidden !== false ||
+					!('retryVisible' in timeoutValue) ||
+					timeoutValue.retryVisible !== true ||
+					!('status' in timeoutValue) ||
+					timeoutValue.status !== 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.' ||
+					!('targetStatusHidden' in timeoutValue) ||
+					timeoutValue.targetStatusHidden !== false
+				) {
+					throw new Error(`Timed-out profile switch did not expose a safe retry at ${width.toString()}px: ${JSON.stringify(timeoutValue)}`)
+				}
+				await capturePng(name)
+			}
+			fixtureNetwork = 'sepolia'
+			await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						document.querySelector('#profile-switch-retry-button')?.click()
+					})()`,
+				},
+				sessionId,
+			)
+			await Bun.sleep(500)
+			for (const [name, width, height] of [
+				['profile-switch-recovered-desktop.png', 1440, 900],
+				['profile-switch-recovered-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const recovered = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => ({
+							activeProfile: document.querySelector('#network-name')?.value,
+							bodyScrollWidth: document.body.scrollWidth,
+							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+							retryActionsHidden: document.querySelector('#profile-switch-retry-actions')?.hidden,
+							targetStatusHidden: document.querySelector('#network-target-status')?.hidden
+						}))()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const recoveredValue = typeof recovered === 'object' && recovered !== null && 'result' in recovered && typeof recovered.result === 'object' && recovered.result !== null && 'value' in recovered.result ? recovered.result.value : undefined
+				if (
+					typeof recoveredValue !== 'object' ||
+					recoveredValue === null ||
+					!('activeProfile' in recoveredValue) ||
+					recoveredValue.activeProfile !== 'sepolia' ||
+					!('bodyScrollWidth' in recoveredValue) ||
+					typeof recoveredValue.bodyScrollWidth !== 'number' ||
+					recoveredValue.bodyScrollWidth > width ||
+					!('fieldsetDisabled' in recoveredValue) ||
+					recoveredValue.fieldsetDisabled !== false ||
+					!('retryActionsHidden' in recoveredValue) ||
+					recoveredValue.retryActionsHidden !== true ||
+					!('targetStatusHidden' in recoveredValue) ||
+					recoveredValue.targetStatusHidden !== true
+				) {
+					throw new Error(`Timed-out profile switch did not recover at ${width.toString()}px: ${JSON.stringify(recoveredValue)}`)
+				}
+				await capturePng(name)
+			}
+			fixtureNetwork = 'mainnet'
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION_STATES'] === '1') {
 			const readConfigurationState = async () => {
@@ -1672,10 +1859,20 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		if (fixtureAttention === 'error') return { ...transaction, failedTargets: [{ error: rawRelayFailure, target: 'https://relay.example' }], status: 'submission-failed' as const }
 		return transaction
 	})
+	const expectedChainId = fixtureNetwork === 'mainnet' ? 1 : 11_155_111
+	const endpointChecks = snapshot.endpointChecks.map(check => ({
+		...check,
+		chainId: expectedChainId,
+		target: fixtureNetwork === 'mainnet' ? check.target : check.target.replace('read.example', 'sepolia-read.example').replace('rpc.example', 'sepolia-rpc.example').replace('relay.flashbots.net', 'sepolia-relay.example'),
+	}))
 	return {
 		...snapshot,
+		expectedChainId,
+		explorerUrl: fixtureNetwork === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
+		network: fixtureNetwork,
 		networkConfigured: fixtureNetworkConfigured,
-		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
+		endpointChecks: fixtureAttention === 'error' ? endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : endpointChecks,
+		rpcEndpointHealth: snapshot.rpcEndpointHealth?.map(endpoint => ({ ...endpoint, target: fixtureNetwork === 'mainnet' ? endpoint.target : endpoint.target.replace('rpc.example', 'sepolia-rpc.example').replace('quorum.example', 'sepolia-quorum.example') })),
 		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
 		lastPollFailureAt: fixtureAttention === 'error' && fixturePollFailureMetadata ? new Date(Date.now() - 2_000).toISOString() : undefined,
 		lastRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && fixtureRetryInProgress ? new Date(Date.now() - 1_000).toISOString() : undefined,
@@ -1694,8 +1891,9 @@ const server = startDashboardServer(0, {
 	getConfiguration: async () => {
 		while (fixtureConfigurationHanging) await Bun.sleep(10)
 		if (fixtureConfigurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
+		const configuration = await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json()
 		return {
-			configuration: await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json(),
+			configuration: { ...configuration, connectivity: snapshot.connectivity, network: fixtureNetwork, networkConfigured: true, rpcQuorum: 2 },
 			revision: 'fixture-revision',
 		}
 	},
@@ -1704,10 +1902,16 @@ const server = startDashboardServer(0, {
 		if (fixtureStateUnavailable) throw new Error('fixture state endpoint unavailable')
 		return currentFixtureSnapshot()
 	},
+	isNetworkConfigured: () => true,
 	setPaused: async value => {
 		fixturePauseRequests.push(value)
 		while (fixturePauseHanging) await Bun.sleep(10)
 		paused = value
+	},
+	switchNetworkProfile: async value => {
+		if (typeof value !== 'object' || value === null || Reflect.get(value, 'network') !== 'sepolia') throw new Error('Expected Sepolia profile request')
+		while (fixtureProfileHanging) await Bun.sleep(10)
+		return { network: 'sepolia' }
 	},
 	updateConnectivity: async () => {
 		while (fixtureConnectivityHanging) await Bun.sleep(10)
