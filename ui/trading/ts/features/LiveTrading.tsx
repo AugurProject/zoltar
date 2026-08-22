@@ -49,34 +49,10 @@ import {
 	positionControlsWorkflowLocked,
 	useLiveTradingController,
 	liveTradingControllerServices,
-	type BalanceState,
 	type GuardedWalletWrite,
-	type LiveTradingControllerServices,
-	type PortfolioBalanceEntry,
-	type Quote,
-	type QuoteContext,
-	type TransactionState,
 } from './liveTradingController.js'
+import type { BalanceState, LiveTradingControllerServices, PortfolioBalanceEntry, Quote, QuoteContext, TransactionState } from './live/liveTradingTypes.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-
-export {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	filterMarketsByUniverse,
-	livePairInitialized,
-	marketSelectionAfterDiscovery,
-	observeKnownReceipt,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	securityPoolAddressFromRoute,
-	walletSummaryAvailability,
-	walletSummaryDiscoveryRetryStart,
-	walletSummaryRefreshState,
-} from './liveTradingController.js'
-export type { PortfolioBalanceEntry } from './liveTradingController.js'
 
 export type LiveSettlementServices = Readonly<{
 	approveRouter: typeof approveRouter

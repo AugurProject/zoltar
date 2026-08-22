@@ -6,8 +6,7 @@ import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { createSecurityPoolDeploymentIndex, type LiveBalances, type LiveMarket, type SecurityPoolDeployment } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import type { LiveTradingControllerServices } from '../liveTradingController.js'
-import type { BalanceState, PortfolioBalanceEntry, Quote, TransactionState } from './liveTradingTypes.js'
+import type { BalanceState, LiveTradingControllerServices, PortfolioBalanceEntry, Quote, TransactionState } from './liveTradingTypes.js'
 
 export function parsedUniverseId(selectedUniverseId: string | undefined) {
 	if (selectedUniverseId === undefined) return undefined

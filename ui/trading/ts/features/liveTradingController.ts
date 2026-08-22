@@ -27,31 +27,12 @@ import {
 	type LiveMarket,
 } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import type { PortfolioBalanceEntry, Quote, TransactionState } from './live/liveTradingTypes.js'
+import type { LiveTradingControllerServices, PortfolioBalanceEntry, Quote, TransactionState } from './live/liveTradingTypes.js'
 import { parsedUniverseId, useBalanceState, useDiscoveryState, usePositionWorkflowState, useQuestionClock, useWalletState } from './live/useLiveTradingState.js'
-export type { BalanceState, PortfolioBalanceEntry, Quote, QuoteContext, TransactionState } from './live/liveTradingTypes.js'
 export { initialQuestionClockTimestamp, questionClockShouldPollAgain } from './live/useLiveTradingState.js'
 
 export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 type WorkflowOwner = 'position' | 'liquidity'
-
-export type LiveTradingControllerServices = Readonly<{
-	approveRouter: typeof approveRouter
-	connectWallet: typeof connectWallet
-	createTradingPublicClient: typeof createTradingPublicClient
-	createTradingWalletClient: typeof createTradingWalletClient
-	discoverAllLiveMarketsInUniverse: typeof discoverAllLiveMarketsInUniverse
-	discoverLiveUniverseMarketPage: typeof discoverLiveUniverseMarketPage
-	loadLiveBalances: typeof loadLiveBalances
-	loadWalletHeaderBalances: typeof loadWalletHeaderBalances
-	simulateEntry: typeof simulateEntry
-	simulateExit: typeof simulateExit
-	submitFreshEntry: typeof submitFreshEntry
-	submitFreshExit: typeof submitFreshExit
-	switchWalletChain: typeof switchWalletChain
-	validateLiveDeployment: typeof validateLiveDeployment
-	walletChainId: typeof walletChainId
-}>
 
 export const liveTradingControllerServices: LiveTradingControllerServices = {
 	approveRouter,

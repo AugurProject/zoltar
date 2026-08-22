@@ -1,27 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	forkMigrationBatchBlocker,
-	forkMigrationBatchWarning,
-	insuredExitLimitMessage,
-	liquidityApprovalRequired,
-	liquidityOperationAvailable,
-	livePairInitialized,
-	marketRouteSubtitle,
-	marketSelectionAfterDiscovery,
-	migrationSimulationSummary,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	portfolioRouteSubtitle,
-	securityPoolAddressFromRoute,
-	settlementBalanceLabel,
-	settlementInputBlocker,
-} from '../../features/LiveTrading.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, liquidityApprovalRequired, liquidityOperationAvailable, marketRouteSubtitle, migrationSimulationSummary, portfolioRouteSubtitle, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveTrading.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
 	collateMarketDiscoveryResults,
@@ -48,7 +27,20 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/liveTradingController.js'
+import {
+	approvalFailureTransition,
+	broadcastUncertainMessage,
+	discoveryCommitAllowed,
+	failedSubmissionTransition,
+	initialQuestionClockTimestamp,
+	livePairInitialized,
+	marketSelectionAfterDiscovery,
+	parseSlippageBps,
+	parseTransactionValidityMinutes,
+	positionControlsWorkflowLocked,
+	questionClockShouldPollAgain,
+	securityPoolAddressFromRoute,
+} from '../../features/liveTradingController.js'
 
 describe('standalone trading UI model', () => {
 	test('uses the deterministic chain timestamp instead of the host wall clock in simulation', () => {

@@ -35,7 +35,7 @@ import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
@@ -44,12 +44,6 @@ import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleVie
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
-
-const getRouteHashForRoute = (route: 'deploy' | 'open-oracle' | 'security-pools') => {
-	if (route === 'deploy') return '#/deploy'
-	if (route === 'open-oracle') return '#/open-oracle'
-	return '#/security-pools'
-}
 
 export function App() {
 	const deployNextMissingPending = useSignal(false)
@@ -329,9 +323,9 @@ export function App() {
 		walletBootstrapComplete,
 	}
 	const tabs: RouteTabDefinition[] = [
-		{ hash: getRouteHashForRoute('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: getRouteHashForRoute('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
-		{ hash: getRouteHashForRoute('deploy'), label: commonCopy.deploy, route: 'deploy' },
+		{ hash: getRouteHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+		{ hash: getRouteHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
+		{ hash: getRouteHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 	]
 	const tabNavigationProps = {
 		route,
@@ -421,7 +415,7 @@ export function App() {
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
-		deploymentCompleteHref: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
+		deploymentCompleteHref: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onDeploy: deployStep,
 		onDeployNextMissing: () => void onDeployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
@@ -678,9 +672,9 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
+					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
+					{ href: buildRouteHref(getRouteHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
 				]}
 			/>
 		)
@@ -691,9 +685,9 @@ export function App() {
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
+					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
+					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
+					{ href: buildRouteHref(getRouteHash('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
 				]}
 			/>
 		)
