@@ -70,7 +70,7 @@ describe('security vault guards', () => {
 		expect(guard('1.25')).toBeUndefined()
 	})
 
-	test('capacity ownership', () => {
+	test('blocks REP withdrawal while escalation deposits remain unsettled', () => {
 		expect(
 			getVaultWithdrawGuardMessage({
 				disputeStakedAttoRep: 1n,

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 const repositoryRoot = join(import.meta.dir, '..')
 const ciWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
+const coverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
 const setupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
@@ -43,6 +45,20 @@ describe('split UI workflow paths', () => {
 		const archiveRoot = 'ui'
 		const restoredPaths = uploadedPaths.map(path => join('ui', path.slice(archiveRoot.length + 1)))
 		expect(restoredPaths).toEqual(uploadedPaths)
+	})
+
+	test('CI isolates the production browser workflow', async () => {
+		const workflow = await readFile(browserWorkflowPath, 'utf8')
+		expect(workflow).toContain('name: Production Browser Workflow')
+		expect(workflow).toContain('run: bun run test:browser:workflow')
+	})
+
+	test('scheduled coverage publishes and retains the canonical policy report', async () => {
+		const workflow = await readFile(coverageWorkflowPath, 'utf8')
+		expect(workflow).toContain('schedule:')
+		expect(workflow).toContain('run: bun run coverage:full')
+		expect(workflow).toContain('cat coverage/coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"')
+		expect(workflow).toContain('name: coverage-report')
 	})
 
 	test('contract caches and transferred inputs include the generated Trading artifact', async () => {

@@ -1897,7 +1897,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, freshVaultState.repBackingUnits), freshDeposit, 'a minimum fresh deposit should remain exactly convertible after zero-migration auction settlement')
 		})
 
-		test('capacity ownership', async () => {
+		test('permissionless winner settlement assigns capacity once when an ETH refund is deferred', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2321,7 +2321,7 @@ describe('Statoblast: truth auction', () => {
 			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /Bid has already been claimed or does not exist/)
 		})
 
-		test('capacity ownership', async () => {
+		test('a winner claim adds auctioned capacity ownership to an existing migrated vault', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 			const endTime = await getQuestionEndDate(client, questionId)
@@ -2371,7 +2371,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(migratedVaultAfterClaim.capacityOwnershipAttoRep, expectedCapacityOwnershipAttoRepAfterClaim, 'capacity ownership')
 		})
 
-		test('capacity ownership', async () => {
+		test('winner claims preserve pool totals after migrated capacity ownership decreases', async () => {
 			const { auctionParticipant, auctionTick, auctionedCapacityOwnershipAttoRep, migratedCapacityOwnershipAttoRep, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep('capacity ownership')
 			const decreasedMigratedCapacityOwnershipAttoRep = migratedCapacityOwnershipAttoRep / 2n
 
@@ -2385,7 +2385,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool), auctionedCapacityOwnershipAttoRep + decreasedMigratedCapacityOwnershipAttoRep, 'capacity ownership')
 		})
 
-		test('capacity ownership', async () => {
+		test('fee accounting reconciles after migrated capacity ownership increases before a winner claim', async () => {
 			const { auctionParticipant, auctionTick, migratedCapacityOwnershipAttoRep, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedCapacityOwnershipAttoRep('capacity ownership')
 			const increasedMigratedCapacityOwnershipAttoRep = migratedCapacityOwnershipAttoRep * 2n
 
@@ -2501,7 +2501,7 @@ describe('Statoblast: truth auction', () => {
 			assert.ok(repAfterSecondClaim > repAfterFirstClaim, 'second claim should be able to add the remaining winning bid')
 		})
 
-		test('capacity ownership', async () => {
+		test('auctioned capacity ownership allocation is independent of winner claim order', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 

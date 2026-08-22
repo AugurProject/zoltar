@@ -3,6 +3,9 @@ import * as path from 'node:path'
 
 export const TEST_TIMING_HISTORY_VERSION = 1
 export const MAXIMUM_TIMING_SAMPLES = 5
+export const MINIMUM_REGRESSION_HISTORY_SAMPLES = 3
+export const MINIMUM_TIMING_REGRESSION_SECONDS = 10
+export const MAXIMUM_TIMING_REGRESSION_RATIO = 0.5
 
 export type TestTimingHistory = {
 	version: typeof TEST_TIMING_HISTORY_VERSION
@@ -14,6 +17,20 @@ export type TestTimingObservation = {
 	elapsedSeconds: number
 	testCaseSecondsByFile: Record<string, number>
 	testFiles: string[]
+}
+
+export type TestTimingRegression = {
+	baselineSeconds: number
+	currentSeconds: number
+	filePath: string
+	increaseRatio: number
+	increaseSeconds: number
+}
+
+export type TestTimingReport = {
+	currentSecondsByFile: Map<string, number>
+	regressions: TestTimingRegression[]
+	slowestFiles: { filePath: string; seconds: number }[]
 }
 
 function normalizeTestPath(filePath: string) {
@@ -119,6 +136,56 @@ export function getHistoricalTestWeights(history: TestTimingHistory, testFiles: 
 	const fallbackIndex = Math.max(0, Math.ceil(sortedWeights.length * 0.75) - 1)
 	const fallbackWeight = sortedWeights[fallbackIndex] ?? 1
 	return testFiles.map(filePath => ({ filePath, weight: median(history.samplesByFile[filePath] ?? []) ?? fallbackWeight }))
+}
+
+export function createTestTimingReport(history: TestTimingHistory | undefined, observations: readonly TestTimingObservation[], options: { maximumSlowFiles?: number; maximumIncreaseRatio?: number; minimumHistorySamples?: number; minimumIncreaseSeconds?: number } = {}): TestTimingReport {
+	const maximumSlowFiles = options.maximumSlowFiles ?? 10
+	const maximumIncreaseRatio = options.maximumIncreaseRatio ?? MAXIMUM_TIMING_REGRESSION_RATIO
+	const minimumHistorySamples = options.minimumHistorySamples ?? MINIMUM_REGRESSION_HISTORY_SAMPLES
+	const minimumIncreaseSeconds = options.minimumIncreaseSeconds ?? MINIMUM_TIMING_REGRESSION_SECONDS
+	const currentSecondsByFile = new Map<string, number>()
+	for (const observation of observations) {
+		for (const [filePath, seconds] of estimateObservationFileSeconds(observation)) currentSecondsByFile.set(filePath, (currentSecondsByFile.get(filePath) ?? 0) + seconds)
+	}
+	const slowestFiles = [...currentSecondsByFile]
+		.map(([filePath, seconds]) => ({ filePath, seconds }))
+		.sort((left, right) => right.seconds - left.seconds || left.filePath.localeCompare(right.filePath))
+		.slice(0, maximumSlowFiles)
+	const regressions: TestTimingRegression[] = []
+	for (const [filePath, currentSeconds] of currentSecondsByFile) {
+		const samples = history?.samplesByFile[filePath] ?? []
+		if (samples.length < minimumHistorySamples) continue
+		const baselineSeconds = median(samples)
+		if (baselineSeconds === undefined) continue
+		const increaseSeconds = currentSeconds - baselineSeconds
+		let increaseRatio = increaseSeconds / baselineSeconds
+		if (baselineSeconds === 0) {
+			increaseRatio = Number.POSITIVE_INFINITY
+			if (currentSeconds === 0) increaseRatio = 0
+		}
+		if (increaseSeconds > minimumIncreaseSeconds && increaseRatio > maximumIncreaseRatio) regressions.push({ baselineSeconds, currentSeconds, filePath, increaseRatio, increaseSeconds })
+	}
+	regressions.sort((left, right) => right.increaseSeconds - left.increaseSeconds || left.filePath.localeCompare(right.filePath))
+	return { currentSecondsByFile, regressions, slowestFiles }
+}
+
+const formatSeconds = (seconds: number) => `${seconds.toFixed(1)}s`
+
+export function renderTestTimingMarkdown(report: TestTimingReport) {
+	const lines = ['# Test timing summary', '', '| Slowest test file | Estimated wall time |', '| --- | ---: |', ...report.slowestFiles.map(file => `| \`${file.filePath}\` | ${formatSeconds(file.seconds)} |`)]
+	if (report.regressions.length === 0) {
+		lines.push('', 'Timing regression budget: passed')
+	} else {
+		lines.push(
+			'',
+			'## Timing regressions',
+			'',
+			...report.regressions.map(regression => `- \`${regression.filePath}\`: ${formatSeconds(regression.currentSeconds)} versus ${formatSeconds(regression.baselineSeconds)} baseline (+${formatSeconds(regression.increaseSeconds)}, +${(regression.increaseRatio * 100).toFixed(1)}%)`),
+			'',
+			'Timing regression budget: failed',
+		)
+	}
+	return `${lines.join('\n')}\n`
 }
 
 export async function writeTestTimingObservation(outputPath: string, junitPath: string, elapsedSeconds: number, testFiles: readonly string[]) {

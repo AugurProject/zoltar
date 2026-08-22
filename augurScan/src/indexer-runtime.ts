@@ -272,6 +272,7 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 	startBlock: bigint,
 	observedHead: (provider: TProvider) => Promise<bigint>,
 	logsAt: (provider: TProvider, blockNumber: bigint) => Promise<void>,
+	reportProviderFailure: (provider: TProvider, error: unknown) => void,
 ): Promise<{ readonly provider: TProvider; readonly startBlock: bigint } | undefined> => {
 	let earliest: { readonly provider: TProvider; readonly startBlock: bigint } | undefined
 	for (const provider of providers) {
@@ -280,7 +281,8 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 			if (head < startBlock) continue
 			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, (blockNumber) => logsAt(provider, blockNumber))
 			if (earliest === undefined || availableStart < earliest.startBlock) earliest = { provider, startBlock: availableStart }
-		} catch {
+		} catch (error) {
+			reportProviderFailure(provider, error)
 			// Recovery is best-effort across providers. The lifecycle retains the
 			// original failure when none can establish a usable log boundary.
 		}

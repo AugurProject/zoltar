@@ -26,12 +26,14 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^ui\/trading\/css\//,
 ]
 
+const BIOME_CHECKED_EXTENSIONS = /\.(?:cjs|css|cts|html|js|json|jsonc|jsx|mjs|mts|ts|tsx)$/
+
 function isBiomeCoveredChangedFile(filePath: string) {
 	return BIOME_COVERED_FILE_PATTERNS.some(pattern => pattern.test(filePath))
 }
 
 export function getBiomeChangedFiles(changedFiles: string[]) {
-	return changedFiles.filter(filePath => !filePath.endsWith('.sol') && isBiomeCoveredChangedFile(filePath))
+	return changedFiles.filter(filePath => BIOME_CHECKED_EXTENSIONS.test(filePath) && isBiomeCoveredChangedFile(filePath))
 }
 
 if (import.meta.main) {
