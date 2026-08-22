@@ -1,5 +1,4 @@
 import type { Address, WalletClient } from '@zoltar/shared/ethereum'
-import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveBalances, LiveMarket, simulateEntry, simulateExit } from '../../protocol/live.js'
 
@@ -11,4 +10,3 @@ export type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{
 export type TransactionState = 'idle' | 'simulating' | 'ready' | 'preparing' | 'approval' | 'approval-pending' | 'approval-confirmed' | 'submitting' | 'pending' | 'confirmed' | 'error'
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
-export type WalletState = WalletSummaryState

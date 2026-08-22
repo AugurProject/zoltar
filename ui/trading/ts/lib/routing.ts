@@ -1,8 +1,8 @@
-import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, normalizeRouteHash, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
 
 export type TradingRoute = 'markets' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}`
 
-export const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
+const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
 	defaultRoute: 'markets',
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },
@@ -21,8 +21,6 @@ export const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
 }
 
 export const tradingRouting = createRouting(TRADING_ROUTING_CONFIG)
-
-export const normalizeTradingRouteHash = normalizeRouteHash
 
 export function getTradingRouteHref(routeHash: string) {
 	return buildRouteHref(routeHash, getRouteHashSearch())

@@ -267,7 +267,8 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 			if (head < startBlock) continue
 			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, (blockNumber) => logsAt(provider, blockNumber))
 			if (earliest === undefined || availableStart < earliest.startBlock) earliest = { provider, startBlock: availableStart }
-		} catch {
+		} catch (error) {
+			if (!(error instanceof ChainConfigurationError) && !(error instanceof RpcRequestMethodError)) throw error
 			// Recovery is best-effort across providers. The lifecycle retains the
 			// original failure when none can establish a usable log boundary.
 		}
