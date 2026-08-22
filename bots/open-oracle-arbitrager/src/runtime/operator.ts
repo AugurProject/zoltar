@@ -60,8 +60,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
 	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
-	let positions = await loadPositionJournal(config.positionFile)
-	if (config.execute) await savePositionJournal(config.positionFile, positions)
+	let positions = await loadPositionJournal(config.positionFile, config.network.chain.id)
+	if (config.execute) await savePositionJournal(config.positionFile, positions, config.network.chain.id)
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 	let clientRpcUrl: string | undefined
 	let wakeProfileSwitchWait: (() => void) | undefined
@@ -81,7 +81,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let wallet = createWallet()
 	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
 	let startupValidated = !config.networkConfigured
-	const executionHistory = await loadExecutionHistory(config.historyFile)
+	const executionHistory = await loadExecutionHistory(config.historyFile, config.network.chain.id)
 	for (const position of positions) {
 		const record = position.historyOutbox
 		if (record !== undefined && !executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) executionHistory.unshift(record)
@@ -112,7 +112,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		status: config.networkConfigured ? 'syncing' : 'paused',
 		tokenAddresses: config.tokenAddresses,
 		tokenMarkets: [],
-		priceHistory: await loadPriceHistory(config.priceHistoryFile),
+		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
 		reportPaths: [],
 		transactionActivity: [],
 	}
@@ -212,7 +212,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const reports = new Map<bigint, ActiveReport>()
 	const persistPosition = async (position: PositionRecord) => {
 		const nextPositions = [position, ...positions.filter(existing => existing.reportId !== position.reportId)]
-		await savePositionJournal(config.positionFile, nextPositions)
+		await savePositionJournal(config.positionFile, nextPositions, config.network.chain.id)
 		positions = nextPositions
 		state.positions = nextPositions
 	}
@@ -221,7 +221,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			const record = position.historyOutbox
 			if (record === undefined) continue
 			if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-			await appendExecutionHistoryIfMissing(config.historyFile, record)
+			await appendExecutionHistoryIfMissing(config.historyFile, record, config.network.chain.id)
 			await persistPosition({ ...position, historyOutbox: undefined })
 		}
 	}
@@ -280,7 +280,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (executionActivationPending) {
 							if (lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 							await ensureExecutionHistoryWritable(config.historyFile)
-							await savePositionJournal(config.positionFile, positions)
+							await savePositionJournal(config.positionFile, positions, config.network.chain.id)
 							config.execute = true
 							state.paused = true
 							startupValidated = false
@@ -760,7 +760,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						})
 						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
-						await appendPriceHistory(config.priceHistoryFile, samples)
+						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
 						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
 						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')

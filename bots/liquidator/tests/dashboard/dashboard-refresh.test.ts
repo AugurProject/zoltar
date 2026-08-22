@@ -200,6 +200,8 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let pendingProfileConfiguration: DashboardConfiguration | undefined
 	let staleProfilePolls = 0
 	let configurationRequestFailure = initialConfigurationRequestFailure
+	let hangNextConfigurationRequest = false
+	let hangNextProfileResponse = false
 	let rejectPause = false
 	const pauseRequests: unknown[] = []
 	const approvedUniverseRequests: string[][] = []
@@ -217,6 +219,12 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/configuration') {
+			if (hangNextConfigurationRequest) {
+				hangNextConfigurationRequest = false
+				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new Error('fixture configuration request aborted')), { once: true })
+				})
+			}
 			if (configurationRequestFailure) return new window.Response(JSON.stringify({ error: 'configuration fixture unavailable' }), { headers: { 'content-type': 'application/json' }, status: 503 })
 			if (pendingProfileConfiguration !== undefined) {
 				if (staleProfilePolls === 0) {
@@ -288,6 +296,12 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
 				networkConfigured: false,
 			}
+			if (hangNextProfileResponse) {
+				hangNextProfileResponse = false
+				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new Error('fixture profile request aborted')), { once: true })
+				})
+			}
 			return new window.Response(JSON.stringify(pendingProfileConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/paused') {
@@ -327,6 +341,12 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		setStaleProfilePolls: (count: number) => {
 			staleProfilePolls = count
+		},
+		hangNextConfigurationRequest: () => {
+			hangNextConfigurationRequest = true
+		},
+		hangNextProfileResponse: () => {
+			hangNextProfileResponse = true
 		},
 		hangNextStateRequest: () => {
 			hangNextStateRequest = true
@@ -560,6 +580,8 @@ describe('liquidator dashboard refresh behavior', () => {
 			state(undefined, [], { rpcEndpointHealth: [{ consecutiveFailures: 0, latencyMilliseconds: 84, status: 'healthy', target: 'https://mainnet.example' }] }),
 		)
 		page.setStaleProfilePolls(3)
+		page.hangNextProfileResponse()
+		page.hangNextConfigurationRequest()
 		const networkName = page.window.document.getElementById('network-name')
 		const networkFields = page.window.document.getElementById('network-fields')
 		const strategyFields = page.window.document.getElementById('strategy-fields')
@@ -584,7 +606,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(networkName.value).toBe('mainnet')
 		expect(networkFields.disabled).toBe(true)
 		expect(strategyFields.disabled).toBe(true)
-		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Profile saved. The bot is switching chains in place; settings will reload automatically.')
+		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Switching to the Sepolia profile…')
 		expect(page.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
 		expect(page.window.document.getElementById('network-scope-summary')?.textContent).toBe('Ethereum mainnet profile · switching to Sepolia')
 		expect(readRpcUrl.value).toBe('https://mainnet-read.example')
@@ -602,7 +624,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await Bun.sleep(20)
 		expect(networkName.value).toBe('mainnet')
 		await staleStateRefresh
-		await Bun.sleep(1_600)
+		await Bun.sleep(6_000)
 		expect(networkName.value).toBe('sepolia')
 		expect(networkFields.disabled).toBe(false)
 		expect(strategyFields.disabled).toBe(true)

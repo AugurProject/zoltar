@@ -131,7 +131,7 @@ async function preflightOperatorProfile(settingsFile: string, target: PersistedO
 			if (target.privateKey === undefined) throw new Error('Execution requires an active signer')
 			signerLock = await acquireExecutionSignerLock(chain.id, privateKeyToAccount(target.privateKey).address)
 		}
-		await Promise.all([loadPositionJournal(target.runtime.positionFile), loadExecutionHistory(target.runtime.historyFile), loadPriceHistory(target.runtime.priceHistoryFile)])
+		await Promise.all([loadPositionJournal(target.runtime.positionFile, chain.id), loadExecutionHistory(target.runtime.historyFile, chain.id), loadPriceHistory(target.runtime.priceHistoryFile, chain.id)])
 	} finally {
 		const releases = [signerLock, journalLock].filter(lock => lock !== undefined).map(lock => lock.release())
 		const results = await Promise.allSettled(releases)

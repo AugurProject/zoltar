@@ -58,8 +58,8 @@ export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Pr
 	let timeout: ReturnType<typeof setTimeout> | undefined
 	const deadline = new Promise<never>((_resolve, reject) => {
 		timeout = setTimeout(() => {
-			controller.abort()
 			reject(new Error(timeoutMessage))
+			controller.abort()
 		}, timeoutMilliseconds)
 	})
 	try {

@@ -7,7 +7,7 @@ import { getAddress, keccak256, privateKeyToAccount, type Hex } from '../helpers
 
 describe('liquidator durable state', () => {
 	test('reports operator capability only after a complete scan with no unresolved recovery', () => {
-		const state = initialRuntimeState(false, undefined)
+		const state = initialRuntimeState(false, undefined, 1)
 		expect(operatorSnapshot(state, false).operatorCapable).toBe(false)
 		state.lastScanAt = '2026-08-20T00:00:00.000Z'
 		state.lastScannedBlock = 100n
@@ -37,10 +37,21 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-schema-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, JSON.stringify({ activities: [], pendingStagedOperations: [], version: 1 }), 'utf8')
-			await expect(loadDurableState(path)).rejects.toThrow('pendingTransactions')
-			await writeFile(path, JSON.stringify({ activities: [], pendingTransactions: [], version: 1 }), 'utf8')
-			await expect(loadDurableState(path)).rejects.toThrow('pendingStagedOperations')
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], version: 2 }), 'utf8')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions')
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingTransactions: [], version: 2 }), 'utf8')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingStagedOperations')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects a valid durable state bound to another chain', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-chain-'))
+		const path = join(directory, 'state.json')
+		try {
+			await saveDurableState(path, initialRuntimeState(true, undefined, 1))
+			await expect(loadDurableState(path, 11_155_111)).rejects.toThrow('belongs to chain 1')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -71,7 +82,7 @@ describe('liquidator durable state', () => {
 				to: getAddress('0x0000000000000000000000000000000000000020'),
 				value: 0n,
 			})
-			const state = initialRuntimeState(false, account.address)
+			const state = initialRuntimeState(false, account.address, 1)
 			state.pendingStagedOperations.push({
 				candidateOutcome: {
 					blockHash: `0x${'44'.repeat(32)}`,
@@ -111,7 +122,7 @@ describe('liquidator durable state', () => {
 				submissionBlock: 100n,
 			})
 			await saveDurableState(path, state)
-			const loaded = await loadDurableState(path)
+			const loaded = await loadDurableState(path, 1)
 			expect(loaded.pendingTransactions).toEqual(state.pendingTransactions)
 			expect(loaded.pendingStagedOperations).toEqual(state.pendingStagedOperations)
 		} finally {
@@ -135,7 +146,7 @@ describe('liquidator durable state', () => {
 				value: 0n,
 			})
 			const hash = keccak256(serializedTransaction)
-			const state = initialRuntimeState(false, account.address)
+			const state = initialRuntimeState(false, account.address, 1)
 			state.pendingTransactions.push({
 				hash,
 				kind: 'liquidation',
@@ -151,13 +162,13 @@ describe('liquidator durable state', () => {
 			})
 			expect(resolveRecoveredIntentJournal(state, hash, undefined)).toBe(false)
 			await saveDurableState(path, state)
-			const restarted = await loadDurableState(path)
+			const restarted = await loadDurableState(path, 1)
 			expect(restarted.pendingTransactions).toHaveLength(1)
-			const recoveredState = initialRuntimeState(false, account.address)
+			const recoveredState = initialRuntimeState(false, account.address, 1)
 			recoveredState.pendingTransactions = restarted.pendingTransactions
 			expect(resolveRecoveredIntentJournal(recoveredState, hash, 'success')).toBe(true)
 			await saveDurableState(path, recoveredState)
-			expect((await loadDurableState(path)).pendingTransactions).toEqual([])
+			expect((await loadDurableState(path, 1)).pendingTransactions).toEqual([])
 		} finally {
 			await rm(directory, { recursive: true })
 		}
@@ -168,7 +179,7 @@ describe('liquidator durable state', () => {
 		if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
 		const serializedTransaction = await account.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 4n, to: getAddress('0x0000000000000000000000000000000000000020'), value: 0n })
 		const hash = keccak256(serializedTransaction)
-		const state = initialRuntimeState(false, account.address)
+		const state = initialRuntimeState(false, account.address, 1)
 		state.pendingTransactions.push({ hash, kind: 'liquidation', label: 'Replacement persistence', maxBlockNumber: 120n, mode: 'public', nonce: 4n, receiptExpectation: { type: 'transaction' }, requiresMarketEvidence: true, sender: account.address, serializedTransaction, submissionBlock: 100n })
 		const activity = { hash, kind: 'recovery' as const, message: 'Replacement reconciled', status: 'confirmed' as const }
 		await expect(
@@ -192,8 +203,8 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, '{"version":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}')
-			expect(loadDurableState(path)).rejects.toThrow('pendingTransactions must be an array')
+			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}')
+			expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -207,6 +218,7 @@ describe('liquidator durable state', () => {
 				path,
 				JSON.stringify({
 					activities: [],
+					chainId: 1,
 					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
@@ -222,10 +234,10 @@ describe('liquidator durable state', () => {
 							submissionBlock: '100',
 						},
 					],
-					version: 1,
+					version: 2,
 				}),
 			)
-			expect(loadDurableState(path)).rejects.toThrow('hash does not match')
+			expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -254,6 +266,7 @@ describe('liquidator durable state', () => {
 				path,
 				JSON.stringify({
 					activities: [],
+					chainId: 1,
 					pendingStagedOperations: [],
 					pendingTransactions: [
 						{
@@ -269,10 +282,10 @@ describe('liquidator durable state', () => {
 							submissionBlock: '100',
 						},
 					],
-					version: 1,
+					version: 2,
 				}),
 			)
-			expect(loadDurableState(path)).rejects.toThrow('sender does not match')
+			expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}

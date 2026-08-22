@@ -1195,8 +1195,14 @@ an independently calculated realized P&amp;L or an explicit declaration that P&a
 is unavailable:
 
 ```bash
-PRIVATE_KEY=0x... bun run reconcile -- --position-file=.state/positions-sepolia.json --report-id=42 --confirm-report-id=42 --evidence='receipts and balance snapshots archived under incident-42' --note='residual REP sold manually; balances checked on all configured read RPCs' --external-cost-eth=0.003 --final-wallet-weth=4.2 --final-wallet-token=85 --pnl-unavailable=true
+PRIVATE_KEY=0x... bun run reconcile -- --position-file=.state/positions-mainnet.sepolia.json --chain-id=11155111 --report-id=42 --confirm-report-id=42 --evidence='receipts and balance snapshots archived under incident-42' --note='residual REP sold manually; balances checked on all configured read RPCs' --external-cost-eth=0.003 --final-wallet-weth=4.2 --final-wallet-token=85 --pnl-unavailable=true
 ```
+
+Use the active profile's configured `runtime.positionFile`; switching the supplied
+Mainnet configuration to Sepolia generates
+`.state/positions-mainnet.sepolia.json`. Set `--chain-id=1` for Mainnet or
+`--chain-id=11155111` for Sepolia. The command rejects a journal bound to a
+different chain.
 
 Use `--realized-net-profit-eth=-0.04 --acknowledge-pnl-is-all-in=true` instead of
 `--pnl-unavailable=true` only when entry evidence was recovered and the all-in value

@@ -58,6 +58,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	let configurationGate: Promise<void> | undefined
 	let releaseState: (() => void) | undefined
 	let releaseConfiguration: (() => void) | undefined
+	let hangProfileResponse = true
 	const submission = validateSubmissionSettings({ mode: 'public', relayUrls: [] })
 	const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	const deployment = {
@@ -123,9 +124,17 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
 		setPaused: () => undefined,
-		switchNetworkProfile: value => {
-			if (typeof value !== 'object' || value === null || Reflect.get(value, 'network') !== 'sepolia') throw new Error('Unexpected profile request')
-			return { network: 'sepolia' }
+		switchNetworkProfile: async value => {
+			if (typeof value !== 'object' || value === null) throw new Error('Unexpected profile request')
+			const requestedNetwork = Reflect.get(value, 'network')
+			if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') throw new Error('Unexpected profile request')
+			if (requestedNetwork === 'sepolia' && hangProfileResponse) {
+				hangProfileResponse = false
+				network = 'sepolia'
+				currentStrategy = strategy(222n)
+				return await new Promise<never>(() => {})
+			}
+			return { network: requestedNetwork }
 		},
 		updateConnectivity: value => value,
 		updateSigner: () => ({ wallet: undefined }),
@@ -193,25 +202,39 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	releaseConfiguration?.()
 	stateGate = undefined
 	configurationGate = undefined
-	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.includes('did not reconnect in time'); attempt++) await Bun.sleep(20)
-	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
-	const profileRetry = element(window, 'profile-switch-retry-button', window.HTMLButtonElement)
-	expect(profileRetry.hidden).toBe(false)
-	expect(profileRetry.disabled).toBe(false)
-	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
-	network = 'sepolia'
-	currentStrategy = strategy(222n)
-	profileRetry.click()
-	await Bun.sleep(50)
+	for (let attempt = 0; attempt < 200 && !element(window, 'settings-chain-scope', window.HTMLElement).textContent.includes('Sepolia'); attempt++) await Bun.sleep(20)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Sepolia')
 	expect(element(window, 'network-name', window.HTMLSelectElement).value).toBe('sepolia')
 	expect(element(window, 'network-target-status', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'configuration-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)
+	const loadedProfitInput = window.document.querySelector('[name="minimumProfitBps"]')
+	if (!(loadedProfitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
+	expect(loadedProfitInput.value).toBe('222')
+
+	const mainnetSelect = element(window, 'network-name', window.HTMLSelectElement)
+	mainnetSelect.value = 'mainnet'
+	mainnetSelect.dispatchEvent(new window.Event('change'))
+	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.includes('did not reconnect in time'); attempt++) await Bun.sleep(20)
+	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
+	const profileRetry = element(window, 'profile-switch-retry-button', window.HTMLButtonElement)
+	expect(profileRetry.hidden).toBe(false)
+	expect(profileRetry.disabled).toBe(false)
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
+	network = 'mainnet'
+	currentStrategy = strategy(333n)
+	profileRetry.click()
+	await Bun.sleep(50)
+	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
+	expect(element(window, 'network-name', window.HTMLSelectElement).value).toBe('mainnet')
+	expect(element(window, 'network-target-status', window.HTMLElement).hidden).toBe(true)
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
+	expect(element(window, 'configuration-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
+	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)
 	const profitInput = window.document.querySelector('[name="minimumProfitBps"]')
 	if (!(profitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
-	expect(profitInput.value).toBe('222')
+	expect(profitInput.value).toBe('333')
 })
 
 function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {

@@ -7,7 +7,7 @@ import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type P
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { acquirePositionJournalLock } from '#state/position-store'
+import { acquirePositionJournalLock, savePositionJournal } from '#state/position-store'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -482,6 +482,16 @@ describe('file-only startup configuration', () => {
 		})
 		expect(mutationAfterRejectedSwitch.status, await mutationAfterRejectedSwitch.clone().text()).toBe(200)
 		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
+		await savePositionJournal(join(directory, 'positions.json'), [], 11_155_111)
+		const wrongStateSwitch = await fetch(`${origin}/api/network-profile`, {
+			body: JSON.stringify({ network: 'mainnet' }),
+			headers: { 'content-type': 'application/json', origin },
+			method: 'PUT',
+		})
+		expect(wrongStateSwitch.status, await wrongStateSwitch.clone().text()).toBe(400)
+		expect(await Bun.file(path).text()).toBe(configuredContents)
+		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+		await savePositionJournal(join(directory, 'positions.json'), [], 1)
 		const targetJournalLock = await acquirePositionJournalLock(join(directory, 'positions.json'))
 		try {
 			const lockedSwitch = await fetch(`${origin}/api/network-profile`, {

@@ -55,7 +55,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 		stateFile: target.runtime.stateFile,
 	})
 	try {
-		const durable = await loadDurableState(target.runtime.stateFile)
+		const durable = await loadDurableState(target.runtime.stateFile, target.network.chainId)
 		const configuredSigner = target.privateKey === undefined ? undefined : privateKeyToAccount(target.privateKey).address
 		for (const intent of durable.pendingTransactions) {
 			validateReconciliationIntentChain(intent.serializedTransaction, target.network.chainId)
@@ -83,8 +83,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					chain,
 					transport: readPool.transport,
 				})
-	const state = initialRuntimeState(settings.paused, wallet?.account.address)
-	const durable = await loadDurableState(settings.runtime.stateFile)
+	const state = initialRuntimeState(settings.paused, wallet?.account.address, settings.network.chainId)
+	const durable = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)
 	state.pendingStagedOperations = durable.pendingStagedOperations

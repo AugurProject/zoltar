@@ -54,6 +54,8 @@ let manualRefreshPending = false
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
 const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -1229,10 +1231,15 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 	setControlsEnabled(connected)
 	setText('connectivity-status', '')
 	try {
-		await api('/api/network-profile', { body: JSON.stringify({ network: requestedNetwork }), headers: { 'content-type': 'application/json' }, method: 'PUT' })
+		await requestWithTimeout(signal => api('/api/network-profile', { body: JSON.stringify({ network: requestedNetwork }), headers: { 'content-type': 'application/json' }, method: 'PUT', signal }), PROFILE_SWITCH_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE)
 		setText('connectivity-status', 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		void waitForNetworkProfile(requestedNetwork)
 	} catch (error) {
+		if (error instanceof Error && error.message === PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE) {
+			setText('connectivity-status', 'The switch request timed out with an unknown outcome. Existing settings remain locked while the dashboard checks the selected profile.')
+			void waitForNetworkProfile(requestedNetwork)
+			return
+		}
 		profileRequestEpoch += 1
 		pendingNetworkProfile = undefined
 		pendingProfileStateConfirmed = false

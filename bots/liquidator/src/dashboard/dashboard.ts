@@ -216,6 +216,9 @@ let configurationConnected = false
 let pauseRequestPending: boolean | undefined
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
+const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
+const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
 function compactDuration(seconds: number) {
 	if (seconds < 60) return `${seconds.toString()}s`
@@ -272,13 +275,13 @@ function setMutationControlsEnabled(enabled: boolean) {
 	}
 }
 
-async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number) {
+async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
 	const controller = new window.AbortController()
 	let timeout: number | undefined
 	const deadline = new Promise<never>((_resolve, reject) => {
 		timeout = window.setTimeout(() => {
+			reject(new Error(timeoutMessage))
 			controller.abort()
-			reject(new Error('Dashboard state request timed out'))
 		}, timeoutMilliseconds)
 	})
 	try {
@@ -299,14 +302,12 @@ async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?:
 	return value as T
 }
 
-function put<T = unknown>(path: string, value: unknown) {
+function put<T = unknown>(path: string, value: unknown, timeoutMilliseconds?: number, timeoutMessage?: string) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Request body is not JSON serializable')
-	return api<T>(path, {
-		body,
-		headers: { 'content-type': 'application/json' },
-		method: 'PUT',
-	})
+	const options = { body, headers: { 'content-type': 'application/json' }, method: 'PUT' }
+	if (timeoutMilliseconds === undefined) return api<T>(path, options)
+	return requestWithTimeout(signal => api<T>(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
 }
 
 function shortAddress(address: string) {
@@ -1124,11 +1125,16 @@ networkName.addEventListener('change', async () => {
 	setMutationControlsEnabled(stateConnected)
 	actionStatus(networkStatus, `Switching to the ${requestedNetwork === 'mainnet' ? 'Ethereum mainnet' : 'Sepolia'} profile…`)
 	try {
-		await put<Configuration>('/api/network-profile', { network: requestedNetwork })
+		await put<Configuration>('/api/network-profile', { network: requestedNetwork }, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE)
 		networkFields.disabled = true
 		actionStatus(networkStatus, 'Profile saved. The bot is switching chains in place; settings will reload automatically.')
 		await waitForNetworkProfile(requestedNetwork)
 	} catch (error) {
+		if (error instanceof Error && error.message === PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE) {
+			actionStatus(networkStatus, 'The switch request timed out with an unknown outcome. Existing settings remain locked while the dashboard checks the selected profile.')
+			await waitForNetworkProfile(requestedNetwork)
+			return
+		}
 		if (pendingNetworkProfile === requestedNetwork) {
 			profileRequestEpoch += 1
 			pendingNetworkProfile = undefined
@@ -1600,7 +1606,7 @@ async function loadConfiguration() {
 		configurationStatus.textContent = 'Loading pool selection and strategy…'
 	}
 	try {
-		const configuration = await api<Configuration>('/api/configuration')
+		const configuration = await api<Configuration>('/api/configuration', undefined, CONFIGURATION_REQUEST_TIMEOUT_MS)
 		if (profileRequestEpoch !== requestEpoch || pendingNetworkProfile !== expectedNetwork) return false
 		if (expectedNetwork !== undefined && configuration.network?.name !== expectedNetwork) {
 			networkName.value = expectedNetwork

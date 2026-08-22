@@ -246,8 +246,22 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 
 	const targetPrivateKey = `0x${'22'.repeat(32)}` as const
 	const targetAccount = privateKeyToAccount(targetPrivateKey)
+	const wrongBoundState = initialRuntimeState(true, targetAccount.address, 1)
+	await saveDurableState(join(directory, 'sepolia-state.json'), wrongBoundState)
+	Reflect.set(incompatibleProfile, 'networkConfigured', false)
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	const wrongBoundProfile = await fetch(`${origin}/api/network-profile`, {
+		body: JSON.stringify({ network: 'sepolia' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(wrongBoundProfile.status, await wrongBoundProfile.clone().text()).toBe(400)
+	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
+	expect(child.exitCode).toBeNull()
+
 	const wrongChainTransaction = await targetAccount.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to: '0x0000000000000000000000000000000000000020', value: 0n })
-	const targetState = initialRuntimeState(true, targetAccount.address)
+	const targetState = initialRuntimeState(true, targetAccount.address, 11_155_111)
 	targetState.pendingTransactions.push({
 		hash: keccak256(wrongChainTransaction),
 		kind: 'fees',
