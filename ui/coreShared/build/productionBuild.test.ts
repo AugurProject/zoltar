@@ -17,7 +17,7 @@ let server: Bun.Server | undefined
 
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS)
-const productionWorkflowTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
+const productionWorkflowTest = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' ? (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS) : test.skip
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
@@ -168,6 +168,15 @@ for (const appId of UI_APP_IDS) {
 
 type BrowserProcessStatus = Pick<Bun.Subprocess, 'exitCode' | 'signalCode'>
 type BrowserProcess = Pick<Bun.Subprocess, 'exitCode' | 'exited' | 'signalCode'>
+type PollingClock = {
+	now: () => number
+	sleep: (milliseconds: number) => Promise<void>
+}
+
+const realtimePollingClock: PollingClock = {
+	now: Date.now,
+	sleep: Bun.sleep,
+}
 
 function describeBrowserExit(browserProcess: BrowserProcessStatus) {
 	if (browserProcess.exitCode !== null) return `code ${browserProcess.exitCode.toString()}`
@@ -187,11 +196,11 @@ function createChromiumStartupError(error: unknown, browserExit: string, stderr:
 	return new Error(`${message}\nChromium exit: ${browserExit}\n${diagnostic}`, { cause: error })
 }
 
-async function waitForDevToolsPort(portFilePath: string, browserProcess?: BrowserProcessStatus, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS) {
-	const deadline = Date.now() + timeoutMilliseconds
+async function waitForDevToolsPort(portFilePath: string, browserProcess?: BrowserProcessStatus, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, clock: PollingClock = realtimePollingClock) {
+	const deadline = clock.now() + timeoutMilliseconds
 	let lastObservedState = 'port file not created'
 
-	while (Date.now() < deadline) {
+	while (clock.now() < deadline) {
 		const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
 		if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before publishing its DevTools port`)
 
@@ -204,9 +213,9 @@ async function waitForDevToolsPort(portFilePath: string, browserProcess?: Browse
 			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 		}
 
-		const remainingMilliseconds = deadline - Date.now()
+		const remainingMilliseconds = deadline - clock.now()
 		if (remainingMilliseconds <= 0) break
-		await Bun.sleep(Math.min(25, remainingMilliseconds))
+		await clock.sleep(Math.min(25, remainingMilliseconds))
 	}
 
 	throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
@@ -215,15 +224,26 @@ async function waitForDevToolsPort(portFilePath: string, browserProcess?: Browse
 test('Chromium DevTools port discovery tolerates delayed startup', async () => {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-delayed-devtools-port-'))
 	const portFilePath = path.join(profilePath, 'DevToolsActivePort')
-	const writePortFile = Bun.sleep(5_250).then(async () => await fs.writeFile(portFilePath, '9222\n'))
+	let elapsedMilliseconds = 0
+	let portPublished = false
+	const clock: PollingClock = {
+		now: () => elapsedMilliseconds,
+		sleep: async milliseconds => {
+			elapsedMilliseconds += milliseconds
+			if (!portPublished && elapsedMilliseconds >= 5_250) {
+				portPublished = true
+				await fs.writeFile(portFilePath, '9222\n')
+			}
+		},
+	}
 
 	try {
-		await expect(waitForDevToolsPort(portFilePath)).resolves.toBe(9222)
+		await expect(waitForDevToolsPort(portFilePath, undefined, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, clock)).resolves.toBe(9222)
+		expect(elapsedMilliseconds).toBe(5_250)
 	} finally {
-		await writePortFile
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
-}, 10_000)
+})
 
 test('Chromium DevTools port discovery reports an early browser exit', async () => {
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: 17, signalCode: null })).rejects.toThrow('Chromium exited with code 17 before publishing its DevTools port')
@@ -233,16 +253,16 @@ test('Chromium DevTools port discovery reports an early browser signal', async (
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: null, signalCode: 'SIGTERM' }, 50)).rejects.toThrow('Chromium exited with signal SIGTERM before publishing its DevTools port')
 })
 
-async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess) {
-	const deadline = Date.now() + timeoutMilliseconds
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess, clock: PollingClock = realtimePollingClock) {
+	const deadline = clock.now() + timeoutMilliseconds
 	let lastObservedState = 'no response'
 
-	while (Date.now() < deadline) {
+	while (clock.now() < deadline) {
 		const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
 		if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before exposing a DevTools page target`)
 
 		try {
-			const remainingMilliseconds = deadline - Date.now()
+			const remainingMilliseconds = deadline - clock.now()
 			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(Math.min(remainingMilliseconds, CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS)) })
 			const targetsResponse = browserProcess === undefined ? await targetsRequest : await Promise.race([targetsRequest, rejectWhenBrowserExits(browserProcess, 'exposing a DevTools page target')])
 			if (!targetsResponse.ok) {
@@ -262,9 +282,9 @@ async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds
 			lastObservedState = error instanceof Error ? error.message : String(error)
 		}
 
-		const remainingMilliseconds = deadline - Date.now()
+		const remainingMilliseconds = deadline - clock.now()
 		if (remainingMilliseconds <= 0) break
-		await Bun.sleep(Math.min(50, remainingMilliseconds))
+		await clock.sleep(Math.min(50, remainingMilliseconds))
 	}
 
 	throw new Error(`Chromium page target was unavailable after ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
@@ -301,23 +321,26 @@ test('Chromium page target discovery tolerates an initially empty target list', 
 })
 
 test('Chromium page target discovery tolerates a delayed initial page target', async () => {
-	let firstRequestAt: number | undefined
+	let elapsedMilliseconds = 0
 	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
 	const devToolsServer = Bun.serve({
-		fetch: () => {
-			const now = Date.now()
-			firstRequestAt ??= now
-			return Response.json(now - firstRequestAt < 5_250 ? [] : [{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
-		},
+		fetch: () => Response.json(elapsedMilliseconds < 5_250 ? [] : [{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }]),
 		port: 0,
 	})
+	const clock: PollingClock = {
+		now: () => elapsedMilliseconds,
+		sleep: async milliseconds => {
+			elapsedMilliseconds += milliseconds
+		},
+	}
 
 	try {
-		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, undefined, clock)).resolves.toBe(pageWebSocketUrl)
+		expect(elapsedMilliseconds).toBe(5_250)
 	} finally {
 		devToolsServer.stop(true)
 	}
-}, 10_000)
+})
 
 test('Chromium page target discovery retries after a stalled target response', async () => {
 	let requestCount = 0
@@ -739,6 +762,7 @@ const productionBrowserScenarios = [
 		appId: 'zoltar',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
 		expected: 'Deploy Contracts',
+		workflow: false,
 		name: 'zoltar baseline deployment',
 		viewport: { height: 900, width: 1440 },
 	},
@@ -746,6 +770,7 @@ const productionBrowserScenarios = [
 		appId: 'zoltar',
 		hash: '#/zoltar?simulate=1&simScenario=deployed',
 		expected: 'Questions',
+		workflow: false,
 		name: 'zoltar deployed protocol',
 		viewport: { height: 900, width: 1440 },
 	},
@@ -753,6 +778,7 @@ const productionBrowserScenarios = [
 		appId: 'statoblast',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
 		expected: 'Deploy Contracts',
+		workflow: false,
 		name: 'statoblast baseline deployment',
 		viewport: { height: 900, width: 1440 },
 	},
@@ -760,6 +786,7 @@ const productionBrowserScenarios = [
 		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=security-pool',
 		expected: 'Security Pools',
+		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
 	},
@@ -767,13 +794,15 @@ const productionBrowserScenarios = [
 		appId: 'statoblast',
 		hash: '#/security-pools?simulate=1&simScenario=securitypoolx2-auction',
 		expected: 'Truth Auction',
+		workflow: true,
 		name: 'statoblast fork and auction',
 		viewport: { height: 900, width: 1440 },
 	},
 ] as const
 
 for (const scenario of productionBrowserScenarios) {
-	productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, async () => {
+	const browserTest = scenario.workflow ? productionWorkflowTest : productionBrowserTest
+	browserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { getWeightedTestFiles, KNOWN_FILE_WEIGHTS } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
 import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
-import { createTestTimingObservation, getHistoricalTestWeights, MAXIMUM_TIMING_SAMPLES, mergeTestTimingHistory, parseJunitTestCaseSeconds, readTestTimingHistory, TEST_TIMING_HISTORY_VERSION, type TestTimingHistory } from './test-timings.mts'
+import { createTestTimingObservation, createTestTimingReport, getHistoricalTestWeights, MAXIMUM_TIMING_SAMPLES, mergeTestTimingHistory, parseJunitTestCaseSeconds, readTestTimingHistory, renderTestTimingMarkdown, TEST_TIMING_HISTORY_VERSION, type TestTimingHistory } from './test-timings.mts'
 
 describe('canonical test discovery', () => {
 	test('local and CI discovery include source, shared, and fuzz tests exactly once', async () => {
@@ -95,5 +95,39 @@ describe('canonical test discovery', () => {
 		} finally {
 			await rm(directory, { recursive: true })
 		}
+	})
+
+	test('timing reports flag only established regressions that exceed absolute and relative budgets', () => {
+		const history: TestTimingHistory = {
+			version: TEST_TIMING_HISTORY_VERSION,
+			samplesByFile: {
+				'established-slow.test.ts': [20, 21, 19],
+				'relative-only.test.ts': [2, 2, 2],
+				'sparse.test.ts': [1, 1],
+			},
+		}
+		const observation = createTestTimingObservation('<testcase file="established-slow.test.ts" time="35"/><testcase file="relative-only.test.ts" time="5"/><testcase file="sparse.test.ts" time="30"/>', 70, ['established-slow.test.ts', 'relative-only.test.ts', 'sparse.test.ts'])
+		const report = createTestTimingReport(history, [observation])
+
+		expect(report.regressions.map(regression => regression.filePath)).toEqual(['established-slow.test.ts'])
+		expect(report.slowestFiles.map(file => file.filePath)).toEqual(['established-slow.test.ts', 'sparse.test.ts', 'relative-only.test.ts'])
+		expect(renderTestTimingMarkdown(report)).toContain('Timing regression budget: failed')
+	})
+
+	test('timing reports pass without historical regressions', () => {
+		const observation = createTestTimingObservation('<testcase file="new.test.ts" time="4"/>', 4, ['new.test.ts'])
+		const report = createTestTimingReport(undefined, [observation])
+
+		expect(report.regressions).toEqual([])
+		expect(renderTestTimingMarkdown(report)).toContain('Timing regression budget: passed')
+	})
+
+	test('timing reports handle a zero-second historical baseline', () => {
+		const history: TestTimingHistory = { version: TEST_TIMING_HISTORY_VERSION, samplesByFile: { 'formerly-empty.test.ts': [0, 0, 0] } }
+		const observation = createTestTimingObservation('<testcase file="formerly-empty.test.ts" time="11"/>', 11, ['formerly-empty.test.ts'])
+		const report = createTestTimingReport(history, [observation])
+
+		expect(report.regressions).toHaveLength(1)
+		expect(report.regressions[0]?.increaseRatio).toBe(Number.POSITIVE_INFINITY)
 	})
 })
