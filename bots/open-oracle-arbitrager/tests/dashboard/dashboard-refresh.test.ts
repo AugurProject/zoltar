@@ -125,9 +125,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		setPaused: () => undefined,
 		switchNetworkProfile: value => {
 			if (typeof value !== 'object' || value === null || Reflect.get(value, 'network') !== 'sepolia') throw new Error('Unexpected profile request')
-			network = 'sepolia'
-			currentStrategy = strategy(222n)
-			return { network }
+			return { network: 'sepolia' }
 		},
 		updateConnectivity: value => value,
 		updateSigner: () => ({ wallet: undefined }),
@@ -192,6 +190,14 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	releaseConfiguration?.()
 	stateGate = undefined
 	configurationGate = undefined
+	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.includes('did not reconnect in time'); attempt++) await Bun.sleep(20)
+	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The profile was saved, but the dashboard did not reconnect in time. Use Reload configuration to retry.')
+	expect(element(window, 'reload-configuration-button', window.HTMLButtonElement).disabled).toBe(false)
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(true)
+	network = 'sepolia'
+	currentStrategy = strategy(222n)
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	element(window, 'reload-configuration-button', window.HTMLButtonElement).click()
 	await Bun.sleep(50)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Sepolia')
 	expect(element(window, 'network-name', window.HTMLSelectElement).value).toBe('sepolia')

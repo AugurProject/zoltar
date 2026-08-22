@@ -320,13 +320,7 @@ function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof p
 }
 
 async function assertOperatorProfileCandidates(path: string, candidates: readonly OperatorProfileCandidate[]) {
-	const reservedPaths = await persistentPathIdentities([
-		path,
-		operatorProfilePath(path, 'mainnet'),
-		operatorProfilePath(path, 'sepolia'),
-		executorDeploymentIntentPath(path, 'mainnet'),
-		executorDeploymentIntentPath(path, 'sepolia'),
-	])
+	const reservedPaths = await persistentPathIdentities([path, operatorProfilePath(path, 'mainnet'), operatorProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path, 'mainnet'), executorDeploymentIntentPath(path, 'sepolia')])
 	const candidatePaths: { candidate: OperatorProfileCandidate; durablePaths: Awaited<ReturnType<typeof persistentPathIdentity>>[] }[] = []
 	for (const candidate of candidates) {
 		if (candidate.settings.network !== candidate.expectedNetwork) throw new Error(`The ${candidate.expectedNetwork} profile contains ${candidate.settings.network} settings`)

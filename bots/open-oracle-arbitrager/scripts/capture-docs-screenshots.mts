@@ -43,6 +43,7 @@ let fixtureConfigurationUnavailable = false
 let fixtureNetworkConfigured = true
 let fixturePauseHanging = false
 let fixtureProfileHanging = false
+let fixtureNetwork: 'mainnet' | 'sepolia' = 'mainnet'
 const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
@@ -448,6 +449,95 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await capturePng(name)
 			}
 			fixtureProfileHanging = false
+			await Bun.sleep(20_500)
+			for (const [name, width, height] of [
+				['profile-switch-timeout-desktop.png', 1440, 900],
+				['profile-switch-timeout-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const timeoutState = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => ({
+							bodyScrollWidth: document.body.scrollWidth,
+							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+							reloadDisabled: document.querySelector('#reload-configuration-button')?.disabled,
+							status: document.querySelector('#connectivity-status')?.textContent,
+							targetStatusHidden: document.querySelector('#network-target-status')?.hidden
+						}))()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const timeoutValue = typeof timeoutState === 'object' && timeoutState !== null && 'result' in timeoutState && typeof timeoutState.result === 'object' && timeoutState.result !== null && 'value' in timeoutState.result ? timeoutState.result.value : undefined
+				if (
+					typeof timeoutValue !== 'object' ||
+					timeoutValue === null ||
+					!('bodyScrollWidth' in timeoutValue) ||
+					typeof timeoutValue.bodyScrollWidth !== 'number' ||
+					timeoutValue.bodyScrollWidth > width ||
+					!('fieldsetDisabled' in timeoutValue) ||
+					timeoutValue.fieldsetDisabled !== true ||
+					!('reloadDisabled' in timeoutValue) ||
+					timeoutValue.reloadDisabled !== false ||
+					!('status' in timeoutValue) ||
+					timeoutValue.status !== 'The profile was saved, but the dashboard did not reconnect in time. Use Reload configuration to retry.' ||
+					!('targetStatusHidden' in timeoutValue) ||
+					timeoutValue.targetStatusHidden !== false
+				) {
+					throw new Error(`Timed-out profile switch did not expose a safe retry at ${width.toString()}px: ${JSON.stringify(timeoutValue)}`)
+				}
+				await capturePng(name)
+			}
+			fixtureNetwork = 'sepolia'
+			await command(
+				'Runtime.evaluate',
+				{
+					expression: `(() => {
+						document.querySelector('#refresh-button')?.click()
+						document.querySelector('#reload-configuration-button')?.click()
+					})()`,
+				},
+				sessionId,
+			)
+			await Bun.sleep(500)
+			for (const [name, width, height] of [
+				['profile-switch-recovered-desktop.png', 1440, 900],
+				['profile-switch-recovered-mobile.png', 390, 844],
+			] as const) {
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width }, sessionId)
+				const recovered = await command(
+					'Runtime.evaluate',
+					{
+						expression: `(() => ({
+							activeProfile: document.querySelector('#network-name')?.value,
+							bodyScrollWidth: document.body.scrollWidth,
+							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+							targetStatusHidden: document.querySelector('#network-target-status')?.hidden
+						}))()`,
+						returnByValue: true,
+					},
+					sessionId,
+				)
+				const recoveredValue = typeof recovered === 'object' && recovered !== null && 'result' in recovered && typeof recovered.result === 'object' && recovered.result !== null && 'value' in recovered.result ? recovered.result.value : undefined
+				if (
+					typeof recoveredValue !== 'object' ||
+					recoveredValue === null ||
+					!('activeProfile' in recoveredValue) ||
+					recoveredValue.activeProfile !== 'sepolia' ||
+					!('bodyScrollWidth' in recoveredValue) ||
+					typeof recoveredValue.bodyScrollWidth !== 'number' ||
+					recoveredValue.bodyScrollWidth > width ||
+					!('fieldsetDisabled' in recoveredValue) ||
+					recoveredValue.fieldsetDisabled !== false ||
+					!('targetStatusHidden' in recoveredValue) ||
+					recoveredValue.targetStatusHidden !== true
+				) {
+					throw new Error(`Timed-out profile switch did not recover at ${width.toString()}px: ${JSON.stringify(recoveredValue)}`)
+				}
+				await capturePng(name)
+			}
+			fixtureNetwork = 'mainnet'
 		}
 		if (process.env['OPEN_ORACLE_CAPTURE_CONFIGURATION_STATES'] === '1') {
 			const readConfigurationState = async () => {
@@ -1756,6 +1846,9 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 	})
 	return {
 		...snapshot,
+		expectedChainId: fixtureNetwork === 'mainnet' ? 1 : 11_155_111,
+		explorerUrl: fixtureNetwork === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
+		network: fixtureNetwork,
 		networkConfigured: fixtureNetworkConfigured,
 		endpointChecks: fixtureAttention === 'error' ? snapshot.endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : snapshot.endpointChecks,
 		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
@@ -1778,7 +1871,7 @@ const server = startDashboardServer(0, {
 		if (fixtureConfigurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
 		const configuration = await Bun.file(join(import.meta.dir, '..', 'config', 'operator.example.json')).json()
 		return {
-			configuration: { ...configuration, connectivity: snapshot.connectivity, network: 'mainnet', networkConfigured: true, rpcQuorum: 2 },
+			configuration: { ...configuration, connectivity: snapshot.connectivity, network: fixtureNetwork, networkConfigured: true, rpcQuorum: 2 },
 			revision: 'fixture-revision',
 		}
 	},

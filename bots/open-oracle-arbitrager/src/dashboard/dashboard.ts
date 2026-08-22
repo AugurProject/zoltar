@@ -37,6 +37,7 @@ let connectivityRequestPending = false
 let persistedNetwork: 'mainnet' | 'sepolia' | undefined
 let pendingNetworkProfile: 'mainnet' | 'sepolia' | undefined
 let pendingProfileStateConfirmed = false
+let profileSwitchTimedOut = false
 let profileRequestEpoch = 0
 let deploymentLoaded = false
 let tokensLoaded = false
@@ -115,7 +116,7 @@ function updateConfigurationControls() {
 	const fieldset = element('configuration-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
 	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
-	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || pendingNetworkProfile !== undefined || configurationLoading
+	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
 }
 
 function updateSettingsLoadState() {
@@ -245,6 +246,7 @@ function finishPendingProfileIfReady(network: 'mainnet' | 'sepolia') {
 	if (pendingNetworkProfile !== network || !pendingProfileStateConfirmed || persistedNetwork !== network) return false
 	pendingNetworkProfile = undefined
 	pendingProfileStateConfirmed = false
+	profileSwitchTimedOut = false
 	updateNetworkTargetStatus()
 	setText('connectivity-status', 'Chain profile loaded. All settings shown belong to this chain.')
 	setControlsEnabled(connected)
@@ -303,7 +305,9 @@ async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
 			void error
 		}
 	}
+	profileSwitchTimedOut = true
 	setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Use Reload configuration to retry.')
+	updateConfigurationControls()
 }
 
 async function api<T>(path: string, init?: RequestInit) {
@@ -1199,6 +1203,7 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 	profileRequestEpoch += 1
 	pendingNetworkProfile = requestedNetwork
 	pendingProfileStateConfirmed = false
+	profileSwitchTimedOut = false
 	select.value = previousNetwork ?? requestedNetwork
 	select.disabled = true
 	updateNetworkTargetStatus()
@@ -1212,6 +1217,7 @@ element<HTMLSelectElement>('network-name').addEventListener('change', async even
 		profileRequestEpoch += 1
 		pendingNetworkProfile = undefined
 		pendingProfileStateConfirmed = false
+		profileSwitchTimedOut = false
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
 		select.value = previousNetwork ?? 'mainnet'
 		updateNetworkTargetStatus()
