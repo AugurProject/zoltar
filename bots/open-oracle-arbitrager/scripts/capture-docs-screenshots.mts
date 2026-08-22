@@ -404,6 +404,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 								disabledTextareaBorderStyle: getComputedStyle(document.querySelector('#public-rpc-urls')).borderStyle,
 								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
 								readRpcUrl: document.querySelector('#read-rpc-url')?.value,
+								retryActionsHidden: document.querySelector('#profile-switch-retry-actions')?.hidden,
 								rpcQuorum: document.querySelector('#rpc-quorum')?.value,
 								scope: document.querySelector('#settings-chain-scope')?.textContent,
 								targetStatus: document.querySelector('#network-target-status')?.textContent,
@@ -429,6 +430,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					pendingValue.fieldsetDisabled !== true ||
 					!('readRpcUrl' in pendingValue) ||
 					pendingValue.readRpcUrl !== 'https://read.example/' ||
+					!('retryActionsHidden' in pendingValue) ||
+					pendingValue.retryActionsHidden !== true ||
 					!('rpcQuorum' in pendingValue) ||
 					pendingValue.rpcQuorum !== '2' ||
 					!('scope' in pendingValue) ||
@@ -522,6 +525,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 							activeProfile: document.querySelector('#network-name')?.value,
 							bodyScrollWidth: document.body.scrollWidth,
 							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+							retryActionsHidden: document.querySelector('#profile-switch-retry-actions')?.hidden,
 							targetStatusHidden: document.querySelector('#network-target-status')?.hidden
 						}))()`,
 						returnByValue: true,
@@ -539,6 +543,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					recoveredValue.bodyScrollWidth > width ||
 					!('fieldsetDisabled' in recoveredValue) ||
 					recoveredValue.fieldsetDisabled !== false ||
+					!('retryActionsHidden' in recoveredValue) ||
+					recoveredValue.retryActionsHidden !== true ||
 					!('targetStatusHidden' in recoveredValue) ||
 					recoveredValue.targetStatusHidden !== true
 				) {

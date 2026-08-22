@@ -306,7 +306,8 @@ section,
 	color: var(--muted);
 }
 
-.notice[hidden] {
+.notice[hidden],
+#profile-switch-retry-actions[hidden] {
 	display: none;
 }
 
