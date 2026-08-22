@@ -117,6 +117,10 @@ function updateConfigurationControls() {
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing configuration fieldset')
 	fieldset.disabled = !connected || pendingNetworkProfile !== undefined || !configurationLoaded || latestSnapshot?.networkConfigured !== true || configurationLoading
 	element<HTMLButtonElement>('reload-configuration-button').disabled = !connected || (pendingNetworkProfile !== undefined && !profileSwitchTimedOut) || configurationLoading
+	const profileRetry = element<HTMLButtonElement>('profile-switch-retry-button')
+	profileRetry.hidden = !profileSwitchTimedOut
+	profileRetry.disabled = !connected || configurationLoading
+	element('profile-switch-retry-actions').hidden = !profileSwitchTimedOut
 }
 
 function updateSettingsLoadState() {
@@ -306,7 +310,7 @@ async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
 		}
 	}
 	profileSwitchTimedOut = true
-	setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Use Reload configuration to retry.')
+	setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
 	updateConfigurationControls()
 }
 
@@ -1194,6 +1198,21 @@ async function manualRefresh() {
 
 element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
+element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
+	const button = event.currentTarget
+	if (pendingNetworkProfile === undefined || !profileSwitchTimedOut || button.disabled) return
+	button.disabled = true
+	button.setAttribute('aria-busy', 'true')
+	button.textContent = 'Retrying profile load…'
+	try {
+		await refresh()
+		await loadCompleteConfiguration()
+	} finally {
+		button.removeAttribute('aria-busy')
+		button.textContent = 'Retry profile load'
+		updateConfigurationControls()
+	}
+})
 
 element<HTMLSelectElement>('network-name').addEventListener('change', async event => {
 	const select = event.currentTarget

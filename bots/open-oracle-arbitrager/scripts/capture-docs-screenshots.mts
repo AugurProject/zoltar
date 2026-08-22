@@ -458,13 +458,19 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				const timeoutState = await command(
 					'Runtime.evaluate',
 					{
-						expression: `(() => ({
-							bodyScrollWidth: document.body.scrollWidth,
-							fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
-							reloadDisabled: document.querySelector('#reload-configuration-button')?.disabled,
-							status: document.querySelector('#connectivity-status')?.textContent,
-							targetStatusHidden: document.querySelector('#network-target-status')?.hidden
-						}))()`,
+						expression: `(() => {
+							const retry = document.querySelector('#profile-switch-retry-button')
+							retry?.scrollIntoView({ block: 'center' })
+							return {
+								bodyScrollWidth: document.body.scrollWidth,
+								fieldsetDisabled: document.querySelector('#connectivity-fieldset')?.disabled,
+								retryDisabled: retry?.disabled,
+								retryHidden: retry?.hidden,
+								retryVisible: retry instanceof HTMLElement && retry.getBoundingClientRect().top >= 0 && retry.getBoundingClientRect().bottom <= window.innerHeight,
+								status: document.querySelector('#connectivity-status')?.textContent,
+								targetStatusHidden: document.querySelector('#network-target-status')?.hidden
+							}
+						})()`,
 						returnByValue: true,
 					},
 					sessionId,
@@ -478,10 +484,14 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					timeoutValue.bodyScrollWidth > width ||
 					!('fieldsetDisabled' in timeoutValue) ||
 					timeoutValue.fieldsetDisabled !== true ||
-					!('reloadDisabled' in timeoutValue) ||
-					timeoutValue.reloadDisabled !== false ||
+					!('retryDisabled' in timeoutValue) ||
+					timeoutValue.retryDisabled !== false ||
+					!('retryHidden' in timeoutValue) ||
+					timeoutValue.retryHidden !== false ||
+					!('retryVisible' in timeoutValue) ||
+					timeoutValue.retryVisible !== true ||
 					!('status' in timeoutValue) ||
-					timeoutValue.status !== 'The profile was saved, but the dashboard did not reconnect in time. Use Reload configuration to retry.' ||
+					timeoutValue.status !== 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.' ||
 					!('targetStatusHidden' in timeoutValue) ||
 					timeoutValue.targetStatusHidden !== false
 				) {
@@ -494,8 +504,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				'Runtime.evaluate',
 				{
 					expression: `(() => {
-						document.querySelector('#refresh-button')?.click()
-						document.querySelector('#reload-configuration-button')?.click()
+						document.querySelector('#profile-switch-retry-button')?.click()
 					})()`,
 				},
 				sessionId,
