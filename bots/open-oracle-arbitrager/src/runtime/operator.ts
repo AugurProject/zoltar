@@ -13,7 +13,7 @@ import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, report
 import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { observeConstantProductMarkets, readConstantProductPairWithQuorum } from '@zoltar/bot-shared/monitoring/constant-product-markets'
+import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '#monitoring/resilience'
@@ -79,6 +79,36 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 				})
 	let client = createClient()
 	let readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
+	const readConfiguredDexPair = async (pair: Address, block: Readonly<{ hash: `0x${string}`; number: bigint }>) =>
+		readConstantProductPairWithQuorum({
+			block,
+			chainId: config.network.chain.id,
+			endpoints: [config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
+			pair,
+			readBlock: async (endpoint, canonicalBlockNumber) =>
+				await contextualRpcRead(
+					'eth_getBlockByNumber',
+					async requestClient => {
+						const endpointBlock = await requestClient.getBlock({ blockNumber: canonicalBlockNumber })
+						return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
+					},
+					endpoint,
+				),
+			readPairAtBlock: async (endpoint, quorumPair, canonicalBlockHash) => {
+				const [token0, token1, reserves] = await contextualRpcRead(
+					'eth_call',
+					requestClient =>
+						Promise.all([
+							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token0' }),
+							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token1' }),
+							requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'getReserves' }),
+						]),
+					endpoint,
+				)
+				return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
+			},
+			requirement: rpcQuorumRequirement(),
+		})
 	let wallet = createWallet()
 	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
 	let startupValidated = !config.networkConfigured
@@ -689,37 +719,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
-						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
-							return await readConstantProductPairWithQuorum({
-								block: { hash: blockHash, number: blockNumber },
-								chainId: config.network.chain.id,
-								endpoints: [config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
-								pair,
-								readBlock: async (endpoint, canonicalBlockNumber) =>
-									await contextualRpcRead(
-										'eth_getBlockByNumber',
-										async requestClient => {
-											const endpointBlock = await requestClient.getBlock({ blockNumber: canonicalBlockNumber })
-											return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
-										},
-										endpoint,
-									),
-								readPairAtBlock: async (endpoint, quorumPair, canonicalBlockHash) => {
-									const [token0, token1, reserves] = await contextualRpcRead(
-										'eth_call',
-										requestClient =>
-											Promise.all([
-												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token0' }),
-												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token1' }),
-												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'getReserves' }),
-											]),
-										endpoint,
-									)
-									return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
-								},
-								requirement: rpcQuorumRequirement(),
-							})
-						})
+						let configuredDexMarkets: Awaited<ReturnType<typeof observeConstantProductMarkets>>
+						try {
+							configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => readConfiguredDexPair(pair, { hash: blockHash, number: blockNumber }))
+						} catch (error) {
+							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
+							state.marketConsensus = undefined
+							throw error
+						}
 						try {
 							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber))
 						} catch (error) {
@@ -932,6 +939,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									async () => {
 										try {
 											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber))
+											await requireCurrentConstantProductMarketEvidence(config.centralizedMarkets, selected.report.game.token2, config.network.weth, selected.marketConsensus, readConfiguredDexPair)
 											return true
 										} catch (error) {
 											if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error

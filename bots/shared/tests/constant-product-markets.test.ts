@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { marketConsensusSettings, type CentralizedMarketSettings } from '../src/monitoring/centralized-markets.ts'
-import { observeConstantProductMarkets, readConstantProductPairWithQuorum } from '../src/monitoring/constant-product-markets.ts'
+import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '../src/monitoring/constant-product-markets.ts'
 import { estimateMarketConsensus } from '../src/monitoring/market-consensus.ts'
 
 const REP: `0x${string}` = '0x0000000000000000000000000000000000000001'
@@ -68,7 +68,7 @@ describe('constant-product DEX observations', () => {
 				readPairAtBlock: async () => pairState(),
 				requirement: 2,
 			}),
-		).rejects.toThrow('canonical block')
+		).rejects.toThrow('DEX pair snapshot failed safety verification')
 	})
 
 	test('rejects a canonical block hash paired with forged reserve state from one RPC', async () => {
@@ -87,7 +87,41 @@ describe('constant-product DEX observations', () => {
 				},
 				requirement: 2,
 			}),
-		).rejects.toThrow('RPC disagreement for DEX pair')
+		).rejects.toThrow('DEX pair snapshot failed safety verification')
+	})
+
+	test('does not downgrade a cross-endpoint reserve disagreement to an unavailable observation', async () => {
+		await expect(
+			observeConstantProductMarkets(settings, REP, WETH, async pair =>
+				readConstantProductPairWithQuorum({
+					block: { hash: BLOCK_HASH, number: 100n },
+					chainId: 1,
+					endpoints: ['primary', 'quorum-a'],
+					pair,
+					readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
+					readPairAtBlock: async endpoint => pairState(endpoint === 'primary' ? 200_000n * UNIT : 100_000n * UNIT),
+					requirement: 1,
+				}),
+			),
+		).rejects.toThrow('DEX pair snapshot failed safety verification')
+	})
+
+	test('revalidates retained DEX evidence against every available reader before execution', async () => {
+		const observed = await observeConstantProductMarkets(settings, REP, WETH, async () => snapshot())
+		const estimate = estimateMarketConsensus(observed.observations, { ...marketConsensusSettings(settings), allowSingleGroupFallback: true, minimumTotalSourceCount: 1 }, REP, 1, 10_000)
+		await expect(
+			requireCurrentConstantProductMarketEvidence(settings, REP, WETH, estimate, async (pair, block) =>
+				readConstantProductPairWithQuorum({
+					block,
+					chainId: 1,
+					endpoints: ['primary', 'quorum-a'],
+					pair,
+					readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
+					readPairAtBlock: async endpoint => pairState(endpoint === 'primary' ? 200_000n * UNIT : 100_000n * UNIT),
+					requirement: 1,
+				}),
+			),
+		).rejects.toThrow('DEX pair snapshot failed safety verification')
 	})
 
 	test('derives a two-sided executable REP/ETH price and depth', async () => {

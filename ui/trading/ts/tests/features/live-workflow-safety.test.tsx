@@ -616,6 +616,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(async () => button('Remove').click())
 		rejectBalanceRefresh = true
+		await waitForDom(() => document.body.textContent?.includes('Approve exact LP amount') ?? false, 'exact LP approval action')
 		await act(async () => button('Approve exact LP amount').click())
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')

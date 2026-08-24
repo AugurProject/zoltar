@@ -118,6 +118,7 @@ export type PositionRecord = {
 
 const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
 const signedDecimal = /^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
+const ARCHIVED_GAS_UTC_DAY_RETENTION_LIMIT = 32
 const TERMINAL_POSITION_RETENTION_LIMIT = 500
 
 export type PositionJournalArchive = {
@@ -134,6 +135,14 @@ export type PositionJournalState = {
 
 export function emptyPositionJournalArchive(): PositionJournalArchive {
 	return { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }
+}
+
+function boundedGasSpentByUtcDay(gasSpentByUtcDay: Readonly<Record<string, string>>) {
+	return Object.fromEntries(
+		Object.entries(gasSpentByUtcDay)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.slice(-ARCHIVED_GAS_UTC_DAY_RETENTION_LIMIT),
+	)
 }
 
 function decimalField(record: Record<string, unknown>, key: string) {
@@ -504,7 +513,7 @@ function parsePositionJournalArchive(value: unknown): PositionJournalArchive {
 		if (typeof amount !== 'string' || !decimal.test(amount)) throw new Error('Position journal archived gas amount is invalid')
 		parsedGasSpentByUtcDay[day] = amount
 	}
-	return { gasSpentByUtcDay: parsedGasSpentByUtcDay, hedgedProfitBeforeGasEth, positionCount, realizedNetProfitEth }
+	return { gasSpentByUtcDay: boundedGasSpentByUtcDay(parsedGasSpentByUtcDay), hedgedProfitBeforeGasEth, positionCount, realizedNetProfitEth }
 }
 
 function archivePosition(archive: PositionJournalArchive, position: PositionRecord): PositionJournalArchive {
@@ -517,7 +526,7 @@ function archivePosition(archive: PositionJournalArchive, position: PositionReco
 	const hedgedProfit = position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence ? 0n : signedDecimalAmountAttoEth(position.hedgedProfitBeforeGasEth)
 	const realizedProfit = position.status === 'closed' && position.realizedNetProfitEth !== undefined ? signedDecimalAmountAttoEth(position.realizedNetProfitEth) : 0n
 	return {
-		gasSpentByUtcDay,
+		gasSpentByUtcDay: boundedGasSpentByUtcDay(gasSpentByUtcDay),
 		hedgedProfitBeforeGasEth: formatAttoEth(signedDecimalAmountAttoEth(archive.hedgedProfitBeforeGasEth) + hedgedProfit),
 		positionCount: archive.positionCount + 1,
 		realizedNetProfitEth: formatAttoEth(signedDecimalAmountAttoEth(archive.realizedNetProfitEth) + realizedProfit),

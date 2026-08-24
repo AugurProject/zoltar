@@ -327,7 +327,10 @@ Example DEX source entries (addresses are intentionally placeholders):
 
 Configured DEX reserve reads are pinned to the scanned canonical block. Polling
 the same block again cannot build price persistence; a changed canonical hash
-discards accumulated DEX history. Single-group fallback is
+discards accumulated DEX history. Immediately before a price-dependent action,
+the bot rereads the retained constant-product evidence at its exact block hash
+and requires every available configured RPC response to agree with the retained
+snapshot. Single-group fallback is
 opt-in; when enabled, only sources in the selected reliable group count toward
 the total-source quorum.
 

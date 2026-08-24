@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
 import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault } from '#monitoring/pool-monitor'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
+import { getAddress } from '../helpers/ethereum.ts'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')

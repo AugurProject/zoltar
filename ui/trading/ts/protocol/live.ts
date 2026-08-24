@@ -726,8 +726,16 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 		}
 		const anchor = await loadLatest()
 		const fromBlock = currentAnchor === undefined ? 0n : currentAnchor.blockNumber + 1n
-		const appended = fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock)) : []
-		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment events changed during discovery')
+		let appended = fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock)) : []
+		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
+			clearSecurityPoolDeploymentIndex(index, key)
+			currentDeployments = []
+			appended = await fetchLogsWithAdaptiveRanges(0n, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock))
+		}
+		if (!(await isAnchorCanonical(anchor))) {
+			clearSecurityPoolDeploymentIndex(index, key)
+			throw new Error('SecurityPool deployment events changed during discovery')
+		}
 		const nextDeployments = [...currentDeployments, ...appended]
 		index.key = key
 		index.deployments = nextDeployments

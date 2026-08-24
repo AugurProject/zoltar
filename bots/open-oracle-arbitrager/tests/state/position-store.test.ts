@@ -3,7 +3,7 @@ import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '#ethereum'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournal, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournal, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 
 const directories: string[] = []
 
@@ -264,6 +264,28 @@ describe('durable OpenOracle position journal', () => {
 		expect(saved.positions.filter(position => position.manualReconciliation !== undefined)).toHaveLength(500)
 		expect(saved.positions.some(position => position.reportId === unresolved.reportId)).toBeTrue()
 		expect(saved.archived.positionCount).toBe(1)
+	})
+
+	test('bounds archived UTC-day gas buckets while retaining recent risk accounting', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const archivedAcrossDays = Array.from({ length: 40 }, (_value, index) => {
+			const minedAt = new Date(Date.UTC(2026, 0, index + 1)).toISOString()
+			return terminalPosition(500 + index, {
+				closedAt: minedAt,
+				gasExpenditures: [{ costEth: '0.001', minedAt, transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}` }],
+				openedAt: minedAt,
+			})
+		})
+		const positions = [...Array.from({ length: 500 }, (_value, index) => terminalPosition(index)), ...archivedAcrossDays]
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions }, 1)
+
+		expect(Object.keys(saved.archived.gasSpentByUtcDay)).toHaveLength(32)
+		expect(saved.archived.gasSpentByUtcDay['2026-01-01']).toBeUndefined()
+		expect(archivedUtcDayGasSpentWeth(saved.archived, new Date('2026-02-09T12:00:00.000Z'))).toBe(10n ** 15n)
+		expect(await loadPositionJournalState(path, 1)).toEqual(saved)
 	})
 
 	test('rejects a valid position journal bound to another chain', async () => {

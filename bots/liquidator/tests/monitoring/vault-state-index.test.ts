@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { createVaultStateIndex, refreshVaultStateIndex } from '../../src/monitoring/vault-state-index.ts'
+import { getAddress, type Address } from '../helpers/ethereum.ts'
 
 type Position = Readonly<{ address: Address; rep: bigint }>
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { discoverRelevantDeployments } from '#monitoring/relevant-deployments'
+import { getAddress, zeroAddress } from '../helpers/ethereum.ts'
 
 type Deployment = Readonly<{ parent: `0x${string}`; securityPool: `0x${string}` }>
 

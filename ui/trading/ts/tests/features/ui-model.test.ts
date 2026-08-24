@@ -437,6 +437,44 @@ describe('standalone trading UI model', () => {
 		expect(index.anchor).toEqual(canonicalAnchor)
 	})
 
+	test('rebuilds when the retained deployment anchor is replaced during an incremental event read', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const retainedAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const latestAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 101n }
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => retainedAnchor,
+			async () => true,
+			async () => ['orphan'],
+		)
+
+		let retainedAnchorCanonical = true
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const result = await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latestAnchor,
+			async anchor => anchor.blockHash !== retainedAnchor.blockHash || retainedAnchorCanonical,
+			async (fromBlock, toBlock) => {
+				ranges.push({ fromBlock, toBlock })
+				if (fromBlock === 101n) {
+					retainedAnchorCanonical = false
+					return ['incremental-on-replacement']
+				}
+				return ['canonical-rebuild']
+			},
+		)
+
+		expect(result).toEqual(['canonical-rebuild'])
+		expect(index.deployments).toEqual(['canonical-rebuild'])
+		expect(index.anchor).toEqual(latestAnchor)
+		expect(ranges).toEqual([
+			{ fromBlock: 101n, toBlock: 101n },
+			{ fromBlock: 0n, toBlock: 101n },
+		])
+	})
+
 	test('clears populated orphan indexes when their canonical rebuild fails', async () => {
 		const eventIndex = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const orphanEventAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
