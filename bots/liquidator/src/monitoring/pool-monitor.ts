@@ -200,13 +200,7 @@ async function loadCurrentVaults(client: ReadClient, index: VaultStateIndex<Vaul
 	})
 }
 
-async function loadPool(
-	client: ReadClient,
-	settings: OperatorSettings,
-	deployment: PoolDeployment,
-	wallet: Address | undefined,
-	monitorIndex: PoolMonitorIndex,
-) {
+async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex) {
 	const block = await client.getBlock()
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
 	const blockNumber = block.number
@@ -379,17 +373,7 @@ function deploymentFromLog(log: Readonly<{ args?: unknown }>): PoolDeployment {
 	const priorityFee = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
 	const retentionRate = Reflect.get(args, 'currentRetentionRate')
 	const settlementCollateral = Reflect.get(args, 'settlementCollateralAttoEth')
-	if (
-		typeof securityPool !== 'string' ||
-		typeof parent !== 'string' ||
-		typeof manager !== 'string' ||
-		typeof universeId !== 'bigint' ||
-		typeof questionId !== 'bigint' ||
-		typeof multiplier !== 'bigint' ||
-		typeof priorityFee !== 'bigint' ||
-		typeof retentionRate !== 'bigint' ||
-		typeof settlementCollateral !== 'bigint'
-	) {
+	if (typeof securityPool !== 'string' || typeof parent !== 'string' || typeof manager !== 'string' || typeof universeId !== 'bigint' || typeof questionId !== 'bigint' || typeof multiplier !== 'bigint' || typeof priorityFee !== 'bigint' || typeof retentionRate !== 'bigint' || typeof settlementCollateral !== 'bigint') {
 		throw new Error('SecurityPool deployment event is incomplete')
 	}
 	return {

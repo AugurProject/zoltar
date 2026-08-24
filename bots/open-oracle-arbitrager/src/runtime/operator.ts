@@ -688,56 +688,56 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					let completedOpportunityCount = 0
 					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-							state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
-							const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
-								return await readConstantProductPairWithQuorum(pair, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], rpcQuorumRequirement(), async (endpoint, quorumPair) => {
-									const [token0, token1, reserves] = await contextualRpcRead(
-										'eth_call',
-										requestClient =>
-											Promise.all([
-										readContractAtBlock(
-											requestClient,
-											{
-												address: quorumPair,
-											abi: constantProductPairAbi,
-											functionName: 'token0',
-										},
-										blockNumber,
-									),
-									readContractAtBlock(
-										requestClient,
-										{
-												address: quorumPair,
-											abi: constantProductPairAbi,
-											functionName: 'token1',
-										},
-										blockNumber,
-									),
-									readContractAtBlock(
-										requestClient,
-										{
-												address: quorumPair,
-											abi: constantProductPairAbi,
-											functionName: 'getReserves',
-										},
-										blockNumber,
-									),
-											]),
-										endpoint,
-									)
-									const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
-									return {
-										blockHash,
-										blockNumber,
-										blockTimestamp: block.timestamp,
-										chainId: config.network.chain.id,
-										reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
-										reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
-										token0: getAddress(String(token0)),
-										token1: getAddress(String(token1)),
-									}
-								})
+						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
+							return await readConstantProductPairWithQuorum(pair, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], rpcQuorumRequirement(), async (endpoint, quorumPair) => {
+								const [token0, token1, reserves] = await contextualRpcRead(
+									'eth_call',
+									requestClient =>
+										Promise.all([
+											readContractAtBlock(
+												requestClient,
+												{
+													address: quorumPair,
+													abi: constantProductPairAbi,
+													functionName: 'token0',
+												},
+												blockNumber,
+											),
+											readContractAtBlock(
+												requestClient,
+												{
+													address: quorumPair,
+													abi: constantProductPairAbi,
+													functionName: 'token1',
+												},
+												blockNumber,
+											),
+											readContractAtBlock(
+												requestClient,
+												{
+													address: quorumPair,
+													abi: constantProductPairAbi,
+													functionName: 'getReserves',
+												},
+												blockNumber,
+											),
+										]),
+									endpoint,
+								)
+								const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
+								return {
+									blockHash,
+									blockNumber,
+									blockTimestamp: block.timestamp,
+									chainId: config.network.chain.id,
+									reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
+									reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
+									token0: getAddress(String(token0)),
+									token1: getAddress(String(token1)),
+								}
 							})
+						})
 						try {
 							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => {
 								const canonicalBlock = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {

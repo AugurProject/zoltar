@@ -1,10 +1,11 @@
 # Statoblast liquidator
 
-The liquidator discovers every security pool registered by a configured
-`SecurityPoolFactory`, shows pool and vault statistics in a local dashboard, and
-evaluates unsafe vaults in operator-selected pools. Dry-run is the default. Live
-execution requires an explicit signer, the configured read RPC quorum, the
-execution flag, and non-zero deployment addresses.
+The liquidator monitors configured security pools, their direct child pools, and
+resolved desired pools from a configured `SecurityPoolFactory`. It shows pool and
+vault statistics in a local dashboard and evaluates unsafe vaults in
+operator-selected pools. Dry-run is the default. Live execution requires an
+explicit signer, the configured read RPC quorum, the execution flag, and non-zero
+deployment addresses.
 
 The bot owns an ordinary vault under its signer address in each selected pool. A
 liquidation moves ETH-denominated open-interest debt, the proportional attoREP
@@ -147,16 +148,19 @@ enabled:
 
 The universe browser walks Zoltar's deployed child-universe tree from universe
 zero, including deployed universes that do not have a security pool yet. The
-pool table is loaded automatically from
-`securityPoolDeploymentCount()` and `securityPoolDeploymentsRange()`. Selecting a
-pool enables candidate evaluation and execution only while its universe is also
-approved and its system state is operational. For an undeployed origin pool,
-add its universe, question, multiplier, and priority-fee tuple to `desiredPools`.
-The bot resolves the canonical factory address and selects it when present; when
+pool table is bounded to the chain profile's `selectedPools`, the direct child
+deployments of those pools, and deployed pools resolved from `desiredPools`; the
+bot does not enumerate unrelated factory deployments. To monitor an existing pool
+by address, add it to `selectedPools` in the paused chain profile. For an existing
+or undeployed origin pool, you can instead add its universe, question, multiplier,
+and priority-fee tuple to `desiredPools` in **Market and pool configuration**. The
+bot resolves the canonical factory address and selects it when present; when
 `allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before
-continuing liquidation. The universe table shows parent and fork-outcome lineage,
-operational and forked pool counts, pool selection, and whether a bot vault can
-migrate into that universe.
+continuing liquidation. Selecting a pool enables candidate evaluation and
+execution only while its universe is also approved and its system state is
+operational. The universe table shows parent and fork-outcome lineage, operational
+and forked pool counts, pool selection, and whether a bot vault can migrate into
+that universe.
 
 `deployment.zoltar` identifies the universe registry, and
 `approvedUniverses` is the operator's explicit truth policy. A root universe or

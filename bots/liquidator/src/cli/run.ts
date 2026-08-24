@@ -510,7 +510,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					const settled = await Promise.allSettled(
 						endpoints.map(async endpoint => {
 							const endpointClient = createPublicClient({ chain: currentChain, transport: readPool.transportFor(endpoint) })
-								return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint)) }
+							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint)) }
 						}),
 					)
 					const available = availableExecutionObservations(

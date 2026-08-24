@@ -1073,12 +1073,14 @@ recovery state. Back it up with the configuration and history files, never share
 path across networks or execution signers, and preserve it until every position
 is closed and reconciled.
 
-The journal retains every position that can still consume risk, every unsent
-history outbox, and the 500 newest terminal recovery records. Older closed or
-confirmed-not-included records are compacted into durable position-count, hedged
-profit, realized-profit, and UTC-day gas totals. Those totals continue to feed the
-dashboard and daily gas guard; the append-only execution history remains the audit
-record for older confirmed entries.
+The journal retains every position that can still consume risk, every expired
+transaction hash that still requires late-inclusion monitoring, every unsent history
+outbox, and the 500 newest fully terminal recovery records. Older closed records,
+and expired-not-included records only after every retained hash is reconciled or
+proved impossible, are compacted into durable position-count, hedged-profit,
+realized-profit, and UTC-day gas totals. Those totals continue to feed the dashboard
+and daily gas guard; the append-only execution history remains the audit record for
+older confirmed entries.
 
 Execute mode holds `<position-file>.lock` for the process lifetime to prevent
 concurrent writers. While a signer is active or queued, it also holds an

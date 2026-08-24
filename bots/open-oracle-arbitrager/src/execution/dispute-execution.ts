@@ -321,7 +321,10 @@ export async function executeDispute(
 			beforeSubmit: async () => {
 				if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 			},
-			persistPending: () => guardedRiskSubmission(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth, capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: gasPrice * 1_200_000n + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition)),
+			persistPending: () =>
+				guardedRiskSubmission(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth, capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: gasPrice * 1_200_000n + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
+					persistPosition(stagedPosition),
+				),
 		})
 		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
