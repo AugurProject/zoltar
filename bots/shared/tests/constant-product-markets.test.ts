@@ -124,6 +124,22 @@ describe('constant-product DEX observations', () => {
 		).rejects.toThrow('DEX pair snapshot failed safety verification')
 	})
 
+	test('rejects changed raw pair state even when token and reserve swaps preserve the derived quote', async () => {
+		const observed = await observeConstantProductMarkets(settings, REP, WETH, async () => snapshot())
+		const estimate = estimateMarketConsensus(observed.observations, { ...marketConsensusSettings(settings), allowSingleGroupFallback: true, minimumTotalSourceCount: 1 }, REP, 1, 10_000)
+		const swapped = snapshot()
+
+		await expect(
+			requireCurrentConstantProductMarketEvidence(settings, REP, WETH, estimate, async () => ({
+				...swapped,
+				reserve0: swapped.reserve1,
+				reserve1: swapped.reserve0,
+				token0: swapped.token1,
+				token1: swapped.token0,
+			})),
+		).rejects.toThrow('DEX pair snapshot failed safety verification')
+	})
+
 	test('derives a two-sided executable REP/ETH price and depth', async () => {
 		const result = await observeConstantProductMarkets(settings, REP, WETH, async pair => {
 			expect(pair).toBe(PAIR)
@@ -135,6 +151,7 @@ describe('constant-product DEX observations', () => {
 		expect(result.observations[0]?.askDepthAttoEth).toBe(UNIT)
 		expect(result.observations[0]?.observedAt).toBe(10_000)
 		expect(result.observations[0]?.observationId).toBe(`1:100:${BLOCK_HASH}`)
+		expect(result.observations[0]?.pairSnapshotId).toBe(`${PAIR}:${REP}:${WETH}:${(200_000n * UNIT).toString()}:${(1_000n * UNIT).toString()}:${BLOCK_HASH}:100`)
 	})
 
 	test('cannot build persistence by polling one cached canonical block at different local times', async () => {

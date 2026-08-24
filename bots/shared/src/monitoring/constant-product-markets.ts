@@ -89,6 +89,10 @@ function deviationBps(left: bigint, right: bigint) {
 
 type ConstantProductDexSource = NonNullable<CentralizedMarketSettings['venueConsensus']>['dexSources'][number]
 
+function pairSnapshotId(source: ConstantProductDexSource, pair: PairSnapshot) {
+	return [source.pair.toLowerCase(), pair.token0.toLowerCase(), pair.token1.toLowerCase(), pair.reserve0.toString(), pair.reserve1.toString(), pair.blockHash.toLowerCase(), pair.blockNumber.toString()].join(':')
+}
+
 function constantProductObservation(settings: CentralizedMarketSettings, assetId: `0x${string}`, weth: `0x${string}`, source: ConstantProductDexSource, pair: PairSnapshot) {
 	if (pair.chainId !== settings.assetChainId) throw new Error('pair snapshot is from the wrong chain')
 	if (pair.blockNumber < 0n || pair.blockTimestamp < 0n || pair.blockTimestamp > BigInt(Number.MAX_SAFE_INTEGER) || !/^0x[0-9a-fA-F]{64}$/.test(pair.blockHash)) throw new Error('pair snapshot has invalid canonical block provenance')
@@ -122,6 +126,7 @@ function constantProductObservation(settings: CentralizedMarketSettings, assetId
 		marketId: source.pair,
 		observationId: `${pair.chainId.toString()}:${pair.blockNumber.toString()}:${pair.blockHash.toLowerCase()}`,
 		observedAt: bigintToSafeNumber(pair.blockTimestamp * 1_000n, 'Pair block timestamp'),
+		pairSnapshotId: pairSnapshotId(source, pair),
 		priceRepPerEth: (askPriceRepPerEth + bidPriceRepPerEth) / 2n,
 		sourceId: source.sourceId,
 	} satisfies MarketConsensusObservation
@@ -133,7 +138,7 @@ export async function requireCurrentConstantProductMarketEvidence(settings: Cent
 	for (const observation of estimate.dex.observations) {
 		const source = configuredSources.get(observation.sourceId.toLowerCase())
 		if (source === undefined) continue
-		if (observation.marketId === undefined || observation.marketId.toLowerCase() !== source.pair.toLowerCase() || observation.blockHash === undefined || observation.blockNumber === undefined) {
+		if (observation.marketId === undefined || observation.marketId.toLowerCase() !== source.pair.toLowerCase() || observation.blockHash === undefined || observation.blockNumber === undefined || observation.pairSnapshotId === undefined) {
 			throw new DexPairSnapshotSafetyError(getAddress(source.pair), new Error('Configured DEX evidence has incomplete or mismatched provenance'))
 		}
 		let current: MarketConsensusObservation
@@ -144,7 +149,14 @@ export async function requireCurrentConstantProductMarketEvidence(settings: Cent
 			if (error instanceof DexPairSnapshotSafetyError || operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 			throw new DexPairSnapshotSafetyError(getAddress(source.pair), error)
 		}
-		if (current.observationId !== observation.observationId || current.observedAt !== observation.observedAt || current.priceRepPerEth !== observation.priceRepPerEth || current.askDepthAttoEth !== observation.askDepthAttoEth || current.bidDepthAttoEth !== observation.bidDepthAttoEth) {
+		if (
+			current.pairSnapshotId !== observation.pairSnapshotId ||
+			current.observationId !== observation.observationId ||
+			current.observedAt !== observation.observedAt ||
+			current.priceRepPerEth !== observation.priceRepPerEth ||
+			current.askDepthAttoEth !== observation.askDepthAttoEth ||
+			current.bidDepthAttoEth !== observation.bidDepthAttoEth
+		) {
 			throw new DexPairSnapshotSafetyError(getAddress(source.pair), new Error('Configured DEX evidence changed during final revalidation'))
 		}
 	}
