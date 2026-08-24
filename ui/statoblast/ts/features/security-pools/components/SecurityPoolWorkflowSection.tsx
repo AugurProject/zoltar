@@ -1,18 +1,15 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { ForkAuctionSection } from '../../truth-auctions/components/ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OpenOraclePriceValue } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOraclePriceValue.js'
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
@@ -20,24 +17,15 @@ import { ReportingSection } from '@zoltar/ui-zoltar/features/reporting/component
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
-import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { getQueuedVaultOperation, SecurityVaultSection } from './SecurityVaultSection.js'
+import { getQueuedVaultOperation } from './VaultQueuedOperationStatusCard.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { UniverseLink } from '@zoltar/ui-zoltar/features/universes/components/UniverseLink.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getWrongNetworkMessage } from '@zoltar/ui-core-shared/lib/network.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -70,7 +58,7 @@ import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
-import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultOwner, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -78,65 +66,9 @@ import { formatUniverseIdHex } from '@zoltar/ui-zoltar/features/universes/lib/un
 import { useForkWorkflowSelectionState } from '../../truth-auctions/hooks/useForkWorkflowSelectionState.js'
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../../types.js'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
-
-function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
-	if (selectedPool === undefined) return undefined
-	if (forkAuctionDetails === undefined) return selectedPool
-	return {
-		...selectedPool,
-		settlementCollateralAttoEth: forkAuctionDetails.settlementCollateralAttoEth,
-		hasForkActivity: forkAuctionDetails.hasForkActivity,
-		forkOutcome: forkAuctionDetails.forkOutcome,
-		forkOwnSecurityPool: forkAuctionDetails.forkOwnSecurityPool,
-		marketDetails: forkAuctionDetails.marketDetails,
-		migratedAttoRep: forkAuctionDetails.migratedAttoRep,
-		questionOutcome: forkAuctionDetails.questionOutcome,
-		securityPoolAddress: forkAuctionDetails.securityPoolAddress,
-		systemState: forkAuctionDetails.systemState,
-		truthAuctionAddress: forkAuctionDetails.truthAuctionAddress,
-		truthAuctionStartedAt: forkAuctionDetails.truthAuctionStartedAt,
-		universeId: forkAuctionDetails.universeId,
-	}
-}
-
-function getPendingOperationLabel(operation: 'liquidation' | 'withdrawRep') {
-	switch (operation) {
-		case 'liquidation':
-			return securityPoolCopy.liquidation
-		case 'withdrawRep':
-			return securityPoolCopy.withdrawRep
-		default:
-			return assertNever(operation)
-	}
-}
-
-function getPendingOperationAmountPresentation(operation: 'liquidation' | 'withdrawRep') {
-	switch (operation) {
-		case 'liquidation':
-			return { label: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth }
-		case 'withdrawRep':
-			return { label: securityPoolCopy.repWithdrawal, suffix: commonCopy.rep }
-		default:
-			return assertNever(operation)
-	}
-}
-function getStagedOperationExecutionModeLabel(operationId: bigint, pendingSettlementOperationIds: bigint[]) {
-	return pendingSettlementOperationIds.includes(operationId) ? securityPoolCopy.autoExecPending : securityPoolCopy.manualExecution
-}
-function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
-	if (systemState === 'operational') return 'ok'
-	if (systemState === undefined) return 'muted'
-	return 'warning'
-}
-
-type RequestPriceReview = {
-	requestValueAttoEth: bigint
-	managerAddress: Address
-	questionTitle: string | undefined
-	securityPoolAddress: Address
-	universeId: bigint
-}
+import { buildSelectedPoolSummaryPool, getSecurityPoolStatusBadgeTone } from './SecurityPoolWorkflowPresentation.js'
+import { SecurityPoolPriceOracleSection, SecurityPoolRequestPriceModal, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
+import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
 
 export function SecurityPoolWorkflowSection({
 	accountState,
@@ -742,6 +674,13 @@ export function SecurityPoolWorkflowSection({
 		...(selectedPoolUniverseMismatch || selectedPoolWorkflowGuardMessage === undefined ? {} : { reason: selectedPoolWorkflowGuardMessage }),
 		value: selectedPoolUiView,
 	}))
+	const vaultBrowseEmptyState = (() => {
+		if (selectedPool === undefined) return selectedPoolBrowsePresentation === undefined ? undefined : <StateHint presentation={selectedPoolBrowsePresentation} />
+		let detail = securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount)
+		if (selectedPool.vaultCount === 0n) detail = securityPoolCopy.poolVaultsEmpty
+		if (selectedPool.vaultScanCapped === true) detail = securityPoolCopy.vaultRegistryScanEmpty
+		return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail }} />
+	})()
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
 			<StickyObjectContext
@@ -842,129 +781,30 @@ export function SecurityPoolWorkflowSection({
 						) : (
 							<>
 								{view === 'vaults' ? (
-									<div className='workflow-stack vault-workspace'>
-										<SectionBlock
-											density='compact'
-											title={securityPoolCopy.vaultOperations}
-											variant='plain'
-											actions={
-												<div className='actions'>
-													<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' semantics='switcher' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
-												</div>
-											}
-										>
-											{selectedVaultLoadNotice}
-											<LookupFieldRow
-												label={securityPoolCopy.selectedVaultOwner}
-												value={selectedVaultOwnerInput}
-												onInput={selectedVaultOwner => securityVault.onSecurityVaultFormChange({ selectedVaultOwner })}
-												placeholder={commonCopy.hexValuePlaceholder}
-												action={
-													<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
-														{securityVault.loadingSecurityVault ? <LoadingText>{securityPoolCopy.refreshing}</LoadingText> : commonCopy.refresh}
-													</button>
-												}
-											/>
-										</SectionBlock>
-
-										{vaultView === 'browse-vaults' ? (
-											<SectionBlock title={securityPoolCopy.vaultDirectory} variant='embedded'>
-												<SecurityPoolVaultDirectory
-													emptyState={(() => {
-														if (selectedPool === undefined) {
-															if (selectedPoolBrowsePresentation === undefined) return undefined
-
-															return <StateHint presentation={selectedPoolBrowsePresentation} />
-														}
-														let emptyVaultDirectoryDetail = securityPoolCopy.formatNoCurrentVaultPositions(selectedPool.vaultCount)
-														if (selectedPool.vaultCount === 0n) emptyVaultDirectoryDetail = securityPoolCopy.poolVaultsEmpty
-														if (selectedPool.vaultScanCapped === true) emptyVaultDirectoryDetail = securityPoolCopy.vaultRegistryScanEmpty
-
-														return (
-															<StateHint
-																presentation={{
-																	key: 'empty',
-																	badgeLabel: commonCopy.none,
-																	badgeTone: 'muted',
-																	detail: emptyVaultDirectoryDetail,
-																}}
-															/>
-														)
-													})()}
-													pool={selectedPool}
-													renderActions={vault => {
-														if (selectedPool === undefined) return undefined
-														return (
-															<div className='actions'>
-																<button
-																	className='secondary'
-																	onClick={() => {
-																		securityVault.onSecurityVaultFormChange({ selectedVaultOwner: vault.vaultAddress.toString() })
-																		setVaultView('selected-vault')
-																		void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
-																	}}
-																>
-																	{securityPoolCopy.selectVault}
-																</button>
-																<button
-																	className='secondary'
-																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.capacityOwnershipAttoRep)}
-																	disabled={accountState.address === undefined || !isOnActiveAppChain || !liquidationEnabled}
-																	title={!isOnActiveAppChain && accountState.address !== undefined ? (getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason) : securityPoolCopy.reviewLiquidation}
-																>
-																	{securityPoolCopy.reviewLiquidation}
-																</button>
-															</div>
-														)
-													}}
-													renderBadge={vault => (selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='ok'>{commonCopy.selected}</Badge> : undefined)}
-													repPerEthPrice={repPerEthPrice}
-													repPerEthSource={repPerEthSource}
-													repPerEthSourceUrl={repPerEthSourceUrl}
-												/>
-											</SectionBlock>
-										) : (
-											<SecurityVaultSection
-												{...securityVault}
-												compactLayout
-												extraReadinessActions={[
-													(() => {
-														const canUseSelectedVaultActions = accountState.address !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isOnActiveAppChain
-														const loadedVaultMissing = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain
-														const liquidationBlocker = (() => {
-															if (loadedVaultMissing) return securityPoolCopy.missingVaultDetail
-															return undefined
-														})()
-
-														return {
-															actionLabel: securityPoolCopy.reviewLiquidation,
-															...(liquidationBlocker === undefined ? {} : { blocker: liquidationBlocker }),
-															description: securityPoolCopy.liquidationWorkflowDescription,
-															key: 'liquidate-vault',
-															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
-															title: securityPoolCopy.reviewLiquidationTitle,
-															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
-																? {}
-																: {
-																		onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.capacityOwnershipAttoRep),
-																	}),
-														}
-													})(),
-												]}
-												autoLoadVault
-												modalFirst
-												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
-												oracleManagerDetails={currentPoolOracleManagerDetails}
-												poolState={selectedPoolStateModel}
-												selectedPoolTotalPoolHeldAttoRep={selectedPool?.totalPoolHeldAttoRep}
-												selectedPoolTotalCapacityOwnershipAttoRep={selectedPool?.totalCapacityOwnershipAttoRep}
-												selectedMarketTitle={selectedPool?.marketDetails.title}
-												showHeader={false}
-												showLookupSection={false}
-												showSecurityPoolAddressInput={false}
-											/>
-										)}
-									</div>
+									<SecurityPoolVaultWorkspace
+										browseEmptyState={vaultBrowseEmptyState}
+										currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
+										isOnActiveAppChain={isOnActiveAppChain}
+										liquidationEnabled={liquidationEnabled}
+										onOpenLiquidationModal={onOpenLiquidationModal}
+										onSelectedPoolViewChange={onSelectedPoolViewChange}
+										poolState={selectedPoolStateModel}
+										repPerEthPrice={repPerEthPrice}
+										repPerEthSource={repPerEthSource}
+										repPerEthSourceUrl={repPerEthSourceUrl}
+										securityVault={securityVault}
+										selectedPool={selectedPool}
+										selectedVaultDetails={selectedVaultDetails}
+										selectedVaultExistsOnchain={selectedVaultExistsOnchain}
+										selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
+										selectedVaultLoadNotice={selectedVaultLoadNotice}
+										selectedVaultOwner={selectedVaultOwner}
+										selectedVaultOwnerInput={selectedVaultOwnerInput}
+										selectedVaultViewOptions={selectedVaultViewOptions}
+										setVaultView={setVaultView}
+										vaultView={vaultView}
+										walletAddress={accountState.address}
+									/>
 								) : undefined}
 
 								{view === 'trading' ? <TradingSection {...trading} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} /> : undefined}
@@ -1018,171 +858,68 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title={securityPoolCopy.stagedOperations} variant='plain'>
-										<ErrorNotice message={currentPoolOracleManagerError} />
-										<SectionBlock density='compact' variant='embedded'>
-											{stagedOperations.map(operation => (
-												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' surface='flat' variant='compact'>
-													<div className='entity-card-header'>
-														<div className='entity-card-copy'>
-															<h3>{getPendingOperationLabel(operation.operation)}</h3>
-															<p className='detail'>{getStagedOperationExecutionModeLabel(operation.operationId, pendingSettlementOperationIds)}</p>
-														</div>
-													</div>
-													<MetricGrid className='entity-card-body'>
-														<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
-														<MetricField label={securityPoolCopy.initiator}>
-															<AddressValue address={operation.operator} />
-														</MetricField>
-														<MetricField label={commonCopy.targetVault}>
-															<AddressValue address={operation.targetVault} />
-														</MetricField>
-														<MetricField label={getPendingOperationAmountPresentation(operation.operation).label}>
-															<CurrencyValue precision='exact' value={operation.amount} suffix={getPendingOperationAmountPresentation(operation.operation).suffix} />
-														</MetricField>
-													</MetricGrid>
-												</WarningSurface>
-											))}
-											{activeStagedOperationCount > BigInt(stagedOperations.length) ? <p className='detail'>{securityPoolCopy.formatShowingActiveStagedOperationsLabel(stagedOperations.length.toString(), activeStagedOperationCount.toString())}</p> : null}
-											{currentPoolOracleManagerDetails === undefined || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: securityPoolCopy.noneQueued, badgeTone: 'muted', detail: securityPoolCopy.stagedOperationsEmpty }} />}
-										</SectionBlock>
-										{currentPoolOracleManagerDetails === undefined ? undefined : (
-											<label className='field'>
-												<span>{securityPoolCopy.stagedOperationId}</span>
-												<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : securityPoolCopy.zeroPlaceholder} />
-											</label>
-										)}
-										<div className='actions'>
-											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager || (currentPoolOracleManagerDetails === undefined && currentPoolOracleManagerError === undefined)}>
-												{(() => {
-													if (currentPoolOracleManagerDetails === undefined && currentPoolOracleManagerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
-													if (currentPoolOracleManagerDetails === undefined) return securityPoolCopy.retryStagedOperations
-													if (loadingPoolOracleManager) return <LoadingText>{securityPoolCopy.refreshingOperations}</LoadingText>
-
-													return securityPoolCopy.refreshStagedOperations
-												})()}
-											</button>
-											{currentPoolOracleManagerDetails === undefined ? undefined : (
-												<TransactionActionButton
-													idleLabel={securityPoolCopy.executeStagedOperation}
-													pendingLabel={securityPoolCopy.executingStagedOperationLabel}
-													onClick={() => {
-														if (resolvedPendingOperationId === undefined) return
-														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress, loadedSelectedPool.universeId)
-													}}
-													pending={poolOracleActiveAction === 'executeStagedOperation'}
-													tone='secondary'
-													availability={{
-														disabled: !selectedPoolStateModel.actions.executeStagedOperation.enabled || !canUseOracleActions || executePendingOperationGuardMessage !== undefined,
-														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled ? executePendingOperationGuardMessage : undefined,
-													}}
-												/>
-											)}
-										</div>
-									</SectionBlock>
+									<SecurityPoolStagedOperationsSection
+										activeOperationCount={activeStagedOperationCount}
+										canExecute={selectedPoolStateModel.actions.executeStagedOperation.enabled}
+										executeGuardMessage={executePendingOperationGuardMessage}
+										executionPending={poolOracleActiveAction === 'executeStagedOperation'}
+										loadingManager={loadingPoolOracleManager}
+										managerAddress={loadedSelectedPool.managerAddress}
+										managerDetails={currentPoolOracleManagerDetails}
+										managerError={currentPoolOracleManagerError}
+										manualOperationId={manualPendingOperationId}
+										onExecute={onExecutePendingPoolOperation}
+										onLoadManager={onLoadPoolOracleManager}
+										onManualOperationIdChange={setManualPendingOperationId}
+										pendingSettlementOperationIds={pendingSettlementOperationIds}
+										resolvedOperationId={resolvedPendingOperationId}
+										securityPoolAddress={loadedSelectedPool.securityPoolAddress}
+										stagedOperations={stagedOperations}
+										suggestedOperationId={selectedPendingOperationId}
+										universeId={loadedSelectedPool.universeId}
+									/>
 								) : undefined}
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
-										<MetricGrid>
-											<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
-												<OpenOraclePriceValue
-													currentTimestamp={currentTimestamp}
-													lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
-													lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
-													priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
-												/>
-											</MetricField>
-											{currentPoolOracleManagerDetails === undefined ? undefined : (
-												<MetricField label={securityPoolCopy.requestCost}>
-													<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceCostAttoEth} suffix={commonCopy.eth} />
-												</MetricField>
-											)}
-											{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-												<MetricField label={securityPoolCopy.pendingRequest}>
-													<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-														{securityPoolCopy.formatPendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
-													</button>
-												</MetricField>
-											)}
-										</MetricGrid>
-										<ErrorNotice message={currentPoolOracleManagerError} />
-										<div className='actions'>
-											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
-											</button>
-											<TransactionActionButton
-												idleLabel={securityPoolCopy.requestNewPrice}
-												pendingLabel={securityPoolCopy.requestingNewPrice}
-												onClick={() => {
-													if (requestPriceTransactionEthValue === undefined) return
-													setRequestPriceReview({
-														requestValueAttoEth: requestPriceTransactionEthValue,
-														managerAddress: loadedSelectedPool.managerAddress,
-														questionTitle: marketDetails === undefined ? undefined : getQuestionTitle(marketDetails),
-														securityPoolAddress: loadedSelectedPool.securityPoolAddress,
-														universeId: loadedSelectedPool.universeId,
-													})
-												}}
-												pending={poolOracleActiveAction === 'requestPrice'}
-												tone='secondary'
-												availability={{
-													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceTransactionEthValue === undefined || requestPriceGuardMessage !== undefined,
-													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceOpenGuardMessage : undefined,
-												}}
-											/>
-										</div>
-									</SectionBlock>
+									<SecurityPoolPriceOracleSection
+										canRequest={selectedPoolStateModel.actions.requestPrice.enabled}
+										currentTimestamp={currentTimestamp}
+										loadingManager={loadingPoolOracleManager}
+										managerAddress={loadedSelectedPool.managerAddress}
+										managerDetails={currentPoolOracleManagerDetails}
+										managerError={currentPoolOracleManagerError}
+										metricValues={selectedPoolOracleMetricValues}
+										onLoadManager={onLoadPoolOracleManager}
+										onOpenRequestReview={() => {
+											if (requestPriceTransactionEthValue === undefined) return
+											setRequestPriceReview({
+												requestValueAttoEth: requestPriceTransactionEthValue,
+												managerAddress: loadedSelectedPool.managerAddress,
+												questionTitle: marketDetails === undefined ? undefined : getQuestionTitle(marketDetails),
+												securityPoolAddress: loadedSelectedPool.securityPoolAddress,
+												universeId: loadedSelectedPool.universeId,
+											})
+										}}
+										onViewPendingReport={onViewPendingReport}
+										requestGuardMessage={requestPriceOpenGuardMessage ?? requestPriceGuardMessage}
+										requestPending={poolOracleActiveAction === 'requestPrice'}
+										requestValueAttoEth={requestPriceTransactionEthValue}
+									/>
 								) : undefined}
 							</>
 						)}
 					</div>
 				</div>
 			</section>
-			<OperationModal
+			<SecurityPoolRequestPriceModal
+				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
-				context={
-					requestPriceReview === undefined
-						? []
-						: [
-								...(requestPriceReview.questionTitle === undefined ? [] : [{ label: commonCopy.question, value: requestPriceReview.questionTitle }]),
-								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={requestPriceReview.securityPoolAddress} /> },
-								{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-							]
-				}
-				description={securityPoolCopy.requestPriceReviewDescription}
-				isOpen={requestPriceReview !== undefined}
+				confirmationGuardMessage={requestPriceConfirmationGuardMessage}
 				onClose={() => setRequestPriceReview(undefined)}
-				title={securityPoolCopy.requestNewPriceTitle}
-			>
-				<TransactionReview
-					primary={[
-						{
-							label: transactionReviewCopy.youPay,
-							value: <CurrencyValue precision='exact' value={requestPriceReview?.requestValueAttoEth} suffix={commonCopy.eth} />,
-						},
-					]}
-					risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]}
-				/>
-				<div className='actions'>
-					<button className='secondary' type='button' onClick={() => setRequestPriceReview(undefined)} disabled={poolOracleActiveAction === 'requestPrice'}>
-						{commonCopy.cancel}
-					</button>
-					<TransactionActionButton
-						idleLabel={securityPoolCopy.confirmPriceRequest}
-						pendingLabel={securityPoolCopy.requestingNewPrice}
-						onClick={() => {
-							if (requestPriceReview === undefined) return
-							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.requestValueAttoEth, requestPriceReview.universeId)
-						}}
-						pending={poolOracleActiveAction === 'requestPrice'}
-						availability={{
-							disabled: requestPriceReview === undefined || !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceConfirmationGuardMessage !== undefined,
-							reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceConfirmationGuardMessage : undefined,
-						}}
-					/>
-				</div>
-			</OperationModal>
+				onConfirm={review => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId)}
+				pending={poolOracleActiveAction === 'requestPrice'}
+				review={requestPriceReview}
+			/>
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}

@@ -72,6 +72,21 @@ function createReadyState(): SimulationWorkerState {
 }
 
 describe('simulation worker lifecycle', () => {
+	test('answers wallet discovery requests without forwarding them to the worker RPC', async () => {
+		const worker = createWorkerHarness()
+		const backendPromise = createSimulationBackend({}, { createWorkerConnection: () => worker.connection })
+		worker.emitMessage({ state: createReadyState(), type: 'ready' })
+		const backend = await backendPromise
+		const provider = backend.getProvider()
+		if (provider === undefined) throw new Error('Expected the simulation provider')
+
+		const accountsPromise = provider.request({ method: 'eth_requestAccounts' })
+		worker.emitMessage({ id: 1, type: 'result', value: undefined })
+
+		await expect(accountsPromise).resolves.toEqual([backend.accounts[0]])
+		expect(worker.postMessage).toHaveBeenCalledTimes(1)
+	})
+
 	test('terminates a worker that fails before readiness', async () => {
 		const worker = createWorkerHarness()
 		const backendPromise = createSimulationBackend({}, { createWorkerConnection: () => worker.connection })

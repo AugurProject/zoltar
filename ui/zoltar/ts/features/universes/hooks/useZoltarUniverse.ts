@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -13,7 +13,7 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { requireWallet } from '@zoltar/ui-core-shared/lib/requireWalletConnection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/lib/assertActiveWallet.js'
-import type { WriteOperationsParameters } from '../../../types/app.js'
+import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
@@ -38,18 +38,12 @@ function includesQuestionId(questions: readonly MarketDetails[], normalizedQuest
 	return questions.some(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
 }
 
-type UseZoltarUniverseParameters = {
+type UseZoltarUniverseParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
 	environmentRefreshKey: number
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
 }
 
 export type UseZoltarUniverseDependencies = {

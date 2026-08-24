@@ -1,0 +1,19 @@
+import { createRouting, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
+import type { Route } from '../types/app.js'
+
+type ZoltarRoute = Exclude<Route, 'not-found'>
+
+const ZOLTAR_ROUTING_CONFIG: RoutingConfig<ZoltarRoute> = {
+	defaultRoute: 'zoltar',
+	routes: [
+		{ hash: '#/deploy', name: 'deploy' },
+		{ hash: '#/zoltar', name: 'zoltar', queryParameters: new Set(['universe', 'zoltarView']) },
+		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(['openOracleView', 'openOracleReportId']) },
+	],
+}
+
+export const zoltarRouting = createRouting(ZOLTAR_ROUTING_CONFIG)
+
+export function installZoltarRouting() {
+	installRouting(ZOLTAR_ROUTING_CONFIG)
+}

@@ -1,0 +1,52 @@
+/// <reference types='bun-types' />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
+import { useTransactionTrayController } from '../../app/hooks/useTransactionTrayController.js'
+import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+
+describe('useTransactionTrayController', () => {
+	let cleanupDom: (() => void) | undefined
+	let cleanupRendered: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		cleanupDom = installDomEnvironment().cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRendered?.()
+		cleanupRendered = undefined
+		cleanupDom?.()
+		cleanupDom = undefined
+	})
+
+	test('owns the standard transaction lifecycle and delegates completion', async () => {
+		let finishedCount = 0
+		let controller: ReturnType<typeof useTransactionTrayController> | undefined
+		function Harness() {
+			controller = useTransactionTrayController({
+				onFinished: () => {
+					finishedCount += 1
+				},
+			})
+			return null
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+
+		await act(() => {
+			controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+		})
+		expect(controller.transactionState.value.inFlightCount).toBe(1)
+		expect(controller.transactionState.value.active?.tone).toBe('awaiting-wallet')
+
+		await act(() => {
+			controller?.onTransactionSubmitted('0x1234000000000000000000000000000000000000000000000000000000000000')
+			controller?.onTransactionFinished()
+		})
+		expect(controller.transactionState.value.inFlightCount).toBe(0)
+		expect(finishedCount).toBe(1)
+	})
+})

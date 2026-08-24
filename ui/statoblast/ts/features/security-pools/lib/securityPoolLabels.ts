@@ -1,4 +1,4 @@
-import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'

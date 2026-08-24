@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readCoreSharedCssSource } from '@zoltar/ui-core-shared/tests/testUtils/coreSharedCss.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -121,7 +122,7 @@ describe('CollateralizationCircle', () => {
 				const temporaryDirectory = mkdtempSync(join(tmpdir(), 'zoltar#collateralization-circle-'))
 				try {
 					const tokensSource = readFileSync('ui/coreShared/css/tokens.css', 'utf8')
-					const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+					const cssSource = readCoreSharedCssSource()
 					const htmlPath = join(temporaryDirectory, 'gauge-fit.html')
 					writeFileSync(
 						htmlPath,

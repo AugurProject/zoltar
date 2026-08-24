@@ -2,7 +2,6 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../copy/market.js'
 import * as openOracleCopy from '../copy/openOracle.js'
-import * as securityPoolCopy from '../copy/securityPool.js'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
@@ -218,7 +217,7 @@ type PoolOracleTransactionContext = {
 
 function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
 	if (context === undefined) return undefined
-	return [...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]), { label: securityPoolCopy.oracleManager, value: <AddressValue address={context.managerAddress} /> }]
+	return [...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]), { label: commonCopy.oracleManager, value: <AddressValue address={context.managerAddress} /> }]
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice', context?: PoolOracleTransactionContext) {

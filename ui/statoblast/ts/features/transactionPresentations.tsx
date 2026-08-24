@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'

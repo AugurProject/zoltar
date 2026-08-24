@@ -1,2 +1,2 @@
-import './liveReload.js'
+import '@zoltar/ui-core-shared/app/liveReload.js'
 import './index.js'

@@ -1,4 +1,7 @@
-import { bigintToSafeNumber, parseUnits as parseSharedUnits } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber } from '@zoltar/shared/ethereum'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 function requireNonNegativeSafeInteger(value: number, label: string) {
 	if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a nonnegative safe integer`)
@@ -7,12 +10,7 @@ function requireNonNegativeSafeInteger(value: number, label: string) {
 export function formatUnits(value: bigint, decimals = 18, maximumFractionDigits = 4) {
 	requireNonNegativeSafeInteger(decimals, 'Decimals')
 	requireNonNegativeSafeInteger(maximumFractionDigits, 'Maximum fraction digits')
-	const negative = value < 0n
-	const absolute = negative ? -value : value
-	const base = 10n ** BigInt(decimals)
-	const whole = absolute / base
-	const fraction = (absolute % base).toString().padStart(decimals, '0').slice(0, maximumFractionDigits).replace(/0+$/, '')
-	return `${negative ? '-' : ''}${whole.toLocaleString()}${fraction.length > 0 ? `.${fraction}` : ''}`
+	return formatTrimmedUnits(value, decimals, maximumFractionDigits)
 }
 
 export function formatShareAmount(value: bigint, maximumFractionDigits = 4) {
@@ -56,19 +54,22 @@ export { bigintToSafeNumber }
 export function parseUnits(value: string, decimals = 18) {
 	requireNonNegativeSafeInteger(decimals, 'Decimals')
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') throw new Error('Enter a valid nonnegative amount')
-	const [whole = '0', fraction = ''] = value.split('.')
+	const fraction = value.split('.')[1] ?? ''
 	if (fraction.length > decimals) throw new Error(`Use no more than ${decimals} decimal places`)
-	return parseSharedUnits(`${whole || '0'}.${fraction}`, decimals)
+	const parsed = tryParseDecimalInput(value, decimals)
+	if (parsed === undefined || parsed < 0n) throw new Error('Enter a valid nonnegative amount')
+	return parsed
 }
 
 export function parseUnitsOrUndefined(value: string, decimals = 18) {
 	if (!Number.isSafeInteger(decimals) || decimals < 0) return undefined
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') return undefined
-	const [whole = '0', fraction = ''] = value.split('.')
+	const fraction = value.split('.')[1] ?? ''
 	if (fraction.length > decimals) return undefined
-	return parseSharedUnits(`${whole || '0'}.${fraction}`, decimals)
+	const parsed = tryParseDecimalInput(value, decimals)
+	return parsed === undefined || parsed < 0n ? undefined : parsed
 }
 
 export function shortAddress(address: string) {
-	return `${address.slice(0, 6)}…${address.slice(-4)}`
+	return abbreviateAddress(address, 6, 4)
 }

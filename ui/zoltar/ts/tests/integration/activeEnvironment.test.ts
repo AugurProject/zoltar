@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
@@ -45,6 +45,7 @@ void describe('active environment', () => {
 		expect(isActiveAppChain('0xaa36a7')).toBe(true)
 		expect(isActiveAppChain('0x1')).toBe(false)
 		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
+		expect(getWrongNetworkReason()).toBe('Switch to Sepolia.')
 	})
 
 	void test('follows a supported wallet network when no network is pinned in the URL', async () => {
@@ -138,6 +139,7 @@ void describe('active environment', () => {
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
+		expect(getWrongNetworkReason()).toBe('Switch to Ethereum mainnet.')
 		resetEnvironment()
 	})
 

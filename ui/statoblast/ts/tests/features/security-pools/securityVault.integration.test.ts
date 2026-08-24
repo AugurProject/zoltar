@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { approveErc20 } from '../../../protocol/tokenActions.js'
+import { approveErc20 } from '@zoltar/ui-zoltar/protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '../../../protocol/securityVault.js'
 import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/deployment.js'

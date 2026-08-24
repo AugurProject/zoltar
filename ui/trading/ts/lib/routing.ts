@@ -1,11 +1,29 @@
-import { buildRouteHref, getRouteHashSearch, installRouting } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
+
+export type TradingRoute = 'markets' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}`
+
+const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
+	defaultRoute: 'markets',
+	routes: [
+		{ hash: '#/deploy', name: 'deploy' },
+		{ aliases: ['#/developer'], hash: '#/markets', name: 'markets' },
+		{ hash: '#/market', name: 'market' },
+		{ hash: '#/liquidity', name: 'liquidity' },
+		{ hash: '#/portfolio', name: 'portfolio' },
+		{ hash: '#/help', name: 'help' },
+		{
+			match: (routeHash: string): TradingRoute | undefined => {
+				const match = /^#\/security-pool\/(0x[0-9a-f]{40})$/i.exec(routeHash)
+				return match === null ? undefined : `security-pool/${match[1]}`
+			},
+		},
+	],
+}
+
+export const tradingRouting = createRouting(TRADING_ROUTING_CONFIG)
 
 export function getTradingRouteHref(routeHash: string) {
 	return buildRouteHref(routeHash, getRouteHashSearch())
-}
-
-export function getTradingRoutePath(hash: string) {
-	return hash.split('?')[0] ?? ''
 }
 
 export function getTradingEnvironmentLocationKey(location: Pick<Location, 'hash' | 'search'> = window.location) {
@@ -13,15 +31,5 @@ export function getTradingEnvironmentLocationKey(location: Pick<Location, 'hash'
 }
 
 export function installTradingRouting() {
-	installRouting({
-		defaultRoute: 'markets',
-		routes: [
-			{ hash: '#/deploy', name: 'deploy' },
-			{ hash: '#/markets', name: 'markets' },
-			{ hash: '#/market', name: 'market' },
-			{ hash: '#/liquidity', name: 'liquidity' },
-			{ hash: '#/portfolio', name: 'portfolio' },
-			{ hash: '#/help', name: 'help' },
-		],
-	})
+	installRouting(TRADING_ROUTING_CONFIG)
 }

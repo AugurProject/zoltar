@@ -46,6 +46,14 @@ runs:
         (cd ui/trading && bun install --frozen-lockfile)
         (cd solidity && bun install --frozen-lockfile)
 
+    - name: Install bot workspace dependencies for dead code analysis
+      if: github.job == 'knip'
+      shell: bash
+      run: |
+        bun ./scripts/install-frozen.mts bots/shared
+        bun ./scripts/install-frozen.mts bots/open-oracle-arbitrager
+        bun ./scripts/install-frozen.mts bots/liquidator
+
     - name: Cache generated shared package
       id: shared-cache
       uses: actions/cache@v5
