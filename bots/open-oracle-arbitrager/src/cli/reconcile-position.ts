@@ -71,8 +71,7 @@ try {
 		realizedNetProfitEth: values.get('realized-net-profit-eth'),
 		recordedBy: account.address,
 	})
-	const updated = [...positions]
-	updated[index] = reconciled
+	const updated = [reconciled, ...positions.slice(0, index), ...positions.slice(index + 1)]
 	await savePositionJournalState(positionFile, { archived: journal.archived, positions: updated }, chainId)
 	console.log(`report=${reportId} status=closed signer=${account.address} pnl=${reconciled.manualReconciliation?.pnlStatus ?? 'unavailable'} journal=${positionFile}`)
 } finally {
