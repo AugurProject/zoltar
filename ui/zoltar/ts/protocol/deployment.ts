@@ -274,7 +274,7 @@ function markDeploymentTransactionPrepared(
 	})
 }
 
-function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
+export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getInfraContractAddresses(profile)
 	return [
 		PROXY_DEPLOYER_ADDRESS,
@@ -295,7 +295,7 @@ function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile())
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStatusOracleStepAddresses(profile)],
+		args: [getZoltarDeploymentStatusOracleStepAddresses(profile)],
 	})
 }
 

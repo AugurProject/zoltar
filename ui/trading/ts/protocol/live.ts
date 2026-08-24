@@ -7,6 +7,11 @@ import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
+import { shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
+import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+
+export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
+export { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from './tradeQuote.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -18,149 +23,8 @@ const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const UI_SLIPPAGE_BPS = 50n
-
-export function requireTransactionSlippageBps(slippageBps: bigint) {
-	if (slippageBps < 0n || slippageBps > 500n) throw new Error('Slippage must be between 0% and 5%')
-}
-
-export function minimumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionSlippageBps(slippageBps)
-	return (amount * (10_000n - slippageBps)) / 10_000n
-}
-
-export function maximumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionSlippageBps(slippageBps)
-	return (amount * (10_000n + slippageBps) + 9_999n) / 10_000n
-}
-
-async function latestBlockIdentity(client: Pick<WalletClient, 'getBlock'>) {
-	const block = await client.getBlock()
-	if (block.number === null || block.number === undefined || block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
-	return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
-}
-
-async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>) => Promise<T>) {
-	const before = await latestBlockIdentity(client)
-	const result = await simulate(before)
-	const after = await latestBlockIdentity(client)
-	if (after.blockNumber !== before.blockNumber || after.blockHash !== before.blockHash) throw new Error('Block changed during simulation; simulate again')
-	return { ...before, result }
-}
-
-type TransactionExpiry = bigint | Readonly<{ validityMinutes: bigint }>
-
-export function requireTransactionValidityMinutes(validityMinutes: bigint) {
-	if (validityMinutes < 1n || validityMinutes > 1_440n) throw new Error('Transaction validity must be between 1 and 1440 minutes')
-}
-
-function deadlineAtBlock(expiry: TransactionExpiry, blockTimestamp: bigint) {
-	if (typeof expiry === 'bigint') return expiry
-	requireTransactionValidityMinutes(expiry.validityMinutes)
-	return blockTimestamp + expiry.validityMinutes * 60n
-}
-
-async function requireQuoteBlock(client: Pick<WalletClient, 'getBlock'>, quote: Readonly<{ blockNumber: bigint; blockHash: Hash }>) {
-	const current = await latestBlockIdentity(client)
-	if (current.blockNumber !== quote.blockNumber || current.blockHash !== quote.blockHash) throw new Error('Quote is stale; simulate again before submission')
-}
-
-export function retainApprovedMinimum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed < approved) throw new Error(`Refreshed quote no longer satisfies the approved minimum ${label}`)
-	return approved
-}
-
-export function retainApprovedMaximum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed > approved) throw new Error(`Refreshed quote no longer satisfies the approved maximum ${label}`)
-	return approved
-}
-
-export type LiveMarket = Readonly<{
-	loadError?: string
-	pool: Address
-	pair: Address | undefined
-	shareToken: Address
-	universeId: bigint
-	questionId: bigint
-	title: string
-	description: string
-	endTime: bigint
-	statoblastSecurityMultiplierBps: bigint
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	systemState: number
-	awaitingForkContinuation: boolean
-	universeForkTime: bigint
-	vaultCount: bigint
-	shareTokenSupplyAttoShares: bigint
-	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
-	totalCapacityOwnershipAttoRep: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
-	mintingCapacityCeilingAttoEth: bigint
-	availableMintingCapacityAttoEth: bigint
-	feeBps: bigint
-	tradingStatus: number | undefined
-	questionOutcome: number
-	yesReserve: bigint
-	noReserve: bigint
-	lpTotalSupply: bigint
-}>
-
-export type MarketLifecycle = Pick<LiveMarket, 'loadError' | 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
-
-function resolvedOutcomeLabel(questionOutcome: number) {
-	if (questionOutcome === 0) return 'Resolved INVALID'
-	if (questionOutcome === 1) return 'Resolved YES'
-	if (questionOutcome === 2) return 'Resolved NO'
-	return 'Question resolved'
-}
-
-export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint) {
-	if (market.loadError !== undefined) return 'Market data unavailable'
-	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) {
-		if (market.tradingStatus === 1) return 'Question ended'
-		if (market.tradingStatus === 2) return 'Pool inactive'
-		if (market.tradingStatus === 3) return 'Awaiting fork continuation'
-		if (market.tradingStatus === 4) return 'Universe forked'
-		if (market.tradingStatus === 5) return resolvedOutcomeLabel(market.questionOutcome)
-	}
-	if (market.universeForkTime !== 0n) return 'Universe forked'
-	if (market.awaitingForkContinuation) return 'Awaiting fork continuation'
-	if (market.systemState !== 0) return 'Pool inactive'
-	if (market.questionOutcome !== 3) return resolvedOutcomeLabel(market.questionOutcome)
-	if (nowSeconds >= market.endTime) return 'Question ended'
-	return undefined
-}
-
-export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint) {
-	return marketNewRiskBlocker(market, nowSeconds) === undefined
-}
-
 export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
 	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
-}
-
-type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidTokenId: bigint; yesTokenId: bigint; noTokenId: bigint }>
-
-export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
-
-export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {
-	const invalidTokenId = market.universeId << 8n
-	return {
-		pool: market.pool,
-		shareToken: market.shareToken,
-		invalidTokenId,
-		yesTokenId: invalidTokenId | 1n,
-		noTokenId: invalidTokenId | 2n,
-	} as const
-}
-
-export function liveBalancesForMarket(balances: LiveBalances | undefined, market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'> | undefined) {
-	if (balances === undefined || market === undefined) return undefined
-	const scope = shareBalanceScope(market)
-	if (balances.scope.pool !== scope.pool || balances.scope.shareToken !== scope.shareToken) return undefined
-	if (balances.scope.invalidTokenId !== scope.invalidTokenId || balances.scope.yesTokenId !== scope.yesTokenId || balances.scope.noTokenId !== scope.noTokenId) return undefined
-	return balances
 }
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'

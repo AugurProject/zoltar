@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -12,19 +12,10 @@ import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent,
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/lib/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
-import type { WriteOperationsParameters } from '../../../types/app.js'
+import type { TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type UsePriceOracleManagerParameters = {
-	accountAddress: Address | undefined
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: WriteOperationsParameters['refreshState']
-}
+type UsePriceOracleManagerParameters = TransactionLifecycleParameters & WriteOperationContext
 
 type PriceOracleReadClient = Pick<ReturnType<typeof createConnectedReadClient>, 'getBalance'>
 type PriceOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>

@@ -2,7 +2,7 @@ import type { NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.j
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { buildDeploymentStatusSnapshot, deployViaProxy, getDeploymentSteps as getZoltarDeploymentSteps, loadDeploymentStatusOracleMaskAtAddress, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar/protocol/deployment.js'
+import { buildDeploymentStatusSnapshot, deployViaProxy, getDeploymentSteps as getZoltarDeploymentSteps, getZoltarDeploymentStatusOracleStepAddresses, loadDeploymentStatusOracleMaskAtAddress, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar/protocol/deployment.js'
 import { getInfraContractAddresses, getEscalationGameFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -73,23 +73,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 
 function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
 	const addresses = getInfraContractAddresses(profile)
-	return [
-		PROXY_DEPLOYER_ADDRESS,
-		...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []),
-		addresses.multicall3,
-		addresses.uniformPriceDualCapBatchAuctionFactory,
-		addresses.scalarOutcomes,
-		addresses.securityPoolUtils,
-		addresses.openOracle,
-		addresses.zoltarQuestionData,
-		addresses.zoltar,
-		addresses.shareTokenFactory,
-		addresses.priceOracleManagerAndOperatorQueuerFactory,
-		addresses.securityPoolForker,
-		addresses.escalationGameClaimDelegate,
-		addresses.escalationGameFactory,
-		addresses.securityPoolFactory,
-	] satisfies Address[]
+	return [...getZoltarDeploymentStatusOracleStepAddresses(profile), addresses.securityPoolForker, addresses.escalationGameClaimDelegate, addresses.escalationGameFactory, addresses.securityPoolFactory] satisfies Address[]
 }
 
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()): Hex {

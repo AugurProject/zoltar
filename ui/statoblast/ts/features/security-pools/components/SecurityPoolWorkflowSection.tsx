@@ -18,7 +18,7 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { getQueuedVaultOperation } from './SecurityVaultSection.js'
+import { getQueuedVaultOperation } from './VaultQueuedOperationStatusCard.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'

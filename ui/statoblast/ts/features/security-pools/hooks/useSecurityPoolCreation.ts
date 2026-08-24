@@ -1,6 +1,5 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -15,23 +14,16 @@ import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
-import type { SecurityPoolFormState, WriteOperationsParameters } from '../../../types/app.js'
+import type { SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type UseSecurityPoolCreationParameters = {
-	accountAddress: Address | undefined
-	activeUniverseId?: bigint | undefined
-	deploymentStatuses: DeploymentStatus[]
-	enabled: boolean
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: WriteOperationsParameters['refreshState']
-	zoltarUniverseHasForked: boolean
-}
+type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
+	WriteOperationContext & {
+		activeUniverseId?: bigint | undefined
+		deploymentStatuses: DeploymentStatus[]
+		enabled: boolean
+		zoltarUniverseHasForked: boolean
+	}
 
 export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	const marketId = marketIdInput.trim()

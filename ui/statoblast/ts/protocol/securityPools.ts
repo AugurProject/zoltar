@@ -15,7 +15,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar/protocol/core.js'
 import { requireForkDataView } from '@zoltar/ui-zoltar/protocol/forkData.js'
-import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from '@zoltar/ui-zoltar/protocol/helpers.js'
+import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from '@zoltar/ui-zoltar/protocol/helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
@@ -29,17 +29,6 @@ export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
-}
-
-type SecurityPoolDeploymentQueryResult = {
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	parent: Address
-	priceOracleManagerAndOperatorQueuer: Address
-	questionId: bigint
-	statoblastSecurityMultiplierBps: bigint
-	securityPool: Address
-	truthAuction: Address
-	universeId: bigint
 }
 
 function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionData') {
@@ -304,7 +293,7 @@ export async function loadSecurityPoolVaultSummary(client: ReadClient, securityP
 }
 
 function shouldLoadSecurityPoolVaults(
-	deployment: Pick<SecurityPoolDeploymentQueryResult, 'parent' | 'securityPool'>,
+	deployment: Pick<SecurityPoolDeploymentTuple, 'parent' | 'securityPool'>,
 	options: {
 		selectedSecurityPoolAddress?: Address | string
 		vaultDetailMode: 'all' | 'selected'
@@ -326,7 +315,7 @@ function createDeferredSecurityPoolVaultSummary(vaultCount: bigint) {
 
 async function loadSecurityPoolDetails(
 	client: ReadClient,
-	deployment: SecurityPoolDeploymentQueryResult,
+	deployment: SecurityPoolDeploymentTuple,
 	options: {
 		accountAddress?: Address
 		selectedSecurityPoolAddress?: Address | string
@@ -478,7 +467,7 @@ async function loadSecurityPoolDetails(
 }
 
 async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigint, count: bigint) {
-	if (count === 0n) return [] as readonly SecurityPoolDeploymentQueryResult[]
+	if (count === 0n) return [] as readonly SecurityPoolDeploymentTuple[]
 	return requireSecurityPoolDeploymentTupleArray(
 		await client.readContract({
 			address: getInfraContractAddresses().securityPoolFactory,
@@ -492,7 +481,7 @@ async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigin
 
 async function loadListedSecurityPools(
 	client: ReadClient,
-	deployments: readonly SecurityPoolDeploymentQueryResult[],
+	deployments: readonly SecurityPoolDeploymentTuple[],
 	options: {
 		accountAddress?: Address
 		selectedSecurityPoolAddress?: Address | string

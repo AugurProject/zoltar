@@ -12,7 +12,7 @@ import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
 import { useAppRouteEffects } from './useAppRouteEffects.js'
 import { useDeploymentFlow } from '@zoltar/ui-zoltar/features/deployment/hooks/useDeploymentFlow.js'
-import { getDeploymentSections } from '@zoltar/ui-zoltar/features/deployment/lib/deployment.js'
+import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar/features/deployment/lib/deploymentRoute.js'
 import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js'
@@ -38,7 +38,7 @@ import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/url
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
-import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
+import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
@@ -114,7 +114,8 @@ export function App() {
 		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
 	})
 	const { transactionState } = transactionTray
-	const { busyStepId, deployNextMissing, deployNextMissingPending, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
@@ -251,7 +252,6 @@ export function App() {
 	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
-	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
 	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
 	const showApplicationDeploymentWarning = applicationDeploymentMissing
@@ -363,21 +363,17 @@ export function App() {
 		urlOpenOracleReportId,
 		walletBootstrapComplete,
 	})
-	const deployRouteContentProps: DeploymentRouteContentProps = {
+	const deployRouteContentProps = buildDeploymentRouteContentProps({
 		accountAddress: accountState.address,
-		busyStepId,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
 		deploymentStatusError,
-		deployNextMissingPending,
-		deploymentSections,
 		deploymentStatuses,
+		flow: deploymentFlow,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
-		onDeploy: deployStep,
-		onDeployNextMissing: () => void deployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
-	}
+	})
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
 		onActiveUniverseChange: setActiveUniverseId,

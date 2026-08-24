@@ -11,6 +11,7 @@ import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlow.js'
+import { buildDeploymentRouteContentProps } from '../features/deployment/lib/deploymentRoute.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
@@ -21,7 +22,6 @@ import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { getActiveSimulationController, initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
-import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
@@ -29,7 +29,7 @@ import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
-import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
+import type { MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
 import { zoltarRouting } from '../lib/routing.js'
 
@@ -86,7 +86,8 @@ export function App() {
 		},
 	})
 	const { transactionState } = transactionTray
-	const { busyStepId, deployNextMissing, deployNextMissingPending, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const {
 		approveZoltarForkRep,
 		createChildUniverse,
@@ -144,7 +145,6 @@ export function App() {
 		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
 		await refreshSimulationView()
 	}
-	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
 	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
 	const showDeployTab = deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
@@ -171,20 +171,16 @@ export function App() {
 		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
 		urlOpenOracleReportId,
 	})
-	const deployRouteContentProps: DeploymentRouteContentProps = {
+	const deployRouteContentProps = buildDeploymentRouteContentProps({
 		accountAddress: accountState.address,
-		busyStepId,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
 		deploymentStatusError,
-		deployNextMissingPending,
-		deploymentSections,
 		deploymentStatuses,
+		flow: deploymentFlow,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
-		onDeploy: deployStep,
-		onDeployNextMissing: () => void deployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
-	}
+	})
 	const zoltarRouteContentProps: MarketRouteContentProps = {
 		accountState,
 		activeUniverseId,

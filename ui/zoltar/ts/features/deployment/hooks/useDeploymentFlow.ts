@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
@@ -8,21 +8,15 @@ import { formatWriteErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../../transactionPresentations.js'
 import { requireWallet } from '@zoltar/ui-core-shared/lib/requireWalletConnection.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/lib/assertActiveWallet.js'
-import type { WriteOperationsParameters } from '../../../types/app.js'
+import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
 
-type UseDeploymentFlowParameters = {
+type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	setDeploymentStatuses: (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => void
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
 	rpcStateRetryWait?: RpcStateRetryWait
 }
 
