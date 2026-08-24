@@ -1,4 +1,7 @@
 import { getChangedFiles } from './changed-files.mts'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
+import { isTestSourceFile } from './test-discovery.mts'
 
 export type TestImpactRecommendation = {
 	command: string
@@ -14,6 +17,8 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 	'bun-test-setup-ui.ts',
 	'bunfig.toml',
 	'scripts/merge-test-timings.mts',
+	'scripts/mutation-support.mts',
+	'scripts/run-mutation-smoke.mts',
 	'scripts/run-balanced-test-shard.mts',
 	'scripts/run-tests.mts',
 	'scripts/run-tests.test.ts',
@@ -26,7 +31,7 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
-		command: 'bun test scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts',
+		command: 'bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
 	},
@@ -38,7 +43,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun test scripts/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
-		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === '.github/workflows/browser-workflow.yml' || filePath === '.github/workflows/coverage.yml',
+		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === '.github/workflows/browser-workflow.yml' || filePath === '.github/workflows/coverage.yml' || filePath.startsWith('ci-proposals/workflows/'),
 	},
 	{
 		command: 'bun run test:browser:smoke',
@@ -77,6 +82,118 @@ function directTestCommand(filePath: string) {
 	return `bun test ${filePath}`
 }
 
+const IMPORT_GRAPH_IGNORED_DIRECTORIES = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
+const IMPORT_GRAPH_SOURCE_PATTERN = /\.(?:cts|mts|ts|tsx)$/
+const PACKAGE_ALIASES = new Map([
+	['@zoltar/shared/', 'shared/ts/'],
+	['@zoltar/bot-shared/', 'bots/shared/src/'],
+	['@zoltar/ui-core-shared/', 'ui/coreShared/ts/'],
+	['@zoltar/ui-statoblast/', 'ui/statoblast/ts/'],
+	['@zoltar/ui-zoltar/', 'ui/zoltar/ts/'],
+])
+
+async function collectImportGraphSources(repositoryRoot: string, directoryPath = repositoryRoot): Promise<string[]> {
+	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
+	const files: string[] = []
+	for (const entry of entries) {
+		if (entry.isDirectory() && IMPORT_GRAPH_IGNORED_DIRECTORIES.has(entry.name)) continue
+		const entryPath = path.join(directoryPath, entry.name)
+		if (entry.isDirectory()) files.push(...(await collectImportGraphSources(repositoryRoot, entryPath)))
+		else if (entry.isFile() && IMPORT_GRAPH_SOURCE_PATTERN.test(entry.name)) files.push(path.relative(repositoryRoot, entryPath).replaceAll('\\', '/'))
+	}
+	return files
+}
+
+function extractImportSpecifiers(source: string) {
+	const specifiers = new Set<string>()
+	for (const match of source.matchAll(/(?:\b(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s*)?|\bimport\s*\(|\brequire\s*\()\s*['"]([^'"]+)['"]/g)) {
+		const specifier = match[1]
+		if (specifier !== undefined) specifiers.add(specifier)
+	}
+	return [...specifiers]
+}
+
+function resolveImportSpecifier(importer: string, specifier: string, sourceFiles: ReadonlySet<string>) {
+	let unresolvedPath: string | undefined
+	if (specifier.startsWith('.')) unresolvedPath = path.posix.normalize(path.posix.join(path.posix.dirname(importer), specifier))
+	else {
+		for (const [alias, aliasRoot] of PACKAGE_ALIASES) {
+			if (specifier.startsWith(alias)) unresolvedPath = `${aliasRoot}${specifier.slice(alias.length)}`
+		}
+	}
+	if (unresolvedPath === undefined) return undefined
+
+	const withoutGeneratedExtension = unresolvedPath.replace(/\.(?:c|m)?js$/, '')
+	const candidates = [unresolvedPath, withoutGeneratedExtension, ...['.ts', '.tsx', '.mts', '.cts'].map(extension => `${withoutGeneratedExtension}${extension}`), ...['.ts', '.tsx', '.mts', '.cts'].map(extension => `${withoutGeneratedExtension}/index${extension}`)]
+	return candidates.find(candidate => sourceFiles.has(candidate))
+}
+
+function groupedTestCommands(testFiles: readonly string[]) {
+	const groups = new Map<string, string[]>()
+	for (const filePath of testFiles) {
+		let group = 'root'
+		let commandPath = filePath
+		if (filePath.startsWith('augurScan/')) {
+			group = 'augurScan'
+			commandPath = filePath.slice('augurScan/'.length)
+		} else {
+			const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
+			if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) {
+				group = `bots/${botMatch[1]}`
+				commandPath = botMatch[2]
+			} else if (filePath.startsWith('solidity/ts/')) group = 'solidity'
+			else if (filePath.startsWith('ui/')) group = 'ui'
+		}
+		const files = groups.get(group) ?? []
+		files.push(commandPath)
+		groups.set(group, files)
+	}
+
+	return [...groups]
+		.map(([group, files]) => {
+			const paths = files.sort((left, right) => left.localeCompare(right)).join(' ')
+			if (group === 'augurScan' || group.startsWith('bots/')) return `cd ${group} && bun test ${paths}`
+			if (group === 'solidity') return `bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ${paths}`
+			if (group === 'ui') return `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ${paths}`
+			return `bun test ${paths}`
+		})
+		.sort((left, right) => left.localeCompare(right))
+}
+
+export async function getImportGraphTestRecommendations(changedFiles: readonly string[], repositoryRoot = process.cwd()) {
+	const sourceFiles = await collectImportGraphSources(repositoryRoot)
+	const sourceFileSet = new Set(sourceFiles)
+	const reverseImports = new Map<string, Set<string>>()
+	await Promise.all(
+		sourceFiles.map(async importer => {
+			const source = await fs.readFile(path.join(repositoryRoot, importer), 'utf8')
+			for (const specifier of extractImportSpecifiers(source)) {
+				const dependency = resolveImportSpecifier(importer, specifier, sourceFileSet)
+				if (dependency === undefined) continue
+				const importers = reverseImports.get(dependency) ?? new Set<string>()
+				importers.add(importer)
+				reverseImports.set(dependency, importers)
+			}
+		}),
+	)
+
+	const affectedTests = new Set<string>()
+	const visited = new Set(changedFiles.filter(filePath => sourceFileSet.has(filePath)))
+	const queue = [...visited]
+	while (queue.length > 0) {
+		const dependency = queue.shift()
+		if (dependency === undefined) break
+		for (const importer of reverseImports.get(dependency) ?? []) {
+			if (isTestSourceFile(importer)) affectedTests.add(importer)
+			if (!visited.has(importer)) {
+				visited.add(importer)
+				queue.push(importer)
+			}
+		}
+	}
+	return groupedTestCommands([...affectedTests]).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
+}
+
 export function getTestImpactRecommendations(changedFiles: readonly string[]) {
 	const recommendations = new Map<string, TestImpactRecommendation>()
 	for (const filePath of changedFiles) {
@@ -92,7 +209,9 @@ export function getTestImpactRecommendations(changedFiles: readonly string[]) {
 
 if (import.meta.main) {
 	const changedFiles = getChangedFiles()
-	const recommendations = getTestImpactRecommendations(changedFiles)
+	const recommendationsByCommand = new Map(getTestImpactRecommendations(changedFiles).map(recommendation => [recommendation.command, recommendation]))
+	for (const recommendation of await getImportGraphTestRecommendations(changedFiles)) recommendationsByCommand.set(recommendation.command, recommendation)
+	const recommendations = [...recommendationsByCommand.values()].sort((left, right) => left.command.localeCompare(right.command))
 	if (recommendations.length === 0) {
 		console.log('No static test-impact mapping matched. Trace changed imports, ownership, interfaces, and consumers using AGENTS.md.')
 	} else {

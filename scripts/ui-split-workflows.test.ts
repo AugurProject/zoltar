@@ -6,6 +6,10 @@ const repositoryRoot = join(import.meta.dir, '..')
 const ciWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
 const coverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
+const proposedBrowserWorkflowPath = join(repositoryRoot, 'ci-proposals', 'workflows', 'browser-workflow.yml')
+const proposedCoverageWorkflowPath = join(repositoryRoot, 'ci-proposals', 'workflows', 'coverage.yml')
+const proposedTestDomainsWorkflowPath = join(repositoryRoot, 'ci-proposals', 'workflows', 'test-domains.yml')
+const proposedTestStabilityWorkflowPath = join(repositoryRoot, 'ci-proposals', 'workflows', 'test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
 const setupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
@@ -20,13 +24,25 @@ const developerDocumentation = [
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+const requireRecord = (value: unknown, label: string) => {
+	if (!isRecord(value)) throw new Error(`${label} must be a YAML mapping`)
+	return value
+}
+const readWorkflow = async (workflowPath: string) => requireRecord(Bun.YAML.parse(await readFile(workflowPath, 'utf8')), workflowPath)
+const workflowJobs = (workflow: Record<string, unknown>) => requireRecord(workflow['jobs'], 'workflow jobs')
+const workflowSteps = (job: unknown) => {
+	const steps = requireRecord(job, 'workflow job')['steps']
+	if (!Array.isArray(steps)) throw new Error('workflow job steps must be a sequence')
+	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
+}
 
 describe('split UI workflow paths', () => {
 	test('split CI remains callable by the version release workflow', async () => {
-		const workflow = await readFile(ciWorkflowPath, 'utf8')
-		expect(workflow).toContain('on:\n  workflow_call:\n')
-		const releaseWorkflow = await readFile(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'), 'utf8')
-		expect(releaseWorkflow).toContain('uses: ./.github/workflows/ci.yml')
+		const workflow = await readWorkflow(ciWorkflowPath)
+		expect(requireRecord(workflow['on'], 'CI triggers')).toHaveProperty('workflow_call')
+		const releaseWorkflow = await readWorkflow(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'))
+		const releaseJobs = workflowJobs(releaseWorkflow)
+		expect(Object.values(releaseJobs).some(job => isRecord(job) && job['uses'] === './.github/workflows/ci.yml')).toBe(true)
 	})
 
 	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
@@ -48,17 +64,60 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('CI isolates the production browser workflow', async () => {
-		const workflow = await readFile(browserWorkflowPath, 'utf8')
-		expect(workflow).toContain('name: Production Browser Workflow')
-		expect(workflow).toContain('run: bun run test:browser:workflow')
+		await expect(access(browserWorkflowPath)).rejects.toThrow()
+		const workflow = await readWorkflow(proposedBrowserWorkflowPath)
+		expect(workflow['name']).toBe('Production Browser Workflow')
+		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 	})
 
 	test('scheduled coverage publishes and retains the canonical policy report', async () => {
-		const workflow = await readFile(coverageWorkflowPath, 'utf8')
-		expect(workflow).toContain('schedule:')
-		expect(workflow).toContain('run: bun run coverage:full')
-		expect(workflow).toContain('cat coverage/coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"')
-		expect(workflow).toContain('name: coverage-report')
+		await expect(access(coverageWorkflowPath)).rejects.toThrow()
+		const workflow = await readWorkflow(proposedCoverageWorkflowPath)
+		const triggers = requireRecord(workflow['on'], 'coverage triggers')
+		expect(Array.isArray(triggers['schedule'])).toBe(true)
+		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
+		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
+		expect(publisher).toBeDefined()
+		const upload = steps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		expect(requireRecord(upload?.['with'], 'coverage upload options')['name']).toBe('coverage-report')
+	})
+
+	test('proposed CI partitions application and Solidity tests and adds pull-request quality gates', async () => {
+		const testDomainsWorkflow = await readWorkflow(proposedTestDomainsWorkflowPath)
+		const testDomainTriggers = requireRecord(testDomainsWorkflow['on'], 'proposed test-domain triggers')
+		const workflowCall = requireRecord(testDomainTriggers['workflow_call'], 'proposed reusable test-domain trigger')
+		const workflowCallInputs = requireRecord(workflowCall['inputs'], 'proposed reusable test-domain inputs')
+		const invocationInput = requireRecord(workflowCallInputs['invocation'], 'proposed reusable invocation input')
+		expect(invocationInput['default']).toBe('reusable')
+		expect(testDomainTriggers).toHaveProperty('pull_request')
+		const proposedPush = requireRecord(testDomainTriggers['push'], 'proposed test-domain push trigger')
+		expect(proposedPush['branches']).toEqual(['main'])
+		expect(proposedPush['tags']).toEqual(['*'])
+		const testDomainConcurrency = requireRecord(testDomainsWorkflow['concurrency'], 'proposed test-domain concurrency')
+		expect(testDomainConcurrency['group']).toContain("${{ inputs.invocation || 'direct' }}")
+		const concurrencyInvocation = (invocation: string | undefined) => invocation ?? 'direct'
+		expect(concurrencyInvocation(undefined)).not.toBe(concurrencyInvocation(String(invocationInput['default'])))
+		const versionDeployWorkflow = await readWorkflow(versionDeployWorkflowPath)
+		const versionPush = requireRecord(requireRecord(versionDeployWorkflow['on'], 'version deploy triggers')['push'], 'version deploy push trigger')
+		expect(Array.isArray(versionPush['tags'])).toBe(true)
+		const domainSteps = Object.values(workflowJobs(testDomainsWorkflow)).flatMap(workflowSteps)
+		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=application'))).toBe(true)
+		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=solidity'))).toBe(true)
+		expect(domainSteps.some(step => step['run'] === 'bun run test:mutation:smoke')).toBe(true)
+
+		const coverageWorkflow = await readWorkflow(proposedCoverageWorkflowPath)
+		const coverageTriggers = requireRecord(coverageWorkflow['on'], 'proposed coverage triggers')
+		expect(coverageTriggers).toHaveProperty('pull_request')
+		const coverageSteps = Object.values(workflowJobs(coverageWorkflow)).flatMap(workflowSteps)
+		expect(coverageSteps.some(step => step['run'] === 'bun run coverage:fast')).toBe(true)
+		expect(coverageSteps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
+
+		const stabilityWorkflow = await readWorkflow(proposedTestStabilityWorkflowPath)
+		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
+		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('indexer-lifecycle.test.ts'))).toBe(true)
+		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('without retries'))).toBe(true)
 	})
 
 	test('contract caches and transferred inputs include the generated Trading artifact', async () => {

@@ -8,6 +8,7 @@ export const MINIMUM_TIMING_REGRESSION_SECONDS = 10
 export const MAXIMUM_TIMING_REGRESSION_RATIO = 0.5
 
 export type TestTimingHistory = {
+	fingerprintsByFile?: Record<string, string>
 	version: typeof TEST_TIMING_HISTORY_VERSION
 	samplesByFile: Record<string, number[]>
 }
@@ -15,6 +16,7 @@ export type TestTimingHistory = {
 export type TestTimingObservation = {
 	version: typeof TEST_TIMING_HISTORY_VERSION
 	elapsedSeconds: number
+	fingerprintsByFile?: Record<string, string>
 	testCaseSecondsByFile: Record<string, number>
 	testFiles: string[]
 }
@@ -30,11 +32,36 @@ export type TestTimingRegression = {
 export type TestTimingReport = {
 	currentSecondsByFile: Map<string, number>
 	regressions: TestTimingRegression[]
+	shardBalance?: { fastestSeconds: number; imbalanceRatio: number; slowestSeconds: number }
 	slowestFiles: { filePath: string; seconds: number }[]
+	unstableFiles: { filePath: string; maximumSeconds: number; minimumSeconds: number; spreadRatio: number }[]
 }
 
 function normalizeTestPath(filePath: string) {
 	return filePath.replaceAll('\\', '/').replace(/^\.\//, '')
+}
+
+async function createFileFingerprint(filePath: string, contextPaths: readonly string[]) {
+	const hasher = new Bun.CryptoHasher('sha256')
+	for (const inputPath of [filePath, ...contextPaths]) {
+		hasher.update(normalizeTestPath(inputPath))
+		hasher.update(await fs.readFile(inputPath))
+	}
+	return hasher.digest('hex')
+}
+
+export async function createTestFingerprints(testFiles: readonly string[], contextPaths: readonly string[]) {
+	return Object.fromEntries(await Promise.all(testFiles.map(async filePath => [normalizeTestPath(filePath), await createFileFingerprint(filePath, contextPaths)] as const)))
+}
+
+export function filterTestTimingHistory(history: TestTimingHistory, currentFingerprints: Readonly<Record<string, string>>): TestTimingHistory {
+	const samplesByFile = Object.fromEntries(Object.entries(history.samplesByFile).filter(([filePath]) => history.fingerprintsByFile?.[filePath] !== undefined && history.fingerprintsByFile[filePath] === currentFingerprints[filePath]))
+	const fingerprintsByFile = Object.fromEntries(
+		Object.keys(samplesByFile)
+			.map(filePath => [filePath, currentFingerprints[filePath]])
+			.filter((entry): entry is [string, string] => entry[1] !== undefined),
+	)
+	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile, ...(Object.keys(fingerprintsByFile).length === 0 ? {} : { fingerprintsByFile }) }
 }
 
 function decodeXmlAttribute(value: string) {
@@ -85,6 +112,7 @@ function isTimingHistory(value: unknown): value is TestTimingHistory {
 	if (typeof value !== 'object' || value === null) return false
 	if (!('version' in value) || !('samplesByFile' in value)) return false
 	if (value.version !== TEST_TIMING_HISTORY_VERSION || typeof value.samplesByFile !== 'object' || value.samplesByFile === null) return false
+	if ('fingerprintsByFile' in value && (typeof value.fingerprintsByFile !== 'object' || value.fingerprintsByFile === null || !Object.values(value.fingerprintsByFile).every(fingerprint => typeof fingerprint === 'string'))) return false
 	return Object.values(value.samplesByFile).every(samples => Array.isArray(samples) && samples.every(sample => typeof sample === 'number' && Number.isFinite(sample) && sample >= 0))
 }
 
@@ -108,12 +136,19 @@ export function mergeTestTimingHistory(previous: TestTimingHistory | undefined, 
 
 	const samplesByFile: Record<string, number[]> = {}
 	for (const filePath of [...new Set(currentTestFiles.map(normalizeTestPath))].sort((left, right) => left.localeCompare(right))) {
-		const priorSamples = previous?.samplesByFile[filePath] ?? []
+		const observedFingerprint = observations.map(observation => observation.fingerprintsByFile?.[filePath]).find(fingerprint => fingerprint !== undefined)
+		const priorFingerprint = previous?.fingerprintsByFile?.[filePath]
+		const priorSamples = observedFingerprint !== undefined && priorFingerprint !== observedFingerprint ? [] : (previous?.samplesByFile[filePath] ?? [])
 		const observed = observedSeconds.get(filePath)
 		const samples = observed === undefined ? priorSamples : [...priorSamples, observed]
 		if (samples.length > 0) samplesByFile[filePath] = samples.slice(-MAXIMUM_TIMING_SAMPLES)
 	}
-	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile }
+	const fingerprintsByFile = Object.fromEntries(
+		Object.keys(samplesByFile)
+			.map(filePath => [filePath, observations.map(observation => observation.fingerprintsByFile?.[filePath]).find(fingerprint => fingerprint !== undefined) ?? previous?.fingerprintsByFile?.[filePath]])
+			.filter((entry): entry is [string, string] => entry[1] !== undefined),
+	)
+	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile, ...(Object.keys(fingerprintsByFile).length === 0 ? {} : { fingerprintsByFile }) }
 }
 
 export function median(values: readonly number[]) {
@@ -143,6 +178,8 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 	const maximumIncreaseRatio = options.maximumIncreaseRatio ?? MAXIMUM_TIMING_REGRESSION_RATIO
 	const minimumHistorySamples = options.minimumHistorySamples ?? MINIMUM_REGRESSION_HISTORY_SAMPLES
 	const minimumIncreaseSeconds = options.minimumIncreaseSeconds ?? MINIMUM_TIMING_REGRESSION_SECONDS
+	const observedFingerprints = Object.assign({}, ...observations.map(observation => observation.fingerprintsByFile ?? {})) as Record<string, string>
+	const currentHistory = history === undefined || Object.keys(observedFingerprints).length === 0 ? history : filterTestTimingHistory(history, observedFingerprints)
 	const currentSecondsByFile = new Map<string, number>()
 	for (const observation of observations) {
 		for (const [filePath, seconds] of estimateObservationFileSeconds(observation)) currentSecondsByFile.set(filePath, (currentSecondsByFile.get(filePath) ?? 0) + seconds)
@@ -153,7 +190,7 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 		.slice(0, maximumSlowFiles)
 	const regressions: TestTimingRegression[] = []
 	for (const [filePath, currentSeconds] of currentSecondsByFile) {
-		const samples = history?.samplesByFile[filePath] ?? []
+		const samples = currentHistory?.samplesByFile[filePath] ?? []
 		if (samples.length < minimumHistorySamples) continue
 		const baselineSeconds = median(samples)
 		if (baselineSeconds === undefined) continue
@@ -166,13 +203,31 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 		if (increaseSeconds > minimumIncreaseSeconds && increaseRatio > maximumIncreaseRatio) regressions.push({ baselineSeconds, currentSeconds, filePath, increaseRatio, increaseSeconds })
 	}
 	regressions.sort((left, right) => right.increaseSeconds - left.increaseSeconds || left.filePath.localeCompare(right.filePath))
-	return { currentSecondsByFile, regressions, slowestFiles }
+	const elapsedSeconds = observations.map(observation => observation.elapsedSeconds).filter(seconds => seconds > 0)
+	const fastestSeconds = Math.min(...elapsedSeconds)
+	const slowestSeconds = Math.max(...elapsedSeconds)
+	const shardBalance = elapsedSeconds.length < 2 || !Number.isFinite(fastestSeconds) || !Number.isFinite(slowestSeconds) ? undefined : { fastestSeconds, slowestSeconds, imbalanceRatio: slowestSeconds / fastestSeconds }
+	const unstableFiles = Object.entries(currentHistory?.samplesByFile ?? {})
+		.filter(([, samples]) => samples.length >= MINIMUM_REGRESSION_HISTORY_SAMPLES)
+		.map(([filePath, samples]) => {
+			const minimumSeconds = Math.min(...samples)
+			const maximumSeconds = Math.max(...samples)
+			let spreadRatio = (maximumSeconds - minimumSeconds) / minimumSeconds
+			if (minimumSeconds === 0) spreadRatio = maximumSeconds === 0 ? 0 : Number.POSITIVE_INFINITY
+			return { filePath, maximumSeconds, minimumSeconds, spreadRatio }
+		})
+		.filter(file => file.maximumSeconds - file.minimumSeconds > MINIMUM_TIMING_REGRESSION_SECONDS && file.spreadRatio > MAXIMUM_TIMING_REGRESSION_RATIO)
+		.sort((left, right) => right.spreadRatio - left.spreadRatio || left.filePath.localeCompare(right.filePath))
+		.slice(0, 10)
+	return { currentSecondsByFile, regressions, ...(shardBalance === undefined ? {} : { shardBalance }), slowestFiles, unstableFiles }
 }
 
 const formatSeconds = (seconds: number) => `${seconds.toFixed(1)}s`
 
 export function renderTestTimingMarkdown(report: TestTimingReport) {
 	const lines = ['# Test timing summary', '', '| Slowest test file | Estimated wall time |', '| --- | ---: |', ...report.slowestFiles.map(file => `| \`${file.filePath}\` | ${formatSeconds(file.seconds)} |`)]
+	if (report.shardBalance !== undefined) lines.push('', `Shard balance: ${formatSeconds(report.shardBalance.fastestSeconds)} fastest, ${formatSeconds(report.shardBalance.slowestSeconds)} slowest (${report.shardBalance.imbalanceRatio.toFixed(2)}x)`)
+	if (report.unstableFiles.length > 0) lines.push('', '## Unstable test durations', '', ...report.unstableFiles.map(file => `- \`${file.filePath}\`: ${formatSeconds(file.minimumSeconds)}–${formatSeconds(file.maximumSeconds)} (${file.spreadRatio.toFixed(2)}x spread)`))
 	if (report.regressions.length === 0) {
 		lines.push('', 'Timing regression budget: passed')
 	} else {
@@ -188,7 +243,7 @@ export function renderTestTimingMarkdown(report: TestTimingReport) {
 	return `${lines.join('\n')}\n`
 }
 
-export async function writeTestTimingObservation(outputPath: string, junitPath: string, elapsedSeconds: number, testFiles: readonly string[]) {
+export async function writeTestTimingObservation(outputPath: string, junitPath: string, elapsedSeconds: number, testFiles: readonly string[], contextPaths: readonly string[] = []) {
 	let junitXml = ''
 	try {
 		junitXml = await fs.readFile(junitPath, 'utf8')
@@ -196,6 +251,7 @@ export async function writeTestTimingObservation(outputPath: string, junitPath: 
 		if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
 	}
 	const observation = createTestTimingObservation(junitXml, elapsedSeconds, testFiles)
+	observation.fingerprintsByFile = await createTestFingerprints(observation.testFiles, contextPaths)
 	await fs.mkdir(path.dirname(outputPath), { recursive: true })
 	await fs.writeFile(outputPath, `${JSON.stringify(observation, undefined, 2)}\n`)
 }

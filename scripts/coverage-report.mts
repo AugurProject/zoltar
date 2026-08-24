@@ -50,6 +50,8 @@ export type CoveragePolicy = {
 			minimumLines: number
 			minimumFunctions: number
 			allowedUnloadedFiles: string[]
+			maximumAllowedUnloadedFiles: number
+			unloadedFilesReviewBy: string
 		}
 	>
 	solidity: {
@@ -415,6 +417,9 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 		const staleAllowedFiles = surfacePolicy.allowedUnloadedFiles.filter(file => !surface.unloadedFiles.includes(file))
 		if (newlyUnloadedFiles.length > 0) failures.push(`TypeScript ${surfaceName} has newly unloaded executable source: ${newlyUnloadedFiles.join(', ')}`)
 		if (staleAllowedFiles.length > 0) failures.push(`TypeScript ${surfaceName} policy still allows source that is no longer unloaded: ${staleAllowedFiles.join(', ')}`)
+		if (surfacePolicy.allowedUnloadedFiles.length > surfacePolicy.maximumAllowedUnloadedFiles) failures.push(`TypeScript ${surfaceName} allows ${surfacePolicy.allowedUnloadedFiles.length.toString()} unloaded files, exceeding its cap of ${surfacePolicy.maximumAllowedUnloadedFiles.toString()}`)
+		const reviewDeadline = Date.parse(`${surfacePolicy.unloadedFilesReviewBy}T00:00:00Z`)
+		if (!Number.isFinite(reviewDeadline) || reviewDeadline < Date.now()) failures.push(`TypeScript ${surfaceName} unloaded-file exceptions require review by ${surfacePolicy.unloadedFilesReviewBy}`)
 	}
 	if (report.solidity !== undefined && belowMinimum(report.solidity.firstParty, policy.solidity.minimumFirstPartyLines)) {
 		failures.push(`First-party Solidity line coverage ${formatExact(report.solidity.firstParty)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(3)}%`)
@@ -443,11 +448,15 @@ function parsePolicy(value: unknown): CoveragePolicy {
 		const minimumLines = surfaceValue['minimumLines']
 		const minimumFunctions = surfaceValue['minimumFunctions']
 		const allowedUnloadedFiles = surfaceValue['allowedUnloadedFiles']
+		const maximumAllowedUnloadedFiles = surfaceValue['maximumAllowedUnloadedFiles']
+		const unloadedFilesReviewBy = surfaceValue['unloadedFilesReviewBy']
 		if (typeof minimumLines !== 'number' || typeof minimumFunctions !== 'number') throw new Error(`Coverage policy has invalid TypeScript ${surfaceName} thresholds`)
+		if (typeof maximumAllowedUnloadedFiles !== 'number' || !Number.isSafeInteger(maximumAllowedUnloadedFiles) || maximumAllowedUnloadedFiles < 0 || typeof unloadedFilesReviewBy !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(unloadedFilesReviewBy))
+			throw new Error(`Coverage policy has invalid TypeScript ${surfaceName} unloaded-file governance`)
 		if (!Array.isArray(allowedUnloadedFiles) || !allowedUnloadedFiles.every(file => typeof file === 'string')) {
 			throw new Error(`Coverage policy has invalid TypeScript ${surfaceName} unloaded files`)
 		}
-		return { minimumLines, minimumFunctions, allowedUnloadedFiles }
+		return { minimumLines, minimumFunctions, allowedUnloadedFiles, maximumAllowedUnloadedFiles, unloadedFilesReviewBy }
 	}
 	const minimumFirstPartyLines = solidityValue['minimumFirstPartyLines']
 	const minimumChangedLines = changedLinesValue['minimum']

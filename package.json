@@ -91,6 +91,7 @@
 		"test:run:shard": "bun test --preload ./bun-test-setup-ui.ts --reporter=dots --timeout 300000",
 		"test:run:balanced-shard": "bun ./scripts/run-balanced-test-shard.mts",
 		"test:plan": "bun ./scripts/test-impact.mts",
+		"test:mutation:smoke": "bun ./scripts/run-mutation-smoke.mts",
 		"test:statoblast": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc:solidity && bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 solidity/ts/tests/statoblast",
 		"test:security-pool-workflow": "bun run ensure-shared-build && bun run check:shared-dependencies && bun run tsc:app && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/statoblast/ts/tests/features/security-pools/workflow",
 		"test:browser:smoke": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts",

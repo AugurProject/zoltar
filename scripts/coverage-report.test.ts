@@ -124,9 +124,9 @@ describe('coverage policy', () => {
 	const policy: CoveragePolicy = {
 		version: 1,
 		typescript: {
-			ui: { minimumLines: 80, minimumFunctions: 70, allowedUnloadedFiles: [] },
-			shared: { minimumLines: 75, minimumFunctions: 65, allowedUnloadedFiles: ['shared/ts/known.ts'] },
-			tooling: { minimumLines: 35, minimumFunctions: 30, allowedUnloadedFiles: [] },
+			ui: { minimumLines: 80, minimumFunctions: 70, allowedUnloadedFiles: [], maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2999-01-01' },
+			shared: { minimumLines: 75, minimumFunctions: 65, allowedUnloadedFiles: ['shared/ts/known.ts'], maximumAllowedUnloadedFiles: 1, unloadedFilesReviewBy: '2999-01-01' },
+			tooling: { minimumLines: 35, minimumFunctions: 30, allowedUnloadedFiles: [], maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2999-01-01' },
 		},
 		solidity: { minimumFirstPartyLines: 99.9 },
 		changedLines: { minimum: 90 },
@@ -179,6 +179,26 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('Changed product TypeScript line coverage is unavailable')
+	})
+
+	test('caps and time-bounds unloaded source exceptions', () => {
+		const report = {
+			typescript: {
+				surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] }, tooling: surface(100, 100) },
+				excludedFiles: [],
+			},
+			changedLines: metric(100),
+		}
+		const result = evaluateCoveragePolicy(report, {
+			...policy,
+			typescript: {
+				...policy.typescript,
+				shared: { ...policy.typescript.shared, maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2020-01-01' },
+			},
+		})
+
+		expect(result.failures).toContain('TypeScript shared allows 1 unloaded files, exceeding its cap of 0')
+		expect(result.failures).toContain('TypeScript shared unloaded-file exceptions require review by 2020-01-01')
 	})
 
 	test('compares exact ratios instead of rounded display percentages', () => {

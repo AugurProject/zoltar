@@ -1,7 +1,11 @@
 import { existsSync, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
-export const TEST_ROOTS = ['scripts', 'shared/ts', 'solidity/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
+export const APPLICATION_TEST_ROOTS = ['scripts', 'shared/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
+export const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
+export const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
+export const TEST_DOMAINS = ['all', 'application', 'solidity'] as const
+export type TestDomain = (typeof TEST_DOMAINS)[number]
 export const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
 export const MAXIMUM_TEST_PARALLELISM = 2
 
@@ -45,6 +49,20 @@ async function collectTestFiles(repositoryRoot: string, directoryPath: string): 
 export async function discoverTestFiles(repositoryRoot = process.cwd(), testRoots: readonly string[] = TEST_ROOTS) {
 	const files = (await Promise.all(testRoots.map(testRoot => collectTestFiles(repositoryRoot, path.join(repositoryRoot, testRoot))))).flat()
 	return [...new Set(files)].sort((left, right) => left.localeCompare(right))
+}
+
+export function isTestDomain(value: string): value is TestDomain {
+	return TEST_DOMAINS.some(domain => domain === value)
+}
+
+export function getTestRootsForDomain(domain: TestDomain) {
+	if (domain === 'application') return APPLICATION_TEST_ROOTS
+	if (domain === 'solidity') return SOLIDITY_TEST_ROOTS
+	return TEST_ROOTS
+}
+
+export function discoverTestFilesForDomain(domain: TestDomain, repositoryRoot = process.cwd()) {
+	return discoverTestFiles(repositoryRoot, getTestRootsForDomain(domain))
 }
 
 export type WeightedTestFile = {

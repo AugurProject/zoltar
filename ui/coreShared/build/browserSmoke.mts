@@ -222,7 +222,13 @@ export async function createDevToolsSession(
 	chromiumPath: string,
 	pageUrl: string,
 	viewport: { readonly height: number; readonly width: number },
-	{ devToolsPortAttempts, initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS, pollMilliseconds = 50, targetAttempts }: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
+	{
+		devToolsPortAttempts,
+		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
+		onProfileCreated,
+		pollMilliseconds = 50,
+		targetAttempts,
+	}: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly onProfileCreated?: (profilePath: string) => void; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
 ) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
 	let browser: ChildProcess | undefined
@@ -237,6 +243,7 @@ export async function createDevToolsSession(
 	}
 	let stderrData = ''
 	try {
+		onProfileCreated?.(profilePath)
 		browser = spawn(chromiumPath, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, `--window-size=${viewport.width.toString()},${viewport.height.toString()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
 		let launchError: Error | undefined
 		browser.once('error', error => {
