@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, privateKeyToAccount, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '#ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
@@ -22,7 +22,7 @@ import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ExecutionCandidate } from '#core/operator-types'
-import { errorMessage, requiredBigint, requiredTuple } from '#core/rpc-validation'
+import { errorMessage } from '#core/rpc-validation'
 import { candidateRiskMismatch, poolsForToken } from '#monitoring/opportunity-evaluation'
 import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
 import { reconcileExpiredAttemptsWithQuorum, processPositionLifecycle } from '#execution/position-lifecycle'
@@ -690,52 +690,34 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
 						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
-							return await readConstantProductPairWithQuorum(pair, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], rpcQuorumRequirement(), async (endpoint, quorumPair) => {
-								const [token0, token1, reserves] = await contextualRpcRead(
-									'eth_call',
-									requestClient =>
-										Promise.all([
-											readContractAtBlock(
-												requestClient,
-												{
-													address: quorumPair,
-													abi: constantProductPairAbi,
-													functionName: 'token0',
-												},
-												blockNumber,
-											),
-											readContractAtBlock(
-												requestClient,
-												{
-													address: quorumPair,
-													abi: constantProductPairAbi,
-													functionName: 'token1',
-												},
-												blockNumber,
-											),
-											readContractAtBlock(
-												requestClient,
-												{
-													address: quorumPair,
-													abi: constantProductPairAbi,
-													functionName: 'getReserves',
-												},
-												blockNumber,
-											),
-										]),
-									endpoint,
-								)
-								const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
-								return {
-									blockHash,
-									blockNumber,
-									blockTimestamp: block.timestamp,
-									chainId: config.network.chain.id,
-									reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
-									reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
-									token0: getAddress(String(token0)),
-									token1: getAddress(String(token1)),
-								}
+							return await readConstantProductPairWithQuorum({
+								block: { hash: blockHash, number: blockNumber },
+								chainId: config.network.chain.id,
+								endpoints: [config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
+								pair,
+								readBlock: async (endpoint, canonicalBlockNumber) =>
+									await contextualRpcRead(
+										'eth_getBlockByNumber',
+										async requestClient => {
+											const endpointBlock = await requestClient.getBlock({ blockNumber: canonicalBlockNumber })
+											return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
+										},
+										endpoint,
+									),
+								readPairAtBlock: async (endpoint, quorumPair, canonicalBlockHash) => {
+									const [token0, token1, reserves] = await contextualRpcRead(
+										'eth_call',
+										requestClient =>
+											Promise.all([
+												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token0' }),
+												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'token1' }),
+												requestClient.readContract({ address: quorumPair, abi: constantProductPairAbi, blockHash: canonicalBlockHash, functionName: 'getReserves' }),
+											]),
+										endpoint,
+									)
+									return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
+								},
+								requirement: rpcQuorumRequirement(),
 							})
 						})
 						try {

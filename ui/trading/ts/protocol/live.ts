@@ -648,26 +648,25 @@ export async function refreshSecurityPoolDeploymentIndex<Deployment, Anchor>(
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
-		if (index.key !== key) {
-			index.key = key
-			index.deployments = []
-			index.anchor = undefined
-		}
-		if (index.anchor !== undefined && !(await isAnchorCanonical(index.anchor))) {
-			index.deployments = []
-			index.anchor = undefined
+		let currentDeployments = index.key === key ? index.deployments : []
+		let currentAnchor = index.key === key ? index.anchor : undefined
+		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
+			currentDeployments = []
+			currentAnchor = undefined
 		}
 		const { anchor, total } = await loadSnapshot()
-		if (total < BigInt(index.deployments.length)) index.deployments = []
-		const knownCount = BigInt(index.deployments.length)
+		if (total < BigInt(currentDeployments.length)) currentDeployments = []
+		const knownCount = BigInt(currentDeployments.length)
 		const ranges = marketDiscoveryRanges(total - knownCount, pageSize).map(range => ({ start: knownCount + range.start, count: range.count }))
 		const pages = await mapWithConcurrency(ranges, 4, async range => await loadRange(range.start, range.count, anchor))
 		const appended = pages.flat()
 		if (BigInt(appended.length) !== total - knownCount) throw new Error('SecurityPool deployment registry returned an incomplete range')
 		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment registry changed during discovery')
-		index.deployments.push(...appended)
+		const nextDeployments = [...currentDeployments, ...appended]
+		index.key = key
+		index.deployments = nextDeployments
 		index.anchor = anchor
-		snapshot = index.deployments.slice()
+		snapshot = nextDeployments.slice()
 	})()
 	index.pending = refresh
 	try {
@@ -703,21 +702,21 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
-		if (index.key !== key) {
-			index.key = key
-			index.deployments = []
-			index.anchor = undefined
-		}
-		if (index.anchor !== undefined && !(await isAnchorCanonical(index.anchor))) {
-			index.deployments = []
-			index.anchor = undefined
+		let currentDeployments = index.key === key ? index.deployments : []
+		let currentAnchor = index.key === key ? index.anchor : undefined
+		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
+			currentDeployments = []
+			currentAnchor = undefined
 		}
 		const anchor = await loadLatest()
-		const fromBlock = index.anchor === undefined ? 0n : index.anchor.blockNumber + 1n
-		if (fromBlock <= anchor.blockNumber) index.deployments.push(...(await loadEvents(fromBlock, anchor.blockNumber)))
+		const fromBlock = currentAnchor === undefined ? 0n : currentAnchor.blockNumber + 1n
+		const appended = fromBlock <= anchor.blockNumber ? await loadEvents(fromBlock, anchor.blockNumber) : []
 		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment events changed during discovery')
+		const nextDeployments = [...currentDeployments, ...appended]
+		index.key = key
+		index.deployments = nextDeployments
 		index.anchor = anchor
-		snapshot = index.deployments.slice()
+		snapshot = nextDeployments.slice()
 	})()
 	index.pending = refresh
 	try {

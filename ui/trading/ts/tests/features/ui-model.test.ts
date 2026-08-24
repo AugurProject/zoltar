@@ -381,6 +381,39 @@ describe('standalone trading UI model', () => {
 		])
 	})
 
+	test('does not retain orphan deployment events when the discovery anchor is replaced', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const orphanAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const canonicalAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 100n }
+		let latest = orphanAnchor
+		let canonicalHash = canonicalAnchor.blockHash
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async anchor => anchor.blockHash === canonicalHash,
+				async () => ['orphan'],
+			),
+		).rejects.toThrow('deployment events changed during discovery')
+		expect(index.deployments).toEqual([])
+		expect(index.anchor).toBeUndefined()
+
+		latest = canonicalAnchor
+		canonicalHash = canonicalAnchor.blockHash
+		expect(
+			await refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async anchor => anchor.blockHash === canonicalHash,
+				async () => ['canonical'],
+			),
+		).toEqual(['canonical'])
+		expect(index.deployments).toEqual(['canonical'])
+		expect(index.anchor).toEqual(canonicalAnchor)
+	})
+
 	test('serializes deployment-index waiters without duplicate appends', async () => {
 		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
 		const deployments = Array.from({ length: 5 }, (_value, position) => ({ universeId: 1n, pool: `pool-${position}` }))

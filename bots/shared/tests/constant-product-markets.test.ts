@@ -13,6 +13,10 @@ function snapshot(blockNumber = 100n, blockTimestamp = 10n, blockHash = BLOCK_HA
 	return { blockHash, blockNumber, blockTimestamp, chainId: 1, reserve0: 200_000n * UNIT, reserve1: 1_000n * UNIT, token0: REP, token1: WETH }
 }
 
+function pairState(reserve0 = 200_000n * UNIT) {
+	return { reserve0, reserve1: 1_000n * UNIT, token0: REP, token1: WETH }
+}
+
 const settings: CentralizedMarketSettings = {
 	assetAddress: REP,
 	assetChainId: 1,
@@ -43,13 +47,45 @@ const settings: CentralizedMarketSettings = {
 }
 
 describe('constant-product DEX observations', () => {
+	test('rejects identical pair values read from different endpoint block identities', async () => {
+		const replacementHash = `0x${'2'.repeat(64)}` as const
+		const endpointBlocks = new Map([
+			['primary', BLOCK_HASH],
+			['quorum-a', replacementHash],
+			['quorum-b', BLOCK_HASH],
+		])
+		await expect(
+			readConstantProductPairWithQuorum({
+				block: { hash: BLOCK_HASH, number: 100n },
+				chainId: 1,
+				endpoints: ['primary', 'quorum-a', 'quorum-b'],
+				pair: PAIR,
+				readBlock: async endpoint => {
+					const hash = endpointBlocks.get(endpoint)
+					if (hash === undefined) throw new Error('Missing endpoint block fixture')
+					return { hash, number: 100n, timestamp: 10n }
+				},
+				readPairAtBlock: async () => pairState(),
+				requirement: 2,
+			}),
+		).rejects.toThrow('canonical block')
+	})
+
 	test('rejects a canonical block hash paired with forged reserve state from one RPC', async () => {
 		const honest = snapshot()
 		const forged = { ...honest, reserve0: honest.reserve0 * 10n }
 		await expect(
-			readConstantProductPairWithQuorum(PAIR, ['primary', 'quorum-a', 'quorum-b'], 2, async (endpoint, pair) => {
-				expect(pair).toBe(PAIR)
-				return endpoint === 'primary' ? forged : honest
+			readConstantProductPairWithQuorum({
+				block: { hash: BLOCK_HASH, number: 100n },
+				chainId: 1,
+				endpoints: ['primary', 'quorum-a', 'quorum-b'],
+				pair: PAIR,
+				readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
+				readPairAtBlock: async (endpoint, pair) => {
+					expect(pair).toBe(PAIR)
+					return pairState(endpoint === 'primary' ? forged.reserve0 : honest.reserve0)
+				},
+				requirement: 2,
 			}),
 		).rejects.toThrow('RPC disagreement for DEX pair')
 	})

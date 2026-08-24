@@ -74,6 +74,8 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 			if (parameters.hasRep(position)) nextActiveVaults.set(address.toLowerCase(), position)
 		}
 	}
+	const currentBlockHash = await parameters.readCanonicalBlockHash(parameters.block.number)
+	if (currentBlockHash?.toLowerCase() !== parameters.block.hash.toLowerCase()) throw new Error('Security pool vault snapshot changed during refresh')
 	index.activeVaults = nextActiveVaults
 	index.activeVaultCount = nextActiveVaults.size
 	index.blockHash = parameters.block.hash

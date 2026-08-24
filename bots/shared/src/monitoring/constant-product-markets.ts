@@ -1,7 +1,7 @@
 import type { CentralizedMarketSettings } from './centralized-markets.ts'
 import type { MarketConsensusObservation } from './market-consensus.ts'
 import { settledQuorumValue } from './read-quorum.ts'
-import { bigintToSafeNumber } from '../ethereum.ts'
+import { bigintToSafeNumber, getAddress, isHex, type Address, type Hash } from '../ethereum.ts'
 
 const UNIT = 10n ** 18n
 const BPS = 10_000n
@@ -19,16 +19,47 @@ export type PairSnapshot = {
 
 export type ConstantProductPairReader = (pair: `0x${string}`) => Promise<PairSnapshot>
 
-export async function readConstantProductPairWithQuorum(
-	pair: `0x${string}`,
-	endpoints: readonly string[],
-	requirement: 1 | 2,
-	readPair: (endpoint: string, pair: `0x${string}`) => Promise<PairSnapshot>,
-) {
+type ConstantProductPairQuorumParameters = {
+	block: Readonly<{ hash: Hash; number: bigint }>
+	chainId: number
+	endpoints: readonly string[]
+	pair: Address
+	readBlock: (endpoint: string, blockNumber: bigint) => Promise<Readonly<{ hash: unknown; number: unknown; timestamp: unknown }>>
+	readPairAtBlock: (endpoint: string, pair: Address, blockHash: Hash) => Promise<Readonly<{ reserve0: unknown; reserve1: unknown; token0: unknown; token1: unknown }>>
+	requirement: 1 | 2
+}
+
+function canonicalEndpointBlock(value: Readonly<{ hash: unknown; number: unknown; timestamp: unknown }>, expected: Readonly<{ hash: Hash; number: bigint }>, pair: Address) {
+	const { hash, number, timestamp } = value
+	if (typeof hash !== 'string' || !isHex(hash) || hash.length !== 66 || typeof number !== 'bigint' || typeof timestamp !== 'bigint') throw new Error(`DEX pair ${pair} endpoint returned malformed canonical block identity`)
+	if (number !== expected.number || hash.toLowerCase() !== expected.hash.toLowerCase()) throw new Error(`DEX pair ${pair} endpoint canonical block does not match the scan anchor`)
+	return { hash: hash as Hash, number, timestamp }
+}
+
+function canonicalPairState(value: Readonly<{ reserve0: unknown; reserve1: unknown; token0: unknown; token1: unknown }>, pair: Address) {
+	const { reserve0, reserve1, token0, token1 } = value
+	if (typeof reserve0 !== 'bigint' || typeof reserve1 !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error(`DEX pair ${pair} endpoint returned malformed pair state`)
+	return { reserve0, reserve1, token0: getAddress(token0), token1: getAddress(token1) }
+}
+
+async function readEndpointPairSnapshot(parameters: ConstantProductPairQuorumParameters, endpoint: string) {
+	const block = canonicalEndpointBlock(await parameters.readBlock(endpoint, parameters.block.number), parameters.block, parameters.pair)
+	const pair = canonicalPairState(await parameters.readPairAtBlock(endpoint, parameters.pair, block.hash), parameters.pair)
+	canonicalEndpointBlock(await parameters.readBlock(endpoint, parameters.block.number), parameters.block, parameters.pair)
+	return {
+		blockHash: block.hash,
+		blockNumber: block.number,
+		blockTimestamp: block.timestamp,
+		chainId: parameters.chainId,
+		...pair,
+	} satisfies PairSnapshot
+}
+
+export async function readConstantProductPairWithQuorum(parameters: ConstantProductPairQuorumParameters) {
 	return await settledQuorumValue(
-		`DEX pair ${pair}`,
-		endpoints.map(async endpoint => ({ endpoint, value: await readPair(endpoint, pair) })),
-		requirement,
+		`DEX pair ${parameters.pair}`,
+		parameters.endpoints.map(async endpoint => ({ endpoint, value: await readEndpointPairSnapshot(parameters, endpoint) })),
+		parameters.requirement,
 	)
 }
 

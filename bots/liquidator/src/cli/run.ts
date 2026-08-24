@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -129,15 +129,26 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	}
 	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair =>
-			readConstantProductPairWithQuorum(pair, [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls], settings.connectivity.rpcQuorum, async (endpoint, quorumPair) => {
-				const pairClient = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
-				const [token0, token1, reserves] = await Promise.all([
-					readContractAtBlock(pairClient, { abi: constantProductPairAbi, address: quorumPair, functionName: 'token0' }, block.number),
-					readContractAtBlock(pairClient, { abi: constantProductPairAbi, address: quorumPair, functionName: 'token1' }, block.number),
-					readContractAtBlock(pairClient, { abi: constantProductPairAbi, address: quorumPair, functionName: 'getReserves' }, block.number),
-				])
-				if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
-				return { blockHash: block.hash, blockNumber: block.number, blockTimestamp: block.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
+			readConstantProductPairWithQuorum({
+				block,
+				chainId: settings.network.chainId,
+				endpoints: [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls],
+				pair,
+				readBlock: async (endpoint, blockNumber) => {
+					const pairClient = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
+					const endpointBlock = await pairClient.getBlock({ blockNumber })
+					return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
+				},
+				readPairAtBlock: async (endpoint, quorumPair, blockHash) => {
+					const pairClient = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
+					const [token0, token1, reserves] = await Promise.all([
+						pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'token0' }),
+						pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'token1' }),
+						pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'getReserves' }),
+					])
+					return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
+				},
+				requirement: settings.connectivity.rpcQuorum,
 			}),
 		)
 	const dashboard = settings.runtime.ui
