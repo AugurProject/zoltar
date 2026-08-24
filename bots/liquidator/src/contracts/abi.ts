@@ -173,6 +173,17 @@ export const vaultEscrowUpdatedEvent = {
 	type: 'event',
 } as const
 
+export const truthAuctionHaircutAppliedEvent = {
+	inputs: [
+		{ indexed: false, name: 'repBeforeAttoRep', type: 'uint256' },
+		{ indexed: false, name: 'repRemovedAttoRep', type: 'uint256' },
+		{ indexed: false, name: 'repRemainingAttoRep', type: 'uint256' },
+		{ indexed: false, name: 'rebasedElapsed', type: 'uint256' },
+	],
+	name: 'TruthAuctionHaircutApplied',
+	type: 'event',
+} as const
+
 export const securityPoolAbi = [
 	vaultAccountingCheckpointEvent,
 	{
@@ -340,6 +351,7 @@ export const securityPoolAbi = [
 ] as const
 
 export const escalationGameAbi = [
+	truthAuctionHaircutAppliedEvent,
 	vaultEscrowUpdatedEvent,
 	{
 		inputs: [{ name: 'vault', type: 'address' }],

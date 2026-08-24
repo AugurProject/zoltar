@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
 import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault } from '#monitoring/pool-monitor'
+import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
@@ -26,6 +28,61 @@ test('vault checkpoint catch-up adapts long cursor gaps into bounded ordered ran
 test('vault change discovery includes pool checkpoints and escalation escrow updates', async () => {
 	const addresses = await loadChangedVaultAddresses(10n, 10n, [async () => [{ args: { vault } }], async () => [{ args: { vault: escrowVault } }]])
 	expect(addresses).toEqual([vault, escrowVault])
+})
+
+test('a truth-auction haircut globally dirties every retained dispute-staked vault', async () => {
+	const backing = (15n * PRICE_PRECISION) / 10n
+	const initialStake = PRICE_PRECISION / 2n
+	const haircuttedStake = (2n * PRICE_PRECISION) / 5n
+	const position = (address: typeof vault, disputeStakedAttoRep: bigint): VaultPosition => ({
+		address,
+		backingUnits: backing,
+		badDebtAttoEth: 0n,
+		capacityOwnershipAttoRep: PRICE_PRECISION,
+		claimableFeesAttoEth: 0n,
+		disputeStakedAttoRep,
+		openInterestAttoEth: PRICE_PRECISION,
+		vaultAttoRepBacking: backing,
+	})
+	const positions = new Map([
+		[vault.toLowerCase(), position(vault, initialStake)],
+		[escrowVault.toLowerCase(), position(escrowVault, initialStake)],
+	])
+	const index = createVaultStateIndex<VaultPosition>()
+	const loadPositions = async (addresses: readonly (typeof vault)[]) => addresses.map(address => positions.get(address.toLowerCase()) ?? position(address, 0n))
+	const first = await refreshVaultStateIndex(index, {
+		block: { hash: `0x${'11'.repeat(32)}`, number: 9n },
+		hasRep: candidate => candidate.backingUnits > 0n || candidate.disputeStakedAttoRep > 0n,
+		knownVaultCount: 2n,
+		loadChangedVaultAddresses: async () => [],
+		loadPositions,
+		loadRegistryRange: async () => [vault, escrowVault],
+		readCanonicalBlockHash: async () => `0x${'11'.repeat(32)}`,
+	})
+	expect(first.activeVaults.every(candidate => !isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
+	positions.set(vault.toLowerCase(), position(vault, haircuttedStake))
+	positions.set(escrowVault.toLowerCase(), position(escrowVault, haircuttedStake))
+
+	const second = await refreshVaultStateIndex(index, {
+		block: { hash: `0x${'22'.repeat(32)}`, number: 10n },
+		hasRep: candidate => candidate.backingUnits > 0n || candidate.disputeStakedAttoRep > 0n,
+		knownVaultCount: 2n,
+		loadChangedVaultAddresses: async (fromBlock, toBlock) =>
+			await loadChangedVaultAddresses(
+				fromBlock,
+				toBlock,
+				[async () => []],
+				[async () => [{ args: { repRemovedAttoRep: 1n } }]],
+				[...index.activeVaults.values()].filter(candidate => candidate.disputeStakedAttoRep > 0n).map(candidate => candidate.address),
+			),
+		loadPositions,
+		loadRegistryRange: async () => [],
+		readCanonicalBlockHash: async blockNumber => (blockNumber === 9n ? `0x${'11'.repeat(32)}` : `0x${'22'.repeat(32)}`),
+	})
+
+	expect(second.refreshedVaults.map(candidate => candidate.address)).toEqual([vault, escrowVault])
+	expect(second.activeVaults.every(candidate => candidate.disputeStakedAttoRep === haircuttedStake)).toBeTrue()
+	expect(second.activeVaults.every(candidate => isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
 })
 
 test('cached raw vault state recomputes backing and open interest from current pool accounting', () => {

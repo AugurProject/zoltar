@@ -1,7 +1,7 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
+import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, repForBackingUnits, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -163,16 +163,23 @@ export function hasVaultRep(vault: VaultPosition) {
 type VaultChangeLog = Readonly<{ args?: unknown }>
 type VaultChangeSource = (range: Readonly<{ fromBlock: bigint; toBlock: bigint }>) => Promise<readonly VaultChangeLog[]>
 
-export async function loadChangedVaultAddresses(fromBlock: bigint, toBlock: bigint, sources: readonly VaultChangeSource[]) {
-	const logsBySource = await Promise.all(sources.map(async source => await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAXIMUM_VAULT_CHANGE_LOG_RANGE, source)))
-	return logsBySource.flatMap(logs =>
-		logs.map(log => {
-			if (typeof log.args !== 'object' || log.args === null) throw new Error('Vault change event is missing its arguments')
-			const vault = Reflect.get(log.args, 'vault')
-			if (typeof vault !== 'string') throw new Error('Vault change event is missing its vault address')
-			return getAddress(vault)
-		}),
-	)
+export async function loadChangedVaultAddresses(fromBlock: bigint, toBlock: bigint, sources: readonly VaultChangeSource[], globalDisputeStakeSources: readonly VaultChangeSource[] = [], disputeStakedVaults: readonly Address[] = []) {
+	const [logsBySource, globalLogsBySource] = await Promise.all([
+		Promise.all(sources.map(async source => await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAXIMUM_VAULT_CHANGE_LOG_RANGE, source))),
+		Promise.all(globalDisputeStakeSources.map(async source => await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAXIMUM_VAULT_CHANGE_LOG_RANGE, source))),
+	])
+	const addresses = new Map<string, Address>()
+	for (const log of logsBySource.flat()) {
+		if (typeof log.args !== 'object' || log.args === null) throw new Error('Vault change event is missing its arguments')
+		const vault = Reflect.get(log.args, 'vault')
+		if (typeof vault !== 'string') throw new Error('Vault change event is missing its vault address')
+		const address = getAddress(vault)
+		addresses.set(address.toLowerCase(), address)
+	}
+	if (globalLogsBySource.some(logs => logs.length > 0)) {
+		for (const vault of disputeStakedVaults) addresses.set(vault.toLowerCase(), vault)
+	}
+	return [...addresses.values()]
 }
 
 export function currentVaultPositionForPoolAccounting(vault: VaultPosition, totalAttoRep: bigint, denominator: bigint, settlementCollateralAttoEth: bigint, totalCapacityOwnershipAttoRep: bigint): VaultPosition {
@@ -202,8 +209,11 @@ async function loadCurrentVaults(
 		knownVaultCount,
 		loadChangedVaultAddresses: async (fromBlock, toBlock) => {
 			const sources: VaultChangeSource[] = [async range => await client.getLogs({ address: pool, event: vaultAccountingCheckpointEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
-			if (escalationGame !== zeroAddress) sources.push(async range => await client.getLogs({ address: escalationGame, event: vaultEscrowUpdatedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }))
-			return await loadChangedVaultAddresses(fromBlock, toBlock, sources)
+			if (escalationGame === zeroAddress) return await loadChangedVaultAddresses(fromBlock, toBlock, sources)
+			sources.push(async range => await client.getLogs({ address: escalationGame, event: vaultEscrowUpdatedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }))
+			const haircutSources: VaultChangeSource[] = [async range => await client.getLogs({ address: escalationGame, event: truthAuctionHaircutAppliedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
+			const disputeStakedVaults = [...index.activeVaults.values()].filter(vault => vault.disputeStakedAttoRep > 0n).map(vault => vault.address)
+			return await loadChangedVaultAddresses(fromBlock, toBlock, sources, haircutSources, disputeStakedVaults)
 		},
 		loadPositions: async vaults => await loadVaultPage(client, pool, escalationGame, vaults, block.number),
 		loadRegistryRange: async (start, count) => {
