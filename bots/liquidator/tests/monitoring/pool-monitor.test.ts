@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { currentVaultPositionForPoolAccounting, loadChangedVaultAddresses } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault } from '#monitoring/pool-monitor'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
@@ -42,4 +42,32 @@ test('cached raw vault state recomputes backing and open interest from current p
 
 	expect(currentVaultPositionForPoolAccounting(raw, 100n, 10n, 101n, 10n)).toMatchObject({ openInterestAttoEth: 30n, vaultAttoRepBacking: 20n })
 	expect(currentVaultPositionForPoolAccounting(raw, 200n, 10n, 201n, 10n)).toMatchObject({ openInterestAttoEth: 60n, vaultAttoRepBacking: 40n })
+})
+
+test('unchanged empty operator vaults are read once and then served from the event-aware cache', async () => {
+	const pool = getAddress('0x0000000000000000000000000000000000000003')
+	const operator = getAddress('0x0000000000000000000000000000000000000004')
+	const monitorIndex = createPoolMonitorIndex()
+	const emptyOperator = {
+		address: operator,
+		backingUnits: 0n,
+		badDebtAttoEth: 0n,
+		capacityOwnershipAttoRep: 0n,
+		claimableFeesAttoEth: 0n,
+		disputeStakedAttoRep: 0n,
+		openInterestAttoEth: 0n,
+		vaultAttoRepBacking: 0n,
+	}
+	const refresh = { refreshedVaults: [], reset: false, vaults: [] }
+	const accounting = { denominator: 10n, settlementCollateralAttoEth: 100n, totalAttoRep: 100n, totalCapacityOwnershipAttoRep: 10n }
+	let positionReads = 0
+	const loadPosition = async () => {
+		positionReads += 1
+		return emptyOperator
+	}
+
+	await resolveOperatorVault(monitorIndex, pool, operator, refresh, accounting, loadPosition)
+	await resolveOperatorVault(monitorIndex, pool, operator, refresh, accounting, loadPosition)
+
+	expect(positionReads).toBe(1)
 })

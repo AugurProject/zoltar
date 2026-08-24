@@ -59,6 +59,7 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 		for (const address of await parameters.loadChangedVaultAddresses(index.blockNumber + 1n, parameters.block.number)) addresses.set(address.toLowerCase(), address)
 	}
 	const nextActiveVaults = reset ? new Map<string, Vault>() : new Map(index.activeVaults)
+	const refreshedVaults: Vault[] = []
 	const refreshAddresses = [...addresses.values()]
 	for (let start = 0; start < refreshAddresses.length; start += Number(VAULT_PAGE_SIZE)) {
 		const page = refreshAddresses.slice(start, start + Number(VAULT_PAGE_SIZE))
@@ -67,6 +68,7 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 		for (const address of page) {
 			const position = positionsByAddress.get(address.toLowerCase())
 			if (position === undefined) throw new Error(`Security pool returned no vault state for ${address}`)
+			refreshedVaults.push(position)
 			const key = address.toLowerCase()
 			if (parameters.hasRep(position)) nextActiveVaults.set(key, position)
 			else nextActiveVaults.delete(key)
@@ -79,5 +81,5 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 	index.blockHash = parameters.block.hash
 	index.blockNumber = parameters.block.number
 	index.knownVaultCount = parameters.knownVaultCount
-	return [...nextActiveVaults.values()]
+	return { activeVaults: [...nextActiveVaults.values()], refreshedVaults, reset }
 }

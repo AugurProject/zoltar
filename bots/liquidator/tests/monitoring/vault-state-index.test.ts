@@ -85,7 +85,7 @@ describe('liquidator active-vault state index', () => {
 		const positions = new Map(registry.map((vault, index) => [vault.toLowerCase(), { address: vault, rep: index === 1_505 ? 0n : 1n } satisfies Position]))
 		const index = createVaultStateIndex<Position>()
 		const loadedPages: Address[][] = []
-		const first = await refreshVaultStateIndex(index, {
+		const { activeVaults: first } = await refreshVaultStateIndex(index, {
 			block: { hash: `0x${'11'.repeat(32)}`, number: 10n },
 			hasRep: position => position.rep > 0n,
 			knownVaultCount: BigInt(registry.length),
@@ -105,7 +105,7 @@ describe('liquidator active-vault state index', () => {
 		if (reactivated === undefined) throw new Error('reactivation fixture is missing')
 		positions.set(reactivated.toLowerCase(), { address: reactivated, rep: 2n })
 		loadedPages.length = 0
-		const second = await refreshVaultStateIndex(index, {
+		const { activeVaults: second } = await refreshVaultStateIndex(index, {
 			block: { hash: `0x${'22'.repeat(32)}`, number: 11n },
 			hasRep: position => position.rep > 0n,
 			knownVaultCount: BigInt(registry.length),
@@ -127,7 +127,7 @@ describe('liquidator active-vault state index', () => {
 		if (emptied === undefined) throw new Error('eviction fixture is missing')
 		positions.set(emptied.toLowerCase(), { address: emptied, rep: 0n })
 		loadedPages.length = 0
-		const third = await refreshVaultStateIndex(index, {
+		const { activeVaults: third } = await refreshVaultStateIndex(index, {
 			block: { hash: `0x${'33'.repeat(32)}`, number: 12n },
 			hasRep: position => position.rep > 0n,
 			knownVaultCount: BigInt(registry.length),
@@ -149,7 +149,7 @@ describe('liquidator active-vault state index', () => {
 		registry.push(appended)
 		positions.set(appended.toLowerCase(), { address: appended, rep: 3n })
 		const registryReads: Array<{ start: bigint; count: bigint }> = []
-		const fourth = await refreshVaultStateIndex(index, {
+		const { activeVaults: fourth } = await refreshVaultStateIndex(index, {
 			block: { hash: `0x${'44'.repeat(32)}`, number: 13n },
 			hasRep: position => position.rep > 0n,
 			knownVaultCount: BigInt(registry.length),

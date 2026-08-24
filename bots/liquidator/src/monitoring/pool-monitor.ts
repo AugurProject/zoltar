@@ -27,11 +27,12 @@ type PoolDeployment = {
 }
 
 export type PoolMonitorIndex = {
+	operatorVaultsByPool: Map<string, VaultPosition>
 	vaultsByPool: Map<string, VaultStateIndex<VaultPosition>>
 }
 
 export function createPoolMonitorIndex(): PoolMonitorIndex {
-	return { vaultsByPool: new Map() }
+	return { operatorVaultsByPool: new Map(), vaultsByPool: new Map() }
 }
 
 function sameAddress(left: Address, right: Address) {
@@ -118,26 +119,6 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
 	return universes
 }
 
-async function loadVault(client: ReadClient, pool: Address, escalationGame: Address, vault: Address, totalAttoRep: bigint, denominator: bigint, blockNumber?: bigint): Promise<VaultPosition> {
-	const [raw, openInterestAttoEth, badDebtAttoEth, disputeStakedAttoRep] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'securityVaults' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'getVaultOpenInterestAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'vaultBadDebtAttoEth' }),
-		escalationGame === zeroAddress ? 0n : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], blockNumber, functionName: 'disputeStakedRepByVaultAttoRep' }),
-	])
-	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = raw
-	return {
-		address: vault,
-		badDebtAttoEth,
-		capacityOwnershipAttoRep,
-		openInterestAttoEth,
-		backingUnits: repBackingUnits,
-		vaultAttoRepBacking: repForBackingUnits(repBackingUnits, totalAttoRep, denominator),
-		claimableFeesAttoEth,
-		disputeStakedAttoRep,
-	}
-}
-
 function requireBigint(value: unknown, label: string) {
 	if (typeof value !== 'bigint') throw new Error(`Security pool returned invalid ${label}`)
 	return value
@@ -215,7 +196,7 @@ async function loadCurrentVaults(
 	totalCapacityOwnershipAttoRep: bigint,
 	block: Readonly<{ hash: `0x${string}`; number: bigint }>,
 ) {
-	const vaults = await refreshVaultStateIndex(index, {
+	const refresh = await refreshVaultStateIndex(index, {
 		block,
 		hasRep: hasVaultRep,
 		knownVaultCount,
@@ -232,12 +213,38 @@ async function loadCurrentVaults(
 		readCanonicalBlockHash: async blockNumber => (await client.getBlock({ blockNumber })).hash,
 	})
 	index.activeVaults = new Map(
-		vaults.map(vault => {
+		refresh.activeVaults.map(vault => {
 			const current = currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
 			return [current.address.toLowerCase(), current]
 		}),
 	)
-	return [...index.activeVaults.values()]
+	return {
+		refreshedVaults: refresh.refreshedVaults.map(vault => currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)),
+		reset: refresh.reset,
+		vaults: [...index.activeVaults.values()],
+	}
+}
+
+export async function resolveOperatorVault(
+	monitorIndex: PoolMonitorIndex,
+	pool: Address,
+	wallet: Address | undefined,
+	refresh: Awaited<ReturnType<typeof loadCurrentVaults>>,
+	accounting: Readonly<{ denominator: bigint; settlementCollateralAttoEth: bigint; totalAttoRep: bigint; totalCapacityOwnershipAttoRep: bigint }>,
+	loadPosition: (wallet: Address) => Promise<VaultPosition>,
+) {
+	const poolKey = pool.toLowerCase()
+	if (wallet === undefined) {
+		monitorIndex.operatorVaultsByPool.delete(poolKey)
+		return emptyVault(zeroAddress)
+	}
+	const refreshed = refresh.refreshedVaults.find(vault => sameAddress(vault.address, wallet))
+	const active = refresh.vaults.find(vault => sameAddress(vault.address, wallet))
+	const cached = monitorIndex.operatorVaultsByPool.get(poolKey)
+	const position = refreshed ?? active ?? (refresh.reset ? emptyVault(wallet) : cached !== undefined && sameAddress(cached.address, wallet) ? cached : await loadPosition(wallet))
+	const current = currentVaultPositionForPoolAccounting(position, accounting.totalAttoRep, accounting.denominator, accounting.settlementCollateralAttoEth, accounting.totalCapacityOwnershipAttoRep)
+	monitorIndex.operatorVaultsByPool.set(poolKey, current)
+	return current
 }
 
 async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex) {
@@ -300,7 +307,8 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		vaultIndex = createVaultStateIndex<VaultPosition>()
 		monitorIndex.vaultsByPool.set(address.toLowerCase(), vaultIndex)
 	}
-	const vaults = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, { hash: block.hash, number: blockNumber })
+	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, { hash: block.hash, number: blockNumber })
+	const vaults = vaultRefresh.vaults
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getActiveStagedOperationCount' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getPendingSettlementOperationIds' }),
@@ -333,7 +341,11 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 			})
 		}
 	}
-	const botVault = wallet === undefined ? emptyVault(zeroAddress) : (vaults.find(vault => sameAddress(vault.address, wallet)) ?? (await loadVault(client, address, normalizedEscalationGame, wallet, totalAttoRep, denominator, blockNumber)))
+	const botVault = await resolveOperatorVault(monitorIndex, address, wallet, vaultRefresh, { denominator, settlementCollateralAttoEth, totalAttoRep, totalCapacityOwnershipAttoRep }, async operator => {
+		const position = (await loadVaultPage(client, address, normalizedEscalationGame, [operator], blockNumber))[0]
+		if (position === undefined) throw new Error('Security pool returned no operator vault state')
+		return position
+	})
 	const selected = settings.selectedPools.some(pool => sameAddress(pool, address))
 	const approvedUniverse = settings.approvedUniverses.includes(deployment.universeId)
 	const riskContext = {
@@ -475,6 +487,13 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	const deploymentBlock = await client.getBlock()
 	if (deploymentBlock.hash === undefined || deploymentBlock.number === undefined) throw new Error('Security pool deployment scan block is missing canonical identity')
 	const deployments = await loadRelevantPoolDeployments(client, settings, { hash: deploymentBlock.hash, number: deploymentBlock.number })
+	const relevantPoolKeys = new Set(deployments.map(deployment => deployment.securityPool.toLowerCase()))
+	for (const poolKey of monitorIndex.vaultsByPool.keys()) {
+		if (!relevantPoolKeys.has(poolKey)) monitorIndex.vaultsByPool.delete(poolKey)
+	}
+	for (const poolKey of monitorIndex.operatorVaultsByPool.keys()) {
+		if (!relevantPoolKeys.has(poolKey)) monitorIndex.operatorVaultsByPool.delete(poolKey)
+	}
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
 		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex)
