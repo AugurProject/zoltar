@@ -66,6 +66,7 @@ describe('liquidator contract ABI conformance', () => {
 			expectConformant(securityPoolAbi, securityPoolArtifact.abi, 'function', name)
 		}
 		expectConformant(escalationGameAbi, escalationGameArtifact.abi, 'function', 'disputeStakedRepByVaultAttoRep')
+		expectConformant(escalationGameAbi, escalationGameArtifact.abi, 'event', 'VaultEscrowUpdated')
 		expectConformant(securityPoolForkerAbi, securityPoolForkerArtifact.abi, 'function', 'forkData')
 	})
 

@@ -197,8 +197,14 @@ in dry-run mode and when automatic vault migrations are disabled. Only the
 on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
 The bot bootstraps every registered vault, then keeps an incremental index of
-vaults with REP backing or REP committed to a dispute. It refreshes those active
-positions and any vaults reported by accounting checkpoints on every scan.
+vaults with REP backing or REP committed to a dispute. In steady state, later
+scans reread only newest registry entries and vaults named by
+`VaultAccountingCheckpoint` or `VaultEscrowUpdated`; reorg recovery rebuilds the
+full registry. An adaptive bounded log scan catches up after long outages.
+Current pool totals and price recompute backing, open interest, health, and
+liquidation candidates locally for every retained vault. Vaults whose pool-held
+and dispute-staked REP both reach zero are evicted until a later event
+reactivates them.
 Empty registrations are discarded after inspection, so they do not consume
 steady-state memory or hide older liquidation opportunities.
 

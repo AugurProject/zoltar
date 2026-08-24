@@ -163,6 +163,16 @@ export const vaultAccountingCheckpointEvent = {
 	type: 'event',
 } as const
 
+export const vaultEscrowUpdatedEvent = {
+	inputs: [
+		{ indexed: true, name: 'vault', type: 'address' },
+		{ indexed: false, name: 'disputeStakedRepByVaultAttoRep', type: 'uint256' },
+		{ indexed: false, name: 'totalDisputeStakedAttoRep', type: 'uint256' },
+	],
+	name: 'VaultEscrowUpdated',
+	type: 'event',
+} as const
+
 export const securityPoolAbi = [
 	vaultAccountingCheckpointEvent,
 	{
@@ -330,6 +340,7 @@ export const securityPoolAbi = [
 ] as const
 
 export const escalationGameAbi = [
+	vaultEscrowUpdatedEvent,
 	{
 		inputs: [{ name: 'vault', type: 'address' }],
 		name: 'disputeStakedRepByVaultAttoRep',

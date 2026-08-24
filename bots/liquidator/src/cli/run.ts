@@ -583,7 +583,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					newMarketObservations.push(...dexMarkets.observations)
 				}
 				try {
-					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => (await client.getBlock({ blockNumber })).hash)
+					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => await canonicalBlockHash(settings, blockNumber, readPool))
 				} catch (error) {
 					state.marketObservations = discardDexMarketObservations(state.marketObservations)
 					state.marketConsensus = undefined

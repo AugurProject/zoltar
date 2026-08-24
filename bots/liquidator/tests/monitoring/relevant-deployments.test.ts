@@ -13,6 +13,7 @@ describe('relevant SecurityPool discovery', () => {
 		const selected = address(1)
 		const desired = address(2)
 		const child = address(3)
+		const desiredChild = address(4)
 		const deployments = new Map<string, Deployment>([
 			[selected.toLowerCase(), { parent: zeroAddress, securityPool: selected }],
 			[desired.toLowerCase(), { parent: zeroAddress, securityPool: desired }],
@@ -23,7 +24,9 @@ describe('relevant SecurityPool discovery', () => {
 			desiredPools: [{ id: 'desired' }],
 			loadDeploymentsForParent: async parent => {
 				parentQueries.push(parent)
-				return parent.toLowerCase() === selected.toLowerCase() ? [{ parent: selected, securityPool: child }] : []
+				if (parent.toLowerCase() === selected.toLowerCase()) return [{ parent: selected, securityPool: child }]
+				if (parent.toLowerCase() === desired.toLowerCase()) return [{ parent: desired, securityPool: desiredChild }]
+				return []
 			},
 			loadDeploymentsForPool: async pool => {
 				poolQueries.push(pool)
@@ -34,8 +37,8 @@ describe('relevant SecurityPool discovery', () => {
 			selectedPools: [selected],
 		})
 
-		expect(result.map(deployment => deployment.securityPool)).toEqual([selected, child, desired])
+		expect(result.map(deployment => deployment.securityPool)).toEqual([selected, child, desired, desiredChild])
 		expect(poolQueries).toEqual([selected, desired])
-		expect(parentQueries).toEqual([selected])
+		expect(parentQueries).toEqual([selected, desired])
 	})
 })

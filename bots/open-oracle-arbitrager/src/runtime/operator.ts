@@ -721,16 +721,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							})
 						})
 						try {
-							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => {
-								const canonicalBlock = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-									const value = await requestClient.getBlock({
-										blockNumber: canonicalBlockNumber,
-									})
-									if (value.hash == null) throw new Error('Canonical block is missing its hash')
-									return { ...value, hash: value.hash }
-								})
-								return canonicalBlock.hash
-							})
+							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber))
 						} catch (error) {
 							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
 							state.marketConsensus = undefined

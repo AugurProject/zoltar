@@ -53,16 +53,12 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 	const canonicalPreviousIndex = await previousIndexIsCanonical(index, parameters)
 	const reset = !canonicalPreviousIndex || parameters.knownVaultCount < index.knownVaultCount
 	const addresses = new Map<string, Address>()
-	if (!reset) {
-		for (const vault of index.activeVaults.values()) addresses.set(vault.address.toLowerCase(), vault.address)
-	}
-	const registryStart = reset ? 0n : index.knownVaultCount
-	const registryCount = reset ? parameters.knownVaultCount : parameters.knownVaultCount - registryStart
-	for (const address of await registryAddresses(parameters, registryStart, registryCount)) addresses.set(address.toLowerCase(), address)
+	const registryCount = reset ? parameters.knownVaultCount : parameters.knownVaultCount - index.knownVaultCount
+	for (const address of await registryAddresses(parameters, 0n, registryCount)) addresses.set(address.toLowerCase(), address)
 	if (!reset && index.blockNumber !== undefined && parameters.block.number > index.blockNumber) {
 		for (const address of await parameters.loadChangedVaultAddresses(index.blockNumber + 1n, parameters.block.number)) addresses.set(address.toLowerCase(), address)
 	}
-	const nextActiveVaults = new Map<string, Vault>()
+	const nextActiveVaults = reset ? new Map<string, Vault>() : new Map(index.activeVaults)
 	const refreshAddresses = [...addresses.values()]
 	for (let start = 0; start < refreshAddresses.length; start += Number(VAULT_PAGE_SIZE)) {
 		const page = refreshAddresses.slice(start, start + Number(VAULT_PAGE_SIZE))
@@ -71,7 +67,9 @@ export async function refreshVaultStateIndex<Vault extends Readonly<{ address: A
 		for (const address of page) {
 			const position = positionsByAddress.get(address.toLowerCase())
 			if (position === undefined) throw new Error(`Security pool returned no vault state for ${address}`)
-			if (parameters.hasRep(position)) nextActiveVaults.set(address.toLowerCase(), position)
+			const key = address.toLowerCase()
+			if (parameters.hasRep(position)) nextActiveVaults.set(key, position)
+			else nextActiveVaults.delete(key)
 		}
 	}
 	const currentBlockHash = await parameters.readCanonicalBlockHash(parameters.block.number)

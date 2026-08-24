@@ -1,4 +1,4 @@
-import { createPublicClient, defineChain, getAddress, http } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, defineChain, getAddress, http, type Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { securityPoolFactoryAbi } from '#contracts/abi'
@@ -21,17 +21,24 @@ export function chainFor(settings: OperatorSettings) {
 	})
 }
 
+export async function canonicalBlockHashFromReaders(endpoints: readonly string[], requirement: 1 | 2, readBlockHash: (endpoint: string) => Promise<Hex | undefined>) {
+	return await settledQuorumValue(
+		'market evidence canonical block',
+		endpoints.map(async endpoint => {
+			const value = await readBlockHash(endpoint)
+			if (value === undefined) throw new Error('Canonical block is missing its hash')
+			return { endpoint, value }
+		}),
+		requirement,
+	)
+}
+
 export async function canonicalBlockHash(settings: OperatorSettings, blockNumber: bigint, pool?: ReturnType<typeof createRpcEndpointPool>) {
 	const currentChain = chainFor(settings)
-	return settledQuorumValue(
-		'market evidence canonical block',
-		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const block = await createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) }).getBlock({ blockNumber })
-			if (block.hash === undefined) throw new Error('Canonical block is missing its hash')
-			return { endpoint, value: block.hash }
-		}),
-		settings.connectivity.rpcQuorum,
-	)
+	return await canonicalBlockHashFromReaders([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls], settings.connectivity.rpcQuorum, async endpoint => {
+		const block = await createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) }).getBlock({ blockNumber })
+		return block.hash
+	})
 }
 
 export async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings, pool?: ReturnType<typeof createRpcEndpointPool>) {

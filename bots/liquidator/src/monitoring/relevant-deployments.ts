@@ -20,14 +20,24 @@ function addDeployment<Deployment extends RelevantDeployment>(deployments: Map<s
 export async function discoverRelevantDeployments<Deployment extends RelevantDeployment, DesiredPool>(parameters: RelevantDeploymentDiscoveryParameters<Deployment, DesiredPool>) {
 	const deployments = new Map<string, Deployment>()
 	const selectedPools = [...new Map(parameters.selectedPools.map(address => [address.toLowerCase(), address])).values()]
-	for (const selectedPool of selectedPools) {
-		for (const deployment of await parameters.loadDeploymentsForPool(selectedPool)) addDeployment(deployments, deployment)
-		for (const deployment of await parameters.loadDeploymentsForParent(selectedPool)) addDeployment(deployments, deployment)
+	const queriedPools = new Set<string>()
+	const queriedParents = new Set<string>()
+	const loadPoolAndChildren = async (pool: Address) => {
+		const key = pool.toLowerCase()
+		if (!queriedPools.has(key)) {
+			queriedPools.add(key)
+			for (const deployment of await parameters.loadDeploymentsForPool(pool)) addDeployment(deployments, deployment)
+		}
+		if (!queriedParents.has(key)) {
+			queriedParents.add(key)
+			for (const deployment of await parameters.loadDeploymentsForParent(pool)) addDeployment(deployments, deployment)
+		}
 	}
+	for (const selectedPool of selectedPools) await loadPoolAndChildren(selectedPool)
 	for (const desired of parameters.desiredPools) {
 		const pool = await parameters.resolveDesiredPool(desired)
-		if (pool === zeroAddress || deployments.has(pool.toLowerCase())) continue
-		for (const deployment of await parameters.loadDeploymentsForPool(pool)) addDeployment(deployments, deployment)
+		if (pool === zeroAddress) continue
+		await loadPoolAndChildren(pool)
 	}
 	return [...deployments.values()]
 }
