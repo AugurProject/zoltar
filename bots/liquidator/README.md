@@ -199,8 +199,10 @@ on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 The bot bootstraps every registered vault, then keeps an incremental index of
 vaults with REP backing or REP committed to a dispute. In steady state, later
 scans reread only newest registry entries and vaults named by
-`VaultAccountingCheckpoint` or `VaultEscrowUpdated`; reorg recovery rebuilds the
-full registry. An adaptive bounded log scan catches up after long outages.
+`VaultAccountingCheckpoint` or `VaultEscrowUpdated`. A
+`TruthAuctionHaircutApplied` event refreshes every retained dispute-staked
+vault; reorg recovery rebuilds the full registry. An adaptive bounded log scan
+catches up after long outages.
 Current pool totals and price recompute backing, open interest, health, and
 liquidation candidates locally for every retained vault. Vaults whose pool-held
 and dispute-staked REP both reach zero are evicted until a later event
