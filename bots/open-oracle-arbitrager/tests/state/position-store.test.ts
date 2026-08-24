@@ -229,6 +229,43 @@ describe('durable OpenOracle position journal', () => {
 		expect(saved.archived.positionCount).toBe(0)
 	})
 
+	test('bounds manually reconciled positions with expired attempts while retaining unresolved recovery', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const reconciled = Array.from({ length: 501 }, (_value, index) => {
+			const recovery = terminalPosition(index, {
+				closedAt: undefined,
+				expiredTransactionAttempts: [{ kind: 'entry', nonce: index.toString(), targetBlockNumber: '100', transactionHash: `0x${'22'.repeat(32)}` }],
+				realizedNetProfitEth: undefined,
+				status: 'recovery-required',
+			})
+			return manuallyReconcilePosition(recovery, {
+				confirmedReportId: recovery.reportId,
+				evidence: `archived recovery evidence ${recovery.reportId}`,
+				externalCostEth: '0',
+				finalWalletToken: '1',
+				finalWalletWeth: '1',
+				note: 'Recovery is complete.',
+				pnlUnavailable: false,
+				realizedNetProfitEth: '0.1',
+				recordedAt: '2026-01-02T00:00:00.000Z',
+				recordedBy: recovery.account,
+			})
+		})
+		const unresolved = terminalPosition(501, {
+			expiredTransactionAttempts: [{ kind: 'entry', nonce: '501', targetBlockNumber: '100', transactionHash: `0x${'33'.repeat(32)}` }],
+			status: 'expired-not-included',
+		})
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions: [...reconciled, unresolved] }, 1)
+
+		expect(saved.positions).toHaveLength(501)
+		expect(saved.positions.filter(position => position.manualReconciliation !== undefined)).toHaveLength(500)
+		expect(saved.positions.some(position => position.reportId === unresolved.reportId)).toBeTrue()
+		expect(saved.archived.positionCount).toBe(1)
+	})
+
 	test('rejects a valid position journal bound to another chain', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-chain-'))
 		directories.push(directory)

@@ -529,7 +529,8 @@ export function compactPositionJournal(state: PositionJournalState): PositionJou
 	let archived = parsePositionJournalArchive(state.archived)
 	const positions: PositionRecord[] = []
 	for (const position of state.positions) {
-		const terminal = (position.status === 'closed' || position.status === 'expired-not-included') && position.historyOutbox === undefined && (position.expiredTransactionAttempts?.length ?? 0) === 0
+		const unresolvedExpiredAttempts = (position.expiredTransactionAttempts?.length ?? 0) > 0 && position.manualReconciliation === undefined
+		const terminal = (position.status === 'closed' || position.status === 'expired-not-included') && position.historyOutbox === undefined && !unresolvedExpiredAttempts
 		if (!terminal || terminalPositions < TERMINAL_POSITION_RETENTION_LIMIT) {
 			positions.push(position)
 			if (terminal) terminalPositions += 1
