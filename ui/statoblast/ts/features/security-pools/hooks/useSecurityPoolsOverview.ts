@@ -2,12 +2,12 @@ import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import {
-	loadAllSecurityPools,
 	loadCoordinatorInitialReportFundingRequirement,
 	loadLiquidationApproval as loadProtocolLiquidationApproval,
 	loadOracleManagerDetails,
 	loadOracleManagerQueueOperationEthValue,
 	loadSecurityPoolPage,
+	loadSecurityPoolLineage,
 	loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary,
 	queueSecurityPoolLiquidation,
 } from '../../../protocol/index.js'
@@ -15,7 +15,7 @@ import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadControlle
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorDetail, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import { createLiquidationFailurePresentation, createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../../transactionPresentations.js'
@@ -49,13 +49,12 @@ type SecurityPoolsOverviewReadClient = {
 }
 
 type SecurityPoolsOverviewProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-type LoadAllSecurityPoolsOptions = Parameters<typeof loadAllSecurityPools>[1]
 type SecurityPoolLiquidationQueueResult = Awaited<ReturnType<typeof queueSecurityPoolLiquidation>>
 
 export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOverviewProductionWriteClient> = {
 	createConnectedReadClient: () => SecurityPoolsOverviewReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	loadAllSecurityPools: (options: LoadAllSecurityPoolsOptions) => Promise<ListedSecurityPool[]>
+	loadSecurityPoolLineage: (securityPoolAddress: Address, accountAddress?: Address) => Promise<ListedSecurityPool[]>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadLiquidationApproval: (managerAddress: Address, approvalId: Hash) => Promise<LiquidationApprovalDetails>
 	loadSecurityPoolVaultSummary: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityPoolVaultSummary>
@@ -64,15 +63,6 @@ export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOve
 	loadSecurityPoolPage: (pageIndex: number, pageSize: number, accountAddress: Address | undefined) => Promise<SecurityPoolPage>
 	queueSecurityPoolLiquidation: (client: TWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth?: bigint, receiverVault?: Address, approvalId?: Hash) => Promise<SecurityPoolLiquidationQueueResult>
 	waitForSecurityPoolReadBackend: () => Promise<void>
-}
-
-const SECURITY_POOL_PAGE_FALLBACK_DETAILS = ['no contract data was returned', 'returned no data']
-
-export function shouldFallbackToAllSecurityPoolsPage(error: unknown) {
-	const detail = getErrorDetail(error)
-	if (detail === undefined) return false
-	const normalizedDetail = detail.toLowerCase()
-	return SECURITY_POOL_PAGE_FALLBACK_DETAILS.some(fallbackDetail => normalizedDetail.includes(fallbackDetail))
 }
 
 export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
@@ -96,7 +86,7 @@ async function waitForSecurityPoolReadBackend() {
 const defaultUseSecurityPoolsOverviewDependencies: UseSecurityPoolsOverviewDependencies = {
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
-	loadAllSecurityPools: async options => await loadAllSecurityPools(createConnectedReadClient(), options),
+	loadSecurityPoolLineage: async (securityPoolAddress, accountAddress) => await loadSecurityPoolLineage(createConnectedReadClient(), securityPoolAddress, accountAddress),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadLiquidationApproval: async (managerAddress, approvalId) => await loadProtocolLiquidationApproval(createConnectedReadClient(), managerAddress, approvalId),
 	loadSecurityPoolVaultSummary: async (securityPoolAddress, vaultAddress) => await loadProtocolSecurityPoolVaultSummary(createConnectedReadClient(), securityPoolAddress, vaultAddress),
@@ -175,18 +165,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			},
 			load: async () => {
 				await dependencies.waitForSecurityPoolReadBackend()
-				const loadOptions =
-					nextCheckedAddress === undefined
-						? {
-								...(accountAddress === undefined ? {} : { accountAddress }),
-								vaultDetailMode: 'selected' as const,
-							}
-						: {
-								...(accountAddress === undefined ? {} : { accountAddress }),
-								selectedSecurityPoolAddress: nextCheckedAddress,
-								vaultDetailMode: 'selected' as const,
-							}
-				return await dependencies.loadAllSecurityPools(loadOptions)
+				if (nextCheckedAddress === undefined) return []
+				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress)
 			},
 			onSuccess: pools => {
 				securityPoolsLoadedEnvironmentRefreshKey.value = requestedEnvironmentRefreshKey
@@ -213,16 +193,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			},
 			load: async () => {
 				await dependencies.waitForSecurityPoolReadBackend()
-				try {
-					return await dependencies.loadSecurityPoolPage(pageIndex, pageSize, accountAddress)
-				} catch (error) {
-					if (!shouldFallbackToAllSecurityPoolsPage(error)) throw error
-					const pools = await dependencies.loadAllSecurityPools({
-						...(accountAddress === undefined ? {} : { accountAddress }),
-						vaultDetailMode: 'selected',
-					})
-					return createSecurityPoolPageFromLoadedPools(pools, pageIndex, pageSize)
-				}
+				return await dependencies.loadSecurityPoolPage(pageIndex, pageSize, accountAddress)
 			},
 			onSuccess: page => {
 				hasLoadedSecurityPoolPage.value = true

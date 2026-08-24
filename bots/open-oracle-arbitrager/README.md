@@ -623,7 +623,7 @@ The dashboard shows:
   P&amp;L.
 - Confirmed dispute transactions and their older quote-time accounting. The table
   and trend are bounded to the latest 500 records; durable position totals use the
-  complete position journal.
+  retained recovery records plus the journal's compacted accounting summary.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
 - A read-only active risk envelope showing configured position, locked-capital,
@@ -1072,6 +1072,13 @@ sync the parent directory. A malformed journal stops startup rather than discard
 recovery state. Back it up with the configuration and history files, never share one
 path across networks or execution signers, and preserve it until every position
 is closed and reconciled.
+
+The journal retains every position that can still consume risk, every unsent
+history outbox, and the 500 newest terminal recovery records. Older closed or
+confirmed-not-included records are compacted into durable position-count, hedged
+profit, realized-profit, and UTC-day gas totals. Those totals continue to feed the
+dashboard and daily gas guard; the append-only execution history remains the audit
+record for older confirmed entries.
 
 Execute mode holds `<position-file>.lock` for the process lifetime to prevent
 concurrent writers. While a signer is active or queued, it also holds an

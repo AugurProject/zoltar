@@ -30,7 +30,6 @@ type Pool = {
 	systemState: string
 	totalCapacityOwnershipRep: string
 	totalPoolHeldRep: string
-	truncatedVaults: boolean
 }
 
 type Universe = {
@@ -918,7 +917,7 @@ function renderPools(snapshot: Snapshot) {
 				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
 				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCapacityOwnershipRep} REP capacity ownership · ${pool.knownVaultCount} known vaults`)),
 				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.capacityOwnershipRep} REP capacity ownership · ${pool.botVault.openInterestDisplay} ETH open interest · ${pool.botVault.claimableFeesEth} ETH fees`)),
-				cell(stacked(pool.candidateCount.toString(), pool.truncatedVaults ? 'Vault scan capped' : pool.bestCandidateBonusValueEth === undefined ? 'No executable target' : `${pool.bestCandidateBonusValueEth} ETH best bonus`)),
+				cell(stacked(pool.candidateCount.toString(), pool.bestCandidateBonusValueEth === undefined ? 'No executable target' : `${pool.bestCandidateBonusValueEth} ETH best bonus`)),
 			]
 			const labels = ['Selected', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
 			const headings = ['pool-selected-heading', 'pool-address-heading', 'pool-question-heading', 'pool-oracle-heading', 'pool-totals-heading', 'pool-vault-heading', 'pool-targets-heading']

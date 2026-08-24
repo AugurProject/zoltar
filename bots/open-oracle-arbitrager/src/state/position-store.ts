@@ -118,6 +118,23 @@ export type PositionRecord = {
 
 const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
 const signedDecimal = /^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
+const TERMINAL_POSITION_RETENTION_LIMIT = 500
+
+export type PositionJournalArchive = {
+	gasSpentByUtcDay: Readonly<Record<string, string>>
+	hedgedProfitBeforeGasEth: string
+	positionCount: number
+	realizedNetProfitEth: string
+}
+
+export type PositionJournalState = {
+	archived: PositionJournalArchive
+	positions: PositionRecord[]
+}
+
+export function emptyPositionJournalArchive(): PositionJournalArchive {
+	return { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }
+}
 
 function decimalField(record: Record<string, unknown>, key: string) {
 	const value = record[key]
@@ -128,6 +145,19 @@ function decimalField(record: Record<string, unknown>, key: string) {
 function decimalAmountAttoEth(value: string) {
 	const [whole = '0', fraction = ''] = value.split('.')
 	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+}
+
+function signedDecimalAmountAttoEth(value: string) {
+	if (!signedDecimal.test(value)) throw new Error('Position journal signed decimal is invalid')
+	return value.startsWith('-') ? -decimalAmountAttoEth(value.slice(1)) : decimalAmountAttoEth(value)
+}
+
+function formatAttoEth(value: bigint) {
+	const negative = value < 0n
+	const magnitude = negative ? -value : value
+	const whole = magnitude / 10n ** 18n
+	const fraction = (magnitude % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '')
+	return `${negative ? '-' : ''}${whole.toString()}${fraction === '' ? '' : `.${fraction}`}`
 }
 
 function optionalIntegerField(record: Record<string, unknown>, key: string) {
@@ -458,13 +488,69 @@ export function manuallyReconcilePosition(
 	}
 }
 
-export async function loadPositionJournal(path: string, expectedChainId: number) {
+function parsePositionJournalArchive(value: unknown): PositionJournalArchive {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal archive is invalid')
+	const positionCount = Reflect.get(value, 'positionCount')
+	const hedgedProfitBeforeGasEth = Reflect.get(value, 'hedgedProfitBeforeGasEth')
+	const realizedNetProfitEth = Reflect.get(value, 'realizedNetProfitEth')
+	const gasSpentByUtcDay = Reflect.get(value, 'gasSpentByUtcDay')
+	if (!Number.isSafeInteger(positionCount) || typeof positionCount !== 'number' || positionCount < 0) throw new Error('Position journal archived position count is invalid')
+	if (typeof hedgedProfitBeforeGasEth !== 'string' || !signedDecimal.test(hedgedProfitBeforeGasEth)) throw new Error('Position journal archived hedged profit is invalid')
+	if (typeof realizedNetProfitEth !== 'string' || !signedDecimal.test(realizedNetProfitEth)) throw new Error('Position journal archived realized profit is invalid')
+	if (typeof gasSpentByUtcDay !== 'object' || gasSpentByUtcDay === null || Array.isArray(gasSpentByUtcDay)) throw new Error('Position journal archived daily gas is invalid')
+	const parsedGasSpentByUtcDay: Record<string, string> = {}
+	for (const [day, amount] of Object.entries(gasSpentByUtcDay)) {
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`))) throw new Error('Position journal archived gas day is invalid')
+		if (typeof amount !== 'string' || !decimal.test(amount)) throw new Error('Position journal archived gas amount is invalid')
+		parsedGasSpentByUtcDay[day] = amount
+	}
+	return { gasSpentByUtcDay: parsedGasSpentByUtcDay, hedgedProfitBeforeGasEth, positionCount, realizedNetProfitEth }
+}
+
+function archivePosition(archive: PositionJournalArchive, position: PositionRecord): PositionJournalArchive {
+	const gasSpentByUtcDay = { ...archive.gasSpentByUtcDay }
+	for (const expenditure of position.gasExpenditures) {
+		const day = expenditure.minedAt.slice(0, 10)
+		gasSpentByUtcDay[day] = formatAttoEth(decimalAmountAttoEth(gasSpentByUtcDay[day] ?? '0') + decimalAmountAttoEth(expenditure.costEth))
+	}
+	const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
+	const hedgedProfit = position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence ? 0n : signedDecimalAmountAttoEth(position.hedgedProfitBeforeGasEth)
+	const realizedProfit = position.status === 'closed' && position.realizedNetProfitEth !== undefined ? signedDecimalAmountAttoEth(position.realizedNetProfitEth) : 0n
+	return {
+		gasSpentByUtcDay,
+		hedgedProfitBeforeGasEth: formatAttoEth(signedDecimalAmountAttoEth(archive.hedgedProfitBeforeGasEth) + hedgedProfit),
+		positionCount: archive.positionCount + 1,
+		realizedNetProfitEth: formatAttoEth(signedDecimalAmountAttoEth(archive.realizedNetProfitEth) + realizedProfit),
+	}
+}
+
+export function compactPositionJournal(state: PositionJournalState): PositionJournalState {
+	let terminalPositions = 0
+	let archived = parsePositionJournalArchive(state.archived)
+	const positions: PositionRecord[] = []
+	for (const position of state.positions) {
+		const terminal = (position.status === 'closed' || position.status === 'expired-not-included') && position.historyOutbox === undefined
+		if (!terminal || terminalPositions < TERMINAL_POSITION_RETENTION_LIMIT) {
+			positions.push(position)
+			if (terminal) terminalPositions += 1
+			continue
+		}
+		archived = archivePosition(archived, position)
+	}
+	return { archived, positions }
+}
+
+export function archivedUtcDayGasSpentWeth(archive: PositionJournalArchive, now = new Date()) {
+	return decimalAmountAttoEth(archive.gasSpentByUtcDay[now.toISOString().slice(0, 10)] ?? '0')
+}
+
+export async function loadPositionJournalState(path: string, expectedChainId: number): Promise<PositionJournalState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected position journal chain ID must be a positive integer')
 	let contents: string
 	try {
 		contents = await readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return []
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return { archived: emptyPositionJournalArchive(), positions: [] }
 		throw error
 	}
 	let parsed: unknown
@@ -476,7 +562,7 @@ export async function loadPositionJournal(path: string, expectedChainId: number)
 	}
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Invalid position journal root')
 	const root = parsed as Record<string, unknown>
-	if (root['version'] !== 2 || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
+	if ((root['version'] !== 2 && root['version'] !== 3) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const positions = root['positions'].map(parsePosition)
 	const ids = new Set<string>()
@@ -484,7 +570,12 @@ export async function loadPositionJournal(path: string, expectedChainId: number)
 		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
 		ids.add(position.reportId)
 	}
-	return positions
+	const archived = root['version'] === 2 ? emptyPositionJournalArchive() : parsePositionJournalArchive(root['archived'])
+	return compactPositionJournal({ archived, positions })
+}
+
+export async function loadPositionJournal(path: string, expectedChainId: number) {
+	return (await loadPositionJournalState(path, expectedChainId)).positions
 }
 
 export function acquirePositionJournalLock(path: string) {
@@ -495,10 +586,11 @@ export function acquireExecutionSignerLock(chainId: number, account: Address) {
 	return acquireSharedExecutionSignerLock(chainId, account)
 }
 
-export async function savePositionJournal(path: string, positions: readonly PositionRecord[], chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+export async function savePositionJournalState(path: string, state: PositionJournalState, chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Position journal chain ID must be a positive integer')
+	const compacted = compactPositionJournal({ archived: state.archived, positions: [...state.positions] })
 	const ids = new Set<string>()
-	for (const position of positions) {
+	for (const position of compacted.positions) {
 		parsePosition(position)
 		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
 		ids.add(position.reportId)
@@ -508,7 +600,7 @@ export async function savePositionJournal(path: string, positions: readonly Posi
 	try {
 		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
 		try {
-			await fileHandle.writeFile(`${JSON.stringify({ chainId, positions, version: 2 }, undefined, 2)}\n`, { encoding: 'utf8' })
+			await fileHandle.writeFile(`${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 3 }, undefined, 2)}\n`, { encoding: 'utf8' })
 			await fileHandle.chmod(0o600)
 			await fileHandle.sync()
 		} finally {
@@ -525,4 +617,9 @@ export async function savePositionJournal(path: string, positions: readonly Posi
 		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
+	return compacted
+}
+
+export async function savePositionJournal(path: string, positions: readonly PositionRecord[], chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+	await savePositionJournalState(path, { archived: emptyPositionJournalArchive(), positions: [...positions] }, chainId, filesystem)
 }

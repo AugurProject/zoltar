@@ -42,6 +42,7 @@ import {
 	retainApprovedMaximum,
 	retainApprovedMinimum,
 	refreshSecurityPoolDeploymentIndex,
+	refreshSecurityPoolDeploymentEventIndex,
 	registryBlockAnchorIsCanonical,
 	registrySnapshotBlockParameters,
 	requireTransactionSlippageBps,
@@ -360,6 +361,24 @@ describe('standalone trading UI model', () => {
 		anchor = 'block-2'
 		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments)
 		expect(rangeReads).toEqual([{ start: 5n, count: 2n }])
+	})
+
+	test('increments a selected-universe event index without rescanning historical blocks', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const loadEvents = async (fromBlock: bigint, toBlock: bigint) => {
+			ranges.push({ fromBlock, toBlock })
+			return [`${fromBlock.toString()}-${toBlock.toString()}`]
+		}
+		const canonical = async () => true
+		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100'])
+		latest = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 105n }
+		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100', '101-105'])
+		expect(ranges).toEqual([
+			{ fromBlock: 0n, toBlock: 100n },
+			{ fromBlock: 101n, toBlock: 105n },
+		])
 	})
 
 	test('serializes deployment-index waiters without duplicate appends', async () => {

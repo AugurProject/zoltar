@@ -43,7 +43,6 @@ export type PoolObservation = {
 	systemState: bigint
 	totalCapacityOwnershipAttoRep: bigint
 	totalAttoRep: bigint
-	truncatedVaults: boolean
 	universeId: bigint
 	vaults: VaultPosition[]
 }
@@ -460,7 +459,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				systemState: pool.systemState.toString(),
 				totalCapacityOwnershipRep: formatDecimalAmount(pool.totalCapacityOwnershipAttoRep),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
-				truncatedVaults: pool.truncatedVaults,
 				universeId: pool.universeId.toString(),
 				vaults: pool.vaults.map(vault => vaultView(vault)),
 			}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { marketConsensusSettings, type CentralizedMarketSettings } from '../src/monitoring/centralized-markets.ts'
-import { observeConstantProductMarkets } from '../src/monitoring/constant-product-markets.ts'
+import { observeConstantProductMarkets, readConstantProductPairWithQuorum } from '../src/monitoring/constant-product-markets.ts'
 import { estimateMarketConsensus } from '../src/monitoring/market-consensus.ts'
 
 const REP: `0x${string}` = '0x0000000000000000000000000000000000000001'
@@ -43,6 +43,17 @@ const settings: CentralizedMarketSettings = {
 }
 
 describe('constant-product DEX observations', () => {
+	test('rejects a canonical block hash paired with forged reserve state from one RPC', async () => {
+		const honest = snapshot()
+		const forged = { ...honest, reserve0: honest.reserve0 * 10n }
+		await expect(
+			readConstantProductPairWithQuorum(PAIR, ['primary', 'quorum-a', 'quorum-b'], 2, async (endpoint, pair) => {
+				expect(pair).toBe(PAIR)
+				return endpoint === 'primary' ? forged : honest
+			}),
+		).rejects.toThrow('RPC disagreement for DEX pair')
+	})
+
 	test('derives a two-sided executable REP/ETH price and depth', async () => {
 		const result = await observeConstantProductMarkets(settings, REP, WETH, async pair => {
 			expect(pair).toBe(PAIR)

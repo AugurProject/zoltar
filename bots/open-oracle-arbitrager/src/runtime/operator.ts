@@ -13,8 +13,8 @@ import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, report
 import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
-import { loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
+import { observeConstantProductMarkets, readConstantProductPairWithQuorum } from '@zoltar/bot-shared/monitoring/constant-product-markets'
+import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '#monitoring/resilience'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -60,8 +60,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
 	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
-	let positions = await loadPositionJournal(config.positionFile, config.network.chain.id)
-	if (config.execute) await savePositionJournal(config.positionFile, positions, config.network.chain.id)
+	let positionJournal = await loadPositionJournalState(config.positionFile, config.network.chain.id)
+	let positions = positionJournal.positions
+	if (config.execute) positionJournal = await savePositionJournalState(config.positionFile, positionJournal, config.network.chain.id)
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 	let clientRpcUrl: string | undefined
 	let wakeProfileSwitchWait: (() => void) | undefined
@@ -107,6 +108,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		retryInProgress: false,
 		opportunities: [],
 		positions,
+		positionArchive: positionJournal.archived,
 		operationLog: [],
 		paused: config.paused,
 		status: config.networkConfigured ? 'syncing' : 'paused',
@@ -212,9 +214,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	const reports = new Map<bigint, ActiveReport>()
 	const persistPosition = async (position: PositionRecord) => {
 		const nextPositions = [position, ...positions.filter(existing => existing.reportId !== position.reportId)]
-		await savePositionJournal(config.positionFile, nextPositions, config.network.chain.id)
-		positions = nextPositions
-		state.positions = nextPositions
+		positionJournal = await savePositionJournalState(config.positionFile, { archived: positionJournal.archived, positions: nextPositions }, config.network.chain.id)
+		positions = positionJournal.positions
+		state.positions = positions
+		state.positionArchive = positionJournal.archived
 	}
 	const flushHistoryOutboxes = async () => {
 		for (const position of positions.filter(candidate => candidate.historyOutbox !== undefined)) {
@@ -280,7 +283,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (executionActivationPending) {
 							if (lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 							await ensureExecutionHistoryWritable(config.historyFile)
-							await savePositionJournal(config.positionFile, positions, config.network.chain.id)
+							positionJournal = await savePositionJournalState(config.positionFile, { archived: positionJournal.archived, positions }, config.network.chain.id)
+							positions = positionJournal.positions
+							state.positions = positions
+							state.positionArchive = positionJournal.archived
 							config.execute = true
 							state.paused = true
 							startupValidated = false
@@ -682,14 +688,17 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					let completedOpportunityCount = 0
 					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
-						const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
-							const [token0, token1, reserves] = await contextualRpcRead('eth_call', requestClient =>
-								Promise.all([
-									readContractAtBlock(
-										requestClient,
-										{
-											address: pair,
+							state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+							const configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => {
+								return await readConstantProductPairWithQuorum(pair, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], rpcQuorumRequirement(), async (endpoint, quorumPair) => {
+									const [token0, token1, reserves] = await contextualRpcRead(
+										'eth_call',
+										requestClient =>
+											Promise.all([
+										readContractAtBlock(
+											requestClient,
+											{
+												address: quorumPair,
 											abi: constantProductPairAbi,
 											functionName: 'token0',
 										},
@@ -698,7 +707,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									readContractAtBlock(
 										requestClient,
 										{
-											address: pair,
+												address: quorumPair,
 											abi: constantProductPairAbi,
 											functionName: 'token1',
 										},
@@ -707,26 +716,28 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									readContractAtBlock(
 										requestClient,
 										{
-											address: pair,
+												address: quorumPair,
 											abi: constantProductPairAbi,
 											functionName: 'getReserves',
 										},
 										blockNumber,
 									),
-								]),
-							)
-							const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
-							return {
-								blockHash,
-								blockNumber,
-								blockTimestamp: block.timestamp,
-								chainId: config.network.chain.id,
-								reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
-								reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
-								token0: getAddress(String(token0)),
-								token1: getAddress(String(token1)),
-							}
-						})
+											]),
+										endpoint,
+									)
+									const reserveValues = requiredTuple(reserves, 2, 'Constant-product reserves')
+									return {
+										blockHash,
+										blockNumber,
+										blockTimestamp: block.timestamp,
+										chainId: config.network.chain.id,
+										reserve0: requiredBigint(reserveValues[0], 'Constant-product reserve0'),
+										reserve1: requiredBigint(reserveValues[1], 'Constant-product reserve1'),
+										token0: getAddress(String(token0)),
+										token1: getAddress(String(token1)),
+									}
+								})
+							})
 						try {
 							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => {
 								const canonicalBlock = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
@@ -862,7 +873,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 											})
 											continue
 										}
-										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, dateFromBlockTimestamp(block.timestamp))
+										const riskDate = dateFromBlockTimestamp(block.timestamp)
+										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate))
 										if (mismatch === undefined) candidates.push(evaluated.candidate)
 										else {
 											evaluated.opportunity.decision = 'risk-limit'
@@ -959,6 +971,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									() => state.paused,
 									trackTransaction,
 									persistPosition,
+									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)),
 								)
 								selected.opportunity.decision = 'submitted'
 								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)

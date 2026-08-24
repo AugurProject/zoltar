@@ -9,6 +9,7 @@ export type CoreDeployment = Readonly<{
 	id: string
 	proxyDeployer: Address
 	securityPoolFactory: Address
+	zoltar: Address
 }>
 
 type TradingDeploymentStepId = 'factory' | 'router'
@@ -75,6 +76,7 @@ export function deploymentConfigurationForPlan(plan: TradingDeploymentPlan, rpcU
 		router: plan.router.address,
 		rpcUrl,
 		securityPoolFactory: plan.core.securityPoolFactory,
+		zoltar: plan.core.zoltar,
 	}
 }
 

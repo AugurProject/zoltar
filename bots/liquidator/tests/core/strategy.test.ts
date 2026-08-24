@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
 import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
-import { candidateScreeningPrice, getVaultRegistryScanCount, hasCurrentVaultState, MAX_VAULT_REGISTRY_ENTRIES_SCANNED } from '../../src/monitoring/pool-monitor.ts'
+import { candidateScreeningPrice, hasVaultRep } from '../../src/monitoring/pool-monitor.ts'
 import { getAddress } from '../helpers/ethereum.ts'
 
 const poolAddress = getAddress('0x0000000000000000000000000000000000000010')
@@ -65,16 +65,13 @@ function pool(): PoolRiskContext {
 }
 
 describe('dynamic-capacity liquidation strategy', () => {
-	test('known-vault scans skip exited entries without hiding current economic state', () => {
-		expect(MAX_VAULT_REGISTRY_ENTRIES_SCANNED).toBe(1_000n)
-		expect(getVaultRegistryScanCount(999n)).toBe(999n)
-		expect(getVaultRegistryScanCount(1_001n)).toBe(1_000n)
+	test('active-vault indexing retains only positions backed by pool or dispute REP', () => {
 		const exited = vault(targetAddress, 0n, 0n)
-		expect(hasCurrentVaultState(exited)).toBe(false)
-		expect(hasCurrentVaultState({ ...exited, badDebtAttoEth: 1n })).toBe(true)
-		expect(hasCurrentVaultState({ ...exited, claimableFeesAttoEth: 1n })).toBe(true)
-		expect(hasCurrentVaultState({ ...exited, disputeStakedAttoRep: 1n })).toBe(true)
-		expect(hasCurrentVaultState(vault(targetAddress, 1n, 0n))).toBe(true)
+		expect(hasVaultRep(exited)).toBe(false)
+		expect(hasVaultRep({ ...exited, badDebtAttoEth: 1n })).toBe(false)
+		expect(hasVaultRep({ ...exited, claimableFeesAttoEth: 1n })).toBe(false)
+		expect(hasVaultRep({ ...exited, disputeStakedAttoRep: 1n })).toBe(true)
+		expect(hasVaultRep(vault(targetAddress, 1n, 0n))).toBe(true)
 	})
 
 	test('matches the protocol bundled debt, capacity, and fixed-bonus transfer', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus } from '../../../protocol/index.js'
+import { loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus, loadSecurityPoolChildren } from '../../../protocol/index.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -112,11 +112,7 @@ export function useSelectedAuctionReadState({
 		setSelectedAuctionChildPoolRecoveryCompletedKey(undefined)
 		setSelectedAuctionChildPoolRecoveryError(undefined)
 		setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
-		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient(), {
-			...(accountAddress === undefined ? {} : { accountAddress }),
-			selectedSecurityPoolAddress: securityPoolAddress,
-			vaultDetailMode: 'selected',
-		})
+		void loadSecurityPoolChildren(fullTruthAuctionReadClient ?? createConnectedReadClient(), securityPoolAddress, accountAddress)
 			.then(allPools => {
 				if (cancelled) return
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === selectedOutcome)

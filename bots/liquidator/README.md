@@ -192,12 +192,11 @@ Pool-selection inheritance is a configuration reconciliation and remains active
 in dry-run mode and when automatic vault migrations are disabled. Only the
 on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
-Current-position results are capped by `runtime.maxVaultsPerPool`. Anyone can
-register a nonzero address, and the bot scans the 1,000 newest-registered
-addresses first. Empty registrations consume scan capacity without consuming
-the result cap, so older current positions may be omitted. Either limit marks
-the scan as capped in the dashboard; a capped scan is not a complete opportunity
-view.
+The bot bootstraps every registered vault, then keeps an incremental index of
+vaults with REP backing or REP committed to a dispute. It refreshes those active
+positions and any vaults reported by accounting checkpoints on every scan.
+Empty registrations are discarded after inspection, so they do not consume
+steady-state memory or hide older liquidation opportunities.
 
 ## Independent market consensus
 

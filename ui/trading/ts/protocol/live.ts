@@ -34,6 +34,23 @@ const poolAccountingComponents = [
 ] as const
 
 const securityPoolFactoryAbi = [
+	{
+		type: 'event',
+		name: 'DeploySecurityPool',
+		inputs: [
+			{ indexed: true, name: 'securityPool', type: 'address' },
+			{ indexed: false, name: 'truthAuction', type: 'address' },
+			{ indexed: false, name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
+			{ indexed: false, name: 'shareToken', type: 'address' },
+			{ indexed: true, name: 'parent', type: 'address' },
+			{ indexed: true, name: 'universeId', type: 'uint248' },
+			{ indexed: false, name: 'questionId', type: 'uint256' },
+			{ indexed: false, name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+			{ indexed: false, name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
+			{ indexed: false, name: 'currentRetentionRate', type: 'uint256' },
+			{ indexed: false, name: 'settlementCollateralAttoEth', type: 'uint256' },
+		],
+	},
 	{ type: 'function', name: 'securityPoolDeploymentCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 	{
 		type: 'function',
@@ -67,7 +84,34 @@ const erc20BalanceAbi = [{ type: 'function', name: 'balanceOf', stateMutability:
 
 const securityPoolForkerAbi = [{ type: 'function', name: 'getQuestionOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address' }], outputs: [{ type: 'uint8' }] }] as const satisfies Abi
 
-const zoltarAbi = [{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
+const zoltarAbi = [
+	{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'getDeployedChildUniverses',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		outputs: [
+			{ name: 'outcomeIndexes', type: 'uint256[]' },
+			{ name: 'childUniverseIds', type: 'uint248[]' },
+			{
+				name: 'children',
+				type: 'tuple[]',
+				components: [
+					{ name: 'forkTime', type: 'uint256' },
+					{ name: 'forkQuestionId', type: 'uint256' },
+					{ name: 'forkingOutcomeIndex', type: 'uint256' },
+					{ name: 'reputationToken', type: 'address' },
+					{ name: 'parentUniverseId', type: 'uint248' },
+				],
+			},
+		],
+	},
+] as const satisfies Abi
 
 const questionDataAbi = [
 	{
@@ -648,41 +692,110 @@ export function registrySnapshotBlockParameters(anchor: RegistryBlockAnchor, sim
 	return simulation ? {} : { blockHash: anchor.blockHash }
 }
 
-async function loadAllSecurityPoolDeployments(client: PublicClient, configuration: DeploymentConfiguration, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>, pageSize = 25n) {
-	return await refreshSecurityPoolDeploymentIndex(
+export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
+	index: SecurityPoolDeploymentIndex<Deployment, RegistryBlockAnchor>,
+	key: string,
+	loadLatest: () => Promise<RegistryBlockAnchor>,
+	isAnchorCanonical: (anchor: RegistryBlockAnchor) => Promise<boolean>,
+	loadEvents: (fromBlock: bigint, toBlock: bigint) => Promise<readonly Deployment[]>,
+) {
+	const previous = index.pending
+	let snapshot: Deployment[] = []
+	const refresh = (async () => {
+		if (previous !== undefined) await previous.catch(() => undefined)
+		if (index.key !== key) {
+			index.key = key
+			index.deployments = []
+			index.anchor = undefined
+		}
+		if (index.anchor !== undefined && !(await isAnchorCanonical(index.anchor))) {
+			index.deployments = []
+			index.anchor = undefined
+		}
+		const anchor = await loadLatest()
+		const fromBlock = index.anchor === undefined ? 0n : index.anchor.blockNumber + 1n
+		if (fromBlock <= anchor.blockNumber) index.deployments.push(...(await loadEvents(fromBlock, anchor.blockNumber)))
+		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment events changed during discovery')
+		index.anchor = anchor
+		snapshot = index.deployments.slice()
+	})()
+	index.pending = refresh
+	try {
+		await refresh
+	} finally {
+		if (index.pending === refresh) index.pending = undefined
+	}
+	return snapshot
+}
+
+function securityPoolDeploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeployment {
+	const args = log.args
+	if (typeof args !== 'object' || args === null) throw new Error('SecurityPool deployment event is missing its arguments')
+	const securityPool = Reflect.get(args, 'securityPool')
+	const shareToken = Reflect.get(args, 'shareToken')
+	const universeId = Reflect.get(args, 'universeId')
+	const questionId = Reflect.get(args, 'questionId')
+	const statoblastSecurityMultiplierBps = Reflect.get(args, 'statoblastSecurityMultiplierBps')
+	const initialReportPriorityFeeAttoEthPerGas = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
+	if (typeof securityPool !== 'string' || typeof shareToken !== 'string' || typeof universeId !== 'bigint' || typeof questionId !== 'bigint' || typeof statoblastSecurityMultiplierBps !== 'bigint' || typeof initialReportPriorityFeeAttoEthPerGas !== 'bigint') {
+		throw new Error('SecurityPool deployment event is incomplete')
+	}
+	return {
+		initialReportPriorityFeeAttoEthPerGas,
+		questionId,
+		securityPool: getAddress(securityPool),
+		shareToken: getAddress(shareToken),
+		statoblastSecurityMultiplierBps,
+		universeId,
+	}
+}
+
+async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
+	const universeIds = [0n]
+	const seen = new Set(['0'])
+	for (let universeIndex = 0; universeIndex < universeIds.length; universeIndex += 1) {
+		const universeId = universeIds[universeIndex]
+		if (universeId === undefined) throw new Error('Universe discovery lost its current entry')
+		for (let start = 0n; ; start += 100n) {
+			const [, childUniverseIds, children] = await client.readContract({ abi: zoltarAbi, address: configuration.zoltar, functionName: 'getDeployedChildUniverses', args: [universeId, start, 100n] })
+			if (childUniverseIds.length !== children.length) throw new Error('Zoltar returned mismatched child universe arrays')
+			for (const childUniverseId of childUniverseIds) {
+				const key = childUniverseId.toString()
+				if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once`)
+				seen.add(key)
+				universeIds.push(childUniverseId)
+			}
+			if (children.length < 100) break
+		}
+	}
+	return universeIds
+}
+
+async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>) {
+	const canonical = async (anchor: RegistryBlockAnchor) => {
+		try {
+			const loadByNumber = getActiveBackend().id === 'simulation' ? undefined : async (blockNumber: bigint) => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })
+			return await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), loadByNumber)
+		} catch (error) {
+			if (error instanceof Error) return false
+			throw error
+		}
+	}
+	return await refreshSecurityPoolDeploymentEventIndex(
 		index,
-		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}`,
-		async () => {
-			const anchor = await latestBlockIdentity(client)
-			const parameters = { abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', ...registrySnapshotBlockParameters(anchor, getActiveBackend().id === 'simulation') } satisfies {
-				abi: typeof securityPoolFactoryAbi
-				address: Address
-				functionName: 'securityPoolDeploymentCount'
-				blockHash?: Hash
-			}
-			const total = await client.readContract(parameters)
-			return { anchor, total }
-		},
-		async anchor => {
-			try {
-				const loadByNumber = getActiveBackend().id === 'simulation' ? undefined : async (blockNumber: bigint) => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })
-				return await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), loadByNumber)
-			} catch (error) {
-				if (error instanceof Error) return false
-				throw error
-			}
-		},
-		async (start, count, anchor) => {
-			const parameters = { abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count], ...registrySnapshotBlockParameters(anchor, getActiveBackend().id === 'simulation') } satisfies {
-				abi: typeof securityPoolFactoryAbi
-				address: Address
-				functionName: 'securityPoolDeploymentsRange'
-				args: readonly [bigint, bigint]
-				blockHash?: Hash
-			}
-			return await client.readContract(parameters)
-		},
-		pageSize,
+		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}:${universeId.toString()}`,
+		async () => await latestBlockIdentity(client),
+		canonical,
+		async (fromBlock, toBlock) =>
+			(
+				await client.getLogs({
+					address: configuration.securityPoolFactory,
+					args: { universeId },
+					event: securityPoolFactoryAbi[0],
+					fromBlock,
+					toBlock,
+				})
+			).map(securityPoolDeploymentFromEvent),
 	)
 }
 
@@ -701,8 +814,9 @@ export function selectUniverseDeployments<Deployment extends Readonly<{ universe
 }
 
 export async function discoverLiveUniverseMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
-	const deployments = await loadAllSecurityPoolDeployments(client, configuration, index, pageSize)
-	const { universeIds, selectedUniverseId, selectedDeployments } = selectUniverseDeployments(deployments, requestedUniverseId)
+	const universeIds = await loadUniverseIds(client, configuration)
+	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
 	const page = marketDiscoveryPage(BigInt(selectedDeployments.length), requestedStart, pageSize)
 	const pageEnd = page.start + page.count
 	const pageDeployments = selectedDeployments.filter((_deployment, index) => {
@@ -713,9 +827,10 @@ export async function discoverLiveUniverseMarketPage(client: PublicClient, confi
 	return { ...page, total: BigInt(selectedDeployments.length), markets: collateMarketDiscoveryResults(pageDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }
 }
 
-export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
-	const deployments = await loadAllSecurityPoolDeployments(client, configuration, index, pageSize)
-	const { universeIds, selectedUniverseId, selectedDeployments } = selectUniverseDeployments(deployments, requestedUniverseId)
+export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, _pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
+	const universeIds = await loadUniverseIds(client, configuration)
+	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
 	const results = await settleWithConcurrency(selectedDeployments, 6, async deployment => await loadLiveMarket(client, configuration, deployment))
 	const total = BigInt(selectedDeployments.length)
 	return { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, markets: collateMarketDiscoveryResults(selectedDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }

@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -33,6 +33,24 @@ const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
+
+const DEPLOY_SECURITY_POOL_EVENT = {
+	type: 'event',
+	name: 'DeploySecurityPool',
+	inputs: [
+		{ indexed: true, name: 'securityPool', type: 'address' },
+		{ indexed: false, name: 'truthAuction', type: 'address' },
+		{ indexed: false, name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
+		{ indexed: false, name: 'shareToken', type: 'address' },
+		{ indexed: true, name: 'parent', type: 'address' },
+		{ indexed: true, name: 'universeId', type: 'uint248' },
+		{ indexed: false, name: 'questionId', type: 'uint256' },
+		{ indexed: false, name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+		{ indexed: false, name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
+		{ indexed: false, name: 'currentRetentionRate', type: 'uint256' },
+		{ indexed: false, name: 'settlementCollateralAttoEth', type: 'uint256' },
+	],
+} as const
 
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
@@ -510,6 +528,81 @@ async function loadListedSecurityPools(
 	},
 ) {
 	return await Promise.all(deployments.map(async deployment => await loadSecurityPoolDetails(client, deployment, options)))
+}
+
+function deploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeploymentQueryResult {
+	const args = log.args
+	if (typeof args !== 'object' || args === null) throw new Error('Security pool deployment event is missing its arguments')
+	const initialReportPriorityFeeAttoEthPerGas = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
+	const parent = Reflect.get(args, 'parent')
+	const priceOracleManagerAndOperatorQueuer = Reflect.get(args, 'priceOracleManagerAndOperatorQueuer')
+	const questionId = Reflect.get(args, 'questionId')
+	const statoblastSecurityMultiplierBps = Reflect.get(args, 'statoblastSecurityMultiplierBps')
+	const securityPool = Reflect.get(args, 'securityPool')
+	const truthAuction = Reflect.get(args, 'truthAuction')
+	const universeId = Reflect.get(args, 'universeId')
+	if (
+		typeof initialReportPriorityFeeAttoEthPerGas !== 'bigint' ||
+		typeof parent !== 'string' ||
+		typeof priceOracleManagerAndOperatorQueuer !== 'string' ||
+		typeof questionId !== 'bigint' ||
+		typeof statoblastSecurityMultiplierBps !== 'bigint' ||
+		typeof securityPool !== 'string' ||
+		typeof truthAuction !== 'string' ||
+		typeof universeId !== 'bigint'
+	) {
+		throw new Error('Security pool deployment event is incomplete')
+	}
+	return {
+		initialReportPriorityFeeAttoEthPerGas,
+		parent: getAddress(parent),
+		priceOracleManagerAndOperatorQueuer: getAddress(priceOracleManagerAndOperatorQueuer),
+		questionId,
+		statoblastSecurityMultiplierBps,
+		securityPool: getAddress(securityPool),
+		truthAuction: getAddress(truthAuction),
+		universeId,
+	}
+}
+
+async function loadSecurityPoolDeploymentEvents(client: ReadClient, args: Readonly<{ parent?: Address; securityPool?: Address }>) {
+	const toBlock = await client.getBlockNumber()
+	return (
+		await client.getLogs({
+			address: getInfraContractAddresses().securityPoolFactory,
+			args,
+			event: DEPLOY_SECURITY_POOL_EVENT,
+			fromBlock: 0n,
+			toBlock,
+		})
+	).map(deploymentFromEvent)
+}
+
+function uniqueDeployments(deployments: readonly SecurityPoolDeploymentQueryResult[]) {
+	return [...new Map(deployments.map(deployment => [deployment.securityPool.toLowerCase(), deployment])).values()]
+}
+
+export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address) {
+	const selected = await loadSecurityPoolDeploymentEvents(client, { securityPool: securityPoolAddress })
+	const selectedDeployment = selected[0]
+	if (selectedDeployment === undefined) return []
+	const [children, parent] = await Promise.all([loadSecurityPoolDeploymentEvents(client, { parent: securityPoolAddress }), selectedDeployment.parent === zeroAddress ? [] : loadSecurityPoolDeploymentEvents(client, { securityPool: selectedDeployment.parent })])
+	const pools = await loadListedSecurityPools(client, uniqueDeployments([...parent, ...selected, ...children]), {
+		...(accountAddress === undefined ? {} : { accountAddress }),
+		selectedSecurityPoolAddress: securityPoolAddress,
+		vaultDetailMode: 'selected',
+		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
+	})
+	return applyChildForkActivityHints(pools)
+}
+
+export async function loadSecurityPoolChildren(client: ReadClient, parentAddress: Address, accountAddress?: Address) {
+	return await loadListedSecurityPools(client, await loadSecurityPoolDeploymentEvents(client, { parent: parentAddress }), {
+		...(accountAddress === undefined ? {} : { accountAddress }),
+		selectedSecurityPoolAddress: parentAddress,
+		vaultDetailMode: 'selected',
+		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
+	})
 }
 
 function applyChildForkActivityHints(pools: ListedSecurityPool[]) {

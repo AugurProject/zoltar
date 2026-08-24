@@ -1,17 +1,34 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, zoltarAbi } from '#contracts/abi'
+import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, vaultAccountingCheckpointEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, repForBackingUnits, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
 import type { PoolObservation, StagedOperationObservation, UniverseObservation } from '#state/operator-state'
+import { createVaultStateIndex, refreshVaultStateIndex, type VaultStateIndex } from './vault-state-index.ts'
+import { discoverRelevantDeployments } from './relevant-deployments.ts'
 
 type ReadClient = PublicClient<Transport, Chain>
 const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
-export const MAX_VAULT_REGISTRY_ENTRIES_SCANNED = 1_000n
 
-export function getVaultRegistryScanCount(knownVaultCount: bigint) {
-	return knownVaultCount < MAX_VAULT_REGISTRY_ENTRIES_SCANNED ? knownVaultCount : MAX_VAULT_REGISTRY_ENTRIES_SCANNED
+type PoolDeployment = {
+	settlementCollateralAttoEth: bigint
+	currentRetentionRate: bigint
+	initialReportPriorityFeeAttoEthPerGas: bigint
+	parent: Address
+	priceOracleManagerAndOperatorQueuer: Address
+	questionId: bigint
+	securityPool: Address
+	statoblastSecurityMultiplierBps: bigint
+	universeId: bigint
+}
+
+export type PoolMonitorIndex = {
+	vaultsByPool: Map<string, VaultStateIndex<VaultPosition>>
+}
+
+export function createPoolMonitorIndex(): PoolMonitorIndex {
+	return { vaultsByPool: new Map() }
 }
 
 function sameAddress(left: Address, right: Address) {
@@ -157,58 +174,42 @@ async function loadVaultPage(client: ReadClient, pool: Address, escalationGame: 
 	})
 }
 
-export function hasCurrentVaultState(vault: VaultPosition) {
-	return vault.backingUnits > 0n || vault.capacityOwnershipAttoRep > 0n || vault.claimableFeesAttoEth > 0n || vault.disputeStakedAttoRep > 0n || vault.badDebtAttoEth > 0n || vault.openInterestAttoEth > 0n
+export function hasVaultRep(vault: VaultPosition) {
+	return vault.backingUnits > 0n || vault.disputeStakedAttoRep > 0n
 }
 
-async function loadCurrentVaults(client: ReadClient, pool: Address, escalationGame: Address, knownVaultCount: bigint, maxVaults: number, totalAttoRep: bigint, denominator: bigint, blockNumber: bigint) {
-	const vaults: VaultPosition[] = []
-	const pageSize = 100n
-	const scanCount = getVaultRegistryScanCount(knownVaultCount)
-	for (let start = 0n; start < scanCount; start += pageSize) {
-		const count = scanCount - start < pageSize ? scanCount - start : pageSize
-		const page = await client.readContract({
-			abi: securityPoolAbi,
-			address: pool,
-			args: [start, count],
-			blockNumber,
-			functionName: 'getVaults',
-		})
-		const positions = await loadVaultPage(
-			client,
-			pool,
-			escalationGame,
-			page.map(address => getAddress(address)),
-			totalAttoRep,
-			denominator,
-			blockNumber,
-		)
-		for (const position of positions) {
-			if (!hasCurrentVaultState(position)) continue
-			vaults.push(position)
-			if (vaults.length > maxVaults) return { truncated: true, vaults: vaults.slice(0, maxVaults) }
-		}
-	}
-	return { truncated: scanCount < knownVaultCount, vaults }
+async function loadCurrentVaults(client: ReadClient, index: VaultStateIndex<VaultPosition>, pool: Address, escalationGame: Address, knownVaultCount: bigint, totalAttoRep: bigint, denominator: bigint, block: Readonly<{ hash: `0x${string}`; number: bigint }>) {
+	return await refreshVaultStateIndex(index, {
+		block,
+		hasRep: hasVaultRep,
+		knownVaultCount,
+		loadChangedVaultAddresses: async (fromBlock, toBlock) => {
+			const logs = await client.getLogs({ address: pool, event: vaultAccountingCheckpointEvent, fromBlock, toBlock })
+			return logs.map(log => {
+				const vault = log.args?.vault
+				if (vault === undefined) throw new Error('Vault accounting checkpoint is missing its vault address')
+				return getAddress(vault)
+			})
+		},
+		loadPositions: async vaults => await loadVaultPage(client, pool, escalationGame, vaults, totalAttoRep, denominator, block.number),
+		loadRegistryRange: async (start, count) => {
+			const page = await client.readContract({ abi: securityPoolAbi, address: pool, args: [start, count], blockNumber: block.number, functionName: 'getVaults' })
+			return page.map(address => getAddress(address))
+		},
+		readCanonicalBlockHash: async blockNumber => (await client.getBlock({ blockNumber })).hash,
+	})
 }
 
 async function loadPool(
 	client: ReadClient,
 	settings: OperatorSettings,
-	deployment: {
-		settlementCollateralAttoEth: bigint
-		currentRetentionRate: bigint
-		initialReportPriorityFeeAttoEthPerGas: bigint
-		parent: Address
-		priceOracleManagerAndOperatorQueuer: Address
-		questionId: bigint
-		securityPool: Address
-		statoblastSecurityMultiplierBps: bigint
-		universeId: bigint
-	},
+	deployment: PoolDeployment,
 	wallet: Address | undefined,
+	monitorIndex: PoolMonitorIndex,
 ) {
-	const blockNumber = await client.getBlockNumber()
+	const block = await client.getBlock()
+	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
+	const blockNumber = block.number
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.priceOracleManagerAndOperatorQueuer)
 	const [
@@ -262,7 +263,12 @@ async function loadPool(
 	])
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
 	const normalizedEscalationGame = getAddress(escalationGame)
-	const { vaults, truncated } = await loadCurrentVaults(client, address, normalizedEscalationGame, knownVaultCount, settings.runtime.maxVaultsPerPool, totalAttoRep, denominator, blockNumber)
+	let vaultIndex = monitorIndex.vaultsByPool.get(address.toLowerCase())
+	if (vaultIndex === undefined) {
+		vaultIndex = createVaultStateIndex<VaultPosition>()
+		monitorIndex.vaultsByPool.set(address.toLowerCase(), vaultIndex)
+	}
+	const vaults = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, { hash: block.hash, number: blockNumber })
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getActiveStagedOperationCount' }),
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getPendingSettlementOperationIds' }),
@@ -356,51 +362,93 @@ async function loadPool(
 		systemState,
 		totalCapacityOwnershipAttoRep,
 		totalAttoRep,
-		truncatedVaults: truncated,
 		universeId: deployment.universeId,
 		vaults,
 	} satisfies PoolObservation
 }
 
-export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined) {
-	const universes = await loadUniverses(client, settings)
-	const count = await client.readContract({
-		abi: securityPoolFactoryAbi,
-		address: settings.deployment.securityPoolFactory,
-		args: [],
-		functionName: 'securityPoolDeploymentCount',
-	})
-	const deployments = []
-	const deploymentPageSize = 100n
-	for (let start = 0n; start < count; start += deploymentPageSize) {
-		const pageCount = count - start < deploymentPageSize ? count - start : deploymentPageSize
-		deployments.push(
-			...(await client.readContract({
+function deploymentFromLog(log: Readonly<{ args?: unknown }>): PoolDeployment {
+	const args = log.args
+	if (typeof args !== 'object' || args === null) throw new Error('SecurityPool deployment event is missing its arguments')
+	const securityPool = Reflect.get(args, 'securityPool')
+	const parent = Reflect.get(args, 'parent')
+	const manager = Reflect.get(args, 'priceOracleManagerAndOperatorQueuer')
+	const universeId = Reflect.get(args, 'universeId')
+	const questionId = Reflect.get(args, 'questionId')
+	const multiplier = Reflect.get(args, 'statoblastSecurityMultiplierBps')
+	const priorityFee = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
+	const retentionRate = Reflect.get(args, 'currentRetentionRate')
+	const settlementCollateral = Reflect.get(args, 'settlementCollateralAttoEth')
+	if (
+		typeof securityPool !== 'string' ||
+		typeof parent !== 'string' ||
+		typeof manager !== 'string' ||
+		typeof universeId !== 'bigint' ||
+		typeof questionId !== 'bigint' ||
+		typeof multiplier !== 'bigint' ||
+		typeof priorityFee !== 'bigint' ||
+		typeof retentionRate !== 'bigint' ||
+		typeof settlementCollateral !== 'bigint'
+	) {
+		throw new Error('SecurityPool deployment event is incomplete')
+	}
+	return {
+		currentRetentionRate: retentionRate,
+		initialReportPriorityFeeAttoEthPerGas: priorityFee,
+		parent: getAddress(parent),
+		priceOracleManagerAndOperatorQueuer: getAddress(manager),
+		questionId,
+		securityPool: getAddress(securityPool),
+		settlementCollateralAttoEth: settlementCollateral,
+		statoblastSecurityMultiplierBps: multiplier,
+		universeId,
+	}
+}
+
+async function loadRelevantPoolDeployments(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
+	const loadDeployments = async (args: Readonly<{ parent?: Address; securityPool?: Address }>) =>
+		(
+			await client.getLogs({
+				address: settings.deployment.securityPoolFactory,
+				args,
+				event: deploySecurityPoolEvent,
+				fromBlock: 0n,
+				toBlock: blockNumber,
+			})
+		).map(deploymentFromLog)
+	return await discoverRelevantDeployments({
+		desiredPools: settings.desiredPools,
+		loadDeploymentsForParent: async parent => await loadDeployments({ parent }),
+		loadDeploymentsForPool: async securityPool => await loadDeployments({ securityPool }),
+		resolveDesiredPool: async desired => {
+			const originId = await client.readContract({
 				abi: securityPoolFactoryAbi,
 				address: settings.deployment.securityPoolFactory,
-				args: [start, pageCount],
-				functionName: 'securityPoolDeploymentsRange',
-			})),
-		)
-	}
+				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas],
+				blockNumber,
+				functionName: 'getOriginId',
+			})
+			return getAddress(
+				await client.readContract({
+					abi: securityPoolFactoryAbi,
+					address: settings.deployment.securityPoolFactory,
+					args: [originId, desired.universeId],
+					blockNumber,
+					functionName: 'getSecurityPool',
+				}),
+			)
+		},
+		selectedPools: settings.selectedPools,
+	})
+}
+
+export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex()) {
+	const universes = await loadUniverses(client, settings)
+	const blockNumber = await client.getBlockNumber()
+	const deployments = await loadRelevantPoolDeployments(client, settings, blockNumber)
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
-		const pool = await loadPool(
-			client,
-			settings,
-			{
-				settlementCollateralAttoEth: deployment.settlementCollateralAttoEth,
-				currentRetentionRate: deployment.currentRetentionRate,
-				initialReportPriorityFeeAttoEthPerGas: deployment.initialReportPriorityFeeAttoEthPerGas,
-				parent: getAddress(deployment.parent),
-				priceOracleManagerAndOperatorQueuer: getAddress(deployment.priceOracleManagerAndOperatorQueuer),
-				questionId: deployment.questionId,
-				securityPool: getAddress(deployment.securityPool),
-				statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,
-				universeId: deployment.universeId,
-			},
-			wallet,
-		)
+		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex)
 		validatePoolUniverseRep(pool, universes)
 		loadedPools.push(pool)
 	}

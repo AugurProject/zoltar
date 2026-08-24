@@ -139,7 +139,6 @@ function state(
 				systemState: '0',
 				totalCapacityOwnershipRep: '0',
 				totalPoolHeldRep: '0',
-				truncatedVaults: false,
 				universeId: '1',
 			},
 		],
@@ -734,21 +733,6 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(globalError?.textContent).toContain('Automatic retry is active.')
 		expect(globalError?.textContent).not.toContain('read RPC stalled')
 		expect(page.window.document.getElementById('operator-alerts')?.classList.contains('hidden')).toBe(true)
-	})
-
-	test('surfaces an incomplete vault registry scan', async () => {
-		const page = await dashboard()
-		const rootUniverseToggle = page.window.document.querySelector('.truth-root-toggle input[type="checkbox"]')
-		expect(rootUniverseToggle?.getAttribute('aria-label')).toBe('Approve root universe 1')
-		const snapshot = state()
-		const [pool] = snapshot.pools
-		if (pool === undefined) throw new Error('Expected pool snapshot')
-		pool.truncatedVaults = true
-		page.setSnapshot(snapshot)
-
-		await page.refresh()
-
-		expect(page.window.document.body.textContent).toContain('Vault scan capped')
 	})
 
 	test('serializes overlapping polling refreshes and preserves one trailing request', async () => {

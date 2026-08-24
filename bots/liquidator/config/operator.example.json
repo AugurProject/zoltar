@@ -50,8 +50,7 @@
 		"ui": true,
 		"uiHost": "127.0.0.1",
 		"uiPort": 4183,
-		"stateFile": ".state/operator-state.json",
-		"maxVaultsPerPool": 1000
+		"stateFile": ".state/operator-state.json"
 	},
 	"selectedPools": [],
 	"strategy": {

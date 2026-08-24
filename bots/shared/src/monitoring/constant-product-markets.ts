@@ -1,11 +1,12 @@
 import type { CentralizedMarketSettings } from './centralized-markets.ts'
 import type { MarketConsensusObservation } from './market-consensus.ts'
+import { settledQuorumValue } from './read-quorum.ts'
 import { bigintToSafeNumber } from '../ethereum.ts'
 
 const UNIT = 10n ** 18n
 const BPS = 10_000n
 
-type PairSnapshot = {
+export type PairSnapshot = {
 	blockHash: `0x${string}`
 	blockNumber: bigint
 	blockTimestamp: bigint
@@ -17,6 +18,19 @@ type PairSnapshot = {
 }
 
 export type ConstantProductPairReader = (pair: `0x${string}`) => Promise<PairSnapshot>
+
+export async function readConstantProductPairWithQuorum(
+	pair: `0x${string}`,
+	endpoints: readonly string[],
+	requirement: 1 | 2,
+	readPair: (endpoint: string, pair: `0x${string}`) => Promise<PairSnapshot>,
+) {
+	return await settledQuorumValue(
+		`DEX pair ${pair}`,
+		endpoints.map(async endpoint => ({ endpoint, value: await readPair(endpoint, pair) })),
+		requirement,
+	)
+}
 
 function amountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint, feeBps: number) {
 	const amountWithFee = amountIn * (BPS - BigInt(feeBps))

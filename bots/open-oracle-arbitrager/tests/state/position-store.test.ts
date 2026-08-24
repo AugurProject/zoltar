@@ -3,7 +3,7 @@ import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '#ethereum'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosition, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournal, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 
 const directories: string[] = []
 
@@ -158,6 +158,50 @@ describe('durable OpenOracle position journal', () => {
 		await savePositionJournal(path, [position], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position])
 		expect((await readFile(path, 'utf8')).toString()).not.toContain('privateKey')
+	})
+
+	test('bounds terminal recovery records while retaining their accounting and daily gas totals', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const terminalPositions = Array.from({ length: 502 }, (_value, index) => ({
+			account: getAddress('0x0000000000000000000000000000000000000002'),
+			actualEntryGasCostEth: '0.001',
+			capitalAtRiskWeth: '0',
+			closedAt: '2026-01-01T01:00:00.000Z',
+			direction: 'sell-rep' as const,
+			entryTransactionHash: `0x${'11'.repeat(32)}` as const,
+			entryTransactionHashes: [`0x${'11'.repeat(32)}` as const],
+			gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` as const }],
+			historyOutbox: undefined,
+			hedgeAmountToken: '1',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '0.1',
+			lifecycleGasCostEth: '0',
+			lifecycleReceiptRecovered: false,
+			lifecycleTargetBlockNumber: undefined,
+			lifecycleTokenDecimals: undefined,
+			lifecycleTransactionHashes: [],
+			lifecycleUpdatedAt: undefined,
+			lifecycleWalletTokenBefore: undefined,
+			lifecycleWalletWethBefore: undefined,
+			lockedToken: '0',
+			lockedWeth: '0',
+			manualReconciliation: undefined,
+			openedAt: '2026-01-01T00:00:00.000Z',
+			realizedNetProfitEth: '0.1',
+			reportId: (index + 1).toString(),
+			status: 'closed' as const,
+			token: getAddress('0x0000000000000000000000000000000000000001'),
+			tokenSymbol: 'REP',
+			withdrawnToken: '1',
+			withdrawnWeth: '1',
+		})) satisfies PositionRecord[]
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions: terminalPositions }, 1)
+		expect(saved.positions).toHaveLength(500)
+		expect(saved.archived).toEqual({ gasSpentByUtcDay: { '2026-01-01': '0.002' }, hedgedProfitBeforeGasEth: '0.2', positionCount: 2, realizedNetProfitEth: '0.2' })
+		expect(await loadPositionJournalState(path, 1)).toEqual(saved)
 	})
 
 	test('rejects a valid position journal bound to another chain', async () => {

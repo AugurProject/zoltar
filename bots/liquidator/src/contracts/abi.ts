@@ -42,7 +42,26 @@ const deploymentComponents = [
 	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
 ] as const
 
+export const deploySecurityPoolEvent = {
+	type: 'event',
+	name: 'DeploySecurityPool',
+	inputs: [
+		{ indexed: true, name: 'securityPool', type: 'address' },
+		{ indexed: false, name: 'truthAuction', type: 'address' },
+		{ indexed: false, name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
+		{ indexed: false, name: 'shareToken', type: 'address' },
+		{ indexed: true, name: 'parent', type: 'address' },
+		{ indexed: true, name: 'universeId', type: 'uint248' },
+		{ indexed: false, name: 'questionId', type: 'uint256' },
+		{ indexed: false, name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+		{ indexed: false, name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
+		{ indexed: false, name: 'currentRetentionRate', type: 'uint256' },
+		{ indexed: false, name: 'settlementCollateralAttoEth', type: 'uint256' },
+	],
+} as const
+
 export const securityPoolFactoryAbi = [
+	deploySecurityPoolEvent,
 	{
 		inputs: [
 			{ name: 'originUniverseId', type: 'uint248' },
@@ -129,7 +148,23 @@ export const zoltarAbi = [
 	},
 ] as const
 
+export const vaultAccountingCheckpointEvent = {
+	inputs: [
+		{ indexed: true, name: 'vault', type: 'address' },
+		{ indexed: false, name: 'repBackingUnits', type: 'uint256' },
+		{ indexed: false, name: 'capacityOwnershipAttoRep', type: 'uint256' },
+		{ indexed: false, name: 'claimableFeesAttoEth', type: 'uint256' },
+		{ indexed: false, name: 'feeIndex', type: 'uint256' },
+		{ indexed: false, name: 'vaultFeeRemainder', type: 'uint256' },
+		{ indexed: false, name: 'resultingTotalRepBackingUnits', type: 'uint256' },
+		{ indexed: false, name: 'resultingFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
+	],
+	name: 'VaultAccountingCheckpoint',
+	type: 'event',
+} as const
+
 export const securityPoolAbi = [
+	vaultAccountingCheckpointEvent,
 	{
 		inputs: [],
 		name: 'escalationGame',

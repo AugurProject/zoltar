@@ -45,6 +45,7 @@ export function parseCoreDeployments(candidate: unknown): readonly CoreDeploymen
 			id: requiredString(value['id'], `Core deployment ${index.toString()} id`),
 			proxyDeployer: requiredAddress(value['proxyDeployer'], `Core deployment ${index.toString()} proxyDeployer`),
 			securityPoolFactory: requiredAddress(value['securityPoolFactory'], `Core deployment ${index.toString()} securityPoolFactory`),
+			zoltar: requiredAddress(value['zoltar'], `Core deployment ${index.toString()} zoltar`),
 		}
 	})
 	const chainIds = new Set<number>()
@@ -66,6 +67,7 @@ export async function loadCoreDeployments() {
 				id: 'simulation',
 				proxyDeployer: PROXY_DEPLOYER_ADDRESS,
 				securityPoolFactory: getInfraContractAddresses(backend.profile).securityPoolFactory,
+				zoltar: getInfraContractAddresses(backend.profile).zoltar,
 			},
 		] satisfies readonly CoreDeployment[]
 	}

@@ -7,7 +7,7 @@ import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitori
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { Venue } from '#core/venue-strategy'
 import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-monitor'
-import type { PositionRecord } from '#state/position-store'
+import { archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, type PositionJournalArchive, type PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -314,6 +314,7 @@ export type OperatorState = {
 	retryInProgress?: boolean | undefined
 	opportunities: OpportunitySnapshot[]
 	positions: PositionRecord[]
+	positionArchive?: PositionJournalArchive | undefined
 	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
@@ -889,10 +890,10 @@ function sumSignedEth(records: readonly ExecutionRecord[], field: 'trackedNetPro
 	return decimalSignedEth(records.reduce((total, record) => total + parseSignedDecimalEth(record[field]), 0n))
 }
 
-function positionTotals(positions: readonly PositionRecord[]) {
-	let hedgedProfit = 0n
+function positionTotals(positions: readonly PositionRecord[], archived: PositionJournalArchive = emptyPositionJournalArchive()) {
+	let hedgedProfit = parseSignedDecimalEth(archived.hedgedProfitBeforeGasEth)
 	let openHedgedNet = 0n
-	let realized = 0n
+	let realized = parseSignedDecimalEth(archived.realizedNetProfitEth)
 	for (const position of positions) {
 		if (position.status === 'closed' && position.realizedNetProfitEth !== undefined) {
 			realized += parseSignedDecimalEth(position.realizedNetProfitEth)
@@ -940,11 +941,12 @@ export function operatorSnapshot(
 		maxTotalLockedAttoWeth: 10n * 10n ** 18n,
 	},
 ): OperatorSnapshot {
-	const totals = positionTotals(state.positions)
+	const archived = state.positionArchive ?? emptyPositionJournalArchive()
+	const totals = positionTotals(state.positions, archived)
 	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(bigintToSafeNumber(BigInt(state.blockTimestamp) * 1_000n, 'Operator block timestamp'))
-	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow)
+	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(state.positions, riskNow) + archivedUtcDayGasSpentWeth(archived, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,
 		consecutivePollFailures: state.consecutivePollFailures ?? 0,
@@ -957,7 +959,7 @@ export function operatorSnapshot(
 		executor: fixed.executor,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
-		positionRecordCount: state.positions.length,
+		positionRecordCount: state.positions.length + archived.positionCount,
 		expectedChainId: fixed.expectedChainId,
 		explorerUrl: fixed.explorerUrl,
 		endpointChecks: state.endpointChecks,
