@@ -1,4 +1,8 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+export {
+	initiallyDepositedLead,
+	worthNowLead,
+} from '@zoltar/ui-zoltar/copy/reportingEscalation.js'
 
 export const bidAmountEth = 'Bid Amount (ETH)'
 export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
@@ -9,10 +13,6 @@ export const closed = 'Closed'
 export const entryDepthLead = 'Entry depth: '
 export const escalationDepositDetailsUnavailable = 'Escalation deposit details are unavailable for this pool right now.'
 export const ethRaisedPerCap = 'ETH Raised / Cap'
-export const forkDepositSettlementAvailabilityDetail = 'Winning fork-carried escalation deposits can be settled after this child pool finalizes.'
-export const escalationAuctionHaircutDetail =
-	'A repair auction can sell from both pool-held REP available to the repair auction and paused dispute-staked REP. Purchased REP is floor-allocated to the game; claims already present share that game-specific retention ratio. This prioritizes restoring settlement collateral that backs open interest over preserving escalation rewards, and the game resumes from reduced effective balances with a fresh response period.'
-export const initiallyDepositedLead = 'Initially deposited: '
 export const loadedDepthEth = 'Visible Depth (ETH)'
 export const loadingCurrentChainTime = 'Loading current chain time.'
 export const migrateVaultTitle = 'Migrate Vault'
@@ -30,7 +30,6 @@ export const startTruthAuctionTitle = 'Start Truth Auction'
 export const submitBid = 'Submit bid'
 export const submitBidTitle = 'Submit Bid'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
-export const worthNowLead = 'Worth now: '
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool-held REP has already been migrated for the ${outcomeLabel} child universe.`
 export const formatEthPerRepValue = (price: CopyTemplateValue) => `${price}\u00a0ETH / REP`
 export const attoEthRaised = 'ETH Raised'
@@ -40,19 +39,6 @@ export const winningThreshold = 'Winning Threshold'
 export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH / REP from depth chart`
-export const formatImportedForkDepositPageSummary = (startIndex: CopyTemplateValue, endIndex: CopyTemplateValue, totalCount: CopyTemplateValue, paginationSummary: CopyTemplateValue) => `Showing parent deposits ${startIndex}-${endIndex} of ${totalCount}. ${paginationSummary}`
-export const formatDepositSelectionRequired = (outcomeLabel: CopyTemplateValue) => `Select at least one ${outcomeLabel} fork-carried deposit to settle.`
-export const importedFromParentUniverse = 'Imported from parent universe'
-export const parentDepositNumber = 'Parent deposit #'
-export const worthNowPendingFinalSettlement = 'Worth now: Pending final settlement'
-export const importedEntryDepthLead = 'Imported entry depth: '
-export const nextParentDeposits = 'Next parent deposits'
-export const previousParentDeposits = 'Previous parent deposits'
-export const settleForkCarriedEscalationDeposits = 'Settle Fork-Carried Escalation Deposits'
-export const importedDepositSettlementDetail = 'Imported from the parent universe. After finalization, only winning positions can be settled; inherited losers require no transaction.'
-export const leading = 'Leading'
-export const totalDisputeStakedRep = 'Total dispute-staked REP'
-export const yourDisputeStakedRep = 'Your dispute-staked REP'
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security Pool for ${outcomeLabel} universe does not exist.`
 export const forkUnavailablePlaceholder = '-'
 export const migration = 'Migration'
@@ -223,10 +209,6 @@ export const walletBidsConnectionRequired = 'Connect a wallet to inspect your su
 export const loadingYourBids = 'Loading your bids…'
 export const walletBidsEmpty = 'No bids from this wallet are indexed for the current auction.'
 export const loadMoreOfMyBids = 'Show more of my bids'
-export const formatEscalationDepositPageSummary = (startIndex: CopyTemplateValue, endIndex: CopyTemplateValue, totalCount: CopyTemplateValue, paginationSummary: CopyTemplateValue) => `Showing deposits ${startIndex}-${endIndex} of ${totalCount}. ${paginationSummary}`
-export const depositNumber = 'Deposit #'
-export const nextDeposits = 'Next deposits'
-export const previousDeposits = 'Previous deposits'
 export const currentFormPrice = 'Current form price'
 export const currentSize = 'Current size'
 export const clearingLevel = 'Clearing level'

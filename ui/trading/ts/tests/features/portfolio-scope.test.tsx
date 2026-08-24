@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveTrading.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
@@ -42,18 +42,14 @@ const market: LiveMarket = {
 }
 
 describe('live portfolio scope', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/portfolio').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/#/portfolio',
 	})
 
 	for (const state of ['disconnected', 'loading', 'error'] as const) {

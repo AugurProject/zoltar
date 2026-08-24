@@ -1,8 +1,8 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
-import { encodeDeployData, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
-import type { DeploymentStatus, DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getDeploymentSteps as getZoltarDeploymentSteps, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar/protocol/deployment.js'
+import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { buildDeploymentStatusSnapshot, deployViaProxy, getDeploymentSteps as getZoltarDeploymentSteps, loadDeploymentStatusOracleMaskAtAddress, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar/protocol/deployment.js'
 import { getInfraContractAddresses, getEscalationGameFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -71,20 +71,6 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
 }
 
-async function deployViaProxy(client: WriteClient, bytecode: Hex): Promise<Hash> {
-	const hash = await client.sendTransaction({
-		to: PROXY_DEPLOYER_ADDRESS,
-		data: bytecode,
-	})
-	const { hash: resolvedHash } = await waitForSubmittedTransactionReceipt(client, hash)
-	return resolvedHash
-}
-
-async function waitForSubmittedTransactionReceipt(client: WriteClient, hash: Hash) {
-	const { waitForSubmittedTransactionReceipt: waitReceipt } = await import('@zoltar/ui-zoltar/protocol/core.js')
-	return await waitReceipt(client, hash)
-}
-
 function getDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
 	const addresses = getInfraContractAddresses(profile)
 	return [
@@ -122,31 +108,6 @@ function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()):
 	}).getDeploymentStatusOracleAddress()
 }
 
-async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
-	return BigInt(
-		await client.readContract({
-			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-			functionName: 'getDeploymentMask',
-			address: getDeploymentStatusOracleAddress(),
-			args: [],
-		}),
-	)
-}
-
-function getDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	let maskIndex = 0n
-	const deploymentStatuses: DeploymentStatus[] = steps.map(step => {
-		if (step.id === 'deploymentStatusOracle') return { ...step, deployed: deploymentStatusOracleDeployed }
-		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
-		maskIndex += 1n
-		return { ...step, deployed }
-	})
-	return {
-		applicationDeploymentComplete: deploymentStatuses.every(step => step.deployed),
-		deploymentStatuses,
-	}
-}
-
 function assertStepRuntimeCode(step: DeploymentStep, code: Hex | undefined): boolean {
 	if (step.trustedSimulationCodePresence) return true
 	if (code === undefined || code === '0x') return false
@@ -163,9 +124,9 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 	if (profile.id === 'simulation') {
 		if (oracleCode === undefined || oracleCode === '0x') {
 			const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-			return getDeploymentStatusSnapshot(steps, proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false)
+			return buildDeploymentStatusSnapshot(steps, proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false)
 		}
-		return getDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMask(client), true)
+		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	}
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
@@ -173,9 +134,9 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 	if (!assertStepRuntimeCode(oracleStep, oracleCode)) {
 		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 		const proxyDeployerDeployed = assertStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return getDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
+		return buildDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
 	}
-	const snapshot = getDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMask(client), true)
+	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	await Promise.all(
 		snapshot.deploymentStatuses.map(async step => {
 			if (!step.deployed) return

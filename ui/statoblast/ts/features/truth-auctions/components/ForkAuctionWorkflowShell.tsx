@@ -5,7 +5,7 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { renderWorkflowMetricGrid } from './ForkAuctionPresentation.js'
 

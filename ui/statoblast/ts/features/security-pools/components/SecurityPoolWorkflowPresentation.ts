@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'

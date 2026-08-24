@@ -928,23 +928,17 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}, [accountAddress, enabled, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report, openOracleReportDetails.value?.isDistributed, openOracleReportDetails.value?.settlementTimestamp])
 
 	const openOracleDisputeSubmission = openOracleReportDetails.value === undefined ? undefined : getDisputeSubmission(openOracleReportDetails.value)
-
-	return {
-		approveToken1,
-		approveToken2,
-		cancelWithdrawalBalanceCheck,
-		createOpenOracleGame,
-		disputeReport,
-		loadOracleReport,
+	const openOracleSectionState = {
+		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		openOracleActiveAction: openOracleActiveAction.value,
 		openOracleActiveWithdrawalBalance: openOracleActiveWithdrawalBalance.value,
-		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
-		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleCreateFieldErrors: openOracleCreateFieldErrors.value,
+		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleDisputeSubmission,
 		openOracleError: openOracleError.value,
-		openOracleFeedback: openOracleFeedback.value,
-		openOracleForm: openOracleForm.value,
+		openOracleReportDetails: openOracleReportDetails.value,
+		openOracleReportLookupState: openOracleReportLookupState.value,
+		openOracleResult: openOracleResult.value,
 		openOracleTokenAccessState: {
 			token1Approval: openOracleToken1Approval.value,
 			token1Balance: openOracleToken1Balance.value,
@@ -957,14 +951,24 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			tokenAccessLoadingInitial: openOracleTokenAccessLoadingInitial.value && openOracleTokenAccessLoad.isLoading.value,
 			tokenAccessRefreshing: openOracleTokenAccessRefreshing.value && openOracleTokenAccessLoad.isLoading.value,
 		},
-		openOracleReportLookupState: openOracleReportLookupState.value,
-		openOracleReportDetails: openOracleReportDetails.value,
-		openOracleResult: openOracleResult.value,
-		openOracleWithdrawalBalanceChecking: openOracleWithdrawalBalanceChecking.value,
-		openOracleWithdrawalReviewMessage: openOracleWithdrawalReviewMessage.value,
 		openOracleWithdrawableBalances: openOracleWithdrawableBalances.value,
 		openOracleWithdrawableBalancesError: openOracleWithdrawableBalancesError.value,
 		openOracleWithdrawableBalancesLoading: openOracleWithdrawableBalanceLoad.isLoading.value,
+		openOracleWithdrawalBalanceChecking: openOracleWithdrawalBalanceChecking.value,
+		openOracleWithdrawalReviewMessage: openOracleWithdrawalReviewMessage.value,
+	}
+
+	return {
+		approveToken1,
+		approveToken2,
+		cancelWithdrawalBalanceCheck,
+		createOpenOracleGame,
+		disputeReport,
+		loadOracleReport,
+		...openOracleSectionState,
+		openOracleFeedback: openOracleFeedback.value,
+		openOracleForm: openOracleForm.value,
+		openOracleSectionState,
 		resetOpenOracleCreateForm: () => {
 			openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 			openOracleCreateFieldErrors.value = {}

@@ -1,23 +1,19 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 let cleanup: (() => Promise<void>) | undefined
-let cleanupDom: (() => void) | undefined
 
-beforeEach(() => {
-	cleanupDom = installDomEnvironment('http://localhost/?demo=1&scenario=forked-scalar#/market').cleanup
-})
-
-afterEach(async () => {
-	await cleanup?.()
-	cleanup = undefined
-	cleanupDom?.()
-	cleanupDom = undefined
+installDomTestLifecycle({
+	afterTest: async () => {
+		await cleanup?.()
+		cleanup = undefined
+	},
+	url: 'http://localhost/?demo=1&scenario=forked-scalar#/market',
 })
 
 function scalarContext(): Extract<ForkMigrationContext, { kind: 'scalar' }> {

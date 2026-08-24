@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, concatHex, encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
 import { Zoltar_Zoltar, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { CarriedDepositProof, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, ReportingSettlementState, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -9,6 +9,7 @@ import { getEscalationSideLabel, getReportingOutcomeKey, getReportingOutcomeValu
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { loadMarketDetails } from './zoltar.js'
+import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, compareBigintAscending, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
 const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
@@ -28,9 +29,7 @@ const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 	},
 ] as const
 const CONTRACT_PAGE_SIZE = 30n
-const NULLIFIER_DEPTH = 64
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
-const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
@@ -452,171 +451,6 @@ async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Pick<
 		}))
 }
 
-function hashCarryLeaf(leaf: CarryLeafViewStruct, outcome: ReportingOutcomeKey): Hex {
-	return keccak256(encodeAbiParameters(CARRY_LEAF_ABI, [leaf.depositor, getReportingOutcomeValue(outcome), leaf.amountAttoRep, leaf.parentDepositIndex, leaf.cumulativeAmountAttoRep, leaf.sourceNodeId]))
-}
-
-function hashCarryParent(left: Hex, right: Hex): Hex {
-	return keccak256(concatHex([left, right]))
-}
-
-function bagCarryPeaks(peaks: readonly Hex[]): Hex {
-	if (peaks.length === 0) return ('0x' + '00'.repeat(32)) as Hex
-	let root = peaks[peaks.length - 1]
-	if (root === undefined) throw new Error('Missing carry peak root')
-	for (let index = peaks.length - 1; index > 0; index -= 1) {
-		const previousPeak = peaks[index - 1]
-		if (previousPeak === undefined) throw new Error('Missing carry peak root')
-		root = hashCarryParent(previousPeak, root)
-	}
-	return root
-}
-
-function buildCarryPeakHeights(leafCount: bigint) {
-	const peakHeights: number[] = []
-	let remainingLeafCount = leafCount
-	let currentHeight = 0
-	while (remainingLeafCount > 0n) {
-		if ((remainingLeafCount & 1n) === 1n) peakHeights.unshift(currentHeight)
-		remainingLeafCount >>= 1n
-		currentHeight += 1
-	}
-	return peakHeights
-}
-
-function compareBigintAscending(left: bigint, right: bigint) {
-	if (left < right) return -1
-	if (left > right) return 1
-	return 0
-}
-
-function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
-	const leafCount = BigInt(leafHashes.length)
-	const peakHeights = buildCarryPeakHeights(leafCount)
-	let offset = 0
-	let targetPeakHeight: number | undefined
-	let targetPeakLeaves: Hex[] | undefined
-	let targetPeakOffset: number | undefined
-	const peakRootsByHeight = new Map<number, Hex>()
-	for (const peakHeight of peakHeights) {
-		const peakSize = 1 << peakHeight
-		const peakLeaves = leafHashes.slice(offset, offset + peakSize)
-		let levelHashes = [...peakLeaves]
-		while (levelHashes.length > 1) {
-			const nextLevelHashes: Hex[] = []
-			for (let index = 0; index < levelHashes.length; index += 2) {
-				const left = levelHashes[index]
-				const right = levelHashes[index + 1]
-				if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
-				nextLevelHashes.push(hashCarryParent(left, right))
-			}
-			levelHashes = nextLevelHashes
-		}
-		const peakRoot = levelHashes[0]
-		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
-		peakRootsByHeight.set(peakHeight, peakRoot)
-		if (targetLeafIndex >= offset && targetLeafIndex < offset + peakSize) {
-			targetPeakHeight = peakHeight
-			targetPeakLeaves = peakLeaves
-			targetPeakOffset = offset
-		}
-		offset += peakSize
-	}
-	if (targetPeakHeight === undefined || targetPeakLeaves === undefined || targetPeakOffset === undefined) {
-		throw new Error('Target carry leaf is not inside the Merkle Mountain Range')
-	}
-	let relativeLeafIndex = targetLeafIndex - targetPeakOffset
-	const peakRelativeLeafIndex = relativeLeafIndex
-	let levelHashes = [...targetPeakLeaves]
-	const merkleMountainRangeSiblings: Hex[] = []
-	while (levelHashes.length > 1) {
-		const siblingIndex = relativeLeafIndex ^ 1
-		const siblingHash = levelHashes[siblingIndex]
-		if (siblingHash === undefined) throw new Error('Missing carry Merkle Mountain Range sibling')
-		merkleMountainRangeSiblings.push(siblingHash)
-		const nextLevelHashes: Hex[] = []
-		for (let index = 0; index < levelHashes.length; index += 2) {
-			const left = levelHashes[index]
-			const right = levelHashes[index + 1]
-			if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
-			nextLevelHashes.push(hashCarryParent(left, right))
-		}
-		levelHashes = nextLevelHashes
-		relativeLeafIndex = Math.floor(relativeLeafIndex / 2)
-	}
-	const orderedPeakHeights = [...peakRootsByHeight.keys()].sort((left, right) => left - right)
-	for (const peakHeight of orderedPeakHeights) {
-		if (peakHeight === targetPeakHeight) continue
-		const peakRoot = peakRootsByHeight.get(peakHeight)
-		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
-		merkleMountainRangeSiblings.push(peakRoot)
-	}
-	const orderedPeaks = orderedPeakHeights.map(peakHeight => {
-		const peakRoot = peakRootsByHeight.get(peakHeight)
-		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
-		return peakRoot
-	})
-	const root = bagCarryPeaks(orderedPeaks)
-	return { merkleMountainRangePeakIndex: BigInt(targetPeakHeight), merkleMountainRangeSiblings, peakRelativeLeafIndex, root }
-}
-
-function buildZeroHashes() {
-	const zeroHashes: Hex[] = [('0x' + '00'.repeat(32)) as Hex]
-	let currentHash = ('0x' + '00'.repeat(32)) as Hex
-	for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-		currentHash = hashCarryParent(currentHash, currentHash)
-		zeroHashes.push(currentHash)
-	}
-	return zeroHashes
-}
-
-class SparseNullifier {
-	private readonly nodes = new Map<string, Hex>()
-	private readonly zeroHashes = buildZeroHashes()
-
-	constructor(consumedParentDepositIndexes: readonly bigint[]) {
-		for (const parentDepositIndex of consumedParentDepositIndexes) this.consume(parentDepositIndex)
-	}
-
-	private getNode(level: number, index: bigint) {
-		return this.nodes.get(`${level}:${index.toString()}`) ?? this.zeroHashes[level]
-	}
-
-	getProof(parentDepositIndex: bigint) {
-		const siblings: Hex[] = []
-		let index = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
-		for (let level = 0; level < NULLIFIER_DEPTH; level += 1) {
-			const siblingIndex = index ^ 1n
-			const siblingHash = this.getNode(level, siblingIndex)
-			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
-			siblings.push(siblingHash)
-			index >>= 1n
-		}
-		return siblings
-	}
-
-	consume(parentDepositIndex: bigint) {
-		let index = BigInt.asUintN(64, BigInt(keccak256(encodeAbiParameters(parseAbiParameters('uint256 parentDepositIndex'), [parentDepositIndex]))))
-		let currentHash = ('0x' + '00'.repeat(31) + '01') as Hex
-		for (let level = 0; level < NULLIFIER_DEPTH; level += 1) {
-			this.nodes.set(`${level}:${index.toString()}`, currentHash)
-			const siblingIndex = index ^ 1n
-			const siblingHash = this.getNode(level, siblingIndex)
-			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
-			currentHash = (index & 1n) === 0n ? hashCarryParent(currentHash, siblingHash) : hashCarryParent(siblingHash, currentHash)
-			index >>= 1n
-		}
-		this.nodes.set(`${NULLIFIER_DEPTH}:0`, currentHash)
-	}
-
-	getRoot() {
-		const root = this.nodes.get(`${NULLIFIER_DEPTH}:0`)
-		const fallbackRoot = this.zeroHashes[NULLIFIER_DEPTH]
-		if (fallbackRoot === undefined) throw new Error('Missing empty nullifier root')
-		return root ?? fallbackRoot
-	}
-}
-
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
@@ -991,7 +825,7 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 		)
 		if (reconstructedRoot !== snapshotRoot) throw new Error('Parent carry snapshot root is not locally reconstructible.')
 	}
-	const nullifierTree = new SparseNullifier(consumedParentDepositIndexes)
+	const nullifierTree = createSparseNullifier(consumedParentDepositIndexes)
 	if (nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []

@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { Fragment, type ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -12,13 +12,12 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
-import { estimateRepPurchased } from '../lib/truthAuctionBook.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import type { ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+
+export { clampPercentage, estimateBidRep, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, isFullReadClient } from './ForkAuctionPresentationState.js'
 
 function sameBigIntArray(left: bigint[], right: bigint[]) {
 	return left.length === right.length && left.every((value, index) => value === right[index])
@@ -32,16 +31,6 @@ export type DisplayMetric = {
 	label: string
 	value: ComponentChildren
 }
-type TruthAuctionStateBadge = {
-	label: string
-	tone: 'blocked' | 'muted' | 'ok' | 'pending'
-}
-
-type MigrationStateBadge = {
-	label: string
-	tone: 'muted' | 'ok' | 'pending'
-}
-
 export const FORK_MIGRATION_DURATION = 4_838_400n
 const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
@@ -479,87 +468,4 @@ export function ForkAuctionOutcomeStage({
 			{renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurityPools, renderSelectedOutcomeChildPoolNotice })}
 		</fieldset>
 	)
-}
-
-export function estimateBidRep(bidAmount: string, bidPrice: bigint | undefined) {
-	if (bidPrice === undefined) return undefined
-	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseTruthAuctionAmountInput(bidAmount)
-	if (parsedBidAmount === undefined) return undefined
-	return estimateRepPurchased(parsedBidAmount, bidPrice)
-}
-export function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
-	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp <= migrationEndsAt) return forkAuctionCopy.truthAuctionMigrationPendingDetail
-	return undefined
-}
-
-export function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
-	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp > migrationEndsAt) return forkAuctionCopy.parentMigrationExpiredDetail
-	return undefined
-}
-
-export function getTruthAuctionBypassReason({ migratedAttoRep, parentSettlementCollateralAttoEthAmount, auctionableAttoRepAtFork }: { migratedAttoRep: bigint; parentSettlementCollateralAttoEthAmount: bigint | undefined; auctionableAttoRepAtFork: bigint | undefined }) {
-	if (parentSettlementCollateralAttoEthAmount === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
-	if (auctionableAttoRepAtFork === undefined) return undefined
-	if (auctionableAttoRepAtFork === 0n) return forkAuctionCopy.truthAuctionNoRepDetail
-	if (migratedAttoRep >= auctionableAttoRepAtFork) return forkAuctionCopy.childUniverseFullyMigratedDetail
-	return undefined
-}
-
-export function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; truthAuction: TruthAuctionMetrics | undefined; truthAuctionEndsAt: bigint | undefined }) {
-	if (truthAuction === undefined) return forkAuctionCopy.loadingTruthAuction
-	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
-	if (truthAuctionEndsAt === undefined) return forkAuctionCopy.auctionEndTimeUnavailable
-	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp <= truthAuctionEndsAt) return forkAuctionCopy.auctionOngoingReason
-	return undefined
-}
-
-export function clampPercentage(value: bigint, maxValue: bigint) {
-	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
-}
-
-export function getTruthAuctionStateBadge({
-	hasSelectedAuctionChildPool,
-	isStartTruthAuctionInProgress,
-	startTruthAuctionCountdown,
-	truthAuction,
-	truthAuctionStartedAt,
-}: {
-	hasSelectedAuctionChildPool: boolean
-	isStartTruthAuctionInProgress: boolean
-	startTruthAuctionCountdown: bigint | undefined
-	truthAuction: TruthAuctionMetrics | undefined
-	truthAuctionStartedAt: bigint
-}): TruthAuctionStateBadge {
-	if (truthAuction === undefined) {
-		if (isStartTruthAuctionInProgress || (hasSelectedAuctionChildPool && truthAuctionStartedAt === 0n && startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n)) {
-			return { label: commonCopy.pending, tone: 'pending' }
-		}
-		if (truthAuctionStartedAt > 0n) return { label: forkAuctionCopy.started, tone: 'pending' }
-		return { label: forkAuctionCopy.inactive, tone: 'muted' }
-	}
-	if (!truthAuction.finalized) {
-		if (truthAuction.hitCap && truthAuction.clearingTick !== undefined && truthAuction.clearingPrice !== undefined) {
-			return { label: forkAuctionCopy.clearing, tone: 'pending' }
-		}
-		return { label: forkAuctionCopy.open, tone: 'pending' }
-	}
-	if (truthAuction.underfunded) return { label: forkAuctionCopy.shortfall, tone: 'blocked' }
-	if (truthAuction.hitCap) return { label: commonCopy.settled, tone: 'ok' }
-	return { label: forkAuctionCopy.unfilled, tone: 'muted' }
-}
-
-export function getMigrationStateBadge({ currentTimestamp, effectiveTruthAuctionStartedAt, migrationEndsAt }: { currentTimestamp: bigint | undefined; effectiveTruthAuctionStartedAt: bigint | undefined; migrationEndsAt: bigint | undefined }): MigrationStateBadge {
-	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStartedBadgeLabel, tone: 'muted' }
-	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: forkAuctionCopy.closed, tone: 'ok' }
-	if (currentTimestamp !== undefined && currentTimestamp >= migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' }
-	return { label: forkAuctionCopy.open, tone: 'pending' }
-}
-
-export function isFullReadClient(client: Pick<ReadClient, 'readContract'> | ReadClient | undefined): client is ReadClient {
-	return client !== undefined && 'getBlock' in client && 'multicall' in client
 }

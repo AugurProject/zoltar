@@ -29,6 +29,7 @@ type UseDeploymentFlowParameters = {
 export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
+	const deployNextMissingPending = useSignal(false)
 	const errorMessage = useSignal<string | undefined>(undefined)
 
 	const deployStep = async (stepId: DeploymentStepId, feedbackAction: DeploymentStepId | 'deployNextMissing' = stepId) => {
@@ -101,15 +102,22 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 	}
 
 	const deployNextMissing = async () => {
-		const nextMissing = findNextDeployableStep(deploymentStatuses)
-		if (nextMissing === undefined) return
-		await deployStep(nextMissing.id, 'deployNextMissing')
+		if (deployNextMissingPending.value) return
+		deployNextMissingPending.value = true
+		try {
+			const nextMissing = findNextDeployableStep(deploymentStatuses)
+			if (nextMissing === undefined) return
+			await deployStep(nextMissing.id, 'deployNextMissing')
+		} finally {
+			deployNextMissingPending.value = false
+		}
 	}
 
 	return {
 		busyStepId: busyStepId.value,
 		deploymentFeedback: deploymentFeedback.value,
 		deployNextMissing,
+		deployNextMissingPending: deployNextMissingPending.value,
 		deployStep,
 		errorMessage: errorMessage.value,
 	}

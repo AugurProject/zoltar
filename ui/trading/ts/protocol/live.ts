@@ -1,134 +1,19 @@
-import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Abi, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
+import { ReputationToken_ReputationToken, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 
-const deploymentComponents = [
-	{ name: 'securityPool', type: 'address' },
-	{ name: 'truthAuction', type: 'address' },
-	{ name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
-	{ name: 'shareToken', type: 'address' },
-	{ name: 'parent', type: 'address' },
-	{ name: 'universeId', type: 'uint248' },
-	{ name: 'questionId', type: 'uint256' },
-	{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
-	{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
-	{ name: 'currentRetentionRate', type: 'uint256' },
-	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-] as const
-
-const poolAccountingComponents = [
-	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-	{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
-	{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
-	{ name: 'feeIndex', type: 'uint256' },
-	{ name: 'feeIndexRemainder', type: 'uint256' },
-	{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-	{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
-	{ name: 'currentRetentionRate', type: 'uint256' },
-] as const
-
-const securityPoolFactoryAbi = [
-	{ type: 'function', name: 'securityPoolDeploymentCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'securityPoolDeploymentsRange',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		outputs: [{ name: 'deployments', type: 'tuple[]', components: deploymentComponents }],
-	},
-] as const satisfies Abi
-
-const securityPoolAbi = [
-	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'repToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'shareTokenSupplyAttoShares', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'getCurrentMintingCapacityAttoEth', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'getPoolAccountingSnapshot', stateMutability: 'view', inputs: [], outputs: [{ name: 'snapshot', type: 'tuple', components: poolAccountingComponents }] },
-	{ type: 'function', name: 'systemState', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
-	{ type: 'function', name: 'getVaultCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'securityPoolForker', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'redeemCompleteSet', stateMutability: 'nonpayable', inputs: [{ name: 'amountAttoShares', type: 'uint256' }], outputs: [] },
-	{ type: 'function', name: 'redeemShares', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-] as const satisfies Abi
-
-const erc20BalanceAbi = [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
-
-const zoltarAbi = [{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
-
-const questionDataAbi = [
-	{
-		type: 'function',
-		name: 'questions',
-		stateMutability: 'view',
-		inputs: [{ name: 'questionId', type: 'uint256' }],
-		outputs: [
-			{ name: 'title', type: 'string' },
-			{ name: 'description', type: 'string' },
-			{ name: 'startTime', type: 'uint256' },
-			{ name: 'endTime', type: 'uint256' },
-			{ name: 'numTicks', type: 'uint120' },
-			{ name: 'displayValueMin', type: 'int256' },
-			{ name: 'displayValueMax', type: 'int256' },
-			{ name: 'answerUnit', type: 'string' },
-		],
-	},
-] as const satisfies Abi
-
-const shareTokenAbi = [
-	{
-		type: 'function',
-		name: 'balanceOf',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'account', type: 'address' },
-			{ name: 'id', type: 'uint256' },
-		],
-		outputs: [{ type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'isApprovedForAll',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'account', type: 'address' },
-			{ name: 'operator', type: 'address' },
-		],
-		outputs: [{ type: 'bool' }],
-	},
-	{
-		type: 'function',
-		name: 'setApprovalForAll',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'operator', type: 'address' },
-			{ name: 'approved', type: 'bool' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'migrate',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'fromId', type: 'uint256' },
-			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
-		],
-		outputs: [],
-	},
-] as const satisfies Abi
+const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const erc20BalanceAbi = ReputationToken_ReputationToken.abi
+const zoltarAbi = Zoltar_Zoltar.abi
+const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
+const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 
 const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
@@ -348,28 +233,6 @@ export async function validateLiveDeployment(client: PublicClient, configuration
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
-}
-
-export async function connectWallet(provider: InjectedEthereum) {
-	const accounts = await provider.request({ method: 'eth_requestAccounts', params: [] })
-	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no account')
-	return getAddress(accounts[0])
-}
-
-export async function connectedWalletAccount(provider: InjectedEthereum) {
-	const accounts = await provider.request({ method: 'eth_accounts', params: [] })
-	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no connected account')
-	return getAddress(accounts[0])
-}
-
-export async function walletChainId(provider: InjectedEthereum) {
-	const result = await provider.request({ method: 'eth_chainId', params: [] })
-	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('Wallet returned an invalid chain ID')
-	return bigintToSafeNumber(BigInt(result), 'Wallet chain ID')
-}
-
-export async function switchWalletChain(provider: InjectedEthereum, chainId: number) {
-	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${chainId.toString(16)}` }] })
 }
 
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {

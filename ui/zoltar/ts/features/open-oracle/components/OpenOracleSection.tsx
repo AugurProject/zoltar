@@ -33,11 +33,11 @@ import {
 	getSelectedWithdrawalBalance,
 	loadBrowseReportPage,
 	renderOpenOracleFieldError,
-	renderReportDetailsCard,
 	renderReportSummaryCard,
 	resolveBrowseStatusFilter,
 	type SelectedReportModal,
 } from './OpenOracleReportContent.js'
+import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
 export function OpenOracleSection({
 	activeView,
 	accountState,
@@ -560,33 +560,33 @@ export function OpenOracleSection({
 
 			{view === 'selected-report' ? (
 				<div className='workflow-stack route-workflow-stack open-oracle-report-stack'>
-					{renderReportDetailsCard(
-						effectiveOpenOracleReportDetails,
-						openOracleForm,
-						openOracleTokenAccessState,
-						openOracleDisputeSubmission,
-						openOracleActiveAction,
-						openOracleActiveWithdrawalBalance,
-						openOracleResult,
-						openOracleReportLookupState,
-						openOracleWithdrawalBalanceChecking,
-						openOracleWithdrawalReviewMessage,
-						accountState.address,
-						isConnected,
-						isOnActiveAppChain,
-						selectedReportModal,
-						onApproveToken1,
-						onApproveToken2,
-						onDisputeReport,
-						onLoadOracleReport,
-						onOpenOracleFormChange,
-						changeSelectedReportModal,
-						onSettleReport,
-						onWithdrawOpenOracleBalance,
-						openOracleWithdrawableBalances,
-						openOracleWithdrawableBalancesError,
-						openOracleWithdrawableBalancesLoading,
-					)}
+					<OpenOracleReportDetailsCard
+						accountAddress={accountState.address}
+						isConnected={isConnected}
+						isOnActiveAppChain={isOnActiveAppChain}
+						onApproveToken1={onApproveToken1}
+						onApproveToken2={onApproveToken2}
+						onDisputeReport={onDisputeReport}
+						onLoadOracleReport={onLoadOracleReport}
+						onOpenOracleFormChange={onOpenOracleFormChange}
+						onSelectedReportModalChange={changeSelectedReportModal}
+						onSettleReport={onSettleReport}
+						onWithdrawOpenOracleBalance={onWithdrawOpenOracleBalance}
+						openOracleActiveAction={openOracleActiveAction}
+						openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
+						openOracleDisputeSubmission={openOracleDisputeSubmission}
+						openOracleForm={openOracleForm}
+						openOracleReportDetails={effectiveOpenOracleReportDetails}
+						openOracleReportLookupState={openOracleReportLookupState}
+						openOracleResult={openOracleResult}
+						openOracleTokenAccessState={openOracleTokenAccessState}
+						openOracleWithdrawableBalances={openOracleWithdrawableBalances}
+						openOracleWithdrawableBalancesError={openOracleWithdrawableBalancesError}
+						openOracleWithdrawableBalancesLoading={openOracleWithdrawableBalancesLoading}
+						openOracleWithdrawalBalanceChecking={openOracleWithdrawalBalanceChecking}
+						openOracleWithdrawalReviewMessage={openOracleWithdrawalReviewMessage}
+						selectedReportModal={selectedReportModal}
+					/>
 				</div>
 			) : undefined}
 

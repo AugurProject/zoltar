@@ -151,7 +151,7 @@ async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock>
 	}
 }
 
-type UseOnchainStateOptions = {
+export type UseOnchainStateOptions = {
 	activeEnvironmentNonce?: number
 	enableChainClock?: boolean
 	onSupportedNetworkChange?: (chainId: string) => void

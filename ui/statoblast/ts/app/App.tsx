@@ -1,6 +1,5 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
@@ -17,8 +16,7 @@ import { getDeploymentSections } from '@zoltar/ui-zoltar/features/deployment/lib
 import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js'
-import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
-import { buildProtocolHookConfigs, useProtocolAppRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolAppRuntime.js'
+import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useOpenOracleOperations } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { getOpenOracleViewOptions } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracleNavigation.js'
 import { usePriceOracleManager } from '@zoltar/ui-zoltar/features/open-oracle/hooks/usePriceOracleManager.js'
@@ -34,7 +32,6 @@ import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
-import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
@@ -48,22 +45,7 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import { statoblastRouting } from '../lib/routing.js'
 
 export function App() {
-	const deployNextMissingPending = useSignal(false)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
-	const { activeEnvironmentNonce, followSupportedWalletNetwork, setActiveEnvironmentNonce, supportedNetworkChangeCoordinator, transactionTray } = useProtocolAppRuntime({
-		replaceEnvironment: async canCommit => {
-			let commitAllowed = false
-			await initializeStatoblastActiveEnvironment(window.location, {
-				shouldCommit: () => {
-					commitAllowed = canCommit()
-					return commitAllowed
-				},
-			})
-			return commitAllowed
-		},
-		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
-	})
-	const { transactionState } = transactionTray
 	const {
 		activeUniverseId,
 		openOracleReportId: urlOpenOracleReportId,
@@ -84,7 +66,10 @@ export function App() {
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
+		activeEnvironmentNonce,
 		applicationDeploymentComplete,
+		baseHookConfig,
+		canReadOnchainData,
 		changeWallet,
 		chainClockError,
 		connectWallet,
@@ -92,36 +77,44 @@ export function App() {
 		currentTimestamp,
 		deploymentStatusError,
 		deploymentStatuses,
+		disconnectWallet,
 		environmentBootstrapError,
 		environmentReady,
 		errorMessages: onchainErrorMessages,
-		readBackendMessage,
-		readBackendValidated,
-		readBackendStatus,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
-		isManagingWallet,
 		isLoadingDeploymentStatuses,
+		isManagingWallet,
+		isOnActiveAppChain,
 		isRefreshing,
+		readBackendMessage,
+		readBackendReady,
+		readBackendStatus,
 		refreshState,
+		setActiveEnvironmentNonce,
 		setDeploymentStatuses,
-		disconnectWallet,
 		switchNetwork,
+		transactionTray,
 		walletBootstrapComplete,
-	} = useOnchainState(
-		{
-			activeEnvironmentNonce,
-			enableChainClock: route !== 'deploy',
-			...(followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
-		},
+		walletScopedAccountAddress,
+		walletScopedHookConfig,
+	} = useProtocolOnchainRuntime({
+		enableChainClock: route !== 'deploy',
 		onchainStateDependencies,
-	)
-	const readBackendReady = readBackendValidated && readBackendMessage === undefined
-	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
-	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
-	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
-	const { baseHookConfig, walletScopedHookConfig } = buildProtocolHookConfigs({ accountAddress: accountState.address, walletScopedAccountAddress, refreshState, transactionTray })
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+		replaceEnvironment: async canCommit => {
+			let commitAllowed = false
+			await initializeStatoblastActiveEnvironment(window.location, {
+				shouldCommit: () => {
+					commitAllowed = canCommit()
+					return commitAllowed
+				},
+			})
+			return commitAllowed
+		},
+		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
+	})
+	const { transactionState } = transactionTray
+	const { busyStepId, deployNextMissing, deployNextMissingPending, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
 	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
@@ -159,35 +152,7 @@ export function App() {
 		withdrawRep,
 	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
-	const {
-		approveToken1,
-		approveToken2,
-		cancelWithdrawalBalanceCheck,
-		createOpenOracleGame,
-		disputeReport,
-		loadOracleReport,
-		loadingOpenOracleCreate,
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleDisputeSubmission,
-		openOracleError,
-		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
-		setOpenOracleCreateForm,
-		setOpenOracleForm,
-		settleReport,
-		withdrawBalance,
-	} = useOpenOracleOperations({
+	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: route === 'open-oracle' && canReadOnchainData,
 		onReportSettled: async () => {
@@ -353,15 +318,6 @@ export function App() {
 		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
 	}
-	const onDeployNextMissing = async () => {
-		if (deployNextMissingPending.value) return
-		deployNextMissingPending.value = true
-		try {
-			await deployNextMissing()
-		} finally {
-			deployNextMissingPending.value = false
-		}
-	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
 		if (securityVaultRepRefreshHash === undefined) {
@@ -412,14 +368,14 @@ export function App() {
 		busyStepId,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
 		deploymentStatusError,
-		deployNextMissingPending: deployNextMissingPending.value,
+		deployNextMissingPending,
 		deploymentSections,
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onDeploy: deployStep,
-		onDeployNextMissing: () => void onDeployNextMissing(),
+		onDeployNextMissing: () => void deployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	}
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
@@ -633,11 +589,11 @@ export function App() {
 		},
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
+		...openOracleSectionState,
 		accountState,
 		activeView: activeOpenOracleView,
 		environmentReady: canReadOnchainData,
 		environmentRefreshKey: activeEnvironmentNonce,
-		loadingOpenOracleCreate,
 		onActiveViewChange: view => setOpenOracleView(view),
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
@@ -649,22 +605,7 @@ export function App() {
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleError,
-		openOracleDisputeSubmission,
 		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
 	if (route === 'security-pools') {

@@ -1,7 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as marketCopy from '../copy/market.js'
 import * as zoltarCopy from '../copy/zoltar.js'
-import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
@@ -13,8 +12,7 @@ import { OverviewPanels } from './components/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlow.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
-import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
-import { buildProtocolHookConfigs, useProtocolAppRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolAppRuntime.js'
+import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
 import { getOpenOracleViewOptions } from '../features/open-oracle/lib/openOracleNavigation.js'
 import { useZoltarOperations } from '../features/universes/hooks/useZoltarOperations.js'
@@ -25,7 +23,6 @@ import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { getDeploymentSections } from '../features/deployment/lib/deployment.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -37,8 +34,46 @@ import type { Route } from '../types/app.js'
 import { zoltarRouting } from '../lib/routing.js'
 
 export function App() {
-	const deployNextMissingPending = useSignal(false)
-	const { activeEnvironmentNonce, followSupportedWalletNetwork, setActiveEnvironmentNonce, supportedNetworkChangeCoordinator, transactionTray } = useProtocolAppRuntime({
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setZoltarView, zoltarView } = useUrlState()
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
+	const { navigate, route } = useHashRoute()
+	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
+	const {
+		accountState,
+		activeEnvironmentNonce,
+		applicationDeploymentComplete,
+		baseHookConfig,
+		canReadOnchainData,
+		changeWallet,
+		chainClockError,
+		connectWallet,
+		currentBlockNumber,
+		currentTimestamp,
+		deploymentStatusError,
+		deploymentStatuses,
+		disconnectWallet,
+		environmentBootstrapError,
+		environmentReady,
+		errorMessages: onchainErrorMessages,
+		hasLoadedDeploymentStatuses,
+		isConnectingWallet,
+		isLoadingDeploymentStatuses,
+		isManagingWallet,
+		isOnActiveAppChain,
+		isRefreshing,
+		readBackendMessage,
+		readBackendReady,
+		readBackendStatus,
+		refreshState,
+		setActiveEnvironmentNonce,
+		setDeploymentStatuses,
+		switchNetwork,
+		transactionTray,
+		walletBootstrapComplete,
+		walletScopedHookConfig,
+	} = useProtocolOnchainRuntime({
+		enableChainClock: route !== 'deploy',
+		onchainStateDependencies,
 		replaceEnvironment: async canCommit => {
 			let commitAllowed = false
 			await initializeActiveEnvironment(window.location, undefined, {
@@ -51,50 +86,7 @@ export function App() {
 		},
 	})
 	const { transactionState } = transactionTray
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setZoltarView, zoltarView } = useUrlState()
-	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
-	const { navigate, route } = useHashRoute()
-	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
-	const {
-		accountState,
-		applicationDeploymentComplete,
-		changeWallet,
-		chainClockError,
-		connectWallet,
-		currentBlockNumber,
-		currentTimestamp,
-		deploymentStatusError,
-		deploymentStatuses,
-		environmentBootstrapError,
-		environmentReady,
-		errorMessages: onchainErrorMessages,
-		readBackendMessage,
-		readBackendValidated,
-		readBackendStatus,
-		hasLoadedDeploymentStatuses,
-		isConnectingWallet,
-		isManagingWallet,
-		isLoadingDeploymentStatuses,
-		isRefreshing,
-		refreshState,
-		setDeploymentStatuses,
-		disconnectWallet,
-		switchNetwork,
-		walletBootstrapComplete,
-	} = useOnchainState(
-		{
-			activeEnvironmentNonce,
-			enableChainClock: route !== 'deploy',
-			...(followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
-		},
-		onchainStateDependencies,
-	)
-	const readBackendReady = readBackendValidated && readBackendMessage === undefined
-	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
-	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
-	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
-	const { baseHookConfig, walletScopedHookConfig } = buildProtocolHookConfigs({ accountAddress: accountState.address, walletScopedAccountAddress, refreshState, transactionTray })
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { busyStepId, deployNextMissing, deployNextMissingPending, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
 	const {
 		approveZoltarForkRep,
 		createChildUniverse,
@@ -137,35 +129,7 @@ export function App() {
 		zoltarUniverseError,
 		zoltarUniverseMissing,
 	} = useZoltarOperations({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
-	const {
-		approveToken1,
-		approveToken2,
-		cancelWithdrawalBalanceCheck,
-		createOpenOracleGame,
-		disputeReport,
-		loadOracleReport,
-		loadingOpenOracleCreate,
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleDisputeSubmission,
-		openOracleError,
-		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
-		setOpenOracleCreateForm,
-		setOpenOracleForm,
-		settleReport,
-		withdrawBalance,
-	} = useOpenOracleOperations({
+	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: route === 'open-oracle' && canReadOnchainData,
 	})
@@ -207,27 +171,18 @@ export function App() {
 		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
 		urlOpenOracleReportId,
 	})
-	const onDeployNextMissing = async () => {
-		if (deployNextMissingPending.value) return
-		deployNextMissingPending.value = true
-		try {
-			await deployNextMissing()
-		} finally {
-			deployNextMissingPending.value = false
-		}
-	}
 	const deployRouteContentProps: DeploymentRouteContentProps = {
 		accountAddress: accountState.address,
 		busyStepId,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
 		deploymentStatusError,
-		deployNextMissingPending: deployNextMissingPending.value,
+		deployNextMissingPending,
 		deploymentSections,
 		deploymentStatuses,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
 		onDeploy: deployStep,
-		onDeployNextMissing: () => void onDeployNextMissing(),
+		onDeployNextMissing: () => void deployNextMissing(),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	}
 	const zoltarRouteContentProps: MarketRouteContentProps = {
@@ -276,6 +231,7 @@ export function App() {
 		zoltarUniverseState,
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
+		...openOracleSectionState,
 		activeView: activeOpenOracleView,
 		accountState,
 		environmentReady: canReadOnchainData,
@@ -297,23 +253,7 @@ export function App() {
 		},
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
-		loadingOpenOracleCreate,
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleError,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleDisputeSubmission,
 		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
 	}
 	const tabNavigationTabs: RouteTabDefinition[] = [
 		...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []),

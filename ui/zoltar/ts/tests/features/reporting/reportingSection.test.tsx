@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
@@ -13,7 +13,7 @@ import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_GAM
 import type { AccountState, ReportingFormState } from '../../../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingSectionProps } from '../../../features/types.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
@@ -258,7 +258,6 @@ function findProjectionPreviewText() {
 	return findProjectionPreviewElement()?.textContent ?? ''
 }
 describe('ReportingSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	test('describes reporting timing with question terminology', () => {
@@ -278,16 +277,11 @@ describe('ReportingSection', () => {
 		}
 	})
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('starts unselected until the user explicitly chooses an outcome side', async () => {

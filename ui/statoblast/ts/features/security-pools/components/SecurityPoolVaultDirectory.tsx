@@ -1,4 +1,4 @@
-import * as securityPoolCopy from '@zoltar/ui-zoltar/copy/securityPool.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'

@@ -299,8 +299,7 @@ function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile())
 	})
 }
 
-function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	const steps = getDeploymentSteps()
+export function buildDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
 	let maskIndex = 0n
 	const deploymentStatuses = steps.map(step => {
 		if (step.id === 'deploymentStatusOracle')
@@ -322,6 +321,10 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
+function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
+	return buildDeploymentStatusSnapshot(getDeploymentSteps(), deployedMask, deploymentStatusOracleDeployed)
+}
+
 function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) {
 	return createDeploymentStatusOracleAddressHelper({
 		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
@@ -330,7 +333,7 @@ function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) 
 	}).getDeploymentStatusOracleAddress()
 }
 
-async function deployViaProxy(client: WriteClient, bytecode: Hex) {
+export async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	markDeploymentTransactionPrepared(client, {
 		data: bytecode,
 		functionName: 'Deploy contract through deterministic proxy',
@@ -404,15 +407,19 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 	return resolvedDeployHash
 }
 
-async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
+export async function loadDeploymentStatusOracleMaskAtAddress(client: Pick<ReadClient, 'readContract'>, address: Address): Promise<bigint> {
 	return BigInt(
 		await client.readContract({
 			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 			functionName: 'getDeploymentMask',
-			address: getDeploymentStatusOracleAddress(),
+			address,
 			args: [],
 		}),
 	)
+}
+
+async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
+	return await loadDeploymentStatusOracleMaskAtAddress(client, getDeploymentStatusOracleAddress())
 }
 
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: RpcStateRetryWait): DeploymentStep[] {

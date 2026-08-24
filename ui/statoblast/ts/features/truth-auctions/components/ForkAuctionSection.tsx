@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'

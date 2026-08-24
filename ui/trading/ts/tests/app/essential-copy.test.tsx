@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { App, currentRoute } from '../../app/App.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
@@ -7,18 +7,14 @@ import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../feature
 const forbiddenCopy = ['illustrative', 'Demo preview only', 'Demo discovery snapshot', 'Simulated account', 'Demo configuration', 'Demo data is simulated', 'Simulate enter', 'Simulate insured']
 
 describe('essential trading copy', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/?demo=1#/market').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/?demo=1#/market',
 	})
 
 	test('does not let the removed demo query expose a parallel application', async () => {

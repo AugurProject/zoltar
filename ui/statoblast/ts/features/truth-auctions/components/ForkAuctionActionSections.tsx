@@ -11,7 +11,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { renderTruthAuctionCapacityOwnershipNotice, renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'

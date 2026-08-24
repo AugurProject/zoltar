@@ -9,7 +9,7 @@ import type { ActiveReportingDetails, ListedSecurityPool, ReportingDetails, Repo
 import { EscalationDepositSelectionList } from '@zoltar/ui-zoltar/features/reporting/components/EscalationDepositSelectionList.js'
 import { getEscalationDepositClaimAmount } from '@zoltar/ui-zoltar/features/reporting/lib/reportingDomain.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ForkOutcomeMigrationSeedStatus } from '../hooks/useSelectedAuctionReadState.js'
 import { renderWorkflowMetricGrid } from './ForkAuctionPresentation.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/lib/actionAvailability.js'

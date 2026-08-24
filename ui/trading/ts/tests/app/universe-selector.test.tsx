@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App, currentRoute, tradingDocumentTitle } from '../../app/App.js'
 import { UniverseSelector } from '../../components/UniverseSelector.js'
 import { WalletSummary } from '../../components/WalletSummary.js'
@@ -12,18 +12,14 @@ import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('universe selector', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/markets').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/#/markets',
 	})
 
 	test('selects one universe from the top-level control', async () => {

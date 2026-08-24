@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
 import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { App, resolveCanonicalLiveDeployment } from '../../app/App.js'
 import { createDeploymentReadClient, TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
@@ -120,18 +120,14 @@ describe('trading deployment setup', () => {
 		rpcChainId = '0x1'
 		await expect(resolveCanonicalLiveDeployment([core], () => client)).rejects.toThrow('RPC chain 1 does not match deployment chain 11155111')
 	})
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/markets').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/#/markets',
 	})
 
 	test('automatically verifies selected network settings and exposes the first deployment step', async () => {

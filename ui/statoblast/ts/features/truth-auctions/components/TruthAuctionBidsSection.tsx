@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as forkAuctionCopy from '@zoltar/ui-zoltar/copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'

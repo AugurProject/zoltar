@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
 import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
@@ -70,18 +70,14 @@ function hasButton(label: string) {
 }
 
 describe('live workflow safety boundary', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/?demo=0#/market').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/?demo=0#/market',
 	})
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {

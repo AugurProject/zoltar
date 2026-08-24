@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as liquidationCopy from '@zoltar/ui-zoltar/copy/liquidation.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AddressInfo } from '@zoltar/ui-core-shared/components/AddressInfo.js'

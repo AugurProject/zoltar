@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
@@ -8,7 +8,7 @@ import { ForkAuctionSection } from '../../../features/truth-auctions/components/
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.js'
 import type { AccountState, ForkAuctionFormState, ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, MarketDetails, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
@@ -246,18 +246,13 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 
 installTestRouting()
 describe('ForkAuctionSection', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders the embedded fork workflow navigator and reports stage changes', async () => {

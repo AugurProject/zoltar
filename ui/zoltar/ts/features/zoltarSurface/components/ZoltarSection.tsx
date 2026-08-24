@@ -1,19 +1,15 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import { useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { ChildUniverseDeploymentModal } from '../../universes/components/ChildUniverseDeploymentModal.js'
-import { ChildUniverseDetails } from '../../universes/components/ChildUniverseDetails.js'
-import { ChildUniversesSection, ChildUniverseStatusBadge } from '../../universes/components/ChildUniversesSection.js'
+import { ChildUniverseDeploymentSection } from '../../universes/components/ChildUniverseDeploymentSection.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
-import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
-import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -30,20 +26,6 @@ type ZoltarUniverseOverviewProps = {
 function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateChildUniverseForOutcomeIndex, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse }: ZoltarUniverseOverviewProps) {
 	const hasForked = zoltarUniverse.hasForked === true
 	const currentUniverseName = formatUniverseCollectionLabel([zoltarUniverse.universeId])
-	const [selectedChildOutcomeIndex, setSelectedChildOutcomeIndex] = useState<bigint | undefined>(undefined)
-	const selectedChildUniverse = zoltarUniverse.childUniverses.find(child => child.outcomeIndex === selectedChildOutcomeIndex)
-	const childDeploymentAvailabilityReason = (() => {
-		if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (!hasForked) return marketCopy.childUniversesNotForkedReason
-		return undefined
-	})()
-	const childUniverseRequirements = [
-		{ key: 'forked', label: marketCopy.universeIsForked, resolved: hasForked, ...(hasForked ? {} : { detail: marketCopy.childUniversesNotForkedReason }) },
-		{ key: 'selection', label: marketCopy.childUniverseSelected, resolved: selectedChildUniverse !== undefined, ...(selectedChildUniverse === undefined ? { detail: marketCopy.childDeploymentSelectionRequired } : {}) },
-		{ key: 'wallet', label: marketCopy.walletConnected, resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: marketCopy.childDeploymentWalletRequiredReason }) },
-		{ key: 'exists', label: marketCopy.childUniverseNotAlreadyDeployed, resolved: selectedChildUniverse?.exists !== true, ...(selectedChildUniverse?.exists === true ? { detail: marketCopy.childUniverseDeployedReason } : {}) },
-	]
 
 	return (
 		<>
@@ -51,48 +33,7 @@ function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateCh
 				<MetricField label={commonCopy.universe}>{currentUniverseName}</MetricField>
 				<MetricField label={commonCopy.status}>{hasForked ? commonCopy.forked : marketCopy.unforked}</MetricField>
 			</DataGrid>
-			<ChildUniversesSection
-				childUniverses={zoltarUniverse.childUniverses}
-				emptyMessage={marketCopy.noChildUniverses}
-				headerSubtitle={hasForked ? marketCopy.childUniverseDeploymentHint : undefined}
-				headerTitle={marketCopy.childUniverses}
-				action={child => ({
-					availability: {
-						disabled: childDeploymentAvailabilityReason !== undefined || child.exists,
-						reason: childDeploymentAvailabilityReason ?? (child.exists ? marketCopy.childUniverseDeployedReason : undefined),
-					},
-					label: child.exists ? commonCopy.deployed : marketCopy.createChildUniverse,
-					onClick: () => setSelectedChildOutcomeIndex(child.outcomeIndex),
-					pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
-					pendingLabel: commonCopy.opening,
-				})}
-				renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-				renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isOnActiveAppChain} />}
-				surface='flat'
-			/>
-			<ChildUniverseDeploymentModal
-				actionAvailability={{
-					disabled: selectedChildUniverse === undefined || childDeploymentAvailabilityReason !== undefined || selectedChildUniverse.exists,
-					reason: selectedChildUniverse === undefined ? marketCopy.childDeploymentSelectionRequired : (childDeploymentAvailabilityReason ?? (selectedChildUniverse.exists ? marketCopy.childUniverseDeployedReason : undefined)),
-				}}
-				idleLabel={marketCopy.deployUniverse}
-				isOpen={selectedChildUniverse !== undefined}
-				onClose={() => setSelectedChildOutcomeIndex(undefined)}
-				onConfirm={() => {
-					if (selectedChildUniverse === undefined) return
-					onCreateChildUniverseForOutcomeIndex(selectedChildUniverse.outcomeIndex)
-				}}
-				pending={selectedChildUniverse !== undefined && zoltarChildUniversePendingOutcomeIndex === selectedChildUniverse.outcomeIndex}
-				pendingLabel={marketCopy.deployingUniverse}
-				requirements={childUniverseRequirements}
-				title={marketCopy.createChildUniverseTitle}
-			>
-				{selectedChildUniverse === undefined ? undefined : (
-					<EntityCard className='compact' surface='flat' title={marketCopy.selectedChildUniverse} variant='compact'>
-						<ChildUniverseDetails accountAddress={accountAddress} child={selectedChildUniverse} isSupportedChain={isOnActiveAppChain} />
-					</EntityCard>
-				)}
-			</ChildUniverseDeploymentModal>
+			<ChildUniverseDeploymentSection accountAddress={accountAddress} childUniverses={zoltarUniverse.childUniverses} hasForked={hasForked} isOnActiveAppChain={isOnActiveAppChain} onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex} pendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex} />
 		</>
 	)
 }

@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
@@ -12,7 +12,7 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
@@ -128,21 +128,15 @@ function createEndedPoolState() {
 }
 
 describe('LiquidationModal', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	const defaultCallerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 	const defaultTargetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	function createLiquidationModalProps(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}): Parameters<typeof LiquidationModal>[0] {
