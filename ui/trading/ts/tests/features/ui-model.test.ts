@@ -381,6 +381,29 @@ describe('standalone trading UI model', () => {
 		])
 	})
 
+	test('chunks a selected-universe genesis rebuild within the bounded log range', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 20_000n }
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const result = await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async () => true,
+			async (fromBlock, toBlock) => {
+				ranges.push({ fromBlock, toBlock })
+				if (toBlock - fromBlock + 1n > 10_000n) throw new Error('block range is too large')
+				return [`${fromBlock.toString()}-${toBlock.toString()}`]
+			},
+		)
+		expect(result).toEqual(['0-9999', '10000-19999', '20000-20000'])
+		expect(ranges).toEqual([
+			{ fromBlock: 0n, toBlock: 9_999n },
+			{ fromBlock: 10_000n, toBlock: 19_999n },
+			{ fromBlock: 20_000n, toBlock: 20_000n },
+		])
+	})
+
 	test('does not retain orphan deployment events when the discovery anchor is replaced', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const orphanAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
@@ -412,6 +435,53 @@ describe('standalone trading UI model', () => {
 		).toEqual(['canonical'])
 		expect(index.deployments).toEqual(['canonical'])
 		expect(index.anchor).toEqual(canonicalAnchor)
+	})
+
+	test('clears populated orphan indexes when their canonical rebuild fails', async () => {
+		const eventIndex = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const orphanEventAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		await refreshSecurityPoolDeploymentEventIndex(
+			eventIndex,
+			'chain:factory:universe-7',
+			async () => orphanEventAnchor,
+			async () => true,
+			async () => ['orphan-event'],
+		)
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				eventIndex,
+				'chain:factory:universe-7',
+				async () => {
+					throw new Error('replacement event head unavailable')
+				},
+				async () => false,
+				async () => [],
+			),
+		).rejects.toThrow('replacement event head unavailable')
+		expect(eventIndex.deployments).toEqual([])
+		expect(eventIndex.anchor).toBeUndefined()
+
+		const rangeIndex = createSecurityPoolDeploymentIndex<string, string>()
+		await refreshSecurityPoolDeploymentIndex(
+			rangeIndex,
+			'chain:factory',
+			async () => ({ anchor: 'orphan-block', total: 1n }),
+			async () => true,
+			async () => ['orphan-range'],
+		)
+		await expect(
+			refreshSecurityPoolDeploymentIndex(
+				rangeIndex,
+				'chain:factory',
+				async () => {
+					throw new Error('replacement registry unavailable')
+				},
+				async () => false,
+				async () => [],
+			),
+		).rejects.toThrow('replacement registry unavailable')
+		expect(rangeIndex.deployments).toEqual([])
+		expect(rangeIndex.anchor).toBeUndefined()
 	})
 
 	test('serializes deployment-index waiters without duplicate appends', async () => {

@@ -1,4 +1,5 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
 import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, vaultAccountingCheckpointEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
@@ -10,6 +11,7 @@ import { discoverRelevantDeployments } from './relevant-deployments.ts'
 
 type ReadClient = PublicClient<Transport, Chain>
 const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
+const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 
 type PoolDeployment = {
 	settlementCollateralAttoEth: bigint
@@ -389,16 +391,22 @@ function deploymentFromLog(log: Readonly<{ args?: unknown }>): PoolDeployment {
 	}
 }
 
-async function loadRelevantPoolDeployments(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
+async function loadRelevantPoolDeployments(client: ReadClient, settings: OperatorSettings, block: Readonly<{ hash: `0x${string}`; number: bigint }>) {
 	const loadDeployments = async (args: Readonly<{ parent?: Address; securityPool?: Address }>) =>
 		(
-			await client.getLogs({
-				address: settings.deployment.securityPoolFactory,
-				args,
-				event: deploySecurityPoolEvent,
-				fromBlock: 0n,
-				toBlock: blockNumber,
-			})
+			await fetchLogsWithAdaptiveRanges(
+				{ nextBlock: 0n },
+				block.number,
+				MAXIMUM_DEPLOYMENT_LOG_RANGE,
+				async range =>
+					await client.getLogs({
+						address: settings.deployment.securityPoolFactory,
+						args,
+						event: deploySecurityPoolEvent,
+						fromBlock: range.fromBlock,
+						toBlock: range.toBlock,
+					}),
+			)
 		).map(deploymentFromLog)
 	return await discoverRelevantDeployments({
 		desiredPools: settings.desiredPools,
@@ -409,7 +417,7 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 				abi: securityPoolFactoryAbi,
 				address: settings.deployment.securityPoolFactory,
 				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas],
-				blockNumber,
+				blockNumber: block.number,
 				functionName: 'getOriginId',
 			})
 			return getAddress(
@@ -417,7 +425,7 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 					abi: securityPoolFactoryAbi,
 					address: settings.deployment.securityPoolFactory,
 					args: [originId, desired.universeId],
-					blockNumber,
+					blockNumber: block.number,
 					functionName: 'getSecurityPool',
 				}),
 			)
@@ -428,8 +436,9 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 
 export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex()) {
 	const universes = await loadUniverses(client, settings)
-	const blockNumber = await client.getBlockNumber()
-	const deployments = await loadRelevantPoolDeployments(client, settings, blockNumber)
+	const deploymentBlock = await client.getBlock()
+	if (deploymentBlock.hash === undefined || deploymentBlock.number === undefined) throw new Error('Security pool deployment scan block is missing canonical identity')
+	const deployments = await loadRelevantPoolDeployments(client, settings, { hash: deploymentBlock.hash, number: deploymentBlock.number })
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
 		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex)
@@ -455,5 +464,6 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 			)
 		}
 	}
+	if ((await client.getBlock({ blockNumber: deploymentBlock.number })).hash?.toLowerCase() !== deploymentBlock.hash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
 	return { pools, universes, walletRepByToken }
 }

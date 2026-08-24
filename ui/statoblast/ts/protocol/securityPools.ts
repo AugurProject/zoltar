@@ -18,6 +18,7 @@ import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportin
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
 
 const QUESTION_OUTCOME_ABI = [
 	{
@@ -33,6 +34,7 @@ const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
+const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 
 const DEPLOY_SECURITY_POOL_EVENT = {
 	type: 'event',
@@ -565,16 +567,34 @@ function deploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDep
 	}
 }
 
-async function loadSecurityPoolDeploymentEvents(client: ReadClient, args: Readonly<{ parent?: Address; securityPool?: Address }>) {
-	const toBlock = await client.getBlockNumber()
+type DeploymentLogAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>
+
+async function loadDeploymentLogAnchor(client: ReadClient): Promise<DeploymentLogAnchor> {
+	const block = await client.getBlock()
+	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool deployment head is missing its canonical identity')
+	return { blockHash: block.hash, blockNumber: block.number }
+}
+
+async function requireDeploymentLogAnchor(client: ReadClient, anchor: DeploymentLogAnchor) {
+	const block = await client.getBlock({ blockNumber: anchor.blockNumber })
+	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
+}
+
+async function loadSecurityPoolDeploymentEvents(client: ReadClient, anchor: DeploymentLogAnchor, args: Readonly<{ parent?: Address; securityPool?: Address }>) {
 	return (
-		await client.getLogs({
-			address: getInfraContractAddresses().securityPoolFactory,
-			args,
-			event: DEPLOY_SECURITY_POOL_EVENT,
-			fromBlock: 0n,
-			toBlock,
-		})
+		await fetchLogsWithAdaptiveRanges(
+			0n,
+			anchor.blockNumber,
+			MAXIMUM_DEPLOYMENT_LOG_RANGE,
+			async range =>
+				await client.getLogs({
+					address: getInfraContractAddresses().securityPoolFactory,
+					args,
+					event: DEPLOY_SECURITY_POOL_EVENT,
+					fromBlock: range.fromBlock,
+					toBlock: range.toBlock,
+				}),
+		)
 	).map(deploymentFromEvent)
 }
 
@@ -583,26 +603,35 @@ function uniqueDeployments(deployments: readonly SecurityPoolDeploymentQueryResu
 }
 
 export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address) {
-	const selected = await loadSecurityPoolDeploymentEvents(client, { securityPool: securityPoolAddress })
+	const anchor = await loadDeploymentLogAnchor(client)
+	const selected = await loadSecurityPoolDeploymentEvents(client, anchor, { securityPool: securityPoolAddress })
 	const selectedDeployment = selected[0]
-	if (selectedDeployment === undefined) return []
-	const [children, parent] = await Promise.all([loadSecurityPoolDeploymentEvents(client, { parent: securityPoolAddress }), selectedDeployment.parent === zeroAddress ? [] : loadSecurityPoolDeploymentEvents(client, { securityPool: selectedDeployment.parent })])
+	if (selectedDeployment === undefined) {
+		await requireDeploymentLogAnchor(client, anchor)
+		return []
+	}
+	const [children, parent] = await Promise.all([loadSecurityPoolDeploymentEvents(client, anchor, { parent: securityPoolAddress }), selectedDeployment.parent === zeroAddress ? [] : loadSecurityPoolDeploymentEvents(client, anchor, { securityPool: selectedDeployment.parent })])
 	const pools = await loadListedSecurityPools(client, uniqueDeployments([...parent, ...selected, ...children]), {
 		...(accountAddress === undefined ? {} : { accountAddress }),
 		selectedSecurityPoolAddress: securityPoolAddress,
 		vaultDetailMode: 'selected',
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
+	await requireDeploymentLogAnchor(client, anchor)
 	return applyChildForkActivityHints(pools)
 }
 
 export async function loadSecurityPoolChildren(client: ReadClient, parentAddress: Address, accountAddress?: Address) {
-	return await loadListedSecurityPools(client, await loadSecurityPoolDeploymentEvents(client, { parent: parentAddress }), {
+	const anchor = await loadDeploymentLogAnchor(client)
+	const deployments = await loadSecurityPoolDeploymentEvents(client, anchor, { parent: parentAddress })
+	const pools = await loadListedSecurityPools(client, deployments, {
 		...(accountAddress === undefined ? {} : { accountAddress }),
 		selectedSecurityPoolAddress: parentAddress,
 		vaultDetailMode: 'selected',
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
+	await requireDeploymentLogAnchor(client, anchor)
+	return pools
 }
 
 function applyChildForkActivityHints(pools: ListedSecurityPool[]) {

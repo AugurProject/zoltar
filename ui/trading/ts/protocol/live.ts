@@ -4,6 +4,9 @@ import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
+
+const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 
 const deploymentComponents = [
 	{ name: 'securityPool', type: 'address' },
@@ -635,6 +638,12 @@ export function createSecurityPoolDeploymentIndex<Deployment, Anchor>(): Securit
 	return { key: undefined, deployments: [], anchor: undefined, pending: undefined }
 }
 
+function clearSecurityPoolDeploymentIndex<Deployment, Anchor>(index: SecurityPoolDeploymentIndex<Deployment, Anchor>, key: string) {
+	index.key = key
+	index.deployments = []
+	index.anchor = undefined
+}
+
 export async function refreshSecurityPoolDeploymentIndex<Deployment, Anchor>(
 	index: SecurityPoolDeploymentIndex<Deployment, Anchor>,
 	key: string,
@@ -648,14 +657,19 @@ export async function refreshSecurityPoolDeploymentIndex<Deployment, Anchor>(
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
-		let currentDeployments = index.key === key ? index.deployments : []
-		let currentAnchor = index.key === key ? index.anchor : undefined
+		if (index.key !== key) clearSecurityPoolDeploymentIndex(index, key)
+		let currentDeployments = index.deployments
+		let currentAnchor = index.anchor
 		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
+			clearSecurityPoolDeploymentIndex(index, key)
 			currentDeployments = []
 			currentAnchor = undefined
 		}
 		const { anchor, total } = await loadSnapshot()
-		if (total < BigInt(currentDeployments.length)) currentDeployments = []
+		if (total < BigInt(currentDeployments.length)) {
+			clearSecurityPoolDeploymentIndex(index, key)
+			currentDeployments = []
+		}
 		const knownCount = BigInt(currentDeployments.length)
 		const ranges = marketDiscoveryRanges(total - knownCount, pageSize).map(range => ({ start: knownCount + range.start, count: range.count }))
 		const pages = await mapWithConcurrency(ranges, 4, async range => await loadRange(range.start, range.count, anchor))
@@ -702,15 +716,17 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
-		let currentDeployments = index.key === key ? index.deployments : []
-		let currentAnchor = index.key === key ? index.anchor : undefined
+		if (index.key !== key) clearSecurityPoolDeploymentIndex(index, key)
+		let currentDeployments = index.deployments
+		let currentAnchor = index.anchor
 		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
+			clearSecurityPoolDeploymentIndex(index, key)
 			currentDeployments = []
 			currentAnchor = undefined
 		}
 		const anchor = await loadLatest()
 		const fromBlock = currentAnchor === undefined ? 0n : currentAnchor.blockNumber + 1n
-		const appended = fromBlock <= anchor.blockNumber ? await loadEvents(fromBlock, anchor.blockNumber) : []
+		const appended = fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock)) : []
 		if (!(await isAnchorCanonical(anchor))) throw new Error('SecurityPool deployment events changed during discovery')
 		const nextDeployments = [...currentDeployments, ...appended]
 		index.key = key
