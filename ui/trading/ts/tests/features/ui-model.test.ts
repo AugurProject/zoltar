@@ -20,6 +20,7 @@ import {
 	retainApprovedMaximum,
 	retainApprovedMinimum,
 	refreshSecurityPoolDeploymentIndex,
+	refreshSecurityPoolDeploymentEventIndex,
 	registryBlockAnchorIsCanonical,
 	registrySnapshotBlockParameters,
 	requireTransactionSlippageBps,
@@ -268,6 +269,165 @@ describe('standalone trading UI model', () => {
 		anchor = 'block-2'
 		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments)
 		expect(rangeReads).toEqual([{ start: 5n, count: 2n }])
+	})
+
+	test('increments a selected-universe event index without rescanning historical blocks', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const loadEvents = async (fromBlock: bigint, toBlock: bigint) => {
+			ranges.push({ fromBlock, toBlock })
+			return [`${fromBlock.toString()}-${toBlock.toString()}`]
+		}
+		const canonical = async () => true
+		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100'])
+		latest = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 105n }
+		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100', '101-105'])
+		expect(ranges).toEqual([
+			{ fromBlock: 0n, toBlock: 100n },
+			{ fromBlock: 101n, toBlock: 105n },
+		])
+	})
+
+	test('chunks a selected-universe genesis rebuild within the bounded log range', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 20_000n }
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const result = await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async () => true,
+			async (fromBlock, toBlock) => {
+				ranges.push({ fromBlock, toBlock })
+				if (toBlock - fromBlock + 1n > 10_000n) throw new Error('block range is too large')
+				return [`${fromBlock.toString()}-${toBlock.toString()}`]
+			},
+		)
+		expect(result).toEqual(['0-9999', '10000-19999', '20000-20000'])
+		expect(ranges).toEqual([
+			{ fromBlock: 0n, toBlock: 9_999n },
+			{ fromBlock: 10_000n, toBlock: 19_999n },
+			{ fromBlock: 20_000n, toBlock: 20_000n },
+		])
+	})
+
+	test('does not retain orphan deployment events when the discovery anchor is replaced', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const orphanAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const canonicalAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 100n }
+		let latest = orphanAnchor
+		let canonicalHash = canonicalAnchor.blockHash
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async anchor => anchor.blockHash === canonicalHash,
+				async () => ['orphan'],
+			),
+		).rejects.toThrow('deployment events changed during discovery')
+		expect(index.deployments).toEqual([])
+		expect(index.anchor).toBeUndefined()
+
+		latest = canonicalAnchor
+		canonicalHash = canonicalAnchor.blockHash
+		expect(
+			await refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async anchor => anchor.blockHash === canonicalHash,
+				async () => ['canonical'],
+			),
+		).toEqual(['canonical'])
+		expect(index.deployments).toEqual(['canonical'])
+		expect(index.anchor).toEqual(canonicalAnchor)
+	})
+
+	test('rebuilds when the retained deployment anchor is replaced during an incremental event read', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const retainedAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		const latestAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 101n }
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => retainedAnchor,
+			async () => true,
+			async () => ['orphan'],
+		)
+
+		let retainedAnchorCanonical = true
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const result = await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latestAnchor,
+			async anchor => anchor.blockHash !== retainedAnchor.blockHash || retainedAnchorCanonical,
+			async (fromBlock, toBlock) => {
+				ranges.push({ fromBlock, toBlock })
+				if (fromBlock === 101n) {
+					retainedAnchorCanonical = false
+					return ['incremental-on-replacement']
+				}
+				return ['canonical-rebuild']
+			},
+		)
+
+		expect(result).toEqual(['canonical-rebuild'])
+		expect(index.deployments).toEqual(['canonical-rebuild'])
+		expect(index.anchor).toEqual(latestAnchor)
+		expect(ranges).toEqual([
+			{ fromBlock: 101n, toBlock: 101n },
+			{ fromBlock: 0n, toBlock: 101n },
+		])
+	})
+
+	test('clears populated orphan indexes when their canonical rebuild fails', async () => {
+		const eventIndex = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const orphanEventAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		await refreshSecurityPoolDeploymentEventIndex(
+			eventIndex,
+			'chain:factory:universe-7',
+			async () => orphanEventAnchor,
+			async () => true,
+			async () => ['orphan-event'],
+		)
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				eventIndex,
+				'chain:factory:universe-7',
+				async () => {
+					throw new Error('replacement event head unavailable')
+				},
+				async () => false,
+				async () => [],
+			),
+		).rejects.toThrow('replacement event head unavailable')
+		expect(eventIndex.deployments).toEqual([])
+		expect(eventIndex.anchor).toBeUndefined()
+
+		const rangeIndex = createSecurityPoolDeploymentIndex<string, string>()
+		await refreshSecurityPoolDeploymentIndex(
+			rangeIndex,
+			'chain:factory',
+			async () => ({ anchor: 'orphan-block', total: 1n }),
+			async () => true,
+			async () => ['orphan-range'],
+		)
+		await expect(
+			refreshSecurityPoolDeploymentIndex(
+				rangeIndex,
+				'chain:factory',
+				async () => {
+					throw new Error('replacement registry unavailable')
+				},
+				async () => false,
+				async () => [],
+			),
+		).rejects.toThrow('replacement registry unavailable')
+		expect(rangeIndex.deployments).toEqual([])
+		expect(rangeIndex.anchor).toBeUndefined()
 	})
 
 	test('serializes deployment-index waiters without duplicate appends', async () => {

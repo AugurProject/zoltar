@@ -46,7 +46,6 @@ function settings(approvedUniverses = ['101']) {
 		privateKey: null,
 		runtime: {
 			execute: false,
-			maxVaultsPerPool: 100,
 			once: true,
 			pollMilliseconds: 12_000,
 			stateFile: '.state/fork-migration-test.json',
@@ -129,7 +128,6 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		systemState: parameters.systemState ?? 0n,
 		totalCapacityOwnershipAttoRep: 0n,
 		totalAttoRep: 0n,
-		truncatedVaults: false,
 		universeId: parameters.universeId,
 		vaults: [],
 	}

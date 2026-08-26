@@ -114,5 +114,6 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, minedDay)).toBeUndefined()
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, minedDay)).toContain('UTC-day gas spend')
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth: 1n, capitalAtRiskAttoWeth: 0n, positions: [], projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toContain('UTC-day gas spend')
 	})
 })

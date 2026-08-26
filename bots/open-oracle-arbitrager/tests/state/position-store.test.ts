@@ -3,9 +3,46 @@ import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '#ethereum'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosition, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournal, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 
 const directories: string[] = []
+
+function terminalPosition(index: number, overrides: Partial<PositionRecord> = {}): PositionRecord {
+	return {
+		account: getAddress('0x0000000000000000000000000000000000000002'),
+		actualEntryGasCostEth: '0.001',
+		capitalAtRiskWeth: '0',
+		closedAt: '2026-01-01T01:00:00.000Z',
+		direction: 'sell-rep',
+		entryTransactionHash: `0x${'11'.repeat(32)}`,
+		entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` }],
+		historyOutbox: undefined,
+		hedgeAmountToken: '1',
+		hedgeWeth: '1',
+		hedgedProfitBeforeGasEth: '0.1',
+		lifecycleGasCostEth: '0',
+		lifecycleReceiptRecovered: false,
+		lifecycleTargetBlockNumber: undefined,
+		lifecycleTokenDecimals: undefined,
+		lifecycleTransactionHashes: [],
+		lifecycleUpdatedAt: undefined,
+		lifecycleWalletTokenBefore: undefined,
+		lifecycleWalletWethBefore: undefined,
+		lockedToken: '0',
+		lockedWeth: '0',
+		manualReconciliation: undefined,
+		openedAt: '2026-01-01T00:00:00.000Z',
+		realizedNetProfitEth: '0.1',
+		reportId: (index + 1).toString(),
+		status: 'closed',
+		token: getAddress('0x0000000000000000000000000000000000000001'),
+		tokenSymbol: 'REP',
+		withdrawnToken: '1',
+		withdrawnWeth: '1',
+		...overrides,
+	}
+}
 
 afterEach(async () => {
 	await Promise.all(directories.splice(0).map(path => rm(path, { force: true, recursive: true })))
@@ -158,6 +195,97 @@ describe('durable OpenOracle position journal', () => {
 		await savePositionJournal(path, [position], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position])
 		expect((await readFile(path, 'utf8')).toString()).not.toContain('privateKey')
+	})
+
+	test('bounds terminal recovery records while retaining their accounting and daily gas totals', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const terminalPositions = Array.from({ length: 502 }, (_value, index) => terminalPosition(index))
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions: terminalPositions }, 1)
+		expect(saved.positions).toHaveLength(500)
+		expect(saved.archived).toEqual({ gasSpentByUtcDay: { '2026-01-01': '0.002' }, hedgedProfitBeforeGasEth: '0.2', positionCount: 2, realizedNetProfitEth: '0.2' })
+		expect(await loadPositionJournalState(path, 1)).toEqual(saved)
+	})
+
+	test('retains expired positions until every transaction attempt is impossible or reconciled', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const positions = [
+			...Array.from({ length: 500 }, (_value, index) => terminalPosition(index)),
+			...Array.from({ length: 2 }, (_value, index) =>
+				terminalPosition(500 + index, {
+					expiredTransactionAttempts: [{ kind: 'entry', nonce: (500 + index).toString(), targetBlockNumber: '100', transactionHash: `0x${'22'.repeat(32)}` }],
+					status: 'expired-not-included',
+				}),
+			),
+		]
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions }, 1)
+		expect(saved.positions).toHaveLength(502)
+		expect(saved.positions.slice(-2).every(position => position.status === 'expired-not-included')).toBe(true)
+		expect(saved.archived.positionCount).toBe(0)
+	})
+
+	test('bounds manually reconciled positions with expired attempts while retaining unresolved recovery', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const reconciled = Array.from({ length: 501 }, (_value, index) => {
+			const recovery = terminalPosition(index, {
+				closedAt: undefined,
+				expiredTransactionAttempts: [{ kind: 'entry', nonce: index.toString(), targetBlockNumber: '100', transactionHash: `0x${'22'.repeat(32)}` }],
+				realizedNetProfitEth: undefined,
+				status: 'recovery-required',
+			})
+			return manuallyReconcilePosition(recovery, {
+				confirmedReportId: recovery.reportId,
+				evidence: `archived recovery evidence ${recovery.reportId}`,
+				externalCostEth: '0',
+				finalWalletToken: '1',
+				finalWalletWeth: '1',
+				note: 'Recovery is complete.',
+				pnlUnavailable: false,
+				realizedNetProfitEth: '0.1',
+				recordedAt: '2026-01-02T00:00:00.000Z',
+				recordedBy: recovery.account,
+			})
+		})
+		const unresolved = terminalPosition(501, {
+			expiredTransactionAttempts: [{ kind: 'entry', nonce: '501', targetBlockNumber: '100', transactionHash: `0x${'33'.repeat(32)}` }],
+			status: 'expired-not-included',
+		})
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions: [...reconciled, unresolved] }, 1)
+
+		expect(saved.positions).toHaveLength(501)
+		expect(saved.positions.filter(position => position.manualReconciliation !== undefined)).toHaveLength(500)
+		expect(saved.positions.some(position => position.reportId === unresolved.reportId)).toBeTrue()
+		expect(saved.archived.positionCount).toBe(1)
+	})
+
+	test('bounds archived UTC-day gas buckets while retaining recent risk accounting', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const archivedAcrossDays = Array.from({ length: 40 }, (_value, index) => {
+			const minedAt = new Date(Date.UTC(2026, 0, index + 1)).toISOString()
+			return terminalPosition(500 + index, {
+				closedAt: minedAt,
+				gasExpenditures: [{ costEth: '0.001', minedAt, transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}` }],
+				openedAt: minedAt,
+			})
+		})
+		const positions = [...Array.from({ length: 500 }, (_value, index) => terminalPosition(index)), ...archivedAcrossDays]
+
+		const saved = await savePositionJournalState(path, { archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' }, positions }, 1)
+
+		expect(Object.keys(saved.archived.gasSpentByUtcDay)).toHaveLength(32)
+		expect(saved.archived.gasSpentByUtcDay['2026-01-01']).toBeUndefined()
+		expect(archivedUtcDayGasSpentWeth(saved.archived, new Date('2026-02-09T12:00:00.000Z'))).toBe(10n ** 15n)
+		expect(await loadPositionJournalState(path, 1)).toEqual(saved)
 	})
 
 	test('rejects a valid position journal bound to another chain', async () => {
