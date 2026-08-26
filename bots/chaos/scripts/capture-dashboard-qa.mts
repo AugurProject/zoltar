@@ -15,6 +15,7 @@ type CaptureRequest = {
 	horizontalScroll?: 'catalog-end' | undefined
 	name: string
 	route: string
+	stateRefreshFailure?: true | undefined
 	verticalScroll?: 'rpc-health' | undefined
 	width: number
 }
@@ -28,7 +29,7 @@ if (requestedCaptureSource === undefined) {
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
-		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', verticalScroll: 'rpc-health', width: 390 },
+		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
 		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
 		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
@@ -50,10 +51,20 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const horizontalScroll = Reflect.get(parsed, 'horizontalScroll')
 	const name = Reflect.get(parsed, 'name')
 	const route = Reflect.get(parsed, 'route')
+	const stateRefreshFailure = Reflect.get(parsed, 'stateRefreshFailure')
 	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
 	const width = Reflect.get(parsed, 'width')
-	if (typeof height !== 'number' || (horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') || typeof name !== 'string' || typeof route !== 'string' || (verticalScroll !== undefined && verticalScroll !== 'rpc-health') || typeof width !== 'number') throw new Error('Capture request fields are invalid')
-	return { height, horizontalScroll, name, route, verticalScroll, width }
+	if (
+		typeof height !== 'number' ||
+		(horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') ||
+		typeof name !== 'string' ||
+		typeof route !== 'string' ||
+		(stateRefreshFailure !== undefined && stateRefreshFailure !== true) ||
+		(verticalScroll !== undefined && verticalScroll !== 'rpc-health') ||
+		typeof width !== 'number'
+	)
+		throw new Error('Capture request fields are invalid')
+	return { height, horizontalScroll, name, route, stateRefreshFailure, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -150,7 +161,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ height, horizontalScroll, name, route, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ height, horizontalScroll, name, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -165,6 +176,17 @@ try {
 			new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
 		])`)
 		await Bun.sleep(250)
+		if (stateRefreshFailure === true) {
+			await command('Network.setBlockedURLs', { urls: ['*://127.0.0.1:4193/api/state*'] })
+			await evaluate("document.querySelector('#refresh-button')?.click()")
+			let failureReady = false
+			for (let poll = 0; poll < 60; poll += 1) {
+				failureReady = (await evaluate("document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#rpc-health-retry-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.disabled === false")) === true
+				if (failureReady) break
+				await Bun.sleep(100)
+			}
+			if (!failureReady) throw new Error(`Dashboard route /${route} did not expose local Retry after the forced state-refresh failure`)
+		}
 		const layout = await evaluate(`new Promise(resolve => {
 			window.scrollTo(0, 0)
 			if (document.scrollingElement !== null) document.scrollingElement.scrollLeft = 0

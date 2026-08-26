@@ -177,6 +177,7 @@ const rpcHealthyCount = element('rpc-healthy-count', HTMLElement)
 const rpcRequiredQuorum = element('rpc-required-quorum', HTMLElement)
 const rpcChainReadiness = element('rpc-chain-readiness', HTMLElement)
 const rpcLastCheck = element('rpc-last-check', HTMLElement)
+const rpcHealthRetryButton = element('rpc-health-retry-button', HTMLButtonElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
@@ -696,6 +697,7 @@ function renderOverview(value: Snapshot) {
 }
 
 function renderRpcHealth(value: Snapshot) {
+	rpcHealthRetryButton.classList.add('hidden')
 	const health = value.rpcHealth
 	if (health.status === 'ready') setBadge(rpcHealthStatus, 'Quorum ready', 'success')
 	else if (health.status === 'degraded') setBadge(rpcHealthStatus, 'Quorum blocked', 'error')
@@ -716,6 +718,7 @@ function renderRpcHealth(value: Snapshot) {
 }
 
 function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
+	rpcHealthRetryButton.classList.remove('hidden')
 	setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
 	rpcConfiguredTotal.textContent = '—'
 	rpcHealthyCount.textContent = '—'
@@ -1091,6 +1094,8 @@ function refresh() {
 	markRecoveryContextRefreshesLoading()
 	refreshButton.disabled = true
 	refreshButton.textContent = 'Refreshing…'
+	rpcHealthRetryButton.disabled = true
+	rpcHealthRetryButton.textContent = 'Refreshing…'
 	let stateAvailable = false
 	refreshPromise = (async () => {
 		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', stateRequestTimeoutMilliseconds), requestJson('/api/configuration', configurationRequestTimeoutMilliseconds)])
@@ -1119,6 +1124,8 @@ function refresh() {
 		refreshPromise = undefined
 		refreshButton.disabled = false
 		refreshButton.textContent = stateAvailable ? 'Refresh' : 'Retry'
+		rpcHealthRetryButton.disabled = false
+		rpcHealthRetryButton.textContent = 'Retry'
 	})
 	return refreshPromise
 }
@@ -1206,6 +1213,7 @@ if (currentSectionLink !== undefined) {
 }
 
 refreshButton.addEventListener('click', () => void refresh())
+rpcHealthRetryButton.addEventListener('click', () => void refresh())
 catalogFilter.addEventListener('change', () => {
 	if (snapshot !== undefined) renderCatalog(snapshot.operationEvaluations)
 })

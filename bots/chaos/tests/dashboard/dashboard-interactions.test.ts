@@ -359,6 +359,7 @@ browserTest(
 					configured: document.querySelector('#rpc-configured-total')?.textContent,
 					healthy: document.querySelector('#rpc-healthy-count')?.textContent,
 					lastCheck: document.querySelector('#rpc-last-check')?.textContent,
+					localRetryHidden: document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden'),
 					required: document.querySelector('#rpc-required-quorum')?.textContent,
 					secretVisible: document.documentElement.textContent?.includes(${JSON.stringify(rpcSecret)}),
 					status: document.querySelector('#rpc-health-status')?.textContent,
@@ -367,6 +368,7 @@ browserTest(
 					chain: 'Ready for chain 11155111',
 					configured: '3 endpoints',
 					healthy: '2 of 3',
+					localRetryHidden: true,
 					required: '2 endpoints',
 					secretVisible: false,
 					status: 'Quorum ready',
@@ -374,13 +376,27 @@ browserTest(
 				expect(Reflect.get(health, 'lastCheck')).not.toBe('No completed check')
 				failSecondStateRead = true
 				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
-				await waitFor("document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#refresh-button')?.textContent === 'Retry'", `${viewport.label} failed refresh did not invalidate RPC health`)
+				await waitFor(
+					"document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#refresh-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === false",
+					`${viewport.label} failed refresh did not expose local RPC recovery`,
+				)
 				expect(
 					await cdp.evaluate(`({
 						chain: document.querySelector('#rpc-chain-readiness')?.textContent,
 						configured: document.querySelector('#rpc-configured-total')?.textContent,
 						healthy: document.querySelector('#rpc-healthy-count')?.textContent,
 						lastCheck: document.querySelector('#rpc-last-check')?.textContent,
+						localRetry: (() => {
+							const button = document.querySelector('#rpc-health-retry-button')
+							const bounds = button?.getBoundingClientRect()
+							return {
+								accessibleName: button?.getAttribute('aria-label'),
+								bottom: bounds?.bottom,
+								disabled: button?.disabled,
+								height: bounds?.height,
+								top: bounds?.top,
+							}
+						})(),
 						required: document.querySelector('#rpc-required-quorum')?.textContent,
 						status: document.querySelector('#rpc-health-status')?.textContent,
 					})`),
@@ -389,12 +405,35 @@ browserTest(
 					configured: '—',
 					healthy: '—',
 					lastCheck: 'Previous health result is stale',
+					localRetry: {
+						accessibleName: 'Retry dashboard state refresh',
+						bottom: expect.any(Number),
+						disabled: false,
+						height: expect.any(Number),
+						top: expect.any(Number),
+					},
 					required: '—',
 					status: 'Health unavailable',
 				})
+				if (viewport.label === 'mobile') {
+					const bounds = await cdp.evaluate(`new Promise(resolve => {
+						const panel = document.querySelector('.rpc-health-panel')
+						panel?.scrollIntoView({ block: 'start' })
+						requestAnimationFrame(() => requestAnimationFrame(() => {
+							const buttonBounds = document.querySelector('#rpc-health-retry-button')?.getBoundingClientRect()
+							resolve({ bottom: buttonBounds?.bottom, height: buttonBounds?.height, top: buttonBounds?.top })
+						}))
+					})`)
+					expect(Reflect.get(bounds, 'top')).toBeGreaterThanOrEqual(0)
+					expect(Reflect.get(bounds, 'bottom')).toBeLessThanOrEqual(viewport.height)
+					expect(Reflect.get(bounds, 'height')).toBeGreaterThanOrEqual(44)
+				}
 				failSecondStateRead = false
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
-				await waitFor("document.querySelector('#rpc-health-status')?.textContent === 'Quorum ready' && document.querySelector('#refresh-button')?.textContent === 'Refresh'", `${viewport.label} RPC health did not recover after Retry`)
+				await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.click()")
+				await waitFor(
+					"document.querySelector('#rpc-health-status')?.textContent === 'Quorum ready' && document.querySelector('#refresh-button')?.textContent === 'Refresh' && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === true",
+					`${viewport.label} RPC health did not recover through its local Retry`,
+				)
 				const renderedSteps = await cdp.evaluate(`[...document.querySelectorAll('#current-workflow .step-list li')].map(row => {
 					const status = row.querySelector('[data-step-status]')
 					const hash = row.querySelector('[data-step-hash]')

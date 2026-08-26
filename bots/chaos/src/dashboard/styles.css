@@ -357,6 +357,19 @@ main {
 	grid-column: 1 / -1;
 }
 
+.rpc-health-heading-actions {
+	display: flex;
+	align-items: flex-end;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.rpc-health-heading-actions button {
+	min-height: 2.2rem;
+	padding: 0.35rem 0.7rem;
+	font-size: 0.76rem;
+}
+
 .rpc-health-grid {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1137,6 +1150,10 @@ fieldset {
 
 	.panel {
 		padding: 1rem;
+	}
+
+	.rpc-health-heading-actions button {
+		min-height: 2.75rem;
 	}
 
 	.schedule-panel h3 {
