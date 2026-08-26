@@ -32,7 +32,10 @@ const dependencies: Readonly<Record<CiScope, readonly CiScope[]>> = { docs: [], 
 const rootDocumentation = new Set(['AGENTS.md', 'LICENSE', 'README.md'])
 const rootInfrastructure = new Set(['reth', 'testnetwork'])
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
+const augurScanIntegrationFiles = new Set(['augurScan/bun.lock', 'augurScan/compose.yaml', 'augurScan/package.json', 'augurScan/schema.sql', 'augurScan/tests/postgres.integration.test.ts'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
+
+const isAugurScanIntegrationInput = (filePath: string): boolean => filePath.startsWith('augurScan/src/') || augurScanIntegrationFiles.has(filePath)
 
 function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (rootDocumentation.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
@@ -93,7 +96,7 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	const expandedScopes = ordered(expanded)
 	const packageMatrix = expandedScopes.flatMap(scope => packageEntries[scope] ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
-	const augurScanIntegration = false
+	const augurScanIntegration = forcedFull || changedFiles.some(isAugurScanIntegrationInput)
 	let reason = 'Selected direct scopes and expanded their verified local consumers.'
 	if (forcedFull) reason = 'A global or unknown path requires the full ordinary CI matrix.'
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'

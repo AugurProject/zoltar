@@ -36,11 +36,14 @@ test('empty input and explicit full mode use the full matrix', () => {
 	expect(classifyCiChange(['README.md'], { full: true }).expandedScopes).toEqual(ciScopes)
 })
 
-test('keeps the unreliable augurScan integration route disabled', () => {
+test('selects augurScan integration for runtime, schema, dependency, and full-suite changes', () => {
 	expect(classifyCiChange(['augurScan/README.md']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(false)
+	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/schema.sql']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/package.json']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/tests/postgres.integration.test.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(true)
 })
 
 test('matrices are valid, deterministic JSON for empty and non-empty selections', () => {

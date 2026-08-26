@@ -672,13 +672,21 @@ class NetworkIndexer {
 		let retainedBoundary = checkpoint?.number ?? storedBlockTip
 		if (storedStartBlock !== undefined) {
 			if (this.#configuredStartBlock > storedStartBlock) {
-				await this.#database.seedNetwork(this.#network, lease, true, true)
+				await this.#database.seedNetwork(this.#network, {
+					lease,
+					resetCanonicalHistoryOnManifestChange: true,
+					preserveStoredStart: true,
+				})
 				throw new Error('Stored history boundary validation unexpectedly succeeded')
 			}
 			this.#network = { ...this.#network, startBlock: storedStartBlock }
 			if (retainedBoundary === undefined) retainedBoundary = await this.#withProviderFailover(() => this.#client.getBlockNumber())
 			await this.#validateManifestChange(retainedBoundary, storedStartBlock, lease)
-			const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
+			const manifestChanged = await this.#database.seedNetwork(this.#network, {
+				lease,
+				resetCanonicalHistoryOnManifestChange: true,
+				preserveStoredStart: true,
+			})
 			if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
 			return
 		}
@@ -696,7 +704,11 @@ class NetworkIndexer {
 				`[${this.#network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`,
 			)
 		})
-		const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
+		const manifestChanged = await this.#database.seedNetwork(this.#network, {
+			lease,
+			resetCanonicalHistoryOnManifestChange: true,
+			preserveStoredStart: true,
+		})
 		if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
 	}
 
