@@ -121,6 +121,7 @@ export async function executeDispute(
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	persistPosition: (position: PositionRecord) => Promise<void>,
+	archivedDailyGasSpentAttoWeth = 0n,
 ): Promise<ExecutionRecord> {
 	const account = wallet.account
 	const executor = config.executor
@@ -320,7 +321,10 @@ export async function executeDispute(
 			beforeSubmit: async () => {
 				if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 			},
-			persistPending: () => guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: gasPrice * 1_200_000n + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition)),
+			persistPending: () =>
+				guardedRiskSubmission(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth, capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: gasPrice * 1_200_000n + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
+					persistPosition(stagedPosition),
+				),
 		})
 		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
@@ -459,7 +463,7 @@ export async function executeDispute(
 					if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 				},
 				() =>
-					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: totalGasUsed * gasPrice + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
+					guardedRiskSubmission(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth, capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: totalGasUsed * gasPrice + lifecycleGasReserveAttoWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
 						journaledSubmission(
 							() => persistPosition(stagedPosition),
 							() =>

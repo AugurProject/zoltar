@@ -106,7 +106,6 @@ describe('liquidator dashboard server', () => {
 						systemState: '0',
 						totalCapacityOwnershipRep: '12',
 						totalPoolHeldRep: '13',
-						truncatedVaults: false,
 						universeId: '14',
 						vaults: [{ address: 'nested-vault-marker', path: protectedPath }],
 					},
@@ -173,7 +172,6 @@ describe('liquidator dashboard server', () => {
 				systemState: '0',
 				totalCapacityOwnershipRep: '12',
 				totalPoolHeldRep: '13',
-				truncatedVaults: false,
 			},
 		])
 	})

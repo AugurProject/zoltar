@@ -20,6 +20,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			id: 'simulation',
 			proxyDeployer: PROXY_DEPLOYER_ADDRESS,
 			securityPoolFactory: addresses.securityPoolFactory,
+			zoltar: addresses.zoltar,
 		},
 		30,
 	)

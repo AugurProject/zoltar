@@ -636,6 +636,11 @@ describe('funded execution orchestration', () => {
 		expect(() => assertReceiptSnapshotBlockHash(receipt.blockHash, canonicalHash, 'Entry')).toThrow('different canonical blocks')
 	})
 
+	test('rejects final market snapshot revalidation when endpoints diverge after pair reads', async () => {
+		const readers = [{ getBlock: () => Promise.resolve({ hash: `0x${'11'.repeat(32)}` as Hex }) }, { getBlock: () => Promise.resolve({ hash: `0x${'22'.repeat(32)}` as Hex }) }]
+		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'market snapshot final revalidation', 100n)).rejects.toThrow('RPC disagreement')
+	})
+
 	test('retains endpoint and method context when a canonical block omits its hash', async () => {
 		const readers = [{ getBlock: () => Promise.resolve({ hash: undefined }) }]
 		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example/private'], 'pending entry 7', 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending entry 7 canonical block is missing its hash')

@@ -42,6 +42,7 @@ for (const appId of UI_APP_IDS) {
 		expect(imports['@preact/signals']).toBe('./vendor/@preact/signals/signals.module.js')
 		expect(imports['@zoltar/shared/bigInt']).toBe('../shared/js/bigInt.js')
 		expect(imports['@zoltar/shared/ethereum']).toBe('../shared/js/ethereum.js')
+		expect(imports['@zoltar/shared/logScan']).toBe('../shared/js/logScan.js')
 		expect(imports['tevm']).toBe('./vendor/tevm/index.js')
 		expect(imports['@zoltar/ui-core-shared/']).toBe('/ui/coreShared/js/')
 		if (appId === 'statoblast' || appId === 'trading') {

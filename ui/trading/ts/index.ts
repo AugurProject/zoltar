@@ -16,6 +16,7 @@ const qaCore = {
 	id: 'mainnet',
 	proxyDeployer: getAddress('0x7A0D94F55792C434d74a40883C6ed8545E406D12'),
 	securityPoolFactory: getAddress('0x5dae4d3F03A59a51F01e52920a76Cb4013D15c70'),
+	zoltar: getAddress('0x7e009E148B2a044f1d8351b78eaff05ac212a8D6'),
 }
 
 function pendingDeploymentFixture() {

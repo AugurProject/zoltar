@@ -36,6 +36,7 @@ export function coreDeploymentFromManifest(candidate: unknown) {
 		id: requiredString(candidate.network.id, 'network.id'),
 		proxyDeployer: deploymentStepAddress(candidate.deploymentSteps, 'proxyDeployer'),
 		securityPoolFactory: deploymentStepAddress(candidate.deploymentSteps, 'securityPoolFactory'),
+		zoltar: deploymentStepAddress(candidate.deploymentSteps, 'zoltar'),
 	}
 }
 
