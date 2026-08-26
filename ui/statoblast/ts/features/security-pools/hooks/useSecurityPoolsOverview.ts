@@ -28,21 +28,14 @@ import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/form
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import type { WriteOperationsParameters } from '../../../types/app.js'
+import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolOverviewActionResult, SecurityPoolPage, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
-type UseSecurityPoolsOverviewParameters = {
-	accountAddress: Address | undefined
-	environmentRefreshKey: number
-	onTransactionCanceled?: WriteOperationsParameters['onTransactionCanceled']
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: WriteOperationsParameters['refreshState']
-}
+type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
+	TransactionCancellationParameters &
+	WriteOperationContext & {
+		environmentRefreshKey: number
+	}
 
 type SecurityPoolsOverviewReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>

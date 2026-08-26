@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/shared/ethereum'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { LiveSettlementControls } from '../../features/LiveTrading.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const pool = getAddress(`0x${'22'.repeat(20)}`)
@@ -78,18 +78,14 @@ async function settleEffects() {
 }
 
 describe('live fork settlement context', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/?demo=0#/market').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/?demo=0#/market',
 	})
 
 	test('retries failed fork metadata and refreshes branches after confirmed migration', async () => {

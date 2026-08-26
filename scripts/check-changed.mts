@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { getChangedFiles } from './changed-files.mts'
 
 function runCommand(command: string, args: string[]) {
@@ -50,7 +51,7 @@ if (import.meta.main) {
 		process.exit(0)
 	}
 
-	const biomeChangedFiles = getBiomeChangedFiles(changedFiles)
+	const biomeChangedFiles = getBiomeChangedFiles(changedFiles).filter(existsSync)
 
 	if (biomeChangedFiles.length === 0) {
 		console.log('check-changed: no Biome-covered changed files to audit')

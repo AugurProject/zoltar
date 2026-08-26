@@ -23,7 +23,7 @@
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
 				"@zoltar/ui-zoltar/*": ["./ts/*"]
 			},
-			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts", "ts/simulation/tevmWorker.ts"]
+			"ignore": ["ts/index.dev.ts", "ts/simulation/tevmWorker.ts"]
 		},
 		"ui/statoblast": {
 			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "ts/index.ts"],
@@ -33,7 +33,7 @@
 				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
 				"@zoltar/ui-statoblast/*": ["./ts/*"]
 			},
-			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts", "ts/simulation/tevmWorker.ts"]
+			"ignore": ["ts/index.dev.ts", "ts/simulation/tevmWorker.ts"]
 		},
 		"ui/trading": {
 			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "ts/index.ts", "ts/simulation/tevmWorker.ts"],
@@ -44,7 +44,7 @@
 				"@zoltar/ui-statoblast/*": ["../statoblast/ts/*"],
 				"@zoltar/ui-trading/*": ["./ts/*"]
 			},
-			"ignore": ["ts/index.dev.ts", "ts/liveReload.ts"],
+			"ignore": ["ts/index.dev.ts"],
 			"ignoreDependencies": ["bun-types"]
 		}
 	},

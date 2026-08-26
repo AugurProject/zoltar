@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { ActionAvailability } from '../types/components.js'
-import { getWrongNetworkMessage } from './network.js'
+import { getWrongNetworkReason } from './network.js'
 
 type WalletActiveAppChainGuardParameters = {
 	accountAddress: Address | string | undefined
@@ -26,7 +26,7 @@ function getWalletRequiredReason(walletRequiredReason: string | undefined) {
 
 export function getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason }: WalletActiveAppChainGuardParameters): WalletActiveAppChainGuardState {
 	if (accountAddress === undefined) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isOnActiveAppChain) return { blocked: true, reason: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason }
+	if (!isOnActiveAppChain) return { blocked: true, reason: getWrongNetworkReason() }
 	return { blocked: false, reason: undefined }
 }
 
@@ -37,7 +37,7 @@ export function getWalletActiveAppChainGuardMessage(parameters: WalletActiveAppC
 
 export function getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected, walletRequiredReason }: WalletConnectionActiveAppChainGuardParameters): WalletActiveAppChainGuardState {
 	if (!walletConnected) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isOnActiveAppChain) return { blocked: true, reason: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason }
+	if (!isOnActiveAppChain) return { blocked: true, reason: getWrongNetworkReason() }
 	return { blocked: false, reason: undefined }
 }
 

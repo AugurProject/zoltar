@@ -1,4 +1,4 @@
-import * as liquidationCopy from '@zoltar/ui-zoltar/copy/liquidation.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/shared/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'

@@ -1,6 +1,5 @@
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { ForkAuctionStageView } from '../../../truth-auctions/lib/forkAuction.js'
-import { getEscalationPhase, isPoolQuestionFinalized } from '@zoltar/ui-zoltar/features/reporting/lib/reportingDomain.js'
+import { deriveReportingStage } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -41,26 +40,7 @@ export function deriveSecurityPoolLifecycleState({
 }
 
 export function deriveSecurityPoolReportingStage({ reportingDetails, reportingReady }: { reportingDetails: ReportingDetails | undefined; reportingReady: boolean | undefined }): SecurityPoolReportingStage | undefined {
-	if (reportingReady === false) return 'preOpen'
-	if (reportingDetails === undefined) return undefined
-	if (isPoolQuestionFinalized(reportingDetails)) return 'resolved'
-	if (reportingDetails.status === 'not-started') return 'notStarted'
-
-	const escalationPhase = getEscalationPhase(reportingDetails)
-	switch (escalationPhase) {
-		case 'Resolved':
-			return 'resolved'
-		case 'Fork Triggered':
-			return 'forkTriggered'
-		case 'Timed Out':
-			return 'timedOut'
-		case 'Pending Start':
-		case 'Active':
-			if (reportingDetails.settlementState === 'migration-required' || reportingDetails.settlementState === 'migration-expired') return 'forkTriggered'
-			return reportingDetails.parentWithdrawalEnabled ? 'activeWithdrawable' : 'activeLocked'
-		default:
-			return assertNever(escalationPhase)
-	}
+	return deriveReportingStage({ reportingDetails, reportingReady })
 }
 
 export function deriveSecurityPoolForkStage({ currentStage, workflowDisabled }: { currentStage: ForkAuctionStageView | undefined; workflowDisabled: boolean | undefined }): SecurityPoolForkStage | undefined {

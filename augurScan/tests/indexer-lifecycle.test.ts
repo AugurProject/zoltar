@@ -784,6 +784,21 @@ describe('network indexer lifecycle', () => {
 		expect(failures[0]?.error).toBeInstanceOf(ChainConfigurationError)
 	})
 
+	test('does not hide unexpected provider failures during log boundary discovery', async () => {
+		const unexpectedFailure = new Error('unexpected provider failure')
+		await expect(
+			findEarliestAvailableLogProvider(
+				[{ id: 'broken' }, { id: 'unused' }],
+				10n,
+				async (provider) => {
+					if (provider.id === 'broken') throw unexpectedFailure
+					return 100n
+				},
+				async () => {},
+			),
+		).rejects.toBe(unexpectedFailure)
+	})
+
 	test('recovers pruned log coverage without recording a lifecycle failure', async () => {
 		const controller = new AbortController()
 		const prunedLogs = new RpcRequestMethodError(

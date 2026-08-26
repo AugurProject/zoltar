@@ -4,7 +4,8 @@ import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { shortAddress } from '../lib/format.js'
-import { AddressValue, Status } from '../components/Status.js'
+import { Status } from '../components/Status.js'
+import { TradingAddressValue } from '../components/TradingAddress.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
 import { isKnownDefaultRpcUrl, loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
@@ -485,7 +486,7 @@ export function TradingDeploymentSetup({
 						<div>
 							<dt>SecurityPoolFactory</dt>
 							<dd>
-								<AddressValue value={selectedCore.securityPoolFactory} />
+								<TradingAddressValue value={selectedCore.securityPoolFactory} />
 							</dd>
 						</div>
 					</dl>

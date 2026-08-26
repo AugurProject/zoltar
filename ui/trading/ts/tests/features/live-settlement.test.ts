@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../../generated/contractArtifact.js'
-import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/LiveTrading.js'
+import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/LiveSettlementControls.js'
 import { normalizeForkOutcomeIndexes, simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 

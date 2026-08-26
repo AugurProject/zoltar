@@ -90,7 +90,18 @@ for (const appId of UI_APP_IDS) {
 	const expectedRoute = expectedRoutes[appId]
 
 	test(`${appId} production build emits the deployable artifact set`, async () => {
-		const expectedPaths = [productionIndexPath, productionCssPath, productionTokensCssPath, appBundlePath, appSourceMapPath, workerBundlePath, workerSourceMapPath, ...productionFaviconPaths, ...(appId === 'trading' ? [path.join(distRootPath, 'css', 'app.css'), path.join(distRootPath, 'core-deployments.json')] : [])]
+		const expectedPaths = [
+			productionIndexPath,
+			productionCssPath,
+			productionTokensCssPath,
+			...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
+			appBundlePath,
+			appSourceMapPath,
+			workerBundlePath,
+			workerSourceMapPath,
+			...productionFaviconPaths,
+			...(appId === 'trading' ? [path.join(distRootPath, 'css', 'app.css'), path.join(distRootPath, 'core-deployments.json')] : []),
+		]
 
 		for (const expectedPath of expectedPaths) {
 			await expect(fs.access(expectedPath)).resolves.toBeNull()
