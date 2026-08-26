@@ -16,8 +16,8 @@ import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { OperationPlan } from '../operations/types.ts'
-import { loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
-import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
+import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations } from './obligations.ts'
 import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
@@ -37,6 +37,65 @@ type RuntimeResources = {
 
 function errorMessage(error: unknown) {
 	return (error instanceof Error ? error.message : String(error)).slice(0, 1_500)
+}
+
+export function backfillWaitMilliseconds(lifecyclePollMilliseconds: number, consecutiveBackfillCycles: number) {
+	if (!Number.isSafeInteger(lifecyclePollMilliseconds) || lifecyclePollMilliseconds < 1_000 || lifecyclePollMilliseconds > 60_000) {
+		throw new Error('Backfill poll interval must be an integer from 1000 through 60000 milliseconds')
+	}
+	if (!Number.isSafeInteger(consecutiveBackfillCycles) || consecutiveBackfillCycles < 0) {
+		throw new Error('Consecutive backfill cycle count must be a non-negative integer')
+	}
+	const initialCadence = Math.min(lifecyclePollMilliseconds, 5_000)
+	const completedWindows = Math.min(Math.floor(consecutiveBackfillCycles / 16), 4)
+	return Math.min(lifecyclePollMilliseconds, initialCadence * 2 ** completedWindows)
+}
+
+export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
+	return {
+		anchor: { blockNumber: scan.anchor.blockNumber, timestamp: scan.anchor.timestamp },
+		auctions: scan.snapshot.auctions.map(auction => ({
+			address: auction.address,
+			bidCount: auction.bids.length,
+			endTime: auction.endTime,
+			finalized: auction.finalized,
+			pool: auction.pool,
+			startTime: auction.startTime,
+		})),
+		complete: scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete,
+		pairs: scan.snapshot.pairs.map(pair => ({ address: pair.address, feeBps: pair.feeBps, pool: pair.pool, status: pair.status, universeId: pair.universeId })),
+		pools: scan.snapshot.pools.map(pool => ({
+			address: pool.address,
+			awaitingForkContinuation: pool.awaitingForkContinuation,
+			coordinator: pool.coordinator,
+			questionId: pool.questionId,
+			systemState: pool.systemState,
+			universeId: pool.universeId,
+			vaultCount: registeredVaultCount(scan.topologyCache, pool.address),
+		})),
+		reports: scan.snapshot.reports.map(report => ({
+			currentReporter: report.currentReporter,
+			flags: report.flags,
+			reportId: report.reportId,
+			settlementTime: report.settlementTime,
+			token1: report.token1,
+			token2: report.token2,
+		})),
+		universes: scan.snapshot.universes.map(universe => ({
+			forkQuestionId: universe.forkQuestionId,
+			forkTime: universe.forkTime,
+			id: universe.id,
+			knownChildOutcomeCount: universe.knownChildOutcomes.length,
+			...(universe.parentUniverseId === undefined ? {} : { parentUniverseId: universe.parentUniverseId }),
+			repToken: universe.repToken,
+		})),
+	}
+}
+
+function registeredVaultCount(topologyCache: CanonicalImmutableTopologyCache, pool: Address) {
+	const registeredVaults = topologyCache.vaultsByPool[pool.toLowerCase()]
+	if (registeredVaults === undefined) throw new Error(`Canonical topology cache omitted the vault registry for pool ${pool}`)
+	return registeredVaults.length
 }
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {
@@ -87,6 +146,32 @@ function schedulerFor(configuration: ConfigurationState, state: RuntimeState) {
 		settings: configuration.settings.scheduler,
 		state: state.scheduler,
 	})
+}
+
+export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
+	if (state.scheduler.selectedOperationId !== operationId || (state.scheduler.status !== 'running' && state.scheduler.status !== 'paused')) return false
+	const scheduler = schedulerFor(configuration, state)
+	await scheduler.complete(operationId)
+	if (configuration.settings.paused || state.paused) await scheduler.pause()
+	return true
+}
+
+function workflowStartedAfterLastScheduledRun(state: RuntimeState) {
+	const operationId = state.scheduler.selectedOperationId
+	if (operationId === undefined) return false
+	const lastRunAt = state.scheduler.lastRunAt === undefined ? undefined : Date.parse(state.scheduler.lastRunAt)
+	return state.workflows.some(workflow => {
+		if (workflow.classification !== 'selectable' || workflow.operationId !== operationId) return false
+		if (workflow.status !== 'abandoned' && workflow.status !== 'completed' && workflow.status !== 'failed') return false
+		const startedAt = Date.parse(workflow.startedAt ?? workflow.createdAt)
+		return lastRunAt === undefined || startedAt > lastRunAt
+	})
+}
+
+function interruptedSchedulerRunNeedsClosure(state: RuntimeState) {
+	if (state.pendingTransactions.length !== 0 || state.workflows.some(workflowNeedsContinuation)) return false
+	if (state.scheduler.status === 'running') return true
+	return state.scheduler.status === 'paused' && workflowStartedAfterLastScheduledRun(state)
 }
 
 async function preflightRpcSet(rpcUrls: readonly string[], expectedChainId: number, kind: 'public-rpc' | 'read-rpc', requiredHealthy: number) {
@@ -425,22 +510,14 @@ async function reconcilePendingWork(configuration: ConfigurationState, state: Ru
 		} else if (!completeLifecycleObligation(state, obligation) && workflow.status === 'blocked') {
 			failLifecycleObligation(obligation, 'Recovered a prerequisite; canonical rediscovery is required for the remaining lifecycle steps', true)
 		}
-	} else if (state.scheduler.status === 'running' && state.scheduler.selectedOperationId === operationId) {
+	} else if ((state.scheduler.status === 'running' || state.scheduler.status === 'paused') && state.scheduler.selectedOperationId === operationId) {
 		retryableSelectableFailure = abandonRetryableSelectableFailure(state, {
 			definitionId: workflow.operationId,
 			ecosystem: workflow.ecosystem,
 			id: workflow.planId,
 			label: workflow.label,
 		})
-		if (workflow.status === 'completed' || workflow.status === 'failed') {
-			const scheduler = schedulerFor(configuration, state)
-			await scheduler.complete(operationId)
-			if (settings.paused) await scheduler.pause()
-		} else {
-			const scheduler = schedulerFor(configuration, state)
-			await scheduler.complete(operationId)
-			if (settings.paused) await scheduler.pause()
-		}
+		await scheduleAfterRecoveredTransaction(configuration, state, operationId)
 	}
 	await persistState(configuration, state)
 	if (recoveryFailure !== undefined && !retryableLifecycleFailure && !retryableSelectableFailure) {
@@ -523,10 +600,9 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		})
 	}
 	if (state.signerAddress === undefined && initialWallet !== undefined) {
-		state.signerAddress = initialWallet
-		state.wallet = initialWallet
+		const binding = bindRuntimeStateToSigner(state, initialWallet)
 		recordActivity(state, {
-			message: `Durable runtime bound to signer ${initialWallet}`,
+			message: binding.indexInvalidated ? `Durable runtime bound to signer ${initialWallet}; keyless wallet index invalidated for canonical rebuild` : `Durable runtime bound to signer ${initialWallet}`,
 			status: 'info',
 			type: 'wallet',
 		})
@@ -538,10 +614,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		revision: loaded.revision,
 		settings: loaded.settings,
 	}
-	if (state.scheduler.status === 'running' && state.pendingTransactions.length === 0 && !state.workflows.some(workflowNeedsContinuation)) {
+	if (interruptedSchedulerRunNeedsClosure(state)) {
 		const scheduler = schedulerFor(configuration, state)
 		await scheduler.complete(state.scheduler.selectedOperationId)
-		if (configuration.settings.paused) await scheduler.pause()
+		if (configuration.settings.paused || state.paused) await scheduler.pause()
 		recordActivity(state, {
 			message: 'Interrupted scheduler run was closed with a fresh randomized wait before any new operation',
 			status: 'info',
@@ -577,6 +653,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	let topologyCacheStateFile: string | undefined
 	let carryProfileResetAuthorized = initialCarryProfileResetAuthorized
 	let backfillIncomplete = false
+	let consecutiveBackfillCycles = 0
 	await persistState(configuration, state)
 	await pollUntilStopped(
 		async () => {
@@ -657,6 +734,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				carryProfileResetAuthorized = false
 				state.evaluations = state.wallet === undefined ? blockExecutableEvaluations(scan.evaluations, 'Configure the dedicated transaction signer before execution') : scan.evaluations
 				state.inventory = scan.inventory
+				state.topology = runtimeTopologySummary(scan)
 				state.lastScanAt = new Date().toISOString()
 				state.lastScannedBlock = scan.anchor.blockNumber
 				state.error = undefined
@@ -785,7 +863,9 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			}
 		},
 		async consecutiveFailures => {
-			const milliseconds = backfillIncomplete ? 250 : retryDelayMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveFailures)
+			const milliseconds = backfillIncomplete ? backfillWaitMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveBackfillCycles) : retryDelayMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveFailures)
+			if (backfillIncomplete) consecutiveBackfillCycles += 1
+			else consecutiveBackfillCycles = 0
 			await shutdown.wait(milliseconds)
 		},
 		loaded.settings.runtime.once,

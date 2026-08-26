@@ -166,16 +166,39 @@
 						<h2 id="catalog-title">Operation catalog</h2>
 						<p class="lede">Every catalog entry shows live eligibility. Blocked operations are never submitted.</p>
 					</div>
-					<label class="filter-control"
-						>Ecosystem
-						<select id="catalog-filter">
-							<option value="all">All ecosystems</option>
-							<option value="zoltar">Zoltar</option>
-							<option value="statoblast">Statoblast</option>
-							<option value="open-oracle">Open Oracle</option>
-							<option value="trading">Trading</option>
-						</select>
-					</label>
+					<div class="catalog-filters">
+						<label class="filter-control"
+							>Ecosystem
+							<select id="catalog-filter">
+								<option value="all">All ecosystems</option>
+								<option value="zoltar">Zoltar</option>
+								<option value="statoblast">Statoblast</option>
+								<option value="open-oracle">Open Oracle</option>
+								<option value="trading">Trading</option>
+							</select>
+						</label>
+						<label class="filter-control"
+							>Classification
+							<select id="catalog-classification-filter">
+								<option value="all">All classifications</option>
+								<option value="selectable">Randomly selectable</option>
+								<option value="lifecycle-obligation">Lifecycle obligation</option>
+								<option value="prerequisite">Workflow prerequisite</option>
+								<option value="role-restricted">Role restricted</option>
+								<option value="excluded-dangerous">Excluded: dangerous</option>
+							</select>
+						</label>
+						<label class="filter-control"
+							>Eligibility
+							<select id="catalog-eligibility-filter">
+								<option value="all">All eligibility states</option>
+								<option value="eligible">Eligible now</option>
+								<option value="blocked">Blocked now</option>
+								<option value="disabled">Policy disabled</option>
+								<option value="not-selectable">Not independently selectable</option>
+							</select>
+						</label>
+					</div>
 				</div>
 				<p class="table-scroll-hint muted">Scroll horizontally to inspect risk, candidates, and eligibility.</p>
 				<div class="table-shell">
@@ -187,6 +210,7 @@
 							<tr>
 								<th scope="col">Operation</th>
 								<th scope="col">Ecosystem</th>
+								<th scope="col">Classification</th>
 								<th scope="col">Risk</th>
 								<th scope="col">Candidates</th>
 								<th scope="col">Eligibility</th>
@@ -206,6 +230,38 @@
 					</div>
 				</div>
 				<div id="ecosystem-grid" class="ecosystem-grid"></div>
+				<article class="panel topology-panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Sanitized canonical graph</p>
+							<h3>Anchored topology</h3>
+						</div>
+						<span id="topology-anchor" class="badge neutral">Anchor loading</span>
+					</div>
+					<p id="topology-status" class="muted">Waiting for canonical topology.</p>
+					<div class="topology-grid">
+						<details open>
+							<summary><strong>Universes</strong></summary>
+							<div id="topology-universes" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Security pools</strong></summary>
+							<div id="topology-pools" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Open Oracle reports</strong></summary>
+							<div id="topology-reports" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Truth auctions</strong></summary>
+							<div id="topology-auctions" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Trading pairs</strong></summary>
+							<div id="topology-pairs" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+					</div>
+				</article>
 			</section>
 
 			<section data-page-content="activity" aria-labelledby="activity-title">
@@ -304,11 +360,12 @@
 					<div>
 						<p class="eyebrow">Safety controls</p>
 						<h2 id="settings-title">Settings</h2>
-						<p class="lede">Changes apply before the next selection cycle.</p>
+						<p class="lede">Pause the bot before changing execution policy. Changes apply before the next selection cycle.</p>
 					</div>
 					<span id="settings-scope" class="badge neutral">Configuration loading</span>
 				</div>
 				<div id="configuration-status" class="notice hidden" role="status"></div>
+				<div id="settings-pause-note" class="notice warning hidden" role="status">Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.</div>
 				<div class="settings-stack">
 					<details class="panel settings-group" open>
 						<summary>

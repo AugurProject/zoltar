@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { createSignerOperationGate, type Hex } from '../support/bot-shared.ts'
+import { createSignerOperationGate, privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '../support/bot-shared.ts'
 import example from '../../config/operator.example.json'
 import {
 	assertSignerCompatibleWithPending,
 	assertSignerCompatibleWithDurableScope,
+	assertSettingsUpdatePaused,
 	ConfigurationCommitIndeterminate,
 	ConfigurationCommittedSafelyPaused,
 	createChaosDashboardController,
@@ -80,6 +81,66 @@ async function captureFailure(operation: () => unknown | Promise<unknown>): Prom
 }
 
 describe('chaos dashboard configuration boundary', () => {
+	test('groups concrete lifecycle candidates into one classified catalog row', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		const definition = {
+			classification: 'lifecycle-obligation' as const,
+			contract: 'OpenOracle',
+			description: 'Settle every due report',
+			discoveryInputs: ['report', 'report'],
+			ecosystem: 'open-oracle' as const,
+			id: 'open-oracle.settle',
+			label: 'Settle report',
+			method: 'settle',
+			risk: 'low' as const,
+		}
+		const plan = (id: string): OperationPlan => ({
+			classification: 'lifecycle-obligation',
+			createdAtBlock: '10',
+			definitionId: definition.id,
+			ecosystem: definition.ecosystem,
+			id,
+			label: definition.label,
+			metadata: { reportId: id },
+			obligation: true,
+			planningSeed: 1,
+			postconditions: [],
+			priority: 'urgent',
+			risk: 'low',
+			steps: [],
+		})
+		state.evaluations = [
+			{ definition, eligibility: { blockers: ['due report', 'due report'], eligible: true }, plan: plan('report:1') },
+			{ definition, eligibility: { blockers: ['second report'], eligible: true }, plan: plan('report:2') },
+		]
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			state,
+		})
+
+		expect(await controller.getState()).toMatchObject({
+			operationEvaluations: [
+				{
+					blockers: ['due report', 'second report'],
+					candidateCount: 2,
+					classification: 'lifecycle-obligation',
+					eligible: true,
+					id: definition.id,
+					prerequisites: ['report'],
+				},
+			],
+		})
+	})
+
 	test('validates the full execution-policy patch through the canonical parser', () => {
 		const candidate = settingsPatchCandidate(settings(), {
 			patch: {
@@ -120,6 +181,81 @@ describe('chaos dashboard configuration boundary', () => {
 			quorumRpcUrls: [],
 			rpcQuorum: 1,
 		})
+	})
+
+	test('requires both persisted and runtime pause before any execution-policy change', () => {
+		const running = configuredSettings(false, false)
+		const paused = configuredSettings(true, false)
+
+		expect(() => assertSettingsUpdatePaused(running, false)).toThrow('changing execution policy')
+		expect(() => assertSettingsUpdatePaused(paused, true)).not.toThrow()
+		expect(() => assertSettingsUpdatePaused(paused, false)).toThrow('running chaos bot')
+	})
+
+	test('rejects a direct settings mutation while running before persistence', async () => {
+		const current = configuredSettings(false, false)
+		const state = runtimeState(current)
+		let persisted = false
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: true, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			saveConfiguration: async () => {
+				persisted = true
+				return 'unexpected-revision'
+			},
+			state,
+		})
+
+		await expect(controller.setSettings(settingsUpdate(current, 'revision', false, 90))).rejects.toThrow('changing execution policy')
+		expect(persisted).toBeFalse()
+	})
+
+	test('invalidates a keyless wallet index during the first dashboard signer binding', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		state.protocolIndex = {
+			auctionBids: {},
+			chainId: current.network.chainId,
+			childRepSplits: [],
+			cursor: { blockHash: zeroHash, blockNumber: current.runtime.protocolStartBlock.toString() },
+			escalationDeposits: [],
+			migrationRepSplits: [],
+			openOracle: current.deployment.openOracle,
+			reports: [],
+			schemaVersion: 2,
+			securityPoolForker: current.deployment.securityPoolForker,
+			startBlock: current.runtime.protocolStartBlock.toString(),
+			wallet: zeroAddress,
+			zoltar: current.deployment.zoltar,
+		}
+		const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current }
+		const controller = createChaosDashboardController({
+			configuration,
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			saveConfiguration: async () => 'next-revision',
+			saveState: async () => undefined,
+			state,
+		})
+
+		await controller.setSigner({ privateKey: firstPrivateKey, remember: true, revision: 'revision' })
+
+		expect(state.signerAddress).toBe(privateKeyToAccount(firstPrivateKey).address)
+		expect(state.protocolIndex).toBeUndefined()
+		expect(state.activities[0]?.message).toContain('wallet-scoped protocol index invalidated')
 	})
 
 	test('requires CAS-shaped pause and signer updates', () => {
@@ -496,7 +632,7 @@ describe('chaos dashboard configuration boundary', () => {
 	})
 
 	test('latches a durable pause when a live-enable configuration save is indeterminate', async () => {
-		const current = configuredSettings(false, false)
+		const current = configuredSettings(true, false)
 		const state = runtimeState(current)
 		const configuration = {
 			path: '/tmp/unused-chaos-config.json',

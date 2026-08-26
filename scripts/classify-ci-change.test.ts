@@ -9,19 +9,20 @@ const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedSco
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
 	[['README.md'], ['docs']],
-	[['shared/ts/trading/math.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan']],
+	[['shared/ts/trading/math.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
-	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'arbitrager', 'liquidator']],
+	[['bots/chaos/src/cli/run.ts'], ['chaos']],
+	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'arbitrager', 'liquidator', 'chaos']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
-	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan']],
+	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
-	[['solidity/contracts/Zoltar.sol'], ['core', 'trading', 'arbitrager', 'liquidator', 'infrastructure']],
+	[['solidity/contracts/Zoltar.sol'], ['core', 'trading', 'arbitrager', 'liquidator', 'chaos', 'infrastructure']],
 	[['reth/compose.yaml'], ['infrastructure']],
 	[
 		['solidity/contracts/trading/TwoWayConstantProductPair.sol', 'bots/liquidator/src/run.ts'],
-		['core', 'trading', 'arbitrager', 'liquidator', 'infrastructure'],
+		['core', 'trading', 'arbitrager', 'liquidator', 'chaos', 'infrastructure'],
 	],
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
@@ -49,14 +50,21 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 	expect(docs.hasPackages).toBe(false)
 	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])
 	expect(JSON.parse(mixed.packageMatrixJson)).toEqual({ include: [...mixed.packageMatrix] })
-	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
+	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan'])
 	expect(classifyCiChange(['shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
 })
 
 test('shared changes select every verified package consumer', () => {
 	const shared = classifyCiChange(['shared/ts/ethereum.ts'])
-	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'augur-scan'])
+	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan'])
 	expect(JSON.parse(shared.packageMatrixJson)).toEqual({ include: [...shared.packageMatrix] })
+})
+
+test('chaos changes select the artifact-backed package job', () => {
+	const chaos = classifyCiChange(['bots/chaos/src/runtime/operator.ts'])
+	expect(chaos.forcedFull).toBe(false)
+	expect(chaos.packageMatrix).toEqual([{ artifacts: true, directory: 'bots/chaos', package: 'chaos' }])
+	expect(chaos.artifactInputs).toBe(true)
 })
 
 test('Git path collection keeps deleted executables and both sides of renames', () => {

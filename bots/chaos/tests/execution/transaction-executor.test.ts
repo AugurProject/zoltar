@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState } from '../../src/state/operator-state.ts'
 
@@ -184,8 +184,9 @@ function combinedRepBalanceRpcServer(balances: { credit: () => bigint; wallet: (
 const receiptTransactionHash = `0x${'11'.repeat(32)}` as const
 const receiptBlockHash = `0x${'22'.repeat(32)}` as const
 const finalityBlockHash = `0x${'33'.repeat(32)}` as const
+const receiptClockTimestamp = 2_000_000n
 
-function receiptRpcServer(head: bigint, receiptVisible: boolean) {
+function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransactionHash = receiptTransactionHash, blockTimestamp = receiptClockTimestamp) {
 	const requestedMethods: string[] = []
 	const server = Bun.serve({
 		port: 0,
@@ -196,6 +197,9 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean) {
 			}
 			requestedMethods.push(body.method)
 			const id = 'id' in body ? body.id : 1
+			if (body.method === 'eth_chainId') {
+				return Response.json({ id, jsonrpc: '2.0', result: '0x1' })
+			}
 			if (body.method === 'eth_getTransactionReceipt') {
 				return Response.json({
 					id,
@@ -213,7 +217,7 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean) {
 								logsBloom: `0x${'00'.repeat(256)}`,
 								status: '0x1',
 								to: target,
-								transactionHash: receiptTransactionHash,
+								transactionHash: returnedTransactionHash,
 								transactionIndex: '0x0',
 								type: '0x2',
 							}
@@ -251,7 +255,7 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean) {
 						sha3Uncles: `0x${'66'.repeat(32)}`,
 						size: '0x1',
 						stateRoot: `0x${'77'.repeat(32)}`,
-						timestamp: '0x1',
+						timestamp: toHex(blockTimestamp),
 						totalDifficulty: '0x0',
 						transactions: [],
 						transactionsRoot: `0x${'88'.repeat(32)}`,
@@ -276,6 +280,7 @@ function environment(firstUrl: string, secondUrl: string, ...additionalUrls: str
 	const quorumRpcUrls = [secondUrl, ...additionalUrls]
 	return {
 		chain: mainnet,
+		clock: () => Number(receiptClockTimestamp * 1_000n),
 		pool: createRpcEndpointPool([firstUrl, ...quorumRpcUrls]),
 		sender,
 		settings: settings(firstUrl, quorumRpcUrls),
@@ -284,6 +289,12 @@ function environment(firstUrl: string, secondUrl: string, ...additionalUrls: str
 }
 
 describe('transaction receipt quorum', () => {
+	test('binds returned transaction objects to the exact requested hash', () => {
+		const wrongHash = `0x${'99'.repeat(32)}` as const
+		expect(() => assertRequestedTransactionHash(receiptTransactionHash, receiptTransactionHash, 'transaction lookup')).not.toThrow()
+		expect(() => assertRequestedTransactionHash(wrongHash, receiptTransactionHash, 'transaction lookup')).toThrow(`returned transaction hash ${wrongHash}, expected ${receiptTransactionHash}`)
+	})
+
 	test('accepts two matching current receipts while ignoring a pre-receipt lagging reader', async () => {
 		const first = receiptRpcServer(112n, true)
 		const second = receiptRpcServer(112n, true)
@@ -293,9 +304,21 @@ describe('transaction receipt quorum', () => {
 
 		expect(result.observed).toBe(true)
 		expect(result.receipt?.transactionHash).toBe(receiptTransactionHash)
-		expect(lagging.requestedMethods).toContain('eth_getTransactionReceipt')
+		expect(lagging.requestedMethods).toContain('eth_chainId')
 		expect(lagging.requestedMethods).toContain('eth_blockNumber')
+		expect(lagging.requestedMethods).not.toContain('eth_getTransactionReceipt')
 		expect(lagging.requestedMethods).not.toContain('eth_getBlockByNumber')
+	})
+
+	test('rejects a receipt quorum whose agreeing latest blocks have old timestamps', async () => {
+		const first = receiptRpcServer(112n, true, receiptTransactionHash, 1n)
+		const second = receiptRpcServer(112n, true, receiptTransactionHash, 1n)
+
+		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow('seconds old')
+		for (const rpc of [first, second]) {
+			expect(rpc.requestedMethods).toContain('eth_getBlockByNumber')
+			expect(rpc.requestedMethods).not.toContain('eth_getTransactionReceipt')
+		}
 	})
 
 	test('fails closed when a reader at the receipt block cannot find the receipt', async () => {
@@ -312,6 +335,14 @@ describe('transaction receipt quorum', () => {
 		const secondLagging = receiptRpcServer(99n, false)
 
 		await expect(finalizedReceiptWithQuorum(environment(onlyReceipt.url, firstLagging.url, secondLagging.url), receiptTransactionHash)).rejects.toBeInstanceOf(ConnectivityDegradedError)
+	})
+
+	test('rejects receipt objects that are not bound to the requested transaction hash', async () => {
+		const wrongHash = `0x${'99'.repeat(32)}` as const
+		const first = receiptRpcServer(112n, true, wrongHash)
+		const second = receiptRpcServer(112n, true, wrongHash)
+
+		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow(`returned transaction hash ${wrongHash}, expected ${receiptTransactionHash}`)
 	})
 })
 
@@ -646,6 +677,7 @@ async function postJournalExecutionFixture(postJournalHead: bigint) {
 			second.setHead(postJournalHead)
 		},
 		chain: mainnet,
+		clock: () => 1_000,
 		pool,
 		sender: account.address,
 		settings: configured,
@@ -680,6 +712,7 @@ describe('transaction signing-anchor re-attestation', () => {
 		const state = initialRuntimeState(false, account.address, 1, initialDurableState(1, false, 'profile:strict-attesters', account.address))
 		const environment: ExecutionEnvironment = {
 			chain: mainnet,
+			clock: () => 1_000,
 			pool,
 			sender: account.address,
 			settings: configured,
@@ -725,6 +758,7 @@ describe('transaction signing-anchor re-attestation', () => {
 		const state = initialRuntimeState(false, account.address, 1, initialDurableState(1, false, 'profile:changing-attesters', account.address))
 		const environment: ExecutionEnvironment = {
 			chain: mainnet,
+			clock: () => 1_000,
 			pool,
 			sender: account.address,
 			settings: configured,
@@ -756,6 +790,7 @@ describe('transaction signing-anchor re-attestation', () => {
 		const environment: ExecutionEnvironment = {
 			beforeBroadcast: async () => catchingUp.setHead(99n),
 			chain: mainnet,
+			clock: () => 1_000,
 			pool,
 			sender: account.address,
 			settings: configured,

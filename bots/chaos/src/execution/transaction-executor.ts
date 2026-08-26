@@ -8,6 +8,7 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
 import { erc1155Abi, erc20Abi, openOracleAbi } from '../contracts/abi.ts'
+import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import {
@@ -53,6 +54,7 @@ export type ExecutionEnvironment = {
 	beforeBroadcast?: (() => Promise<void>) | undefined
 	beforeSign?: (() => Promise<void>) | undefined
 	chain: Chain
+	clock?: (() => number) | undefined
 	executionCancelled?: (() => boolean) | undefined
 	finalityBlocks?: bigint | undefined
 	pool: RpcPool
@@ -88,6 +90,12 @@ export function sameCanonicalAttesters(left: ReadonlySet<string>, right: Readonl
 
 export function sameCanonicalExecutionAnchor(left: CanonicalExecutionAnchor, right: CanonicalExecutionAnchor) {
 	return left.number === right.number && left.hash.toLowerCase() === right.hash.toLowerCase() && sameCanonicalAttesters(left.attestingRpcUrls, right.attestingRpcUrls)
+}
+
+export function assertRequestedTransactionHash(returnedHash: Hex, requestedHash: Hex, label: string) {
+	if (returnedHash.toLowerCase() !== requestedHash.toLowerCase()) {
+		throw new Error(`${label} returned transaction hash ${returnedHash}, expected ${requestedHash}`)
+	}
 }
 
 export function requiredConnectivity(settings: OperatorSettings) {
@@ -193,6 +201,12 @@ export async function agreedLatestBlock(environment: ExecutionEnvironment, label
 	if (block.number !== blockNumber) {
 		throw new Error(`${label} returned block ${block.number.toString()}, expected ${blockNumber.toString()}`)
 	}
+	assertCanonicalAnchorFreshness(
+		heads.map(head => head.value),
+		block.number,
+		block.timestamp,
+		environment.clock?.() ?? Date.now(),
+	)
 	const blockHash = block.hash
 	const attestingRpcUrls = new Set(blockObservations.filter(observation => observation.value.number === block.number && observation.value.hash?.toLowerCase() === blockHash.toLowerCase()).map(observation => observation.rpcUrl))
 	if (attestingRpcUrls.size < connectivity.rpcQuorum) {
@@ -732,7 +746,8 @@ function missingReceipt(error: unknown) {
 
 export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironment, hash: Hex) {
 	const connectivity = requiredConnectivity(environment.settings)
-	const readers = executionReadClients(environment)
+	const finalityAnchor = await agreedLatestBlock(environment, `receipt ${hash} finality anchor`)
+	const readers = canonicalAttestingReaders(environment, `receipt ${hash} finality`, finalityAnchor.attestingRpcUrls)
 	type ReceiptEvidence = {
 		blockHash: Hex
 		blockNumber: bigint
@@ -745,6 +760,7 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 			let receipt: TransactionReceipt | undefined
 			try {
 				receipt = await reader.client.getTransactionReceipt({ hash })
+				assertRequestedTransactionHash(receipt.transactionHash, hash, `RPC ${reader.endpoint} receipt lookup`)
 			} catch (error) {
 				if (!missingReceipt(error)) throw error
 			}

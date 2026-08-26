@@ -5,6 +5,7 @@ import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
 import { createQuestion, getQuestionId } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.ts'
+import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { CHAOS_FINALITY_BLOCKS } from '../../src/execution/transaction-executor.ts'
@@ -34,8 +35,15 @@ export type ChaosRpcProxy = {
 	successfulSendRawTransactionParams: readonly (readonly unknown[])[]
 }
 
+export type ChaosPrivateRelay = {
+	dispose: () => void
+	rawTransactions: readonly Hex[]
+	relayUrl: string
+}
+
 export type ChaosAnvilFixture = {
 	baselineQuestionCount: bigint
+	createPrivateRelay: () => ChaosPrivateRelay
 	createRpcProxy: (options?: { lostAcknowledgementOrdinal?: number | undefined }) => ChaosRpcProxy
 	dispose: () => Promise<void>
 	infra: ReturnType<typeof getInfraContractAddresses>
@@ -46,6 +54,48 @@ export type ChaosAnvilFixture = {
 	signer: Address
 	tradingFactory: Address
 	tradingRouter: Address
+}
+
+function privateTransaction(value: unknown): Hex {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('tx' in value) || !hex(value.tx)) throw new Error('Private relay request did not contain serialized transaction bytes')
+	return value.tx
+}
+
+function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
+	const rawTransactions: Hex[] = []
+	const server = Bun.serve({
+		port: 0,
+		async fetch(request) {
+			if (request.headers.get('x-flashbots-signature') === null) return Response.json({ error: { code: -32_600, message: 'Missing relay authentication' }, id: 1, jsonrpc: '2.0' }, { status: 401 })
+			const body = jsonRpcRequest(JSON.parse(await request.text()))
+			if (body.method !== 'eth_sendPrivateTransaction' || body.params.length !== 1) {
+				return Response.json({ error: { code: -32_601, message: 'Unsupported private relay method' }, id: body.id, jsonrpc: '2.0' })
+			}
+			const rawTransaction = privateTransaction(body.params[0])
+			const upstream = await fetch(node.rpcUrl, {
+				body: JSON.stringify({ id: body.id, jsonrpc: '2.0', method: 'eth_sendRawTransaction', params: [rawTransaction] }),
+				headers: { 'content-type': 'application/json' },
+				method: 'POST',
+			})
+			const upstreamText = await upstream.text()
+			const upstreamBody: unknown = JSON.parse(upstreamText)
+			if (!upstream.ok || !successfulJsonRpcResult(upstreamBody)) return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
+			rawTransactions.push(rawTransaction)
+			await mineFinalityBlocks(node)
+			return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
+		},
+	})
+	if (server.port === undefined) {
+		server.stop(true)
+		throw new Error('Integration private relay did not expose a port')
+	}
+	return {
+		dispose: () => server.stop(true),
+		get rawTransactions() {
+			return [...rawTransactions]
+		},
+		relayUrl: `http://127.0.0.1:${server.port.toString()}`,
+	}
 }
 
 function jsonRpcRequest(value: unknown): JsonRpcRequest {
@@ -180,7 +230,9 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		await createQuestion(deployer, question, outcomes)
 		await deployOriginSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
-		const pool = getSecurityPoolAddresses(getAddress('0x0000000000000000000000000000000000000000'), ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
+		const poolAddresses = getSecurityPoolAddresses(getAddress('0x0000000000000000000000000000000000000000'), ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		const pool = poolAddresses.securityPool
+		await manipulatePriceOracle(deployer, simulator, poolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		const tradingFactory = await deploy(
 			deployer,
@@ -209,6 +261,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,
+			createPrivateRelay: () => createPrivateRelay(node),
 			createRpcProxy: options => createRpcProxy(node, options),
 			dispose: node.dispose,
 			infra,

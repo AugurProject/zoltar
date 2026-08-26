@@ -495,9 +495,15 @@ dd {
 }
 
 .balance strong {
-	overflow-wrap: anywhere;
+	overflow-x: auto;
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 1rem;
+	font-size: 0.72rem;
+	white-space: nowrap;
+}
+
+.token-row > strong {
+	max-width: 60%;
+	overflow-wrap: anywhere;
 }
 
 .rep-balance {
@@ -727,6 +733,15 @@ dd {
 	font-weight: 700;
 }
 
+.catalog-filters {
+	display: flex;
+	align-items: flex-end;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 0.7rem;
+	width: min(44rem, 100%);
+}
+
 .table-shell {
 	overflow-x: auto;
 	border: 1px solid var(--operator-border);
@@ -740,6 +755,7 @@ dd {
 
 table {
 	width: 100%;
+	min-width: 72rem;
 	border-collapse: collapse;
 	font-size: 0.84rem;
 }
@@ -795,6 +811,61 @@ tbody tr:last-child td {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 1rem;
+}
+
+.topology-panel {
+	margin-top: 1rem;
+}
+
+.topology-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.8rem;
+	margin-top: 1rem;
+}
+
+.topology-grid details {
+	min-width: 0;
+	padding: 0.75rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.65rem;
+	background: #0d1114;
+}
+
+.topology-grid details:last-child:nth-child(odd) {
+	grid-column: 1 / -1;
+}
+
+.topology-grid summary {
+	cursor: pointer;
+}
+
+.topology-list {
+	display: grid;
+	gap: 0.45rem;
+	max-height: 22rem;
+	margin-top: 0.65rem;
+	overflow-y: auto;
+}
+
+.topology-row {
+	display: grid;
+	gap: 0.2rem;
+	min-width: 0;
+	padding: 0.6rem;
+	border: 1px solid rgb(43 50 57 / 68%);
+	border-radius: 0.5rem;
+	background: rgb(8 11 13 / 55%);
+}
+
+.topology-row strong,
+.topology-row small {
+	overflow-wrap: anywhere;
+}
+
+.topology-row small {
+	color: var(--operator-muted);
+	line-height: 1.4;
 }
 
 .ecosystem-card {
@@ -1121,6 +1192,15 @@ fieldset {
 		grid-template-columns: 1fr;
 	}
 
+	.catalog-filters {
+		justify-content: stretch;
+	}
+
+	.filter-control {
+		min-width: min(100%, 15rem);
+		flex: 1;
+	}
+
 	.timeline-item {
 		grid-template-columns: 1fr auto;
 	}
@@ -1187,12 +1267,21 @@ fieldset {
 	}
 
 	.balance-grid,
-	.coverage-grid {
+	.coverage-grid,
+	.topology-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.rep-balance {
 		grid-column: 1 / -1;
+	}
+
+	.topology-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.topology-grid details:last-child:nth-child(odd) {
+		grid-column: auto;
 	}
 
 	.token-row,

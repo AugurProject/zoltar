@@ -8,6 +8,7 @@ type RepBalance = {
 type OperationEvaluation = {
 	blockers: string[]
 	candidateCount?: string | number | undefined
+	classification?: string | undefined
 	description?: string | undefined
 	ecosystem?: string | undefined
 	eligible?: boolean | undefined
@@ -16,6 +17,19 @@ type OperationEvaluation = {
 	label?: string | undefined
 	prerequisites: string[]
 	risk?: string | undefined
+}
+
+type Topology = {
+	anchorBlock?: string | number | undefined
+	anchorTimestamp?: string | number | undefined
+	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; pool?: string | undefined; startTime?: string | number | undefined }>
+	complete?: boolean | undefined
+	pairs: Array<{ address?: string | undefined; feeBps?: string | number | undefined; pool?: string | undefined; status?: string | number | undefined; universeId?: string | undefined }>
+	pools: Array<{ address?: string | undefined; awaitingForkContinuation?: boolean | undefined; coordinator?: string | undefined; questionId?: string | undefined; systemState?: string | number | undefined; universeId?: string | undefined; vaultCount?: number | undefined }>
+	reports: Array<{ currentReporter?: string | undefined; flags?: string | number | undefined; reportId?: string | undefined; settlementTime?: string | number | undefined; token1?: string | undefined; token2?: string | undefined }>
+	totalCounts: { auctions: number; pairs: number; pools: number; reports: number; universes: number }
+	truncated?: boolean | undefined
+	universes: Array<{ forkQuestionId?: string | undefined; forkTime?: string | number | undefined; id?: string | undefined; knownChildOutcomeCount?: number | undefined; parentUniverseId?: string | undefined; repToken?: string | undefined }>
 }
 
 type WorkflowStep = {
@@ -105,6 +119,7 @@ type Snapshot = {
 	}
 	signerReady?: boolean | undefined
 	status?: string | undefined
+	topology: Topology
 	wallet?: string | undefined
 }
 
@@ -112,6 +127,7 @@ type Configuration = {
 	allowHighRiskOperations?: boolean | undefined
 	allowIrreversibleOperations?: boolean | undefined
 	chainId?: string | number | undefined
+	configurationCommitIndeterminate?: boolean | undefined
 	enabledEcosystems: string[]
 	execute?: boolean | undefined
 	hasSigner?: boolean | undefined
@@ -181,9 +197,18 @@ const rpcHealthRetryButton = element('rpc-health-retry-button', HTMLButtonElemen
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
+const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
+const catalogEligibilityFilter = element('catalog-eligibility-filter', HTMLSelectElement)
 const catalogCaption = element('catalog-caption', HTMLTableCaptionElement)
 const catalogRows = element('catalog-rows', HTMLTableSectionElement)
 const ecosystemGrid = element('ecosystem-grid', HTMLDivElement)
+const topologyAnchor = element('topology-anchor', HTMLSpanElement)
+const topologyStatus = element('topology-status', HTMLParagraphElement)
+const topologyUniverses = element('topology-universes', HTMLDivElement)
+const topologyPools = element('topology-pools', HTMLDivElement)
+const topologyReports = element('topology-reports', HTMLDivElement)
+const topologyAuctions = element('topology-auctions', HTMLDivElement)
+const topologyPairs = element('topology-pairs', HTMLDivElement)
 const pendingCount = element('pending-count', HTMLSpanElement)
 const obligationCount = element('obligation-count', HTMLSpanElement)
 const pendingTransactions = element('pending-transactions', HTMLDivElement)
@@ -224,6 +249,7 @@ const obligationRetryButton = element('obligation-retry', HTMLButtonElement)
 const activityList = element('activity-list', HTMLOListElement)
 const settingsScope = element('settings-scope', HTMLSpanElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
+const settingsPauseNote = element('settings-pause-note', HTMLDivElement)
 const settingsForm = element('settings-form', HTMLFormElement)
 const settingsFields = element('settings-fields', HTMLFieldSetElement)
 const executeInput = element('execute', HTMLInputElement)
@@ -254,11 +280,21 @@ const confirmResume = element('confirm-resume', HTMLButtonElement)
 
 let snapshot: Snapshot | undefined
 let configuration: Configuration | undefined
-let refreshPromise: Promise<void> | undefined
+type RefreshResult = { configurationAvailable: boolean; stateAvailable: boolean }
+let refreshPromise: Promise<RefreshResult> | undefined
 let settingsDirty = false
 let settingsConflict = false
 let settingsRevision: string | number | undefined
 let pauseMutationPending = false
+let pauseMutationUnreconciled = false
+let settingsMutationUnreconciled = false
+let signerMutationUnreconciled = false
+let configurationCommitIndeterminate = false
+
+const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
+const configurationCommitIndeterminateMessage = 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.'
+
+type MutationReconciliationTarget = 'pause' | 'settings' | 'signer'
 
 type RecoveryContextRefresh = {
 	available: (value: Snapshot) => boolean
@@ -392,6 +428,64 @@ function parseWorkflow(value: unknown) {
 	}
 }
 
+function parseTopology(value: unknown): Topology {
+	const source = record(value) ?? {}
+	const counts = record(source['totalCounts']) ?? {}
+	return {
+		anchorBlock: scalarValue(source['anchorBlock']),
+		anchorTimestamp: scalarValue(source['anchorTimestamp']),
+		auctions: list(source['auctions'], entry => ({
+			address: stringValue(entry['address']),
+			bidCount: nonnegativeIntegerValue(entry['bidCount']),
+			endTime: scalarValue(entry['endTime']),
+			finalized: booleanValue(entry['finalized']),
+			pool: stringValue(entry['pool']),
+			startTime: scalarValue(entry['startTime']),
+		})),
+		complete: booleanValue(source['complete']),
+		pairs: list(source['pairs'], entry => ({
+			address: stringValue(entry['address']),
+			feeBps: scalarValue(entry['feeBps']),
+			pool: stringValue(entry['pool']),
+			status: scalarValue(entry['status']),
+			universeId: stringValue(entry['universeId']),
+		})),
+		pools: list(source['pools'], entry => ({
+			address: stringValue(entry['address']),
+			awaitingForkContinuation: booleanValue(entry['awaitingForkContinuation']),
+			coordinator: stringValue(entry['coordinator']),
+			questionId: stringValue(entry['questionId']),
+			systemState: scalarValue(entry['systemState']),
+			universeId: stringValue(entry['universeId']),
+			vaultCount: nonnegativeIntegerValue(entry['vaultCount']),
+		})),
+		reports: list(source['reports'], entry => ({
+			currentReporter: stringValue(entry['currentReporter']),
+			flags: scalarValue(entry['flags']),
+			reportId: stringValue(entry['reportId']),
+			settlementTime: scalarValue(entry['settlementTime']),
+			token1: stringValue(entry['token1']),
+			token2: stringValue(entry['token2']),
+		})),
+		totalCounts: {
+			auctions: nonnegativeIntegerValue(counts['auctions']) ?? 0,
+			pairs: nonnegativeIntegerValue(counts['pairs']) ?? 0,
+			pools: nonnegativeIntegerValue(counts['pools']) ?? 0,
+			reports: nonnegativeIntegerValue(counts['reports']) ?? 0,
+			universes: nonnegativeIntegerValue(counts['universes']) ?? 0,
+		},
+		truncated: booleanValue(source['truncated']),
+		universes: list(source['universes'], entry => ({
+			forkQuestionId: stringValue(entry['forkQuestionId']),
+			forkTime: scalarValue(entry['forkTime']),
+			id: stringValue(entry['id']),
+			knownChildOutcomeCount: nonnegativeIntegerValue(entry['knownChildOutcomeCount']),
+			parentUniverseId: stringValue(entry['parentUniverseId']),
+			repToken: stringValue(entry['repToken']),
+		})),
+	}
+}
+
 function parseSnapshot(value: unknown): Snapshot {
 	const source = record(value) ?? {}
 	const inventory = record(source['inventory']) ?? {}
@@ -437,6 +531,7 @@ function parseSnapshot(value: unknown): Snapshot {
 		operationEvaluations: list(source['operationEvaluations'], entry => ({
 			blockers: strings(entry['blockers']),
 			candidateCount: scalarValue(entry['candidateCount']),
+			classification: stringValue(entry['classification']),
 			description: stringValue(entry['description']),
 			ecosystem: stringValue(entry['ecosystem']),
 			eligible: booleanValue(entry['eligible']),
@@ -477,6 +572,7 @@ function parseSnapshot(value: unknown): Snapshot {
 		},
 		signerReady: booleanValue(source['signerReady']),
 		status: stringValue(source['status']),
+		topology: parseTopology(source['topology']),
 		wallet: stringValue(source['wallet']),
 	}
 }
@@ -487,6 +583,7 @@ function parseConfiguration(value: unknown): Configuration {
 		allowHighRiskOperations: booleanValue(source['allowHighRiskOperations']),
 		allowIrreversibleOperations: booleanValue(source['allowIrreversibleOperations']),
 		chainId: scalarValue(source['chainId']),
+		configurationCommitIndeterminate: booleanValue(source['configurationCommitIndeterminate']),
 		enabledEcosystems: strings(source['enabledEcosystems']),
 		execute: booleanValue(source['execute']),
 		hasSigner: booleanValue(source['hasSigner']),
@@ -511,8 +608,17 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 	const controller = new AbortController()
 	const timeout = window.setTimeout(() => controller.abort(), timeoutMilliseconds)
 	try {
-		const response = await fetch(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal: controller.signal })
-		const value: unknown = await response.json()
+		let response: Response
+		let value: unknown
+		try {
+			response = await fetch(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal: controller.signal })
+			value = await response.json()
+		} catch (error) {
+			if (init?.method !== 'PUT') throw error
+			const unknown = new Error(error instanceof DOMException && error.name === 'AbortError' ? 'The mutation timed out and may have committed.' : 'The mutation response was lost and the change may have committed.')
+			unknown.name = 'MutationOutcomeUnknown'
+			throw unknown
+		}
 		if (!response.ok) {
 			const responseRecord = record(value)
 			const message = stringValue(responseRecord?.['error'])
@@ -520,6 +626,8 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 			if (response.status === 409 && responseRecord?.['code'] === 'configuration_revision_conflict') {
 				error.name = 'ConfigurationRevisionConflict'
 			}
+			if (responseRecord?.['code'] === 'configuration_committed_safely_paused') error.name = 'MutationOutcomeUnknown'
+			if (responseRecord?.['code'] === 'configuration_commit_indeterminate') error.name = 'ConfigurationCommitIndeterminate'
 			throw error
 		}
 		return value
@@ -622,6 +730,19 @@ function ecosystemLabel(value: string | undefined) {
 	return ecosystemLabels.get(normalizeEcosystem(value)) ?? 'Zoltar'
 }
 
+function operationIsIndependentlyExecutable(value: OperationEvaluation) {
+	return value.classification === 'selectable' || value.classification === 'lifecycle-obligation'
+}
+
+function classificationLabel(value: string | undefined) {
+	if (value === 'lifecycle-obligation') return 'Lifecycle obligation'
+	if (value === 'excluded-dangerous') return 'Excluded: dangerous'
+	if (value === 'role-restricted') return 'Role restricted'
+	if (value === 'prerequisite') return 'Workflow prerequisite'
+	if (value === 'selectable') return 'Randomly selectable'
+	return 'Classification unavailable'
+}
+
 function shortHex(value: string | undefined) {
 	if (value === undefined || value.length < 14) return value ?? '—'
 	return `${value.slice(0, 8)}…${value.slice(-6)}`
@@ -632,6 +753,24 @@ function parsePositiveNumber(value: string | number | undefined) {
 	if (typeof value === 'number') parsed = value
 	else if (value !== undefined) parsed = Number(value)
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function publicCandidateCount(value: string | number | undefined) {
+	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
+	const count = BigInt(value)
+	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
+}
+
+function formatAtomic18(value: string | number | undefined) {
+	if (value === undefined) return '—'
+	let atomic = ''
+	if (typeof value === 'string') atomic = value
+	else if (Number.isSafeInteger(value) && value >= 0) atomic = value.toString()
+	if (!/^(?:0|[1-9]\d*)$/.test(atomic)) return 'Invalid atomic balance'
+	const padded = atomic.padStart(19, '0')
+	const integer = padded.slice(0, -18).replace(/^0+(?=\d)/, '')
+	return `${integer}.${padded.slice(-18)}`
 }
 
 function formatDuration(totalSeconds: number) {
@@ -673,19 +812,67 @@ function statusLabel(status: string | undefined) {
 	return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1).toLowerCase()}`
 }
 
+function applyMutationControlLatches() {
+	if (pauseMutationUnreconciled || configurationCommitIndeterminate) pauseButton.disabled = true
+	if (settingsMutationUnreconciled || configurationCommitIndeterminate) settingsFields.disabled = true
+	if (signerMutationUnreconciled || configurationCommitIndeterminate) signerFields.disabled = true
+	if (!configurationCommitIndeterminate) return
+	confirmResume.disabled = true
+	for (const fields of [replacementFields, cancellationFields, candidateFields, workflowFields, obligationFields]) fields.disabled = true
+}
+
+function setMutationReconciliationPending(target: MutationReconciliationTarget) {
+	if (target === 'pause') pauseMutationUnreconciled = true
+	else if (target === 'settings') settingsMutationUnreconciled = true
+	else signerMutationUnreconciled = true
+	applyMutationControlLatches()
+}
+
+function resolveMutationReconciliations() {
+	if (configurationCommitIndeterminate) {
+		applyMutationControlLatches()
+		return
+	}
+	const reconciliationMessage = 'The request outcome was unknown. Current configuration and state were reloaded; review it before another mutation.'
+	if (pauseMutationUnreconciled) {
+		pauseMutationUnreconciled = false
+		pauseStatus.textContent = reconciliationMessage
+	}
+	if (settingsMutationUnreconciled) {
+		settingsMutationUnreconciled = false
+		settingsSaveStatus.textContent = reconciliationMessage
+	}
+	if (signerMutationUnreconciled) {
+		signerMutationUnreconciled = false
+		signerStatus.textContent = reconciliationMessage
+	}
+	if (snapshot !== undefined) renderHeader(snapshot)
+	if (configuration !== undefined) renderConfiguration(configuration)
+}
+
+function latchConfigurationCommitIndeterminate(status?: HTMLElement, message = configurationCommitIndeterminateMessage) {
+	configurationCommitIndeterminate = true
+	const recovery = `${message} ${configurationCommitIndeterminateRecoveryMessage}`
+	if (status !== undefined) status.textContent = recovery
+	configurationStatus.textContent = recovery
+	configurationStatus.className = 'notice error'
+	applyMutationControlLatches()
+}
+
 function renderHeader(value: Snapshot) {
 	if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
 	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
 	else setBadge(modeBadge, 'Dry run', 'info')
-	const networkName = value.network ?? 'Network unknown'
-	setBadge(networkBadge, value.chainId === undefined ? networkName : `${networkName} · ${String(value.chainId)}`, value.network === undefined ? 'warning' : 'neutral')
+	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
+	const chainId = value.chainId ?? configuration?.chainId
+	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
 	setBadge(signerBadge, value.signerReady === true ? 'Signer ready' : 'Signer missing', value.signerReady === true ? 'success' : 'warning')
 	const recoveryItems = value.pendingTransactions.length + value.obligations.length
 	setBadge(recoveryBadge, recoveryItems === 0 ? 'Recovery clear' : `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, recoveryItems === 0 ? 'success' : 'warning')
 	let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
 	if (pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
 	pauseButton.textContent = pauseLabel
-	pauseButton.disabled = pauseMutationPending
+	pauseButton.disabled = pauseMutationPending || pauseMutationUnreconciled || configurationCommitIndeterminate
 }
 
 function renderOverview(value: Snapshot) {
@@ -694,14 +881,15 @@ function renderOverview(value: Snapshot) {
 	nextRun.textContent = formatDate(value.scheduler.nextRunAt)
 	const delay = parsePositiveNumber(value.scheduler.lastDelaySeconds)
 	lastDelay.textContent = delay === undefined ? '—' : formatDuration(delay)
-	const eligible = value.operationEvaluations.filter(operation => operation.enabled !== false && operation.eligible === true)
-	eligibleCount.textContent = `${eligible.length.toString()} of ${value.operationEvaluations.length.toString()}`
+	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
+	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true)
+	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
 	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No signer') : compactIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
-	balanceEth.textContent = value.inventory.eth === undefined ? '—' : String(value.inventory.eth)
-	balanceWeth.textContent = value.inventory.weth === undefined ? '—' : String(value.inventory.weth)
+	balanceEth.textContent = formatAtomic18(value.inventory.eth)
+	balanceWeth.textContent = formatAtomic18(value.inventory.weth)
 	balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
 	renderRepBalances(value.inventory.rep)
 	renderRpcHealth(value)
@@ -752,7 +940,7 @@ function renderRepBalances(values: RepBalance[]) {
 		const identity = node('div')
 		identity.append(node('strong', undefined, value.symbol ?? 'REP'))
 		identity.append(node('small', 'mono', value.universeId === undefined ? shortHex(value.token) : `Universe ${value.universeId}`))
-		row.append(identity, node('strong', 'mono', value.balance === undefined ? '—' : String(value.balance)))
+		row.append(identity, node('strong', 'mono', formatAtomic18(value.balance)))
 		return row
 	})
 	repBalances.replaceChildren(...rows)
@@ -797,7 +985,7 @@ function renderWorkflow(value: Workflow | undefined) {
 
 function renderCoverage(values: OperationEvaluation[]) {
 	const cards = ecosystemOrder.map(ecosystem => {
-		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem)
+		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 		const eligible = operations.filter(value => value.enabled !== false && value.eligible === true).length
 		const card = node('div', 'coverage-card')
 		card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
@@ -807,42 +995,70 @@ function renderCoverage(values: OperationEvaluation[]) {
 }
 
 function renderCatalog(values: OperationEvaluation[]) {
-	const selected = catalogFilter.value
-	const filtered = selected === 'all' ? values : values.filter(value => normalizeEcosystem(value.ecosystem) === selected)
-	catalogCaption.textContent = `${filtered.length.toString()} operation${filtered.length === 1 ? '' : 's'} shown · eligibility refreshes with canonical state.`
+	const selectedEcosystem = catalogFilter.value
+	const selectedClassification = catalogClassificationFilter.value
+	const selectedEligibility = catalogEligibilityFilter.value
+	const filtered = values.filter(value => {
+		if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
+		if (selectedClassification !== 'all' && value.classification !== selectedClassification) return false
+		const independentlyExecutable = operationIsIndependentlyExecutable(value)
+		const eligible = independentlyExecutable && value.enabled !== false && value.eligible === true
+		let eligibility = 'blocked'
+		if (!independentlyExecutable) eligibility = 'not-selectable'
+		else if (value.enabled === false) eligibility = 'disabled'
+		else if (eligible) eligibility = 'eligible'
+		return selectedEligibility === 'all' || selectedEligibility === eligibility
+	})
+	const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
+	catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
 	const rows = filtered.map(value => {
 		const row = document.createElement('tr')
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
+		if (value.id !== undefined) nameCell.append(node('small', 'mono', value.id))
 		if (value.description !== undefined) nameCell.append(node('small', undefined, value.description))
 		const ecosystemCell = node('td', undefined, ecosystemLabel(value.ecosystem))
+		const classificationCell = node('td')
+		const classificationBadge = node('span')
+		let classificationTone: Parameters<typeof setBadge>[2] = 'success'
+		if (value.classification === 'excluded-dangerous') classificationTone = 'error'
+		else if (value.classification === 'role-restricted' || value.classification === 'prerequisite') classificationTone = 'neutral'
+		else if (value.classification === 'lifecycle-obligation') classificationTone = 'info'
+		setBadge(classificationBadge, classificationLabel(value.classification), classificationTone)
+		classificationCell.append(classificationBadge)
 		const riskCell = node('td')
 		const riskBadge = node('span')
 		setBadge(riskBadge, statusLabel(value.risk ?? 'standard'), value.risk === 'irreversible' || value.risk === 'high' ? 'warning' : 'neutral')
 		riskCell.append(riskBadge)
-		const candidatesCell = node('td', 'mono', value.candidateCount === undefined ? '0' : String(value.candidateCount))
+		const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
 		const eligibilityCell = node('td')
 		const enabled = value.enabled !== false
-		const eligible = enabled && value.eligible === true
+		const independentlyExecutable = operationIsIndependentlyExecutable(value)
+		const eligible = independentlyExecutable && enabled && value.eligible === true
 		const eligibilityBadge = node('span')
-		if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
+		if (!independentlyExecutable) setBadge(eligibilityBadge, 'Not independently selectable', 'neutral')
+		else if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
 		else if (eligible) setBadge(eligibilityBadge, 'Eligible', 'success')
 		else setBadge(eligibilityBadge, 'Blocked', 'warning')
 		eligibilityCell.append(eligibilityBadge)
 		if (!eligible) {
 			let reasons = value.blockers
-			if (reasons.length === 0) reasons = !enabled ? ['Disabled by operator policy'] : ['No eligible candidate in current state']
+			if (reasons.length === 0) {
+				if (!independentlyExecutable) reasons = ['This surface is classified for coverage but cannot be selected as a standalone operation']
+				else if (!enabled) reasons = ['Disabled by operator policy']
+				else reasons = ['No eligible candidate in current state']
+			}
 			const listValue = node('ul', 'blocker-list')
 			for (const reason of reasons) listValue.append(node('li', undefined, reason))
 			eligibilityCell.append(listValue)
 		}
-		row.append(nameCell, ecosystemCell, riskCell, candidatesCell, eligibilityCell)
+		row.append(nameCell, ecosystemCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
 		return row
 	})
 	if (rows.length === 0) {
 		const row = document.createElement('tr')
 		const cell = node('td', 'empty-state', 'No operations match this filter.')
-		cell.setAttribute('colspan', '5')
+		cell.setAttribute('colspan', '6')
 		row.append(cell)
 		catalogRows.replaceChildren(row)
 	} else catalogRows.replaceChildren(...rows)
@@ -850,7 +1066,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 
 function renderEcosystems(values: OperationEvaluation[]) {
 	const cards = ecosystemOrder.map(ecosystem => {
-		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem)
+		const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 		const enabled = operations.filter(value => value.enabled !== false)
 		const eligible = enabled.filter(value => value.eligible === true)
 		const candidates = eligible.reduce((total, value) => total + (parsePositiveNumber(value.candidateCount) ?? 0), 0)
@@ -880,6 +1096,68 @@ function renderEcosystems(values: OperationEvaluation[]) {
 		return card
 	})
 	ecosystemGrid.replaceChildren(...cards)
+}
+
+function topologyIdentifier(value: string | undefined, fallback: string) {
+	const identifier = node('span', 'mono', value === undefined ? fallback : shortHex(value))
+	if (value !== undefined) identifier.title = value
+	return identifier
+}
+
+function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[], render: (value: Record<string, unknown>) => HTMLElement) {
+	if (values.length === 0) {
+		target.className = 'topology-list empty-state'
+		target.textContent = 'None discovered at this anchor.'
+		return
+	}
+	target.className = 'topology-list'
+	target.replaceChildren(
+		...values.flatMap(value => {
+			const source = record(value)
+			return source === undefined ? [] : [render(source)]
+		}),
+	)
+}
+
+function topologyRow(identity: HTMLElement | string, facts: string[]) {
+	const row = node('div', 'topology-row')
+	const heading = node('strong')
+	heading.append(typeof identity === 'string' ? document.createTextNode(identity) : identity)
+	row.append(heading, node('small', undefined, facts.join(' · ')))
+	return row
+}
+
+function renderTopology(value: Topology) {
+	const visibleTotal = value.universes.length + value.pools.length + value.reports.length + value.auctions.length + value.pairs.length
+	const discoveredTotal = value.totalCounts.universes + value.totalCounts.pools + value.totalCounts.reports + value.totalCounts.auctions + value.totalCounts.pairs
+	if (value.anchorBlock === undefined) {
+		setBadge(topologyAnchor, 'Anchor unavailable', 'warning')
+		topologyStatus.textContent = 'Waiting for the first canonical scan to publish its sanitized protocol topology.'
+	} else {
+		setBadge(topologyAnchor, `Block ${String(value.anchorBlock)}`, value.complete === false || value.truncated === true ? 'warning' : 'success')
+		if (value.truncated === true) {
+			topologyStatus.textContent = `${visibleTotal.toString()} of ${discoveredTotal.toString()} anchored protocol identities shown · dashboard projection is capped; canonical discovery is ${value.complete === false ? 'incomplete' : 'complete'}.`
+		} else {
+			topologyStatus.textContent = `${visibleTotal.toString()} anchored protocol identit${visibleTotal === 1 ? 'y' : 'ies'} · ${value.complete === false ? 'discovery is incomplete' : 'sanitized canonical snapshot'}.`
+		}
+	}
+	renderTopologyGroup(topologyUniverses, value.universes, source =>
+		topologyRow(`Universe ${String(source['id'] ?? '—')}`, [source['parentUniverseId'] === undefined ? 'genesis' : `parent ${String(source['parentUniverseId'])}`, `${String(source['knownChildOutcomeCount'] ?? 0)} child routes`, `REP ${shortHex(stringValue(source['repToken']))}`]),
+	)
+	renderTopologyGroup(topologyPools, value.pools, source =>
+		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable'), [
+			`universe ${String(source['universeId'] ?? '—')}`,
+			`state ${String(source['systemState'] ?? '—')}`,
+			`${String(source['vaultCount'] ?? 0)} vaults${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
+		]),
+	)
+	renderTopologyGroup(topologyReports, value.reports, source =>
+		topologyRow(`Report ${String(source['reportId'] ?? '—')}`, [`tokens ${shortHex(stringValue(source['token1']))} / ${shortHex(stringValue(source['token2']))}`, `settlement ${String(source['settlementTime'] ?? '—')}`, `flags ${String(source['flags'] ?? '—')}`]),
+	)
+	renderTopologyGroup(topologyAuctions, value.auctions, source => topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable'), [`pool ${shortHex(stringValue(source['pool']))}`, source['finalized'] === true ? 'finalized' : 'active', `${String(source['bidCount'] ?? 0)} indexed bids`]))
+	renderTopologyGroup(topologyPairs, value.pairs, source =>
+		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable'), [`pool ${shortHex(stringValue(source['pool']))}`, `universe ${String(source['universeId'] ?? '—')}`, `status ${String(source['status'] ?? '—')}`, `${String(source['feeBps'] ?? '—')} bps`]),
+	)
 }
 
 function renderRecovery(value: Snapshot) {
@@ -988,9 +1266,11 @@ function renderSnapshot(value: Snapshot) {
 	renderOverview(value)
 	renderCatalog(value.operationEvaluations)
 	renderEcosystems(value.operationEvaluations)
+	renderTopology(value.topology)
 	renderRecovery(value)
 	renderAlerts(value)
 	renderCountdown()
+	applyMutationControlLatches()
 }
 
 function renderCountdown() {
@@ -1026,7 +1306,11 @@ function renderCountdown() {
 }
 
 function renderConfiguration(value: Configuration, force = false) {
-	settingsFields.disabled = false
+	if (value.configurationCommitIndeterminate === true) latchConfigurationCommitIndeterminate()
+	const policyEditable = value.paused === true && snapshot?.paused === true && !settingsMutationUnreconciled && !configurationCommitIndeterminate
+	settingsFields.disabled = !policyEditable
+	settingsPauseNote.classList.toggle('hidden', policyEditable)
+	signerFields.disabled = signerMutationUnreconciled || configurationCommitIndeterminate
 	const network = value.network ?? snapshot?.network ?? 'Network unknown'
 	let networkTone: Parameters<typeof setBadge>[2] = 'success'
 	if (value.networkConfigured === false) networkTone = 'warning'
@@ -1070,6 +1354,7 @@ function renderConfiguration(value: Configuration, force = false) {
 		if (!(toggle instanceof HTMLInputElement)) continue
 		toggle.checked = value.enabledEcosystems.includes(toggle.dataset['ecosystemToggle'] ?? '')
 	}
+	applyMutationControlLatches()
 }
 
 function markRecoveryContextRefreshesLoading() {
@@ -1119,6 +1404,7 @@ function refresh() {
 	rpcHealthRetryButton.disabled = true
 	rpcHealthRetryButton.textContent = 'Refreshing…'
 	let stateAvailable = false
+	let configurationAvailable = false
 	refreshPromise = (async () => {
 		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', stateRequestTimeoutMilliseconds), requestJson('/api/configuration', configurationRequestTimeoutMilliseconds)])
 		if (stateResult.status === 'fulfilled') {
@@ -1136,12 +1422,18 @@ function refresh() {
 		if (configurationResult.status === 'fulfilled') {
 			configuration = parseConfiguration(configurationResult.value)
 			renderConfiguration(configuration)
-			configurationStatus.classList.add('hidden')
+			configurationAvailable = true
+			if (!configurationCommitIndeterminate) configurationStatus.classList.add('hidden')
 		} else {
 			settingsFields.disabled = true
 			configurationStatus.textContent = configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
 			configurationStatus.className = 'notice error'
 		}
+		if (stateAvailable && configurationAvailable) {
+			resolveMutationReconciliations()
+		}
+		applyMutationControlLatches()
+		return { configurationAvailable, stateAvailable }
 	})().finally(() => {
 		refreshPromise = undefined
 		refreshButton.disabled = false
@@ -1150,6 +1442,23 @@ function refresh() {
 		rpcHealthRetryButton.textContent = 'Retry'
 	})
 	return refreshPromise
+}
+
+async function reconcileUnknownMutation(error: unknown, status: HTMLElement, scope: 'configuration and state' | 'state', target?: MutationReconciliationTarget) {
+	if (error instanceof Error && error.name === 'ConfigurationCommitIndeterminate') {
+		latchConfigurationCommitIndeterminate(status, error.message)
+		return { handled: true, reconciled: false }
+	}
+	if (!(error instanceof Error) || error.name !== 'MutationOutcomeUnknown') return { handled: false, reconciled: false }
+	if (target !== undefined) setMutationReconciliationPending(target)
+	status.textContent = `${error.message} Controls remain frozen while the dashboard reloads current ${scope}.`
+	const activeRefresh = refreshPromise
+	if (activeRefresh !== undefined) await activeRefresh
+	const result = await refresh()
+	const reconciled = scope === 'state' ? result.stateAvailable : result.configurationAvailable && result.stateAvailable
+	const verb = scope === 'configuration and state' ? 'were' : 'was'
+	status.textContent = reconciled ? `The request outcome was unknown. Current ${scope} ${verb} reloaded; review it before another mutation.` : `The request outcome is still unknown because current ${scope} could not be reloaded. Controls remain frozen; retry the dashboard refresh.`
+	return { handled: true, reconciled }
 }
 
 async function put(path: string, value: unknown) {
@@ -1171,7 +1480,9 @@ async function mutatePaused(paused: boolean) {
 		pauseStatus.textContent = paused ? 'Pause saved.' : 'Resume saved.'
 		await refresh()
 	} catch (error) {
-		pauseStatus.textContent = error instanceof Error ? error.message : 'Pause control failed.'
+		const reconciliation = await reconcileUnknownMutation(error, pauseStatus, 'configuration and state', 'pause')
+		if (!reconciliation.handled) pauseStatus.textContent = error instanceof Error ? error.message : 'Pause control failed.'
+		else pauseMutationUnreconciled = !reconciliation.reconciled
 	} finally {
 		pauseMutationPending = false
 		if (snapshot !== undefined) renderHeader(snapshot)
@@ -1181,12 +1492,13 @@ async function mutatePaused(paused: boolean) {
 function openResumeDialog() {
 	const value = snapshot
 	if (value === undefined) return
-	const eligible = value.operationEvaluations.filter(operation => operation.enabled !== false && operation.eligible === true).length
+	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
+	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
 	const signerDetail = value.signerReady === true && value.wallet !== undefined ? compactIdentifier(value.wallet, 'recovery signer address') : 'Missing'
 	const rows: [string, HTMLElement | string][] = [
 		['Mode', value.execute === true ? 'Live execution' : 'Dry run'],
 		['Signer', signerDetail],
-		['Eligible operations', `${eligible.toString()} of ${value.operationEvaluations.length.toString()}`],
+		['Eligible operations', `${eligible.toString()} of ${executable.length.toString()}`],
 		['Recovery items', (value.pendingTransactions.length + value.obligations.length).toString()],
 	]
 	resumePreflight.replaceChildren(
@@ -1240,6 +1552,12 @@ for (const context of recoveryContexts) context.retryButton.addEventListener('cl
 catalogFilter.addEventListener('change', () => {
 	if (snapshot !== undefined) renderCatalog(snapshot.operationEvaluations)
 })
+catalogClassificationFilter.addEventListener('change', () => {
+	if (snapshot !== undefined) renderCatalog(snapshot.operationEvaluations)
+})
+catalogEligibilityFilter.addEventListener('change', () => {
+	if (snapshot !== undefined) renderCatalog(snapshot.operationEvaluations)
+})
 pauseButton.addEventListener('click', () => {
 	if (snapshot?.paused === true) openResumeDialog()
 	else void mutatePaused(true)
@@ -1269,6 +1587,7 @@ replacementForm.addEventListener('submit', event => {
 		}
 		replacementFields.disabled = true
 		replacementStatus.textContent = 'Queuing verification…'
+		let mutationReconciled = true
 		try {
 			await put('/api/reconciliation/replacement', {
 				intentHash,
@@ -1278,9 +1597,11 @@ replacementForm.addEventListener('submit', event => {
 			replacementStatus.textContent = 'Replacement verification queued.'
 			await refresh()
 		} catch (error) {
-			replacementStatus.textContent = error instanceof Error ? error.message : 'Could not queue replacement verification.'
+			const reconciliation = await reconcileUnknownMutation(error, replacementStatus, 'state')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) replacementStatus.textContent = error instanceof Error ? error.message : 'Could not queue replacement verification.'
 		} finally {
-			replacementFields.disabled = snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.cancellationHash !== undefined
+			replacementFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.cancellationHash !== undefined
 		}
 	})()
 })
@@ -1309,6 +1630,7 @@ cancellationForm.addEventListener('submit', event => {
 		}
 		cancellationFields.disabled = true
 		cancellationStatus.textContent = 'Queuing verification…'
+		let mutationReconciled = true
 		try {
 			await put('/api/reconciliation/cancellation', {
 				cancellationHash,
@@ -1322,9 +1644,11 @@ cancellationForm.addEventListener('submit', event => {
 			cancellationStatus.textContent = 'Nonce cancellation verification queued.'
 			await refresh()
 		} catch (error) {
-			cancellationStatus.textContent = error instanceof Error ? error.message : 'Could not queue nonce cancellation verification.'
+			const reconciliation = await reconcileUnknownMutation(error, cancellationStatus, 'state')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) cancellationStatus.textContent = error instanceof Error ? error.message : 'Could not queue nonce cancellation verification.'
 		} finally {
-			cancellationFields.disabled = snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.replacementHash !== undefined
+			cancellationFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.replacementHash !== undefined
 		}
 	})()
 })
@@ -1349,6 +1673,7 @@ candidateForm.addEventListener('submit', event => {
 		}
 		candidateFields.disabled = true
 		candidateStatus.textContent = 'Clearing candidate…'
+		let mutationReconciled = true
 		try {
 			await put('/api/reconciliation/candidate', {
 				confirmation: candidateConfirmationInput.value,
@@ -1361,10 +1686,12 @@ candidateForm.addEventListener('submit', event => {
 			candidateStatus.textContent = 'Recovery candidate cleared.'
 			await refresh()
 		} catch (error) {
-			candidateStatus.textContent = error instanceof Error ? error.message : 'Could not clear the recovery candidate.'
+			const reconciliation = await reconcileUnknownMutation(error, candidateStatus, 'state')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) candidateStatus.textContent = error instanceof Error ? error.message : 'Could not clear the recovery candidate.'
 		} finally {
 			const candidate = snapshot?.pendingTransactions[0]?.replacementHash ?? snapshot?.pendingTransactions[0]?.cancellationHash
-			candidateFields.disabled = snapshot?.paused !== true || candidate === undefined
+			candidateFields.disabled = !mutationReconciled || snapshot?.paused !== true || candidate === undefined
 		}
 	})()
 })
@@ -1388,6 +1715,7 @@ workflowForm.addEventListener('submit', event => {
 		}
 		workflowFields.disabled = true
 		workflowStatus.textContent = 'Saving reconciliation…'
+		let mutationReconciled = true
 		try {
 			await put('/api/reconciliation/workflow', {
 				action: 'abandon',
@@ -1401,9 +1729,11 @@ workflowForm.addEventListener('submit', event => {
 			workflowStatus.textContent = 'Partial workflow abandonment saved.'
 			await refresh()
 		} catch (error) {
-			workflowStatus.textContent = error instanceof Error ? error.message : 'Partial workflow reconciliation failed.'
+			const reconciliation = await reconcileUnknownMutation(error, workflowStatus, 'state')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) workflowStatus.textContent = error instanceof Error ? error.message : 'Partial workflow reconciliation failed.'
 		} finally {
-			workflowFields.disabled = snapshot?.paused !== true || snapshot.currentWorkflow?.status !== 'waiting-continuation'
+			workflowFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.currentWorkflow?.status !== 'waiting-continuation'
 		}
 	})()
 })
@@ -1439,6 +1769,7 @@ obligationForm.addEventListener('submit', event => {
 		}
 		obligationFields.disabled = true
 		obligationStatus.textContent = 'Saving reconciliation…'
+		let mutationReconciled = true
 		try {
 			await put('/api/reconciliation/obligation', {
 				action,
@@ -1452,9 +1783,11 @@ obligationForm.addEventListener('submit', event => {
 			obligationStatus.textContent = 'Lifecycle reconciliation saved.'
 			await refresh()
 		} catch (error) {
-			obligationStatus.textContent = error instanceof Error ? error.message : 'Lifecycle reconciliation failed.'
+			const reconciliation = await reconcileUnknownMutation(error, obligationStatus, 'state')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) obligationStatus.textContent = error instanceof Error ? error.message : 'Lifecycle reconciliation failed.'
 		} finally {
-			obligationFields.disabled = snapshot?.paused !== true || (snapshot?.obligations.length ?? 0) === 0
+			obligationFields.disabled = !mutationReconciled || snapshot?.paused !== true || (snapshot?.obligations.length ?? 0) === 0
 		}
 	})()
 })
@@ -1472,12 +1805,18 @@ discardSettingsButton.addEventListener('click', () => {
 settingsForm.addEventListener('submit', event => {
 	event.preventDefault()
 	void (async () => {
+		if (configuration?.paused !== true || snapshot?.paused !== true) {
+			settingsSaveStatus.textContent = 'Pause the bot before changing execution policy.'
+			settingsFields.disabled = true
+			return
+		}
 		if (settingsConflict) {
 			settingsSaveStatus.textContent = 'Discard these edits and review the current configuration before saving.'
 			return
 		}
 		settingsFields.disabled = true
 		settingsSaveStatus.textContent = 'Saving…'
+		let mutationReconciled = true
 		try {
 			const minDelaySeconds = parseDelay(minDelayInput, 'Minimum delay')
 			const maxDelaySeconds = parseDelay(maxDelayInput, 'Maximum delay')
@@ -1519,9 +1858,15 @@ settingsForm.addEventListener('submit', event => {
 				discardSettingsButton.disabled = false
 				await refresh()
 			}
-			settingsSaveStatus.textContent = error instanceof Error ? error.message : 'Settings could not be saved.'
+			const reconciliation = await reconcileUnknownMutation(error, settingsSaveStatus, 'configuration and state', 'settings')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (reconciliation.handled) {
+				settingsConflict = true
+				saveSettingsButton.disabled = true
+				discardSettingsButton.disabled = false
+			} else settingsSaveStatus.textContent = error instanceof Error ? error.message : 'Settings could not be saved.'
 		} finally {
-			settingsFields.disabled = configuration === undefined
+			settingsFields.disabled = !mutationReconciled || configuration === undefined || configuration.paused !== true || snapshot?.paused !== true
 		}
 	})()
 })
@@ -1538,15 +1883,18 @@ signerForm.addEventListener('submit', event => {
 		signerStatus.textContent = 'Updating signer…'
 		const remember = rememberSignerInput.checked
 		privateKeyInput.value = ''
+		let mutationReconciled = true
 		try {
 			await put('/api/signer', { privateKey, remember, revision: configuration?.revision })
 			signerStatus.textContent = 'Signer updated. The input was cleared.'
 			await refresh()
 		} catch (error) {
-			signerStatus.textContent = error instanceof Error ? error.message : 'Signer could not be updated.'
+			const reconciliation = await reconcileUnknownMutation(error, signerStatus, 'configuration and state', 'signer')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) signerStatus.textContent = error instanceof Error ? error.message : 'Signer could not be updated.'
 		} finally {
 			privateKeyInput.value = ''
-			signerFields.disabled = false
+			signerFields.disabled = !mutationReconciled
 		}
 	})()
 })
@@ -1555,6 +1903,7 @@ clearSignerButton.addEventListener('click', () => {
 	void (async () => {
 		signerFields.disabled = true
 		signerStatus.textContent = 'Clearing signer…'
+		let mutationReconciled = true
 		try {
 			await put('/api/signer', { privateKey: null, remember: false, revision: configuration?.revision })
 			privateKeyInput.value = ''
@@ -1562,9 +1911,11 @@ clearSignerButton.addEventListener('click', () => {
 			signerStatus.textContent = 'Signer cleared. Execution remains blocked until a signer is configured.'
 			await refresh()
 		} catch (error) {
-			signerStatus.textContent = error instanceof Error ? error.message : 'Signer could not be cleared.'
+			const reconciliation = await reconcileUnknownMutation(error, signerStatus, 'configuration and state', 'signer')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (!reconciliation.handled) signerStatus.textContent = error instanceof Error ? error.message : 'Signer could not be cleared.'
 		} finally {
-			signerFields.disabled = false
+			signerFields.disabled = !mutationReconciled
 		}
 	})()
 })

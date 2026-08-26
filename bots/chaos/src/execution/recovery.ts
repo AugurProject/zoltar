@@ -13,6 +13,7 @@ import {
 	agreedLatestBlock,
 	agreedExactCall,
 	assertFreshWalletAssetDebits,
+	assertRequestedTransactionHash,
 	assertStepPreflightCalls,
 	captureBalanceEvidence,
 	captureStorageEvidence,
@@ -144,6 +145,7 @@ async function exactIntentIsVisible(environment: ExecutionEnvironment, intent: P
 		executionReadClients(environment).map(async ({ client }) => {
 			try {
 				const transaction = await client.getTransaction({ hash: intent.hash })
+				assertRequestedTransactionHash(transaction.hash, intent.hash, 'Pending intent lookup')
 				if (!transactionMatchesIntent(transaction, intent)) {
 					throw new Error(`Transaction ${intent.hash} does not match the persisted intent semantics`)
 				}
@@ -543,6 +545,7 @@ async function verifyRecoveredCancellation(environment: ExecutionEnvironment, in
 		`nonce cancellation transaction ${cancellationHash}`,
 		executionReadClients(environment).map(async ({ client, endpoint }) => {
 			const candidate = await client.getTransaction({ hash: cancellationHash })
+			assertRequestedTransactionHash(candidate.hash, cancellationHash, `RPC ${endpoint} nonce cancellation lookup`)
 			return {
 				endpoint,
 				value: {
@@ -637,6 +640,7 @@ export async function verifyRecoveredReplacement(environment: ExecutionEnvironme
 		`replacement transaction ${replacementHash}`,
 		readers.map(async ({ client, endpoint }) => {
 			const candidate = await client.getTransaction({ hash: replacementHash })
+			assertRequestedTransactionHash(candidate.hash, replacementHash, `RPC ${endpoint} replacement lookup`)
 			return {
 				endpoint,
 				value: {

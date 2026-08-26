@@ -53,6 +53,7 @@ runs:
         bun ./scripts/install-frozen.mts bots/shared
         bun ./scripts/install-frozen.mts bots/open-oracle-arbitrager
         bun ./scripts/install-frozen.mts bots/liquidator
+        bun ./scripts/install-frozen.mts bots/chaos
 
     - name: Cache generated shared package
       id: shared-cache

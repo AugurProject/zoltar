@@ -1,6 +1,5 @@
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
-import type { CanonicalUintString } from '../core/units.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -11,9 +10,9 @@ const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
 const MINING_SAFETY_SECONDS = 120n
 const LIFECYCLE_BATCH_LIMIT = 16
 const ORACLE_REQUEST_BUFFER_MULTIPLIER = 2n
+const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
+const STAGED_WITHDRAWAL_VALIDITY_SECONDS = 5n * 60n
 const MAX_UINT128 = (1n << 128n) - 1n
-const CHILD_REP_SPLIT_SIGNATURE = 'ChildRepSplit(address,uint256,uint256,uint256)'
-const CHILD_REP_SPLIT_ABI = 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)'
 const CARRY_DEPOSIT_CONSUMED_SIGNATURE = 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
 const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, uint8 outcome, uint256 attoRepAmount, uint8 reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot)'
 const CLAIM_DEPOSIT_SIGNATURE = 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'
@@ -44,19 +43,6 @@ const forkOutcomesForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) =>
 const operationalPools = (snapshot: EcosystemSnapshot) => snapshot.pools.filter(pool => pool.systemState === 0 && !pool.awaitingForkContinuation && pool.questionOutcome === BINARY_OUTCOME_NONE && snapshot.universes.find(universe => universe.id === pool.universeId)?.forkTime === '0')
 const walletVault = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => pool.vaults.find(vault => vault.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
 const canDeployOriginPool = (universe: EcosystemSnapshot['universes'][number]) => universe.forkTime === '0' && amount(universe.nonDecisionThresholdAttoRep) > amount(universe.initialEscalationDepositAttoRep)
-
-function decodedChildRepSplitEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcomeIndex: string, targetAttoRep: CanonicalUintString): OperationEvidence {
-	return {
-		abi: CHILD_REP_SPLIT_ABI,
-		emitter: snapshot.deployments.securityPoolForker,
-		equals: targetAttoRep,
-		field: 'childPoolRepSplitAttoRep',
-		indexed: { outcomeIndex, parent: pool.address },
-		kind: 'decoded-event-field',
-		signature: CHILD_REP_SPLIT_SIGNATURE,
-		topic0: eventTopic(CHILD_REP_SPLIT_SIGNATURE),
-	}
-}
 
 function decodedVaultMigrationEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, field: 'outcomeIndex' | 'resultingParentRepBackingUnits', expected: string, child?: PoolSnapshot): OperationEvidence {
 	return {
@@ -591,7 +577,7 @@ const queueWithdrawal: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: coordinatorAbi,
-				args: [1, snapshot.wallet.address, requested, 300n, funding.price, funding.initialWethAttoEth],
+				args: [1, snapshot.wallet.address, requested, STAGED_WITHDRAWAL_VALIDITY_SECONDS, funding.price, funding.initialWethAttoEth],
 				evidence,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				id: 'queue-withdrawal',
@@ -611,7 +597,7 @@ const queueWithdrawal: OperationDefinition = {
 			}),
 		)
 		return planBase({
-			deadlineTimestamp: (amount(pool.lastOracleSettlementTimestamp) + 300n).toString(),
+			deadlineTimestamp: (amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS).toString(),
 			definitionId: queueWithdrawal.id,
 			ecosystem: 'statoblast',
 			label: queueWithdrawal.label,
@@ -904,8 +890,9 @@ function unresolvedMigrationCandidates(snapshot: EcosystemSnapshot) {
 		const validOutcomes = new Set(forkOutcomesForPool(snapshot, pool))
 		if (pool.systemState !== 1 || !pool.forkUnresolvedEscalation || validOutcomes.size === 0 || amount(pool.forkActivationTime) === 0n || now + MINING_SAFETY_SECONDS > deadline) return []
 		return pool.unresolvedEscalationMigrationReadyOutcomes.flatMap(outcome => {
-			const outcomeIndex = Number(BigInt(outcome))
-			return validOutcomes.has(outcome) && pool.walletEscalationMaterializedOutcomes[outcomeIndex] === false ? [{ deadline, outcome, pool }] : []
+			const outcomeIndex = BigInt(outcome)
+			const notMaterialized = outcomeIndex > 2n || pool.walletEscalationMaterializedOutcomes[Number(outcomeIndex)] === false
+			return validOutcomes.has(outcome) && notMaterialized ? [{ deadline, outcome, pool }] : []
 		})
 	})
 }
@@ -916,8 +903,9 @@ function unresolvedMigrationPresenceCandidates(snapshot: EcosystemSnapshot) {
 		const deadline = amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
 		if (pool.systemState !== 1 || !pool.forkUnresolvedEscalation || amount(pool.forkActivationTime) === 0n || now > deadline) return []
 		return forkOutcomesForPool(snapshot, pool).flatMap(outcome => {
-			const outcomeIndex = Number(BigInt(outcome))
-			return pool.walletEscalationMaterializedOutcomes[outcomeIndex] === false ? [{ deadline, outcome, pool }] : []
+			const outcomeIndex = BigInt(outcome)
+			const notMaterialized = outcomeIndex <= 2n ? pool.walletEscalationMaterializedOutcomes[Number(outcomeIndex)] === false : pool.unresolvedEscalationMigrationReadyOutcomes.includes(outcome)
+			return notMaterialized ? [{ deadline, outcome, pool }] : []
 		})
 	})
 }
@@ -979,19 +967,24 @@ const migrateVaultWithUnresolvedEscalation: OperationDefinition = {
 function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 	const id = `statoblast.staged.${mode}`
 	const metadata = (staged: EcosystemSnapshot['stagedOperations'][number]) => ({ coordinator: staged.coordinator, operationId: staged.id, operationType: staged.operation })
+	const stagedDeadline = (pool: PoolSnapshot, operation: EcosystemSnapshot['stagedOperations'][number]) => amount(operation.queuedAt) + amount(pool.oracleSettlementTime) + amount(operation.validForSeconds)
+	const executionDeadline = (pool: PoolSnapshot, operation: EcosystemSnapshot['stagedOperations'][number]) => {
+		const operationDeadline = stagedDeadline(pool, operation)
+		const oracleDeadline = amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
+		return operationDeadline < oracleDeadline ? operationDeadline : oracleDeadline
+	}
 	const candidates = (snapshot: EcosystemSnapshot) => {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.stagedOperations.filter(operation => {
 			const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 			if (pool === undefined) return false
-			const deadline = amount(operation.queuedAt) + amount(pool.oracleSettlementTime) + amount(operation.validForSeconds)
-			return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= deadline : now > deadline
+			return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= executionDeadline(pool, operation) : now > stagedDeadline(pool, operation)
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) => {
 		const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === staged.coordinator.toLowerCase())
 		if (pool === undefined) return undefined
-		const deadline = (amount(staged.queuedAt) + amount(pool.oracleSettlementTime) + amount(staged.validForSeconds)).toString()
+		const deadline = (mode === 'execute' ? executionDeadline(pool, staged) : stagedDeadline(pool, staged)).toString()
 		const signature = 'ExecutedStagedOperation(uint256,uint8,bool,string)'
 		const successEvidence: OperationEvidence = {
 			abi: 'event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)',
@@ -1067,8 +1060,7 @@ function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 			const found = snapshot.stagedOperations.some(operation => {
 				const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 				if (pool === undefined) return false
-				const deadline = amount(operation.queuedAt) + amount(pool.oracleSettlementTime) + amount(operation.validForSeconds)
-				return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= deadline : now > deadline
+				return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= executionDeadline(pool, operation) : now > stagedDeadline(pool, operation)
 			})
 			return eligible(found ? undefined : `No staged operation is ready to ${mode}`)
 		},
@@ -1194,15 +1186,18 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 			const child = childForOutcome(snapshot, candidate.pool, outcome)
 			evidence = [decodedVaultMigrationEvidence(snapshot, candidate.pool, 'outcomeIndex', outcome, child), decodedVaultMigrationEvidence(snapshot, candidate.pool, 'resultingParentRepBackingUnits', '0', child)]
 		} else if (kind === 'own-question') evidence = [eventEvidence(snapshot.deployments.zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')]
-		else evidence = [decodedChildRepSplitEvidence(snapshot, candidate.pool, outcome, candidate.pool.forkRepMigrationTargetAttoRep)]
+		else evidence = [{ kind: 'receipt-success' }]
 		const metadata: Record<string, string | number | boolean> = kind === 'migrate-vault' ? { pool: candidate.pool.address } : { outcome, pool: candidate.pool.address }
 		if (kind === 'migrate-rep') metadata['targetAttoRep'] = candidate.pool.forkRepMigrationTargetAttoRep
+		let postconditions = ['Fork workflow advances without violating canonical parent/child accounting']
+		if (kind === 'migrate-vault') postconditions = [`The wallet source vault reaches zero backing on the canonical outcome ${outcome} child route`]
+		if (kind === 'migrate-rep') postconditions = ['The next canonical scan confirms the indexed child REP split reached its immutable fork target, including when another keeper won the race']
 		const plan = planBase({
 			definitionId: id,
 			ecosystem: 'statoblast',
 			label: kind === 'migrate-vault' ? `Fork workflow: migrate-vault through outcome ${outcome}` : `Fork workflow: ${kind}`,
 			metadata,
-			postconditions: kind === 'migrate-vault' ? [`The wallet source vault reaches zero backing on the canonical outcome ${outcome} child route`] : ['Fork workflow advances without violating canonical parent/child accounting'],
+			postconditions,
 			priority: candidate.deadline === undefined ? 'random' : 'urgent',
 			risk: 'irreversible',
 			snapshot,

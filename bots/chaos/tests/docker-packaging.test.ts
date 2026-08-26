@@ -50,6 +50,7 @@ describe('chaos Docker packaging', () => {
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
 		expect(source).toContain('USER bun')
 		expect(source).toContain('RUN bun ./scripts/check-runtime.mts')
+		expect(await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')).toContain("import { main } from '../src/cli/run.ts'")
 		expect(source).toContain('EXPOSE 4193')
 		expect(source).toContain('VOLUME ["/app/bots/chaos/.state"]')
 	})

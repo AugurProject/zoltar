@@ -6,7 +6,7 @@ import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
 import { workflowNeedsContinuation } from './workflows.ts'
-import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
+import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 
 export type ConfigurationState = {
 	path: string
@@ -158,6 +158,56 @@ export function assertSignerCompatibleWithDurableScope(recordedAddress: Address 
 	}
 }
 
+export function assertSettingsUpdatePaused(current: OperatorSettings, runtimePaused: boolean) {
+	if (!current.paused || !runtimePaused) {
+		throw new Error('Pause both the persisted configuration and running chaos bot before changing execution policy')
+	}
+}
+
+function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>) {
+	const rows = new Map<
+		string,
+		{
+			blockers: string[]
+			candidateCount: number
+			classification: (typeof state.evaluations)[number]['definition']['classification']
+			description: string
+			ecosystem: (typeof state.evaluations)[number]['definition']['ecosystem']
+			eligible: boolean
+			enabled: boolean
+			id: string
+			label: string
+			prerequisites: string[]
+			risk: (typeof state.evaluations)[number]['definition']['risk']
+		}
+	>()
+	for (const evaluation of state.evaluations) {
+		const id = evaluation.definition.id
+		const existing = rows.get(id)
+		if (existing === undefined) {
+			rows.set(id, {
+				blockers: [...new Set(evaluation.eligibility.blockers)],
+				candidateCount: evaluation.plan === undefined ? 0 : 1,
+				classification: evaluation.definition.classification,
+				description: evaluation.definition.description,
+				ecosystem: evaluation.definition.ecosystem,
+				eligible: evaluation.eligibility.eligible,
+				enabled: enabled.has(evaluation.definition.ecosystem),
+				id,
+				label: evaluation.definition.label,
+				prerequisites: [...new Set(evaluation.definition.discoveryInputs)],
+				risk: evaluation.definition.risk,
+			})
+			continue
+		}
+		existing.candidateCount += evaluation.plan === undefined ? 0 : 1
+		existing.eligible ||= evaluation.eligibility.eligible
+		existing.blockers = [...new Set([...existing.blockers, ...evaluation.eligibility.blockers])]
+		existing.prerequisites = [...new Set([...existing.prerequisites, ...evaluation.definition.discoveryInputs])]
+	}
+	return [...rows.values()]
+}
+
 function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
 	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction')
 	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
@@ -179,23 +229,23 @@ function dashboardState(state: RuntimeState, configuration: ConfigurationState) 
 		execute: configuration.settings.runtime.execute,
 		network: configuration.settings.network.name,
 		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed'),
-		operationEvaluations: state.evaluations.map(evaluation => ({
-			blockers: evaluation.eligibility.blockers,
-			candidateCount: evaluation.plan === undefined ? 0 : 1,
-			description: evaluation.definition.description,
-			ecosystem: evaluation.definition.ecosystem,
-			eligible: evaluation.eligibility.eligible,
-			enabled: enabled.has(evaluation.definition.ecosystem),
-			id: evaluation.definition.id,
-			label: evaluation.definition.label,
-			prerequisites: evaluation.definition.discoveryInputs,
-			risk: evaluation.definition.risk,
-		})),
+		operationEvaluations: groupedOperationEvaluations(state, enabled),
 		scheduler: {
 			...state.scheduler,
 			due: schedulerIsDue(state.scheduler.status === 'due' ? { ...state.scheduler, status: 'scheduled' } : state.scheduler),
 		},
 		signerReady: configuration.settings.privateKey !== undefined,
+		topology:
+			state.topology === undefined
+				? undefined
+				: {
+						...state.topology,
+						auctions: state.topology.auctions.map(auction => ({ ...auction })),
+						pairs: state.topology.pairs.map(pair => ({ ...pair })),
+						pools: state.topology.pools.map(pool => ({ ...pool })),
+						reports: state.topology.reports.map(report => ({ ...report })),
+						universes: state.topology.universes.map(universe => ({ ...universe })),
+					},
 	}
 }
 
@@ -229,6 +279,17 @@ function runtimeStateCandidate(state: RuntimeState): RuntimeState {
 		...state,
 		activities: [...state.activities],
 		scheduler: { ...state.scheduler },
+		topology:
+			state.topology === undefined
+				? undefined
+				: {
+						...state.topology,
+						auctions: state.topology.auctions.map(auction => ({ ...auction })),
+						pairs: state.topology.pairs.map(pair => ({ ...pair })),
+						pools: state.topology.pools.map(pool => ({ ...pool })),
+						reports: state.topology.reports.map(report => ({ ...report })),
+						universes: state.topology.universes.map(universe => ({ ...universe })),
+					},
 	}
 }
 
@@ -259,7 +320,7 @@ function safetyFailureCheckpoint(checkpoint: RuntimeState, message: string) {
 }
 
 function applyRuntimeSettings(state: RuntimeState, settings: OperatorSettings, address: Address | undefined) {
-	state.signerAddress ??= address
+	if (address !== undefined) bindRuntimeStateToSigner(state, address)
 	state.paused = settings.paused || state.safetyPaused
 	state.wallet = address ?? state.signerAddress
 	if (state.paused) state.status = 'paused'
@@ -732,6 +793,7 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 		async setSettings(value) {
 			await update(async () => {
 				const candidate = settingsPatchCandidate(options.configuration.settings, value)
+				assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
 				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
 					recordActivity(state, {
 						message: 'Execution policy updated',
@@ -745,9 +807,12 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 			const candidate = signerCandidateSettings(options.configuration.settings, value)
 			try {
 				await update(async () => {
-					await apply(candidate.settings, candidate.revision, candidate.rememberSigner, state => {
+					await apply(candidate.settings, candidate.revision, candidate.rememberSigner, (state, baseline) => {
+						let message = 'Transaction signer updated'
+						if (candidate.settings.privateKey === undefined) message = 'Transaction signer cleared'
+						else if (baseline.protocolIndex !== undefined && state.protocolIndex === undefined) message = 'Transaction signer updated; wallet-scoped protocol index invalidated for canonical rebuild'
 						recordActivity(state, {
-							message: candidate.settings.privateKey === undefined ? 'Transaction signer cleared' : 'Transaction signer updated',
+							message,
 							status: 'info',
 							type: 'wallet',
 						})

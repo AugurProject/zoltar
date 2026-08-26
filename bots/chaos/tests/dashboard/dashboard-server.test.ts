@@ -225,6 +225,7 @@ describe('chaos dashboard server', () => {
 		committed.name = CONFIGURATION_COMMITTED_SAFELY_PAUSED
 		const indeterminate = new Error('sensitive owner-file path')
 		indeterminate.name = CONFIGURATION_COMMIT_INDETERMINATE
+		let postIndeterminateMutationCalls = 0
 		const server = startDashboardServer(
 			0,
 			controller({
@@ -233,6 +234,9 @@ describe('chaos dashboard server', () => {
 				},
 				setSigner: () => {
 					throw indeterminate
+				},
+				setPaused: () => {
+					postIndeterminateMutationCalls += 1
 				},
 			}),
 		)
@@ -278,6 +282,126 @@ describe('chaos dashboard server', () => {
 			treatAsCommitted: true,
 		})
 		expect(JSON.stringify(indeterminateBody)).not.toContain('sensitive')
+
+		const latchedConfiguration = await authenticatedFetch(new URL('/api/configuration', server.url))
+		expect(latchedConfiguration.status).toBe(200)
+		expect(await latchedConfiguration.json()).toMatchObject({ configurationCommitIndeterminate: true })
+
+		const blockedMutation = await authenticatedFetch(new URL('/api/paused', server.url), {
+			body: JSON.stringify({ paused: true, revision: 'current' }),
+			headers: {
+				'content-type': 'application/json',
+				origin: server.url.origin,
+			},
+			method: 'PUT',
+		})
+		expect(blockedMutation.status).toBe(503)
+		expect(await blockedMutation.json()).toEqual(indeterminateBody)
+		expect(postIndeterminateMutationCalls).toBe(0)
+	})
+
+	test('waits for an in-flight mutation before serving reconciliation snapshots', async () => {
+		let releaseMutation: () => void = () => undefined
+		const mutationGate = new Promise<void>(resolve => {
+			releaseMutation = resolve
+		})
+		let markMutationStarted: () => void = () => undefined
+		const mutationStarted = new Promise<void>(resolve => {
+			markMutationStarted = resolve
+		})
+		let paused = true
+		let revision = 'before-mutation'
+		let configurationReadCount = 0
+		let stateReadCount = 0
+		const server = startDashboardServer(
+			0,
+			controller({
+				getConfiguration: () => {
+					configurationReadCount += 1
+					return { paused, revision }
+				},
+				getState: () => {
+					stateReadCount += 1
+					return { paused }
+				},
+				setSettings: async () => {
+					markMutationStarted()
+					await mutationGate
+					paused = false
+					revision = 'after-mutation'
+				},
+			}),
+		)
+		servers.push(server)
+
+		const mutation = authenticatedFetch(new URL('/api/settings', server.url), {
+			body: JSON.stringify({ patch: {}, revision: 'before-mutation' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		await mutationStarted
+		const configurationRead = authenticatedFetch(new URL('/api/configuration', server.url))
+		const stateRead = authenticatedFetch(new URL('/api/state', server.url))
+		await Bun.sleep(20)
+		expect(configurationReadCount).toBe(0)
+		expect(stateReadCount).toBe(0)
+
+		releaseMutation()
+		expect((await mutation).status).toBe(200)
+		const [configurationResponse, stateResponse] = await Promise.all([configurationRead, stateRead])
+		expect(await configurationResponse.json()).toMatchObject({ paused: false, revision: 'after-mutation' })
+		expect(await stateResponse.json()).toMatchObject({ paused: false })
+		expect(configurationReadCount).toBe(2)
+		expect(stateReadCount).toBe(1)
+	})
+
+	test('does not execute a queued mutation after an indeterminate configuration boundary', async () => {
+		const indeterminate = new Error('sensitive post-commit failure')
+		indeterminate.name = CONFIGURATION_COMMIT_INDETERMINATE
+		let releaseSigner: () => void = () => undefined
+		const signerGate = new Promise<void>(resolve => {
+			releaseSigner = resolve
+		})
+		let markSignerStarted: () => void = () => undefined
+		const signerStarted = new Promise<void>(resolve => {
+			markSignerStarted = resolve
+		})
+		let pausedMutationCalls = 0
+		const server = startDashboardServer(
+			0,
+			controller({
+				setPaused: () => {
+					pausedMutationCalls += 1
+				},
+				setSigner: async () => {
+					markSignerStarted()
+					await signerGate
+					throw indeterminate
+				},
+			}),
+		)
+		servers.push(server)
+
+		const signerMutation = authenticatedFetch(new URL('/api/signer', server.url), {
+			body: JSON.stringify({ privateKey: `0x${'11'.repeat(32)}`, remember: true, revision: 'current' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		await signerStarted
+		const queuedPause = authenticatedFetch(new URL('/api/paused', server.url), {
+			body: JSON.stringify({ paused: true, revision: 'current' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		await Bun.sleep(20)
+		expect(pausedMutationCalls).toBe(0)
+
+		releaseSigner()
+		const [signerResponse, pauseResponse] = await Promise.all([signerMutation, queuedPause])
+		expect(signerResponse.status).toBe(503)
+		expect(pauseResponse.status).toBe(503)
+		expect(await pauseResponse.json()).toMatchObject({ code: 'configuration_commit_indeterminate' })
+		expect(pausedMutationCalls).toBe(0)
 	})
 
 	test('whitelists runtime state and removes calldata, signed transactions, RPCs, and sensitive error details', () => {
@@ -352,6 +476,98 @@ describe('chaos dashboard server', () => {
 			requiredReadQuorum: 2,
 			status: 'degraded',
 		})
+	})
+
+	test('groups lifecycle candidates and preserves every operation classification', () => {
+		const definition = { classification: 'lifecycle-obligation', description: 'Settle a mature report', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }
+		const state = publicChaosState({
+			evaluations: [
+				{ blockers: ['first candidate changed'], candidateCount: 0, definition, eligibility: { blockers: ['first candidate changed'], eligible: false }, enabled: true },
+				{ definition, eligibility: { blockers: [], eligible: true }, enabled: true, plan: { id: 'candidate-1' } },
+				{ definition, eligibility: { blockers: [], eligible: true }, enabled: true, plan: { id: 'candidate-2' } },
+				{
+					definition: { classification: 'role-restricted', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' },
+					eligibility: { blockers: ['Only the factory may initialize a pool'], eligible: false },
+				},
+			],
+		})
+
+		expect(Reflect.get(state, 'operationEvaluations')).toEqual([
+			{
+				blockers: ['first candidate changed'],
+				candidateCount: 2,
+				classification: 'lifecycle-obligation',
+				description: 'Settle a mature report',
+				ecosystem: 'open-oracle',
+				eligible: true,
+				enabled: true,
+				id: 'open-oracle.settle',
+				label: 'Settle report',
+				prerequisites: [],
+				risk: 'low',
+			},
+			{
+				blockers: ['Only the factory may initialize a pool'],
+				candidateCount: 0,
+				classification: 'role-restricted',
+				ecosystem: 'statoblast',
+				eligible: false,
+				id: 'surface.pool.initialize',
+				label: 'Pool.initialize',
+				prerequisites: [],
+				risk: 'high',
+			},
+		])
+	})
+
+	test('projects a bounded sanitized topology without runtime-only fields', () => {
+		const secret = 'topology-secret'
+		const topology = Reflect.get(
+			publicChaosState({
+				topology: {
+					anchor: { blockHash: `0x${'ab'.repeat(32)}`, blockNumber: '42', timestamp: '1000' },
+					auctions: [{ address: '0x1111111111111111111111111111111111111111', bids: [{ rawTransaction: secret }], finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+					complete: true,
+					pairs: [{ address: '0x3333333333333333333333333333333333333333', pool: '0x2222222222222222222222222222222222222222', reserve: secret, status: 1, universeId: '0' }],
+					pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', vaults: [{ privateKey: secret }] }],
+					reports: [{ calldata: secret, currentReporter: '0x5555555555555555555555555555555555555555', reportId: '7', token1: '0x6666666666666666666666666666666666666666', token2: '0x7777777777777777777777777777777777777777' }],
+					universes: [{ id: '0', knownChildOutcomes: ['1', '2'], privateRpcUrl: `https://${secret}.example`, repToken: '0x8888888888888888888888888888888888888888' }],
+				},
+			}),
+			'topology',
+		)
+
+		expect(topology).toEqual({
+			anchorBlock: '42',
+			anchorTimestamp: '1000',
+			auctions: [{ address: '0x1111111111111111111111111111111111111111', bidCount: 1, finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+			complete: true,
+			pairs: [{ address: '0x3333333333333333333333333333333333333333', pool: '0x2222222222222222222222222222222222222222', status: 1, universeId: '0' }],
+			pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', vaultCount: 1 }],
+			reports: [{ currentReporter: '0x5555555555555555555555555555555555555555', reportId: '7', token1: '0x6666666666666666666666666666666666666666', token2: '0x7777777777777777777777777777777777777777' }],
+			totalCounts: { auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 },
+			truncated: false,
+			universes: [{ id: '0', knownChildOutcomeCount: 2, repToken: '0x8888888888888888888888888888888888888888' }],
+		})
+		expect(JSON.stringify(topology)).not.toContain(secret)
+	})
+
+	test('reports bounded topology projection truncation without overstating visible totals', () => {
+		const topology = Reflect.get(
+			publicChaosState({
+				topology: {
+					anchor: { blockNumber: '42', timestamp: '1000' },
+					complete: true,
+					pools: Array.from({ length: 501 }, (_, index) => ({ address: `pool-${index.toString()}` })),
+				},
+			}),
+			'topology',
+		)
+
+		expect(Reflect.get(topology, 'complete')).toBe(true)
+		expect(Reflect.get(topology, 'truncated')).toBe(true)
+		expect(Reflect.get(Reflect.get(topology, 'totalCounts'), 'pools')).toBe(501)
+		expect(Reflect.get(topology, 'pools')).toHaveLength(500)
 	})
 
 	test('serves only aggregate RPC quorum health from the authenticated state API', async () => {

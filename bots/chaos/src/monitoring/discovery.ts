@@ -27,6 +27,13 @@ export type ChaosReadClient = PublicClient<Transport, Chain>
 
 export const DISCOVERY_RPC_CONCURRENCY = 12
 export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
+const OUTCOME_LABEL_PAGE_SIZE = 256n
+// Zoltar persists and emits every non-empty label in one createQuestion
+// transaction. These ceilings are far above a practical transaction-sized
+// domain, but still make a hostile endpoint's pagination and memory finite.
+const DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION = 4_096
+const DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION = 4 * 1024 * 1024
+const utf8Encoder = new TextEncoder()
 
 export function forkMigrationWindowIsOpen(systemState: bigint, forkActivationTime: bigint, timestamp: bigint) {
 	return systemState === 1n && forkActivationTime > 0n && timestamp <= forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
@@ -59,6 +66,8 @@ export function limitDiscoveryConcurrency(client: ChaosReadClient, maximum = DIS
 }
 
 export interface DiscoveryLimits {
+	maxOutcomeLabelUtf8BytesPerQuestion: number
+	maxOutcomeLabelsPerQuestion: number
 	maxQuestions: number
 	maxUniverses: number
 	maxPools: number
@@ -88,6 +97,8 @@ type TopologyMutationState = {
 }
 
 const DEFAULT_LIMITS: DiscoveryLimits = {
+	maxOutcomeLabelUtf8BytesPerQuestion: DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION,
+	maxOutcomeLabelsPerQuestion: DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION,
 	maxPools: 100,
 	maxQuestions: 100,
 	maxStagedOperationsPerPool: 100,
@@ -97,11 +108,36 @@ const DEFAULT_LIMITS: DiscoveryLimits = {
 
 function limitsWithDefaults(configured?: Partial<DiscoveryLimits>): DiscoveryLimits {
 	return {
+		maxOutcomeLabelUtf8BytesPerQuestion: configured?.maxOutcomeLabelUtf8BytesPerQuestion ?? DEFAULT_LIMITS.maxOutcomeLabelUtf8BytesPerQuestion,
+		maxOutcomeLabelsPerQuestion: configured?.maxOutcomeLabelsPerQuestion ?? DEFAULT_LIMITS.maxOutcomeLabelsPerQuestion,
 		maxPools: configured?.maxPools ?? DEFAULT_LIMITS.maxPools,
 		maxQuestions: configured?.maxQuestions ?? DEFAULT_LIMITS.maxQuestions,
 		maxStagedOperationsPerPool: configured?.maxStagedOperationsPerPool ?? DEFAULT_LIMITS.maxStagedOperationsPerPool,
 		maxUniverses: configured?.maxUniverses ?? DEFAULT_LIMITS.maxUniverses,
 		maxVaultsPerPool: configured?.maxVaultsPerPool ?? DEFAULT_LIMITS.maxVaultsPerPool,
+	}
+}
+
+async function discoverOutcomeLabels(client: ChaosReadClient, questionData: Address, questionId: bigint, blockNumber: bigint, limits: DiscoveryLimits) {
+	const outcomeLabels: string[] = []
+	let utf8Bytes = 0
+	for (;;) {
+		const remaining = limits.maxOutcomeLabelsPerQuestion - outcomeLabels.length
+		const requested = remaining === 0 ? 1n : BigInt(Math.min(remaining, Number(OUTCOME_LABEL_PAGE_SIZE)))
+		const page = await client.readContract({ abi: questionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
+		if (BigInt(page.length) > requested) throw new Error(`Question ${questionId.toString()} outcome-label page exceeded its requested size`)
+		if (remaining === 0) {
+			if (page.length === 0) return outcomeLabels
+			throw new Error(`Question ${questionId.toString()} exceeds the configured ${limits.maxOutcomeLabelsPerQuestion.toString()}-label discovery limit`)
+		}
+		for (const label of page) {
+			utf8Bytes += utf8Encoder.encode(label).byteLength
+			if (utf8Bytes > limits.maxOutcomeLabelUtf8BytesPerQuestion) {
+				throw new Error(`Question ${questionId.toString()} outcome labels exceed the configured ${limits.maxOutcomeLabelUtf8BytesPerQuestion.toString()}-byte UTF-8 discovery limit`)
+			}
+		}
+		outcomeLabels.push(...page)
+		if (BigInt(page.length) < requested) return outcomeLabels
 	}
 }
 
@@ -461,7 +497,7 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 			const [question, createdAt, labels] = await Promise.all([
 				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
 				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId, 0n, 256n], blockNumber, functionName: 'getOutcomeLabels' }),
+				discoverOutcomeLabels(client, deployments.questionData, questionId, blockNumber, limits),
 			])
 			const [, , startTime, endTime, numTicks] = question
 			let kind: QuestionSnapshot['kind'] = 'categorical'

@@ -321,7 +321,7 @@ function migrationDefinition(mode: 'add' | 'split' | 'burn'): OperationDefinitio
 	return {
 		buildPlan(snapshot, options) {
 			const universe = choose(
-				snapshot.universes.filter(candidate => (mode === 'burn' ? true : candidate.forkTime !== '0')),
+				snapshot.universes.filter(candidate => (mode === 'burn' || candidate.forkTime !== '0') && repSpend(snapshot, candidate, options, id) > 0n),
 				mixSeed(options.seed, id),
 			)
 			if (universe === undefined) return undefined

@@ -3,6 +3,7 @@ import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../config/settings.ts'
+import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../contracts/surface.ts'
 import { discoverEcosystemSnapshot } from '../monitoring/discovery.ts'
 import { carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
@@ -33,6 +34,10 @@ export type CanonicalScanResult = {
 	inventory: WalletBalanceState
 	snapshot: EcosystemSnapshot
 	topologyCache: CanonicalImmutableTopologyCache
+}
+
+export type CanonicalScanOptions = {
+	clock?: (() => number) | undefined
 }
 
 function requiredConnectivity(settings: OperatorSettings) {
@@ -83,7 +88,7 @@ export function sharedCanonicalBlockNumber(heads: readonly bigint[], requiredQuo
 	return shared
 }
 
-export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool): Promise<CanonicalAnchor> {
+export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool, nowMilliseconds = Date.now()): Promise<CanonicalAnchor> {
 	const connectivity = requiredConnectivity(settings)
 	const heads = availableSettledValues(
 		await Promise.allSettled(
@@ -106,7 +111,7 @@ export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool)
 		connectivity.rpcQuorum,
 	)
 	const capableHeads = heads.filter(observation => observation.blockNumber >= sharedBlockNumber)
-	return await settledQuorumValue(
+	const anchor = await settledQuorumValue(
 		`canonical scan block ${sharedBlockNumber.toString()}`,
 		capableHeads.map(async ({ client, endpoint }) => {
 			const block = await client.getBlock({ blockNumber: sharedBlockNumber })
@@ -124,6 +129,13 @@ export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool)
 		}),
 		connectivity.rpcQuorum,
 	)
+	assertCanonicalAnchorFreshness(
+		heads.map(observation => observation.blockNumber),
+		anchor.blockNumber,
+		anchor.timestamp,
+		nowMilliseconds,
+	)
+	return anchor
 }
 
 function protocolIndexMatches(index: ChaosProtocolIndex, settings: OperatorSettings, wallet: Address) {
@@ -473,8 +485,9 @@ export async function performCanonicalScan(
 	previousCarryProofJournal?: CarryProofJournal,
 	carryProfileResetAuthorized = false,
 	previousTopologyCache?: CanonicalImmutableTopologyCache,
+	options: CanonicalScanOptions = {},
 ): Promise<CanonicalScanResult> {
-	const anchor = await canonicalAnchor(settings, pool)
+	const anchor = await canonicalAnchor(settings, pool, options.clock?.() ?? Date.now())
 	if (settings.runtime.protocolStartBlock > anchor.blockNumber) {
 		throw new Error(`Configured protocol start block ${settings.runtime.protocolStartBlock.toString()} is ahead of canonical block ${anchor.blockNumber.toString()}`)
 	}

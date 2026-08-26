@@ -322,6 +322,7 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 	state.workflows.push(workflow)
 	const environment: ExecutionEnvironment = {
 		chain: mainnet,
+		clock: () => 1_000,
 		pool,
 		sender: account.address,
 		settings,
@@ -562,7 +563,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		for (const methods of fixture.requestedMethods) {
 			expect(methods).toContain('eth_call')
 			expect(methods).not.toContain('eth_sendRawTransaction')
-			expect(methods.filter(method => method === 'eth_getBlockByNumber')).toHaveLength(2)
+			expect(methods.filter(method => method === 'eth_getBlockByNumber')).toHaveLength(3)
 		}
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')

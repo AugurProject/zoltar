@@ -18,7 +18,7 @@ import {
 	type ChaosReadClient,
 } from '../../src/monitoring/discovery.ts'
 import type { OracleGameSnapshot } from '../../src/operations/types.ts'
-import type { CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 interface GraphOverrides {
@@ -26,6 +26,8 @@ interface GraphOverrides {
 	forkerZoltar?: Address
 	historicalBlockErrors?: readonly string[]
 	historicalBlockHashes?: Readonly<Record<string, `0x${string}`>>
+	outcomeLabelPage?: (questionId: bigint, start: bigint, count: bigint) => readonly string[]
+	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
 	questionIds?: readonly bigint[]
 	routerFactory?: Address
 	tradingSecurityPoolFactory?: Address
@@ -100,8 +102,14 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return ['Question', 'Description', 1_000n, 2_000n, 2n, 0n, 1n, 'shares']
 				case 'questionCreatedTimestamp':
 					return 900n
-				case 'getOutcomeLabels':
-					return ['Yes', 'No']
+				case 'getOutcomeLabels': {
+					const questionId = parameters.args?.[0]
+					const start = parameters.args?.[1]
+					const count = parameters.args?.[2]
+					if (typeof questionId !== 'bigint' || typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Outcome-label page arguments required')
+					if (graph.outcomeLabelPage !== undefined) return graph.outcomeLabelPage(questionId, start, count)
+					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
+				}
 				case 'securityPoolDeploymentCount':
 					return 0n
 				case 'securityPoolDeploymentsRange':
@@ -240,6 +248,63 @@ describe('anchored ecosystem discovery', () => {
 		expect(snapshot.warnings).toEqual([])
 	})
 
+	test('exhausts categorical outcome labels beyond the first 256-entry page', async () => {
+		const labels = Array.from({ length: 512 }, (_, index) => `Outcome ${index.toString()}`)
+		const fake = fakeClient(10n, hash(1), {
+			outcomeLabelsByQuestion: { '101': labels },
+			questionIds: [101n],
+		})
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			wallet: address(1),
+		})
+		expect(snapshot.questions[0]?.outcomeLabels).toEqual(labels)
+		expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels').map(read => read.args)).toEqual([
+			[101n, 0n, 256n],
+			[101n, 256n, 256n],
+			[101n, 512n, 256n],
+		])
+	})
+
+	test('rejects a provider that returns a full outcome-label page forever', async () => {
+		const fake = fakeClient(10n, hash(1), {
+			outcomeLabelPage: (_questionId, start, count) => Array.from({ length: Number(count) }, (_, index) => `Outcome ${(start + BigInt(index)).toString()}`),
+			questionIds: [101n],
+		})
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxOutcomeLabelsPerQuestion: 512 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('Question 101 exceeds the configured 512-label discovery limit')
+		expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels').map(read => read.args)).toEqual([
+			[101n, 0n, 256n],
+			[101n, 256n, 256n],
+			[101n, 512n, 1n],
+		])
+	})
+
+	test('rejects outcome labels that exceed the configured UTF-8 byte budget', async () => {
+		const fake = fakeClient(10n, hash(1), {
+			outcomeLabelsByQuestion: { '101': ['é'] },
+			questionIds: [101n],
+		})
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxOutcomeLabelUtf8BytesPerQuestion: 1 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('Question 101 outcome labels exceed the configured 1-byte UTF-8 discovery limit')
+	})
+
 	test('reuses only checkpoint-authenticated immutable topology and pages from prior collection boundaries', async () => {
 		const first = fakeClient(10n, hash(10), {
 			childOutcomesByUniverse: { '0': [1n, 2n, 3n] },
@@ -343,7 +408,7 @@ describe('anchored ecosystem discovery', () => {
 			pairsByPool: {},
 			poolDeployments: [],
 			questions: [{ createdAt: '1', endTime: '3', id: '101', kind: 'binary', numTicks: '2', outcomeLabels: ['Yes', 'No'], startTime: '2' }],
-			schemaVersion: 1,
+			schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 			universeChildren: {},
 			vaultsByPool: {},
 		}

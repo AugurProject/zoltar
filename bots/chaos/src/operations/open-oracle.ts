@@ -350,6 +350,7 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 		if (mode === 'withdraw') methodSignature = 'withdraw(address,uint256)'
 		else if (mode === 'withdraw-to') methodSignature = 'withdrawTo(address,uint256,address)'
 		else if (useCustomPushGasLimit) methodSignature = 'pushOrCredit(address,address,uint128,uint32)'
+		const stepId = useCustomPushGasLimit ? `${mode}-custom-gas` : mode
 		const label = {
 			'push-or-credit': 'Push or credit OpenOracle balance',
 			withdraw: 'Withdraw OpenOracle credit',
@@ -372,7 +373,7 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 					evidence,
 					functionName: method,
 					gasLimit: OPEN_ORACLE_CREDIT_STEP_GAS_LIMIT,
-					id: methodSignature,
+					id: stepId,
 					label: methodSignature,
 					preflightCalls,
 					to: snapshot.deployments.openOracle,

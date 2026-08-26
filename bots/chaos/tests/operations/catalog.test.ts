@@ -581,14 +581,52 @@ describe('chaos operation catalog', () => {
 		universe.forkTime = '1999999000'
 		universe.forkQuestionId = '77'
 		pool.systemState = 1
+		pool.forkActivationTime = '1999999000'
 		shares.migrationProgressByRoute['0:0'] = '0'
 		const first = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
 		expect(first?.metadata).toMatchObject({ fromId: '0', targetOutcome: '0' })
+		expect(first?.deadlineTimestamp).toBe('2004837400')
 		expect(first?.steps[0]?.walletAssetDebits).toEqual([{ amount: shares.invalid, asset: shares.shareToken, category: 'outcome-share', kind: 'erc1155', tokenId: '0' }])
 
 		shares.migrationProgressByRoute['0:0'] = shares.invalid
 		const repeated = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
 		expect(repeated).toBeUndefined()
+		shares.migrationProgressByRoute['0:0'] = (BigInt(shares.invalid) + 1n).toString()
+		expect(() => eligibleOperationPlans(snapshot, permissiveOptions)).toThrow('exceeds the wallet source balance')
+	})
+
+	test('requires an existing child route after the share-migration child-creation window closes', () => {
+		const snapshot = snapshotFixture()
+		const universe = snapshot.universes[0]
+		const pool = snapshot.pools[0]
+		const shares = snapshot.wallet.shares[0]
+		if (universe === undefined || pool === undefined || shares === undefined) throw new Error('Fork migration fixture is incomplete')
+		universe.forkTime = '1000'
+		universe.forkQuestionId = '77'
+		pool.systemState = 1
+		pool.forkActivationTime = '1000'
+		shares.migrationProgressByRoute['0:0'] = '0'
+		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeUndefined()
+
+		snapshot.pools.push({ ...pool, address: address(91), forkOutcomeIndex: '0', parent: pool.address, systemState: 2, universeId: '91', vaults: [] })
+		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')?.deadlineTimestamp).toBeUndefined()
+	})
+
+	test('selects REP add and burn plans only from funded universes', () => {
+		const snapshot = snapshotFixture()
+		const fundedUniverse = snapshot.universes[0]
+		const fundedInventory = snapshot.wallet.tokens.find(token => token.address === fundedUniverse?.repToken)
+		if (fundedUniverse === undefined || fundedInventory === undefined) throw new Error('Funded REP fixture is incomplete')
+		fundedUniverse.forkTime = '1000'
+		const unfundedRep = address(92)
+		snapshot.universes.push({ ...fundedUniverse, id: '92', migrationRepSplitProgressByOutcome: {}, repToken: unfundedRep })
+		snapshot.wallet.tokens.push({ ...fundedInventory, address: unfundedRep, allowances: {}, balance: '0' })
+		for (let seed = 0; seed < 16; seed += 1) {
+			const plans = eligibleOperationPlans(snapshot, { ...permissiveOptions, seed })
+			for (const definitionId of ['zoltar.migration.add', 'zoltar.rep.burn']) {
+				expect(plans.find(candidate => candidate.definitionId === definitionId)?.metadata['universeId']).toBe(fundedUniverse.id)
+			}
+		}
 	})
 
 	test('constructs well-formed categorical/scalar children and keeps empty indexed REP split progress ineligible', () => {

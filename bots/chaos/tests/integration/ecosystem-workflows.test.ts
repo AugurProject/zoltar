@@ -14,6 +14,7 @@ import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_Security
 import { CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
 
 const SCAN_SEED = 42
+const ANVIL_CLOCK = () => 2_000_000_700_000
 const OPERATION_IDS = ['zoltar.question.create-binary', 'open-oracle.weth.wrap', 'trading.pair.create', 'statoblast.vault.deposit-rep'] as const
 
 let fixture: ChaosAnvilFixture | undefined
@@ -118,6 +119,7 @@ function runtimeContext(settings: OperatorSettings) {
 	const wallet = createWalletClient({ account, chain, transport: pool.transport })
 	const environment: ExecutionEnvironment = {
 		chain,
+		clock: ANVIL_CLOCK,
 		finalityBlocks: CHAOS_FINALITY_BLOCKS,
 		pool,
 		sender: account.address,
@@ -129,7 +131,7 @@ function runtimeContext(settings: OperatorSettings) {
 }
 
 async function canonicalPlans(context: ReturnType<typeof runtimeContext>) {
-	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined)
+	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, false, undefined, { clock: ANVIL_CLOCK })
 	expect(scan.indexComplete).toBeTrue()
 	expect(scan.carryProofJournalComplete).toBeTrue()
 	context.state.evaluations = scan.evaluations
@@ -137,6 +139,28 @@ async function canonicalPlans(context: ReturnType<typeof runtimeContext>) {
 	context.state.lastScannedBlock = scan.anchor.blockNumber
 	context.state.protocolIndex = scan.index
 	return { plans: OPERATION_IDS.map(id => requiredPlan(scan.evaluations, id)), scan }
+}
+
+async function canonicalRescan(context: ReturnType<typeof runtimeContext>, previous?: Awaited<ReturnType<typeof performCanonicalScan>>) {
+	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, previous?.index, previous?.carryProofJournal, false, previous?.topologyCache, { clock: ANVIL_CLOCK })
+	expect(scan.indexComplete).toBeTrue()
+	expect(scan.carryProofJournalComplete).toBeTrue()
+	context.state.evaluations = scan.evaluations
+	context.state.inventory = scan.inventory
+	context.state.lastScannedBlock = scan.anchor.blockNumber
+	context.state.protocolIndex = scan.index
+	return scan
+}
+
+async function executeCanonicalOperation(context: ReturnType<typeof runtimeContext>, scan: Awaited<ReturnType<typeof performCanonicalScan>>, id: string) {
+	const plan = requiredPlan(scan.evaluations, id)
+	const workflow = await executeOperationPlan(context.environment, plan)
+	expect(workflow.status, `${id} workflow status`).toBe('completed')
+	expect(
+		workflow.steps.every(step => step.status === 'confirmed'),
+		`${id} transaction status`,
+	).toBeTrue()
+	return { plan, scan: await canonicalRescan(context, scan), workflow }
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
@@ -212,6 +236,77 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(workflow.steps.map(step => step.status)).toEqual(['confirmed', 'confirmed'])
 			expect(workflow.status).toBe('completed')
 		} finally {
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
+	test('rescans between dependent Zoltar, OpenOracle, Statoblast, and Trading state transitions', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const relay = current.createPrivateRelay()
+		const stateFile = await temporaryStateFile()
+		try {
+			const settings = settingsFor(current, proxy, stateFile.path)
+			settings.submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relay.relayUrl] }
+			const context = runtimeContext(settings)
+			let scan = await canonicalRescan(context)
+			const execute = async (id: string) => {
+				const result = await executeCanonicalOperation(context, scan, id)
+				scan = result.scan
+				return result
+			}
+
+			await execute('zoltar.question.create-categorical')
+			expect(scan.snapshot.questions).toHaveLength(Number(current.baselineQuestionCount) + 1)
+
+			await execute('open-oracle.weth.wrap')
+			const deposit = await execute('open-oracle.deposit')
+			const creditToken = deposit.plan.metadata['token']
+			if (typeof creditToken !== 'string') throw new Error('OpenOracle deposit did not identify its credited token')
+			const depositedCredit = scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === creditToken.toLowerCase())?.openOracleCredit
+			expect(BigInt(depositedCredit ?? '0')).toBeGreaterThan(1n)
+
+			await execute('open-oracle.withdraw')
+			const withdrawnCredit = scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === creditToken.toLowerCase())?.openOracleCredit
+			expect(withdrawnCredit).toBe('1')
+
+			await execute('statoblast.vault.deposit-rep')
+			const depositedVault = scan.snapshot.pools.find(pool => pool.address.toLowerCase() === current.pool.toLowerCase())?.vaults.find(vault => vault.address.toLowerCase() === context.account.address.toLowerCase())
+			if (depositedVault === undefined) throw new Error('Statoblast deposit did not create a discoverable wallet vault')
+			expect(BigInt(depositedVault.repBackingAttoRep)).toBeGreaterThan(0n)
+			await execute('statoblast.complete-set.create')
+			const mintedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
+			expect(BigInt(mintedShares?.invalid ?? '0')).toBeGreaterThan(0n)
+			expect(BigInt(mintedShares?.yes ?? '0')).toBeGreaterThan(0n)
+			expect(BigInt(mintedShares?.no ?? '0')).toBeGreaterThan(0n)
+
+			await execute('statoblast.complete-set.redeem')
+			const redeemedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
+			expect(redeemedShares).toMatchObject({ invalid: '0', no: '0', yes: '0' })
+
+			await execute('trading.pair.create')
+			const uninitializedPair = scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === current.pool.toLowerCase())
+			expect(uninitializedPair?.status).toBe(6)
+
+			await execute('trading.pair.initialize-eth')
+			const initializedPair = scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === current.pool.toLowerCase())
+			expect(initializedPair?.status).toBe(0)
+			expect(BigInt(initializedPair?.totalSupply ?? '0')).toBeGreaterThan(0n)
+			expect(BigInt(initializedPair?.walletLiquidity ?? '0')).toBeGreaterThan(0n)
+
+			const liquidityBeforeAdd = BigInt(initializedPair?.walletLiquidity ?? '0')
+			await execute('trading.liquidity.add-eth')
+			const pairAfterAdd = scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === current.pool.toLowerCase())
+			expect(BigInt(pairAfterAdd?.walletLiquidity ?? '0')).toBeGreaterThan(liquidityBeforeAdd)
+
+			expect(context.state.pendingTransactions).toEqual([])
+			expect(proxy.rawTransactions).toEqual([])
+			expect(relay.rawTransactions).toHaveLength(12)
+			expect(relay.rawTransactions.every(rawTransaction => parseTransaction(rawTransaction).type === 'eip1559')).toBeTrue()
+		} finally {
+			relay.dispose()
 			proxy.dispose()
 			await stateFile.dispose()
 		}

@@ -42,6 +42,7 @@ describe('OpenOracle safe operation completeness', () => {
 		expect(step.gasLimit).toBe(500_000n.toString())
 		expect(withdrawal.lastValidBlockNumber).toBe('101')
 		expect(withdrawal.metadata).toMatchObject({ amount: 1_000n.toString(), methodSignature: 'withdrawTo(address,uint256,address)', recipient: snapshot.wallet.address, token: snapshot.deployments.weth })
+		expect(withdrawal.steps[0]?.id).toBe('withdraw-to')
 		expect(step.preflightCalls).toHaveLength(1)
 		const preflight = step.preflightCalls[0]
 		if (preflight === undefined) throw new Error('withdrawTo preflight missing')
@@ -79,10 +80,12 @@ describe('OpenOracle safe operation completeness', () => {
 		if (defaultStep === undefined || boundedStep === undefined) throw new Error('pushOrCredit step missing')
 
 		expect(defaultStep.data.slice(0, 10)).toBe(selector('pushOrCredit(address,address,uint128)'))
+		expect(defaultStep.id).toBe('push-or-credit')
 		expect(decodeFunctionData({ abi: openOracleAbi, data: defaultStep.data })).toEqual({ args: [snapshot.deployments.weth, snapshot.wallet.address, 1_000n], functionName: 'pushOrCredit' })
 		expect(defaultPlan.metadata).toMatchObject({ forwardedGasLimit: 50_000n.toString(), recipient: snapshot.wallet.address })
 
 		expect(boundedStep.data.slice(0, 10)).toBe(selector('pushOrCredit(address,address,uint128,uint32)'))
+		expect(boundedStep.id).toBe('push-or-credit-custom-gas')
 		const boundedCall = decodeFunctionData({ abi: openOracleAbi, data: boundedStep.data })
 		expect(boundedCall.functionName).toBe('pushOrCredit')
 		expect(boundedCall.args?.slice(0, 3)).toEqual([snapshot.deployments.weth, snapshot.wallet.address, 1_000n])

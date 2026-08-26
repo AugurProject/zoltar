@@ -2,14 +2,16 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
-import { EndpointCheckFailure, privateKeyToAccount, type EndpointCheck } from '../support/bot-shared.ts'
+import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
-import { abandonRetryableSelectableFailure, executionProfileId, recordEndpointPreflightChecks, runChaosOperator } from '../../src/runtime/operator.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
+import { abandonRetryableSelectableFailure, backfillWaitMilliseconds, executionProfileId, recordEndpointPreflightChecks, runChaosOperator, runtimeTopologySummary, scheduleAfterRecoveredTransaction } from '../../src/runtime/operator.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
+import { address, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -27,6 +29,18 @@ function processLocks(): ChaosProcessLocks {
 		commitSigner: async () => undefined,
 		discardSigner: async () => undefined,
 		release: async () => undefined,
+	}
+}
+
+function topologyCacheWithVaults(pool: Address, vaults: Address[]): CanonicalImmutableTopologyCache {
+	return {
+		anchor: { blockHash: zeroHash, blockNumber: '77' },
+		pairsByPool: {},
+		poolDeployments: [],
+		questions: [],
+		schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
+		universeChildren: {},
+		vaultsByPool: { [pool.toLowerCase()]: vaults },
 	}
 }
 
@@ -89,6 +103,29 @@ function lifecyclePlan(): OperationPlan {
 	}
 }
 
+function completedSelectableWorkflow(operationId: string, startedAt: string, completedAt: string) {
+	const workflow = createDurableWorkflow({
+		...lifecyclePlan(),
+		classification: 'selectable',
+		definitionId: operationId,
+		ecosystem: 'trading',
+		id: `${operationId}:100:restart-fixture`,
+		obligation: false,
+		priority: 'random',
+	})
+	workflow.createdAt = startedAt
+	workflow.startedAt = startedAt
+	workflow.completedAt = completedAt
+	workflow.updatedAt = completedAt
+	workflow.status = 'completed'
+	for (const step of workflow.steps) {
+		step.confirmedAt = completedAt
+		step.startedAt = startedAt
+		step.status = 'confirmed'
+	}
+	return workflow
+}
+
 function runtimeWithPartialLifecycleHistory(profileId: string, signerAddress: ReturnType<typeof privateKeyToAccount>['address']) {
 	const state = initialRuntimeState(true, signerAddress, 11155111, initialDurableState(11155111, true, profileId, signerAddress))
 	const plan = lifecyclePlan()
@@ -136,6 +173,74 @@ function runtimeWithPartialLifecycleHistory(profileId: string, signerAddress: Re
 }
 
 describe('chaos operator runtime', () => {
+	test('bounds sustained backfill cadence by the configured lifecycle poll interval', () => {
+		expect(backfillWaitMilliseconds(1_000, 0)).toBe(1_000)
+		expect(backfillWaitMilliseconds(12_000, 0)).toBe(5_000)
+		expect(backfillWaitMilliseconds(12_000, 15)).toBe(5_000)
+		expect(backfillWaitMilliseconds(12_000, 16)).toBe(10_000)
+		expect(backfillWaitMilliseconds(12_000, 32)).toBe(12_000)
+		expect(backfillWaitMilliseconds(60_000, 64)).toBe(60_000)
+		expect(() => backfillWaitMilliseconds(999, 0)).toThrow('1000 through 60000')
+		expect(() => backfillWaitMilliseconds(12_000, -1)).toThrow('non-negative')
+	})
+
+	test('publishes only a sanitized completeness-aware canonical topology summary', () => {
+		const snapshot = snapshotFixture()
+		const firstPool = snapshot.pools[0]
+		if (firstPool === undefined) throw new Error('Topology fixture requires one pool')
+		const firstVault = firstPool.vaults[0]
+		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
+		const summary = runtimeTopologySummary({
+			anchor: { blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
+			canonicalLifecyclePresenceComplete: true,
+			carryProofJournalComplete: true,
+			indexComplete: false,
+			snapshot,
+			topologyCache: topologyCacheWithVaults(firstPool.address, [firstVault.address]),
+		})
+		expect(summary.anchor).toEqual({ blockNumber: 77n, timestamp: 1n })
+		expect(summary.complete).toBeFalse()
+		expect(summary.universes).toHaveLength(snapshot.universes.length)
+		expect(summary.pools[0]).toEqual({
+			address: firstPool.address,
+			awaitingForkContinuation: firstPool.awaitingForkContinuation,
+			coordinator: firstPool.coordinator,
+			questionId: firstPool.questionId,
+			systemState: firstPool.systemState,
+			universeId: firstPool.universeId,
+			vaultCount: firstPool.vaults.length,
+		})
+		expect(summary.reports).toHaveLength(snapshot.reports.length)
+		expect(summary.auctions).toHaveLength(snapshot.auctions.length)
+		expect(summary.pairs).toHaveLength(snapshot.pairs.length)
+	})
+
+	test('publishes the canonical registry total when only the wallet vault was inspected', () => {
+		const snapshot = snapshotFixture()
+		const firstPool = snapshot.pools[0]
+		if (firstPool === undefined) throw new Error('Topology fixture requires one pool')
+		const walletVault = firstPool.vaults[0]
+		if (walletVault === undefined) throw new Error('Topology fixture requires one wallet vault')
+		firstPool.vaultDiscoveryComplete = false
+		firstPool.vaults = [walletVault]
+		const registeredVaults = [walletVault.address, address(91), address(92)]
+
+		const summary = runtimeTopologySummary({
+			anchor: { blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
+			canonicalLifecyclePresenceComplete: true,
+			carryProofJournalComplete: true,
+			indexComplete: true,
+			snapshot,
+			topologyCache: topologyCacheWithVaults(firstPool.address, registeredVaults),
+		})
+
+		expect(firstPool.vaultDiscoveryComplete).toBeFalse()
+		expect(firstPool.vaults).toHaveLength(1)
+		expect(summary.complete).toBeTrue()
+		expect(summary.pools[0]?.vaultCount).toBe(registeredVaults.length)
+		expect(Object.keys(summary.pools[0] ?? {}).sort()).toEqual(['address', 'awaitingForkContinuation', 'coordinator', 'questionId', 'systemState', 'universeId', 'vaultCount'])
+	})
+
 	test('replaces stale healthy preflight checks on failure and recovery', async () => {
 		const healthyChecks: readonly EndpointCheck[] = [{ chainId: 1, checkedAt: '2026-08-24T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://read-one.example' }]
 		const failedChecks: readonly EndpointCheck[] = [{ chainId: undefined, checkedAt: '2026-08-24T00:01:00.000Z', error: 'unavailable', kind: 'read-rpc', status: 'failed', target: 'https://read-one.example' }]
@@ -207,6 +312,142 @@ describe('chaos operator runtime', () => {
 		expect(durable.pendingTransactions).toHaveLength(0)
 		expect(durable.protocolIndex).toBeUndefined()
 		expect(durable.profileId).toBe(executionProfileId(settings))
+	})
+
+	test('invalidates a keyless protocol index when startup first binds the configured signer', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-keyless-index-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
+		durable.protocolIndex = {
+			auctionBids: {},
+			chainId: settings.network.chainId,
+			childRepSplits: [],
+			cursor: { blockHash: zeroHash, blockNumber: settings.runtime.protocolStartBlock.toString() },
+			escalationDeposits: [],
+			migrationRepSplits: [],
+			openOracle: settings.deployment.openOracle,
+			reports: [],
+			schemaVersion: 2,
+			securityPoolForker: settings.deployment.securityPoolForker,
+			startBlock: settings.runtime.protocolStartBlock.toString(),
+			wallet: zeroAddress,
+			zoltar: settings.deployment.zoltar,
+		}
+		await saveDurableState(stateFile, durable)
+
+		using shutdown = createChaosShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
+
+		const rebound = await loadDurableState(stateFile, settings.network.chainId)
+		expect(rebound.signerAddress).toBe(privateKeyToAccount(FIRST_PRIVATE_KEY).address)
+		expect(rebound.protocolIndex).toBeUndefined()
+		expect(rebound.activities[0]?.message).toContain('keyless wallet index invalidated')
+	})
+
+	test('closes a recovered paused schedule with a fresh random wait before resume', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-recovered-schedule-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
+		const state = initialRuntimeState(true, signer, settings.network.chainId, initialDurableState(settings.network.chainId, true, executionProfileId(settings), signer))
+		state.scheduler = {
+			lastDelaySeconds: 60,
+			lastRunAt: '2026-08-25T00:00:00.000Z',
+			nextRunAt: '2026-08-25T00:01:00.000Z',
+			selectedOperationId: 'trading.swap',
+			status: 'paused',
+		}
+		const before = Date.now()
+		const completed = await scheduleAfterRecoveredTransaction(
+			{
+				path: join(directory, 'operator.json'),
+				rememberSigner: true,
+				revision: 'revision',
+				settings,
+			},
+			state,
+			'trading.swap',
+		)
+
+		expect(completed).toBeTrue()
+		expect(state.scheduler.status).toBe('paused')
+		expect(Date.parse(state.scheduler.nextRunAt ?? '')).toBeGreaterThanOrEqual(before + settings.scheduler.minimumDelaySeconds * 1_000)
+		expect(state.scheduler.lastRunAt).not.toBe('2026-08-25T00:00:00.000Z')
+		const durable = await loadDurableState(stateFile, settings.network.chainId)
+		expect(durable.scheduler).toEqual(state.scheduler)
+	})
+
+	test('closes an interrupted paused transaction run during production startup', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-paused-recovery-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const pausedSettings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const settings = parseSettings(
+			{
+				...serializedSettings(pausedSettings),
+				connectivity: {
+					publicRpcUrls: ['https://submit.example'],
+					quorumRpcUrls: ['https://read-two.example', 'https://read-three.example'],
+					readRpcUrl: 'https://read-one.example',
+					rpcQuorum: 2,
+				},
+				networkConfigured: true,
+				paused: false,
+			},
+			pausedSettings.privateKey,
+		)
+		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
+		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings), signer)
+		durable.safetyPaused = true
+		durable.scheduler = {
+			lastDelaySeconds: 60,
+			lastRunAt: '2026-08-25T00:00:00.000Z',
+			nextRunAt: '2026-08-25T00:01:00.000Z',
+			selectedOperationId: 'trading.swap',
+			status: 'paused',
+		}
+		durable.workflows = [completedSelectableWorkflow('trading.swap', '2026-08-25T00:01:00.000Z', '2026-08-25T00:02:00.000Z')]
+		await saveDurableState(stateFile, durable)
+
+		const before = Date.now()
+		using shutdown = createChaosShutdownController()
+		shutdown.requestShutdown()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
+
+		const recovered = await loadDurableState(stateFile, settings.network.chainId)
+		expect(recovered.scheduler.status).toBe('paused')
+		expect(Date.parse(recovered.scheduler.lastRunAt ?? '')).toBeGreaterThanOrEqual(before)
+		expect(Date.parse(recovered.scheduler.nextRunAt ?? '')).toBeGreaterThanOrEqual(before + settings.scheduler.minimumDelaySeconds * 1_000)
+		expect(recovered.activities[0]?.message).toBe('Interrupted scheduler run was closed with a fresh randomized wait before any new operation')
+	})
+
+	test('preserves an ordinary paused countdown during production startup', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-paused-countdown-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
+		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings), signer)
+		durable.scheduler = {
+			lastDelaySeconds: 3_600,
+			lastRunAt: '2026-08-25T00:02:01.000Z',
+			nextRunAt: '2099-08-25T01:02:01.000Z',
+			selectedOperationId: 'trading.swap',
+			status: 'paused',
+		}
+		durable.workflows = [completedSelectableWorkflow('trading.swap', '2026-08-25T00:01:00.000Z', '2026-08-25T00:02:00.000Z')]
+		const expectedScheduler = { ...durable.scheduler }
+		await saveDurableState(stateFile, durable)
+
+		using shutdown = createChaosShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
+
+		const restarted = await loadDurableState(stateFile, settings.network.chainId)
+		expect(restarted.scheduler).toEqual(expectedScheduler)
+		expect(restarted.activities).toEqual([])
 	})
 
 	test('moves a stopped safe bootstrap to a fresh state path when deployment identity changes', async () => {

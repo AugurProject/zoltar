@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '../support/bot-shared.ts'
 import { securityPoolForkerAbi, zoltarAbi } from '../../src/contracts/abi.ts'
+import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
-import { eventTopic } from '../../src/operations/planning.ts'
-import { snapshotFixture } from './fixture.ts'
+import { hash, snapshotFixture } from './fixture.ts'
 
 const options = {
 	allowHighRisk: true,
@@ -103,18 +103,16 @@ describe('indexed REP migration operations', () => {
 		const step = plan.steps[0]
 		if (step === undefined) throw new Error('Expected a migrateRepToZoltar step')
 		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toEqual({ args: [pool.address, [0n]], functionName: 'migrateRepToZoltar' })
-		expect(step.evidence).toEqual([
-			{
-				abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
-				emitter: snapshot.deployments.securityPoolForker,
-				equals: '100',
-				field: 'childPoolRepSplitAttoRep',
-				indexed: { outcomeIndex: '0', parent: pool.address },
-				kind: 'decoded-event-field',
-				signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
-				topic0: eventTopic('ChildRepSplit(address,uint256,uint256,uint256)'),
-			},
-		])
+		expect(step.evidence).toEqual([{ kind: 'receipt-success' }])
+		expect(() =>
+			validateStepReceiptEvidence(step, {
+				blockHash: hash(101),
+				blockNumber: 101n,
+				logs: [],
+				status: 'success',
+				transactionHash: hash(102),
+			}),
+		).not.toThrow()
 
 		const policyDisabled = { ...options, allowIrreversibleOperations: false }
 		expect(urgentOperationPlans(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
@@ -138,5 +136,33 @@ describe('indexed REP migration operations', () => {
 		})
 		pool.forkRepMigrationProgressByOutcome['0'] = '101'
 		expect(() => canonicalLifecyclePresence(snapshot, options)).toThrow('REP migration progress exceeds its fork target')
+	})
+
+	test('materializes unresolved escalation entitlements for categorical and scalar routes above outcome two', () => {
+		const { pool, snapshot, universe } = forkedSnapshot()
+		const question = snapshot.questions[0]
+		if (question === undefined) throw new Error('Fork question fixture is missing')
+		pool.forkUnresolvedEscalation = true
+		question.kind = 'categorical'
+		question.outcomeLabels = ['Alpha', 'Beta', 'Gamma']
+		pool.unresolvedEscalationMigrationReadyOutcomes = ['3']
+
+		let plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault-unresolved')
+		expect(plan?.metadata['childOutcomeIndex']).toBe('3')
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			definitionId: 'statoblast.fork.migrate-vault-unresolved',
+			ecosystem: 'statoblast',
+			metadata: { childOutcomeIndex: '3', pool: pool.address },
+		})
+
+		const scalarOutcome = ((1n << 255n) | (37n << 120n) | 63n).toString()
+		question.kind = 'scalar'
+		question.numTicks = '100'
+		question.outcomeLabels = []
+		universe.knownChildOutcomes = [scalarOutcome]
+		pool.unresolvedEscalationMigrationReadyOutcomes = [scalarOutcome]
+		plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault-unresolved')
+		expect(plan?.metadata['childOutcomeIndex']).toBe(scalarOutcome)
+		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: plan?.steps[0]?.data ?? '0x' })).toEqual({ args: [pool.address, snapshot.wallet.address, BigInt(scalarOutcome)], functionName: 'migrateVaultWithUnresolvedEscalation' })
 	})
 })

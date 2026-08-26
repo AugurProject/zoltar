@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
 
-export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 1
+export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 2
 export const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
 
@@ -88,7 +88,7 @@ type TopologyManifestPayload = {
 	manifestSchemaVersion: 1
 	payloadBytes: string
 	payloadDigest: Hex
-	payloadSchemaVersion: 1
+	payloadSchemaVersion: typeof IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION
 	segmentCount: string
 	segmentsDigest: Hex
 	storeSchemaVersion: 1
@@ -164,7 +164,7 @@ function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 	const question = requiredRecord(value, label)
 	assertExactKeys(question, ['createdAt', 'endTime', 'id', 'kind', 'numTicks', 'outcomeLabels', 'startTime'], label)
 	if (question['kind'] !== 'binary' && question['kind'] !== 'categorical' && question['kind'] !== 'scalar') throw new Error(`${label}.kind is unsupported`)
-	if (!Array.isArray(question['outcomeLabels']) || question['outcomeLabels'].length > 256) throw new Error(`${label}.outcomeLabels must contain at most 256 labels`)
+	if (!Array.isArray(question['outcomeLabels'])) throw new Error(`${label}.outcomeLabels must be an array`)
 	return {
 		createdAt: unsignedIntegerString(question['createdAt'], `${label}.createdAt`),
 		endTime: unsignedIntegerString(question['endTime'], `${label}.endTime`),
@@ -420,7 +420,13 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 	const generationPath = generationDirectory(statePath, digest)
 	await ownerDirectory(storePath, 'Immutable topology store')
 	await ownerDirectory(generationPath, 'Immutable topology generation')
-	const manifest = parseManifest(parseJson(await readOwnerFile(`${generationPath}/manifest.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology manifest'), 'Immutable topology manifest'), digest)
+	const rawManifest = parseJson(await readOwnerFile(`${generationPath}/manifest.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology manifest'), 'Immutable topology manifest')
+	const manifestRecord = requiredRecord(rawManifest, 'immutable topology manifest')
+	// Schema one fetched at most 256 labels and could persist an incomplete
+	// categorical domain. Discard it without reading or trusting its payload so
+	// the next anchored scan rebuilds every immutable question from the chain.
+	if (manifestRecord['payloadSchemaVersion'] === 1) return undefined
+	const manifest = parseManifest(manifestRecord, digest)
 	if (!sameIdentity(manifest.identity, expectedIdentity)) return undefined
 	const expectedSegments = safeCount(manifest.segmentCount, 'Immutable topology segment count')
 	const expectedPayloadBytes = BigInt(manifest.payloadBytes)

@@ -94,6 +94,122 @@ function publicStrings(value: unknown) {
 		: []
 }
 
+const operationClassifications = new Set(['excluded-dangerous', 'lifecycle-obligation', 'prerequisite', 'role-restricted', 'selectable'])
+
+function operationClassificationField(source: Record<string, unknown>, key: string) {
+	const value = stringField(source, key)
+	return value !== undefined && operationClassifications.has(value) ? value : undefined
+}
+
+function publicCandidateCount(value: unknown) {
+	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
+	const count = BigInt(value)
+	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
+}
+
+function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 'report' | 'universe') {
+	const source = record(value)
+	if (source === undefined) return undefined
+	if (kind === 'universe') {
+		const id = stringField(source, 'id')
+		if (id === undefined) return undefined
+		return compact({
+			forkQuestionId: stringField(source, 'forkQuestionId'),
+			forkTime: scalar(source, 'forkTime'),
+			id,
+			knownChildOutcomeCount: Array.isArray(source['knownChildOutcomes']) ? source['knownChildOutcomes'].length : safeIntegerField(source, 'knownChildOutcomeCount'),
+			parentUniverseId: stringField(source, 'parentUniverseId'),
+			repToken: stringField(source, 'repToken'),
+		})
+	}
+	if (kind === 'pool') {
+		const address = stringField(source, 'address')
+		if (address === undefined) return undefined
+		return compact({
+			address,
+			awaitingForkContinuation: booleanField(source, 'awaitingForkContinuation'),
+			coordinator: stringField(source, 'coordinator'),
+			questionId: stringField(source, 'questionId'),
+			systemState: scalar(source, 'systemState'),
+			universeId: stringField(source, 'universeId'),
+			vaultCount: Array.isArray(source['vaults']) ? source['vaults'].length : safeIntegerField(source, 'vaultCount'),
+		})
+	}
+	if (kind === 'report') {
+		const reportId = stringField(source, 'reportId') ?? stringField(source, 'id')
+		if (reportId === undefined) return undefined
+		return compact({
+			currentReporter: stringField(source, 'currentReporter'),
+			flags: scalar(source, 'flags'),
+			reportId,
+			settlementTime: scalar(source, 'settlementTime'),
+			token1: stringField(source, 'token1'),
+			token2: stringField(source, 'token2'),
+		})
+	}
+	if (kind === 'auction') {
+		const address = stringField(source, 'address')
+		if (address === undefined) return undefined
+		return compact({
+			address,
+			bidCount: Array.isArray(source['bids']) ? source['bids'].length : safeIntegerField(source, 'bidCount'),
+			endTime: scalar(source, 'endTime'),
+			finalized: booleanField(source, 'finalized'),
+			pool: stringField(source, 'pool'),
+			startTime: scalar(source, 'startTime'),
+		})
+	}
+	const address = stringField(source, 'address')
+	if (address === undefined) return undefined
+	return compact({
+		address,
+		feeBps: scalar(source, 'feeBps'),
+		pool: stringField(source, 'pool'),
+		status: scalar(source, 'status'),
+		universeId: stringField(source, 'universeId'),
+	})
+}
+
+const MAXIMUM_PUBLIC_TOPOLOGY_ITEMS_PER_KIND = 500
+
+function publicTopologyItems(value: unknown, kind: 'auction' | 'pair' | 'pool' | 'report' | 'universe') {
+	if (!Array.isArray(value)) return []
+	return value.slice(0, MAXIMUM_PUBLIC_TOPOLOGY_ITEMS_PER_KIND).flatMap(entry => {
+		const projected = publicTopologyItem(entry, kind)
+		return projected === undefined ? [] : [projected]
+	})
+}
+
+function topologyItemCount(value: unknown) {
+	return Array.isArray(value) ? value.length : 0
+}
+
+/** Sanitized, bounded view of the protocol graph observed at one canonical anchor. */
+export function publicChaosTopology(value: unknown) {
+	const source = record(value)
+	const anchor = record(source?.['anchor'])
+	const totalCounts = {
+		auctions: topologyItemCount(source?.['auctions']),
+		pairs: topologyItemCount(source?.['pairs']),
+		pools: topologyItemCount(source?.['pools']),
+		reports: topologyItemCount(source?.['reports']),
+		universes: topologyItemCount(source?.['universes']),
+	}
+	return {
+		anchorBlock: scalar(anchor ?? {}, 'blockNumber') ?? scalar(source ?? {}, 'anchorBlock'),
+		anchorTimestamp: scalar(anchor ?? {}, 'timestamp') ?? scalar(source ?? {}, 'anchorTimestamp'),
+		auctions: publicTopologyItems(source?.['auctions'], 'auction'),
+		complete: booleanField(source ?? {}, 'complete'),
+		pairs: publicTopologyItems(source?.['pairs'], 'pair'),
+		pools: publicTopologyItems(source?.['pools'], 'pool'),
+		reports: publicTopologyItems(source?.['reports'], 'report'),
+		totalCounts,
+		truncated: [totalCounts.auctions, totalCounts.pairs, totalCounts.pools, totalCounts.reports, totalCounts.universes].some(count => count > MAXIMUM_PUBLIC_TOPOLOGY_ITEMS_PER_KIND),
+		universes: publicTopologyItems(source?.['universes'], 'universe'),
+	}
+}
+
 function publicRepBalance(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
@@ -254,7 +370,8 @@ function publicEvaluation(value: unknown) {
 	const plan = record(source['plan'])
 	return compact({
 		blockers: publicStrings(eligibility['blockers']),
-		candidateCount: scalar(source, 'candidateCount') ?? (plan === undefined ? 0 : 1),
+		candidateCount: publicCandidateCount(source['candidateCount']) ?? (plan === undefined ? 0 : 1),
+		classification: operationClassificationField(definition, 'classification') ?? operationClassificationField(source, 'classification'),
 		description: stringField(definition, 'description'),
 		ecosystem: stringField(definition, 'ecosystem'),
 		eligible: booleanField(eligibility, 'eligible'),
@@ -264,6 +381,33 @@ function publicEvaluation(value: unknown) {
 		prerequisites: publicStrings(source['prerequisites']),
 		risk: stringField(definition, 'risk'),
 	})
+}
+
+function groupedPublicEvaluations(value: unknown) {
+	if (!Array.isArray(value)) return []
+	const grouped = new Map<string, Record<string, unknown>>()
+	for (const entry of value) {
+		const projected = publicEvaluation(entry)
+		if (projected === undefined) continue
+		const source = record(projected)
+		if (source === undefined) continue
+		const key = [stringField(source, 'id') ?? '', stringField(source, 'ecosystem') ?? '', stringField(source, 'label') ?? '', stringField(source, 'classification') ?? ''].join('\u0000')
+		const previous = grouped.get(key)
+		if (previous === undefined) {
+			grouped.set(key, source)
+			continue
+		}
+		const previousCount = publicCandidateCount(previous['candidateCount']) ?? 0
+		const currentCount = publicCandidateCount(source['candidateCount']) ?? 0
+		const totalCount = BigInt(previousCount) + BigInt(currentCount)
+		previous['candidateCount'] = totalCount <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(totalCount) : totalCount.toString()
+		previous['blockers'] = [...new Set([...publicStrings(previous['blockers']), ...publicStrings(source['blockers'])])]
+		previous['prerequisites'] = [...new Set([...publicStrings(previous['prerequisites']), ...publicStrings(source['prerequisites'])])]
+		previous['eligible'] = previous['eligible'] === true || source['eligible'] === true
+		if (previous['enabled'] === true || source['enabled'] === true) previous['enabled'] = true
+		else if (previous['enabled'] === false || source['enabled'] === false) previous['enabled'] = false
+	}
+	return [...grouped.values()]
 }
 
 function publicWorkflowStep(value: unknown) {
@@ -390,12 +534,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown) {
 					return [obligation]
 				})
 			: [],
-		operationEvaluations: Array.isArray(evaluationSource)
-			? evaluationSource.flatMap(entry => {
-					const evaluation = publicEvaluation(entry)
-					return evaluation === undefined ? [] : [evaluation]
-				})
-			: [],
+		operationEvaluations: groupedPublicEvaluations(evaluationSource),
 		paused: booleanField(source, 'paused'),
 		pendingTransactions: Array.isArray(source['pendingTransactions'])
 			? source['pendingTransactions'].flatMap(entry => {
@@ -407,6 +546,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown) {
 		scheduler: publicScheduler(source['scheduler']),
 		signerReady: booleanField(source, 'signerReady') ?? booleanField(source, 'operatorCapable') ?? (stringField(source, 'wallet') === undefined ? undefined : true),
 		status: stringField(source, 'status'),
+		topology: publicChaosTopology(source['topology']),
 		wallet: stringField(source, 'wallet') ?? stringField(source, 'signer'),
 	})
 }
@@ -468,16 +608,7 @@ function publicFailure(operation: string, error: unknown) {
 		)
 	}
 	if (error instanceof Error && error.name === CONFIGURATION_COMMIT_INDETERMINATE) {
-		return json(
-			{
-				code: 'configuration_commit_indeterminate',
-				commitStatus: 'indeterminate',
-				error: 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.',
-				safetyPausedInProcess: true,
-				treatAsCommitted: true,
-			},
-			503,
-		)
+		return indeterminateConfigurationFailure()
 	}
 	if (error instanceof Error && error.name === 'SignerOperationBusy') {
 		const pausing = operation === 'mutation:/api/paused'
@@ -500,6 +631,19 @@ function publicFailure(operation: string, error: unknown) {
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
 
+function indeterminateConfigurationFailure() {
+	return json(
+		{
+			code: 'configuration_commit_indeterminate',
+			commitStatus: 'indeterminate',
+			error: 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.',
+			safetyPausedInProcess: true,
+			treatAsCommitted: true,
+		},
+		503,
+	)
+}
+
 export function startDashboardServer(port: number, controller: ChaosDashboardController) {
 	const dashboardPassword = controller.password
 	if (controller.hostname === '0.0.0.0' && controller.loopbackPublished !== true) {
@@ -513,6 +657,23 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
+	let configurationCommitIndeterminate = false
+	let mutationBarrier = Promise.resolve()
+	const enqueueMutation = (operation: () => Promise<Response>) => {
+		const predecessor = mutationBarrier
+		let release: () => void = () => undefined
+		mutationBarrier = new Promise<void>(resolve => {
+			release = resolve
+		})
+		return (async () => {
+			await predecessor
+			try {
+				return await operation()
+			} finally {
+				release()
+			}
+		})()
+	}
 	const server = Bun.serve({
 		hostname: controller.hostname,
 		port,
@@ -536,6 +697,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
+						await mutationBarrier
 						const [stateResult, configurationResult] = await Promise.allSettled([controller.getState(), controller.getConfiguration()])
 						if (stateResult.status === 'rejected') throw stateResult.reason
 						if (configurationResult.status === 'rejected') console.error('chaosDashboardOperation=configuration-read-for-health failed=configuration unavailable')
@@ -547,7 +709,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				}
 				if (url.pathname === '/api/configuration') {
 					try {
-						return json(publicChaosConfiguration(await controller.getConfiguration()))
+						await mutationBarrier
+						return json({ ...publicChaosConfiguration(await controller.getConfiguration()), configurationCommitIndeterminate })
 					} catch (error) {
 						console.error(`chaosDashboardOperation=configuration-read failed=${error instanceof Error ? error.message : String(error)}`)
 						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
@@ -569,13 +732,17 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				])
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {
-					try {
-						const value = await boundedDashboardJson(request)
-						await handler(value)
-						return json({ saved: true })
-					} catch (error) {
-						return publicFailure(`mutation:${url.pathname}`, error)
-					}
+					return await enqueueMutation(async () => {
+						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()
+						try {
+							const value = await boundedDashboardJson(request)
+							await handler(value)
+							return json({ saved: true })
+						} catch (error) {
+							if (error instanceof Error && error.name === CONFIGURATION_COMMIT_INDETERMINATE) configurationCommitIndeterminate = true
+							return publicFailure(`mutation:${url.pathname}`, error)
+						}
+					})
 				}
 			}
 			return json({ error: 'Not found' }, 404)

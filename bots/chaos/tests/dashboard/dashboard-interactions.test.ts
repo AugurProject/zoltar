@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/dashboard-controller.ts'
 
 type RecoveryScenario = {
 	fieldsId: string
@@ -113,6 +114,16 @@ const workflowRenderingState = state({
 		status: 'waiting-transaction',
 		steps: workflowSteps,
 	},
+	evaluations: [
+		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-1' } },
+		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
+		{ definition: { classification: 'role-restricted', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['Factory only'], eligible: false } },
+	],
+	inventory: {
+		eth: '1000000000000000001',
+		rep: [{ balance: '123456789012345678901', symbol: 'REP', token: '0x9999999999999999999999999999999999999998', universeId: '0' }],
+		weth: '42',
+	},
 	obligations: [{ id: 'obligation-rendering', label: 'Rendered obligation', status: 'executing', updatedAt: '2026-08-24T00:01:00.000Z' }],
 	paused: false,
 	pendingTransactions: [
@@ -127,6 +138,15 @@ const workflowRenderingState = state({
 	],
 	rpcEndpointHealth: readRpcHealth,
 	scheduler: { status: 'waiting-transaction' },
+	topology: {
+		anchor: { blockNumber: '4242', timestamp: '1000' },
+		auctions: [{ address: '0x1111111111111111111111111111111111111111', bids: [], finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+		complete: true,
+		pairs: [{ address: '0x3333333333333333333333333333333333333333', feeBps: 30, pool: '0x2222222222222222222222222222222222222222', status: 1, universeId: '0' }],
+		pools: [{ address: '0x2222222222222222222222222222222222222222', systemState: 0, universeId: '0', vaults: [] }],
+		reports: [{ reportId: '7', settlementTime: '2000', token1: '0x4444444444444444444444444444444444444444', token2: '0x5555555555555555555555555555555555555555' }],
+		universes: [{ id: '0', knownChildOutcomes: [], repToken: '0x9999999999999999999999999999999999999998' }],
+	},
 	wallet: walletAddress,
 })
 
@@ -208,6 +228,7 @@ browserTest(
 		let initialDashboardState = firstScenario.staleState
 		let recoveredDashboardState = firstScenario.recoveredState
 		let failSecondStateRead = true
+		let failNextStateRead = false
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({
@@ -221,12 +242,29 @@ browserTest(
 						rpcQuorum: 2,
 					},
 					network: { chainId: 11_155_111, name: 'sepolia' },
-					paused: true,
+					paused: Reflect.get(initialDashboardState, 'paused') === true,
+					runtime: { execute: false },
+					scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
+					strategy: {
+						allowHighRiskOperations: false,
+						allowIrreversibleOperations: false,
+						enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
+						maximumEthPerOperation: '0.05',
+						maximumGasCostEth: '0.02',
+						maximumRepPerOperation: '10',
+						minimumEthReserve: '0.05',
+						minimumRepReserve: '10',
+						workflowValidForBlocks: 96,
+					},
 				},
 				signerAddress: walletAddress,
 			}),
 			getState: async () => {
 				stateRequests += 1
+				if (failNextStateRead) {
+					failNextStateRead = false
+					throw new Error('intentional one-shot state-read failure')
+				}
 				if (failSecondStateRead && stateRequests === 2) {
 					await Bun.sleep(150)
 					throw new Error('intentional state-read failure')
@@ -245,6 +283,8 @@ browserTest(
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
+		const dashboardPort = dashboard.port
+		if (dashboardPort === undefined) throw new Error('Dashboard interaction fixture did not expose a port')
 		const debuggingPort = await availablePort()
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-chromium-'))
 		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
@@ -423,6 +463,13 @@ browserTest(
 					status: 'Quorum ready',
 				})
 				expect(Reflect.get(health, 'lastCheck')).not.toBe('No completed check')
+				expect(
+					await cdp.evaluate(`({
+						eth: document.querySelector('#balance-eth')?.textContent,
+						rep: document.querySelector('#rep-balances .token-row > strong')?.textContent,
+						weth: document.querySelector('#balance-weth')?.textContent,
+					})`),
+				).toEqual({ eth: '1.000000000000000001', rep: '123.456789012345678901', weth: '0.000000000000000042' })
 				failSecondStateRead = true
 				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
 				await waitFor(
@@ -588,6 +635,37 @@ browserTest(
 				await waitFor(`document.querySelector('[data-identifier-type="wallet address"] .identifier-feedback')?.textContent === 'Copied'`, `${viewport.label} copy retry did not succeed`)
 				expect(await cdp.evaluate('window.__identifierCopies')).toEqual([walletAddress, walletAddress])
 
+				if (viewport.label === 'desktop') {
+					await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
+					await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
+					expect(
+						await cdp.evaluate(`({
+								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
+								rows: document.querySelectorAll('#catalog-rows tr').length,
+							})`),
+					).toEqual({ candidate: '2', rows: 2 })
+					await cdp.evaluate(`(() => {
+							const filter = document.querySelector('#catalog-classification-filter')
+							if (!(filter instanceof HTMLSelectElement)) return
+							filter.value = 'role-restricted'
+							filter.dispatchEvent(new Event('change', { bubbles: true }))
+						})()`)
+					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('Pool.initialize') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
+
+					await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
+					await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", 'Anchored topology did not render')
+					expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 anchored protocol identities · sanitized canonical snapshot.')
+					expect(
+						await cdp.evaluate(`({
+								auctions: document.querySelectorAll('#topology-auctions .topology-row').length,
+								pairs: document.querySelectorAll('#topology-pairs .topology-row').length,
+								pools: document.querySelectorAll('#topology-pools .topology-row').length,
+								reports: document.querySelectorAll('#topology-reports .topology-row').length,
+								universes: document.querySelectorAll('#topology-universes .topology-row').length,
+							})`),
+					).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
+				}
+
 				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
 				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null && document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
 				await expectVisibleIdentifiers(
@@ -656,6 +734,35 @@ browserTest(
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
+				expect(await cdp.evaluate(`document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false`)).toBe(true)
+				failNextStateRead = true
+				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/signer`] })
+				await cdp.evaluate(`(() => {
+						const input = document.querySelector('#private-key')
+						const form = document.querySelector('#signer-form')
+						if (!(input instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+						input.value = ${JSON.stringify(`0x${'99'.repeat(32)}`)}
+						form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+					})()`)
+				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('configuration and state could not be reloaded') === true", `${viewport.label} partial signer reconciliation did not remain unresolved`)
+				expect(await cdp.evaluate(`document.querySelector('#signer-fields')?.disabled`)).toBe(true)
+				await cdp.command('Network.setBlockedURLs', { urls: [] })
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#signer-fields')?.disabled === false", `${viewport.label} unresolved signer mutation did not recover after a complete refresh`)
+
+				initialDashboardState = pausedWorkflowRenderingState
+				recoveredDashboardState = pausedWorkflowRenderingState
+				stateRequests = 0
+				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
+				await waitFor("document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} paused execution policy did not become editable`)
+				failNextStateRead = true
+				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/settings`] })
+				await cdp.evaluate(`document.querySelector('#settings-form')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('configuration and state could not be reloaded') === true", `${viewport.label} partial settings reconciliation did not remain unresolved`)
+				expect(await cdp.evaluate(`document.querySelector('#settings-fields')?.disabled`)).toBe(true)
+				await cdp.command('Network.setBlockedURLs', { urls: [] })
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} unresolved settings mutation did not recover after a complete refresh`)
 
 				initialDashboardState = degradedWorkflowRenderingState
 				recoveredDashboardState = degradedWorkflowRenderingState
@@ -770,6 +877,103 @@ browserTest(
 		}
 	},
 	60_000,
+)
+
+browserTest(
+	'permanently freezes dashboard mutations after an indeterminate configuration commit',
+	async () => {
+		const indeterminate = new Error('sensitive post-rename owner-file failure')
+		indeterminate.name = CONFIGURATION_COMMIT_INDETERMINATE
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({
+				hasSigner: true,
+				rememberSigner: true,
+				revision: 'fixture-indeterminate',
+				settings: {
+					network: { chainId: 11_155_111, name: 'sepolia' },
+					paused: true,
+					runtime: { execute: false },
+					scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
+					strategy: { enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'] },
+				},
+				signerAddress: walletAddress,
+			}),
+			getState: () => state({ signerReady: true, wallet: walletAddress }),
+			hostname: '127.0.0.1',
+			password: dashboardPassword,
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {
+				throw indeterminate
+			},
+			setWorkflow: () => {},
+		})
+		const debuggingPort = await availablePort()
+		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-indeterminate-chromium-'))
+		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
+		let socket: WebSocket | undefined
+		try {
+			const cdp = await connectToChromium(debuggingPort)
+			socket = cdp.socket
+			await cdp.command('Network.enable')
+			await cdp.command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
+			const waitFor = async (expression: string, message: string) => {
+				for (let attempt = 0; attempt < 200; attempt += 1) {
+					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(message)
+			}
+			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
+			await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null && document.querySelector('#signer-fields')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
+			await cdp.evaluate(`(() => {
+				const input = document.querySelector('#private-key')
+				const form = document.querySelector('#signer-form')
+				if (!(input instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+				input.value = ${JSON.stringify(`0x${'99'.repeat(32)}`)}
+				form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+			})()`)
+			await waitFor("document.querySelector('#signer-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'Indeterminate signer commit did not latch the dashboard')
+			expect(
+				await cdp.evaluate(`({
+					configurationNotice: document.querySelector('#configuration-status')?.textContent,
+					confirmationDisabled: document.querySelector('#confirm-resume')?.disabled,
+					pauseDisabled: document.querySelector('#pause-button')?.disabled,
+					settingsDisabled: document.querySelector('#settings-fields')?.disabled,
+					signerDisabled: document.querySelector('#signer-fields')?.disabled,
+					sensitiveVisible: document.documentElement.textContent?.includes('sensitive post-rename'),
+				})`),
+			).toMatchObject({
+				configurationNotice: expect.stringContaining('inspect and reload the owner configuration and runtime-state files offline'),
+				confirmationDisabled: true,
+				pauseDisabled: true,
+				settingsDisabled: true,
+				signerDisabled: true,
+				sensitiveVisible: false,
+			})
+
+			await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+			await waitFor("document.querySelector('#refresh-button')?.textContent === 'Refresh'", 'Refresh did not finish after the indeterminate mutation')
+			expect(await cdp.evaluate("document.querySelector('#signer-fields')?.disabled === true && document.querySelector('#signer-status')?.textContent?.includes('permanently frozen') === true")).toBe(true)
+
+			await cdp.command('Page.navigate', { url: 'about:blank' })
+			await waitFor("document.readyState === 'complete'", 'Chromium did not reset before checking the server-process latch')
+			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
+			await waitFor("document.querySelector('#configuration-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'A new page did not inherit the server-process mutation latch')
+			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
+		} finally {
+			socket?.close()
+			browser.kill()
+			await browser.exited
+			dashboard.stop(true)
+			await rm(userDataDirectory, { force: true, recursive: true })
+		}
+	},
+	30_000,
 )
 
 test('recovery dashboard source has no generic manual-load fallback', async () => {

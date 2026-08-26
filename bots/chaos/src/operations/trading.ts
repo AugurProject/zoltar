@@ -13,6 +13,7 @@ const EXECUTOR_FINALITY_BLOCKS = 12n
 const CONSERVATIVE_BLOCK_SECONDS = 15n
 const BPS_DENOMINATOR = 10_000n
 const TRADING_SLIPPAGE_BPS = 100n
+const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 
 function minimumAfterSlippage(value: bigint) {
 	if (value <= 0n) return 0n
@@ -621,26 +622,50 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 	}
 }
 
-const migrateShares: OperationDefinition = {
-	buildPlan(snapshot, options) {
-		const routes = snapshot.pools.flatMap(pool => {
-			const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
-			const forkQuestion = universe === undefined ? undefined : snapshot.questions.find(question => question.id === universe.forkQuestionId)
-			const shares = shareForPool(snapshot, pool)
-			const targetOutcomes = validForkOutcomeRoutes(forkQuestion, universe?.knownChildOutcomes)
-			if (universe === undefined || universe.forkTime === '0' || !shareMigrationPoolReady(pool, universe.forkTime) || targetOutcomes.length === 0 || shares === undefined) return []
-			return [shares.invalid, shares.yes, shares.no].flatMap((balance, sourceOutcome) => {
-				const sourceBalance = amount(balance)
-				if (sourceBalance === 0n) return []
-				return targetOutcomes.flatMap(targetOutcome => {
-					const progress = amount(shares.migrationProgressByRoute[`${sourceOutcome.toString()}:${targetOutcome}`] ?? sourceBalance.toString())
-					return progress < sourceBalance ? [{ fromId: shareTokenId(pool.universeId, sourceOutcome), shares, sourceBalance, targetOutcome }] : []
-				})
+type ShareMigrationRoute = {
+	deadline?: bigint
+	fromId: bigint
+	shares: ShareInventory
+	sourceBalance: bigint
+	targetOutcome: string
+}
+
+function shareMigrationRouteAvailability(snapshot: EcosystemSnapshot, pool: PoolSnapshot, targetOutcome: string): { deadline?: bigint } | undefined {
+	const childExists = snapshot.pools.some(child => child.parent.toLowerCase() === pool.address.toLowerCase() && child.forkOutcomeIndex === targetOutcome)
+	if (childExists || pool.systemState === 0) return {}
+	const activation = amount(pool.forkActivationTime)
+	if (activation === 0n) return undefined
+	const deadline = activation + FORK_MIGRATION_WINDOW_SECONDS
+	return amount(snapshot.anchor.timestamp) + lifecycleSafetySeconds(0) <= deadline ? { deadline } : undefined
+}
+
+function shareMigrationRoutes(snapshot: EcosystemSnapshot): ShareMigrationRoute[] {
+	return snapshot.pools.flatMap(pool => {
+		const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
+		const forkQuestion = universe === undefined ? undefined : snapshot.questions.find(question => question.id === universe.forkQuestionId)
+		const shares = shareForPool(snapshot, pool)
+		const targetOutcomes = validForkOutcomeRoutes(forkQuestion, universe?.knownChildOutcomes)
+		if (universe === undefined || universe.forkTime === '0' || !shareMigrationPoolReady(pool, universe.forkTime) || targetOutcomes.length === 0 || shares === undefined) return []
+		return [shares.invalid, shares.yes, shares.no].flatMap((balance, sourceOutcome) => {
+			const sourceBalance = amount(balance)
+			if (sourceBalance === 0n) return []
+			return targetOutcomes.flatMap(targetOutcome => {
+				const progress = amount(shares.migrationProgressByRoute[`${sourceOutcome.toString()}:${targetOutcome}`] ?? sourceBalance.toString())
+				if (progress > sourceBalance) throw new Error(`Share migration progress for ${pool.address} route ${sourceOutcome.toString()}:${targetOutcome} exceeds the wallet source balance`)
+				if (progress === sourceBalance) return []
+				const availability = shareMigrationRouteAvailability(snapshot, pool, targetOutcome)
+				return availability === undefined ? [] : [{ ...availability, fromId: shareTokenId(pool.universeId, sourceOutcome), shares, sourceBalance, targetOutcome }]
 			})
 		})
-		const route = choose(routes, mixSeed(options.seed, migrateShares.id))
+	})
+}
+
+const migrateShares: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const route = choose(shareMigrationRoutes(snapshot), mixSeed(options.seed, migrateShares.id))
 		if (route === undefined) return undefined
 		return planBase({
+			...(route.deadline === undefined ? {} : { deadlineTimestamp: route.deadline.toString() }),
 			definitionId: migrateShares.id,
 			ecosystem: 'trading',
 			label: migrateShares.label,
@@ -668,17 +693,7 @@ const migrateShares: OperationDefinition = {
 	discoveryInputs: ['forked source pool', 'share balances', 'child pool routing'],
 	ecosystem: 'trading',
 	evaluate(snapshot, options) {
-		const found = snapshot.pools.some(pool => {
-			const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
-			const forkQuestion = universe === undefined ? undefined : snapshot.questions.find(question => question.id === universe.forkQuestionId)
-			const shares = shareForPool(snapshot, pool)
-			const targetOutcomes = validForkOutcomeRoutes(forkQuestion, universe?.knownChildOutcomes)
-			if (universe === undefined || universe.forkTime === '0' || !shareMigrationPoolReady(pool, universe.forkTime) || targetOutcomes.length === 0 || shares === undefined) return false
-			return [shares.invalid, shares.yes, shares.no].some((balance, sourceOutcome) => {
-				const sourceBalance = amount(balance)
-				return sourceBalance > 0n && targetOutcomes.some(targetOutcome => amount(shares.migrationProgressByRoute[`${sourceOutcome.toString()}:${targetOutcome}`] ?? sourceBalance.toString()) < sourceBalance)
-			})
-		})
+		const found = shareMigrationRoutes(snapshot).length > 0
 		return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', found ? undefined : 'No fork share route has anchored unmigrated progress')
 	},
 	id: 'trading.shares.migrate',

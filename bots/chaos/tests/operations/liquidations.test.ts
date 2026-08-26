@@ -72,8 +72,15 @@ describe('safe liquidation operations', () => {
 		const withdrawalPlan = urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
 		const withdrawalCall = withdrawalPlan?.steps[0]?.preflightCalls[0]
 		if (withdrawalCall === undefined) throw new Error('Staged withdrawal preflight missing')
+		expect(withdrawalPlan?.deadlineTimestamp).toBe('2000000200')
 		expect(withdrawalCall.expectedResult).toBe('0x')
 		expect(decodeFunctionData({ abi: securityPoolAbi, data: withdrawalCall.data })).toEqual({ args: [withdrawal.snapshot.wallet.address, 100n], functionName: 'withdrawRepFromVault' })
+
+		const pool = withdrawal.snapshot.pools[0]
+		if (pool === undefined) throw new Error('Withdrawal pool missing')
+		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 181n).toString()
+		pool.oraclePriceValid = true
+		expect(urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
 	})
 
 	test('keeps stable staged identities and raw presence while execution is stale or fails simulation', () => {

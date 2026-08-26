@@ -30,6 +30,7 @@ jobs:
       bot_shared: ${{ steps.scope.outputs.bot_shared }}
       arbitrager: ${{ steps.scope.outputs.arbitrager }}
       liquidator: ${{ steps.scope.outputs.liquidator }}
+      chaos: ${{ steps.scope.outputs.chaos }}
       augur_scan: ${{ steps.scope.outputs.augur_scan }}
       infrastructure: ${{ steps.scope.outputs.infrastructure }}
       package_matrix: ${{ steps.scope.outputs.package_matrix }}
@@ -360,6 +361,7 @@ jobs:
           BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
           ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
           LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
+          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
           INFRA_SELECTED: ${{ needs.changes.outputs.infrastructure }}
           PACKAGES_SELECTED: ${{ needs.changes.outputs.has_packages }}
@@ -396,7 +398,7 @@ jobs:
           for result in PREPARE_RESULT TESTS_RESULT TEST_TIMINGS_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi

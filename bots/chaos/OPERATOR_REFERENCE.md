@@ -92,7 +92,7 @@ The example relay hosts are deliberately unusable. A relay must report the confi
 
 ## Operation coverage
 
-The dashboard's Operation catalog owns live eligibility for the runtime definitions in `CHAOS_OPERATION_CATALOG`. The complete canonical mutation inventory—including privileged and excluded ABI entries that are not runtime definitions—is owned by [`src/contracts/surface.ts`](./src/contracts/surface.ts). [`tests/contracts/catalog-coverage.test.ts`](./tests/contracts/catalog-coverage.test.ts) compares that inventory and every curated function/event shape with generated artifacts.
+The dashboard's Operation catalog projects the complete canonical mutation inventory. Runtime definitions, grouped lifecycle candidates, workflow prerequisites, privileged surfaces, and dangerous exclusions retain their classification and current blockers; filters separate ecosystem, classification, and eligibility. [`src/contracts/surface.ts`](./src/contracts/surface.ts) owns the canonical inventory, while `CHAOS_OPERATION_CATALOG` owns executable planners. [`tests/contracts/catalog-coverage.test.ts`](./tests/contracts/catalog-coverage.test.ts) compares both with generated artifacts.
 
 Every canonical mutating or special entry is classified as selectable random work, a workflow prerequisite, a lifecycle obligation, role-restricted, or excluded-dangerous. The bot does not impersonate privileged callers, invoke delegate modules directly, invent recipients or authorizations, redeploy infrastructure, or treat receive/fallback routing as ordinary random work.
 
@@ -119,7 +119,7 @@ The configured scheduler bounds must be inclusive values within 60–3,600 secon
 - `strategy.enabledEcosystems` accepts one or more of `zoltar`, `statoblast`, `open-oracle`, and `trading`.
 - ETH and REP reserves protect retained inventory while eligibility checks hold. Each ETH/REP principal cap applies separately to one workflow and is cumulative across all of that workflow's steps; the cap resets for every later workflow. Wallet, WETH, REP, and OpenOracle internal-credit debits contribute to the relevant cap. Repeated workflows can consume additional principal down to the reserves, so the dedicated account's holdings—not a per-workflow cap—are the total asset-risk envelope. The gas ceiling is a separate per-transaction limit.
 - `strategy.workflowValidForBlocks` must be at least 64 so prerequisites can reach finality while every continuation is still freshly simulated.
-- High-risk and irreversible operations use independent explicit gates.
+- High-risk and irreversible operations use independent explicit gates. The dashboard locks the complete execution-policy form while the bot is unpaused, so risk gates, reserves, caps, timing, and ecosystem scope cannot be changed in a running browser session.
 
 For dry-run validation, resume with `runtime.execute: false`, observe several randomized selections, then pause again before changing live controls. Inspect `nextRunAt` before live resume because due random work can begin immediately; deadline-bound lifecycle recovery can also take priority.
 
@@ -129,9 +129,15 @@ Timestamp-bound calls require private next-block inclusion with a safety margin.
 
 ## Configuration and durable state
 
-Dashboard mutations use configuration revisions so a stale browser cannot overwrite a newer file. Bot-owned writes are serialized, but an arbitrary filesystem writer cannot join that protocol. The dashboard is therefore the only supported writer while the process is running; stop it before any offline edit, restore, or copy.
+Dashboard mutations use configuration revisions so a stale browser cannot overwrite a newer file. Bot-owned writes are serialized, but an arbitrary filesystem writer cannot join that protocol. The dashboard is therefore the only supported writer while the process is running; stop it before any offline edit, restore, or copy. A configuration commit first writes a durable safety checkpoint.
 
-A configuration commit first writes a durable safety checkpoint. Post-commit persistence or signer-lock faults are surfaced as committed-but-safety-paused or commit-indeterminate. Dashboard APIs redact RPC and relay URLs, deployment details, keys, signed transactions, and calldata.
+Mutation outcomes have three distinct recovery paths:
+
+- A timeout or lost transport response before the API returns a commit status is an unknown response. The browser freezes the affected controls while it reloads the current revision or recovery state. If reconciliation succeeds, compare that state before continuing; never repeat the original mutation blindly.
+- `configuration_committed_safely_paused` confirms that the owner configuration committed but activation did not complete. The durable safety pause remains set. Reload and verify the committed configuration and recovery state, correct the reported activation problem, and explicitly resume only after that review.
+- `configuration_commit_indeterminate` means the owner-file save may have committed and its exact outcome cannot be proven. Treat the request as committed. The server rejects every later dashboard mutation for the rest of that process, so Refresh reads can aid diagnosis but cannot unlock mutation controls. Stop the bot, inspect and reconcile the owner configuration and runtime-state files offline, restart, and reverify the signer, revision, pause, and recovery state before making another change.
+
+Dashboard APIs redact RPC and relay URLs, deployment details, keys, signed transactions, and calldata.
 
 Treat the main runtime state and its companion stores as one backup unit:
 

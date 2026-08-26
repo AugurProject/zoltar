@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
+import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
 
 type CdpMessage = {
 	error: { message?: string } | undefined
@@ -30,12 +31,13 @@ type PaintTarget = {
 }
 
 const outputDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
+const expectedCatalogEntryCount = new Set(unavailableOperationCatalog('visual fixture').map(evaluation => evaluation.definition.id)).size
 await mkdir(outputDirectory, { recursive: true })
 const requestedCaptureSource = process.argv[2]
 if (requestedCaptureSource === undefined) {
 	const captures: CaptureRequest[] = [
 		{ height: 900, name: 'chaos-overview-desktop', route: 'overview', width: 1_440 },
-		{ fullDocument: true, height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
+		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
@@ -224,8 +226,10 @@ try {
 		if (typeof renderedState !== 'object' || renderedState === null || Array.isArray(renderedState)) throw new Error(`Dashboard route /${route} did not expose its rendered state`)
 		if (Reflect.get(renderedState, 'bodyPage') !== route || Reflect.get(renderedState, 'visiblePage') !== true) throw new Error(`Dashboard route /${route} rendered the wrong page: ${JSON.stringify(renderedState)}`)
 		if (route === 'catalog') {
-			const expectedLabels = ['Create binary question', 'Fork universe', 'Deposit vault REP', 'Bid in truth auction', 'Submit oracle report', 'Settle oracle report', 'Enter YES position', 'Remove liquidity']
-			if (Reflect.get(renderedState, 'catalogCaption') !== '8 operations shown · eligibility refreshes with canonical state.' || JSON.stringify(Reflect.get(renderedState, 'catalogLabels')) !== JSON.stringify(expectedLabels)) {
+			const labels = Reflect.get(renderedState, 'catalogLabels')
+			const caption = Reflect.get(renderedState, 'catalogCaption')
+			const requiredLabels = ['Create binary question', 'Deposit REP to vault', 'Submit OpenOracle report', 'Router enter', 'settle report']
+			if (!Array.isArray(labels) || labels.length !== expectedCatalogEntryCount || requiredLabels.some(label => !labels.includes(label)) || caption !== `${expectedCatalogEntryCount.toString()} of ${expectedCatalogEntryCount.toString()} classified catalog entries shown · 7 live candidates.`) {
 				throw new Error(`Catalog fixture was incomplete before capture: ${JSON.stringify(renderedState)}`)
 			}
 		}
@@ -238,7 +242,7 @@ try {
 				Reflect.get(renderedState, 'network') === 'sepolia · 11155111' &&
 				Reflect.get(renderedState, 'pause') === 'Pause' &&
 				Reflect.get(renderedState, 'refresh') === 'Refresh' &&
-				Reflect.get(renderedState, 'settingsDisabled') === false &&
+				Reflect.get(renderedState, 'settingsDisabled') === true &&
 				Reflect.get(renderedState, 'settingsScope') === 'sepolia · chain 11155111' &&
 				Reflect.get(renderedState, 'toggleCount') === 4 &&
 				Reflect.get(renderedState, 'togglesChecked') === true
@@ -432,10 +436,10 @@ try {
 				)
 				if (fullDocument === true) {
 					paintTargets.push(
-						{ accent: 'present', label: 'Zoltar ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="zoltar"]' },
-						{ accent: 'present', label: 'Statoblast ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="statoblast"]' },
-						{ accent: 'present', label: 'Open Oracle ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="open-oracle"]' },
-						{ accent: 'present', label: 'Trading ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="trading"]' },
+						{ accent: 'absent', label: 'disabled Zoltar ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="zoltar"]' },
+						{ accent: 'absent', label: 'disabled Statoblast ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="statoblast"]' },
+						{ accent: 'absent', label: 'disabled Open Oracle ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="open-oracle"]' },
+						{ accent: 'absent', label: 'disabled Trading ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="trading"]' },
 						{ label: 'transaction signer form', minimumDistinctColors: 12, selector: '#signer-form' },
 					)
 				}
