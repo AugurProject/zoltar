@@ -46,13 +46,15 @@ body[data-page="settings"] [data-page-content]:not([data-page-content="settings"
 
 button,
 input,
-select {
+select,
+textarea {
 	font: inherit;
 }
 
 button,
 select,
-input {
+input,
+textarea {
 	min-height: 2.75rem;
 	border: 1px solid var(--operator-border);
 	border-radius: 0.55rem;
@@ -85,7 +87,8 @@ fieldset:disabled button {
 }
 
 input,
-select {
+select,
+textarea {
 	width: 100%;
 	padding: 0.65rem 0.75rem;
 	background: #0b0f12;

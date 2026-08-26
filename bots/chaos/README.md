@@ -187,4 +187,4 @@ To inspect the UI without a chain or key:
 bun ./scripts/serve-dashboard-fixture.mts
 ```
 
-With Chromium installed, `bun ./scripts/capture-dashboard-qa.mts` records desktop (`1440x900`) and mobile (`390x844`) evidence under ignored `.state/qa`.
+With Chromium installed, `bun ./scripts/capture-dashboard-qa.mts` records evidence under ignored `.state/qa` using desktop (`1440x900`) and mobile (`390x844`) viewports. The catalog and Settings captures expand vertically to include their complete documents.

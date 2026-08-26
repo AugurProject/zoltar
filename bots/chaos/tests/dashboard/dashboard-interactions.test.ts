@@ -607,6 +607,51 @@ browserTest(
 						pending: document.querySelector('#pending-transactions .badge')?.textContent,
 					})`),
 				).toEqual({ activity: 'Dry run', obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
+				const recoveryTextarea = await cdp.evaluate(`(() => {
+					const fields = document.querySelector('#candidate-fields')
+					const input = document.querySelector('#candidate-confirmation')
+					const textarea = document.querySelector('#candidate-reason')
+					if (!(fields instanceof HTMLFieldSetElement) || !(input instanceof HTMLInputElement) || !(textarea instanceof HTMLTextAreaElement)) return undefined
+					const disabled = textarea.matches(':disabled')
+					const disabledStyle = getComputedStyle(textarea)
+					const inputStyle = getComputedStyle(input)
+					const styledLikeInput =
+						disabledStyle.backgroundColor === inputStyle.backgroundColor &&
+						disabledStyle.borderColor === inputStyle.borderColor &&
+						disabledStyle.borderRadius === inputStyle.borderRadius &&
+						disabledStyle.color === inputStyle.color &&
+						disabledStyle.fontFamily === inputStyle.fontFamily
+					fields.disabled = false
+					textarea.value = 'Operator confirmed the canonical recovery state.'
+					textarea.focus()
+					const enabledStyle = getComputedStyle(textarea)
+					return {
+						disabled,
+						enabled: !textarea.matches(':disabled'),
+						minimumHeight: Number.parseFloat(enabledStyle.minHeight),
+						styledLikeInput,
+						value: textarea.value,
+					}
+				})()`)
+				expect(recoveryTextarea).toEqual({
+					disabled: true,
+					enabled: true,
+					minimumHeight: 80,
+					styledLikeInput: true,
+					value: 'Operator confirmed the canonical recovery state.',
+				})
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown', windowsVirtualKeyCode: 9 })
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyUp', windowsVirtualKeyCode: 9 })
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', modifiers: 8, type: 'keyDown', windowsVirtualKeyCode: 9 })
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', modifiers: 8, type: 'keyUp', windowsVirtualKeyCode: 9 })
+				expect(
+					await cdp.evaluate(`(() => {
+						const textarea = document.querySelector('#candidate-reason')
+						if (!(textarea instanceof HTMLTextAreaElement)) return undefined
+						const style = getComputedStyle(textarea)
+						return { focused: document.activeElement === textarea, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth }
+					})()`),
+				).toEqual({ focused: true, outlineStyle: 'solid', outlineWidth: '2px' })
 
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)

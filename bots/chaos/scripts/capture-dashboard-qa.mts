@@ -11,6 +11,7 @@ type CdpMessage = {
 }
 
 type CaptureRequest = {
+	fullDocument?: true | undefined
 	height: number
 	horizontalScroll?: 'catalog-end' | undefined
 	name: string
@@ -21,13 +22,20 @@ type CaptureRequest = {
 	width: number
 }
 
+type PaintTarget = {
+	accent?: 'absent' | 'present' | undefined
+	label: string
+	minimumDistinctColors: number
+	selector: string
+}
+
 const outputDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
 await mkdir(outputDirectory, { recursive: true })
 const requestedCaptureSource = process.argv[2]
 if (requestedCaptureSource === undefined) {
 	const captures: CaptureRequest[] = [
 		{ height: 900, name: 'chaos-overview-desktop', route: 'overview', width: 1_440 },
-		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
+		{ fullDocument: true, height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
@@ -35,7 +43,7 @@ if (requestedCaptureSource === undefined) {
 		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
-		{ height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
+		{ fullDocument: true, height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
 	]
 	for (const capture of captures) {
 		const child = Bun.spawn([process.execPath, import.meta.path, JSON.stringify(capture)], { stderr: 'pipe', stdout: 'pipe' })
@@ -49,6 +57,7 @@ if (requestedCaptureSource === undefined) {
 function parseCaptureRequest(value: string): CaptureRequest {
 	const parsed: unknown = JSON.parse(value)
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Capture request must be an object')
+	const fullDocument = Reflect.get(parsed, 'fullDocument')
 	const height = Reflect.get(parsed, 'height')
 	const horizontalScroll = Reflect.get(parsed, 'horizontalScroll')
 	const name = Reflect.get(parsed, 'name')
@@ -58,6 +67,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
 	const width = Reflect.get(parsed, 'width')
 	if (
+		(fullDocument !== undefined && fullDocument !== true) ||
 		typeof height !== 'number' ||
 		(horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') ||
 		typeof name !== 'string' ||
@@ -68,7 +78,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
-	return { height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }
+	return { fullDocument, height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -82,7 +92,6 @@ const browser = Bun.spawn(
 		'--no-sandbox',
 		'--disable-background-timer-throttling',
 		'--disable-dev-shm-usage',
-		'--disable-gpu',
 		'--disable-renderer-backgrounding',
 		'--force-device-scale-factor=1',
 		'--hide-scrollbars',
@@ -160,12 +169,22 @@ try {
 	const evaluate = async (expression: string) => {
 		const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
 		if (typeof response !== 'object' || response === null || Array.isArray(response)) throw new Error('Runtime evaluation returned an invalid response')
+		const exceptionDetails = Reflect.get(response, 'exceptionDetails')
+		if (typeof exceptionDetails === 'object' && exceptionDetails !== null) {
+			const exception = Reflect.get(exceptionDetails, 'exception')
+			const description = typeof exception === 'object' && exception !== null ? Reflect.get(exception, 'description') : undefined
+			const textValue = Reflect.get(exceptionDetails, 'text')
+			let message = 'Runtime evaluation failed'
+			if (typeof description === 'string') message = description
+			else if (typeof textValue === 'string') message = textValue
+			throw new Error(message)
+		}
 		const result = Reflect.get(response, 'result')
 		if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Runtime evaluation omitted its result')
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ fullDocument, height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -180,6 +199,51 @@ try {
 			new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
 		])`)
 		await Bun.sleep(250)
+		const renderedState = await evaluate(`(() => {
+			const visiblePage = document.querySelector(${JSON.stringify(`[data-page-content="${route}"]`)})
+			const labels = [...document.querySelectorAll('#catalog-rows .operation-name strong')].map(element => element.textContent)
+			const ecosystemToggles = [...document.querySelectorAll('[data-ecosystem-toggle]')]
+			return {
+				bodyPage: document.body.dataset.page,
+				catalogCaption: document.querySelector('#catalog-caption')?.textContent,
+				catalogLabels: labels,
+				execute: document.querySelector('#execute') instanceof HTMLInputElement ? document.querySelector('#execute').checked : undefined,
+				highRisk: document.querySelector('#allow-high-risk') instanceof HTMLInputElement ? document.querySelector('#allow-high-risk').checked : undefined,
+				irreversible: document.querySelector('#allow-irreversible') instanceof HTMLInputElement ? document.querySelector('#allow-irreversible').checked : undefined,
+				mode: document.querySelector('#mode-badge')?.textContent,
+				network: document.querySelector('#network-badge')?.textContent,
+				pause: document.querySelector('#pause-button')?.textContent,
+				refresh: document.querySelector('#refresh-button')?.textContent,
+				settingsDisabled: document.querySelector('#settings-fields') instanceof HTMLFieldSetElement ? document.querySelector('#settings-fields').disabled : undefined,
+				settingsScope: document.querySelector('#settings-scope')?.textContent,
+				toggleCount: ecosystemToggles.length,
+				togglesChecked: ecosystemToggles.every(toggle => toggle instanceof HTMLInputElement && toggle.checked),
+				visiblePage: visiblePage instanceof HTMLElement && getComputedStyle(visiblePage).display !== 'none',
+			}
+		})()`)
+		if (typeof renderedState !== 'object' || renderedState === null || Array.isArray(renderedState)) throw new Error(`Dashboard route /${route} did not expose its rendered state`)
+		if (Reflect.get(renderedState, 'bodyPage') !== route || Reflect.get(renderedState, 'visiblePage') !== true) throw new Error(`Dashboard route /${route} rendered the wrong page: ${JSON.stringify(renderedState)}`)
+		if (route === 'catalog') {
+			const expectedLabels = ['Create binary question', 'Fork universe', 'Deposit vault REP', 'Bid in truth auction', 'Submit oracle report', 'Settle oracle report', 'Enter YES position', 'Remove liquidity']
+			if (Reflect.get(renderedState, 'catalogCaption') !== '8 operations shown · eligibility refreshes with canonical state.' || JSON.stringify(Reflect.get(renderedState, 'catalogLabels')) !== JSON.stringify(expectedLabels)) {
+				throw new Error(`Catalog fixture was incomplete before capture: ${JSON.stringify(renderedState)}`)
+			}
+		}
+		if (route === 'settings') {
+			const settingsMatchFixture =
+				Reflect.get(renderedState, 'execute') === false &&
+				Reflect.get(renderedState, 'highRisk') === false &&
+				Reflect.get(renderedState, 'irreversible') === false &&
+				Reflect.get(renderedState, 'mode') === 'Dry run' &&
+				Reflect.get(renderedState, 'network') === 'sepolia · 11155111' &&
+				Reflect.get(renderedState, 'pause') === 'Pause' &&
+				Reflect.get(renderedState, 'refresh') === 'Refresh' &&
+				Reflect.get(renderedState, 'settingsDisabled') === false &&
+				Reflect.get(renderedState, 'settingsScope') === 'sepolia · chain 11155111' &&
+				Reflect.get(renderedState, 'toggleCount') === 4 &&
+				Reflect.get(renderedState, 'togglesChecked') === true
+			if (!settingsMatchFixture) throw new Error(`Settings controls did not match the visual fixture before capture: ${JSON.stringify(renderedState)}`)
+		}
 		if (stateRefreshFailure === true) {
 			await command('Network.setBlockedURLs', { urls: ['*://127.0.0.1:4193/api/state*'] })
 			await evaluate("document.querySelector('#refresh-button')?.click()")
@@ -298,6 +362,85 @@ try {
 			const top = Reflect.get(retry, 'top')
 			if (typeof bottom !== 'number' || typeof buttonHeight !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1 || buttonHeight < 44) throw new Error(`Candidate recovery Retry did not fit the requested viewport: ${JSON.stringify(retry)}`)
 		}
+		let captureHeight = height
+		if (fullDocument === true) {
+			await evaluate('window.scrollTo(0, 0)')
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				const documentHeight = await evaluate('Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))')
+				if (typeof documentHeight !== 'number' || !Number.isSafeInteger(documentHeight) || documentHeight < height || documentHeight > 12_000) {
+					throw new Error(`Dashboard route /${route} returned an invalid full-document height: ${String(documentHeight)}`)
+				}
+				captureHeight = documentHeight
+				await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: captureHeight, mobile: false, width })
+				await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+				const fitsViewport = await evaluate('Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)) <= window.innerHeight')
+				if (fitsViewport === true) break
+				if (attempt === 2) throw new Error(`Dashboard route /${route} did not fit its expanded full-document viewport`)
+			}
+			const fullDocumentLayout = await evaluate(`(() => {
+				const content = document.querySelector(${JSON.stringify(`[data-page-content="${route}"]`)})
+				const bounds = content?.getBoundingClientRect()
+				return {
+					contentBottom: bounds?.bottom,
+					contentTop: bounds?.top,
+					documentHeight: Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)),
+					innerHeight: window.innerHeight,
+					scrollY: window.scrollY,
+				}
+			})()`)
+			const contentBottom = typeof fullDocumentLayout === 'object' && fullDocumentLayout !== null ? Reflect.get(fullDocumentLayout, 'contentBottom') : undefined
+			const contentTop = typeof fullDocumentLayout === 'object' && fullDocumentLayout !== null ? Reflect.get(fullDocumentLayout, 'contentTop') : undefined
+			if (
+				typeof fullDocumentLayout !== 'object' ||
+				fullDocumentLayout === null ||
+				Reflect.get(fullDocumentLayout, 'documentHeight') !== captureHeight ||
+				Reflect.get(fullDocumentLayout, 'innerHeight') !== captureHeight ||
+				Reflect.get(fullDocumentLayout, 'scrollY') !== 0 ||
+				typeof contentBottom !== 'number' ||
+				contentBottom > captureHeight ||
+				typeof contentTop !== 'number' ||
+				contentTop < 0
+			) {
+				throw new Error(`Dashboard route /${route} was not complete in its full-document viewport: ${JSON.stringify(fullDocumentLayout)}`)
+			}
+		}
+		const paintTargets: PaintTarget[] = []
+		if (verticalScroll === 'rpc-health') {
+			paintTargets.push({ label: 'RPC health panel', minimumDistinctColors: 12, selector: '.rpc-health-panel' }, { label: 'RPC health Retry', minimumDistinctColors: 8, selector: '#rpc-health-retry-button' })
+		} else if (recoveryRefreshFailure === 'candidate') {
+			paintTargets.push({ label: 'candidate recovery form', minimumDistinctColors: 12, selector: '#candidate-form' }, { label: 'candidate recovery Retry', minimumDistinctColors: 8, selector: '#candidate-retry' })
+		} else {
+			paintTargets.push(
+				{ label: 'operator brand heading', minimumDistinctColors: 8, selector: '.brand h1' },
+				{ label: 'Refresh control', minimumDistinctColors: 8, selector: '#refresh-button' },
+				{ label: 'Pause control', minimumDistinctColors: 8, selector: '#pause-button' },
+				{ label: `${route} heading`, minimumDistinctColors: 8, selector: `[data-page-content="${route}"] h2` },
+			)
+			if (route === 'overview') paintTargets.push({ label: 'schedule panel', minimumDistinctColors: 12, selector: '.schedule-panel' })
+			if (route === 'catalog') {
+				paintTargets.push({ label: 'catalog caption', minimumDistinctColors: 8, selector: '#catalog-caption' }, { label: 'first catalog row', minimumDistinctColors: 12, selector: '#catalog-rows tr:first-child' })
+				if (fullDocument === true) paintTargets.push({ label: 'last catalog row', minimumDistinctColors: 12, selector: '#catalog-rows tr:last-child' })
+			}
+			if (route === 'ecosystem') paintTargets.push({ label: 'first ecosystem card', minimumDistinctColors: 12, selector: '#ecosystem-grid .ecosystem-card:first-child' })
+			if (route === 'activity') paintTargets.push({ label: 'pending recovery heading', minimumDistinctColors: 8, selector: '.recovery-columns .panel:first-child .panel-heading' })
+			if (route === 'settings') {
+				paintTargets.push(
+					{ label: 'execution policy', minimumDistinctColors: 12, selector: '#settings-form' },
+					{ accent: 'absent', label: 'live execution checkbox', minimumDistinctColors: 3, selector: '#execute' },
+					{ accent: 'absent', label: 'high-risk checkbox', minimumDistinctColors: 3, selector: '#allow-high-risk' },
+					{ accent: 'absent', label: 'irreversible checkbox', minimumDistinctColors: 3, selector: '#allow-irreversible' },
+				)
+				if (fullDocument === true) {
+					paintTargets.push(
+						{ accent: 'present', label: 'Zoltar ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="zoltar"]' },
+						{ accent: 'present', label: 'Statoblast ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="statoblast"]' },
+						{ accent: 'present', label: 'Open Oracle ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="open-oracle"]' },
+						{ accent: 'present', label: 'Trading ecosystem checkbox', minimumDistinctColors: 3, selector: '[data-ecosystem-toggle="trading"]' },
+						{ label: 'transaction signer form', minimumDistinctColors: 12, selector: '#signer-form' },
+					)
+				}
+			}
+		}
 		let data: string | undefined
 		let previousData: string | undefined
 		let matchingFrames = 0
@@ -318,9 +461,65 @@ try {
 			previousData = data
 		}
 		if (data === undefined || matchingFrames < 2) throw new Error(`Dashboard route /${route} did not reach three identical painted frames`)
+		const paintTargetSource = JSON.stringify(paintTargets)
+		const screenshotSource = JSON.stringify(data)
+		const screenshotIntegrity = await evaluate(`(async () => {
+			const binary = atob(${screenshotSource})
+			const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+			const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+			const canvas = document.createElement('canvas')
+			canvas.width = bitmap.width
+			canvas.height = bitmap.height
+			const context = canvas.getContext('2d', { willReadFrequently: true })
+			if (context === null) return undefined
+			context.drawImage(bitmap, 0, 0)
+			const targets = ${paintTargetSource}.map(target => {
+				const element = document.querySelector(target.selector)
+				if (!(element instanceof HTMLElement)) return { ...target, available: false }
+				const bounds = element.getBoundingClientRect()
+				const left = Math.max(0, Math.floor(bounds.left))
+				const right = Math.min(bitmap.width, Math.ceil(bounds.right))
+				const top = Math.max(0, Math.floor(bounds.top))
+				const bottom = Math.min(bitmap.height, Math.ceil(bounds.bottom))
+				if (right - left < 3 || bottom - top < 3) return { ...target, available: false, bottom, left, right, top }
+				const pixels = context.getImageData(left, top, right - left, bottom - top).data
+				const colors = new Set()
+				let accentPixels = 0
+				for (let index = 0; index < pixels.length; index += 4) {
+					const red = pixels[index]
+					const green = pixels[index + 1]
+					const blue = pixels[index + 2]
+					colors.add((red << 16) | (green << 8) | blue)
+					if (red === 49 && green === 189 && blue === 137) accentPixels += 1
+				}
+				return { ...target, accentPixels, available: true, bottom, distinctColors: colors.size, left, right, top }
+			})
+			bitmap.close()
+			return { height: canvas.height, targets, width: canvas.width }
+		})()`)
+		if (typeof screenshotIntegrity !== 'object' || screenshotIntegrity === null || Array.isArray(screenshotIntegrity)) throw new Error(`Dashboard route /${route} could not decode its captured PNG at original resolution`)
+		if (Reflect.get(screenshotIntegrity, 'height') !== captureHeight || Reflect.get(screenshotIntegrity, 'width') !== width) {
+			throw new Error(`Dashboard route /${route} captured the wrong PNG dimensions: ${JSON.stringify(screenshotIntegrity)}`)
+		}
+		const targetResults = Reflect.get(screenshotIntegrity, 'targets')
+		if (!Array.isArray(targetResults) || targetResults.length !== paintTargets.length) throw new Error(`Dashboard route /${route} omitted screenshot paint assertions`)
+		for (const target of targetResults) {
+			if (typeof target !== 'object' || target === null || Array.isArray(target)) throw new Error(`Dashboard route /${route} returned an invalid screenshot paint assertion`)
+			const label = Reflect.get(target, 'label')
+			const colors = Reflect.get(target, 'distinctColors')
+			const minimumColors = Reflect.get(target, 'minimumDistinctColors')
+			const accent = Reflect.get(target, 'accent')
+			const accentPixels = Reflect.get(target, 'accentPixels')
+			if (Reflect.get(target, 'available') !== true || typeof colors !== 'number' || typeof minimumColors !== 'number' || colors < minimumColors) {
+				throw new Error(`Dashboard route /${route} did not paint ${String(label)} into the captured PNG: ${JSON.stringify(target)}`)
+			}
+			if ((accent === 'absent' && accentPixels !== 0) || (accent === 'present' && (typeof accentPixels !== 'number' || accentPixels === 0))) {
+				throw new Error(`Dashboard route /${route} painted the wrong control state for ${String(label)}: ${JSON.stringify(target)}`)
+			}
+		}
 		const path = resolve(outputDirectory, `${name}.png`)
 		await Bun.write(path, Buffer.from(data, 'base64'))
-		console.log(`${name}: ${width.toString()}x${height.toString()} · /${route} · ${path}`)
+		console.log(`${name}: ${width.toString()}x${captureHeight.toString()} · /${route} · ${paintTargets.length.toString()} paint assertions · ${path}`)
 		if (recoveryRefreshFailure === 'candidate') {
 			const restored = await evaluate(`(async () => {
 				const configurationResponse = await fetch('/api/configuration')
