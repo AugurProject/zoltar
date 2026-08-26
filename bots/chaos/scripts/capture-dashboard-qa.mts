@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 type CdpMessage = {
@@ -11,8 +12,10 @@ type CdpMessage = {
 
 type CaptureRequest = {
 	height: number
+	horizontalScroll?: 'catalog-end' | undefined
 	name: string
 	route: string
+	verticalScroll?: 'rpc-health' | undefined
 	width: number
 }
 
@@ -25,6 +28,9 @@ if (requestedCaptureSource === undefined) {
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
+		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', verticalScroll: 'rpc-health', width: 390 },
+		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
+		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
 	]
@@ -41,17 +47,38 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const parsed: unknown = JSON.parse(value)
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Capture request must be an object')
 	const height = Reflect.get(parsed, 'height')
+	const horizontalScroll = Reflect.get(parsed, 'horizontalScroll')
 	const name = Reflect.get(parsed, 'name')
 	const route = Reflect.get(parsed, 'route')
+	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
 	const width = Reflect.get(parsed, 'width')
-	if (typeof height !== 'number' || typeof name !== 'string' || typeof route !== 'string' || typeof width !== 'number') throw new Error('Capture request fields are invalid')
-	return { height, name, route, width }
+	if (typeof height !== 'number' || (horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') || typeof name !== 'string' || typeof route !== 'string' || (verticalScroll !== undefined && verticalScroll !== 'rpc-health') || typeof width !== 'number') throw new Error('Capture request fields are invalid')
+	return { height, horizontalScroll, name, route, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
 const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 const dashboardPassword = 'dashboard visual fixture password'
-const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', '--remote-debugging-port=9393', `--user-data-dir=${resolve(outputDirectory, `chromium-${Date.now().toString()}`)}`, 'about:blank'], { stderr: 'pipe', stdout: 'pipe' })
+const browserProfileDirectory = await mkdtemp(resolve(tmpdir(), 'chaos-dashboard-qa-'))
+const browser = Bun.spawn(
+	[
+		chromium,
+		'--headless=new',
+		'--no-sandbox',
+		'--disable-background-timer-throttling',
+		'--disable-dev-shm-usage',
+		'--disable-gpu',
+		'--disable-renderer-backgrounding',
+		'--force-device-scale-factor=1',
+		'--hide-scrollbars',
+		'--run-all-compositor-stages-before-draw',
+		'--remote-debugging-port=9393',
+		`--user-data-dir=${browserProfileDirectory}`,
+		`--window-size=${requestedCapture.width.toString()},${requestedCapture.height.toString()}`,
+		'about:blank',
+	],
+	{ stderr: 'pipe', stdout: 'pipe' },
+)
 
 try {
 	let tabs: unknown
@@ -111,6 +138,7 @@ try {
 	await command('Runtime.enable')
 	await command('Log.enable')
 	await command('Page.enable')
+	await command('Page.bringToFront')
 	await command('Network.enable')
 	await command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
 
@@ -122,7 +150,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async (route: string, name: string, width: number, height: number) => {
+	const capture = async ({ height, horizontalScroll, name, route, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -132,6 +160,10 @@ try {
 			await Bun.sleep(100)
 		}
 		if (!ready) throw new Error(`Dashboard route /${route} did not finish its first refresh`)
+		await evaluate(`Promise.all([
+			document.fonts.ready,
+			new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+		])`)
 		await Bun.sleep(250)
 		const layout = await evaluate(`new Promise(resolve => {
 			window.scrollTo(0, 0)
@@ -161,34 +193,76 @@ try {
 		const brandLeft = Reflect.get(layout, 'brandLeft')
 		if (typeof brandLeft !== 'number' || brandLeft < 0) throw new Error(`Dashboard route /${route} shifted the operator header: ${JSON.stringify(layout)}`)
 		if (Reflect.get(layout, 'currentNavigationVisible') !== true || Reflect.get(layout, 'scrollY') !== 0) throw new Error(`Dashboard route /${route} did not preserve a visible current navigation target at the top of the document: ${JSON.stringify(layout)}`)
-		const screenshotOptions = { captureBeyondViewport: false, format: 'png', fromSurface: true }
+		if (horizontalScroll === 'catalog-end') {
+			const scroll = await evaluate(`new Promise(resolve => {
+				const shell = document.querySelector('.table-shell')
+				if (!(shell instanceof HTMLElement)) {
+					resolve(undefined)
+					return
+				}
+				shell.scrollLeft = shell.scrollWidth
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve({
+					clientWidth: shell.clientWidth,
+					scrollLeft: shell.scrollLeft,
+					scrollWidth: shell.scrollWidth,
+				})))
+			})`)
+			if (typeof scroll !== 'object' || scroll === null) throw new Error('Catalog table was not available for horizontal-scroll capture')
+			const clientWidth = Reflect.get(scroll, 'clientWidth')
+			const scrollLeft = Reflect.get(scroll, 'scrollLeft')
+			const scrollWidth = Reflect.get(scroll, 'scrollWidth')
+			if (typeof clientWidth !== 'number' || typeof scrollLeft !== 'number' || typeof scrollWidth !== 'number' || scrollWidth <= clientWidth || scrollLeft < scrollWidth - clientWidth - 1) {
+				throw new Error(`Catalog table did not reach its horizontal end: ${JSON.stringify(scroll)}`)
+			}
+		}
+		if (verticalScroll === 'rpc-health') {
+			const rpcPanel = await evaluate(`new Promise(resolve => {
+				const panel = document.querySelector('.rpc-health-panel')
+				if (!(panel instanceof HTMLElement)) {
+					resolve(undefined)
+					return
+				}
+				panel.scrollIntoView({ block: 'start' })
+				requestAnimationFrame(() => requestAnimationFrame(() => {
+					const bounds = panel.getBoundingClientRect()
+					resolve({ bottom: bounds.bottom, top: bounds.top })
+				}))
+			})`)
+			if (typeof rpcPanel !== 'object' || rpcPanel === null) throw new Error('RPC health panel was not available for vertical-scroll capture')
+			const bottom = Reflect.get(rpcPanel, 'bottom')
+			const top = Reflect.get(rpcPanel, 'top')
+			if (typeof bottom !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1) throw new Error(`RPC health panel did not fit the requested viewport: ${JSON.stringify(rpcPanel)}`)
+		}
 		let data: string | undefined
 		let previousData: string | undefined
-		let stable = false
+		let matchingFrames = 0
 		for (let attempt = 0; attempt < 20; attempt += 1) {
 			await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
 			await Bun.sleep(50)
-			const screenshot = await command('Page.captureScreenshot', screenshotOptions)
+			const screenshot = await command('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })
 			if (typeof screenshot !== 'object' || screenshot === null || Array.isArray(screenshot)) throw new Error('Screenshot result was invalid')
 			const nextData = Reflect.get(screenshot, 'data')
 			if (typeof nextData !== 'string') throw new Error('Screenshot result omitted PNG data')
 			data = nextData
 			if (data === previousData) {
-				stable = true
-				break
+				matchingFrames += 1
+				if (matchingFrames === 2) break
+			} else {
+				matchingFrames = 0
 			}
 			previousData = data
 		}
-		if (data === undefined || !stable) throw new Error(`Dashboard route /${route} did not reach a stable painted frame`)
+		if (data === undefined || matchingFrames < 2) throw new Error(`Dashboard route /${route} did not reach three identical painted frames`)
 		const path = resolve(outputDirectory, `${name}.png`)
 		await Bun.write(path, Buffer.from(data, 'base64'))
 		console.log(`${name}: ${width.toString()}x${height.toString()} · /${route} · ${path}`)
 	}
 
-	await capture(requestedCapture.route, requestedCapture.name, requestedCapture.width, requestedCapture.height)
+	await capture(requestedCapture)
 	if (diagnostics.length > 0) throw new Error(`Dashboard produced browser diagnostics: ${diagnostics.join('\n')}`)
 	socket.close()
 } finally {
 	browser.kill()
 	await browser.exited
+	await rm(browserProfileDirectory, { force: true, recursive: true })
 }

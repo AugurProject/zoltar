@@ -285,45 +285,210 @@ describe('chaos dashboard server', () => {
 		const calldata = `0x${'ab'.repeat(256)}`
 		const signedTransaction = `0x${'cd'.repeat(512)}`
 		const rpc = 'https://operator:password@rpc.example/?api_key=secret'
-		const state = publicChaosState({
-			activities: [
-				{ at: '2026-08-24T00:00:00.000Z', details: `authorization=Bearer ${privateKey}`, hash: `0x${'01'.repeat(32)}`, message: 'Transaction submitted', status: 'pending' },
-				{ at: '2026-08-24T00:01:00.000Z', message: rpc, status: 'failed' },
-			],
-			evaluations: [
-				{
-					definition: { description: 'Wrap bounded ETH', ecosystem: 'open-oracle', id: 'wrap', label: 'Wrap WETH', risk: 'low' },
-					eligibility: { blockers: [], eligible: true },
-					plan: { steps: [{ data: calldata }] },
+		const state = publicChaosState(
+			{
+				activities: [
+					{ at: '2026-08-24T00:00:00.000Z', details: `authorization=Bearer ${privateKey}`, hash: `0x${'01'.repeat(32)}`, message: 'Transaction submitted', status: 'pending' },
+					{ at: '2026-08-24T00:01:00.000Z', message: rpc, status: 'failed' },
+				],
+				evaluations: [
+					{
+						definition: { description: 'Wrap bounded ETH', ecosystem: 'open-oracle', id: 'wrap', label: 'Wrap WETH', risk: 'low' },
+						eligibility: { blockers: [], eligible: true },
+						plan: { steps: [{ data: calldata }] },
+					},
+				],
+				inventory: { eth: '1', rep: [{ allowances: { spender: privateKey }, balance: '2', symbol: 'REP', token: '0x2222222222222222222222222222222222222222' }], weth: '3' },
+				lastScannedBlock: 42n,
+				obligations: [{ blockers: [`rpc_url=${rpc}`], dueAt: '2026-08-24T01:00:00.000Z', id: 'settle', label: 'Settle report', status: 'pending' }],
+				pendingTransactions: [{ data: calldata, hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', nonce: 9n, serializedTransaction: signedTransaction, status: 'submitted' }],
+				rpcEndpointHealth: [
+					{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: rpc },
+					{ chainId: 11_155_111, checkedAt: '2026-08-24T00:01:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://second.example/?token=private' },
+					{ chainId: undefined, checkedAt: '2026-08-24T00:02:00.000Z', error: `token=${privateKey}`, kind: 'read-rpc', status: 'failed', target: 'https://third.example/private' },
+					{ error: `RPC ${rpc} failed with secret`, lastFailureAt: '2026-08-24T00:04:00.000Z', status: 'degraded', target: 'https://second.example/?token=private' },
+				],
+				scheduler: { lastDelaySeconds: 61, nextRunAt: '2026-08-24T02:00:00.000Z', status: 'scheduled' },
+				wallet: '0x3333333333333333333333333333333333333333',
+				workflows: [
+					{
+						createdAt: '2026-08-24T00:00:00.000Z',
+						id: 'workflow',
+						label: 'Wrap WETH',
+						status: 'waiting-transaction',
+						steps: [{ data: calldata, label: 'Wrap', status: 'submitted', transactionHash: `0x${'02'.repeat(32)}` }],
+					},
+				],
+			},
+			{
+				settings: {
+					connectivity: {
+						publicRpcUrls: ['https://submit.example/?token=private'],
+						quorumRpcUrls: ['https://second.example/?token=private', 'https://third.example/private'],
+						readRpcUrl: rpc,
+						rpcQuorum: 2,
+					},
+					network: { chainId: 11_155_111, name: 'sepolia' },
 				},
-			],
-			inventory: { eth: '1', rep: [{ allowances: { spender: privateKey }, balance: '2', symbol: 'REP', token: '0x2222222222222222222222222222222222222222' }], weth: '3' },
-			lastScannedBlock: 42n,
-			obligations: [{ blockers: [`rpc_url=${rpc}`], dueAt: '2026-08-24T01:00:00.000Z', id: 'settle', label: 'Settle report', status: 'pending' }],
-			pendingTransactions: [{ data: calldata, hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', nonce: 9n, serializedTransaction: signedTransaction, status: 'submitted' }],
-			rpcEndpointHealth: [{ target: rpc }],
-			scheduler: { lastDelaySeconds: 61, nextRunAt: '2026-08-24T02:00:00.000Z', status: 'scheduled' },
-			wallet: '0x3333333333333333333333333333333333333333',
-			workflows: [
-				{
-					createdAt: '2026-08-24T00:00:00.000Z',
-					id: 'workflow',
-					label: 'Wrap WETH',
-					status: 'waiting-transaction',
-					steps: [{ data: calldata, label: 'Wrap', status: 'submitted', transactionHash: `0x${'02'.repeat(32)}` }],
-				},
-			],
-		})
+			},
+		)
 		const body = JSON.stringify(state)
 
 		expect(body).not.toContain(privateKey)
 		expect(body).not.toContain(calldata)
 		expect(body).not.toContain(signedTransaction)
 		expect(body).not.toContain('rpc.example')
+		expect(body).not.toContain('second.example')
+		expect(body).not.toContain('third.example')
 		expect(body).not.toContain('Bearer')
 		expect(Reflect.get(state, 'lastScannedBlock')).toBe('42')
 		expect(Reflect.get(state, 'pendingTransactions')).toEqual([{ hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', nonce: '9', status: 'submitted' }])
 		expect(Reflect.get(state, 'operationEvaluations')).toEqual([{ blockers: [], candidateCount: 1, description: 'Wrap bounded ETH', ecosystem: 'open-oracle', eligible: true, id: 'wrap', label: 'Wrap WETH', prerequisites: [], risk: 'low' }])
+		expect(Reflect.get(state, 'rpcHealth')).toEqual({
+			chainReady: false,
+			configuredReadEndpointCount: 3,
+			healthyReadEndpointCount: 1,
+			lastCheckedAt: '2026-08-24T00:04:00.000Z',
+			requiredReadQuorum: 2,
+			status: 'degraded',
+		})
+	})
+
+	test('serves only aggregate RPC quorum health from the authenticated state API', async () => {
+		const secret = 'rpc-dashboard-secret'
+		const server = startDashboardServer(
+			0,
+			controller({
+				getConfiguration: () => ({
+					settings: {
+						connectivity: {
+							publicRpcUrls: [`https://submit.example/?api_key=${secret}`],
+							quorumRpcUrls: ['https://read-two.example/private'],
+							readRpcUrl: `https://operator:${secret}@read-one.example/private`,
+							rpcQuorum: 2,
+						},
+						network: { chainId: 11_155_111, name: 'sepolia' },
+					},
+				}),
+				getState: () => ({
+					rpcEndpointHealth: [
+						{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:04.000Z', kind: 'read-rpc', status: 'healthy', target: `https://stale-${secret}.example/private` },
+						{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:00.000Z', kind: 'read-rpc', status: 'healthy', target: `https://operator:${secret}@read-one.example/private` },
+						{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:01.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-two.example/private' },
+						{ lastSuccessAt: '2026-08-24T00:00:02.000Z', status: 'healthy', target: `https://operator:${secret}@read-one.example/private` },
+						{ error: `token=${secret}`, lastSuccessAt: '2026-08-24T00:00:03.000Z', status: 'healthy', target: 'https://read-two.example/private' },
+					],
+				}),
+			}),
+		)
+		servers.push(server)
+
+		const response = await authenticatedFetch(new URL('/api/state', server.url))
+		expect(response.status).toBe(200)
+		const body = await response.json()
+		expect(Reflect.get(body, 'rpcHealth')).toEqual({
+			chainReady: true,
+			configuredReadEndpointCount: 2,
+			healthyReadEndpointCount: 2,
+			lastCheckedAt: '2026-08-24T00:00:03.000Z',
+			requiredReadQuorum: 2,
+			status: 'ready',
+		})
+		const serialized = JSON.stringify(body)
+		expect(serialized).not.toContain(secret)
+		expect(serialized).not.toContain('read-one.example')
+		expect(serialized).not.toContain('read-two.example')
+		expect(serialized).not.toContain('stale-')
+		expect(serialized).not.toContain('submit.example')
+		expect(serialized).not.toContain('target')
+		expect(serialized).not.toContain('error')
+	})
+
+	test('projects only current configured read-quorum evidence in timestamp order', () => {
+		const configuration = {
+			settings: {
+				connectivity: {
+					quorumRpcUrls: ['https://read-two.example/private'],
+					readRpcUrl: 'https://read-one.example/private',
+					rpcQuorum: 2,
+				},
+				network: { chainId: 1 },
+			},
+		}
+		const checks = [
+			{ chainId: 1, checkedAt: '2026-08-24T00:01:00.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-one.example/private' },
+			{ chainId: 1, checkedAt: '2026-08-24T00:01:00.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-two.example/private' },
+		]
+		const projectedHealth = (rpcEndpointHealth: readonly unknown[]) => Reflect.get(publicChaosState({ rpcEndpointHealth }, configuration), 'rpcHealth')
+
+		expect(projectedHealth([])).toEqual({ configuredReadEndpointCount: 2, healthyReadEndpointCount: 0, requiredReadQuorum: 2, status: 'not-checked' })
+
+		expect(projectedHealth([...checks, { lastFailureAt: '2026-08-24T00:02:00.000Z', status: 'degraded', target: 'https://read-one.example/private' }, { lastSuccessAt: '2026-08-24T00:03:00.000Z', status: 'healthy', target: 'https://read-one.example/private' }])).toEqual({
+			chainReady: true,
+			configuredReadEndpointCount: 2,
+			healthyReadEndpointCount: 2,
+			lastCheckedAt: '2026-08-24T00:03:00.000Z',
+			requiredReadQuorum: 2,
+			status: 'ready',
+		})
+
+		expect(projectedHealth([...checks, { lastSuccessAt: '2026-08-24T00:02:00.000Z', status: 'healthy', target: 'https://read-one.example/private' }, { lastFailureAt: '2026-08-24T00:03:00.000Z', status: 'degraded', target: 'https://read-one.example/private' }])).toEqual({
+			chainReady: false,
+			configuredReadEndpointCount: 2,
+			healthyReadEndpointCount: 1,
+			lastCheckedAt: '2026-08-24T00:03:00.000Z',
+			requiredReadQuorum: 2,
+			status: 'degraded',
+		})
+
+		expect(projectedHealth([...checks, { lastFailureAt: '2026-08-24T00:00:00.000Z', status: 'degraded', target: 'https://read-one.example/private' }])).toEqual({
+			chainReady: true,
+			configuredReadEndpointCount: 2,
+			healthyReadEndpointCount: 2,
+			lastCheckedAt: '2026-08-24T00:01:00.000Z',
+			requiredReadQuorum: 2,
+			status: 'ready',
+		})
+
+		expect(projectedHealth([...checks, { chainId: undefined, checkedAt: '2026-08-24T00:04:00.000Z', kind: 'read-rpc', status: 'failed', target: 'https://read-one.example/private' }])).toEqual({
+			chainReady: false,
+			configuredReadEndpointCount: 2,
+			healthyReadEndpointCount: 1,
+			lastCheckedAt: '2026-08-24T00:04:00.000Z',
+			requiredReadQuorum: 2,
+			status: 'degraded',
+		})
+	})
+
+	test('treats an invalid duplicate-origin read configuration as unavailable without deriving observed counts', () => {
+		const secret = 'duplicate-origin-secret'
+		const state = publicChaosState(
+			{
+				rpcEndpointHealth: [
+					{ chainId: 1, checkedAt: '2026-08-24T00:01:00.000Z', kind: 'read-rpc', status: 'healthy', target: `https://duplicate.example/one?token=${secret}` },
+					{ chainId: 1, checkedAt: '2026-08-24T00:02:00.000Z', kind: 'read-rpc', status: 'healthy', target: `https://duplicate.example/two?token=${secret}` },
+				],
+			},
+			{
+				settings: {
+					connectivity: {
+						quorumRpcUrls: [`https://duplicate.example/two?token=${secret}`],
+						readRpcUrl: `https://duplicate.example/one?token=${secret}`,
+						rpcQuorum: 2,
+					},
+					network: { chainId: 1 },
+				},
+			},
+		)
+
+		expect(Reflect.get(state, 'rpcHealth')).toEqual({ status: 'not-configured' })
+		const serialized = JSON.stringify(state)
+		expect(serialized).not.toContain(secret)
+		expect(serialized).not.toContain('duplicate.example')
+		expect(serialized).not.toContain('target')
+
+		const unspecifiedChain = publicChaosState({ rpcEndpointHealth: [{ chainId: 1, checkedAt: '2026-08-24T00:01:00.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-one.example' }] }, { settings: { connectivity: { quorumRpcUrls: [], readRpcUrl: 'https://read-one.example', rpcQuorum: 1 }, network: {} } })
+		expect(Reflect.get(unspecifiedChain, 'rpcHealth')).toEqual({ status: 'not-configured' })
 	})
 
 	test('projects serialized settings without returning private keys or connectivity credentials', () => {

@@ -69,6 +69,18 @@ function scalar(source: Record<string, unknown>, key: string) {
 	return stringField(source, key) ?? numberField(source, key) ?? booleanField(source, key) ?? (typeof value === 'bigint' ? value.toString() : undefined)
 }
 
+function safeIntegerField(source: Record<string, unknown>, key: string) {
+	const value = source[key]
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+function isoTimestampField(source: Record<string, unknown>, key: string) {
+	const value = source[key]
+	if (typeof value !== 'string') return undefined
+	const milliseconds = Date.parse(value)
+	return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined
+}
+
 function compact<T extends Record<string, unknown>>(value: T) {
 	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
@@ -119,6 +131,118 @@ function publicScheduler(value: unknown) {
 		nextRunAt: stringField(source, 'nextRunAt'),
 		selectedOperationId: stringField(source, 'selectedOperationId'),
 		status: stringField(source, 'status'),
+	})
+}
+
+type RpcHealthPolicy = {
+	configuredReadEndpointCount: number | undefined
+	configuredReadTargets: ReadonlySet<string> | undefined
+	expectedChainId: number | undefined
+	requiredReadQuorum: number | undefined
+}
+
+function endpointOrigin(value: unknown) {
+	if (typeof value !== 'string') return undefined
+	try {
+		return new URL(value).origin
+	} catch (error) {
+		if (error instanceof TypeError) return undefined
+		throw error
+	}
+}
+
+function publicRpcHealthPolicy(value: unknown): RpcHealthPolicy {
+	const source = record(value)
+	const settings = record(source?.['settings']) ?? source
+	const connectivity = record(settings?.['connectivity'])
+	const network = record(settings?.['network'])
+	if (connectivity === undefined) {
+		return { configuredReadEndpointCount: undefined, configuredReadTargets: undefined, expectedChainId: safeIntegerField(network ?? {}, 'chainId'), requiredReadQuorum: undefined }
+	}
+	const readRpcUrl = connectivity['readRpcUrl']
+	const quorumRpcUrls = connectivity['quorumRpcUrls']
+	const configuredRpcUrls = typeof readRpcUrl === 'string' && Array.isArray(quorumRpcUrls) && quorumRpcUrls.every(entry => typeof entry === 'string') && quorumRpcUrls.length <= 8 ? [readRpcUrl, ...quorumRpcUrls] : undefined
+	const configuredOrigins = configuredRpcUrls?.flatMap(entry => {
+		const origin = endpointOrigin(entry)
+		return origin === undefined ? [] : [origin]
+	})
+	const configuredReadTargets = configuredOrigins !== undefined && configuredRpcUrls !== undefined && configuredOrigins.length === configuredRpcUrls.length && new Set(configuredOrigins).size === configuredOrigins.length ? new Set(configuredOrigins) : undefined
+	const configuredReadEndpointCount = configuredReadTargets?.size
+	const configuredQuorum = safeIntegerField(connectivity, 'rpcQuorum')
+	const requiredReadQuorum = configuredQuorum !== undefined && configuredQuorum >= 1 && configuredReadEndpointCount !== undefined && configuredQuorum <= configuredReadEndpointCount ? configuredQuorum : undefined
+	return {
+		configuredReadEndpointCount,
+		configuredReadTargets,
+		expectedChainId: safeIntegerField(network ?? {}, 'chainId'),
+		requiredReadQuorum,
+	}
+}
+
+function publicRpcHealth(value: unknown, configurationValue: unknown) {
+	const policy = publicRpcHealthPolicy(configurationValue)
+	if (policy.configuredReadEndpointCount === undefined || policy.configuredReadTargets === undefined || policy.expectedChainId === undefined || policy.requiredReadQuorum === undefined) {
+		return { status: 'not-configured' }
+	}
+	const entries = Array.isArray(value)
+		? value.flatMap(entry => {
+				const source = record(entry)
+				return source === undefined ? [] : [source]
+			})
+		: []
+	const readChecksByTarget = new Map<string, Record<string, unknown>>()
+	for (const entry of entries) {
+		if (entry['kind'] !== 'read-rpc') continue
+		const target = endpointOrigin(entry['target'])
+		if (target === undefined || !policy.configuredReadTargets.has(target)) continue
+		const current = readChecksByTarget.get(target)
+		const currentCheckedAt = current === undefined ? undefined : isoTimestampField(current, 'checkedAt')
+		const candidateCheckedAt = isoTimestampField(entry, 'checkedAt')
+		if (current === undefined || (candidateCheckedAt !== undefined && (currentCheckedAt === undefined || candidateCheckedAt > currentCheckedAt))) readChecksByTarget.set(target, entry)
+	}
+	type PoolEvent = { at: string; milliseconds: number; healthy: boolean }
+	const poolEventsByTarget = new Map<string, PoolEvent>()
+	const recordPoolEvent = (target: string, at: string | undefined, healthy: boolean) => {
+		if (at === undefined) return
+		const milliseconds = Date.parse(at)
+		const current = poolEventsByTarget.get(target)
+		if (current === undefined || milliseconds > current.milliseconds || (milliseconds === current.milliseconds && !healthy && current.healthy)) {
+			poolEventsByTarget.set(target, { at, healthy, milliseconds })
+		}
+	}
+	for (const entry of entries) {
+		if (entry['kind'] !== undefined) continue
+		const target = endpointOrigin(entry['target'])
+		if (target === undefined || !policy.configuredReadTargets.has(target)) continue
+		recordPoolEvent(target, isoTimestampField(entry, 'lastSuccessAt'), true)
+		recordPoolEvent(target, isoTimestampField(entry, 'lastFailureAt'), false)
+	}
+	const readChecks = [...readChecksByTarget.values()]
+	let healthyReadEndpointCount = 0
+	const timestamps: string[] = []
+	for (const check of readChecks) {
+		const checkedAt = isoTimestampField(check, 'checkedAt')
+		if (checkedAt !== undefined) timestamps.push(checkedAt)
+		const target = endpointOrigin(check['target'])
+		const poolEvent = target === undefined ? undefined : poolEventsByTarget.get(target)
+		if (poolEvent !== undefined) timestamps.push(poolEvent.at)
+		const chainId = safeIntegerField(check, 'chainId')
+		const expectedChainMatches = chainId === policy.expectedChainId
+		const currentlyHealthy = checkedAt !== undefined && (poolEvent === undefined || poolEvent.milliseconds <= Date.parse(checkedAt) || poolEvent.healthy)
+		if (check['status'] === 'healthy' && expectedChainMatches && currentlyHealthy) healthyReadEndpointCount += 1
+	}
+	const requiredReadQuorum = policy.requiredReadQuorum
+	const chainReady = readChecks.length === 0 ? undefined : readChecks.length >= requiredReadQuorum && healthyReadEndpointCount >= requiredReadQuorum
+	const lastCheckedAt = timestamps.sort((left, right) => Date.parse(right) - Date.parse(left))[0]
+	let status: 'degraded' | 'not-checked' | 'ready' = 'degraded'
+	if (readChecks.length === 0) status = 'not-checked'
+	else if (chainReady) status = 'ready'
+	return compact({
+		chainReady,
+		configuredReadEndpointCount: policy.configuredReadEndpointCount,
+		healthyReadEndpointCount,
+		lastCheckedAt,
+		requiredReadQuorum,
+		status,
 	})
 }
 
@@ -226,9 +350,10 @@ function publicAlert(value: unknown) {
 	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
 }
 
-export function publicChaosState(value: unknown) {
+export function publicChaosState(value: unknown, configurationValue?: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
+	const rpcHealthPolicy = publicRpcHealthPolicy(configurationValue)
 	const workflows = Array.isArray(source['workflows']) ? source['workflows'] : []
 	const activeWorkflow = workflows.find(entry => {
 		const status = stringField(record(entry) ?? {}, 'status')
@@ -249,7 +374,7 @@ export function publicChaosState(value: unknown) {
 					return alert === undefined ? [] : [alert]
 				})
 			: [],
-		chainId: scalar(source, 'chainId'),
+		chainId: scalar(source, 'chainId') ?? rpcHealthPolicy.expectedChainId,
 		currentWorkflow,
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
@@ -278,6 +403,7 @@ export function publicChaosState(value: unknown) {
 					return transaction === undefined ? [] : [transaction]
 				})
 			: [],
+		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
 		scheduler: publicScheduler(source['scheduler']),
 		signerReady: booleanField(source, 'signerReady') ?? booleanField(source, 'operatorCapable') ?? (stringField(source, 'wallet') === undefined ? undefined : true),
 		status: stringField(source, 'status'),
@@ -410,7 +536,10 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
-						return json(publicChaosState(await controller.getState()))
+						const [stateResult, configurationResult] = await Promise.allSettled([controller.getState(), controller.getConfiguration()])
+						if (stateResult.status === 'rejected') throw stateResult.reason
+						if (configurationResult.status === 'rejected') console.error('chaosDashboardOperation=configuration-read-for-health failed=configuration unavailable')
+						return json(publicChaosState(stateResult.value, configurationResult.status === 'fulfilled' ? configurationResult.value : undefined))
 					} catch (error) {
 						console.error(`chaosDashboardOperation=state-read failed=${error instanceof Error ? error.message : String(error)}`)
 						return json({ error: 'Dashboard state is temporarily unavailable. Automatic recovery remains active.' }, 503)

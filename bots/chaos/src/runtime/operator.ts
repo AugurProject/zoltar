@@ -1,5 +1,5 @@
 import { createWalletClient, privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { checkPrivateTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
+import { checkPrivateTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
@@ -31,8 +31,8 @@ type LoadedConfiguration = {
 
 type RuntimeResources = {
 	pool: ReturnType<typeof createChaosReadPool>
-	readPreflightChecks: readonly unknown[]
-	submissionPreflightChecks: readonly unknown[]
+	readPreflightChecks: readonly EndpointCheck[]
+	submissionPreflightChecks: readonly EndpointCheck[]
 }
 
 function errorMessage(error: unknown) {
@@ -95,8 +95,33 @@ async function preflightSubmissionNetwork(settings: OperatorSettings) {
 	return await preflightRpcSet(connectivity.publicRpcUrls, settings.network.chainId, 'public-rpc', 1)
 }
 
+export async function recordEndpointPreflightChecks(run: () => Promise<readonly EndpointCheck[]>, recordChecks: (checks: readonly EndpointCheck[]) => void) {
+	try {
+		const checks = await run()
+		recordChecks(checks)
+		return checks
+	} catch (error) {
+		if (error instanceof EndpointCheckFailure) recordChecks(error.checks)
+		throw error
+	}
+}
+
 async function ensureSubmissionPreflight(resources: RuntimeResources, settings: OperatorSettings) {
-	resources.submissionPreflightChecks = await preflightSubmissionNetwork(settings)
+	await recordEndpointPreflightChecks(
+		async () => await preflightSubmissionNetwork(settings),
+		checks => {
+			resources.submissionPreflightChecks = checks
+		},
+	)
+}
+
+async function ensureReadPreflight(resources: RuntimeResources, settings: OperatorSettings) {
+	await recordEndpointPreflightChecks(
+		async () => await preflightReadNetwork(settings),
+		checks => {
+			resources.readPreflightChecks = checks
+		},
+	)
 }
 
 function resourceHealth(resources: RuntimeResources) {
@@ -507,6 +532,15 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		})
 		await persistState(configuration, state)
 	}
+	let resources: RuntimeResources | undefined
+	if (loaded.settings.networkConfigured) {
+		resources = {
+			pool: createChaosReadPool(loaded.settings),
+			readPreflightChecks: [],
+			submissionPreflightChecks: [],
+		}
+	}
+	state.rpcEndpointHealth = resources === undefined ? [] : resourceHealth(resources)
 	const signerOperationGate = createSignerOperationGate()
 	const dashboardController = createChaosDashboardController({
 		configuration,
@@ -519,20 +553,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	})
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
 	await using _dashboardLifecycle = dashboard === undefined ? undefined : chaosDashboardLifecycle(dashboard)
-	let resources: RuntimeResources | undefined
 	let carryProofJournal: CarryProofJournal | undefined
 	let carryProofJournalStateFile: string | undefined
 	let topologyCache: CanonicalImmutableTopologyCache | undefined
 	let topologyCacheProfileId: string | undefined
 	let topologyCacheStateFile: string | undefined
 	let carryProfileResetAuthorized = initialCarryProfileResetAuthorized
-	if (loaded.settings.networkConfigured) {
-		resources = {
-			pool: createChaosReadPool(loaded.settings),
-			readPreflightChecks: [],
-			submissionPreflightChecks: [],
-		}
-	}
 	let backfillIncomplete = false
 	await persistState(configuration, state)
 	await pollUntilStopped(
@@ -588,7 +614,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				if (resources === undefined) {
 					throw new Error('Configured network is missing its RPC endpoint pool')
 				}
-				resources.readPreflightChecks = await preflightReadNetwork(settings)
+				await ensureReadPreflight(resources, settings)
 				state.rpcEndpointHealth = resourceHealth(resources)
 				if (state.pendingTransactions.length !== 0) {
 					if (!acquireCycleGate()) return 'deferred'
@@ -728,6 +754,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			} catch (error) {
 				if (!acquireCycleGate()) return 'deferred'
 				if (!configurationIsCurrent()) return 'deferred'
+				if (resources !== undefined) state.rpcEndpointHealth = resourceHealth(resources)
 				await handleCycleFailure(error, configuration, state)
 				throw error
 			} finally {

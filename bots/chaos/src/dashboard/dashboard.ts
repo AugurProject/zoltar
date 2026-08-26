@@ -71,6 +71,15 @@ type Activity = {
 	txHash?: string | undefined
 }
 
+type RpcHealth = {
+	chainReady?: boolean | undefined
+	configuredReadEndpointCount?: number | undefined
+	healthyReadEndpointCount?: number | undefined
+	lastCheckedAt?: string | undefined
+	requiredReadQuorum?: number | undefined
+	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | undefined
+}
+
 type Snapshot = {
 	activities: Activity[]
 	alerts: { message?: string | undefined; severity?: string | undefined }[]
@@ -85,6 +94,7 @@ type Snapshot = {
 	operationEvaluations: OperationEvaluation[]
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
+	rpcHealth: RpcHealth
 	scheduler: {
 		due?: boolean | undefined
 		lastDelaySeconds?: string | number | undefined
@@ -161,6 +171,12 @@ const balanceEth = element('balance-eth', HTMLElement)
 const balanceWeth = element('balance-weth', HTMLElement)
 const balanceRepTotal = element('balance-rep-total', HTMLElement)
 const repBalances = element('rep-balances', HTMLDivElement)
+const rpcHealthStatus = element('rpc-health-status', HTMLSpanElement)
+const rpcConfiguredTotal = element('rpc-configured-total', HTMLElement)
+const rpcHealthyCount = element('rpc-healthy-count', HTMLElement)
+const rpcRequiredQuorum = element('rpc-required-quorum', HTMLElement)
+const rpcChainReadiness = element('rpc-chain-readiness', HTMLElement)
+const rpcLastCheck = element('rpc-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
@@ -316,6 +332,14 @@ function scalarValue(value: unknown) {
 	return typeof value === 'string' || typeof value === 'number' ? value : undefined
 }
 
+function nonnegativeIntegerValue(value: unknown) {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
+	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' ? value : undefined
+}
+
 function strings(value: unknown) {
 	return Array.isArray(value) ? value.flatMap(entry => (typeof entry === 'string' ? [entry] : [])) : []
 }
@@ -357,6 +381,7 @@ function parseWorkflow(value: unknown) {
 function parseSnapshot(value: unknown): Snapshot {
 	const source = record(value) ?? {}
 	const inventory = record(source['inventory']) ?? {}
+	const rpcHealth = record(source['rpcHealth']) ?? {}
 	const scheduler = record(source['scheduler']) ?? {}
 	return {
 		activities: list(source['activities'], entry => ({
@@ -420,6 +445,14 @@ function parseSnapshot(value: unknown): Snapshot {
 			submittedAt: stringValue(entry['submittedAt']),
 			submissionBlock: scalarValue(entry['submissionBlock']),
 		})),
+		rpcHealth: {
+			chainReady: booleanValue(rpcHealth['chainReady']),
+			configuredReadEndpointCount: nonnegativeIntegerValue(rpcHealth['configuredReadEndpointCount']),
+			healthyReadEndpointCount: nonnegativeIntegerValue(rpcHealth['healthyReadEndpointCount']),
+			lastCheckedAt: stringValue(rpcHealth['lastCheckedAt']),
+			requiredReadQuorum: nonnegativeIntegerValue(rpcHealth['requiredReadQuorum']),
+			status: rpcHealthStatusValue(rpcHealth['status']),
+		},
 		scheduler: {
 			due: booleanValue(scheduler['due']),
 			lastDelaySeconds: scalarValue(scheduler['lastDelaySeconds']),
@@ -657,8 +690,38 @@ function renderOverview(value: Snapshot) {
 	balanceWeth.textContent = value.inventory.weth === undefined ? '—' : String(value.inventory.weth)
 	balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
 	renderRepBalances(value.inventory.rep)
+	renderRpcHealth(value)
 	renderWorkflow(value.currentWorkflow)
 	renderCoverage(value.operationEvaluations)
+}
+
+function renderRpcHealth(value: Snapshot) {
+	const health = value.rpcHealth
+	if (health.status === 'ready') setBadge(rpcHealthStatus, 'Quorum ready', 'success')
+	else if (health.status === 'degraded') setBadge(rpcHealthStatus, 'Quorum blocked', 'error')
+	else if (health.status === 'not-checked') setBadge(rpcHealthStatus, 'Awaiting health check', 'warning')
+	else setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
+	const configured = health.configuredReadEndpointCount
+	rpcConfiguredTotal.textContent = configured === undefined ? '—' : `${configured.toString()} endpoint${configured === 1 ? '' : 's'}`
+	const healthy = health.healthyReadEndpointCount
+	if (healthy === undefined) rpcHealthyCount.textContent = '—'
+	else rpcHealthyCount.textContent = configured === undefined ? healthy.toString() : `${healthy.toString()} of ${configured.toString()}`
+	const quorum = health.requiredReadQuorum
+	rpcRequiredQuorum.textContent = quorum === undefined ? '—' : `${quorum.toString()} endpoint${quorum === 1 ? '' : 's'}`
+	const chain = value.chainId === undefined ? 'configured chain' : `chain ${String(value.chainId)}`
+	if (health.chainReady === true) rpcChainReadiness.textContent = `Ready for ${chain}`
+	else if (health.chainReady === false) rpcChainReadiness.textContent = `Not ready for ${chain}`
+	else rpcChainReadiness.textContent = 'Not yet verified'
+	rpcLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
+}
+
+function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
+	setBadge(rpcHealthStatus, 'Health unavailable', 'warning')
+	rpcConfiguredTotal.textContent = '—'
+	rpcHealthyCount.textContent = '—'
+	rpcRequiredQuorum.textContent = '—'
+	rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
+	rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
 }
 
 function renderRepBalances(values: RepBalance[]) {
@@ -1038,6 +1101,7 @@ function refresh() {
 			globalError.classList.add('hidden')
 			settleRecoveryContextRefreshes(snapshot)
 		} else {
+			renderUnavailableRpcHealth(snapshot !== undefined)
 			globalError.textContent = stateResult.reason instanceof Error ? stateResult.reason.message : 'Dashboard state is unavailable.'
 			globalError.classList.remove('hidden')
 			settleRecoveryContextRefreshes(undefined)
@@ -1135,10 +1199,9 @@ if (currentSectionLink !== undefined) {
 		if (!(navigation instanceof HTMLElement)) return
 		const navigationBounds = navigation.getBoundingClientRect()
 		const linkBounds = link.getBoundingClientRect()
-		const leftBoundary = navigationBounds.left + 2
-		const rightBoundary = navigationBounds.right - 2
-		if (linkBounds.left < leftBoundary) navigation.scrollLeft += linkBounds.left - leftBoundary
-		else if (linkBounds.right > rightBoundary) navigation.scrollLeft += linkBounds.right - rightBoundary
+		const centeredScrollLeft = navigation.scrollLeft + linkBounds.left - navigationBounds.left - (navigation.clientWidth - linkBounds.width) / 2
+		const maximumScrollLeft = Math.max(0, navigation.scrollWidth - navigation.clientWidth)
+		navigation.scrollLeft = Math.min(maximumScrollLeft, Math.max(0, centeredScrollLeft))
 	})
 }
 

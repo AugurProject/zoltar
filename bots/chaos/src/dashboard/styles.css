@@ -353,6 +353,31 @@ main {
 	gap: 1rem;
 }
 
+.rpc-health-panel {
+	grid-column: 1 / -1;
+}
+
+.rpc-health-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 0.65rem;
+	margin: 0;
+}
+
+.rpc-health-grid div {
+	min-width: 0;
+	padding: 0.8rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.6rem;
+	background: #0d1114;
+}
+
+.rpc-health-note {
+	margin: 0.8rem 0 0;
+	font-size: 0.76rem;
+	line-height: 1.45;
+}
+
 .two-column {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -673,6 +698,10 @@ dd {
 	border: 1px solid var(--operator-border);
 	border-radius: 0.85rem;
 	background: var(--operator-surface);
+}
+
+.table-scroll-hint {
+	display: none;
 }
 
 table {
@@ -1022,8 +1051,13 @@ fieldset {
 		grid-template-columns: 1fr;
 	}
 
-	.coverage-grid {
+	.coverage-grid,
+	.rpc-health-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.rpc-last-check {
+		grid-column: 1 / -1;
 	}
 }
 
@@ -1041,6 +1075,12 @@ fieldset {
 
 	.section-status {
 		text-align: left;
+	}
+
+	.table-scroll-hint {
+		display: block;
+		margin: 0 0 0.65rem;
+		font-size: 0.76rem;
 	}
 
 	.ecosystem-grid {

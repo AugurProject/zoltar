@@ -2,9 +2,10 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
+import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
-import { abandonRetryableSelectableFailure, executionProfileId, runChaosOperator } from '../../src/runtime/operator.ts'
+import { abandonRetryableSelectableFailure, executionProfileId, recordEndpointPreflightChecks, runChaosOperator } from '../../src/runtime/operator.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState } from '../../src/state/operator-state.ts'
 import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
@@ -29,6 +30,33 @@ function processLocks(): ChaosProcessLocks {
 }
 
 describe('chaos operator runtime', () => {
+	test('replaces stale healthy preflight checks on failure and recovery', async () => {
+		const healthyChecks: readonly EndpointCheck[] = [{ chainId: 1, checkedAt: '2026-08-24T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://read-one.example' }]
+		const failedChecks: readonly EndpointCheck[] = [{ chainId: undefined, checkedAt: '2026-08-24T00:01:00.000Z', error: 'unavailable', kind: 'read-rpc', status: 'failed', target: 'https://read-one.example' }]
+		const recoveredChecks: readonly EndpointCheck[] = [{ chainId: 1, checkedAt: '2026-08-24T00:02:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://read-one.example' }]
+		let storedChecks: readonly EndpointCheck[] = healthyChecks
+
+		await expect(
+			recordEndpointPreflightChecks(
+				async () => {
+					throw new EndpointCheckFailure('read quorum unavailable', failedChecks)
+				},
+				checks => {
+					storedChecks = checks
+				},
+			),
+		).rejects.toBeInstanceOf(EndpointCheckFailure)
+		expect(storedChecks).toEqual(failedChecks)
+
+		await recordEndpointPreflightChecks(
+			async () => recoveredChecks,
+			checks => {
+				storedChecks = checks
+			},
+		)
+		expect(storedChecks).toEqual(recoveredChecks)
+	})
+
 	test('isolates durable state by deployment without coupling it to key persistence or index tuning', () => {
 		const base = parseSettings(example)
 		const serialized = serializedSettings(base)

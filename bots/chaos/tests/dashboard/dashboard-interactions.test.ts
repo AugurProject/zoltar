@@ -23,6 +23,15 @@ const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
 const activityHash = `0x${'78'.repeat(32)}`
 const walletAddress = `0x${'ab'.repeat(20)}`
+const rpcSecret = 'dashboard-rpc-secret'
+const readRpcHealth = [
+	{ chainId: 11_155_111, checkedAt: '2026-08-24T00:03:00.000Z', kind: 'read-rpc', status: 'healthy', target: `https://operator:${rpcSecret}@read-one.example/private` },
+	{ chainId: 11_155_111, checkedAt: '2026-08-24T00:03:01.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-two.example/?api_key=private' },
+	{ chainId: undefined, checkedAt: '2026-08-24T00:03:02.000Z', error: `RPC read-three.example rejected token=${rpcSecret}`, kind: 'read-rpc', status: 'failed', target: 'https://read-three.example/private' },
+	{ lastSuccessAt: '2026-08-24T00:03:03.000Z', status: 'healthy', target: `https://operator:${rpcSecret}@read-one.example/private` },
+	{ lastSuccessAt: '2026-08-24T00:03:04.000Z', status: 'healthy', target: 'https://read-two.example/?api_key=private' },
+] as const
+const degradedReadRpcHealth = [...readRpcHealth.slice(0, 4), { error: `RPC read-two.example rejected api_key=${rpcSecret}`, lastFailureAt: '2026-08-24T00:05:00.000Z', status: 'degraded', target: 'https://read-two.example/?api_key=private' }] as const
 const workflowSteps = [
 	{ label: 'Confirmed step', status: 'confirmed', transactionHash: `0x${'11'.repeat(32)}` },
 	{ label: 'Complete step', status: 'complete', transactionHash: `0x${'22'.repeat(32)}` },
@@ -110,11 +119,13 @@ const workflowRenderingState = state({
 			status: 'waiting-transaction',
 		},
 	],
+	rpcEndpointHealth: readRpcHealth,
 	scheduler: { status: 'waiting-transaction' },
 	wallet: walletAddress,
 })
 
 const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
+const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: degradedReadRpcHealth }
 
 async function availablePort() {
 	const listener = createServer()
@@ -193,7 +204,21 @@ browserTest(
 		let failSecondStateRead = true
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({ hasSigner: true, revision: 'fixture-1', settings: { paused: true }, signerAddress: walletAddress }),
+			getConfiguration: () => ({
+				hasSigner: true,
+				revision: 'fixture-1',
+				settings: {
+					connectivity: {
+						publicRpcUrls: [`https://submit.example/?token=${rpcSecret}`],
+						quorumRpcUrls: ['https://read-two.example/?api_key=private', 'https://read-three.example/private'],
+						readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
+						rpcQuorum: 2,
+					},
+					network: { chainId: 11_155_111, name: 'sepolia' },
+					paused: true,
+				},
+				signerAddress: walletAddress,
+			}),
 			getState: async () => {
 				stateRequests += 1
 				if (failSecondStateRead && stateRequests === 2) {
@@ -329,6 +354,47 @@ browserTest(
 				await cdp.command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: viewport.height, mobile: false, width: viewport.width })
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 				await waitFor(`document.querySelectorAll('#current-workflow .step-list li').length === ${workflowSteps.length.toString()}`, `${viewport.label} workflow steps did not render`)
+				const health = await cdp.evaluate(`({
+					chain: document.querySelector('#rpc-chain-readiness')?.textContent,
+					configured: document.querySelector('#rpc-configured-total')?.textContent,
+					healthy: document.querySelector('#rpc-healthy-count')?.textContent,
+					lastCheck: document.querySelector('#rpc-last-check')?.textContent,
+					required: document.querySelector('#rpc-required-quorum')?.textContent,
+					secretVisible: document.documentElement.textContent?.includes(${JSON.stringify(rpcSecret)}),
+					status: document.querySelector('#rpc-health-status')?.textContent,
+				})`)
+				expect(health).toMatchObject({
+					chain: 'Ready for chain 11155111',
+					configured: '3 endpoints',
+					healthy: '2 of 3',
+					required: '2 endpoints',
+					secretVisible: false,
+					status: 'Quorum ready',
+				})
+				expect(Reflect.get(health, 'lastCheck')).not.toBe('No completed check')
+				failSecondStateRead = true
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor("document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#refresh-button')?.textContent === 'Retry'", `${viewport.label} failed refresh did not invalidate RPC health`)
+				expect(
+					await cdp.evaluate(`({
+						chain: document.querySelector('#rpc-chain-readiness')?.textContent,
+						configured: document.querySelector('#rpc-configured-total')?.textContent,
+						healthy: document.querySelector('#rpc-healthy-count')?.textContent,
+						lastCheck: document.querySelector('#rpc-last-check')?.textContent,
+						required: document.querySelector('#rpc-required-quorum')?.textContent,
+						status: document.querySelector('#rpc-health-status')?.textContent,
+					})`),
+				).toEqual({
+					chain: 'Unavailable until state refresh succeeds',
+					configured: '—',
+					healthy: '—',
+					lastCheck: 'Previous health result is stale',
+					required: '—',
+					status: 'Health unavailable',
+				})
+				failSecondStateRead = false
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor("document.querySelector('#rpc-health-status')?.textContent === 'Quorum ready' && document.querySelector('#refresh-button')?.textContent === 'Refresh'", `${viewport.label} RPC health did not recover after Retry`)
 				const renderedSteps = await cdp.evaluate(`[...document.querySelectorAll('#current-workflow .step-list li')].map(row => {
 					const status = row.querySelector('[data-step-status]')
 					const hash = row.querySelector('[data-step-hash]')
@@ -458,6 +524,21 @@ browserTest(
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
 
+				initialDashboardState = degradedWorkflowRenderingState
+				recoveredDashboardState = degradedWorkflowRenderingState
+				stateRequests = 0
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#rpc-health-status')?.textContent === 'Quorum blocked'", `${viewport.label} degraded RPC health did not render`)
+				expect(
+					await cdp.evaluate(`({
+						chain: document.querySelector('#rpc-chain-readiness')?.textContent,
+						healthy: document.querySelector('#rpc-healthy-count')?.textContent,
+						secretVisible: document.documentElement.textContent?.includes(${JSON.stringify(rpcSecret)}),
+						status: document.querySelector('#rpc-health-status')?.textContent,
+					})`),
+				).toEqual({ chain: 'Not ready for chain 11155111', healthy: '1 of 3', secretVisible: false, status: 'Quorum blocked' })
+				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+
 				initialDashboardState = pausedWorkflowRenderingState
 				recoveredDashboardState = pausedWorkflowRenderingState
 				stateRequests = 0
@@ -514,16 +595,26 @@ browserTest(
 					const currentBounds = current.getBoundingClientRect()
 					return {
 						bodyWidth: document.body.scrollWidth,
+						centerDelta: Math.abs((currentBounds.left + currentBounds.right) / 2 - (navigationBounds.left + navigationBounds.right) / 2),
 						clientWidth: document.documentElement.clientWidth,
 						currentPath: new URL(current.getAttribute('href') ?? '', window.location.href).pathname,
 						currentVisible: currentBounds.left >= navigationBounds.left - 1 && currentBounds.right <= navigationBounds.right + 1,
 						linkHeights: [...navigation.querySelectorAll('a')].map(link => link.getBoundingClientRect().height),
+						maximumScrollLeft: navigation.scrollWidth - navigation.clientWidth,
 						scrollLeft: navigation.scrollLeft,
 						scrollY: window.scrollY,
 					}
 				})()`)
 				expect(navigationBeforeRefresh).toMatchObject({ currentPath: `/${route}`, currentVisible: true, scrollY: 0 })
 				expect(Reflect.get(navigationBeforeRefresh, 'bodyWidth')).toBe(Reflect.get(navigationBeforeRefresh, 'clientWidth'))
+				const navigationScrollLeft = Reflect.get(navigationBeforeRefresh, 'scrollLeft')
+				const maximumScrollLeft = Reflect.get(navigationBeforeRefresh, 'maximumScrollLeft')
+				if (typeof navigationScrollLeft !== 'number' || typeof maximumScrollLeft !== 'number') throw new Error(`/${route} navigation scroll metrics are unavailable`)
+				if (route === 'activity') {
+					expect(navigationScrollLeft).toBeGreaterThan(0)
+					expect(navigationScrollLeft).toBeLessThan(maximumScrollLeft)
+					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
+				} else expect(Math.abs(navigationScrollLeft - maximumScrollLeft)).toBeLessThanOrEqual(1)
 				const linkHeights = Reflect.get(navigationBeforeRefresh, 'linkHeights')
 				expect(linkHeights).toHaveLength(5)
 				for (const height of Array.isArray(linkHeights) ? linkHeights : []) expect(height).toBeGreaterThanOrEqual(44)

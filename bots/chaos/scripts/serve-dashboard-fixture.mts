@@ -37,9 +37,9 @@ function settings() {
 	return {
 		connectivity: {
 			publicRpcUrls: ['https://fixture-user:fixture-password@rpc.invalid/private'],
-			quorumRpcUrls: ['https://quorum.invalid/?api_key=dashboard-secret'],
+			quorumRpcUrls: ['https://quorum-one.invalid/?api_key=dashboard-secret', 'https://quorum-two.invalid/private-token'],
 			readRpcUrl: 'https://rpc.invalid/private',
-			rpcQuorum: 1,
+			rpcQuorum: 2,
 		},
 		deployment: {},
 		network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
@@ -98,7 +98,15 @@ function state() {
 				submittedAt: new Date(now - 12_000).toISOString(),
 			},
 		],
-		rpcEndpointHealth: [{ target: 'https://fixture-user:fixture-password@rpc.invalid', status: 'healthy' }],
+		rpcEndpointHealth: [
+			{ chainId: 11_155_111, checkedAt: new Date(now - 7_000).toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://rpc.invalid' },
+			{ chainId: 11_155_111, checkedAt: new Date(now - 7_100).toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://quorum-one.invalid' },
+			{ chainId: undefined, checkedAt: new Date(now - 7_200).toISOString(), error: 'RPC https://quorum-two.invalid failed with dashboard-secret', kind: 'read-rpc', status: 'failed', target: 'https://quorum-two.invalid' },
+			{ chainId: 11_155_111, checkedAt: new Date(now - 6_900).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://fixture-user:fixture-password@rpc.invalid' },
+			{ lastSuccessAt: new Date(now - 6_000).toISOString(), status: 'healthy', target: 'https://rpc.invalid' },
+			{ lastSuccessAt: new Date(now - 6_100).toISOString(), status: 'healthy', target: 'https://quorum-one.invalid' },
+			{ error: 'api_key=dashboard-secret', lastFailureAt: new Date(now - 5_900).toISOString(), status: 'degraded', target: 'https://quorum-two.invalid' },
+		],
 		scheduler: {
 			lastDelaySeconds: 2_113,
 			lastRunAt: new Date(now - 575_000).toISOString(),
