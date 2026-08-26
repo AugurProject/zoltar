@@ -268,7 +268,7 @@
 						</tr>
 						<tr>
 							<td><code>redeemRepFromVault(vault)</code></td>
-							<td>Anyone; REP is always sent to <code>vault</code></td>
+							<td>Vault owner; caller must equal <code>vault</code>, and REP is sent to <code>vault</code></td>
 							<td>Operational pool with a final outcome; the specified <code>vault</code> has no escalation escrow and has redeemable REP.</td>
 							<td>Burns the vault's REP backing units and returns its proportional vault REP backing.</td>
 							<td><code>RepRedeemedFromVault</code></td>

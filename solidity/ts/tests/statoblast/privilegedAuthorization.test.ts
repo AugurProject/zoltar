@@ -161,7 +161,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 						args: [client.account.address, 1n],
 					}),
 				),
-			/Only coord/,
+			/Unauthorized/,
 		)
 		await assertUnauthorizedUnchanged(
 			() =>
@@ -184,7 +184,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 						],
 					}),
 				),
-			/Only coord/,
+			/Unauthorized/,
 		)
 
 		const authorizedCapacityOwnershipAttoRep = repDeposit / 5n

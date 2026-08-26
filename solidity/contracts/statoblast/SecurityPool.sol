@@ -99,7 +99,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only coord');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Unauthorized');
 		_requireValidPrice();
 		_;
 	}
@@ -577,21 +577,21 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function redeemRepFromVault(address vault) external {
+		require(msg.sender == vault, 'Unauthorized');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		uint256 disputeStakedAttoRep =
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
 		require(disputeStakedAttoRep == 0, 'Escrow locked');
 		updateVaultFees(vault);
-		uint256 vaultBackingUnits = securityVaults[vault].repBackingUnits;
-		uint256 backingUnitsToRedeem = vaultBackingUnits;
+		uint256 backingUnitsToRedeem = securityVaults[vault].repBackingUnits;
 		uint256 attoRepAmount = backingUnitsToAttoRep(backingUnitsToRedeem);
 		require(attoRepAmount > 0, 'No redeemable REP');
 		securityVaults[vault].repBackingUnits = 0;
 		totalRepBackingUnits -= backingUnitsToRedeem;
-		_registerVault(vault);
+		// A positive claim was registered when its backing units were created or transferred.
 		IERC20(address(repToken)).safeTransfer(vault, attoRepAmount);
-		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
+		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, 0, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
 	}
 

@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '3e0e4daf3cba7ac9743ccdc8450962bde7f407758cb3598a062c78de588c2c0d'
+export const expectedProductionSoliditySourceFingerprint = 'f2b615b5d7ee9d20c44657561f4ceab89609bd25d0b69b3ad6988f8204ad51c6'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -816,7 +816,7 @@ export const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`redeemRepFromVault(vault)`',
-				caller: 'Anyone; REP is always sent to `vault`',
+				caller: 'Vault owner; caller must equal `vault`, and REP is sent to `vault`',
 				effect: "Burns the vault's REP backing units and returns its proportional vault REP backing.",
 				declarations: [{ name: 'redeemRepFromVault' }],
 				preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow and has redeemable REP.',
