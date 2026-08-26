@@ -116,4 +116,16 @@ describe('chaos execution safety gates', () => {
 		}
 		expect(() => assertOperationPrincipalCaps({ id: 'rep-credit', steps: [repStep] }, { maximumEthPerOperationAttoEth: 100n, maximumRepPerOperationAttoRep: 10n })).toThrow('maximumRepPerOperation')
 	})
+
+	test('applies cumulative principal caps independently to each workflow', () => {
+		const cappedStep = {
+			...step,
+			value: '15',
+			walletAssetDebits: [{ amount: '15', asset: 'ETH' as const, kind: 'native' as const }],
+		}
+		const limits = { maximumEthPerOperationAttoEth: 20n, maximumRepPerOperationAttoRep: 20n }
+		expect(assertOperationPrincipalCaps({ id: 'first-workflow', steps: [cappedStep] }, limits)).toEqual({ nativeDebit: 15n, repDebit: 0n })
+		expect(assertOperationPrincipalCaps({ id: 'later-workflow', steps: [cappedStep] }, limits)).toEqual({ nativeDebit: 15n, repDebit: 0n })
+		expect(() => assertOperationPrincipalCaps({ id: 'single-combined-workflow', steps: [cappedStep, { ...cappedStep, id: 'second' }] }, limits)).toThrow('maximumEthPerOperation')
+	})
 })

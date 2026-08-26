@@ -79,6 +79,30 @@ describe('durable chaos scheduler', () => {
 		expect(randomCalls).toBe(0)
 	})
 
+	test('retains a paused countdown and marks it due when resumed after its deadline', async () => {
+		const state = initialDurableState(1, false)
+		let now = Date.parse('2026-08-24T00:00:00.000Z')
+		let randomCalls = 0
+		const scheduler = createChaosScheduler({
+			clock: () => now,
+			persist: async () => {},
+			random: minimum => {
+				randomCalls += 1
+				return minimum
+			},
+			settings,
+			state: state.scheduler,
+		})
+		await scheduler.ensureScheduled()
+		const nextRunAt = state.scheduler.nextRunAt
+		await scheduler.pause()
+		now += 61_000
+		await scheduler.resume()
+		expect(state.scheduler.nextRunAt).toBe(nextRunAt)
+		expect(state.scheduler.status).toBe('due')
+		expect(randomCalls).toBe(1)
+	})
+
 	test('does not mutate in-memory scheduling when durable persistence fails', async () => {
 		const state = initialDurableState(1, false)
 		const scheduler = createChaosScheduler({

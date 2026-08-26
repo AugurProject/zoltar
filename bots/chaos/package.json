@@ -19,8 +19,8 @@
 	"scripts": {
 		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
 		"ensure-contract-artifacts": "bun ../../scripts/ensure-contract-artifacts.mts",
-		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md src tests scripts config",
-		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md src tests scripts config",
+		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
+		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config",
 		"run": "bun ./src/cli/run.ts",
 		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",

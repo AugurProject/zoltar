@@ -159,14 +159,27 @@ describe('chaos-bot settings', () => {
 		expect(await readdir(directory)).toContain('operator.json.custom-chain-4242424242.profile')
 	})
 
-	test('preserves canonical mainnet and Sepolia presets', async () => {
-		const sepolia = parseSettings(await storedExample())
+	test('parses the documented chain forms with distinct durable state paths', async () => {
+		const configuredSource = record(JSON.parse(await readFile(configuredPlaceholderPath, 'utf8')))
+		const configuredRuntime = record(configuredSource['runtime'])
+		const sepolia = parseSettings({
+			...configuredSource,
+			runtime: { ...configuredRuntime, stateFile: '.state/chaos.sepolia.json' },
+		})
 		expect(sepolia.network).toEqual({ chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
 		const mainnet = parseSettings({
 			...serializedSettings(sepolia),
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
+			runtime: { ...serializedSettings(sepolia).runtime, stateFile: '.state/chaos.mainnet.json' },
 		})
 		expect(mainnet.network).toEqual({ chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' })
+		expect(mainnet.runtime.stateFile).not.toBe(sepolia.runtime.stateFile)
+		const customSource = record(JSON.parse(await readFile(customChainPlaceholderPath, 'utf8')))
+		const custom = parseSettings({
+			...customSource,
+			runtime: { ...record(customSource['runtime']), stateFile: '.state/chaos.custom-4242424242.json' },
+		})
+		expect(new Set([sepolia.runtime.stateFile, mainnet.runtime.stateFile, custom.runtime.stateFile]).size).toBe(3)
 		expect(() =>
 			parseSettings({
 				...serializedSettings(sepolia),
