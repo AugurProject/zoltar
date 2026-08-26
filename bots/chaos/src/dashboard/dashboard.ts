@@ -1089,19 +1089,38 @@ function renderEcosystems(values: OperationEvaluation[]) {
 			metric.append(node('strong', undefined, amount.toString()), node('span', undefined, label))
 			metrics.append(metric)
 		}
-		const blockers = [...new Set(enabled.flatMap(value => value.blockers))].slice(0, 3)
-		const summary = blockers.length === 0 ? node('p', 'muted', eligible.length > 0 ? 'At least one exact operation can be simulated now.' : 'Waiting for protocol discovery.') : node('ul', 'blocker-list')
-		if (summary instanceof HTMLUListElement) for (const blocker of blockers) summary.append(node('li', undefined, blocker))
+		let summary: HTMLElement
+		if (eligible.length > 0) summary = node('p', 'muted', 'At least one exact operation can be simulated now.')
+		else if (operations.length === 0) summary = node('p', 'muted', 'Waiting for protocol discovery.')
+		else {
+			const blockers = [
+				...new Set(
+					operations.flatMap(value => {
+						const operation = value.label ?? value.id ?? 'Unnamed operation'
+						let reasons = value.blockers
+						if (value.enabled === false) reasons = ['Disabled by operator policy']
+						else if (reasons.length === 0) reasons = ['No eligible candidate in current state']
+						return reasons.map(reason => `${operation}: ${reason}`)
+					}),
+				),
+			].slice(0, 3)
+			summary = node('ul', 'blocker-list')
+			for (const blocker of blockers) summary.append(node('li', undefined, blocker))
+		}
 		card.append(heading, metrics, summary)
 		return card
 	})
 	ecosystemGrid.replaceChildren(...cards)
 }
 
-function topologyIdentifier(value: string | undefined, fallback: string) {
-	const identifier = node('span', 'mono', value === undefined ? fallback : shortHex(value))
-	if (value !== undefined) identifier.title = value
-	return identifier
+function topologyIdentifier(value: string | undefined, fallback: string, type: string) {
+	return value === undefined ? node('span', 'mono muted', fallback) : compactIdentifier(value, type)
+}
+
+function topologyIdentifierFact(label: string, value: string | undefined, type: string) {
+	const fact = node('span', 'topology-fact topology-identifier-fact')
+	fact.append(node('span', undefined, label), topologyIdentifier(value, 'Unavailable', type))
+	return fact
 }
 
 function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[], render: (value: Record<string, unknown>) => HTMLElement) {
@@ -1119,11 +1138,13 @@ function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[],
 	)
 }
 
-function topologyRow(identity: HTMLElement | string, facts: string[]) {
+function topologyRow(identity: HTMLElement | string, facts: Array<HTMLElement | string>) {
 	const row = node('div', 'topology-row')
 	const heading = node('strong')
 	heading.append(typeof identity === 'string' ? document.createTextNode(identity) : identity)
-	row.append(heading, node('small', undefined, facts.join(' · ')))
+	const details = node('small', 'topology-facts')
+	for (const fact of facts) details.append(typeof fact === 'string' ? node('span', 'topology-fact', fact) : fact)
+	row.append(heading, details)
 	return row
 }
 
@@ -1142,21 +1163,33 @@ function renderTopology(value: Topology) {
 		}
 	}
 	renderTopologyGroup(topologyUniverses, value.universes, source =>
-		topologyRow(`Universe ${String(source['id'] ?? '—')}`, [source['parentUniverseId'] === undefined ? 'genesis' : `parent ${String(source['parentUniverseId'])}`, `${String(source['knownChildOutcomeCount'] ?? 0)} child routes`, `REP ${shortHex(stringValue(source['repToken']))}`]),
+		topologyRow(`Universe ${String(source['id'] ?? '—')}`, [source['parentUniverseId'] === undefined ? 'genesis' : `parent ${String(source['parentUniverseId'])}`, `${String(source['knownChildOutcomeCount'] ?? 0)} child routes`, topologyIdentifierFact('REP', stringValue(source['repToken']), 'universe REP token')]),
 	)
 	renderTopologyGroup(topologyPools, value.pools, source =>
-		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable'), [
+		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'security pool address'), [
 			`universe ${String(source['universeId'] ?? '—')}`,
 			`state ${String(source['systemState'] ?? '—')}`,
 			`${String(source['vaultCount'] ?? 0)} vaults${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
 		]),
 	)
 	renderTopologyGroup(topologyReports, value.reports, source =>
-		topologyRow(`Report ${String(source['reportId'] ?? '—')}`, [`tokens ${shortHex(stringValue(source['token1']))} / ${shortHex(stringValue(source['token2']))}`, `settlement ${String(source['settlementTime'] ?? '—')}`, `flags ${String(source['flags'] ?? '—')}`]),
+		topologyRow(`Report ${String(source['reportId'] ?? '—')}`, [
+			topologyIdentifierFact('Token 1', stringValue(source['token1']), 'report token 1'),
+			topologyIdentifierFact('Token 2', stringValue(source['token2']), 'report token 2'),
+			`settlement ${String(source['settlementTime'] ?? '—')}`,
+			`flags ${String(source['flags'] ?? '—')}`,
+		]),
 	)
-	renderTopologyGroup(topologyAuctions, value.auctions, source => topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable'), [`pool ${shortHex(stringValue(source['pool']))}`, source['finalized'] === true ? 'finalized' : 'active', `${String(source['bidCount'] ?? 0)} indexed bids`]))
+	renderTopologyGroup(topologyAuctions, value.auctions, source =>
+		topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'truth auction address'), [topologyIdentifierFact('Pool', stringValue(source['pool']), 'truth auction pool address'), source['finalized'] === true ? 'finalized' : 'active', `${String(source['bidCount'] ?? 0)} indexed bids`]),
+	)
 	renderTopologyGroup(topologyPairs, value.pairs, source =>
-		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable'), [`pool ${shortHex(stringValue(source['pool']))}`, `universe ${String(source['universeId'] ?? '—')}`, `status ${String(source['status'] ?? '—')}`, `${String(source['feeBps'] ?? '—')} bps`]),
+		topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable', 'trading pair address'), [
+			topologyIdentifierFact('Pool', stringValue(source['pool']), 'trading pair pool address'),
+			`universe ${String(source['universeId'] ?? '—')}`,
+			`status ${String(source['status'] ?? '—')}`,
+			`${String(source['feeBps'] ?? '—')} bps`,
+		]),
 	)
 }
 

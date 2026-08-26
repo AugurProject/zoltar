@@ -19,7 +19,7 @@ type CaptureRequest = {
 	recoveryRefreshFailure?: 'candidate' | undefined
 	route: string
 	stateRefreshFailure?: true | undefined
-	verticalScroll?: 'rpc-health' | undefined
+	verticalScroll?: 'rpc-health' | 'topology' | undefined
 	width: number
 }
 
@@ -39,10 +39,12 @@ if (requestedCaptureSource === undefined) {
 		{ height: 900, name: 'chaos-overview-desktop', route: 'overview', width: 1_440 },
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
+		{ height: 900, name: 'chaos-ecosystem-desktop-topology', route: 'ecosystem', verticalScroll: 'topology', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
 		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
 		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
+		{ height: 844, name: 'chaos-ecosystem-mobile-topology', route: 'ecosystem', verticalScroll: 'topology', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
 		{ fullDocument: true, height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
@@ -76,7 +78,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 		(recoveryRefreshFailure !== undefined && recoveryRefreshFailure !== 'candidate') ||
 		typeof route !== 'string' ||
 		(stateRefreshFailure !== undefined && stateRefreshFailure !== true) ||
-		(verticalScroll !== undefined && verticalScroll !== 'rpc-health') ||
+		(verticalScroll !== undefined && verticalScroll !== 'rpc-health' && verticalScroll !== 'topology') ||
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
@@ -351,6 +353,44 @@ try {
 			const top = Reflect.get(rpcPanel, 'top')
 			if (typeof bottom !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1) throw new Error(`RPC health panel did not fit the requested viewport: ${JSON.stringify(rpcPanel)}`)
 		}
+		if (verticalScroll === 'topology') {
+			const topology = await evaluate(`new Promise(resolve => {
+				const panel = document.querySelector('.topology-panel')
+				if (!(panel instanceof HTMLElement)) {
+					resolve(undefined)
+					return
+				}
+				panel.scrollIntoView({ block: 'start' })
+				requestAnimationFrame(() => requestAnimationFrame(() => {
+					const bounds = panel.getBoundingClientRect()
+					const identifiers = [...panel.querySelectorAll('.compact-identifier')].map(identifier => {
+						const full = identifier.querySelector('.identifier-full')
+						return {
+							copy: identifier.querySelector('.identifier-copy') instanceof HTMLButtonElement,
+							disclosure: identifier.querySelector('.identifier-disclosure') instanceof HTMLButtonElement,
+							value: full instanceof HTMLTextAreaElement ? full.value : undefined,
+						}
+					})
+					resolve({ identifiers, top: bounds.top })
+				}))
+			})`)
+			if (typeof topology !== 'object' || topology === null || Array.isArray(topology)) throw new Error('Anchored topology was not available for capture')
+			const identifiers = Reflect.get(topology, 'identifiers')
+			const top = Reflect.get(topology, 'top')
+			const values = Array.isArray(identifiers) ? identifiers.map(identifier => (typeof identifier === 'object' && identifier !== null ? Reflect.get(identifier, 'value') : undefined)) : []
+			if (
+				typeof top !== 'number' ||
+				top < -1 ||
+				top > height / 3 ||
+				!Array.isArray(identifiers) ||
+				identifiers.length !== 9 ||
+				identifiers.some(identifier => typeof identifier !== 'object' || identifier === null || Reflect.get(identifier, 'copy') !== true || Reflect.get(identifier, 'disclosure') !== true) ||
+				values.some(value => typeof value !== 'string' || value.length < 42) ||
+				new Set(values).size < 6
+			) {
+				throw new Error(`Anchored topology did not expose complete identifier controls for capture: ${JSON.stringify(topology)}`)
+			}
+		}
 		if (recoveryRefreshFailure === 'candidate') {
 			const retry = await evaluate(`new Promise(resolve => {
 				const button = document.querySelector('#candidate-retry')
@@ -411,6 +451,12 @@ try {
 		const paintTargets: PaintTarget[] = []
 		if (verticalScroll === 'rpc-health') {
 			paintTargets.push({ label: 'RPC health panel', minimumDistinctColors: 12, selector: '.rpc-health-panel' }, { label: 'RPC health Retry', minimumDistinctColors: 8, selector: '#rpc-health-retry-button' })
+		} else if (verticalScroll === 'topology') {
+			paintTargets.push(
+				{ label: 'topology heading', minimumDistinctColors: 12, selector: '.topology-panel .panel-heading' },
+				{ label: 'topology identifier Copy', minimumDistinctColors: 8, selector: '#topology-universes .identifier-copy' },
+				{ label: 'topology identifier disclosure', minimumDistinctColors: 8, selector: '#topology-universes .identifier-disclosure' },
+			)
 		} else if (recoveryRefreshFailure === 'candidate') {
 			paintTargets.push({ label: 'candidate recovery form', minimumDistinctColors: 12, selector: '#candidate-form' }, { label: 'candidate recovery Retry', minimumDistinctColors: 8, selector: '#candidate-retry' })
 		} else {

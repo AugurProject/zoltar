@@ -25,6 +25,26 @@ const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
 const activityHash = `0x${'78'.repeat(32)}`
 const walletAddress = `0x${'ab'.repeat(20)}`
+const topologyValues = {
+	auctionAddress: `0x${'a1'.repeat(20)}`,
+	auctionPoolAddress: `0x${'a2'.repeat(20)}`,
+	pairAddress: `0x${'b1'.repeat(20)}`,
+	pairPoolAddress: `0x${'b2'.repeat(20)}`,
+	poolAddress: `0x${'c1'.repeat(20)}`,
+	reportToken1: `0x${'d1'.repeat(20)}`,
+	reportToken2: `0x${'d2'.repeat(20)}`,
+	repToken: `0x${'e1'.repeat(20)}`,
+}
+const topologyIdentifiers = [
+	{ type: 'universe REP token', value: topologyValues.repToken },
+	{ type: 'security pool address', value: topologyValues.poolAddress },
+	{ type: 'report token 1', value: topologyValues.reportToken1 },
+	{ type: 'report token 2', value: topologyValues.reportToken2 },
+	{ type: 'truth auction address', value: topologyValues.auctionAddress },
+	{ type: 'truth auction pool address', value: topologyValues.auctionPoolAddress },
+	{ type: 'trading pair address', value: topologyValues.pairAddress },
+	{ type: 'trading pair pool address', value: topologyValues.pairPoolAddress },
+]
 const rpcSecret = 'dashboard-rpc-secret'
 const readRpcHealth = [
 	{ chainId: 11_155_111, checkedAt: '2026-08-24T00:03:00.000Z', kind: 'read-rpc', status: 'healthy', target: `https://operator:${rpcSecret}@read-one.example/private` },
@@ -117,7 +137,9 @@ const workflowRenderingState = state({
 	evaluations: [
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-1' } },
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
+		{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.blocked-sibling', label: 'Blocked report sibling', risk: 'low' }, eligibility: { blockers: ['No safe fixture candidate exists'], eligible: false } },
 		{ definition: { classification: 'role-restricted', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['Factory only'], eligible: false } },
+		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
 	inventory: {
 		eth: '1000000000000000001',
@@ -140,12 +162,12 @@ const workflowRenderingState = state({
 	scheduler: { status: 'waiting-transaction' },
 	topology: {
 		anchor: { blockNumber: '4242', timestamp: '1000' },
-		auctions: [{ address: '0x1111111111111111111111111111111111111111', bids: [], finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+		auctions: [{ address: topologyValues.auctionAddress, bids: [], finalized: false, pool: topologyValues.auctionPoolAddress }],
 		complete: true,
-		pairs: [{ address: '0x3333333333333333333333333333333333333333', feeBps: 30, pool: '0x2222222222222222222222222222222222222222', status: 1, universeId: '0' }],
-		pools: [{ address: '0x2222222222222222222222222222222222222222', systemState: 0, universeId: '0', vaults: [] }],
-		reports: [{ reportId: '7', settlementTime: '2000', token1: '0x4444444444444444444444444444444444444444', token2: '0x5555555555555555555555555555555555555555' }],
-		universes: [{ id: '0', knownChildOutcomes: [], repToken: '0x9999999999999999999999999999999999999998' }],
+		pairs: [{ address: topologyValues.pairAddress, feeBps: 30, pool: topologyValues.pairPoolAddress, status: 1, universeId: '0' }],
+		pools: [{ address: topologyValues.poolAddress, systemState: 0, universeId: '0', vaults: [] }],
+		reports: [{ reportId: '7', settlementTime: '2000', token1: topologyValues.reportToken1, token2: topologyValues.reportToken2 }],
+		universes: [{ id: '0', knownChildOutcomes: [], repToken: topologyValues.repToken }],
 	},
 	wallet: walletAddress,
 })
@@ -352,6 +374,23 @@ browserTest(
 				}
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 				return identifiers
+			}
+			const touchControl = async (selector: string) => {
+				const center = await cdp.evaluate(`new Promise(resolve => {
+					const control = document.querySelector(${JSON.stringify(selector)})
+					control?.scrollIntoView({ block: 'center' })
+					requestAnimationFrame(() => requestAnimationFrame(() => {
+						const bounds = control?.getBoundingClientRect()
+						resolve({ x: bounds === undefined ? undefined : bounds.left + bounds.width / 2, y: bounds === undefined ? undefined : bounds.top + bounds.height / 2 })
+					}))
+				})`)
+				const x = typeof center === 'object' && center !== null ? Reflect.get(center, 'x') : undefined
+				const y = typeof center === 'object' && center !== null ? Reflect.get(center, 'y') : undefined
+				if (typeof x !== 'number' || typeof y !== 'number') throw new Error(`Missing touch target for ${selector}`)
+				await cdp.command('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+				await cdp.command('Input.dispatchTouchEvent', { touchPoints: [{ x, y }], type: 'touchStart' })
+				await cdp.command('Input.dispatchTouchEvent', { touchPoints: [], type: 'touchEnd' })
+				await cdp.command('Emulation.setTouchEmulationEnabled', { enabled: false })
 			}
 
 			for (const scenario of scenarios) {
@@ -643,7 +682,7 @@ browserTest(
 								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
 								rows: document.querySelectorAll('#catalog-rows tr').length,
 							})`),
-					).toEqual({ candidate: '2', rows: 2 })
+					).toEqual({ candidate: '2', rows: 4 })
 					await cdp.evaluate(`(() => {
 							const filter = document.querySelector('#catalog-classification-filter')
 							if (!(filter instanceof HTMLSelectElement)) return
@@ -651,20 +690,71 @@ browserTest(
 							filter.dispatchEvent(new Event('change', { bubbles: true }))
 						})()`)
 					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('Pool.initialize') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
+				}
 
-					await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
-					await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", 'Anchored topology did not render')
-					expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 anchored protocol identities · sanitized canonical snapshot.')
+				await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
+				await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", `${viewport.label} anchored topology did not render`)
+				expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 anchored protocol identities · sanitized canonical snapshot.')
+				expect(
+					await cdp.evaluate(`({
+							auctions: document.querySelectorAll('#topology-auctions .topology-row').length,
+							pairs: document.querySelectorAll('#topology-pairs .topology-row').length,
+							pools: document.querySelectorAll('#topology-pools .topology-row').length,
+							reports: document.querySelectorAll('#topology-reports .topology-row').length,
+							universes: document.querySelectorAll('#topology-universes .topology-row').length,
+						})`),
+				).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
+				await expectVisibleIdentifiers(topologyIdentifiers, viewport.width === 390 ? 44 : 32, '.topology-panel .compact-identifier')
+				const ecosystemCards = await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-card')].map(card => ({
+					blockers: [...card.querySelectorAll('.blocker-list li')].map(item => item.textContent),
+					ecosystem: card.getAttribute('data-ecosystem'),
+					readiness: card.querySelector('.panel-heading .badge')?.textContent,
+					summary: card.querySelector(':scope > p, :scope > ul')?.textContent,
+				}))`)
+				const openOracleCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'open-oracle') : undefined
+				const tradingCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'trading') : undefined
+				expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Ready', summary: 'At least one exact operation can be simulated now.' })
+				expect(tradingCard).toEqual({ blockers: ['Router enter: No safe route exists'], ecosystem: 'trading', readiness: 'Blocked', summary: 'Router enter: No safe route exists' })
+				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
+					configurable: true,
+					value: { writeText: value => { window.__topologyCopies = [...(window.__topologyCopies ?? []), value]; return Promise.resolve() } },
+				}); window.__topologyCopies = []`)
+				if (viewport.label === 'desktop') {
+					expect(
+						await cdp.evaluate(`(() => {
+							const disclosure = document.querySelector('[data-identifier-type="universe REP token"] .identifier-disclosure')
+							disclosure?.focus()
+							return { focused: document.activeElement === disclosure, tag: disclosure?.tagName }
+						})()`),
+					).toEqual({ focused: true, tag: 'BUTTON' })
+					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'rawKeyDown', windowsVirtualKeyCode: 32 })
+					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'keyUp', windowsVirtualKeyCode: 32 })
 					expect(
 						await cdp.evaluate(`({
-								auctions: document.querySelectorAll('#topology-auctions .topology-row').length,
-								pairs: document.querySelectorAll('#topology-pairs .topology-row').length,
-								pools: document.querySelectorAll('#topology-pools .topology-row').length,
-								reports: document.querySelectorAll('#topology-reports .topology-row').length,
-								universes: document.querySelectorAll('#topology-universes .topology-row').length,
-							})`),
-					).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
+							expanded: document.querySelector('[data-identifier-type="universe REP token"] .identifier-disclosure')?.getAttribute('aria-expanded'),
+							hidden: document.querySelector('[data-identifier-type="universe REP token"] .identifier-full')?.hidden,
+							value: document.querySelector('[data-identifier-type="universe REP token"] .identifier-full')?.value,
+						})`),
+					).toEqual({ expanded: 'true', hidden: false, value: topologyValues.repToken })
+					expect(await cdp.evaluate(`(() => { const copy = document.querySelector('[data-identifier-type="security pool address"] .identifier-copy'); copy?.focus(); return { focused: document.activeElement === copy, tag: copy?.tagName } })()`)).toEqual({ focused: true, tag: 'BUTTON' })
+					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'rawKeyDown', windowsVirtualKeyCode: 32 })
+					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'keyUp', windowsVirtualKeyCode: 32 })
+					await waitFor(`document.querySelector('[data-identifier-type="security pool address"] .identifier-feedback')?.textContent === 'Copied'`, 'Keyboard topology copy did not report success')
+					expect(await cdp.evaluate('window.__topologyCopies')).toEqual([topologyValues.poolAddress])
+				} else {
+					await touchControl('[data-identifier-type="report token 1"] .identifier-disclosure')
+					expect(
+						await cdp.evaluate(`({
+							expanded: document.querySelector('[data-identifier-type="report token 1"] .identifier-disclosure')?.getAttribute('aria-expanded'),
+							hidden: document.querySelector('[data-identifier-type="report token 1"] .identifier-full')?.hidden,
+							value: document.querySelector('[data-identifier-type="report token 1"] .identifier-full')?.value,
+						})`),
+					).toEqual({ expanded: 'true', hidden: false, value: topologyValues.reportToken1 })
+					await touchControl('[data-identifier-type="report token 2"] .identifier-copy')
+					await waitFor(`document.querySelector('[data-identifier-type="report token 2"] .identifier-feedback')?.textContent === 'Copied'`, 'Touch topology copy did not report success')
+					expect(await cdp.evaluate('window.__topologyCopies')).toEqual([topologyValues.reportToken2])
 				}
+				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 
 				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
 				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null && document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
@@ -734,7 +824,19 @@ browserTest(
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
-				expect(await cdp.evaluate(`document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false`)).toBe(true)
+				expect(
+					await cdp.evaluate(`({
+						lede: document.querySelector('.settings-intro .lede')?.textContent,
+						locked: document.querySelector('#settings-fields')?.disabled,
+						pauseNote: document.querySelector('#settings-pause-note')?.textContent,
+						pauseNoteVisible: document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false,
+					})`),
+				).toEqual({
+					lede: 'Changes apply before the next selection cycle.',
+					locked: true,
+					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
+					pauseNoteVisible: true,
+				})
 				failNextStateRead = true
 				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/signer`] })
 				await cdp.evaluate(`(() => {
@@ -797,7 +899,7 @@ browserTest(
 			stateRequests = 3
 			await cdp.command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: 844, mobile: false, width: 390 })
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
-			await waitFor("document.querySelector('#settings-scope')?.textContent !== 'Configuration loading'", 'Mobile settings fixture did not load')
+			await waitFor("document.querySelector('#settings-scope')?.textContent === 'sepolia · chain 11155111'", 'Mobile settings fixture did not load')
 			const checkboxTargets = await cdp.evaluate(`[
 				...document.querySelectorAll('#execute, #allow-high-risk, #allow-irreversible, [data-ecosystem-toggle], #remember-signer'),
 			].map(input => {
@@ -827,6 +929,7 @@ browserTest(
 				})()`,
 					`/${route} did not reveal its current navigation chip`,
 				)
+				await waitFor("document.querySelector('#refresh-button')?.disabled === false && document.querySelector('#refresh-button')?.textContent === 'Refresh'", `/${route} initial refresh did not settle`)
 				const navigationBeforeRefresh = await cdp.evaluate(`(() => {
 					const navigation = document.querySelector('.section-nav')
 					const current = navigation?.querySelector('[aria-current="page"]')

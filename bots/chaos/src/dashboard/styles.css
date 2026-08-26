@@ -868,6 +868,28 @@ tbody tr:last-child td {
 	line-height: 1.4;
 }
 
+.topology-row > strong .identifier-value {
+	color: var(--operator-text);
+}
+
+.topology-facts,
+.topology-fact,
+.topology-identifier-fact {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.topology-facts {
+	gap: 0.35rem 0.7rem;
+}
+
+.topology-identifier-fact {
+	gap: 0.35rem;
+}
+
 .ecosystem-card {
 	position: relative;
 	overflow: hidden;
