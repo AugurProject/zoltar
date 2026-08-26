@@ -1221,7 +1221,7 @@ async function retryRateLimited<TValue>(operation: () => Promise<TValue>, option
 
 async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
-		retryCount: transport.retryCount,
+		retryCount: parameters.method === 'eth_sendTransaction' ? 0 : transport.retryCount,
 		retryDelay: transport.retryDelay,
 	})
 }
