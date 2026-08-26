@@ -162,13 +162,24 @@ try {
 		if (typeof brandLeft !== 'number' || brandLeft < 0) throw new Error(`Dashboard route /${route} shifted the operator header: ${JSON.stringify(layout)}`)
 		if (Reflect.get(layout, 'currentNavigationVisible') !== true || Reflect.get(layout, 'scrollY') !== 0) throw new Error(`Dashboard route /${route} did not preserve a visible current navigation target at the top of the document: ${JSON.stringify(layout)}`)
 		const screenshotOptions = { captureBeyondViewport: false, format: 'png', fromSurface: true }
-		await command('Page.captureScreenshot', screenshotOptions)
-		await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-		await Bun.sleep(100)
-		const screenshot = await command('Page.captureScreenshot', screenshotOptions)
-		if (typeof screenshot !== 'object' || screenshot === null || Array.isArray(screenshot)) throw new Error('Screenshot result was invalid')
-		const data = Reflect.get(screenshot, 'data')
-		if (typeof data !== 'string') throw new Error('Screenshot result omitted PNG data')
+		let data: string | undefined
+		let previousData: string | undefined
+		let stable = false
+		for (let attempt = 0; attempt < 20; attempt += 1) {
+			await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+			await Bun.sleep(50)
+			const screenshot = await command('Page.captureScreenshot', screenshotOptions)
+			if (typeof screenshot !== 'object' || screenshot === null || Array.isArray(screenshot)) throw new Error('Screenshot result was invalid')
+			const nextData = Reflect.get(screenshot, 'data')
+			if (typeof nextData !== 'string') throw new Error('Screenshot result omitted PNG data')
+			data = nextData
+			if (data === previousData) {
+				stable = true
+				break
+			}
+			previousData = data
+		}
+		if (data === undefined || !stable) throw new Error(`Dashboard route /${route} did not reach a stable painted frame`)
 		const path = resolve(outputDirectory, `${name}.png`)
 		await Bun.write(path, Buffer.from(data, 'base64'))
 		console.log(`${name}: ${width.toString()}x${height.toString()} · /${route} · ${path}`)
