@@ -8,6 +8,11 @@ const compiledArtifactPath = path.join(projectRoot, 'solidity/artifacts/Contract
 const outputPath = path.resolve(import.meta.dir, '../config/abis.json')
 const manifestsRoot = path.resolve(import.meta.dir, '../config/manifests')
 
+const serializeManifest = (contracts: readonly (readonly [string, string, string])[]): string => {
+	const entries = contracts.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
+	return `{\n\t"contracts": [\n${entries}\n\t]\n}\n`
+}
+
 const collectSources = async (directory: string, relativeRoot = path.join(projectRoot, 'solidity')): Promise<Record<string, { content: string }>> => {
 	const sources: Record<string, { content: string }> = {}
 	const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))
@@ -158,7 +163,12 @@ const deploymentKind: Readonly<Record<string, string>> = {
 	zoltarQuestionData: 'zoltarQuestionData',
 }
 
-for (const networkId of ['mainnet', 'sepolia']) {
+const usdcAddress = {
+	mainnet: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+	sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+} as const
+
+for (const networkId of ['mainnet', 'sepolia'] as const) {
 	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
 	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
@@ -166,9 +176,13 @@ for (const networkId of ['mainnet', 'sepolia']) {
 		const kind = deploymentKind[id]
 		return kind === undefined ? [] : [[address, label, kind] as [string, string, string]]
 	})
-	configured.push([deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'], [deployment.network.wethAddress, 'Wrapped Ether', 'weth'])
+	configured.push(
+		[deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'],
+		[deployment.network.wethAddress, 'Wrapped Ether', 'weth'],
+		[usdcAddress[networkId], 'USD Coin', 'usdc'],
+	)
 	const unique = [...new Map(configured.map((entry) => [entry[0].toLowerCase(), entry])).values()]
-	await Bun.write(path.join(manifestsRoot, `${networkId}.json`), `${JSON.stringify({ contracts: unique }, undefined, 2)}\n`)
+	await Bun.write(path.join(manifestsRoot, `${networkId}.json`), serializeManifest(unique))
 }
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)
