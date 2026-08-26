@@ -53,7 +53,7 @@ For Mainnet, copy `config/operator.configured-placeholder.json` as the shape, th
 
 Replace the selected shape's independent RPCs and all eight deployment roots with values from an independently verified deployment manifest, then keep `networkConfigured: true`. Replace every reserved `.invalid` endpoint and every patterned address. A nonzero address or internally consistent graph is not proof that you selected the intended deployment.
 
-Live execution requires a three-reader, two-agreeing quorum with three distinct RPC origins. Single-reader mode is dry-run only. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest block that can contain protocol deployment or carry events. Public submission is appropriate for initial dry runs but blocks deadline-bound operations; those require authenticated private relays.
+Live execution configures three distinct RPC origins. Each quorum check needs at least two healthy responses, and every successful response used by that check must agree; a conflicting third response fails closed. Single-reader mode is dry-run only. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest block that can contain protocol deployment or carry events. Public submission is appropriate for initial dry runs but blocks deadline-bound operations; those require authenticated private relays.
 
 The [operator reference](./OPERATOR_REFERENCE.md) defines the exact mainnet, Sepolia, and custom-chain forms; deployment-graph checks; RPC quorum; submission modes; and relay requirements.
 
@@ -155,20 +155,21 @@ docker compose logs --tail 100 chaos
 
 Sign in as user `operator`. The password file is owner-only, reused across restarts, and never printed by the entrypoint. Rotate it by stopping the service, replacing the file with at least 16 characters, restoring owner-only permissions, and restarting.
 
-On first start, the container copies the default safe template—not the configured-placeholder reference—to `.state/operator.json`, changes only the in-container UI bind address to `0.0.0.0`, and preserves paused dry-run defaults. Before a signer is loaded, you can perform the one-time network/deployment bootstrap outside the container. Stop the bot first:
+On first start, the container copies the default safe template—not the configured-placeholder reference—to `.state/operator.json`, changes only the in-container UI bind address to `0.0.0.0`, and preserves paused dry-run defaults. That safe start also creates durable activity at the template's default `runtime.stateFile`. Do not reuse that journal after changing the deployment. Before a signer is loaded, perform the one-time network/deployment bootstrap outside the container: stop the bot, replace the placeholders, and set `runtime.stateFile` to a new unused path in the copied configuration.
 
 ```sh
 install -d -m 700 .state
 docker compose stop chaos
 docker compose cp chaos:/app/bots/chaos/.state/operator.json ./.state/operator.json
-# Replace every network and deployment placeholder; keep paused dry-run mode.
+# Replace every network and deployment placeholder, choose a new unused
+# runtime.stateFile, and keep paused dry-run mode.
 chmod 600 .state/operator.json
 docker compose cp ./.state/operator.json chaos:/app/bots/chaos/.state/operator.json
 docker compose run --rm --no-deps --user root --entrypoint sh chaos -c 'chown bun:bun /app/bots/chaos/.state/operator.json && chmod 600 /app/bots/chaos/.state/operator.json'
 docker compose start chaos
 ```
 
-The ownership repair is required because `docker compose cp` can create the destination as root while the bot runs as `bun`. Perform this export only before a private key has been loaded or remembered. After bootstrap, use the authenticated dashboard for supported changes. If an offline edit is unavoidable, first pause, clear the remembered signer in Settings, stop the bot, and handle the complete `.state` directory through an encrypted secret-management workflow.
+The ownership repair is required because `docker compose cp` can create the destination as root while the bot runs as `bun`. The original template journal remains preserved at its old path; the configured restart initializes the new path. Perform this export only before a private key has been loaded or remembered. After bootstrap, use the authenticated dashboard for supported changes. If an offline edit is unavoidable, first pause, clear the remembered signer in Settings, stop the bot, and handle the complete `.state` directory through an encrypted secret-management workflow.
 
 For unattended deployments, mount the complete `.state` directory through your secret-management system. Do not put keys or credentialed endpoints in Compose, `.env`, shell history, screenshots, or support bundles.
 

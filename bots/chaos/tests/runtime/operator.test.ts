@@ -210,6 +210,30 @@ describe('chaos operator runtime', () => {
 		expect(durable.profileId).toBe(executionProfileId(settings))
 	})
 
+	test('moves a stopped safe bootstrap to a fresh state path when deployment identity changes', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-bootstrap-')
+		temporaryDirectories.push(directory)
+		const bootstrapStateFile = join(directory, 'bootstrap-state.json')
+		const configuredStateFile = join(directory, 'configured-state.json')
+		const bootstrapSettings = restartSettings(bootstrapStateFile, 0, null)
+
+		using bootstrapShutdown = createChaosShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'bootstrap-revision', settings: bootstrapSettings }, processLocks(), bootstrapShutdown)
+		const bootstrapBefore = await readFile(bootstrapStateFile)
+		const changedAtOldPath = restartSettings(bootstrapStateFile, 1, null)
+		using rejectedShutdown = createChaosShutdownController()
+		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'changed-revision', settings: changedAtOldPath }, processLocks(), rejectedShutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
+		expect((await readFile(bootstrapStateFile)).equals(bootstrapBefore)).toBeTrue()
+
+		const changedAtFreshPath = restartSettings(configuredStateFile, 1, null)
+		using configuredShutdown = createChaosShutdownController()
+		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'configured-revision', settings: changedAtFreshPath }, processLocks(), configuredShutdown)
+		const configured = await loadDurableState(configuredStateFile, changedAtFreshPath.network.chainId)
+		expect(configured.profileId).toBe(executionProfileId(changedAtFreshPath))
+		expect(configured.signerAddress).toBeUndefined()
+		expect(configured.activities[0]?.message).toBe('Durable runtime initialized for the configured deployment profile')
+	})
+
 	test('rejects a changed signer before a deployment reset and leaves partial lifecycle state byte-for-byte unchanged', async () => {
 		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-restart-')
 		temporaryDirectories.push(directory)
