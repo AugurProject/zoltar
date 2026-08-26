@@ -30,8 +30,8 @@ type RecoveryGasEstimateOutcome = 'excessive' | 'malformed' | 'success' | 'unava
 
 type RecoveryRpcOptions = {
 	baseFeePerGas?: bigint | undefined
-	ethBalance?: bigint | undefined
-	ethBalanceUnavailable?: boolean | undefined
+	ethBalanceAttoEth?: bigint | undefined
+	ethBalanceAttoEthUnavailable?: boolean | undefined
 	ethCallUnavailable?: boolean | undefined
 	gasEstimate?: RecoveryGasEstimateOutcome | undefined
 	head?: bigint | undefined
@@ -63,8 +63,8 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 				case 'eth_getTransactionCount':
 					return Response.json({ id, jsonrpc: '2.0', result: toHex(currentNonce) })
 				case 'eth_getBalance':
-					if (options.ethBalanceUnavailable === true) return new Response('RPC temporarily unavailable', { status: 503 })
-					return Response.json({ id, jsonrpc: '2.0', result: toHex(options.ethBalance ?? 10n ** 20n) })
+					if (options.ethBalanceAttoEthUnavailable === true) return new Response('RPC temporarily unavailable', { status: 503 })
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(options.ethBalanceAttoEth ?? 10n ** 20n) })
 				case 'eth_getTransactionByHash':
 				case 'eth_getTransactionReceipt':
 					return Response.json({ id, jsonrpc: '2.0', result: null })
@@ -237,13 +237,13 @@ type RecoveryEnvironmentOptions = {
 	baseFeePerGas?: bigint | undefined
 	catchUpThirdDuringReplay?: boolean | undefined
 	downstreamPreflight?: boolean | undefined
-	ethBalance?: bigint | undefined
+	ethBalanceAttoEth?: bigint | undefined
 	maximumEthPerOperationAttoEth?: bigint | undefined
 	maximumGasCostAttoEth?: bigint | undefined
 	maximumRepPerOperationAttoRep?: bigint | undefined
 	minimumEthReserveAttoEth?: bigint | undefined
 	repBalances?: { credit: bigint; wallet: bigint } | undefined
-	secondEthBalanceUnavailable?: boolean | undefined
+	secondEthBalanceAttoEthUnavailable?: boolean | undefined
 	thirdGasEstimate?: RecoveryGasEstimateOutcome | undefined
 	transactionValue?: bigint | undefined
 	unavailableThirdAttester?: boolean | undefined
@@ -264,16 +264,16 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 		value: options.transactionValue ?? 0n,
 	})
 	const hash = keccak256(serializedTransaction)
-	const commonRpcOptions = { baseFeePerGas: options.baseFeePerGas, ethBalance: options.ethBalance, repBalances: options.repBalances }
+	const commonRpcOptions = { baseFeePerGas: options.baseFeePerGas, ethBalanceAttoEth: options.ethBalanceAttoEth, repBalances: options.repBalances }
 	const first = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, commonRpcOptions)
-	const second = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, { ...commonRpcOptions, ethBalanceUnavailable: options.secondEthBalanceUnavailable })
-	const needsThird = options.unavailableThirdAttester === true || options.thirdGasEstimate !== undefined || options.catchUpThirdDuringReplay === true || options.secondEthBalanceUnavailable === true
+	const second = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, { ...commonRpcOptions, ethBalanceAttoEthUnavailable: options.secondEthBalanceAttoEthUnavailable })
+	const needsThird = options.unavailableThirdAttester === true || options.thirdGasEstimate !== undefined || options.catchUpThirdDuringReplay === true || options.secondEthBalanceAttoEthUnavailable === true
 	const third = needsThird
 		? recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, {
 				...commonRpcOptions,
 				...(options.unavailableThirdAttester === true ? { ethCallUnavailable: true } : {}),
 				...(options.thirdGasEstimate === undefined ? {} : { gasEstimate: options.thirdGasEstimate }),
-				head: options.catchUpThirdDuringReplay === true || options.secondEthBalanceUnavailable === true ? 98n : 99n,
+				head: options.catchUpThirdDuringReplay === true || options.secondEthBalanceAttoEthUnavailable === true ? 98n : 99n,
 			})
 		: undefined
 	const rpcServers = third === undefined ? [first, second] : [first, second, third]
@@ -366,7 +366,7 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 describe('pending chaos transaction recovery decisions', () => {
 	test('resubmits when exact-attester ETH funding equals the signed maximum cost plus reserve', async () => {
 		const fixture = await forkedRecoveryEnvironment({
-			ethBalance: 200_105n,
+			ethBalanceAttoEth: 200_105n,
 			minimumEthReserveAttoEth: 100n,
 			transactionValue: 5n,
 		})
@@ -397,7 +397,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		{ balance: 200_104n, label: 'one atto below the ETH reserve', reserve: 100n, value: 5n },
 		{ balance: 199_999n, label: 'below the signed maximum gas cost', reserve: 0n, value: 0n },
 	])('retains identical bytes when funding is $label', async ({ balance, reserve, value }) => {
-		const fixture = await forkedRecoveryEnvironment({ ethBalance: balance, minimumEthReserveAttoEth: reserve, transactionValue: value })
+		const fixture = await forkedRecoveryEnvironment({ ethBalanceAttoEth: balance, minimumEthReserveAttoEth: reserve, transactionValue: value })
 
 		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('wallet ETH reserve')
 
@@ -451,7 +451,7 @@ describe('pending chaos transaction recovery decisions', () => {
 	})
 
 	test('does not substitute a funded nonattester for an unavailable canonical ETH-balance reader', async () => {
-		const fixture = await forkedRecoveryEnvironment({ ethBalance: 10n ** 20n, secondEthBalanceUnavailable: true })
+		const fixture = await forkedRecoveryEnvironment({ ethBalanceAttoEth: 10n ** 20n, secondEthBalanceAttoEthUnavailable: true })
 
 		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toBeInstanceOf(ConnectivityDegradedError)
 
