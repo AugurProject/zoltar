@@ -9,6 +9,7 @@ import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTo
 import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
+import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
 type MemoryClientLike = ReturnType<typeof createMemoryClient>
@@ -18,10 +19,7 @@ type TemporarySimulationAccountCopy = {
 	address: Address
 	mode: 'full' | 'storage'
 }
-type RequestArguments = {
-	method: string
-	params?: unknown
-}
+type RequestArguments = SimulationProviderRequest
 type TevmTransactionRequest = CallParams
 type TevmBlock = Awaited<ReturnType<MemoryClientLike['getBlock']>>
 type SerializedTransaction = Parameters<typeof recoverTransactionAddress>[0]['serializedTransaction']
@@ -155,19 +153,6 @@ async function getSimulationChainState(memoryClient: MemoryClientLike) {
 	return {
 		blockNumber: getRequiredBlockNumber(block),
 		currentTimestamp: block.timestamp,
-	}
-}
-function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSelectedAccount, requestRpc }: { getChainId: () => string; getQueryDelayMilliseconds: () => number; getSelectedAccount: () => Address; requestRpc: (parameters: RequestArguments) => Promise<unknown> }): InjectedEthereum {
-	const request = (async (parameters: RequestArguments) => {
-		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') return [getSelectedAccount()]
-		if (parameters.method === 'eth_chainId') return getChainId()
-		await delayMilliseconds(getQueryDelayMilliseconds())
-		return await requestRpc(parameters)
-	}) as InjectedEthereum['request']
-	return {
-		on: () => undefined,
-		removeListener: () => undefined,
-		request,
 	}
 }
 function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks): WriteClient {

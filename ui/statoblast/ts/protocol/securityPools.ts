@@ -9,26 +9,17 @@ import {
 	Zoltar_Zoltar,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { deriveHasForkActivity } from '@zoltar/ui-zoltar/protocol/forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar/protocol/core.js'
 import { requireForkDataView } from '@zoltar/ui-zoltar/protocol/forkData.js'
-import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from '@zoltar/ui-zoltar/protocol/helpers.js'
+import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from '@zoltar/ui-zoltar/protocol/helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
-
-const QUESTION_OUTCOME_ABI = [
-	{
-		inputs: [{ name: 'securityPool', type: 'address' }],
-		name: 'getQuestionOutcome',
-		outputs: [{ name: 'outcome', type: 'uint8' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
@@ -36,39 +27,14 @@ const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 
-const DEPLOY_SECURITY_POOL_EVENT = {
-	type: 'event',
-	name: 'DeploySecurityPool',
-	inputs: [
-		{ indexed: true, name: 'securityPool', type: 'address' },
-		{ indexed: false, name: 'truthAuction', type: 'address' },
-		{ indexed: false, name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
-		{ indexed: false, name: 'shareToken', type: 'address' },
-		{ indexed: true, name: 'parent', type: 'address' },
-		{ indexed: true, name: 'universeId', type: 'uint248' },
-		{ indexed: false, name: 'questionId', type: 'uint256' },
-		{ indexed: false, name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
-		{ indexed: false, name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
-		{ indexed: false, name: 'currentRetentionRate', type: 'uint256' },
-		{ indexed: false, name: 'settlementCollateralAttoEth', type: 'uint256' },
-	],
-} as const
+const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
+if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
 
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
-}
-
-type SecurityPoolDeploymentQueryResult = {
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	parent: Address
-	priceOracleManagerAndOperatorQueuer: Address
-	questionId: bigint
-	statoblastSecurityMultiplierBps: bigint
-	securityPool: Address
-	truthAuction: Address
-	universeId: bigint
 }
 
 function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionData') {
@@ -333,7 +299,7 @@ export async function loadSecurityPoolVaultSummary(client: ReadClient, securityP
 }
 
 function shouldLoadSecurityPoolVaults(
-	deployment: Pick<SecurityPoolDeploymentQueryResult, 'parent' | 'securityPool'>,
+	deployment: Pick<SecurityPoolDeploymentTuple, 'parent' | 'securityPool'>,
 	options: {
 		selectedSecurityPoolAddress?: Address | string
 		vaultDetailMode: 'all' | 'selected'
@@ -355,7 +321,7 @@ function createDeferredSecurityPoolVaultSummary(vaultCount: bigint) {
 
 async function loadSecurityPoolDetails(
 	client: ReadClient,
-	deployment: SecurityPoolDeploymentQueryResult,
+	deployment: SecurityPoolDeploymentTuple,
 	options: {
 		accountAddress?: Address
 		selectedSecurityPoolAddress?: Address | string
@@ -414,7 +380,7 @@ async function loadSecurityPoolDetails(
 				args: [],
 			},
 			{
-				abi: QUESTION_OUTCOME_ABI,
+				abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
 				functionName: 'getQuestionOutcome',
 				address: getInfraContractAddresses().securityPoolForker,
 				args: [securityPoolAddress],
@@ -507,7 +473,7 @@ async function loadSecurityPoolDetails(
 }
 
 async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigint, count: bigint) {
-	if (count === 0n) return [] as readonly SecurityPoolDeploymentQueryResult[]
+	if (count === 0n) return [] as readonly SecurityPoolDeploymentTuple[]
 	return requireSecurityPoolDeploymentTupleArray(
 		await client.readContract({
 			address: getInfraContractAddresses().securityPoolFactory,
@@ -521,7 +487,7 @@ async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigin
 
 async function loadListedSecurityPools(
 	client: ReadClient,
-	deployments: readonly SecurityPoolDeploymentQueryResult[],
+	deployments: readonly SecurityPoolDeploymentTuple[],
 	options: {
 		accountAddress?: Address
 		selectedSecurityPoolAddress?: Address | string
@@ -532,7 +498,7 @@ async function loadListedSecurityPools(
 	return await Promise.all(deployments.map(async deployment => await loadSecurityPoolDetails(client, deployment, options)))
 }
 
-function deploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeploymentQueryResult {
+function deploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeploymentTuple {
 	const args = log.args
 	if (typeof args !== 'object' || args === null) throw new Error('Security pool deployment event is missing its arguments')
 	const initialReportPriorityFeeAttoEthPerGas = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
@@ -590,7 +556,7 @@ async function loadSecurityPoolDeploymentEvents(client: ReadClient, anchor: Depl
 				await client.getLogs({
 					address: getInfraContractAddresses().securityPoolFactory,
 					args,
-					event: DEPLOY_SECURITY_POOL_EVENT,
+					event: deploySecurityPoolEvent,
 					fromBlock: range.fromBlock,
 					toBlock: range.toBlock,
 				}),
@@ -598,7 +564,7 @@ async function loadSecurityPoolDeploymentEvents(client: ReadClient, anchor: Depl
 	).map(deploymentFromEvent)
 }
 
-function uniqueDeployments(deployments: readonly SecurityPoolDeploymentQueryResult[]) {
+function uniqueDeployments(deployments: readonly SecurityPoolDeploymentTuple[]) {
 	return [...new Map(deployments.map(deployment => [deployment.securityPool.toLowerCase(), deployment])).values()]
 }
 

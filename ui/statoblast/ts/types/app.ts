@@ -1,21 +1,9 @@
-import type { MarketType, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export type { AccountState, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
+export type { AccountState, TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
+export type { MarketFormState } from '@zoltar/ui-zoltar/types/app.js'
 
 export type Route = 'deploy' | 'security-pools' | 'open-oracle' | 'not-found'
-
-export type MarketFormState = {
-	answerUnit: string
-	categoricalOutcomes: string[]
-	description: string
-	scalarIncrement: string
-	scalarMax: string
-	scalarMin: string
-	title: string
-	endTime: string
-	marketType: MarketType
-	startTime: string
-}
 
 export type SecurityPoolFormState = {
 	initialReportPriorityFeeGwei: string

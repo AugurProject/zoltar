@@ -8,20 +8,12 @@ import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAn
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { requireForkDataView } from './forkData.js'
 import { executeForkAuctionAction } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { getDeploymentSteps } from './deployment.js'
 import { loadMarketDetails } from './zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
-const QUESTION_OUTCOME_ABI = [
-	{
-		inputs: [{ name: 'securityPool', type: 'address' }],
-		name: 'getQuestionOutcome',
-		outputs: [{ name: 'outcome', type: 'uint8' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 function getDeploymentStep(id: DeploymentStepId) {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
@@ -142,7 +134,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				args: [securityPoolAddress],
 			},
 			{
-				abi: QUESTION_OUTCOME_ABI,
+				abi: SECURITY_POOL_QUESTION_OUTCOME_ABI,
 				functionName: 'getQuestionOutcome',
 				address: getInfraContractAddresses().securityPoolForker,
 				args: [securityPoolAddress],

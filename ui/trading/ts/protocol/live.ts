@@ -1,329 +1,35 @@
-import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Abi, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
+import { ReputationToken_ReputationToken, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
+export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
+import { shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
+import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+
+export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
+export { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from './tradeQuote.js'
+
+const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const erc20BalanceAbi = ReputationToken_ReputationToken.abi
+const zoltarAbi = Zoltar_Zoltar.abi
+const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
+const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
+const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
+if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
 
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
-
-const deploymentComponents = [
-	{ name: 'securityPool', type: 'address' },
-	{ name: 'truthAuction', type: 'address' },
-	{ name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
-	{ name: 'shareToken', type: 'address' },
-	{ name: 'parent', type: 'address' },
-	{ name: 'universeId', type: 'uint248' },
-	{ name: 'questionId', type: 'uint256' },
-	{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
-	{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
-	{ name: 'currentRetentionRate', type: 'uint256' },
-	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-] as const
-
-const poolAccountingComponents = [
-	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-	{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
-	{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
-	{ name: 'feeIndex', type: 'uint256' },
-	{ name: 'feeIndexRemainder', type: 'uint256' },
-	{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-	{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
-	{ name: 'currentRetentionRate', type: 'uint256' },
-] as const
-
-const securityPoolFactoryAbi = [
-	{
-		type: 'event',
-		name: 'DeploySecurityPool',
-		inputs: [
-			{ indexed: true, name: 'securityPool', type: 'address' },
-			{ indexed: false, name: 'truthAuction', type: 'address' },
-			{ indexed: false, name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
-			{ indexed: false, name: 'shareToken', type: 'address' },
-			{ indexed: true, name: 'parent', type: 'address' },
-			{ indexed: true, name: 'universeId', type: 'uint248' },
-			{ indexed: false, name: 'questionId', type: 'uint256' },
-			{ indexed: false, name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
-			{ indexed: false, name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
-			{ indexed: false, name: 'currentRetentionRate', type: 'uint256' },
-			{ indexed: false, name: 'settlementCollateralAttoEth', type: 'uint256' },
-		],
-	},
-	{ type: 'function', name: 'securityPoolDeploymentCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'securityPoolDeploymentsRange',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		outputs: [{ name: 'deployments', type: 'tuple[]', components: deploymentComponents }],
-	},
-] as const satisfies Abi
-
-const securityPoolAbi = [
-	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'repToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'shareTokenSupplyAttoShares', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'getCurrentMintingCapacityAttoEth', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'getPoolAccountingSnapshot', stateMutability: 'view', inputs: [], outputs: [{ name: 'snapshot', type: 'tuple', components: poolAccountingComponents }] },
-	{ type: 'function', name: 'systemState', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
-	{ type: 'function', name: 'getVaultCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-	{ type: 'function', name: 'securityPoolForker', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'redeemCompleteSet', stateMutability: 'nonpayable', inputs: [{ name: 'amountAttoShares', type: 'uint256' }], outputs: [] },
-	{ type: 'function', name: 'redeemShares', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-] as const satisfies Abi
-
-const erc20BalanceAbi = [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
-
-const securityPoolForkerAbi = [{ type: 'function', name: 'getQuestionOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address' }], outputs: [{ type: 'uint8' }] }] as const satisfies Abi
-
-const zoltarAbi = [
-	{ type: 'function', name: 'getForkTime', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'getDeployedChildUniverses',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'universeId', type: 'uint248' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		outputs: [
-			{ name: 'outcomeIndexes', type: 'uint256[]' },
-			{ name: 'childUniverseIds', type: 'uint248[]' },
-			{
-				name: 'children',
-				type: 'tuple[]',
-				components: [
-					{ name: 'forkTime', type: 'uint256' },
-					{ name: 'forkQuestionId', type: 'uint256' },
-					{ name: 'forkingOutcomeIndex', type: 'uint256' },
-					{ name: 'reputationToken', type: 'address' },
-					{ name: 'parentUniverseId', type: 'uint248' },
-				],
-			},
-		],
-	},
-] as const satisfies Abi
-
-const questionDataAbi = [
-	{
-		type: 'function',
-		name: 'questions',
-		stateMutability: 'view',
-		inputs: [{ name: 'questionId', type: 'uint256' }],
-		outputs: [
-			{ name: 'title', type: 'string' },
-			{ name: 'description', type: 'string' },
-			{ name: 'startTime', type: 'uint256' },
-			{ name: 'endTime', type: 'uint256' },
-			{ name: 'numTicks', type: 'uint120' },
-			{ name: 'displayValueMin', type: 'int256' },
-			{ name: 'displayValueMax', type: 'int256' },
-			{ name: 'answerUnit', type: 'string' },
-		],
-	},
-] as const satisfies Abi
-
-const shareTokenAbi = [
-	{
-		type: 'function',
-		name: 'balanceOf',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'account', type: 'address' },
-			{ name: 'id', type: 'uint256' },
-		],
-		outputs: [{ type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'isApprovedForAll',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'account', type: 'address' },
-			{ name: 'operator', type: 'address' },
-		],
-		outputs: [{ type: 'bool' }],
-	},
-	{
-		type: 'function',
-		name: 'setApprovalForAll',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'operator', type: 'address' },
-			{ name: 'approved', type: 'bool' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'migrate',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'fromId', type: 'uint256' },
-			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
-		],
-		outputs: [],
-	},
-] as const satisfies Abi
 
 const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const UI_SLIPPAGE_BPS = 50n
-
-export function requireTransactionSlippageBps(slippageBps: bigint) {
-	if (slippageBps < 0n || slippageBps > 500n) throw new Error('Slippage must be between 0% and 5%')
-}
-
-export function minimumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionSlippageBps(slippageBps)
-	return (amount * (10_000n - slippageBps)) / 10_000n
-}
-
-export function maximumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionSlippageBps(slippageBps)
-	return (amount * (10_000n + slippageBps) + 9_999n) / 10_000n
-}
-
-async function latestBlockIdentity(client: Pick<WalletClient, 'getBlock'>) {
-	const block = await client.getBlock()
-	if (block.number === null || block.number === undefined || block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
-	return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
-}
-
-async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>) => Promise<T>) {
-	const before = await latestBlockIdentity(client)
-	const result = await simulate(before)
-	const after = await latestBlockIdentity(client)
-	if (after.blockNumber !== before.blockNumber || after.blockHash !== before.blockHash) throw new Error('Block changed during simulation; simulate again')
-	return { ...before, result }
-}
-
-type TransactionExpiry = bigint | Readonly<{ validityMinutes: bigint }>
-
-export function requireTransactionValidityMinutes(validityMinutes: bigint) {
-	if (validityMinutes < 1n || validityMinutes > 1_440n) throw new Error('Transaction validity must be between 1 and 1440 minutes')
-}
-
-function deadlineAtBlock(expiry: TransactionExpiry, blockTimestamp: bigint) {
-	if (typeof expiry === 'bigint') return expiry
-	requireTransactionValidityMinutes(expiry.validityMinutes)
-	return blockTimestamp + expiry.validityMinutes * 60n
-}
-
-async function requireQuoteBlock(client: Pick<WalletClient, 'getBlock'>, quote: Readonly<{ blockNumber: bigint; blockHash: Hash }>) {
-	const current = await latestBlockIdentity(client)
-	if (current.blockNumber !== quote.blockNumber || current.blockHash !== quote.blockHash) throw new Error('Quote is stale; simulate again before submission')
-}
-
-export function retainApprovedMinimum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed < approved) throw new Error(`Refreshed quote no longer satisfies the approved minimum ${label}`)
-	return approved
-}
-
-export function retainApprovedMaximum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed > approved) throw new Error(`Refreshed quote no longer satisfies the approved maximum ${label}`)
-	return approved
-}
-
-export type LiveMarket = Readonly<{
-	loadError?: string
-	pool: Address
-	pair: Address | undefined
-	shareToken: Address
-	universeId: bigint
-	questionId: bigint
-	title: string
-	description: string
-	endTime: bigint
-	statoblastSecurityMultiplierBps: bigint
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	systemState: number
-	awaitingForkContinuation: boolean
-	universeForkTime: bigint
-	vaultCount: bigint
-	shareTokenSupplyAttoShares: bigint
-	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
-	totalCapacityOwnershipAttoRep: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
-	mintingCapacityCeilingAttoEth: bigint
-	availableMintingCapacityAttoEth: bigint
-	feeBps: bigint
-	tradingStatus: number | undefined
-	questionOutcome: number
-	yesReserve: bigint
-	noReserve: bigint
-	lpTotalSupply: bigint
-}>
-
-export type MarketLifecycle = Pick<LiveMarket, 'loadError' | 'tradingStatus' | 'systemState' | 'awaitingForkContinuation' | 'universeForkTime' | 'questionOutcome' | 'endTime'>
-
-function resolvedOutcomeLabel(questionOutcome: number) {
-	if (questionOutcome === 0) return 'Resolved INVALID'
-	if (questionOutcome === 1) return 'Resolved YES'
-	if (questionOutcome === 2) return 'Resolved NO'
-	return 'Question resolved'
-}
-
-export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint) {
-	if (market.loadError !== undefined) return 'Market data unavailable'
-	if (market.tradingStatus !== undefined && market.tradingStatus !== 6) {
-		if (market.tradingStatus === 1) return 'Question ended'
-		if (market.tradingStatus === 2) return 'Pool inactive'
-		if (market.tradingStatus === 3) return 'Awaiting fork continuation'
-		if (market.tradingStatus === 4) return 'Universe forked'
-		if (market.tradingStatus === 5) return resolvedOutcomeLabel(market.questionOutcome)
-	}
-	if (market.universeForkTime !== 0n) return 'Universe forked'
-	if (market.awaitingForkContinuation) return 'Awaiting fork continuation'
-	if (market.systemState !== 0) return 'Pool inactive'
-	if (market.questionOutcome !== 3) return resolvedOutcomeLabel(market.questionOutcome)
-	if (nowSeconds >= market.endTime) return 'Question ended'
-	return undefined
-}
-
-export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint) {
-	return marketNewRiskBlocker(market, nowSeconds) === undefined
-}
-
 export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
 	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
-}
-
-type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidTokenId: bigint; yesTokenId: bigint; noTokenId: bigint }>
-
-export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
-
-export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {
-	const invalidTokenId = market.universeId << 8n
-	return {
-		pool: market.pool,
-		shareToken: market.shareToken,
-		invalidTokenId,
-		yesTokenId: invalidTokenId | 1n,
-		noTokenId: invalidTokenId | 2n,
-	} as const
-}
-
-export function liveBalancesForMarket(balances: LiveBalances | undefined, market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'> | undefined) {
-	if (balances === undefined || market === undefined) return undefined
-	const scope = shareBalanceScope(market)
-	if (balances.scope.pool !== scope.pool || balances.scope.shareToken !== scope.shareToken) return undefined
-	if (balances.scope.invalidTokenId !== scope.invalidTokenId || balances.scope.yesTokenId !== scope.yesTokenId || balances.scope.noTokenId !== scope.noTokenId) return undefined
-	return balances
 }
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
@@ -396,28 +102,6 @@ export async function validateLiveDeployment(client: PublicClient, configuration
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
-}
-
-export async function connectWallet(provider: InjectedEthereum) {
-	const accounts = await provider.request({ method: 'eth_requestAccounts', params: [] })
-	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no account')
-	return getAddress(accounts[0])
-}
-
-export async function connectedWalletAccount(provider: InjectedEthereum) {
-	const accounts = await provider.request({ method: 'eth_accounts', params: [] })
-	if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Wallet returned no connected account')
-	return getAddress(accounts[0])
-}
-
-export async function walletChainId(provider: InjectedEthereum) {
-	const result = await provider.request({ method: 'eth_chainId', params: [] })
-	if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) throw new Error('Wallet returned an invalid chain ID')
-	return bigintToSafeNumber(BigInt(result), 'Wallet chain ID')
-}
-
-export async function switchWalletChain(provider: InjectedEthereum, chainId: number) {
-	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${chainId.toString(16)}` }] })
 }
 
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
@@ -569,7 +253,7 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } = poolSettings
 	const [question, questionOutcome, universeForkTime] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
-		client.readContract({ abi: securityPoolForkerAbi, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
+		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
 		client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
 	])
 	const questionFields = liveQuestionFields(question)
@@ -814,7 +498,7 @@ async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, confi
 				await client.getLogs({
 					address: configuration.securityPoolFactory,
 					args: { universeId },
-					event: securityPoolFactoryAbi[0],
+					event: deploySecurityPoolEvent,
 					fromBlock,
 					toBlock,
 				})

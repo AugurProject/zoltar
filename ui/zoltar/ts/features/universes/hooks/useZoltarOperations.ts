@@ -1,26 +1,18 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { useCallback, useMemo } from 'preact/hooks'
-import type { WriteOperationsParameters } from '../../../types/app.js'
+import type { TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
 import { useZoltarUniverse } from './useZoltarUniverse.js'
 
-type UseZoltarOperationsParameters = {
-	accountAddress: Address | undefined
-	activeUniverseId: bigint
-	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
-	autoLoadInitialData: boolean
-	deploymentStatuses: DeploymentStatus[]
-	environmentRefreshKey: number
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: WriteOperationsParameters['refreshState']
-}
+type UseZoltarOperationsParameters = TransactionLifecycleParameters &
+	WriteOperationContext & {
+		activeUniverseId: bigint
+		activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
+		autoLoadInitialData: boolean
+		deploymentStatuses: DeploymentStatus[]
+		environmentRefreshKey: number
+	}
 
 export function useZoltarOperations({
 	accountAddress,

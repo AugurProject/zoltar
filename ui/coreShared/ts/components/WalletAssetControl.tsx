@@ -6,7 +6,7 @@ import { useRequestGuard } from '../lib/requestGuard.js'
 import { normalizeWalletAssetFailure, watchActiveWalletAsset, type WalletAssetWatchResult } from '../lib/walletAsset.js'
 import { AddressValue } from './AddressValue.js'
 import { LoadingText } from './LoadingText.js'
-import { getWrongNetworkMessage } from '../lib/network.js'
+import { getWrongNetworkReason } from '../lib/network.js'
 import { sameAddress } from '../lib/address.js'
 
 type WalletAssetControlProps = {
@@ -21,7 +21,7 @@ type WalletAssetControlStatus = { status: 'accepted' } | { message: string; stat
 type WalletAssetControlState = WalletAssetControlStatus & { scopeGeneration: number }
 
 function getErrorMessage(result: WalletAssetWatchResult) {
-	if (result.status === 'wrong-network') return getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason
+	if (result.status === 'wrong-network') return getWrongNetworkReason()
 	if (result.status === 'unsupported') return commonCopy.walletAssetAutomaticImportUnavailable
 	if (result.status === 'unavailable') return commonCopy.walletAssetUnavailable
 	if (result.status === 'failed') return commonCopy.walletAssetRequestFailed
@@ -109,7 +109,7 @@ export function WalletAssetControl({ accountAddress, address, isSupportedChain, 
 			</button>
 			{isSupportedChain ? undefined : (
 				<span className='wallet-asset-prerequisite' id={networkRequirementId}>
-					{getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason}
+					{getWrongNetworkReason()}
 				</span>
 			)}
 			{state.status === 'accepted' ? (

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { EntityCard } from '../components/EntityCard.js'
 import { WarningSurface } from '../components/WarningSurface.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -42,7 +42,7 @@ describe('flat nested surfaces', () => {
 	})
 
 	test('keeps loaded question previews and timeline rows flat', () => {
-		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+		const cssSource = readCoreSharedCssSource()
 		const loadedPreviewRule = cssSource.slice(cssSource.indexOf('.loaded-question-preview {'), cssSource.indexOf('.field-inline {'))
 		const timelineItemRule = cssSource.slice(cssSource.indexOf('.question-preview-timeline-item {'), cssSource.indexOf('.question-preview-timeline-label,'))
 
@@ -53,7 +53,7 @@ describe('flat nested surfaces', () => {
 	})
 
 	test('aligns workflow actions as rows and keeps share totals with the distribution', () => {
-		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+		const cssSource = readCoreSharedCssSource()
 		const totalRule = cssSource.slice(cssSource.indexOf('.trading-share-callouts-total {'), cssSource.indexOf('.security-pool-strip-meter {'))
 
 		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')

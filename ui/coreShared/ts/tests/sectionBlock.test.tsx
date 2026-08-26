@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { SectionBlock } from '../components/SectionBlock.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -44,7 +44,7 @@ describe('SectionBlock', () => {
 	})
 
 	test('keeps embedded spacing overrides after compact and mobile section padding rules', () => {
-		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+		const cssSource = readCoreSharedCssSource()
 		const compactRuleIndex = cssSource.indexOf('.section-block.density-compact {')
 		const compactEmbeddedRuleIndex = cssSource.indexOf('.section-block.embedded.density-compact {')
 		const mobileSectionRuleIndex = cssSource.indexOf('.route-header,\n\t.section-block,\n\t.overview-panel {')

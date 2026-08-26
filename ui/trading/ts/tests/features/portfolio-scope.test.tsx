@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { LivePortfolio, LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveTrading.js'
-import { Portfolio } from '../../features/Routes.js'
-import { demoMarket } from '../../demo/markets.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveTrading.js'
+import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const pool: Address = `0x${'12'.repeat(20)}`
 const shareToken: Address = `0x${'34'.repeat(20)}`
@@ -43,18 +42,14 @@ const market: LiveMarket = {
 }
 
 describe('live portfolio scope', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/portfolio').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/#/portfolio',
 	})
 
 	for (const state of ['disconnected', 'loading', 'error'] as const) {
@@ -98,16 +93,6 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
 		expect(rendered.container.textContent).not.toContain('Balances are grouped by SecurityPool')
-	})
-
-	test('shows demo balances only for the globally selected universe', async () => {
-		const rendered = await renderIntoDocument(<Portfolio market={demoMarket('baseline')} />)
-		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(1)
-		expect(rendered.container.textContent).not.toContain('Genesis universe')
-		expect(rendered.container.textContent).not.toContain('Child universe · YES branch')
-		expect(rendered.container.textContent).not.toContain('Total YES')
-		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
