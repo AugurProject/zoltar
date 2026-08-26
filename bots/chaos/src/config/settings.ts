@@ -367,8 +367,8 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 	if (settings.runtime.execute && hasZeroDeploymentAddress(settings.deployment)) throw new Error('Live execution requires every ecosystem deployment address')
-	if (settings.runtime.execute && settings.connectivity !== undefined && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) {
-		throw new Error('Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)')
+	if (settings.runtime.execute && (settings.connectivity === undefined || settings.connectivity.rpcQuorum !== 2 || settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(2))) {
+		throw new Error('Live execution requires RPC quorum 2 with three independent read origins')
 	}
 	return settings
 }

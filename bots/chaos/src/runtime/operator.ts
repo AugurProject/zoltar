@@ -43,6 +43,26 @@ function configuredWallet(settings: OperatorSettings): Address | undefined {
 	return settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address
 }
 
+function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefined, stateFile: string) {
+	if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
+		throw new Error(`Durable state ${stateFile} is scoped to signer ${state.signerAddress}; configure a distinct state file for signer ${wallet}`)
+	}
+}
+
+function isPristineBootstrapState(state: RuntimeState) {
+	const schedulerIsPristine = (state.scheduler.status === 'idle' || state.scheduler.status === 'paused') && state.scheduler.lastDelaySeconds === undefined && state.scheduler.lastRunAt === undefined && state.scheduler.nextRunAt === undefined && state.scheduler.selectedOperationId === undefined
+	return state.signerAddress === undefined && state.activities.length === 0 && state.obligationTombstones.length === 0 && state.obligations.length === 0 && state.pendingTransactions.length === 0 && state.protocolIndex === undefined && !state.safetyPaused && schedulerIsPristine && state.workflows.length === 0
+}
+
+function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, paused: boolean, wallet: Address | undefined, stateFile: string) {
+	if (state.profileId === expectedProfileId) return false
+	if (!isPristineBootstrapState(state)) {
+		throw new Error(`Durable state ${stateFile} contains signer, workflow, obligation, recovery, or audit history for deployment profile ${state.profileId}; configure a distinct state file for the new deployment profile ${expectedProfileId}`)
+	}
+	resetRuntimeStateForProfile(state, expectedProfileId, paused, wallet)
+	return true
+}
+
 export function executionProfileId(settings: OperatorSettings) {
 	return carryProofDeploymentProfileId(settings)
 }
@@ -493,17 +513,14 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	const initialWallet = configuredWallet(loaded.settings)
 	const state = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
 	const initialProfileId = executionProfileId(loaded.settings)
-	const initialCarryProfileResetAuthorized = state.profileId !== initialProfileId && state.pendingTransactions.length === 0
+	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
+	const initialCarryProfileResetAuthorized = resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile)
 	if (initialCarryProfileResetAuthorized) {
-		resetRuntimeStateForProfile(state, initialProfileId, loaded.settings.paused, initialWallet)
 		recordActivity(state, {
 			message: 'Durable runtime initialized for the configured deployment profile',
 			status: 'info',
 			type: 'configuration',
 		})
-	}
-	if (initialWallet !== undefined && state.signerAddress !== undefined && initialWallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
-		throw new Error(`Durable state ${loaded.settings.runtime.stateFile} is scoped to signer ${state.signerAddress}; configure a distinct state file for signer ${initialWallet}`)
 	}
 	if (state.signerAddress === undefined && initialWallet !== undefined) {
 		state.signerAddress = initialWallet
@@ -576,10 +593,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			const configurationIsCurrent = () => configuration.revision === cycleRevision && configuration.settings === settings
 			try {
 				const expectedProfileId = executionProfileId(settings)
-				if (state.profileId !== expectedProfileId && state.pendingTransactions.length === 0) {
+				if (state.profileId !== expectedProfileId) {
 					if (!acquireCycleGate()) return 'deferred'
 					if (!configurationIsCurrent()) return 'deferred'
-					resetRuntimeStateForProfile(state, expectedProfileId, settings.paused, configuredWallet(settings))
+					const wallet = configuredWallet(settings)
+					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
+					resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile)
 					carryProofJournal = undefined
 					carryProofJournalStateFile = undefined
 					topologyCache = undefined

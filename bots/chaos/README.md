@@ -53,7 +53,7 @@ For Mainnet, copy `config/operator.configured-placeholder.json` as the shape, th
 
 Replace the selected shape's independent RPCs and all eight deployment roots with values from an independently verified deployment manifest, then keep `networkConfigured: true`. Replace every reserved `.invalid` endpoint and every patterned address. A nonzero address or internally consistent graph is not proof that you selected the intended deployment.
 
-Use a three-reader quorum for a shared network. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest block that can contain protocol deployment or carry events. Public submission is appropriate for initial dry runs but blocks deadline-bound operations; those require authenticated private relays.
+Live execution requires a three-reader, two-agreeing quorum with three distinct RPC origins. Single-reader mode is dry-run only. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest block that can contain protocol deployment or carry events. Public submission is appropriate for initial dry runs but blocks deadline-bound operations; those require authenticated private relays.
 
 The [operator reference](./OPERATOR_REFERENCE.md) defines the exact mainnet, Sepolia, and custom-chain forms; deployment-graph checks; RPC quorum; submission modes; and relay requirements.
 

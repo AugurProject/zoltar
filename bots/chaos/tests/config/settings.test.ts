@@ -263,6 +263,50 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('every ecosystem deployment address')
 	})
 
+	test('requires quorum 2 across three independent read origins for live execution', async () => {
+		const configured = await configuredExample()
+		const privateKey = `0x${'22'.repeat(32)}` as const
+		const deploymentAddress = '0x0000000000000000000000000000000000000001'
+		const live = {
+			...configured,
+			deployment: Object.fromEntries(Object.keys(record(configured['deployment'])).map(key => [key, deploymentAddress])),
+			privateKey,
+			runtime: { ...record(configured['runtime']), execute: true },
+		}
+
+		expect(() => parseSettings(live)).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(() =>
+			parseSettings({
+				...live,
+				connectivity: {
+					...record(configured['connectivity']),
+					quorumRpcUrls: ['https://quorum-one.example'],
+					rpcQuorum: 2,
+				},
+			}),
+		).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(() =>
+			parseSettings({
+				...live,
+				connectivity: {
+					...record(configured['connectivity']),
+					quorumRpcUrls: ['https://quorum-one.example', 'https://quorum-two.example'],
+					rpcQuorum: 2,
+				},
+			}),
+		).not.toThrow()
+		expect(() =>
+			parseSettings({
+				...live,
+				connectivity: {
+					...record(configured['connectivity']),
+					quorumRpcUrls: ['https://read.example/second-provider', 'https://quorum-two.example'],
+					rpcQuorum: 2,
+				},
+			}),
+		).toThrow('changing only the URL path does not create an independent provider')
+	})
+
 	test('enforces the one-to-sixty-minute delay and distinct-delay ranges', async () => {
 		const example = await storedExample()
 		expect(() => parseSettings({ ...example, scheduler: { maximumDelaySeconds: 3_601, minimumDelaySeconds: 60 } })).toThrow('maximumDelaySeconds')

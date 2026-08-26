@@ -59,8 +59,8 @@ These checks reject an inconsistent graph. They cannot prove that an internally 
 
 ## RPC and submission configuration
 
-- `rpcQuorum: 1` needs one healthy read endpoint and is suitable only for isolated development.
-- `rpcQuorum: 2` needs a primary `readRpcUrl` and at least two `quorumRpcUrls`: three distinct origins, two of which must agree and remain healthy.
+- `rpcQuorum: 1` needs one healthy read endpoint and is available only in dry-run mode for isolated development.
+- Live execution requires `rpcQuorum: 2`, a primary `readRpcUrl`, and at least two `quorumRpcUrls`: three distinct origins, two of which must agree and remain healthy.
 - Every endpoint must report the configured chain. Use HTTPS except for loopback HTTP or the local Anvil service. Different paths on one origin are not independent providers.
 - `publicRpcUrls` supplies public broadcasts. The schema requires at least one even when private submission is selected.
 - `runtime.protocolStartBlock` is the earliest block that can contain protocol deployment or carry events. `"0"` is safe but can make the first backfill slow. Starting too late omits cumulative history and makes proof-dependent operations fail closed.

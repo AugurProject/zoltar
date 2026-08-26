@@ -30,9 +30,9 @@ function configuredSettings(paused: boolean, execute: boolean, privateKey = firs
 		...example,
 		connectivity: {
 			publicRpcUrls: ['https://public.example'],
-			quorumRpcUrls: [],
+			quorumRpcUrls: ['https://quorum-one.example', 'https://quorum-two.example'],
 			readRpcUrl: 'https://read.example',
-			rpcQuorum: 1,
+			rpcQuorum: 2,
 		},
 		deployment: {
 			openOracle: deploymentAddress,
@@ -101,6 +101,25 @@ describe('chaos dashboard configuration boundary', () => {
 		})
 		expect(candidate.settings.scheduler).toEqual({ maximumDelaySeconds: 180, minimumDelaySeconds: 90 })
 		expect(candidate.settings.strategy.enabledEcosystems).toEqual(['zoltar', 'open-oracle'])
+	})
+
+	test('rejects a dashboard transition from single-reader dry run to live execution', () => {
+		const configured = configuredSettings(true, false)
+		const singleReader = parseSettings({
+			...serializedSettings(configured),
+			connectivity: {
+				publicRpcUrls: ['https://public.example'],
+				quorumRpcUrls: [],
+				readRpcUrl: 'https://read.example',
+				rpcQuorum: 1,
+			},
+		})
+
+		expect(() => settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', true))).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', false)).settings.connectivity).toMatchObject({
+			quorumRpcUrls: [],
+			rpcQuorum: 1,
+		})
 	})
 
 	test('requires CAS-shaped pause and signer updates', () => {
