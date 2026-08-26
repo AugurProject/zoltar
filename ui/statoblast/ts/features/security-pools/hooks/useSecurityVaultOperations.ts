@@ -5,8 +5,8 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
+import { approveErc20 } from '@zoltar/ui-zoltar/protocol/tokenActions.js'
 import {
-	approveErc20,
 	depositRepToVaultToSecurityPool,
 	loadCoordinatorInitialReportFundingRequirement,
 	loadErc20Allowance,

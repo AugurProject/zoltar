@@ -1,26 +1,24 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
-import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
+import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar/app/components/OverviewPanels.js'
 import { useAppRouteEffects } from './useAppRouteEffects.js'
-import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { useDeploymentFlow } from '@zoltar/ui-zoltar/features/deployment/hooks/useDeploymentFlow.js'
-import { getDeploymentSections } from '@zoltar/ui-zoltar/features/deployment/lib/deployment.js'
+import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar/features/deployment/lib/deploymentRoute.js'
 import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '../features/markets/hooks/useMarketCreation.js'
-import { useOnchainState } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
+import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { useOpenOracleOperations } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { getOpenOracleViewOptions } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracleNavigation.js'
 import { usePriceOracleManager } from '@zoltar/ui-zoltar/features/open-oracle/hooks/usePriceOracleManager.js'
 import { useRepPrices } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useRepPrices.js'
 import { useReportingOperations } from '@zoltar/ui-zoltar/features/reporting/hooks/useReportingOperations.js'
@@ -31,58 +29,23 @@ import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/s
 import { useSecurityVaultOperations } from '../features/security-pools/hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from '../features/markets/hooks/useTradingOperations.js'
 import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
-import { getActiveSimulationController, shouldFollowWalletNetwork } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
-import { createSupportedNetworkChangeCoordinator } from '@zoltar/ui-core-shared/app/lib/supportedNetworkChange.js'
-import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { getWalletScopedAccountAddress, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionTrayState } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
-import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
-import type { DeploymentRouteContentProps, OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
+import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
 import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
-import type { GlobalTransactionPresentation, RouteTabDefinition, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
-
-const getRouteHashForRoute = (route: 'deploy' | 'open-oracle' | 'security-pools') => {
-	if (route === 'deploy') return '#/deploy'
-	if (route === 'open-oracle') return '#/open-oracle'
-	return '#/security-pools'
-}
+import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
+import { statoblastRouting } from '../lib/routing.js'
 
 export function App() {
-	const transactionState = useSignal<TransactionTrayState>(createInitialTransactionTrayState())
-	const deployNextMissingPending = useSignal(false)
-	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
-	const followSupportedWalletNetwork = shouldFollowWalletNetwork()
-	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
-	const supportedNetworkChangeCoordinator =
-		supportedNetworkChangeCoordinatorRef.current ??
-		createSupportedNetworkChangeCoordinator({
-			getInFlightCount: () => transactionState.value.inFlightCount,
-			replaceEnvironment: async canCommit => {
-				let commitAllowed = false
-				await initializeStatoblastActiveEnvironment(window.location, {
-					shouldCommit: () => {
-						commitAllowed = canCommit()
-						return commitAllowed
-					},
-				})
-				if (!commitAllowed) return false
-				setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
-				setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
-				return true
-			},
-		})
-	supportedNetworkChangeCoordinatorRef.current = supportedNetworkChangeCoordinator
 	const {
 		activeUniverseId,
 		openOracleReportId: urlOpenOracleReportId,
@@ -99,33 +62,14 @@ export function App() {
 		setSecurityPoolQuestionId,
 		setSelectedPoolView,
 	} = useUrlState()
-	const onTransactionRequested = (intent: TransactionIntent) => {
-		transactionState.value = markTransactionRequested(transactionState.value, intent)
-	}
-	const onTransactionPrepared = (preview: TransactionRequestPreview) => {
-		transactionState.value = markTransactionPrepared(transactionState.value, preview)
-	}
-	const onTransactionSubmitted = (hash: Hash) => {
-		transactionState.value = markTransactionSubmitted(transactionState.value, hash)
-	}
-	const onTransactionFailed = (message: string) => {
-		transactionState.value = markTransactionFailed(transactionState.value, message)
-	}
-	const onTransactionCanceled = () => {
-		transactionState.value = markTransactionCanceled(transactionState.value)
-	}
-	const onTransactionPresented = (presentation: GlobalTransactionPresentation) => {
-		transactionState.value = markTransactionPresented(transactionState.value, presentation)
-	}
-	const onTransactionFinished = () => {
-		transactionState.value = markTransactionFinished(transactionState.value)
-		void supportedNetworkChangeCoordinator.handleTransactionFinished()
-	}
 	const { navigate, route } = useHashRoute()
 	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
+		activeEnvironmentNonce,
 		applicationDeploymentComplete,
+		baseHookConfig,
+		canReadOnchainData,
 		changeWallet,
 		chainClockError,
 		connectWallet,
@@ -133,50 +77,45 @@ export function App() {
 		currentTimestamp,
 		deploymentStatusError,
 		deploymentStatuses,
+		disconnectWallet,
 		environmentBootstrapError,
 		environmentReady,
 		errorMessages: onchainErrorMessages,
-		readBackendMessage,
-		readBackendValidated,
-		readBackendStatus,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
-		isManagingWallet,
 		isLoadingDeploymentStatuses,
+		isManagingWallet,
+		isOnActiveAppChain,
 		isRefreshing,
+		readBackendMessage,
+		readBackendReady,
+		readBackendStatus,
 		refreshState,
+		setActiveEnvironmentNonce,
 		setDeploymentStatuses,
-		disconnectWallet,
 		switchNetwork,
+		transactionTray,
 		walletBootstrapComplete,
-	} = useOnchainState(
-		{
-			activeEnvironmentNonce,
-			enableChainClock: route !== 'deploy',
-			...(followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
-		},
+		walletScopedAccountAddress,
+		walletScopedHookConfig,
+	} = useProtocolOnchainRuntime({
+		enableChainClock: route !== 'deploy',
 		onchainStateDependencies,
-	)
-	const readBackendReady = readBackendValidated && readBackendMessage === undefined
-	const canReadOnchainData = environmentReady && readBackendReady && hasLoadedDeploymentStatuses
-	const isOnActiveAppChain = isSupportedAppChain(accountState.chainId)
-	const walletScopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
-	const baseHookConfig = {
-		accountAddress: accountState.address,
-		onTransactionCanceled,
-		onTransactionFailed,
-		onTransactionFinished,
-		onTransactionPresented,
-		onTransactionPrepared,
-		onTransactionRequested,
-		onTransactionSubmitted,
-		refreshState,
-	}
-	const walletScopedHookConfig = {
-		...baseHookConfig,
-		accountAddress: walletScopedAccountAddress,
-	}
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+		replaceEnvironment: async canCommit => {
+			let commitAllowed = false
+			await initializeStatoblastActiveEnvironment(window.location, {
+				shouldCommit: () => {
+					commitAllowed = canCommit()
+					return commitAllowed
+				},
+			})
+			return commitAllowed
+		},
+		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
+	})
+	const { transactionState } = transactionTray
+	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
@@ -214,35 +153,7 @@ export function App() {
 		withdrawRep,
 	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
-	const {
-		approveToken1,
-		approveToken2,
-		cancelWithdrawalBalanceCheck,
-		createOpenOracleGame,
-		disputeReport,
-		loadOracleReport,
-		loadingOpenOracleCreate,
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleDisputeSubmission,
-		openOracleError,
-		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
-		setOpenOracleCreateForm,
-		setOpenOracleForm,
-		settleReport,
-		withdrawBalance,
-	} = useOpenOracleOperations({
+	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: route === 'open-oracle' && canReadOnchainData,
 		onReportSettled: async () => {
@@ -341,7 +252,6 @@ export function App() {
 	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
-	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessages = [deploymentErrorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
 	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
 	const showApplicationDeploymentWarning = applicationDeploymentMissing
@@ -380,9 +290,9 @@ export function App() {
 		walletBootstrapComplete,
 	}
 	const tabs: RouteTabDefinition[] = [
-		{ hash: getRouteHashForRoute('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: getRouteHashForRoute('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
-		{ hash: getRouteHashForRoute('deploy'), label: commonCopy.deploy, route: 'deploy' },
+		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+		{ hash: statoblastRouting.getHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
+		{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 	]
 	const tabNavigationProps = {
 		route,
@@ -407,15 +317,6 @@ export function App() {
 		if (!nextSecurityPoolAddress.startsWith('0x') || nextSecurityPoolAddress.length !== 42) return
 		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
-	}
-	const onDeployNextMissing = async () => {
-		if (deployNextMissingPending.value) return
-		deployNextMissingPending.value = true
-		try {
-			await deployNextMissing()
-		} finally {
-			deployNextMissingPending.value = false
-		}
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
@@ -462,21 +363,17 @@ export function App() {
 		urlOpenOracleReportId,
 		walletBootstrapComplete,
 	})
-	const deployRouteContentProps: DeploymentRouteContentProps = {
+	const deployRouteContentProps = buildDeploymentRouteContentProps({
 		accountAddress: accountState.address,
-		busyStepId,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
 		deploymentStatusError,
-		deployNextMissingPending: deployNextMissingPending.value,
-		deploymentSections,
 		deploymentStatuses,
+		flow: deploymentFlow,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
-		deploymentCompleteHref: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
-		onDeploy: deployStep,
-		onDeployNextMissing: () => void onDeployNextMissing(),
+		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
-	}
+	})
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
 		onActiveUniverseChange: setActiveUniverseId,
@@ -688,11 +585,11 @@ export function App() {
 		},
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
+		...openOracleSectionState,
 		accountState,
 		activeView: activeOpenOracleView,
 		environmentReady: canReadOnchainData,
 		environmentRefreshKey: activeEnvironmentNonce,
-		loadingOpenOracleCreate,
 		onActiveViewChange: view => setOpenOracleView(view),
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
@@ -704,22 +601,7 @@ export function App() {
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
-		openOracleActiveAction,
-		openOracleActiveWithdrawalBalance,
-		openOracleCreateForm,
-		openOracleCreateFieldErrors,
-		openOracleError,
-		openOracleDisputeSubmission,
 		openOracleForm,
-		openOracleReportLookupState,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-		openOracleResult,
-		openOracleWithdrawalBalanceChecking,
-		openOracleWithdrawalReviewMessage,
-		openOracleWithdrawableBalances,
-		openOracleWithdrawableBalancesError,
-		openOracleWithdrawableBalancesLoading,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
 	if (route === 'security-pools') {
@@ -729,25 +611,14 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
-					{ href: buildRouteHref(getRouteHashForRoute('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
-		routeSubNavigation = (
-			<RouteSubNavigation
-				ariaLabel={appCopy.oracleReportViews}
-				value={activeOpenOracleView}
-				onChange={view => setOpenOracleView(view)}
-				options={[
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
-					{ href: buildRouteHref(getRouteHashForRoute('open-oracle'), writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
-				]}
-			/>
-		)
+		routeSubNavigation = <RouteSubNavigation ariaLabel={appCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch())} />
 	}
 	const transactionRouteKey = (() => {
 		if (route === 'security-pools') return `${route}:${activeSecurityPoolsView}`
@@ -756,25 +627,18 @@ export function App() {
 	})()
 
 	return (
-		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
-			<ChainTimestampContext.Provider value={currentTimestamp}>
-				<main>
-					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />
-					<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />
-					<AppHeaderShell overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
-					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
-						<GlobalTransactionTray activeUniverseId={activeUniverseId} routeKey={transactionRouteKey} transaction={transactionState.value.active} />
-
-						<div id='app-content' tabIndex={-1}>
-							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
-								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-									<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
-								</fieldset>
-							</TransactionActionButtonLockProvider>
-						</div>
-					</GlobalTransactionPresentationProvider>
-				</main>
-			</ChainTimestampContext.Provider>
-		</ChainBlockNumberContext.Provider>
+		<ProtocolAppFrame
+			activeUniverseId={activeUniverseId}
+			currentBlockNumber={currentBlockNumber}
+			currentTimestamp={currentTimestamp}
+			header={<AppHeaderShell overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />}
+			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+			notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />}
+			routeContentDisabled={isRouteContentDisabled}
+			transactionRouteKey={transactionRouteKey}
+			transactionState={transactionState.value}
+		>
+			<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+		</ProtocolAppFrame>
 	)
 }

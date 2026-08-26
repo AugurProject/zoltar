@@ -1,5 +1,6 @@
 import * as commonCopy from '../copy/common.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
+import { abbreviateAddress } from '../lib/address.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 
@@ -8,11 +9,6 @@ type AddressValueProps = {
 	className?: string
 	copyable?: boolean
 	responsiveAbbreviation?: boolean
-}
-
-function abbreviateAddress(address: string) {
-	if (address.length <= 13) return address
-	return `${address.slice(0, 8)}…${address.slice(-6)}`
 }
 
 function AddressText({ address, responsiveAbbreviation }: { address: string; responsiveAbbreviation: boolean }) {

@@ -1,7 +1,6 @@
 import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/shared/ethereum'
-import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
+import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from '../injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from './errors.js'
-import { tryParseAddressInput } from './inputs.js'
 import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
@@ -118,7 +117,7 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 }
 
 export function normalizeAccount(value: unknown): Address | undefined {
-	return typeof value === 'string' ? tryParseAddressInput(value) : undefined
+	return normalizeInjectedAccount(value)
 }
 
 function isProviderRequestError(error: unknown) {
@@ -127,28 +126,24 @@ function isProviderRequestError(error: unknown) {
 
 async function readProviderAccounts(ethereum: InjectedEthereum | undefined) {
 	if (ethereum === undefined) return []
-	let result: unknown
 	try {
-		result = await ethereum.request({ method: 'eth_accounts' })
+		return await readInjectedAccounts(ethereum)
 	} catch (error) {
 		if (!isProviderRequestError(error)) throw error
 		return []
 	}
-	if (!Array.isArray(result)) return []
-	return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 }
 
 async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	if (ethereum === undefined) throw new Error('Unable to verify wallet network because no injected wallet was found.')
 	let result: unknown
 	try {
-		result = await ethereum.request({ method: 'eth_chainId' })
+		result = await ethereum.request({ method: 'eth_chainId', params: [] })
 	} catch (error) {
 		if (!isProviderRequestError(error)) throw error
 		throw new Error('Unable to verify wallet network.')
 	}
-	if (typeof result !== 'string') throw new Error('Wallet returned an invalid chain ID.')
-	return result
+	return parseInjectedChainId(result)
 }
 
 export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUrl }: { profile?: NetworkProfile; rpcUrl?: string } = {}): ChainBackend {
@@ -208,9 +203,7 @@ export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUr
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			const result = await ethereum.request({ method: 'eth_requestAccounts' })
-			if (!Array.isArray(result)) return []
-			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
+			return await readInjectedAccounts(ethereum, 'eth_requestAccounts')
 		},
 		requestAccountSelection: async () => {
 			const ethereum = getProvider()
@@ -243,7 +236,7 @@ export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUr
 		switchNetwork: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
-			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: profile.chainIdHex }] })
+			await switchInjectedChain(ethereum, profile.chainIdHex)
 		},
 	}
 }

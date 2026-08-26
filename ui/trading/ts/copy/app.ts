@@ -6,26 +6,32 @@ export const markets = 'Markets'
 export const market = 'Market'
 export const liquidity = 'Liquidity'
 export const portfolio = 'Portfolio'
-export const deploy = 'Deploy'
+export { connectWallet, deploy, eth, rep, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
 export const securityPool = 'Security pool'
+export const pairNotCreated = 'Not created'
 export const notFound = 'Not found'
 export const pageNotFound = 'Page not found'
 export const returnToMarkets = 'Return to markets'
 export const backToMarkets = '← Markets'
 export const disconnectWallet = 'Disconnect wallet'
-export const connectWallet = 'Connect wallet'
+export const selectUniverse = 'Select universe'
+export const connectedWalletBalances = 'Connected wallet balances'
+export const loadingBalances = 'Loading balances…'
+export const connectedAccount = 'Connected account'
+export const walletBalances = 'Wallet balances'
+export const balancesUnavailable = 'Balances unavailable'
+const walletBalanceReadFailed = 'wallet balance read failed'
+export const loadingWalletBalances = 'Loading wallet ETH and current-universe REP balances'
+export const genesisUniverse = 'Genesis universe'
 export const positionsByPool = 'Positions by SecurityPool'
 export const standaloneLiveClient = 'Standalone live client'
 export const contractsUnavailable = 'Trading contracts unavailable'
 export const checkingContracts = 'Checking deterministic trading contracts…'
 export const poolDataUnavailable = 'Pool data unavailable'
-export const separateInvalidAccounting = 'Separate INVALID accounting'
-export const liquidityDescription = 'LP tokens represent only YES and NO reserves.'
-export const removalPreview = 'Removal preview'
 export const projectGuide = 'Project guide'
 export const marketGuide = 'How the market works'
-export const deploymentDescription = 'Deploy and verify the shared deterministic contracts that back the application.'
+export { deploymentDescription } from '@zoltar/ui-core-shared/copy/app.js'
 export const marketGuideSteps = [
 	{
 		number: '01',
@@ -60,4 +66,16 @@ export function documentTitle(pageTitle: string) {
 
 export function disconnectWalletLabel(account: string) {
 	return `${disconnectWallet} ${account}`
+}
+
+export function walletBalanceError(errorLabel: string | undefined, error: string | undefined) {
+	return `${errorLabel ?? balancesUnavailable}: ${error ?? walletBalanceReadFailed}`
+}
+
+export function universeLabel(id: string) {
+	return `Universe ${id}`
+}
+
+export function openSecurityPoolLabel(address: string) {
+	return `Open security pool ${address}`
 }

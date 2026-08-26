@@ -22,6 +22,19 @@ export type WriteOperationsParameters = {
 	refreshState: RefreshState
 }
 
+export type TransactionLifecycleParameters = {
+	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
+	onTransactionFinished: WriteOperationsParameters['onTransactionFinished']
+	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
+	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
+	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
+	onTransactionSubmitted: WriteOperationsParameters['onTransactionSubmitted']
+}
+
+export type TransactionCancellationParameters = Pick<WriteOperationsParameters, 'onTransactionCanceled'>
+
+export type WriteOperationContext = Pick<WriteOperationsParameters, 'accountAddress' | 'refreshState'>
+
 export type AccountState = {
 	address: Address | undefined
 	chainId: string | undefined

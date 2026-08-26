@@ -1,5 +1,4 @@
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/shared/ethereum'
-import type { InjectedEthereum } from '../injectedEthereum.js'
 import type { ChainBackend, WriteClient } from '../lib/chainBackend.js'
 import { normalizeAccount } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
@@ -7,14 +6,10 @@ import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
+import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
-
-type RequestArguments = {
-	method: string
-	params?: unknown
-}
 
 type PendingRequest = {
 	reject: (error: Error) => void
@@ -81,15 +76,6 @@ function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
 			worker.onmessage = handler
 		},
 		terminate: () => worker.terminate(),
-	}
-}
-
-function createSimulationProvider(requestRpc: (parameters: RequestArguments) => Promise<unknown>): InjectedEthereum {
-	const request = (async parameters => await requestRpc(parameters as RequestArguments)) as InjectedEthereum['request']
-	return {
-		on: () => undefined,
-		removeListener: () => undefined,
-		request,
 	}
 }
 
@@ -176,7 +162,7 @@ export async function createSimulationBackend(
 			type: 'call',
 		})
 
-	const requestRpc = async (parameters: RequestArguments) =>
+	const requestRpc = async (parameters: SimulationProviderRequest) =>
 		await requestFromWorker<unknown>({
 			method: parameters.method,
 			params: parameters.params,
@@ -263,7 +249,11 @@ export async function createSimulationBackend(
 		return currentState
 	}
 
-	const provider = createSimulationProvider(requestRpc)
+	const provider = createSimulationProvider({
+		getChainId: () => profile.chainIdHex,
+		getSelectedAccount: () => requireState().selectedAccount,
+		requestRpc,
+	})
 	const createBaseWriteClient = (accountAddress: Address) =>
 		createWalletClient({
 			account: accountAddress,

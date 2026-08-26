@@ -1,25 +1,25 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { App, buildLiveUniverseOptions, compactUniqueUniverseIds, currentRoute, routeOwnsLiveWallet, tradingDocumentTitle, UniverseSelector, WalletSummary, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../app/App.js'
-import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/LiveTrading.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { App, currentRoute, tradingDocumentTitle } from '../../app/App.js'
+import { UniverseSelector } from '../../components/UniverseSelector.js'
+import { WalletSummary } from '../../components/WalletSummary.js'
+import { buildLiveUniverseOptions, compactUniqueUniverseIds } from '../../lib/universeOptions.js'
+import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
+import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 describe('universe selector', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/markets').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
+		url: 'http://localhost/#/markets',
 	})
 
 	test('selects one universe from the top-level control', async () => {
@@ -65,6 +65,21 @@ describe('universe selector', () => {
 		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
 		expect(document.title).toBe(tradingDocumentTitle('not-found'))
 		expect(document.title).toBe('Not found · Statoblast trading')
+	})
+
+	test('accepts only addressed security-pool routes', () => {
+		window.history.replaceState(undefined, '', '/#/security-pool')
+		expect(currentRoute()).toBe('not-found')
+		const address = `0x${'44'.repeat(20)}`
+		window.history.replaceState(undefined, '', `/#/security-pool/${address}`)
+		expect(currentRoute()).toBe(`security-pool/${address}`)
+		window.history.replaceState(undefined, '', `/#security-pool/${address}`)
+		expect(currentRoute()).toBe(`security-pool/${address}`)
+	})
+
+	test('preserves slashless top-level route bookmarks', () => {
+		window.history.replaceState(undefined, '', '/#markets')
+		expect(currentRoute()).toBe('markets')
 	})
 
 	test('uses Statoblast branding without the removed footer disclaimers', async () => {

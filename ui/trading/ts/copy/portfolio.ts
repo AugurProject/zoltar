@@ -1,0 +1,26 @@
+export const yes = 'YES'
+export const no = 'NO'
+export const invalid = 'INVALID'
+export const lp = 'LP'
+export const lpTokens = 'LP tokens'
+export const lpYesClaim = 'LP YES claim'
+export const lpNoClaim = 'LP NO claim'
+export const claimCoveredByInvalid = 'Claim covered by separate INVALID'
+export const maximumInsuredYesExit = 'Maximum insured YES exit'
+export const maximumInsuredNoExit = 'Maximum insured NO exit'
+export const shareApproval = 'Share approval'
+export const routerApproved = 'Router approved'
+export const approvalRequiredForExit = 'Approval required for exit'
+export const lpAllowance = 'LP allowance'
+export const invalidOwnershipNotice = 'Transferring LP tokens does not transfer INVALID.'
+export const disconnectedGuidance = 'Connect a wallet to load the positions for these SecurityPools.'
+export const loadingPoolBalances = 'Loading balances separately for each SecurityPool…'
+export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
+export const noPortfolioBalances = 'No YES, NO, INVALID, or LP balance was found in the discovered SecurityPools.'
+export const securityPoolPosition = 'SecurityPool position'
+export const balanceUnavailable = 'Balance unavailable'
+export const securityPool = 'Security pool'
+
+export function poolBalancesUnavailable(message: string) {
+	return `This SecurityPool’s balances could not be loaded: ${message}`
+}

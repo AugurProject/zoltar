@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { buildRouteHref, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '../lib/routing.js'
+import { buildRouteHref, createRouting, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, normalizeRouteHash, parseRouteHash } from '../lib/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { installTestRouting } from './testUtils/testRouting.js'
 
@@ -38,6 +38,40 @@ describe('routing', () => {
 
 		window.location.hash = '#/does-not-exist?simulate=1'
 		expect(getCurrentRoute()).toBe('not-found')
+	})
+
+	test('resolves parameterized routes with a configured matcher', () => {
+		installRouting({
+			defaultRoute: 'markets',
+			routes: [
+				{ hash: '#/markets', name: 'markets' },
+				{
+					match: routeHash => {
+						const match = /^#\/market\/(\d+)$/.exec(routeHash)
+						return match === null ? undefined : `market/${match[1]}`
+					},
+				},
+			],
+		})
+		window.location.hash = '#/market/42'
+
+		expect(getCurrentRoute()).toBe('market/42')
+		window.location.hash = '#/market'
+		expect(getCurrentRoute()).toBe('not-found')
+	})
+
+	test('normalizes route hashes and resolves configured aliases through a typed router', () => {
+		const routing = createRouting({
+			defaultRoute: 'markets',
+			routes: [
+				{ aliases: ['#/developer'], hash: '#/markets', name: 'markets' },
+				{ hash: '#/portfolio', name: 'portfolio' },
+			] as const,
+		})
+		expect(parseRouteHash('#/markets?simulate=1')).toEqual({ routeHash: '#/markets', search: '?simulate=1' })
+		expect(normalizeRouteHash('markets?simulate=1')).toBe('#/markets?simulate=1')
+		expect(routing.resolve('#/developer?simulate=1')).toBe('markets')
+		expect(routing.getHash('portfolio')).toBe('#/portfolio')
 	})
 
 	test('ensureRouteHash seeds default hash when blank', () => {

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readCoreSharedCssSource } from '@zoltar/ui-core-shared/tests/testUtils/coreSharedCss.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -35,7 +35,7 @@ describe('LifecycleStageBanner', () => {
 		expect(document.body.querySelector('.lifecycle-stage-banner.flat.success')).not.toBeNull()
 		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner.flat')).not.toBeNull()
 
-		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+		const cssSource = readCoreSharedCssSource()
 		const baseFlatRuleIndex = cssSource.indexOf('.lifecycle-stage-banner.flat {')
 		const warningFlatRuleIndex = cssSource.indexOf('.warning-surface.lifecycle-stage-banner.flat {')
 		const criticalFlatRuleIndex = cssSource.indexOf('.lifecycle-stage-banner.flat.critical {')
