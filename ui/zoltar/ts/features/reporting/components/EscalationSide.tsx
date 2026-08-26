@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as forkAuctionCopy from '../../../copy/reportingEscalation.js'
 import type { JSX } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'

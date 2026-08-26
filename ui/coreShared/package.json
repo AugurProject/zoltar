@@ -44,6 +44,8 @@
 	"exports": {
 		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
 		"./tests/testUtils/domEnvironment.js": "./ts/tests/testUtils/domEnvironment.ts",
+		"./tests/testUtils/coreSharedCss.js": "./ts/tests/testUtils/coreSharedCss.ts",
+		"./tests/testUtils/domTestLifecycle.js": "./ts/tests/testUtils/domTestLifecycle.ts",
 		"./tests/testUtils/fakeBackend.js": "./ts/tests/testUtils/fakeBackend.ts",
 		"./tests/testUtils/protocolTestSupport.js": "./ts/tests/testUtils/protocolTestSupport.ts",
 		"./tests/testUtils/queries.js": "./ts/tests/testUtils/queries.ts",

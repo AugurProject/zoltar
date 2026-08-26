@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { readFileSync } from 'node:fs'
+import { readCoreSharedCssSource } from '@zoltar/ui-core-shared/tests/testUtils/coreSharedCss.js'
 import { CollateralizationMetricField } from '../../../features/security-pools/components/CollateralizationMetricField.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -101,7 +101,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('keeps success and danger color rules specific enough for every collateralization container', () => {
-		const cssSource = readFileSync('ui/coreShared/css/index.css', 'utf8')
+		const cssSource = readCoreSharedCssSource()
 
 		for (const selector of ['.workflow-metric-grid strong.metric-value-success', '.workflow-question-grid strong.metric-value-success', '.workflow-vault-grid strong.metric-value-success', '.entity-metric strong.metric-value-success', '.selected-pool-context-grid strong.metric-value-success']) {
 			expect(cssSource).toContain(selector)

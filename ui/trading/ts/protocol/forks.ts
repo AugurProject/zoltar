@@ -1,80 +1,12 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Abi, type Address, type PublicClient } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/scalarOutcome'
+import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { LiveMarket } from './live.js'
 
-const universeComponents = [
-	{ name: 'forkTime', type: 'uint256' },
-	{ name: 'forkQuestionId', type: 'uint256' },
-	{ name: 'forkingOutcomeIndex', type: 'uint256' },
-	{ name: 'reputationToken', type: 'address' },
-	{ name: 'parentUniverseId', type: 'uint248' },
-] as const
-
-const poolForkAbi = [
-	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'questionData', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-] as const satisfies Abi
-
-const zoltarForkAbi = [
-	{ type: 'function', name: 'universes', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: universeComponents },
-	{
-		type: 'function',
-		name: 'getDeployedChildUniverses',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'universeId', type: 'uint248' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		outputs: [
-			{ name: 'outcomeIndexes', type: 'uint256[]' },
-			{ name: 'childUniverseIds', type: 'uint248[]' },
-			{ name: 'childUniverses', type: 'tuple[]', components: universeComponents },
-		],
-	},
-] as const satisfies Abi
-
-const forkQuestionAbi = [
-	{
-		type: 'function',
-		name: 'questions',
-		stateMutability: 'view',
-		inputs: [{ name: 'questionId', type: 'uint256' }],
-		outputs: [
-			{ name: 'title', type: 'string' },
-			{ name: 'description', type: 'string' },
-			{ name: 'startTime', type: 'uint48' },
-			{ name: 'endTime', type: 'uint48' },
-			{ name: 'numTicks', type: 'uint120' },
-			{ name: 'displayValueMin', type: 'int256' },
-			{ name: 'displayValueMax', type: 'int256' },
-			{ name: 'answerUnit', type: 'string' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'getOutcomeLabels',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'questionId', type: 'uint256' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'numberOfEntries', type: 'uint256' },
-		],
-		outputs: [{ type: 'string[]' }],
-	},
-	{
-		type: 'function',
-		name: 'getAnswerOptionName',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'questionId', type: 'uint256' },
-			{ name: 'answer', type: 'uint256' },
-		],
-		outputs: [{ type: 'string' }],
-	},
-] as const satisfies Abi
-
-const shareForkAbi = [{ type: 'function', name: 'canonicalPoolByUniverse', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'address' }] }] as const satisfies Abi
+const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
+const zoltarForkAbi = Zoltar_Zoltar.abi
+const forkQuestionAbi = ZoltarQuestionData_ZoltarQuestionData.abi
+const shareForkAbi = statoblast_tokens_ShareToken_ShareToken.abi
 
 export type ForkTarget = Readonly<{
 	outcomeIndex: bigint

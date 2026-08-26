@@ -1,39 +1,32 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let restoreRouting: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		restoreRouting = installTestRouting()
+	const { trackRendered } = installDomTestLifecycle({
+		afterTest: () => {
+			restoreRouting?.()
+			restoreRouting = undefined
+		},
 	})
 
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		restoreRouting?.()
-		restoreRouting = undefined
+	beforeEach(() => {
+		restoreRouting = installTestRouting()
 	})
 
 	test('does not render when there is no submitted transaction', async () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={undefined} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(renderedComponent.container.textContent).toBe('')
 	})
@@ -50,7 +43,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('status')).not.toBeNull()
@@ -72,7 +65,7 @@ describe('GlobalTransactionTray', () => {
 		if (lifecyclePresentations.some(presentation => presentation === undefined)) throw new Error('Transaction lifecycle presentation should be defined')
 
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray activeUniverseId={7n} transaction={requested.active} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 		expect(within(document.body).queryByText('Transaction universe mismatch')).toBeNull()
 		await act(() => {
 			render(<GlobalTransactionTray activeUniverseId={8n} transaction={{ ...success, universeId: undefined }} />, renderedComponent.container)
@@ -96,7 +89,7 @@ describe('GlobalTransactionTray', () => {
 				<GlobalTransactionTray transaction={{ dismissKey: 'reserved-space', title: 'Question Created', tone: 'success' }} />
 			</main>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(document.documentElement.style.scrollPaddingBottom).not.toBe('')
 		await act(() => {
@@ -121,7 +114,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Security Pool Address')).not.toBeNull()
@@ -140,7 +133,7 @@ describe('GlobalTransactionTray', () => {
 				))}
 			</>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const identifierButtons = within(document.body).getAllByRole('button', { name: `Copy identifier ${questionId}` })
 		expect(identifierButtons).toHaveLength(2)
@@ -159,7 +152,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
@@ -179,7 +172,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Creating Question')).not.toBeNull()
@@ -198,7 +191,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Awaiting Wallet')).not.toBeNull()
@@ -212,7 +205,7 @@ describe('GlobalTransactionTray', () => {
 	test('shows a terminal failure after a wallet-awaiting transaction resolves', async () => {
 		const dismissKey = 'transaction-request-wallet-terminal'
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ dismissKey, title: 'Creating Question', tone: 'awaiting-wallet' }} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 
@@ -235,7 +228,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Preparing')).not.toBeNull()
@@ -255,7 +248,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('alert')).not.toBeNull()
@@ -274,7 +267,7 @@ describe('GlobalTransactionTray', () => {
 			tone: 'error' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
@@ -284,7 +277,7 @@ describe('GlobalTransactionTray', () => {
 		})
 
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = rerenderedComponent.cleanup
+		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByRole('alert')).not.toBeNull()
 		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
 	})
@@ -301,7 +294,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
@@ -319,7 +312,7 @@ describe('GlobalTransactionTray', () => {
 			tone: 'warning' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
 		await act(() => {
@@ -332,7 +325,7 @@ describe('GlobalTransactionTray', () => {
 		})
 
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = rerenderedComponent.cleanup
+		trackRendered(rerenderedComponent)
 		expect(rerenderedComponent.container.textContent).toBe('')
 	})
 
@@ -357,12 +350,11 @@ describe('GlobalTransactionTray', () => {
 		expect(completedTransaction.operationKey).toBe('transaction-request-1')
 
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 		await act(() => {
 			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Dismiss' }))
 		})
 		await renderedComponent.cleanup()
-		cleanupRenderedComponent = undefined
 
 		const remountedCompletion = await renderIntoDocument(<GlobalTransactionTray transaction={completedTransaction} />)
 		expect(remountedCompletion.container.textContent).toBe('')
@@ -372,7 +364,7 @@ describe('GlobalTransactionTray', () => {
 		if (freshRequestFailure === undefined) throw new Error('Fresh request failure should be active')
 		expect(freshRequestFailure.operationKey).toBe('transaction-request-1')
 		const freshRequestTray = await renderIntoDocument(<GlobalTransactionTray transaction={freshRequestFailure} />)
-		cleanupRenderedComponent = freshRequestTray.cleanup
+		trackRendered(freshRequestTray)
 		expect(within(freshRequestTray.container).getByRole('alert')).not.toBeNull()
 		expect(within(freshRequestTray.container).getByText('Action canceled in wallet.')).not.toBeNull()
 	})
@@ -384,7 +376,7 @@ describe('GlobalTransactionTray', () => {
 			tone: 'success' as const,
 		})
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		for (let index = 0; index <= 100; index += 1) {
 			await act(() => {
@@ -395,14 +387,13 @@ describe('GlobalTransactionTray', () => {
 			})
 		}
 		await renderedComponent.cleanup()
-		cleanupRenderedComponent = undefined
 
 		const evictedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(0)} />)
 		expect(within(evictedTransaction.container).getByText('Completed transaction 0')).not.toBeNull()
 		await evictedTransaction.cleanup()
 
 		const rememberedTransaction = await renderIntoDocument(<GlobalTransactionTray transaction={createTransaction(100)} />)
-		cleanupRenderedComponent = rememberedTransaction.cleanup
+		trackRendered(rememberedTransaction)
 		expect(rememberedTransaction.container.textContent).toBe('')
 	})
 
@@ -414,7 +405,7 @@ describe('GlobalTransactionTray', () => {
 			tone: 'pending' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
 		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
@@ -424,7 +415,7 @@ describe('GlobalTransactionTray', () => {
 		})
 
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={transaction} />)
-		cleanupRenderedComponent = rerenderedComponent.cleanup
+		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
 		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
 	})
@@ -432,7 +423,7 @@ describe('GlobalTransactionTray', () => {
 	test('shows terminal success after a pending transaction resolves', async () => {
 		const hash = '0x6234000000000000000000000000000000000000000000000000000000000000' as const
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 
@@ -453,7 +444,7 @@ describe('GlobalTransactionTray', () => {
 			tone: 'success' as const,
 		}
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={transaction} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		expect(document.body.querySelector('.global-transaction-notice-compact')).toBeNull()
 
@@ -473,7 +464,7 @@ describe('GlobalTransactionTray', () => {
 	test('keeps the submission route as the origin when navigation happens before confirmation', async () => {
 		const hash = '0x8234000000000000000000000000000000000000000000000000000000000000' as const
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray routeKey='zoltar:create' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		await act(() => {
 			render(<GlobalTransactionTray routeKey='zoltar:fork' transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />, renderedComponent.container)
@@ -501,7 +492,7 @@ describe('GlobalTransactionTray', () => {
 				}}
 			/>,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(renderedComponent)
 
 		await act(() => {
 			render(

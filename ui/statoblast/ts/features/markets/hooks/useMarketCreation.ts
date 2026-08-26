@@ -12,28 +12,22 @@ import { createMarketParameters } from '../lib/marketCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
-import type { MarketFormState, WriteOperationsParameters } from '../../../types/app.js'
+import type { MarketFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { useZoltarOperations } from '@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js'
 
-type UseMarketCreationParameters = {
-	accountAddress: Address | undefined
-	activeUniverseId: bigint
-	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
-	autoLoadInitialData: boolean
-	deploymentStatuses: DeploymentStatus[]
-	environmentRefreshKey: number
-	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
-	onTransactionFinished: () => void
-	onTransactionPresented: WriteOperationsParameters['onTransactionPresented']
-	onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']
-	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: WriteOperationsParameters['refreshState']
-}
+type UseMarketCreationParameters = TransactionLifecycleParameters &
+	WriteOperationContext & {
+		activeUniverseId: bigint
+		activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
+		autoLoadInitialData: boolean
+		deploymentStatuses: DeploymentStatus[]
+		environmentRefreshKey: number
+	}
 
 export type UseMarketCreationDependencies = {
-	createMarket: (accountAddress: Address, callbacks: { onTransactionPrepared?: WriteOperationsParameters['onTransactionPrepared']; onTransactionSubmitted: (hash: Hash) => void }, parameters: ReturnType<typeof createMarketParameters>) => Promise<MarketCreationResult & { hash: Hash }>
+	createMarket: (accountAddress: Address, callbacks: CreateWriteClientCallbacks, parameters: ReturnType<typeof createMarketParameters>) => Promise<MarketCreationResult & { hash: Hash }>
 }
 
 const defaultUseMarketCreationDependencies: UseMarketCreationDependencies = {

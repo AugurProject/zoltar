@@ -1,13 +1,12 @@
 import { useSignal } from '@preact/signals'
-import { bigintToSafeNumber, zeroAddress, type Abi, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, isOpenOracleReportMissingError, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, readOptionalMulticall, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/index.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import {
 	deriveOpenOracleDisputeSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
@@ -22,7 +21,7 @@ import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
 import { parseAddressInput, parseReportIdInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../lib/formDefaults.js'
 import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
-import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
@@ -33,19 +32,27 @@ import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsPar
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleReportLookupState } from '../../types.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
+import { getOpenOracleFailureTitle, getOpenOraclePendingTitle, getOpenOracleSuccessTitle } from '../lib/openOracleActionTitles.js'
+import {
+	getRefreshedOpenOracleApprovalAmount,
+	readCreateTokenDecimals,
+	toBigIntReadResult,
+	toReadError,
+	type LoadedOracleReportResult,
+	type OpenOracleRawReadResult,
+	type OpenOracleReadClient,
+	type OpenOracleTokenAccessLoadResult,
+	type OptionalReadResult,
+	type RefreshOpenOracleTokenAccessOptions,
+	type TokenAccessLoadResult,
+} from '../lib/openOracleTokenAccess.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
 	onReportSettled?: () => Promise<void> | void
 }
 
-type OpenOracleReadClient = {
-	getBalance: (parameters: { address: Address }) => Promise<bigint>
-	readContract: (parameters: { abi: Abi; address: Address; args: readonly unknown[]; functionName: string }) => Promise<unknown>
-}
-
 type OpenOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-type OpenOracleRawReadResult = { error?: unknown; result?: unknown; status: 'failure' | 'success' }
 
 export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProductionWriteClient> = {
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveToken1' | 'approveToken2') => Promise<OpenOracleActionResult>
@@ -77,91 +84,6 @@ const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDepende
 	readOptionalMulticall: async contracts => await readOptionalMulticall(createConnectedReadClient(), contracts),
 	settleOracleReport: async (client, openOracleAddress, reportId) => await settleOracleReport(client, openOracleAddress, reportId),
 	withdrawOpenOracleBalance: async (client, openOracleAddress, token, amount, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, amount, recipient),
-}
-
-function parseTokenDecimals(value: unknown) {
-	let decimals: number | undefined
-	if (typeof value === 'bigint') decimals = bigintToSafeNumber(value, 'Token decimals')
-	if (typeof value === 'number') decimals = value
-	return decimals !== undefined && Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : undefined
-}
-
-type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
-
-async function readCreateTokenDecimals(readClient: OpenOracleReadClient, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
-	try {
-		const value = await readClient.readContract({ abi: ABIS.mainnet.erc20, address, args: [], functionName: 'decimals' })
-		const decimals = parseTokenDecimals(value)
-		return decimals === undefined ? { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' } : { decimals, status: 'success' }
-	} catch (error) {
-		if (!isRecoverableContractReadError(error)) throw error
-		return { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' }
-	}
-}
-
-type TokenAccessLoadResult = {
-	amount: bigint | undefined
-	error: string | undefined
-}
-
-type OpenOracleTokenAccessLoadResult = {
-	token1ApprovalResult: TokenApprovalState
-	token2ApprovalResult: TokenApprovalState
-	token1BalanceResult: TokenAccessLoadResult
-	token2BalanceResult: TokenAccessLoadResult
-}
-
-type LoadedOracleReportResult = {
-	details: OpenOracleReportDetails
-	reportId: bigint
-}
-
-type RefreshOpenOracleTokenAccessOptions = {
-	preserveExisting?: boolean
-}
-
-function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: 'base token' | 'quote token' }) {
-	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(`No ${tokenLabel} approval is required for the refreshed report`)
-	if (requirement.approvedAmount === undefined) {
-		throw new Error(
-			formatTokenApprovalUnavailableMessage({
-				actionLabel: 'submitting this approval',
-				reason: approvalError,
-				tokenLabel,
-			}),
-		)
-	}
-	if (requirement.hasSufficientApproval) throw new Error(`The ${tokenLabel} approval is already sufficient for the refreshed report`)
-	const approvalAmount = explicitAmount ?? requirement.targetAmount
-	if (approvalAmount === undefined) throw new Error(`No ${tokenLabel} approval amount is required for the refreshed report`)
-	if (approvalAmount <= requirement.approvedAmount) throw new Error(`The ${tokenLabel} approval must increase the current allowance`)
-	if (approvalAmount < requirement.requiredAmount) throw new Error(`The ${tokenLabel} approval must cover the refreshed dispute requirement`)
-	return approvalAmount
-}
-
-type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
-
-function toReadError(error: unknown) {
-	return error instanceof Error ? error : new Error('Unknown read error')
-}
-
-function toBigIntReadResult(result: OpenOracleRawReadResult): OptionalReadResult<bigint> {
-	if (result.status === 'success') {
-		if (typeof result.result !== 'bigint') {
-			return {
-				error: new Error('Unexpected non-bigint OpenOracle token access value'),
-				status: 'failure',
-			}
-		}
-		return {
-			result: result.result,
-			status: 'success',
-		}
-	}
-	return {
-		error: toReadError(result.error),
-		status: 'failure',
-	}
 }
 
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
@@ -226,84 +148,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	enabledRef.current = enabled
 	const currentSelectedReportIdRef = useRef(currentSelectedReportIdInput)
 	currentSelectedReportIdRef.current = currentSelectedReportIdInput
-	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
-		switch (actionName) {
-			case 'approveToken1':
-				return 'Approving base token'
-			case 'approveToken2':
-				return 'Approving quote token'
-			case 'createReportInstance':
-				return 'Creating standalone oracle report'
-			case 'dispute':
-				return 'Submitting dispute'
-			case 'executeStagedOperation':
-				return 'Executing staged operation'
-			case 'queueOperation':
-				return 'Queueing operation'
-			case 'requestPrice':
-				return 'Requesting price'
-			case 'settle':
-				return 'Settling report'
-			case 'withdrawBalance':
-				return 'Withdrawing Oracle balance'
-			case 'wrapWeth':
-				return 'Wrapping ETH to WETH'
-			default:
-				return assertNever(actionName)
-		}
-	}
-	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
-		switch (actionName) {
-			case 'approveToken1':
-				return 'Base token approved'
-			case 'approveToken2':
-				return 'Quote token approved'
-			case 'createReportInstance':
-				return 'Standalone oracle report created'
-			case 'dispute':
-				return 'Dispute submitted'
-			case 'executeStagedOperation':
-				return 'Staged operation executed'
-			case 'queueOperation':
-				return 'Operation queued'
-			case 'requestPrice':
-				return 'Price requested'
-			case 'settle':
-				return 'Report settled'
-			case 'withdrawBalance':
-				return 'Oracle balance withdrawn'
-			case 'wrapWeth':
-				return 'ETH wrapped to WETH'
-			default:
-				return assertNever(actionName)
-		}
-	}
-	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
-		switch (actionName) {
-			case 'approveToken1':
-				return 'Base token approval failed'
-			case 'approveToken2':
-				return 'Quote token approval failed'
-			case 'createReportInstance':
-				return 'Report creation failed'
-			case 'dispute':
-				return 'Dispute failed'
-			case 'executeStagedOperation':
-				return 'Staged operation failed'
-			case 'queueOperation':
-				return 'Queue operation failed'
-			case 'requestPrice':
-				return 'Price request failed'
-			case 'settle':
-				return 'Settlement failed'
-			case 'withdrawBalance':
-				return 'Oracle balance withdrawal failed'
-			case 'wrapWeth':
-				return 'ETH wrap failed'
-			default:
-				return assertNever(actionName)
-		}
-	}
 
 	const setOpenOracleTokenAccessMode = (mode: 'idle' | 'initial' | 'background') => {
 		openOracleTokenAccessLoadingInitial.value = mode === 'initial'
@@ -619,7 +463,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						withdrawalTokenSymbol,
 					}
 		try {
-			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
+			openOracleFeedback.value = createPendingActionFeedback(actionName, getOpenOraclePendingTitle(actionName))
 			await runWriteAction(
 				{
 					...buildWriteActionConfig(
@@ -630,12 +474,12 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					),
 					formatErrorMessage: options?.formatErrorMessage,
 					onRefreshError: (message, hash) => {
-						openOracleFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+						openOracleFeedback.value = createWarningActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), message, hash)
 						const result = openOracleResult.value
 						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message, transactionContext))
 					},
 					onWriteError: message => {
-						openOracleFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+						openOracleFeedback.value = createErrorActionFeedback(actionName, getOpenOracleFailureTitle(actionName), message)
 					},
 					refreshErrorFallback: 'Oracle transaction succeeded, but refreshing the selected report failed',
 					refreshState: async () => {
@@ -648,7 +492,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				errorFallback,
 				async result => {
 					openOracleResult.value = result
-					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
 					if (result.action === 'createReportInstance') {
 						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
@@ -928,23 +772,17 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}, [accountAddress, enabled, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report, openOracleReportDetails.value?.isDistributed, openOracleReportDetails.value?.settlementTimestamp])
 
 	const openOracleDisputeSubmission = openOracleReportDetails.value === undefined ? undefined : getDisputeSubmission(openOracleReportDetails.value)
-
-	return {
-		approveToken1,
-		approveToken2,
-		cancelWithdrawalBalanceCheck,
-		createOpenOracleGame,
-		disputeReport,
-		loadOracleReport,
+	const openOracleSectionState = {
+		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		openOracleActiveAction: openOracleActiveAction.value,
 		openOracleActiveWithdrawalBalance: openOracleActiveWithdrawalBalance.value,
-		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
-		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleCreateFieldErrors: openOracleCreateFieldErrors.value,
+		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleDisputeSubmission,
 		openOracleError: openOracleError.value,
-		openOracleFeedback: openOracleFeedback.value,
-		openOracleForm: openOracleForm.value,
+		openOracleReportDetails: openOracleReportDetails.value,
+		openOracleReportLookupState: openOracleReportLookupState.value,
+		openOracleResult: openOracleResult.value,
 		openOracleTokenAccessState: {
 			token1Approval: openOracleToken1Approval.value,
 			token1Balance: openOracleToken1Balance.value,
@@ -957,14 +795,24 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			tokenAccessLoadingInitial: openOracleTokenAccessLoadingInitial.value && openOracleTokenAccessLoad.isLoading.value,
 			tokenAccessRefreshing: openOracleTokenAccessRefreshing.value && openOracleTokenAccessLoad.isLoading.value,
 		},
-		openOracleReportLookupState: openOracleReportLookupState.value,
-		openOracleReportDetails: openOracleReportDetails.value,
-		openOracleResult: openOracleResult.value,
-		openOracleWithdrawalBalanceChecking: openOracleWithdrawalBalanceChecking.value,
-		openOracleWithdrawalReviewMessage: openOracleWithdrawalReviewMessage.value,
 		openOracleWithdrawableBalances: openOracleWithdrawableBalances.value,
 		openOracleWithdrawableBalancesError: openOracleWithdrawableBalancesError.value,
 		openOracleWithdrawableBalancesLoading: openOracleWithdrawableBalanceLoad.isLoading.value,
+		openOracleWithdrawalBalanceChecking: openOracleWithdrawalBalanceChecking.value,
+		openOracleWithdrawalReviewMessage: openOracleWithdrawalReviewMessage.value,
+	}
+
+	return {
+		approveToken1,
+		approveToken2,
+		cancelWithdrawalBalanceCheck,
+		createOpenOracleGame,
+		disputeReport,
+		loadOracleReport,
+		...openOracleSectionState,
+		openOracleFeedback: openOracleFeedback.value,
+		openOracleForm: openOracleForm.value,
+		openOracleSectionState,
 		resetOpenOracleCreateForm: () => {
 			openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 			openOracleCreateFieldErrors.value = {}

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
+import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { shouldLoadOpenOracleReportFromUrl as shouldLoadOpenOracleReport, useOpenOracleRouteSync } from '@zoltar/ui-zoltar/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import type { Route } from '../types/app.js'
 
 type Props = {
@@ -30,7 +32,7 @@ type Props = {
 }
 
 export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId }: { environmentReady: boolean; route: Route; urlOpenOracleReportId: string }) {
-	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
+	return shouldLoadOpenOracleReport({ environmentReady, isOpenOracleRoute: route === 'open-oracle', reportId: urlOpenOracleReportId })
 }
 
 export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
@@ -75,42 +77,15 @@ export function useAppRouteEffects({
 	urlOpenOracleReportId,
 	walletBootstrapComplete,
 }: Props) {
-	const loadOracleReportRef = useRef(loadOracleReport)
 	const loadSecurityPoolsRef = useRef(loadSecurityPools)
-	const navigateRef = useRef(navigate)
-	const lastRequestedOpenOracleReportId = useRef<string | undefined>(undefined)
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
-	const lastSyncedOpenOracleReportId = useRef<string | undefined>(undefined)
 	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
 
-	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
-	navigateRef.current = navigate
-
-	useEffect(() => {
-		if (route !== 'open-oracle') {
-			lastSyncedOpenOracleReportId.current = undefined
-			return
-		}
-		const normalizedReportId = urlOpenOracleReportId.trim()
-		if (lastSyncedOpenOracleReportId.current === normalizedReportId) return
-		lastSyncedOpenOracleReportId.current = normalizedReportId
-		setOpenOracleFormReportId(normalizedReportId)
-	}, [route, setOpenOracleFormReportId, urlOpenOracleReportId])
-
-	useEffect(() => {
-		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })
-		if (!shouldLoadReport) {
-			lastRequestedOpenOracleReportId.current = undefined
-			return
-		}
-		const requestKey = `${activeEnvironmentNonce}:${urlOpenOracleReportId}`
-		if (lastRequestedOpenOracleReportId.current === requestKey) return
-		lastRequestedOpenOracleReportId.current = requestKey
-		void loadOracleReportRef.current(urlOpenOracleReportId)
-	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
+	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady, isOpenOracleRoute: route === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId })
+	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
 
 	useEffect(() => {
 		if (route !== 'security-pools') {
@@ -184,10 +159,4 @@ export function useAppRouteEffects({
 		if (tradingResultHash === undefined) return
 		void loadSecurityPoolsRef.current(securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
-
-	useEffect(() => {
-		if (!applicationDeploymentMissing) return
-		if (route === 'deploy') return
-		navigateRef.current('deploy')
-	}, [applicationDeploymentMissing, route])
 }

@@ -2,7 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import * as userMessagesCopy from '../copy/userMessages.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { assertNever } from './assert.js'
-import { getWrongNetworkMessage } from './network.js'
+import { getWrongNetworkReason } from './network.js'
 import type { LoadableValueState } from './loadState.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'load_failed'
@@ -147,7 +147,7 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 		return createPresentation('wrong_network', {
 			badgeLabel: userMessagesCopy.wrongNetwork,
 			badgeTone: 'blocked',
-			detail: getWrongNetworkMessage() ?? commonCopy.mainnetRequiredReason,
+			detail: getWrongNetworkReason(),
 		})
 	return undefined
 }
