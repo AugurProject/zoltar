@@ -1,0 +1,32 @@
+name: zoltar-chaos
+
+services:
+  chaos:
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: bots/chaos/Dockerfile
+    image: zoltar-chaos
+    environment:
+      # Keep this assertion paired with the host-loopback port mapping below.
+      ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
+      # The entrypoint creates this owner-only secret in the private state volume.
+      ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password
+    ports:
+      - 127.0.0.1:4193:4193
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:4193/healthz'); if (!response.ok) process.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - chaos-state:/app/bots/chaos/.state
+
+volumes:
+  chaos-state:
+
+networks:
+  default:
+    name: zoltar
+    external: true

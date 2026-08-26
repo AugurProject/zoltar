@@ -1,0 +1,122 @@
+import { afterEach, describe, expect, test } from 'bun:test'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const botDirectory = join(import.meta.dir, '..')
+const dockerfile = join(botDirectory, 'Dockerfile')
+const dockerignore = join(botDirectory, 'Dockerfile.dockerignore')
+const composeFile = join(botDirectory, 'compose.yaml')
+const entrypoint = join(botDirectory, 'scripts', 'docker-entrypoint.sh')
+const example = join(botDirectory, 'config', 'operator.example.json')
+const windowsLauncher = join(botDirectory, 'start.bat')
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
+})
+
+async function fixture() {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-docker-'))
+	temporaryDirectories.push(directory)
+	await mkdir(join(directory, '.state'))
+	await mkdir(join(directory, 'config'))
+	await writeFile(join(directory, 'config', 'operator.example.json'), await readFile(example))
+	return directory
+}
+
+async function runEntrypoint(directory: string) {
+	const child = Bun.spawn([entrypoint, '/bin/true'], { cwd: directory, env: process.env, stderr: 'pipe', stdout: 'pipe' })
+	const exitCode = await child.exited
+	if (exitCode !== 0) throw new Error(`Docker entrypoint exited ${exitCode.toString()}: ${await new Response(child.stderr).text()}`)
+}
+
+describe('chaos Docker packaging', () => {
+	test('provides a location-independent Windows launcher', async () => {
+		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
+		expect(source).toContain('pushd "%~dp0"')
+		expect(source).toContain('docker compose up --build --force-recreate -d')
+		expect(source).toContain('docker compose exec chaos sh -c "cat .state/dashboard-password"')
+		expect(source).toContain('exit /b 1')
+	})
+
+	test('builds shared packages and runs as the non-root Bun user', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		const ignoreSource = await readFile(dockerignore, 'utf8')
+		expect(source).toContain('-alpine AS shared-builder')
+		expect(source).toContain('&& bun run shared:build')
+		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
+		expect(source).toContain('COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts')
+		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
+		expect(source).toContain('USER bun')
+		expect(source).toContain('RUN bun ./scripts/check-runtime.mts')
+		expect(source).toContain('EXPOSE 4193')
+		expect(source).toContain('VOLUME ["/app/bots/chaos/.state"]')
+	})
+
+	test('publishes only the host-loopback dashboard port and retains state', async () => {
+		const source = await readFile(composeFile, 'utf8')
+		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
+		expect(source).toContain('127.0.0.1:4193:4193')
+		expect(source).toContain('chaos-state:/app/bots/chaos/.state')
+		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password')
+		expect(source).not.toMatch(/ZOLTAR_BOT_DASHBOARD_PASSWORD:\s/)
+	})
+
+	test('creates a private paused dry-run operator configuration on first start', async () => {
+		const directory = await fixture()
+		await runEntrypoint(directory)
+
+		const settingsFile = join(directory, '.state', 'operator.json')
+		const settings = await readFile(settingsFile, 'utf8')
+		expect(settings).toContain('"paused": true')
+		expect(settings).toContain('"execute": false')
+		expect(settings).toContain('"allowHighRiskOperations": false')
+		expect(settings).toContain('"uiHost": "0.0.0.0"')
+		expect((await stat(join(directory, '.state'))).mode & 0o777).toBe(0o700)
+		expect((await stat(settingsFile)).mode & 0o777).toBe(0o600)
+	})
+
+	test('creates and loads an owner-only dashboard password without logging it', async () => {
+		const directory = await fixture()
+		const passwordFile = join(directory, '.state', 'dashboard-password')
+		const child = Bun.spawn([entrypoint, '/bin/true'], {
+			cwd: directory,
+			env: {
+				...process.env,
+				ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: passwordFile,
+			},
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		expect(await child.exited).toBe(0)
+		const password = (await readFile(passwordFile, 'utf8')).trim()
+		expect(password).toMatch(/^[0-9a-f]{48}$/)
+		expect((await stat(passwordFile)).mode & 0o777).toBe(0o600)
+		expect(await new Response(child.stdout).text()).not.toContain(password)
+		expect(await new Response(child.stderr).text()).not.toContain(password)
+	})
+
+	test('preserves an existing configuration while restoring owner-only mode', async () => {
+		const directory = await fixture()
+		const settingsFile = join(directory, '.state', 'operator.json')
+		await writeFile(settingsFile, 'existing settings')
+		await chmod(settingsFile, 0o644)
+
+		await runEntrypoint(directory)
+
+		expect(await readFile(settingsFile, 'utf8')).toBe('existing settings')
+		expect((await stat(settingsFile)).mode & 0o777).toBe(0o600)
+	})
+
+	test('rejects a symbolic-link configuration without changing its target', async () => {
+		const directory = await fixture()
+		const target = join(directory, 'outside-settings.json')
+		await writeFile(target, 'outside settings')
+		await chmod(target, 0o644)
+		await symlink(target, join(directory, '.state', 'operator.json'))
+
+		await expect(runEntrypoint(directory)).rejects.toThrow('must not be a symbolic link')
+		expect((await stat(target)).mode & 0o777).toBe(0o644)
+	})
+})

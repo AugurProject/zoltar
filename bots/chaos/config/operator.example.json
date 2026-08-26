@@ -1,0 +1,60 @@
+{
+	"version": 1,
+	"connectivity": null,
+	"deployment": {
+		"openOracle": "0x0000000000000000000000000000000000000000",
+		"questionData": "0x0000000000000000000000000000000000000000",
+		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
+		"securityPoolForker": "0x0000000000000000000000000000000000000000",
+		"tradingFactory": "0x0000000000000000000000000000000000000000",
+		"tradingRouter": "0x0000000000000000000000000000000000000000",
+		"weth": "0x0000000000000000000000000000000000000000",
+		"zoltar": "0x0000000000000000000000000000000000000000"
+	},
+	"discovery": {
+		"maxPools": 100,
+		"maxQuestions": 100,
+		"maxStagedOperationsPerPool": 100,
+		"maxUniverses": 100,
+		"maxVaultsPerPool": 100
+	},
+	"network": {
+		"chainId": 11155111,
+		"explorerUrl": "https://sepolia.etherscan.io",
+		"name": "sepolia"
+	},
+	"networkConfigured": false,
+	"paused": true,
+	"privateKey": null,
+	"runtime": {
+		"execute": false,
+		"lifecyclePollMilliseconds": 12000,
+		"once": false,
+		"protocolLogBlockSpan": 2000,
+		"protocolStartBlock": "0",
+		"stateFile": ".state/chaos.sepolia.json",
+		"ui": true,
+		"uiHost": "127.0.0.1",
+		"uiPort": 4193
+	},
+	"scheduler": {
+		"maximumDelaySeconds": 3600,
+		"minimumDelaySeconds": 60
+	},
+	"strategy": {
+		"allowHighRiskOperations": false,
+		"allowIrreversibleOperations": false,
+		"enabledEcosystems": ["zoltar", "statoblast", "open-oracle", "trading"],
+		"maximumEthPerOperation": "0.05",
+		"maximumGasCostEth": "0.02",
+		"maximumRepPerOperation": "10",
+		"minimumEthReserve": "0.05",
+		"minimumRepReserve": "10",
+		"workflowValidForBlocks": 96
+	},
+	"submission": {
+		"minimumBundleRelaySuccesses": 1,
+		"mode": "public",
+		"relayUrls": []
+	}
+}

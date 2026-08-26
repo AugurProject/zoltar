@@ -397,7 +397,8 @@ export async function submitSignedTransaction(parameters: {
 	settings: SubmissionSettings
 	signMessage: (message: string | Uint8Array) => Promise<Hex>
 }): Promise<SubmittedTransaction> {
-	if (parameters.settings.mode === 'public') {
+	const settings = validateSubmissionSettings(parameters.settings)
+	if (settings.mode === 'public') {
 		const settled = await Promise.allSettled(parameters.publicRpcUrls.map(url => parameters.publicSubmit(url, parameters.serializedTransaction)))
 		const acceptedTargets: string[] = []
 		const failedTargets: SubmissionTargetResult[] = []
@@ -422,7 +423,7 @@ export async function submitSignedTransaction(parameters: {
 		}
 	}
 	const settled = await Promise.allSettled(
-		parameters.settings.relayUrls.map(url =>
+		settings.relayUrls.map(url =>
 			sendPrivateTransaction({
 				address: parameters.address,
 				hash: parameters.hash,
@@ -437,14 +438,17 @@ export async function submitSignedTransaction(parameters: {
 	const acceptedTargets: string[] = []
 	const failedTargets: SubmissionTargetResult[] = []
 	for (const [index, result] of settled.entries()) {
-		const relay = parameters.settings.relayUrls[index]
+		const relay = settings.relayUrls[index]
 		if (relay === undefined) throw new Error('Missing relay URL for submission result')
 		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: result.reason instanceof Error ? result.reason.message : String(result.reason), target })
 	}
-	if (acceptedTargets.length === 0) {
-		throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	if (acceptedTargets.length < settings.minimumBundleRelaySuccesses) {
+		if (acceptedTargets.length === 0 && settings.minimumBundleRelaySuccesses === 1) {
+			throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+		}
+		throw new SubmissionFailure(`Private transaction submission required ${settings.minimumBundleRelaySuccesses.toString()} accepting relays but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
 	}
 	return {
 		acceptedTargets,

@@ -459,6 +459,52 @@ describe('signed transaction delivery', () => {
 		})
 	})
 
+	test('enforces the configured acceptance threshold for private transactions', async () => {
+		const accepted = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: hash }))
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'relay unavailable' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: [],
+				serializedTransaction,
+				settings: validateSubmissionSettings({
+					minimumBundleRelaySuccesses: 2,
+					mode: 'private',
+					relayUrls: [accepted, rejected],
+				}),
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('required 2 accepting relays')
+	})
+
+	test.each([0, -1, 1.5, 2])('rejects an unvalidated private relay threshold of %p before submission', async minimumBundleRelaySuccesses => {
+		let relayRequests = 0
+		const accepted = relay(() => {
+			relayRequests += 1
+			return Response.json({ id: 1, jsonrpc: '2.0', result: hash })
+		})
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: [],
+				serializedTransaction,
+				settings: {
+					minimumBundleRelaySuccesses,
+					mode: 'private',
+					relayUrls: [accepted],
+				},
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('Minimum bundle relay successes must be an integer between 1 and the configured private relay count')
+		expect(relayRequests).toBe(0)
+	})
+
 	test.each([
 		{ response: { id: 2, jsonrpc: '2.0', result: hash } },
 		{ response: { id: 1, jsonrpc: '1.0', result: hash } },

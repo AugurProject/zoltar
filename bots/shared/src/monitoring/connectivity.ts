@@ -221,16 +221,20 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	}
 }
 
-async function rawAssertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds: number) {
+type RelayMethod = 'eth_callBundle' | 'eth_sendBundle' | 'eth_sendPrivateTransaction'
+const unsupportedRelayMethodSentinel = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+
+async function rawRelayCapabilityError(url: string, requestedMethod: string, capabilityMethod: RelayMethod, timeoutMilliseconds: number, options?: { allowClientErrorResponse?: boolean | undefined }) {
 	const response = await fetch(url, {
-		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params: [] }),
+		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: requestedMethod, params: [] }),
 		headers: { 'content-type': 'application/json' },
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
-	if (!response.ok) {
-		const message = `Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`
+	const boundedClientErrorResponse = response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 425 && response.status !== 429
+	if (!response.ok && !(options?.allowClientErrorResponse === true && boundedClientErrorResponse)) {
+		const message = `Endpoint did not prove ${capabilityMethod} support: RPC returned HTTP ${response.status.toString()}`
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
 	}
@@ -242,29 +246,59 @@ async function rawAssertRelayMethodCapability(url: string, method: 'eth_callBund
 		throw error
 	}
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
-		throw new Error(`Endpoint did not prove ${method} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
+		throw new Error(`Endpoint did not prove ${capabilityMethod} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
 	}
 	const error = value.error
 	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
-		throw new Error(`Endpoint did not prove ${method} support: malformed JSON-RPC error`)
+		throw new Error(`Endpoint did not prove ${capabilityMethod} support: malformed JSON-RPC error`)
 	}
-	const code = error.code
-	const message = error.message.trim()
+	return { code: error.code, id: value.id, message: error.message.trim() }
+}
+
+async function rawAssertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds: number) {
+	const { code, message } = await rawRelayCapabilityError(url, method, method, timeoutMilliseconds)
 	const normalizedMessage = message.toLowerCase()
 	const authenticationEvidence = normalizedMessage.includes('signature is required') || normalizedMessage.includes('invalid signature') || normalizedMessage.includes('authentication required') || normalizedMessage.includes('authentication is required')
 	const parameterEvidence =
 		normalizedMessage.includes('invalid params') || normalizedMessage.includes('invalid parameters') || normalizedMessage.includes('invalid argument') || normalizedMessage.includes('missing transaction') || normalizedMessage.includes('missing tx') || normalizedMessage.includes('invalid transaction')
-	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
-	if (!recognizedCapabilityEvidence) {
-		throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
+	if (code === -32_602 && parameterEvidence) return
+	if (code === -32_600 && authenticationEvidence) {
+		if (method !== 'eth_sendPrivateTransaction') return
+		const sentinelError = await rawRelayCapabilityError(url, unsupportedRelayMethodSentinel, method, timeoutMilliseconds, { allowClientErrorResponse: true })
+		const normalizedSentinelMessage = sentinelError.message.toLowerCase()
+		const unsupportedMethodEvidence = normalizedSentinelMessage.includes('method not found') || (normalizedSentinelMessage.includes('method') && normalizedSentinelMessage.includes('not whitelisted'))
+		if (sentinelError.id === 1 && sentinelError.code === -32_601 && unsupportedMethodEvidence) return
+		throw new EndpointSafetyError(`Endpoint did not prove ${method} support: unsupported-method sentinel returned RPC ${sentinelError.code.toString()}: ${sentinelError.message}`)
 	}
+	throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
 }
 
-async function assertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds = 5_000) {
+async function assertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds = 5_000) {
 	try {
 		await rawAssertRelayMethodCapability(url, method, timeoutMilliseconds)
 	} catch (error) {
 		throw endpointMethodFailure(error, url, method)
+	}
+}
+
+async function checkPrivateTransactionRelayEndpoint(url: string, expectedChainId: number): Promise<EndpointCheck> {
+	const checkedAt = new Date().toISOString()
+	let chainId: number | undefined
+	try {
+		chainId = await readRpcChainId(url)
+		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
+		await assertRelayMethodCapability(url, 'eth_sendPrivateTransaction')
+		return { chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
+	} catch (error) {
+		return {
+			chainId,
+			checkedAt,
+			error: error instanceof Error ? error.message : String(error),
+			failureDisposition: endpointFailureDisposition(error),
+			kind: 'private-relay',
+			status: 'failed',
+			target: endpointLabel(url),
+		}
 	}
 }
 
@@ -302,6 +336,18 @@ export async function checkSubmissionEndpoints(settings: SubmissionSettings, exp
 	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
 	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
+	return checks
+}
+
+export async function checkPrivateTransactionSubmissionEndpoints(settings: SubmissionSettings, expectedChainId: number) {
+	if (settings.mode === 'public') return []
+	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateTransactionRelayEndpoint(url, expectedChainId)))
+	const failed = checks.filter(check => check.status === 'failed')
+	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
+	const healthyCount = checks.length - failed.length
+	if (safetyFailure !== undefined || healthyCount < settings.minimumBundleRelaySuccesses) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'private transaction relay check failed'}`)).join('; '), checks)
+	}
 	return checks
 }
 

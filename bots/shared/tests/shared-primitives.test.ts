@@ -29,6 +29,11 @@ describe('shared bot primitives', () => {
 		expect(Bun.resolveSync('@zoltar/shared/ethereum', import.meta.dir)).toBe(join(import.meta.dir, '../../../shared/ts/ethereum.ts'))
 	})
 
+	test('exposes raw transport requests only through the dedicated subpath', async () => {
+		const transport = await import('@zoltar/bot-shared/ethereum/rpc-transport')
+		expect(transport.requestTransport).toBeFunction()
+	})
+
 	test('keeps the Ethereum facade limited to the compatibility surface', async () => {
 		const facade = await import('../src/ethereum.ts')
 		expect(Object.keys(facade).sort()).toEqual(
@@ -284,9 +289,10 @@ describe('shared bot primitives', () => {
 			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: blockNumber === 100n ? canonicalReceiptHash : descendantHash }),
 			getBlockNumber: async () => head,
 		})
-		await expect(confirmCanonicalReceiptFinality([reader(111n), reader(112n)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).resolves.toBe(false)
-		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(113n)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).resolves.toBe(true)
-		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(112n, descendantHash)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('RPC disagreement')
+		await expect(confirmCanonicalReceiptFinality([reader(111n), reader(112n)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).resolves.toBe(false)
+		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(113n)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).resolves.toBe(true)
+		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(112n), reader(80n)], ['one', 'two', 'lagging'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).resolves.toBe(true)
+		await expect(confirmCanonicalReceiptFinality([reader(112n), reader(112n, descendantHash)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('RPC disagreement')
 	})
 
 	test('rejects finality evidence when readers switch forks after the descendant query', async () => {
@@ -306,7 +312,7 @@ describe('shared bot primitives', () => {
 				getBlockNumber: async () => 112n,
 			}
 		}
-		await expect(confirmCanonicalReceiptFinality([switchingReader(), switchingReader()], ['one', 'two'], 'switching receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('receipt is no longer canonical')
+		await expect(confirmCanonicalReceiptFinality([switchingReader(), switchingReader()], ['one', 'two'], 'switching receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('receipt is no longer canonical')
 	})
 
 	test('requires the same endpoint quorum to attest descendant and receipt ancestry', async () => {

@@ -1,0 +1,1545 @@
+const universeComponents = [
+	{ name: 'forkTime', type: 'uint256' },
+	{ name: 'forkQuestionId', type: 'uint256' },
+	{ name: 'forkingOutcomeIndex', type: 'uint256' },
+	{ name: 'reputationToken', type: 'address' },
+	{ name: 'parentUniverseId', type: 'uint248' },
+] as const
+
+const questionComponents = [
+	{ name: 'title', type: 'string' },
+	{ name: 'description', type: 'string' },
+	{ name: 'startTime', type: 'uint48' },
+	{ name: 'endTime', type: 'uint48' },
+	{ name: 'numTicks', type: 'uint120' },
+	{ name: 'displayValueMin', type: 'int256' },
+	{ name: 'displayValueMax', type: 'int256' },
+	{ name: 'answerUnit', type: 'string' },
+] as const
+
+export const erc20Abi = [
+	{ inputs: [], name: 'getTotalTheoreticalSupplyAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'spender', type: 'address' },
+		],
+		name: 'allowance',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'spender', type: 'address' },
+			{ name: 'value', type: 'uint256' },
+		],
+		name: 'approve',
+		outputs: [{ name: '', type: 'bool' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const erc1155Abi = [
+	{
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'id', type: 'uint256' },
+		],
+		name: 'balanceOf',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'operator', type: 'address' },
+		],
+		name: 'isApprovedForAll',
+		outputs: [{ name: '', type: 'bool' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'operator', type: 'address' },
+			{ name: 'approved', type: 'bool' },
+		],
+		name: 'setApprovalForAll',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const shareTokenAbi = [
+	...erc1155Abi,
+	{
+		inputs: [
+			{ name: 'fromId', type: 'uint256' },
+			{ name: 'targetUniverseId', type: 'uint248' },
+			{ name: 'account', type: 'address' },
+		],
+		name: 'getMigratedShareAmountAttoShares',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'fromId', type: 'uint256' },
+			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
+		],
+		name: 'migrate',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const zoltarAbi = [
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'migrator', type: 'address' },
+			{ indexed: false, name: 'recipient', type: 'address' },
+			{ indexed: true, name: 'universeId', type: 'uint248' },
+			{ indexed: false, name: 'outcomeIndex', type: 'uint256' },
+			{ indexed: true, name: 'childUniverseId', type: 'uint248' },
+			{ indexed: false, name: 'amountAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'childMigrationRepAmountAttoRep', type: 'uint256' },
+		],
+		name: 'MigrationRepSplit',
+		type: 'event',
+	},
+	{ inputs: [], name: 'zoltarQuestionData', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'forkBurnDivisor', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'uint248' }], name: 'universes', outputs: universeComponents, stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'universeId', type: 'uint248' }], name: 'getForkThresholdAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'universeId', type: 'uint248' }], name: 'getForkTime', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'universeId', type: 'uint248' }], name: 'getNonDecisionThresholdAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		name: 'getChildUniverseId',
+		outputs: [{ name: '', type: 'uint248' }],
+		stateMutability: 'pure',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'migrator', type: 'address' },
+			{ name: 'universeId', type: 'uint248' },
+		],
+		name: 'getMigrationRepBalanceAttoRep',
+		outputs: [{ name: 'migrationRepBalanceAttoRep', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		name: 'getDeployedChildUniverses',
+		outputs: [
+			{ name: 'outcomeIndexes', type: 'uint256[]' },
+			{ name: 'childUniverseIds', type: 'uint248[]' },
+			{ components: universeComponents, name: 'childUniverses', type: 'tuple[]' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'questionId', type: 'uint256' },
+		],
+		name: 'forkUniverse',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'amountAttoRep', type: 'uint256' },
+		],
+		name: 'burnRep',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		name: 'deployChild',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'amountAttoRep', type: 'uint256' },
+		],
+		name: 'addRepToMigrationBalance',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'amountAttoRep', type: 'uint256' },
+			{ name: 'outcomeIndexes', type: 'uint256[]' },
+		],
+		name: 'splitMigrationRep',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const questionDataAbi = [
+	{ inputs: [], name: 'getQuestionCount', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'numberOfEntries', type: 'uint256' },
+		],
+		name: 'getQuestions',
+		outputs: [{ name: 'returnQuestionIds', type: 'uint256[]' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: '', type: 'uint256' }], name: 'questions', outputs: questionComponents, stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'uint256' }], name: 'questionCreatedTimestamp', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'questionId', type: 'uint256' },
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'numberOfEntries', type: 'uint256' },
+		],
+		name: 'getOutcomeLabels',
+		outputs: [{ name: 'returnOutcomeLabels', type: 'string[]' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ components: questionComponents, name: 'questionData', type: 'tuple' },
+			{ name: 'outcomeOptions', type: 'string[]' },
+		],
+		name: 'createQuestion',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+const poolDeploymentComponents = [
+	{ name: 'securityPool', type: 'address' },
+	{ name: 'truthAuction', type: 'address' },
+	{ name: 'priceOracleManagerAndOperatorQueuer', type: 'address' },
+	{ name: 'shareToken', type: 'address' },
+	{ name: 'parent', type: 'address' },
+	{ name: 'universeId', type: 'uint248' },
+	{ name: 'questionId', type: 'uint256' },
+	{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+	{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
+	{ name: 'currentRetentionRate', type: 'uint256' },
+	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
+] as const
+
+const poolAccountingComponents = [
+	{ name: 'settlementCollateralAttoEth', type: 'uint256' },
+	{ name: 'totalCapacityOwnershipAttoRep', type: 'uint256' },
+	{ name: 'feeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
+	{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
+	{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
+	{ name: 'feeIndex', type: 'uint256' },
+	{ name: 'feeIndexRemainder', type: 'uint256' },
+	{ name: 'totalFeesOwedRemainder', type: 'uint256' },
+	{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
+	{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
+	{ name: 'currentRetentionRate', type: 'uint256' },
+] as const
+
+const liquidationSnapshotComponents = [
+	{ name: 'targetBackingUnits', type: 'uint256' },
+	{ name: 'targetCapacityOwnershipAttoRep', type: 'uint256' },
+	{ name: 'totalPoolHeldAttoRep', type: 'uint256' },
+	{ name: 'totalRepBackingUnits', type: 'uint256' },
+] as const
+
+const liquidationRequestComponents = [
+	{ name: 'operationId', type: 'uint256' },
+	{ name: 'operator', type: 'address' },
+	{ name: 'receiverVault', type: 'address' },
+	{ name: 'targetVault', type: 'address' },
+	{ name: 'requestedDebtAttoEth', type: 'uint256' },
+	{ components: liquidationSnapshotComponents, name: 'snapshot', type: 'tuple' },
+	{ name: 'minimumReceiverHealthFactorBps', type: 'uint256' },
+	{ name: 'minLiquidationPriceDistanceBps', type: 'uint256' },
+] as const
+
+const carriedDepositProofComponents = [
+	{ name: 'depositor', type: 'address' },
+	{ name: 'amountAttoRep', type: 'uint256' },
+	{ name: 'parentDepositIndex', type: 'uint256' },
+	{ name: 'cumulativeAmountAttoRep', type: 'uint256' },
+	{ name: 'sourceNodeId', type: 'uint256' },
+	{ name: 'leafIndex', type: 'uint256' },
+	{ name: 'merkleMountainRangeSiblings', type: 'bytes32[]' },
+	{ name: 'merkleMountainRangePeakIndex', type: 'uint256' },
+	{ name: 'nullifierSiblings', type: 'bytes32[]' },
+] as const
+
+const carryOutcomeStateViewComponents = [
+	{ name: 'balanceAttoRep', type: 'uint256' },
+	{ name: 'snapshotLeafCount', type: 'uint256' },
+	{ name: 'snapshotPeaks', type: 'bytes32[64]' },
+	{ name: 'inheritedUnresolvedTotalAttoRep', type: 'uint256' },
+	{ name: 'currentNullifierRoot', type: 'bytes32' },
+	{ name: 'localHeadNodeId', type: 'uint256' },
+	{ name: 'currentLeafCount', type: 'uint256' },
+	{ name: 'currentPeaks', type: 'bytes32[64]' },
+	{ name: 'localUnresolvedTotalAttoRep', type: 'uint256' },
+	{ name: 'currentCarryRoot', type: 'bytes32' },
+	{ name: 'currentCarryTotalAttoRep', type: 'uint256' },
+] as const
+
+export const securityPoolFactoryAbi = [
+	{ inputs: [], name: 'securityPoolDeploymentCount', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		name: 'securityPoolDeploymentsRange',
+		outputs: [{ components: poolDeploymentComponents, name: 'deployments', type: 'tuple[]' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'universeId', type: 'uint248' },
+			{ name: 'questionId', type: 'uint256' },
+			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256' },
+			{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256' },
+		],
+		name: 'deployOriginSecurityPool',
+		outputs: [{ name: 'securityPool', type: 'address' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const securityPoolAbi = [
+	{ inputs: [], name: 'securityPoolFactory', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'securityPoolForker', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'zoltar', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'questionData', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'repToken', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'openOracle', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'shareToken', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'universeId', outputs: [{ name: '', type: 'uint248' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'questionId', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'priceOracleManagerAndOperatorQueuer', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'escalationGame', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'truthAuction', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'systemState', outputs: [{ name: '', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'awaitingForkContinuation', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'settlementCollateralAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getPoolAccountingSnapshot', outputs: [{ components: poolAccountingComponents, name: '', type: 'tuple' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getCurrentMintingCapacityAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'statoblastSecurityMultiplierBps', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'shareTokenSupplyAttoShares', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'totalRepBackingUnits', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'totalBadDebtAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'feeIndex', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'lastUpdatedFeeAccumulator', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'minimumVaultRepDepositAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'initialEscalationGameDepositAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getVaultCount', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		name: 'getVaults',
+		outputs: [{ name: 'vaultRange', type: 'address[]' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: '', type: 'address' }],
+		name: 'securityVaults',
+		outputs: [
+			{ name: 'repBackingUnits', type: 'uint256' },
+			{ name: 'capacityOwnershipAttoRep', type: 'uint256' },
+			{ name: 'claimableFeesAttoEth', type: 'uint256' },
+			{ name: 'feeIndex', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'getVaultOpenInterestAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getTotalPoolHeldAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'address' }], name: 'vaultBadDebtAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'repBackingUnits', type: 'uint256' }], name: 'backingUnitsToAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'vault', type: 'address' },
+			{ name: 'attoRepAmount', type: 'uint256' },
+		],
+		name: 'withdrawRepFromVault',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'attoRepAmount', type: 'uint256' },
+			{ name: 'targetHealthFactorBps', type: 'uint256' },
+		],
+		name: 'depositRepToVault',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'redeemFees', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'updateVaultFees', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [], name: 'updateSettlementCollateral', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [], name: 'updateRetentionRate', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [], name: 'createCompleteSet', outputs: [], stateMutability: 'payable', type: 'function' },
+	{ inputs: [{ name: 'amountAttoShares', type: 'uint256' }], name: 'redeemCompleteSet', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [], name: 'redeemShares', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'redeemRepFromVault', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'operationId', type: 'uint256' },
+			{ indexed: false, name: 'operator', type: 'address' },
+			{ indexed: true, name: 'receiverVault', type: 'address' },
+			{ indexed: true, name: 'targetVault', type: 'address' },
+			{ indexed: false, name: 'securityBondDebtMovedAttoEth', type: 'uint256' },
+			{ indexed: false, name: 'capacityOwnershipMovedAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'badDebtAttoEth', type: 'uint256' },
+		],
+		name: 'VaultLiquidated',
+		type: 'event',
+	},
+	{
+		inputs: [{ components: liquidationRequestComponents, name: 'request', type: 'tuple' }],
+		name: 'performLiquidation',
+		outputs: [
+			{ name: 'debtMovedAttoEth', type: 'uint256' },
+			{ name: 'capacityOwnershipMovedAttoRep', type: 'uint256' },
+			{ name: 'badDebtAttoEth', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'outcome', type: 'uint8' },
+			{ name: 'maximumDepositAttoRep', type: 'uint256' },
+		],
+		name: 'depositToEscalationGame',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'outcome', type: 'uint8' },
+			{ name: 'depositIndexes', type: 'uint256[]' },
+		],
+		name: 'withdrawFromEscalationGame',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [], name: 'parent', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'isEscalationResolved', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'outcome', type: 'uint8' },
+			{ components: carriedDepositProofComponents, name: 'proofs', type: 'tuple[]' },
+		],
+		name: 'withdrawForkedEscalationDeposits',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [], name: 'resumeForkedEscalationGame', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+const stagedOperationComponents = [
+	{ name: 'operation', type: 'uint8' },
+	{ name: 'operator', type: 'address' },
+	{ name: 'receiverVault', type: 'address' },
+	{ name: 'targetVault', type: 'address' },
+	{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256' },
+	{ name: 'queuedAt', type: 'uint256' },
+	{ name: 'validForSeconds', type: 'uint256' },
+	{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
+	{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256' },
+	{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256' },
+	{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256' },
+	{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
+	{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
+	{ name: 'liquidationApprovalId', type: 'bytes32' },
+	{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256' },
+] as const
+
+const liquidationApprovalParamsComponents = [
+	{ name: 'securityPool', type: 'address' },
+	{ name: 'receiverVault', type: 'address' },
+	{ name: 'operator', type: 'address' },
+	{ name: 'targetVault', type: 'address' },
+	{ name: 'maxCumulativeDebtAttoEth', type: 'uint256' },
+	{ name: 'maxDebtPerLiquidationAttoEth', type: 'uint256' },
+	{ name: 'minPostLiquidationHealthFactorBps', type: 'uint256' },
+	{ name: 'validAfter', type: 'uint256' },
+	{ name: 'validUntil', type: 'uint256' },
+	{ name: 'nonce', type: 'uint256' },
+] as const
+
+export const liquidationApprovalRegistryAbi = [
+	{ inputs: [], name: 'coordinator', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [{ name: '', type: 'uint256' }],
+		name: 'liquidationReservations',
+		outputs: [
+			{ name: 'approvalId', type: 'bytes32' },
+			{ name: 'reservedDebtAttoEth', type: 'uint256' },
+			{ name: 'settled', type: 'bool' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: 'approvalId', type: 'bytes32' }],
+		name: 'getLiquidationApproval',
+		outputs: [
+			{
+				components: [
+					{ components: liquidationApprovalParamsComponents, name: 'params', type: 'tuple' },
+					{ name: 'availableDebtAttoEth', type: 'uint256' },
+					{ name: 'reservedDebtAttoEth', type: 'uint256' },
+					{ name: 'consumedDebtAttoEth', type: 'uint256' },
+					{ name: 'revoked', type: 'bool' },
+				],
+				name: '',
+				type: 'tuple',
+			},
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: '_coordinator', type: 'address' }], name: 'initialize', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ components: liquidationApprovalParamsComponents, name: 'params', type: 'tuple' }], name: 'setLiquidationApproval', outputs: [{ name: 'approvalId', type: 'bytes32' }], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{ components: liquidationApprovalParamsComponents, name: 'params', type: 'tuple' },
+			{ name: 'signature', type: 'bytes' },
+		],
+		name: 'permitLiquidationApproval',
+		outputs: [{ name: 'approvalId', type: 'bytes32' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'approvalId', type: 'bytes32' }], name: 'revokeLiquidationApproval', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'newNonce', type: 'uint256' }], name: 'invalidateLiquidationApprovalNonce', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{ name: 'operationId', type: 'uint256' },
+			{ name: 'approvalId', type: 'bytes32' },
+			{ name: 'receiverVault', type: 'address' },
+			{ name: 'targetVault', type: 'address' },
+			{ name: 'operator', type: 'address' },
+			{ name: 'requestedDebtAttoEth', type: 'uint256' },
+			{ name: 'snapshotTargetDebtAttoEth', type: 'uint256' },
+			{ name: 'latestExecutionTimestamp', type: 'uint256' },
+		],
+		name: 'reserve',
+		outputs: [{ name: 'reservedDebtAttoEth', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'operationId', type: 'uint256' }], name: 'release', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'operationId', type: 'uint256' }], name: 'minimumHealthFactorBps', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'operationId', type: 'uint256' },
+			{ name: 'debtMovedAttoEth', type: 'uint256' },
+		],
+		name: 'consume',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const coordinatorAbi = [
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'operationId', type: 'uint256' },
+			{ indexed: true, name: 'operator', type: 'address' },
+			{ indexed: true, name: 'receiverVault', type: 'address' },
+			{ indexed: false, name: 'targetVault', type: 'address' },
+			{ indexed: false, name: 'approvalId', type: 'bytes32' },
+			{ indexed: false, name: 'requestedDebtAttoEth', type: 'uint256' },
+			{ indexed: false, name: 'reservedDebtAttoEth', type: 'uint256' },
+		],
+		name: 'LiquidationRouteStaged',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'operationId', type: 'uint256' },
+			{ indexed: false, name: 'operation', type: 'uint8' },
+			{ indexed: false, name: 'success', type: 'bool' },
+			{ indexed: false, name: 'errorMessage', type: 'string' },
+		],
+		name: 'ExecutedStagedOperation',
+		type: 'event',
+	},
+	{ inputs: [], name: 'securityPool', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'reputationToken', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'openOracle', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'weth', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'isPriceValid', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'settlementTime', outputs: [{ name: '', type: 'uint48' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'lastPrice', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'lastSettlementTimestamp', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'stagedOperationCounter', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'minimumToken1ReportAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'minLiquidationPriceDistanceBps', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'liquidationApprovalRegistry', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'pendingReportId', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getRequestPriceCostAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getActiveStagedOperationCount', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'startIndex', type: 'uint256' },
+			{ name: 'count', type: 'uint256' },
+		],
+		name: 'getActiveStagedOperations',
+		outputs: [
+			{ name: 'operationIds', type: 'uint256[]' },
+			{ components: stagedOperationComponents, name: 'operations', type: 'tuple[]' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [], name: 'getPendingSettlementOperationIds', outputs: [{ name: '', type: 'uint256[]' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'proposedRepPerEthPrice', type: 'uint256' },
+			{ name: 'requestedInitialAttoWeth', type: 'uint256' },
+		],
+		name: 'requestPrice',
+		outputs: [],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{ inputs: [], name: 'recoverSettledPendingReport', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{ name: 'operation', type: 'uint8' },
+			{ name: 'targetVault', type: 'address' },
+			{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256' },
+			{ name: 'validForSeconds', type: 'uint256' },
+			{ name: 'proposedRepPerEthPrice', type: 'uint256' },
+			{ name: 'requestedInitialAttoWeth', type: 'uint256' },
+		],
+		name: 'requestPriceIfNeededAndStageOperation',
+		outputs: [],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'targetVault', type: 'address' },
+			{ name: 'receiverVault', type: 'address' },
+			{ name: 'requestedDebtAttoEth', type: 'uint256' },
+			{ name: 'approvalId', type: 'bytes32' },
+			{ name: 'validForSeconds', type: 'uint256' },
+			{ name: 'proposedRepPerEthPrice', type: 'uint256' },
+			{ name: 'requestedInitialAttoWeth', type: 'uint256' },
+		],
+		name: 'requestPriceIfNeededAndStageLiquidation',
+		outputs: [],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'operationId', type: 'uint256' }], name: 'executeStagedOperation', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'operationId', type: 'uint256' }], name: 'expireStagedOperation', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+export const securityPoolForkerAbi = [
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'parentPool', type: 'address' },
+			{ indexed: true, name: 'migrationProxy', type: 'address' },
+			{ indexed: false, name: 'ownFork', type: 'bool' },
+			{ indexed: false, name: 'unresolvedEscalation', type: 'bool' },
+			{ indexed: false, name: 'settlementCollateralAtForkAttoEth', type: 'uint256' },
+			{ indexed: false, name: 'totalPoolHeldRepAtForkAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'auctionableAttoRepAtFork', type: 'uint256' },
+			{ indexed: false, name: 'escalationSourceRepAtForkAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'escalationChildRepAtForkAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'escalationStartBondAtForkAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'escalationNonDecisionThresholdAtForkAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'escalationElapsedAtFork', type: 'uint256' },
+			{ indexed: false, name: 'escalationSnapshotId', type: 'bytes32' },
+		],
+		name: 'SecurityPoolForkSnapshot',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'parentPool', type: 'address' },
+			{ indexed: true, name: 'sourceGame', type: 'address' },
+			{ indexed: false, name: 'attoRepAmount', type: 'uint256' },
+		],
+		name: 'DisputeStakedRepDrainedAtFork',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'parent', type: 'address' },
+			{ indexed: true, name: 'outcomeIndex', type: 'uint256' },
+			{ indexed: false, name: 'childPoolRepSplitAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'pendingChildAttoRep', type: 'uint256' },
+		],
+		name: 'ChildRepSplit',
+		type: 'event',
+	},
+	{ inputs: [], name: 'zoltar', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'getQuestionOutcome', outputs: [{ name: 'outcome', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint8' },
+			{ name: 'parentDepositIndex', type: 'uint256' },
+		],
+		name: 'isEscalationDepositClaimedDirectly',
+		outputs: [{ name: '', type: 'bool' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint8' },
+		],
+		name: 'getDirectlyClaimedEscalationPrincipal',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'getForkActivationTime', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getUnassignedPosition',
+		outputs: [
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'forkData',
+		outputs: [
+			{ name: 'auctionableAttoRepAtFork', type: 'uint256' },
+			{ name: 'truthAuction', type: 'address' },
+			{ name: 'truthAuctionStarted', type: 'uint256' },
+			{ name: 'migratedAttoRep', type: 'uint256' },
+			{ name: 'auctionedCapacityOwnershipAttoRep', type: 'uint256' },
+			{ name: 'escalationElapsedAtFork', type: 'uint256' },
+			{ name: 'escalationStartBondAtForkAttoRep', type: 'uint256' },
+			{ name: 'escalationNonDecisionThresholdAtForkAttoRep', type: 'uint256' },
+			{ name: 'ownFork', type: 'bool' },
+			{ name: 'unresolvedEscalationAtFork', type: 'bool' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: 'securityPool', type: 'address' }],
+		name: 'getOwnForkMigrationStatus',
+		outputs: [
+			{ name: 'ownFork', type: 'bool' },
+			{ name: 'auctionableAttoRepAtFork', type: 'uint256' },
+			{ name: 'vaultRepAtForkAttoRep', type: 'uint256' },
+			{ name: 'escalationChildRepPerSelectedOutcomeAttoRep', type: 'uint256' },
+			{ name: 'escrowSourceRepAtForkAttoRep', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+			{
+				components: [
+					{ name: 'tick', type: 'int256' },
+					{ name: 'bidIndex', type: 'uint256' },
+				],
+				name: 'tickIndices',
+				type: 'tuple[]',
+			},
+		],
+		name: 'claimAuctionProceeds',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+		],
+		name: 'getEscalationMigrationEntitlementStatus',
+		outputs: [
+			{ name: 'initialized', type: 'bool' },
+			{ name: 'totalCurrentAttoRep', type: 'uint256' },
+			{ name: 'materializedByOutcome', type: 'bool[3]' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'initiateSecurityPoolFork', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndices', type: 'uint256[]' },
+		],
+		name: 'migrateRepToZoltar',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint8' },
+			{ name: 'depositIndexes', type: 'uint256[]' },
+		],
+		name: 'claimForkedEscalationDeposits',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		name: 'createChildUniverse',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'outcomeIndex', type: 'uint256' },
+		],
+		name: 'migrateVault',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+			{ name: 'childOutcomeIndex', type: 'uint256' },
+		],
+		name: 'migrateVaultWithUnresolvedEscalation',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'startTruthAuction', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'finalizeTruthAuction', outputs: [], stateMutability: 'payable', type: 'function' },
+	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'forkZoltarWithOwnEscalationGame', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+			{
+				components: [
+					{ name: 'tick', type: 'int256' },
+					{ name: 'bidIndex', type: 'uint256' },
+				],
+				name: 'claimTickIndices',
+				type: 'tuple[]',
+			},
+			{
+				components: [
+					{ name: 'tick', type: 'int256' },
+					{ name: 'bidIndex', type: 'uint256' },
+				],
+				name: 'refundTickIndices',
+				type: 'tuple[]',
+			},
+		],
+		name: 'settleAuctionBids',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const escalationGameAbi = [
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'nodeId', type: 'uint256' },
+			{ indexed: true, name: 'outcome', type: 'uint8' },
+			{ indexed: true, name: 'depositor', type: 'address' },
+			{ indexed: false, name: 'attoRepAmount', type: 'uint256' },
+			{ indexed: false, name: 'parentDepositIndex', type: 'uint256' },
+			{ indexed: false, name: 'cumulativeRepAmountAttoRep', type: 'uint256' },
+		],
+		name: 'LocalDepositAppended',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'sourceGame', type: 'address' },
+			{ indexed: true, name: 'snapshotId', type: 'bytes32' },
+			{ indexed: false, name: 'carryRoots', type: 'bytes32[3]' },
+			{ indexed: false, name: 'nullifierRoots', type: 'bytes32[3]' },
+			{ indexed: false, name: 'leafCounts', type: 'uint256[3]' },
+			{ indexed: false, name: 'unresolvedTotalsAttoRep', type: 'uint256[3]' },
+			{ indexed: false, name: 'resolutionBalancesAttoRep', type: 'uint256[3]' },
+		],
+		name: 'ForkCarryCheckpoint',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'parentDepositIndex', type: 'uint256' },
+			{ indexed: true, name: 'sourceNodeId', type: 'uint256' },
+			{ indexed: true, name: 'depositor', type: 'address' },
+			{ indexed: false, name: 'outcome', type: 'uint8' },
+			{ indexed: false, name: 'attoRepAmount', type: 'uint256' },
+			{ indexed: false, name: 'reason', type: 'uint8' },
+			{ indexed: false, name: 'resultingUnresolvedTotalAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'resultingNullifierRoot', type: 'bytes32' },
+			{ indexed: false, name: 'resultingCarryRoot', type: 'bytes32' },
+		],
+		name: 'CarryDepositConsumed',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, name: 'depositor', type: 'address' },
+			{ indexed: true, name: 'outcome', type: 'uint8' },
+			{ indexed: true, name: 'parentDepositIndex', type: 'uint256' },
+			{ indexed: false, name: 'originalDepositAmountAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'amountToWithdrawAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'burnAmountAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'transferredRep', type: 'bool' },
+		],
+		name: 'ClaimDeposit',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: false, name: 'repBeforeAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'repRemovedAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'repRemainingAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'rebasedElapsed', type: 'uint256' },
+		],
+		name: 'TruthAuctionHaircutApplied',
+		type: 'event',
+	},
+	{ inputs: [], name: 'forkCarrySnapshotInitialized', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'securityPool', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getFinalQuestionResolution', outputs: [{ name: '', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getBindingCapitalAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'amountAttoRep', type: 'uint256' },
+			{ name: 'parentDepositIndex', type: 'uint256' },
+		],
+		name: 'applyInheritedClaimRetention',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'amountAttoRep', type: 'uint256' },
+			{ name: 'cumulativeAmountAttoRep', type: 'uint256' },
+			{ name: 'parentDepositIndex', type: 'uint256' },
+		],
+		name: 'applyInheritedSourceStorageBasis',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ components: carriedDepositProofComponents, name: 'proof', type: 'tuple' },
+			{ name: 'outcome', type: 'uint8' },
+		],
+		name: 'withdrawDeposit',
+		outputs: [
+			{ name: 'depositor', type: 'address' },
+			{ name: 'amountToWithdrawAttoRep', type: 'uint256' },
+			{ name: 'originalDepositAmountAttoRep', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [{ name: 'outcome', type: 'uint8' }],
+		name: 'getOutcomeState',
+		outputs: [{ components: carryOutcomeStateViewComponents, name: 'stateView', type: 'tuple' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [],
+		name: 'getForkCarrySnapshot',
+		outputs: [
+			{ name: 'carryPeaks', type: 'bytes32[64][3]' },
+			{ name: 'carryLeafCounts', type: 'uint256[3]' },
+			{ name: 'carryTotalsAttoRep', type: 'uint256[3]' },
+			{ name: 'nullifierRoots', type: 'bytes32[3]' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [], name: 'canTriggerOwnFork', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'forkContinuation', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'isForkCarryFundingComplete', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'forkResumedAt', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getEscalationGameEndDate', outputs: [{ name: 'endTime', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'hasReachedNonDecision', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'nonDecisionState', outputs: [{ name: '', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'startBondAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'nonDecisionThresholdAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getOutcomeBalancesAttoRep', outputs: [{ name: 'balancesAttoRep', type: 'uint256[3]' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'disputeStakedRepByVaultAttoRep', outputs: [{ name: 'amountAttoRep', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'sweepResidualRepToSecurityPool', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+export const auctionAbi = [
+	{ inputs: [], name: 'auctionStarted', outputs: [{ name: '', type: 'uint48' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'minBidSizeAttoEth', outputs: [{ name: '', type: 'uint128' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'finalized', outputs: [{ name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [],
+		name: 'computeClearing',
+		outputs: [
+			{ name: 'hitCap', type: 'bool' },
+			{ name: 'clearingTickOut', type: 'int256' },
+			{ name: 'accumulatedBidAttoEth', type: 'uint256' },
+			{ name: 'bidAtClearingTickAttoEth', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [{ name: '', type: 'address' }], name: 'pendingEthRefundsAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'tick', type: 'int256' }], name: 'submitBid', outputs: [], stateMutability: 'payable', type: 'function' },
+	{ inputs: [], name: 'finalize', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{ inputs: [], name: 'withdrawPendingEthRefund', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+	{
+		inputs: [
+			{
+				components: [
+					{ name: 'tick', type: 'int256' },
+					{ name: 'bidIndex', type: 'uint256' },
+				],
+				name: 'tickIndices',
+				type: 'tuple[]',
+			},
+		],
+		name: 'refundLosingBids',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+const oracleGameComponents = [
+	{ name: 'currentAmount1', type: 'uint128' },
+	{ name: 'currentAmount2', type: 'uint128' },
+	{ name: 'currentReporter', type: 'address' },
+	{ name: 'reportTimestamp', type: 'uint48' },
+	{ name: 'settlementTimestamp', type: 'uint48' },
+	{ name: 'token1', type: 'address' },
+	{ name: 'lastReportOppoTime', type: 'uint48' },
+	{ name: 'settlementTime', type: 'uint48' },
+	{ name: 'escalationHalt', type: 'uint128' },
+	{ name: 'protocolFeeRecipient', type: 'address' },
+	{ name: 'settlerReward', type: 'uint96' },
+	{ name: 'token2', type: 'address' },
+	{ name: 'numReports', type: 'uint24' },
+	{ name: 'disputeDelay', type: 'uint24' },
+	{ name: 'feePercentage', type: 'uint24' },
+	{ name: 'multiplier', type: 'uint16' },
+	{ name: 'callbackContract', type: 'address' },
+	{ name: 'callbackGasLimit', type: 'uint32' },
+	{ name: 'protocolFee', type: 'uint24' },
+	{ name: 'flags', type: 'uint8' },
+] as const
+
+const preimageHelperComponents = [
+	{ name: 'reportId', type: 'uint256' },
+	{ name: 'creator', type: 'address' },
+	{ name: 'blockTimestamp', type: 'uint256' },
+	{ name: 'blockNumber', type: 'uint256' },
+] as const
+
+const timingComponents = [
+	{ name: 'blockNumber', type: 'uint256' },
+	{ name: 'blockNumberBound', type: 'uint256' },
+	{ name: 'blockTimestamp', type: 'uint256' },
+	{ name: 'blockTimestampBound', type: 'uint256' },
+] as const
+
+export const openOracleAbi = [
+	{ inputs: [{ name: '', type: 'uint256' }], name: 'oracleGame', outputs: [{ name: '', type: 'bytes32' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'uint256' }], name: 'storedGame', outputs: oracleGameComponents, stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+		],
+		name: 'tokenHolder',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+		],
+		name: 'internalAllowance',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ components: oracleGameComponents, name: 'params', type: 'tuple' },
+			{ name: 'tryInternalBalance1', type: 'bool' },
+			{ name: 'tryInternalBalance2', type: 'bool' },
+			{ components: timingComponents, name: 'timing', type: 'tuple' },
+		],
+		name: 'report',
+		outputs: [{ name: 'reportId', type: 'uint256' }],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'reportId', type: 'uint256' },
+			{ name: 'newAmount1', type: 'uint128' },
+			{ name: 'newAmount2', type: 'uint128' },
+			{ name: 'disputer', type: 'address' },
+			{ name: 'tryInternalBalance1', type: 'bool' },
+			{ name: 'tryInternalBalance2', type: 'bool' },
+			{ components: oracleGameComponents, name: 'params', type: 'tuple' },
+			{ components: preimageHelperComponents, name: 'helper', type: 'tuple' },
+			{ components: timingComponents, name: 'timing', type: 'tuple' },
+		],
+		name: 'dispute',
+		outputs: [],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'reportId', type: 'uint256' },
+			{ components: oracleGameComponents, name: 'params', type: 'tuple' },
+			{ components: preimageHelperComponents, name: 'helper', type: 'tuple' },
+		],
+		name: 'settle',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'tokenToGet', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+			{ name: 'to', type: 'address' },
+		],
+		name: 'withdrawTo',
+		outputs: [{ name: 'sent', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'token', type: 'address' },
+			{ name: 'amount', type: 'uint128' },
+			{ name: 'beneficiary', type: 'address' },
+		],
+		name: 'deposit',
+		outputs: [],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'tokenToGet', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'withdraw',
+		outputs: [{ name: 'sent', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'token1', type: 'address' },
+			{ name: 'token2', type: 'address' },
+		],
+		name: 'dust',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'spender', type: 'address' },
+			{ name: 'token', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'approveInternal',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'token', type: 'address' },
+			{ name: 'to', type: 'address' },
+			{ name: 'amount', type: 'uint128' },
+		],
+		name: 'pushOrCredit',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'token', type: 'address' },
+			{ name: 'to', type: 'address' },
+			{ name: 'amount', type: 'uint128' },
+			{ name: 'gasLimit', type: 'uint32' },
+		],
+		name: 'pushOrCredit',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+export const wethAbi = [
+	{ inputs: [], name: 'deposit', outputs: [], stateMutability: 'payable', type: 'function' },
+	{ inputs: [{ name: 'wad', type: 'uint256' }], name: 'withdraw', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+export const tradingFactoryAbi = [
+	{ inputs: [], name: 'securityPoolFactory', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'address' }], name: 'getPair', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'pool', type: 'address' }], name: 'createPair', outputs: [{ name: 'pair', type: 'address' }], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+export const tradingPairAbi = [
+	{ inputs: [], name: 'factory', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'securityPool', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'shareToken', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'universeId', outputs: [{ name: '', type: 'uint248' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'questionId', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'tradingStatus', outputs: [{ name: 'status', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'feeBps', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [],
+		name: 'getReserves',
+		outputs: [
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [],
+		name: 'getEffectiveReserves',
+		outputs: [
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{ inputs: [], name: 'totalSupply', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: '', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+		],
+		name: 'allowance',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'spender', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'approve',
+		outputs: [{ name: '', type: 'bool' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'yesAmount', type: 'uint256' },
+			{ name: 'noAmount', type: 'uint256' },
+			{ name: 'minLiquidity', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+		],
+		name: 'initialize',
+		outputs: [{ name: 'liquidity', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'maxYes', type: 'uint256' },
+			{ name: 'maxNo', type: 'uint256' },
+			{ name: 'minLiquidity', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+		],
+		name: 'addLiquidity',
+		outputs: [
+			{ name: 'yesUsed', type: 'uint256' },
+			{ name: 'noUsed', type: 'uint256' },
+			{ name: 'liquidity', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'liquidity', type: 'uint256' },
+			{ name: 'minYes', type: 'uint256' },
+			{ name: 'minNo', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+		],
+		name: 'removeLiquidity',
+		outputs: [
+			{ name: 'yesOut', type: 'uint256' },
+			{ name: 'noOut', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'yesForNo', type: 'bool' },
+			{ name: 'amountIn', type: 'uint256' },
+			{ name: 'minAmountOut', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+		],
+		name: 'swapExactInput',
+		outputs: [
+			{ name: 'amountOut', type: 'uint256' },
+			{ name: 'feeAmount', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'yesForNo', type: 'bool' },
+			{ name: 'amountOut', type: 'uint256' },
+			{ name: 'maxAmountIn', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+		],
+		name: 'swapExactOutput',
+		outputs: [
+			{ name: 'amountIn', type: 'uint256' },
+			{ name: 'feeAmount', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [], name: 'sync', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+] as const
+
+const enterPositionResultComponents = [
+	{ name: 'ethSpent', type: 'uint256' },
+	{ name: 'completeSetShares', type: 'uint256' },
+	{ name: 'oppositeSharesSwapped', type: 'uint256' },
+	{ name: 'additionalLongShares', type: 'uint256' },
+	{ name: 'totalLongShares', type: 'uint256' },
+	{ name: 'invalidInsurance', type: 'uint256' },
+	{ name: 'feeAmount', type: 'uint256' },
+	{ name: 'conditionalYesBpsBefore', type: 'uint256' },
+	{ name: 'conditionalYesBpsAfter', type: 'uint256' },
+] as const
+
+const exitPositionResultComponents = [
+	{ name: 'completeSetShares', type: 'uint256' },
+	{ name: 'longSharesSwapped', type: 'uint256' },
+	{ name: 'totalLongShares', type: 'uint256' },
+	{ name: 'invalidInsurance', type: 'uint256' },
+	{ name: 'ethOut', type: 'uint256' },
+	{ name: 'feeAmount', type: 'uint256' },
+] as const
+
+const liquidityResultComponents = [
+	{ name: 'pair', type: 'address' },
+	{ name: 'completeSetShares', type: 'uint256' },
+	{ name: 'yesUsed', type: 'uint256' },
+	{ name: 'noUsed', type: 'uint256' },
+	{ name: 'yesReturned', type: 'uint256' },
+	{ name: 'noReturned', type: 'uint256' },
+	{ name: 'invalidInsurance', type: 'uint256' },
+	{ name: 'liquidity', type: 'uint256' },
+] as const
+
+export const tradingRouterAbi = [
+	{ inputs: [], name: 'factory', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'pair', type: 'address' },
+			{ name: 'longOutcome', type: 'uint8' },
+			{ name: 'minLongSharesOut', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'enterPosition',
+		outputs: [{ components: enterPositionResultComponents, name: 'result', type: 'tuple' }],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pair', type: 'address' },
+			{ name: 'longOutcome', type: 'uint8' },
+			{ name: 'completeSetSharesToRedeem', type: 'uint256' },
+			{ name: 'maxLongSharesIn', type: 'uint256' },
+			{ name: 'minEthOut', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'exitPosition',
+		outputs: [{ components: exitPositionResultComponents, name: 'result', type: 'tuple' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pool', type: 'address' },
+			{ name: 'completeSetSharesToRedeem', type: 'uint256' },
+			{ name: 'minEthOut', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'redeemCompleteSet',
+		outputs: [{ name: 'ethOut', type: 'uint256' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pair', type: 'address' },
+			{ name: 'conditionalYesBpsValue', type: 'uint256' },
+			{ name: 'minLiquidity', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'initializeWithEth',
+		outputs: [{ components: liquidityResultComponents, name: 'result', type: 'tuple' }],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pool', type: 'address' },
+			{ name: 'conditionalYesBpsValue', type: 'uint256' },
+			{ name: 'minLiquidity', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'createPairAndInitializeWithEth',
+		outputs: [{ components: liquidityResultComponents, name: 'result', type: 'tuple' }],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pair', type: 'address' },
+			{ name: 'minLiquidity', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'addLiquidityWithEth',
+		outputs: [{ components: liquidityResultComponents, name: 'result', type: 'tuple' }],
+		stateMutability: 'payable',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'pair', type: 'address' },
+			{ name: 'liquidity', type: 'uint256' },
+			{ name: 'minYesOut', type: 'uint256' },
+			{ name: 'minNoOut', type: 'uint256' },
+			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
+		],
+		name: 'removeLiquidity',
+		outputs: [
+			{ name: 'yesOut', type: 'uint256' },
+			{ name: 'noOut', type: 'uint256' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const

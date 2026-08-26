@@ -1,0 +1,52 @@
+import { randomInt } from 'node:crypto'
+import type { EvaluatedOperation, OperationPlan } from '../operations/types.ts'
+
+export type RandomIndex = (upperExclusive: number) => number
+
+const cryptoRandomIndex: RandomIndex = upperExclusive => randomInt(upperExclusive)
+
+function requireRandomIndex(index: number, length: number) {
+	if (!Number.isSafeInteger(index) || index < 0 || index >= length) {
+		throw new Error(`Random operation index must be from 0 through ${(length - 1).toString()}`)
+	}
+	return index
+}
+
+export function eligibleOperationPlans(evaluations: readonly EvaluatedOperation[]) {
+	return evaluations.flatMap(evaluation => {
+		if (!evaluation.eligibility.eligible || evaluation.plan === undefined) return []
+		return [evaluation.plan]
+	})
+}
+
+function deadlineValue(plan: OperationPlan) {
+	if (plan.deadlineTimestamp === undefined) return 2n ** 256n - 1n
+	if (!/^(?:0|[1-9]\d*)$/.test(plan.deadlineTimestamp)) {
+		throw new Error(`Operation ${plan.definitionId} has an invalid deadline timestamp`)
+	}
+	return BigInt(plan.deadlineTimestamp)
+}
+
+export function urgentOperationPlans(evaluations: readonly EvaluatedOperation[]) {
+	const urgent = eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'urgent' || plan.obligation)
+	for (const plan of urgent) deadlineValue(plan)
+	return urgent.sort((left, right) => {
+		const leftDeadline = deadlineValue(left)
+		const rightDeadline = deadlineValue(right)
+		if (leftDeadline < rightDeadline) return -1
+		if (leftDeadline > rightDeadline) return 1
+		return left.id.localeCompare(right.id)
+	})
+}
+
+export function randomOperationPlans(evaluations: readonly EvaluatedOperation[]) {
+	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation)
+}
+
+export function selectOperationPlan(evaluations: readonly EvaluatedOperation[], randomIndex: RandomIndex = cryptoRandomIndex): OperationPlan | undefined {
+	const urgent = urgentOperationPlans(evaluations)
+	if (urgent.length > 0) return urgent[0]
+	const candidates = randomOperationPlans(evaluations)
+	if (candidates.length === 0) return undefined
+	return candidates[requireRandomIndex(randomIndex(candidates.length), candidates.length)]
+}

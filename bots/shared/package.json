@@ -8,6 +8,7 @@
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/security": "./src/dashboard/security.ts",
 		"./ethereum": "./src/ethereum.ts",
+		"./ethereum/rpc-transport": "./src/ethereum/rpc-transport.ts",
 		"./execution/signer-operation-gate": "./src/execution/signer-operation-gate.ts",
 		"./execution/canonical-finality": "./src/execution/canonical-finality.ts",
 		"./execution/process-lock": "./src/execution/process-lock.ts",
