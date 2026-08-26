@@ -230,8 +230,9 @@
 									<input id="replacement-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" />
 								</label>
 								<p class="muted">Pause first. The bot accepts the replacement only after quorum verification proves the exact sender, nonce, destination, calldata, value, finality, and semantic result.</p>
-								<div class="form-actions"><button type="submit">Queue verification</button><span id="replacement-status" class="action-status" role="alert"></span></div>
+								<div class="form-actions"><button type="submit">Queue verification</button></div>
 							</fieldset>
+							<div class="recovery-status-row"><span id="replacement-status" class="action-status" role="alert"></span><button id="replacement-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="replacement-status">Retry</button></div>
 						</form>
 						<form id="cancellation-form" class="reconciliation-form">
 							<fieldset id="cancellation-fields" disabled>
@@ -239,24 +240,27 @@
 								<label>Nonce cancellation transaction hash<input id="cancellation-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" /></label>
 								<label>Audit reason<textarea id="cancellation-reason" minlength="12" maxlength="2048" required></textarea></label>
 								<label>Typed confirmation<input id="cancellation-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="VERIFY NONCE CANCELLATION" /></label>
-								<div class="form-actions"><button type="submit">Queue cancellation verification</button><span id="cancellation-status" class="action-status" role="alert"></span></div>
+								<div class="form-actions"><button type="submit">Queue cancellation verification</button></div>
 							</fieldset>
+							<div class="recovery-status-row"><span id="cancellation-status" class="action-status" role="alert"></span><button id="cancellation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="cancellation-status">Retry</button></div>
 						</form>
 						<form id="candidate-form" class="reconciliation-form">
 							<fieldset id="candidate-fields" disabled>
 								<p class="muted">A mistyped or stale replacement/cancellation hash can be cleared without changing the original signed intent.</p>
 								<label>Audit reason<textarea id="candidate-reason" minlength="12" maxlength="2048" required></textarea></label>
 								<label>Typed confirmation<input id="candidate-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="CLEAR RECOVERY CANDIDATE" /></label>
-								<div class="form-actions"><button type="submit">Clear queued candidate</button><span id="candidate-status" class="action-status" role="alert"></span></div>
+								<div class="form-actions"><button type="submit">Clear queued candidate</button></div>
 							</fieldset>
+							<div class="recovery-status-row"><span id="candidate-status" class="action-status" role="alert"></span><button id="candidate-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="candidate-status">Retry</button></div>
 						</form>
 						<form id="workflow-form" class="reconciliation-form">
 							<fieldset id="workflow-fields" disabled>
 								<p class="muted">If a partial random workflow can no longer produce its exact canonical continuation, abandonment transfers responsibility to the operator and starts a fresh randomized wait.</p>
 								<label>Audit reason<textarea id="workflow-reason" minlength="12" maxlength="2048" required></textarea></label>
 								<label>Typed confirmation<input id="workflow-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="ABANDON PARTIAL WORKFLOW" /></label>
-								<div class="form-actions"><button type="submit">Abandon partial workflow</button><span id="workflow-status" class="action-status" role="alert"></span></div>
+								<div class="form-actions"><button type="submit">Abandon partial workflow</button></div>
 							</fieldset>
+							<div class="recovery-status-row"><span id="workflow-status" class="action-status" role="alert"></span><button id="workflow-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="workflow-status">Retry</button></div>
 						</form>
 					</article>
 					<article class="panel">
@@ -278,8 +282,9 @@
 								<label>Audit reason<textarea id="obligation-reason" minlength="12" maxlength="2048" required></textarea></label>
 								<label>Typed confirmation<input id="obligation-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
 								<p id="obligation-confirmation-help" class="muted">Type RETRY VERIFIED SAFE FAILURE. Retry is limited to unsigned failures, finalized reverts, and verified nonce cancellations.</p>
-								<div class="form-actions"><button type="submit">Reconcile lifecycle item</button><span id="obligation-status" class="action-status" role="alert"></span></div>
+								<div class="form-actions"><button type="submit">Reconcile lifecycle item</button></div>
 							</fieldset>
+							<div class="recovery-status-row"><span id="obligation-status" class="action-status" role="alert"></span><button id="obligation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="obligation-status">Retry</button></div>
 						</form>
 					</article>
 				</div>

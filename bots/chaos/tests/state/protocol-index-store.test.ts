@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symli
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256 } from '../support/bot-shared.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { initialDurableState, loadDurableState, saveDurableState, serializedDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
 import { MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS, parseProtocolIndex, protocolIndexSidecarDirectory } from '../../src/state/protocol-index-store.ts'

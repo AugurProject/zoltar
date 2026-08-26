@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symli
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '../support/bot-shared.ts'
 import {
 	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
 	compactDurableState,

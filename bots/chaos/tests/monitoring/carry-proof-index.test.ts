@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '../support/bot-shared.ts'
 import {
 	applyCarryConsumption,
 	applyCarryConsumptionToAccumulator,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, toHex, zeroHash, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, toHex, zeroHash, type Address, type Hash, type Hex } from '../support/bot-shared.ts'
 import { appendLocalCarryLeaf, applyCarryConsumption, carryCheckpointSnapshotId, carryCommitment, carryGameAccounting, createCarryGameHistory, currentCarryGameState, setCarryGameAccounting, sparseNullifierRoot, type CarryGameState, type CarryOutcome, type CarryTriple } from '../../src/monitoring/carry-proof-index.ts'
 import { carryProofScanDigest, carryProofWithdrawalsDigest, carryUpdateMatchingCommitment, carryUpdateMatchingDigest, updateCarryProofJournal, type CarryProofScanContext } from '../../src/monitoring/carry-proof-scan.ts'
 import {

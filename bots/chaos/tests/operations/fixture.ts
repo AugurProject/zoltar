@@ -1,4 +1,4 @@
-import { getAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { getAddress, type Address, type Hash } from '../support/bot-shared.ts'
 import type { EcosystemSnapshot } from '../../src/operations/types.ts'
 
 export const address = (value: number): Address => getAddress(`0x${value.toString(16).padStart(40, '0')}`)

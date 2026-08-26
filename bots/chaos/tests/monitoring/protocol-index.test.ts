@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
+import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '../support/bot-shared.ts'
 import { ChaosProtocolIndexReorgError, decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import type { ChaosReadClient } from '../../src/monitoring/discovery.ts'
 import { address, hash } from '../operations/fixture.ts'

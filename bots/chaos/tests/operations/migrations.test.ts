@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData } from '../support/bot-shared.ts'
 import { securityPoolForkerAbi, zoltarAbi } from '../../src/contracts/abi.ts'
 import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'

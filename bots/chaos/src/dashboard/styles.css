@@ -573,6 +573,24 @@ dd {
 	line-height: 1.45;
 }
 
+.recovery-status-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.65rem;
+	margin-top: 0.65rem;
+}
+
+.recovery-status-row .action-status {
+	flex: 1 1 14rem;
+	line-height: 1.45;
+}
+
+.recovery-context-retry {
+	flex: 0 0 auto;
+}
+
 .text-link {
 	color: var(--operator-accent);
 	font-size: 0.8rem;

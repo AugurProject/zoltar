@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, type Address } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, type Address } from '../support/bot-shared.ts'
 import {
 	assertCanonicalPairGraph,
 	assertCanonicalPoolGraph,

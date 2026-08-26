@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters, zeroHash } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, zeroHash } from '../support/bot-shared.ts'
 import { securityPoolAbi } from '../../src/contracts/abi.ts'
 import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import type { StagedOperationSnapshot } from '../../src/operations/types.ts'

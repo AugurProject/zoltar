@@ -14,6 +14,7 @@ type CaptureRequest = {
 	height: number
 	horizontalScroll?: 'catalog-end' | undefined
 	name: string
+	recoveryRefreshFailure?: 'candidate' | undefined
 	route: string
 	stateRefreshFailure?: true | undefined
 	verticalScroll?: 'rpc-health' | undefined
@@ -33,6 +34,7 @@ if (requestedCaptureSource === undefined) {
 		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
 		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
+		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
 	]
 	for (const capture of captures) {
@@ -50,6 +52,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const height = Reflect.get(parsed, 'height')
 	const horizontalScroll = Reflect.get(parsed, 'horizontalScroll')
 	const name = Reflect.get(parsed, 'name')
+	const recoveryRefreshFailure = Reflect.get(parsed, 'recoveryRefreshFailure')
 	const route = Reflect.get(parsed, 'route')
 	const stateRefreshFailure = Reflect.get(parsed, 'stateRefreshFailure')
 	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
@@ -58,13 +61,14 @@ function parseCaptureRequest(value: string): CaptureRequest {
 		typeof height !== 'number' ||
 		(horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') ||
 		typeof name !== 'string' ||
+		(recoveryRefreshFailure !== undefined && recoveryRefreshFailure !== 'candidate') ||
 		typeof route !== 'string' ||
 		(stateRefreshFailure !== undefined && stateRefreshFailure !== true) ||
 		(verticalScroll !== undefined && verticalScroll !== 'rpc-health') ||
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
-	return { height, horizontalScroll, name, route, stateRefreshFailure, verticalScroll, width }
+	return { height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -161,7 +165,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ height, horizontalScroll, name, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -186,6 +190,30 @@ try {
 				await Bun.sleep(100)
 			}
 			if (!failureReady) throw new Error(`Dashboard route /${route} did not expose local Retry after the forced state-refresh failure`)
+		}
+		if (recoveryRefreshFailure === 'candidate') {
+			await evaluate("document.querySelector('#pause-button')?.click()")
+			let pauseReady = false
+			for (let poll = 0; poll < 60; poll += 1) {
+				pauseReady = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#refresh-button')?.textContent === 'Refresh'")) === true
+				if (pauseReady) break
+				await Bun.sleep(100)
+			}
+			if (!pauseReady) throw new Error('Dashboard fixture did not pause before recovery-failure capture')
+			await command('Network.setBlockedURLs', { urls: ['*://127.0.0.1:4193/api/state*'] })
+			await evaluate(`(() => {
+				const form = document.querySelector('#candidate-form')
+				if (!(form instanceof HTMLFormElement)) return false
+				form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				return true
+			})()`)
+			let failureReady = false
+			for (let poll = 0; poll < 60; poll += 1) {
+				failureReady = (await evaluate("document.querySelector('#candidate-status')?.textContent?.includes('unavailable') === true && document.querySelector('#candidate-retry')?.textContent === 'Retry' && document.querySelector('#candidate-retry')?.disabled === false")) === true
+				if (failureReady) break
+				await Bun.sleep(100)
+			}
+			if (!failureReady) throw new Error('Dashboard fixture did not expose candidate recovery Retry after the forced state-refresh failure')
 		}
 		const layout = await evaluate(`new Promise(resolve => {
 			window.scrollTo(0, 0)
@@ -255,6 +283,21 @@ try {
 			const top = Reflect.get(rpcPanel, 'top')
 			if (typeof bottom !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1) throw new Error(`RPC health panel did not fit the requested viewport: ${JSON.stringify(rpcPanel)}`)
 		}
+		if (recoveryRefreshFailure === 'candidate') {
+			const retry = await evaluate(`new Promise(resolve => {
+				const button = document.querySelector('#candidate-retry')
+				button?.scrollIntoView({ block: 'center' })
+				requestAnimationFrame(() => requestAnimationFrame(() => {
+					const bounds = button?.getBoundingClientRect()
+					resolve({ bottom: bounds?.bottom, height: bounds?.height, top: bounds?.top })
+				}))
+			})`)
+			if (typeof retry !== 'object' || retry === null) throw new Error('Candidate recovery Retry was not available for capture')
+			const bottom = Reflect.get(retry, 'bottom')
+			const buttonHeight = Reflect.get(retry, 'height')
+			const top = Reflect.get(retry, 'top')
+			if (typeof bottom !== 'number' || typeof buttonHeight !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1 || buttonHeight < 44) throw new Error(`Candidate recovery Retry did not fit the requested viewport: ${JSON.stringify(retry)}`)
+		}
 		let data: string | undefined
 		let previousData: string | undefined
 		let matchingFrames = 0
@@ -278,6 +321,20 @@ try {
 		const path = resolve(outputDirectory, `${name}.png`)
 		await Bun.write(path, Buffer.from(data, 'base64'))
 		console.log(`${name}: ${width.toString()}x${height.toString()} · /${route} · ${path}`)
+		if (recoveryRefreshFailure === 'candidate') {
+			const restored = await evaluate(`(async () => {
+				const configurationResponse = await fetch('/api/configuration')
+				if (!configurationResponse.ok) return false
+				const configuration = await configurationResponse.json()
+				const response = await fetch('/api/paused', {
+					body: JSON.stringify({ paused: false, revision: configuration.revision }),
+					headers: { 'content-type': 'application/json' },
+					method: 'PUT',
+				})
+				return response.ok
+			})()`)
+			if (restored !== true) throw new Error('Dashboard fixture did not restore its running state after recovery-failure capture')
+		}
 	}
 
 	await capture(requestedCapture)

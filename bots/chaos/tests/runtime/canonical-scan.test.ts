@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroHash } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../../src/contracts/surface.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, completeOperationCoverage, createChaosReadPool, discoveryCoverageIsComplete, planningOptions, sharedCanonicalBlockNumber, snapshotWithProtocolIndex, unavailableOperationCatalog, walletInventory } from '../../src/runtime/canonical-scan.ts'

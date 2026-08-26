@@ -11,6 +11,7 @@ type RecoveryScenario = {
 	formId: string
 	label: string
 	recoveredState: Record<string, unknown>
+	retryId: string
 	staleState: Record<string, unknown>
 	statusId: string
 }
@@ -61,6 +62,7 @@ const scenarios: RecoveryScenario[] = [
 		formId: 'replacement-form',
 		label: 'pending intent replacement',
 		recoveredState: state({ pendingTransactions: [{ hash: transactionHash, status: 'submitted' }] }),
+		retryId: 'replacement-retry',
 		staleState: state({ pendingTransactions: [{ status: 'submitted' }] }),
 		statusId: 'replacement-status',
 	},
@@ -69,6 +71,7 @@ const scenarios: RecoveryScenario[] = [
 		formId: 'cancellation-form',
 		label: 'pending intent cancellation',
 		recoveredState: state({ pendingTransactions: [{ hash: transactionHash, status: 'submitted' }] }),
+		retryId: 'cancellation-retry',
 		staleState: state({ pendingTransactions: [{ status: 'submitted' }] }),
 		statusId: 'cancellation-status',
 	},
@@ -77,6 +80,7 @@ const scenarios: RecoveryScenario[] = [
 		formId: 'candidate-form',
 		label: 'queued recovery candidate',
 		recoveredState: state({ pendingTransactions: [{ hash: transactionHash, replacementHash: candidateHash, status: 'submitted' }] }),
+		retryId: 'candidate-retry',
 		staleState: state({ pendingTransactions: [{ replacementHash: candidateHash, status: 'submitted' }] }),
 		statusId: 'candidate-status',
 	},
@@ -85,6 +89,7 @@ const scenarios: RecoveryScenario[] = [
 		formId: 'workflow-form',
 		label: 'partial workflow',
 		recoveredState: state({ workflows: [{ id: 'workflow-1', status: 'waiting-continuation', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
+		retryId: 'workflow-retry',
 		staleState: state({ workflows: [{ id: 'workflow-1', status: 'waiting-continuation' }] }),
 		statusId: 'workflow-status',
 	},
@@ -93,6 +98,7 @@ const scenarios: RecoveryScenario[] = [
 		formId: 'obligation-form',
 		label: 'lifecycle obligation',
 		recoveredState: state({ obligations: [{ id: 'obligation-1', status: 'pending', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
+		retryId: 'obligation-retry',
 		staleState: state({ obligations: [{ id: 'obligation-1', status: 'pending' }] }),
 		statusId: 'obligation-status',
 	},
@@ -225,6 +231,7 @@ browserTest(
 					await Bun.sleep(150)
 					throw new Error('intentional state-read failure')
 				}
+				if (stateRequests === 3) await Bun.sleep(150)
 				return stateRequests >= 3 ? recoveredDashboardState : initialDashboardState
 			},
 			hostname: '127.0.0.1',
@@ -310,6 +317,7 @@ browserTest(
 			for (const scenario of scenarios) {
 				await cdp.command('Page.navigate', { url: 'about:blank' })
 				await waitFor("document.readyState === 'complete'", 'Chromium did not reset between scenarios')
+				await cdp.command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: 844, mobile: false, width: 390 })
 				initialDashboardState = scenario.staleState
 				recoveredDashboardState = scenario.recoveredState
 				failSecondStateRead = true
@@ -323,20 +331,61 @@ browserTest(
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
 					return {
 						disabled: document.querySelector('#${scenario.fieldsId}')?.disabled,
+						retryDisabled: document.querySelector('#${scenario.retryId}')?.disabled,
+						retryHidden: document.querySelector('#${scenario.retryId}')?.classList.contains('hidden'),
+						retryText: document.querySelector('#${scenario.retryId}')?.textContent,
 						status: document.querySelector('#${scenario.statusId}')?.textContent,
 					}
 				})()`)
-				expect(loading).toEqual({ disabled: true, status: expect.stringContaining('Loading the current') })
-				await waitFor(`document.querySelector('#${scenario.statusId}')?.textContent?.includes('unavailable') === true && document.querySelector('#refresh-button')?.textContent === 'Retry'`, `${scenario.label} did not expose its failed refresh and Retry action`)
+				expect(loading).toEqual({ disabled: true, retryDisabled: true, retryHidden: false, retryText: 'Refreshing…', status: expect.stringContaining('Loading the current') })
+				await waitFor(
+					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('unavailable') === true && document.querySelector('#refresh-button')?.textContent === 'Retry' && document.querySelector('#${scenario.retryId}')?.textContent === 'Retry' && document.querySelector('#${scenario.retryId}')?.disabled === false`,
+					`${scenario.label} did not expose its local Retry action after failure`,
+				)
 				expect(stateRequests).toBe(2)
-				const failure = await cdp.evaluate(`({
-					disabled: document.querySelector('#${scenario.fieldsId}')?.disabled,
-					refreshDisabled: document.querySelector('#refresh-button')?.disabled,
-					status: document.querySelector('#${scenario.statusId}')?.textContent,
+				const failure = await cdp.evaluate(`new Promise(resolve => {
+					const button = document.querySelector('#${scenario.retryId}')
+					button?.scrollIntoView({ block: 'center' })
+					requestAnimationFrame(() => requestAnimationFrame(() => {
+						const bounds = button?.getBoundingClientRect()
+						resolve({
+							accessibleDescription: button?.getAttribute('aria-describedby'),
+							bottom: bounds?.bottom,
+							disabled: document.querySelector('#${scenario.fieldsId}')?.disabled,
+							height: bounds?.height,
+							retryDisabled: button?.disabled,
+							retryHidden: button?.classList.contains('hidden'),
+							status: document.querySelector('#${scenario.statusId}')?.textContent,
+							top: bounds?.top,
+						})
+					}))
 				})`)
-				expect(failure).toEqual({ disabled: true, refreshDisabled: false, status: expect.stringContaining('Use Retry in the header') })
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
-				await waitFor(`document.querySelector('#${scenario.statusId}')?.textContent?.includes('loaded') === true && document.querySelector('#refresh-button')?.textContent === 'Refresh'`, `${scenario.label} did not recover through Retry`)
+				expect(failure).toEqual({
+					accessibleDescription: scenario.statusId,
+					bottom: expect.any(Number),
+					disabled: true,
+					height: expect.any(Number),
+					retryDisabled: false,
+					retryHidden: false,
+					status: expect.not.stringContaining('header'),
+					top: expect.any(Number),
+				})
+				expect(Reflect.get(failure, 'top')).toBeGreaterThanOrEqual(0)
+				expect(Reflect.get(failure, 'bottom')).toBeLessThanOrEqual(844)
+				expect(Reflect.get(failure, 'height')).toBeGreaterThanOrEqual(44)
+				await cdp.evaluate(`document.querySelector('#${scenario.retryId}')?.click()`)
+				expect(
+					await cdp.evaluate(`({
+						disabled: document.querySelector('#${scenario.retryId}')?.disabled,
+						hidden: document.querySelector('#${scenario.retryId}')?.classList.contains('hidden'),
+						status: document.querySelector('#${scenario.statusId}')?.textContent,
+						text: document.querySelector('#${scenario.retryId}')?.textContent,
+					})`),
+				).toEqual({ disabled: true, hidden: false, status: expect.stringContaining('Loading the current'), text: 'Refreshing…' })
+				await waitFor(
+					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('loaded') === true && document.querySelector('#refresh-button')?.textContent === 'Refresh' && document.querySelector('#${scenario.retryId}')?.classList.contains('hidden') === true`,
+					`${scenario.label} did not recover through its local Retry`,
+				)
 				expect(stateRequests).toBe(3)
 				expect(await cdp.evaluate(`document.querySelector('#${scenario.fieldsId}')?.disabled`)).toBe(false)
 			}

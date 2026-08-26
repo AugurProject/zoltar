@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount } from '../support/bot-shared.ts'
 import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError } from '../../src/core/process-locks.ts'
 
 const directories: string[] = []

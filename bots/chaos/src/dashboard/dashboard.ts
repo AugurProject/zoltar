@@ -191,22 +191,26 @@ const replacementForm = element('replacement-form', HTMLFormElement)
 const replacementFields = element('replacement-fields', HTMLFieldSetElement)
 const replacementHashInput = element('replacement-hash', HTMLInputElement)
 const replacementStatus = element('replacement-status', HTMLSpanElement)
+const replacementRetryButton = element('replacement-retry', HTMLButtonElement)
 const cancellationForm = element('cancellation-form', HTMLFormElement)
 const cancellationFields = element('cancellation-fields', HTMLFieldSetElement)
 const cancellationHashInput = element('cancellation-hash', HTMLInputElement)
 const cancellationReasonInput = element('cancellation-reason', HTMLTextAreaElement)
 const cancellationConfirmationInput = element('cancellation-confirmation', HTMLInputElement)
 const cancellationStatus = element('cancellation-status', HTMLSpanElement)
+const cancellationRetryButton = element('cancellation-retry', HTMLButtonElement)
 const candidateForm = element('candidate-form', HTMLFormElement)
 const candidateFields = element('candidate-fields', HTMLFieldSetElement)
 const candidateReasonInput = element('candidate-reason', HTMLTextAreaElement)
 const candidateConfirmationInput = element('candidate-confirmation', HTMLInputElement)
 const candidateStatus = element('candidate-status', HTMLSpanElement)
+const candidateRetryButton = element('candidate-retry', HTMLButtonElement)
 const workflowForm = element('workflow-form', HTMLFormElement)
 const workflowFields = element('workflow-fields', HTMLFieldSetElement)
 const workflowReasonInput = element('workflow-reason', HTMLTextAreaElement)
 const workflowConfirmationInput = element('workflow-confirmation', HTMLInputElement)
 const workflowStatus = element('workflow-status', HTMLSpanElement)
+const workflowRetryButton = element('workflow-retry', HTMLButtonElement)
 const obligations = element('obligations', HTMLDivElement)
 const obligationForm = element('obligation-form', HTMLFormElement)
 const obligationFields = element('obligation-fields', HTMLFieldSetElement)
@@ -216,6 +220,7 @@ const obligationReasonInput = element('obligation-reason', HTMLTextAreaElement)
 const obligationConfirmationInput = element('obligation-confirmation', HTMLInputElement)
 const obligationConfirmationHelp = element('obligation-confirmation-help', HTMLParagraphElement)
 const obligationStatus = element('obligation-status', HTMLSpanElement)
+const obligationRetryButton = element('obligation-retry', HTMLButtonElement)
 const activityList = element('activity-list', HTMLOListElement)
 const settingsScope = element('settings-scope', HTMLSpanElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
@@ -261,6 +266,7 @@ type RecoveryContextRefresh = {
 	loadedMessage: string
 	missingMessage: string
 	name: string
+	retryButton: HTMLButtonElement
 	status: HTMLSpanElement
 }
 
@@ -272,6 +278,7 @@ const replacementRecoveryContext: RecoveryContextRefresh = {
 	loadedMessage: 'Current pending intent loaded. Review the transaction hash, then submit again.',
 	missingMessage: 'No pending intent is currently actionable for replacement. Recovery controls remain disabled.',
 	name: 'pending intent',
+	retryButton: replacementRetryButton,
 	status: replacementStatus,
 }
 
@@ -281,6 +288,7 @@ const cancellationRecoveryContext: RecoveryContextRefresh = {
 	loadedMessage: 'Current pending intent loaded. Review the cancellation details, then submit again.',
 	missingMessage: 'No pending intent is currently actionable for cancellation. Recovery controls remain disabled.',
 	name: 'pending intent',
+	retryButton: cancellationRetryButton,
 	status: cancellationStatus,
 }
 
@@ -293,6 +301,7 @@ const candidateRecoveryContext: RecoveryContextRefresh = {
 	loadedMessage: 'Current recovery candidate loaded. Review it, then submit again.',
 	missingMessage: 'No queued recovery candidate is available. Candidate controls remain disabled.',
 	name: 'recovery candidate',
+	retryButton: candidateRetryButton,
 	status: candidateStatus,
 }
 
@@ -302,6 +311,7 @@ const workflowRecoveryContext: RecoveryContextRefresh = {
 	loadedMessage: 'Partial workflow loaded. Review it, then submit again.',
 	missingMessage: 'No partial workflow awaiting continuation is available. Workflow controls remain disabled.',
 	name: 'partial workflow',
+	retryButton: workflowRetryButton,
 	status: workflowStatus,
 }
 
@@ -314,8 +324,11 @@ const obligationRecoveryContext: RecoveryContextRefresh = {
 	loadedMessage: 'Current lifecycle item loaded. Review it, then submit again.',
 	missingMessage: 'No current lifecycle item is available. Lifecycle controls remain disabled.',
 	name: 'lifecycle item',
+	retryButton: obligationRetryButton,
 	status: obligationStatus,
 }
+
+const recoveryContexts = [replacementRecoveryContext, cancellationRecoveryContext, candidateRecoveryContext, workflowRecoveryContext, obligationRecoveryContext] as const
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
@@ -1062,6 +1075,9 @@ function renderConfiguration(value: Configuration, force = false) {
 function markRecoveryContextRefreshesLoading() {
 	for (const context of pendingRecoveryContextRefreshes) {
 		context.fields.disabled = true
+		context.retryButton.classList.remove('hidden')
+		context.retryButton.disabled = true
+		context.retryButton.textContent = 'Refreshing…'
 		context.status.textContent = `Loading the current ${context.name}…`
 	}
 }
@@ -1070,9 +1086,15 @@ function settleRecoveryContextRefreshes(value: Snapshot | undefined) {
 	for (const context of pendingRecoveryContextRefreshes) {
 		if (value === undefined) {
 			context.fields.disabled = true
-			context.status.textContent = `The current ${context.name} is unavailable because dashboard state could not be refreshed. Use Retry in the header.`
+			context.retryButton.classList.remove('hidden')
+			context.retryButton.disabled = false
+			context.retryButton.textContent = 'Retry'
+			context.status.textContent = `The current ${context.name} is unavailable because dashboard state could not be refreshed.`
 			continue
 		}
+		context.retryButton.classList.add('hidden')
+		context.retryButton.disabled = false
+		context.retryButton.textContent = 'Retry'
 		if (context.available(value)) context.status.textContent = context.loadedMessage
 		else {
 			context.fields.disabled = true
@@ -1214,6 +1236,7 @@ if (currentSectionLink !== undefined) {
 
 refreshButton.addEventListener('click', () => void refresh())
 rpcHealthRetryButton.addEventListener('click', () => void refresh())
+for (const context of recoveryContexts) context.retryButton.addEventListener('click', () => void requestRecoveryContextRefresh(context))
 catalogFilter.addEventListener('change', () => {
 	if (snapshot !== undefined) renderCatalog(snapshot.operationEvaluations)
 })

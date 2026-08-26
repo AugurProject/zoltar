@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, keccak256, toHex, type Address, type Hash } from '../support/bot-shared.ts'
 import { requireSuccessfulReceipt, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import type { OperationStep } from '../../src/operations/types.ts'
 

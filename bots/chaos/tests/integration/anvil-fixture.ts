@@ -1,4 +1,4 @@
-import { encodeDeployData, getAddress, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeDeployData, getAddress, privateKeyToAccount, type Address, type Hex } from '../support/bot-shared.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
