@@ -197,7 +197,7 @@ export function SecurityPoolWorkflowSection({
 				})
 	const selectedPoolStateModel = evaluateSecurityPoolState({
 		lifecycleState: selectedPoolLifecycleState,
-		ordinaryEscalationGameStarted: currentReportingDetails?.status === 'active' && currentReportingDetails.contributionFunding === 'wallet',
+		ordinaryEscalationGameStarted: selectedPool?.ordinaryEscalationGameStarted ?? (currentReportingDetails?.status === 'active' && currentReportingDetails.contributionFunding === 'wallet'),
 		reportingStage: selectedPoolReportingStage,
 		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
 	})

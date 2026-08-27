@@ -961,6 +961,26 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectReportingOutcome('Yes')
 			await driver.waitForBodyText('Your selected REP was committed to the chosen escalation side.')
 			await driver.waitForBodyWithoutText('Submitting report…')
+			const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
+			const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
+			const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
+			if (captureVaultLockedQaScreenshots) {
+				await driver.clickButton('Dismiss')
+				await driver.clickButton('Vaults')
+				await driver.waitForBodyText('New vault REP backing is unavailable after ordinary escalation starts.')
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
+				if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
+				if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
+					await driver.resize({ height: 844, width: 390 })
+					await driver.evaluate(
+						`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const reasonId = button?.getAttribute('aria-describedby'); if (reasonId === null || reasonId === undefined) return; document.getElementById(reasonId)?.scrollIntoView({ block: 'center' }) })()`,
+					)
+					await driver.captureScreenshot(vaultLockedMobileScreenshotPath)
+					await driver.resize({ height: 900, width: 1440 })
+				}
+				await driver.clickButton('Reporting')
+				await driver.waitForBodyText('Report Outcome')
+			}
 			await selectReportingOutcome('No')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')

@@ -344,6 +344,7 @@ export type ListedSecurityPool = {
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint
+	ordinaryEscalationGameStarted: boolean
 	marketDetails: MarketDetails
 	migratedAttoRep: bigint
 	parent: Address

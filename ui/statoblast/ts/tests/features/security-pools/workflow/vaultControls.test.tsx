@@ -9,6 +9,29 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const fixture = createVaultControlsFixture()
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
 
+	test('blocks vault deposits from a direct vault view when an ordinary escalation already started', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ ordinaryEscalationGameStarted: true, securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
+		const disabledReason = document.getElementById(depositButton.getAttribute('aria-describedby') ?? '')
+		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.')
+	})
+
 	test('shows an explicit vault-refresh blocker while the selected vault auto-loads', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const renderedComponent = await renderIntoDocument(

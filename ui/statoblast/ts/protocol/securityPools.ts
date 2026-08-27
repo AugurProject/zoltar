@@ -332,7 +332,22 @@ async function loadSecurityPoolDetails(
 	const { initialReportPriorityFeeAttoEthPerGas, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, statoblastSecurityMultiplierBps, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 	const shouldLoadVaults = shouldLoadSecurityPoolVaults(deployment, options)
 	const [
-		[settlementCollateralAttoEth, currentRetentionRate, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime],
+		[
+			settlementCollateralAttoEth,
+			currentRetentionRate,
+			minimumSecurityBondDebtAttoEth,
+			minimumVaultRepDepositAttoRep,
+			forkData,
+			lastOraclePrice,
+			lastSettlementTimestamp,
+			questionOutcome,
+			systemStateValue,
+			shareTokenSupplyAttoShares,
+			totalPoolHeldAttoRep,
+			poolAccountingSnapshot,
+			universeForkTime,
+			escalationGameAddress,
+		],
 		marketDetails,
 		vaultSummaries,
 	] = await Promise.all([
@@ -415,6 +430,12 @@ async function loadSecurityPoolDetails(
 				address: getInfraContractAddresses().zoltar,
 				args: [universeId],
 			},
+			{
+				abi: statoblast_SecurityPool_SecurityPool.abi,
+				functionName: 'escalationGame',
+				address: securityPoolAddress,
+				args: [],
+			},
 		]),
 		loadMarketDetails(client, questionId),
 		shouldLoadVaults
@@ -424,6 +445,14 @@ async function loadSecurityPoolDetails(
 				})
 			: getSecurityPoolVaultCount(client, securityPoolAddress).then(createDeferredSecurityPoolVaultSummary),
 	])
+	const ordinaryEscalationGameStarted = sameAddress(escalationGameAddress, zeroAddress)
+		? false
+		: !(await client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				functionName: 'forkContinuation',
+				address: escalationGameAddress,
+				args: [],
+			}))
 	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 	const systemState = getSecurityPoolSystemState(systemStateValue)
@@ -450,6 +479,7 @@ async function loadSecurityPoolDetails(
 		managerAddress,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,
+		ordinaryEscalationGameStarted,
 		marketDetails,
 		migratedAttoRep,
 		parent,
