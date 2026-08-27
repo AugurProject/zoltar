@@ -20,6 +20,10 @@
 		["0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x13CD80A6741A6349d2FeBDd65991108eCfD4f283", "Genesis REP", "reputationToken"],
 		["0x65156FD21726b8efcB627fa38c506E3f3542F601", "Wrapped Ether", "weth"],
-		["0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", "USD Coin", "usdc"]
+		["0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", "USD Coin", "usdc"],
+		["0x6A2dA30c08fA167CB6FDA47b433FbA081E701c2e", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x20c9Dd90dD4b5548c27850C42B0D83748D1C9920", "Escalation Game Factory", "escalationGameFactory"],
+		["0xe5680a51628360C08fc1021E05169AB2D812bBbA", "Security Pool Factory", "securityPoolFactory"],
+		["0x526186B90D97bb6bB9A44228a7373189507850D5", "Escalation Game Proof Verifier", "escalationProofVerifier"]
 	]
 }

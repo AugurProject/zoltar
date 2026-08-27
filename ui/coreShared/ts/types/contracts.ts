@@ -466,6 +466,7 @@ type EscalationMigrationEntitlementStatus = {
 }
 
 type ReportingDetailsBase = {
+	contributionFunding?: 'vault' | 'wallet' | undefined
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint
 	forkThresholdAttoRep: bigint
@@ -484,6 +485,9 @@ type ReportingDetailsBase = {
 	viewerVaultExists: boolean
 	viewerVaultDisputeStakedAttoRep: bigint | undefined
 	viewerVaultRepBackingAttoRep: bigint | undefined
+	viewerWalletRepAllowanceAttoRep?: bigint | undefined
+	viewerWalletRepBalanceAttoRep?: bigint | undefined
+	viewerWalletRepTokenAddress?: Address | undefined
 }
 
 export type ActiveReportingDetails = ReportingDetailsBase & {
@@ -496,6 +500,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	sides: EscalationSide[]
 	activationTime: bigint
 	totalCostAttoRep: bigint
+	forkContinuation?: boolean | undefined
 }
 
 export type ReportingDetails =
@@ -505,7 +510,7 @@ export type ReportingDetails =
 	| ActiveReportingDetails
 
 export type ReportingActionResult = ActionResult & {
-	action: 'reportOutcome' | 'withdrawEscalation'
+	action: 'approveReportingRep' | 'reportOutcome' | 'withdrawEscalation'
 	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address
 	universeId: bigint

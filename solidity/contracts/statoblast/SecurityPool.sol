@@ -443,7 +443,9 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
-		require(!isEscalationResolved(), 'Resolved');
+		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
+		if (ordinaryEscalationGameStarted) revert();
+		if (isEscalationResolved()) revert();
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		updateVaultFees(msg.sender);
@@ -627,6 +629,7 @@ contract SecurityPool is SecurityPoolStorage {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question active');
 			escalationGame = escalationGameFactory.deployEscalationGame(initialEscalationGameDepositAttoRep, zoltar.getNonDecisionThresholdAttoRep(universeId));
+			ordinaryEscalationGameStarted = true;
 			emit EscalationGameSet(escalationGame);
 		} else {
 			require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork paused');

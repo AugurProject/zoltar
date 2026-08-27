@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'f2b615b5d7ee9d20c44657561f4ceab89609bd25d0b69b3ad6988f8204ad51c6'
+export const expectedProductionSoliditySourceFingerprint = '5332520164e4664ca7ee23a82ade0b19bd3f790ddf25a6366e09e542ea333d6a'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -359,6 +359,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/EscalationGame.sol': {
 		applyTruthAuctionHaircut: ['external(uint256)'],
+		depositRepFromWallet: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 		resumeFromFork: ['external()'],
 		start: ['external(uint256,uint256)'],
@@ -481,7 +482,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/ReputationToken.sol': 'b3e68791ded4f7fd9cc70785bdd3c55d5ec7fde5ad64b7fbe8aee03d5d273e3b',
 	'solidity/contracts/Zoltar.sol': '6479e6b24905f8f3299e486703df934aa7811152a9d20517596da64cbcd4b471',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
-	'solidity/contracts/statoblast/EscalationGame.sol': '41394612ae4488f08c9f4c18ff912cec089fc40a3f5d501a27cb8b2fabc4db57',
+	'solidity/contracts/statoblast/EscalationGame.sol': '4cc9cce15e1e989a28853212147ac49c46e18cb6dab402bc80b196718042e590',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': 'bdd7cfe47523c5e0c8985eec993214de44caf88fc4f2e6f1586d2d03c0a02ef0',
 	'solidity/contracts/statoblast/EscalationGameEscrow.sol': 'c75cd0c9ea134a3bfa03227d0500485049818553447b4b258ff220cb0d201dde',
@@ -777,7 +778,7 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Vault owner',
 				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from this deposit and its selected deposit target factor.',
 				declarations: [{ name: 'depositRepToVault' }],
-				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
+				preconditions: 'Operational and unforked; no ordinary escalation game has ever started on this pool; `isEscalationResolved()` is false; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
 				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{
@@ -1183,12 +1184,12 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'aa111e15b811c762945753415ef818ed6f85ec81553ab7ede082aca87869ad64',
+		compiledAbiFingerprint: 'f689369c534f5be75bb6844347d80ffbee4fdd87ded092a8b6df4c926d072a5e',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
 		readAbiFingerprint: 'ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `cumulativeClaimRetention`, and `cumulativeClaimRetentionExponent`. The claim delegate fallback exposes `rootClaimSourceGame`, `applyInheritedClaimRetention`, and `applyInheritedSourceStorageBasis`. The source-storage-basis read allocates retained carry by cumulative-prefix differences so leaf allocations sum to the aggregate checkpoint. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through `SecurityPool`; after an ordinary game starts, wallet-funded deposits use `depositRepFromWallet` and mint no pool backing units.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'disputeStakedRepByVaultAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
@@ -1271,6 +1272,14 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Transfers the sold child REP to the pool, applies one retention ratio to escrow and outcome balances, and rebases elapsed curve time. The fork remains final and the game remains paused until the pool resumes it.',
 				preconditions: "Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.",
 				signals: '`TruthAuctionHaircutApplied` and REP `Transfer`',
+			},
+			{
+				call: '`depositRepFromWallet(outcome, maximumDepositAttoRep)`',
+				caller: 'Any REP holder',
+				effect: 'Transfers the accepted REP directly from the caller into dispute escrow, appends a local deposit, and records its carry leaf without minting pool backing units.',
+				declarations: [{ name: 'depositRepFromWallet' }],
+				preconditions: "Current game is the pool's ordinary unresolved game; pool operational; universe unforked; outcome non-`None`; caller allowance to this game covers the accepted REP; preview accepts a positive amount within the remaining threshold room.",
+				signals: '`LocalDepositAppended`, `DepositOnOutcome`, REP `Transfer`, optionally `NonDecisionReached`',
 			},
 			{
 				call: '`recordDepositFromSecurityPool(...)`',

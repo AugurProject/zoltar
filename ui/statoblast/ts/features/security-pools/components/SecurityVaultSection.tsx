@@ -171,6 +171,7 @@ export function SecurityVaultSection({
 	const approveRepEnabled = poolState?.actions.approveRep.enabled ?? true
 	const claimFeesEnabled = poolState?.actions.redeemFees.enabled ?? true
 	const vaultLifecycleBlocker = (() => {
+		if (poolState?.ordinaryEscalationGameStarted) return securityPoolCopy.vaultDepositEscalationStartedDetail
 		if (poolState?.lifecycleState === 'ended') return securityPoolCopy.vaultActionsEndedDetail
 		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
 		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail

@@ -1,5 +1,5 @@
 {
-  "sourceHash": "504f6c2fdd35b7ff5e81938e1b9a21ec380ae6813a6f4662d8dc3583f2e83d85",
+  "sourceHash": "8f2d9e78a1de046899eee48bfc3cfc6f4bbf273b6300ec90d66b8d9862a41378",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -3267,6 +3267,24 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "enum BinaryOutcomes.BinaryOutcome",
+              "name": "outcome",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maximumDepositAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "depositRepFromWallet",
+          "outputs": [],
+          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
@@ -7785,6 +7803,24 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "enum BinaryOutcomes.BinaryOutcome",
+              "name": "outcome",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maximumDepositAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "recordWalletDeposit",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "resumeFromFork",
           "outputs": [],
@@ -7920,6 +7956,35 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "enum BinaryOutcomes.BinaryOutcome",
+              "name": "outcome",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "previewDepositOnOutcome",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "acceptedAmountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "resultingCumulativeAmountAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "repToken",
           "outputs": [
@@ -7952,12 +8017,88 @@
       "abi": [
         {
           "inputs": [],
+          "name": "escalationGame",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "securityPoolForker",
           "outputs": [
             {
               "internalType": "address",
               "name": "",
               "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "systemState",
+          "outputs": [
+            {
+              "internalType": "enum SystemState",
+              "name": "",
+              "type": "uint8"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "universeId",
+          "outputs": [
+            {
+              "internalType": "uint248",
+              "name": "",
+              "type": "uint248"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "zoltar",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ]
+    },
+    "IEscalationGameZoltarContext": {
+      "source": "contracts/statoblast/EscalationGameDepositDelegate.sol",
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "uint248",
+              "name": "universeId",
+              "type": "uint248"
+            }
+          ],
+          "name": "getForkTime",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",

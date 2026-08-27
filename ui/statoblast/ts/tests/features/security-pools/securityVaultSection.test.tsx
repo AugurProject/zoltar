@@ -512,6 +512,29 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Review Special Action' }).getAttribute('aria-describedby')).toBe(specialActionReason.id)
 	})
 
+	test('redirects ordinary-game vault deposits to wallet-funded reporting while preserving vault withdrawals', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState: 'operational',
+						ordinaryEscalationGameStarted: true,
+						universeHasForked: false,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const reason = 'New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.'
+		const reasonElement = within(document.body).getByText(reason)
+		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		expect(depositButton.getAttribute('aria-describedby')).toBe(reasonElement.id)
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
 	test('preserves wallet recovery for lifecycle-enabled redemption after the pool ends', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

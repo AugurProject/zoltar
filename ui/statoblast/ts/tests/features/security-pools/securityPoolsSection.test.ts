@@ -60,6 +60,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 	return {
 		accountState: createAccountState(),
 		loadingReportingDetails: false,
+		onApproveReportingRep: () => undefined,
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,

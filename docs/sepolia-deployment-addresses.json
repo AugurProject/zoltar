@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xC86e2669295B9e0bC5103E1d8Ef73020c3D23955"
+			"address": "0x6A2dA30c08fA167CB6FDA47b433FbA081E701c2e"
 		},
 		{
 			"id": "weth",
@@ -93,12 +93,12 @@
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+			"address": "0x20c9Dd90dD4b5548c27850C42B0D83748D1C9920"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xa73297859221E9df8957003e47D4e391C6a87fE3"
+			"address": "0xe5680a51628360C08fc1021E05169AB2D812bBbA"
 		}
 	],
 	"derivedContracts": [
@@ -115,17 +115,17 @@
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+			"address": "0x20c9Dd90dD4b5548c27850C42B0D83748D1C9920"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xa73297859221E9df8957003e47D4e391C6a87fE3"
+			"address": "0xe5680a51628360C08fc1021E05169AB2D812bBbA"
 		},
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505"
+			"address": "0x526186B90D97bb6bB9A44228a7373189507850D5"
 		}
 	]
 }

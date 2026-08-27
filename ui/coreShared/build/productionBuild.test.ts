@@ -594,6 +594,7 @@ function readEvaluationString(response: unknown) {
 }
 
 type ProductionBrowserDriver = {
+	captureScreenshot: (screenshotPath: string) => Promise<void>
 	clickButton: (label: string, occurrence?: number) => Promise<void>
 	evaluate: (expression: string) => Promise<unknown>
 	navigate: (url: string) => Promise<void>
@@ -676,6 +677,12 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		}
 		if (!applicationReady) throw new Error(`Production application did not finish loading: ${state}`)
 		const driver: ProductionBrowserDriver = {
+			captureScreenshot: async screenshotPath => {
+				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
+				if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
+				await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
+				await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
+			},
 			clickButton: async (label, occurrence = 0) => {
 				const clicked = await evaluate(
 					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
@@ -912,6 +919,41 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				await driver.waitForButtonEnabled('Max')
 				await driver.clickButton('Max')
+				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Approve REP' && !button.disabled)`)
+				if (approvalRequired === true) {
+					const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
+					const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
+					const captureQaScreenshots = (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') || (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '')
+					if (captureQaScreenshots) {
+						const dismissAvailable = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Dismiss' && !button.disabled)`)
+						if (dismissAvailable === true) await driver.clickButton('Dismiss')
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+					}
+					if (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') await driver.captureScreenshot(desktopScreenshotPath)
+					if (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '') {
+						await driver.resize({ height: 844, width: 390 })
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+						await driver.captureScreenshot(mobileScreenshotPath)
+						await driver.resize({ height: 900, width: 1440 })
+					}
+					await driver.clickButton('Approve REP')
+					await driver.waitForTransactionStatus('Confirmed', 'Approve Reporting REP')
+					await driver.waitForBodyText('REP approved')
+					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
+					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
+					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
+					if (captureApprovedQaScreenshots) {
+						await driver.clickButton('Dismiss')
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+					}
+					if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
+					if (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '') {
+						await driver.resize({ height: 844, width: 390 })
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+						await driver.captureScreenshot(approvedMobileScreenshotPath)
+						await driver.resize({ height: 900, width: 1440 })
+					}
+				}
 				await driver.waitForButtonEnabled(`Report ${outcome}`)
 				await driver.clickButton(`Report ${outcome}`)
 			}

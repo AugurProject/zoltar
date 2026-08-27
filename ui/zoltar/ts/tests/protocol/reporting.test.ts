@@ -2,8 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
-import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, reportOutcomeInSecurityPool, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -12,6 +12,7 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
+const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e8')
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
 const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
@@ -62,6 +63,63 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 }
 
 describe('reporting protocol client', () => {
+	test('reportOutcomeInSecurityPool sends active ordinary-game contributions from the wallet directly to game escrow', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(
+			request => {
+				capturedData = request.data
+				capturedTo = request.to
+			},
+			async request => {
+				if (request.functionName === 'universeId') return 9n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'forkContinuation') return false
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		)
+
+		const result = await reportOutcomeInSecurityPool(asWriteClient(client), securityPoolAddress, 'yes', 7n)
+
+		expect(capturedTo).toBe(escalationGameAddress)
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('depositRepFromWallet')
+		expect(decodedCall.args).toEqual([1n, 7n])
+		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
+	})
+
+	test('reportOutcomeInSecurityPool preserves vault-funded deposits for fork continuations', async () => {
+		let capturedData: Hex | undefined
+		let capturedTo: Address | null | undefined
+		const client = createMockWriteClient(
+			request => {
+				capturedData = request.data
+				capturedTo = request.to
+			},
+			async request => {
+				if (request.functionName === 'universeId') return 9n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'forkContinuation') return true
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		)
+
+		await reportOutcomeInSecurityPool(asWriteClient(client), securityPoolAddress, 'no', 11n)
+
+		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedData).toBeDefined()
+		const decodedCall = decodeFunctionData({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			data: capturedData ?? ('0x' satisfies Hex),
+		})
+		expect(decodedCall.functionName).toBe('depositToEscalationGame')
+		expect(decodedCall.args).toEqual([2n, 11n])
+	})
+
 	test('loadReportingDetails keeps proof deposits visible after optional unresolved parent escalation-deposit accounting cleanup', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
@@ -97,6 +155,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf') return 100n
+				if (request.functionName === 'allowance') return 100n
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return escrowedRep
@@ -163,6 +224,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf') return 100n
+				if (request.functionName === 'allowance') return 100n
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
@@ -226,6 +290,9 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf') return 100n
+				if (request.functionName === 'allowance') return 100n
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n

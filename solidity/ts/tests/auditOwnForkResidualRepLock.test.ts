@@ -128,7 +128,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 		strictEqualTypeSafe(await backingUnitsToAttoRep(client, yesPool.securityPool, 0n), 0n, 'the ownerless pool conversion should return zero')
 		strictEqualTypeSafe(await forkerBackingUnitsToAttoRep(client, yesPool.securityPool, 0n), 0n, 'the ownerless forker conversion preview should return zero')
 
-		await assert.rejects(depositRepToVault(client, yesPool.securityPool, 10n * 10n ** 18n), /Resolved/)
+		await assert.rejects(depositRepToVault(client, yesPool.securityPool, 10n * 10n ** 18n))
 		await assert.rejects(redeemRepFromVault(client, yesPool.securityPool, client.account.address), /No redeemable REP/)
 		strictEqualTypeSafe(await getERC20Balance(client, yesRepToken, yesPool.securityPool), 0n, 'closed deposit and redemption paths should leave no REP locked')
 	})

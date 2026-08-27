@@ -217,10 +217,10 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -256,12 +256,11 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
-		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
+		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -431,9 +430,6 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 
-		const unresolvedDeposit = reportBond
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -442,6 +438,9 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+
+		const unresolvedDeposit = reportBond
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -468,7 +467,6 @@ describe('Statoblast: escalation migration', () => {
 		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -476,6 +474,7 @@ describe('Statoblast: escalation migration', () => {
 		if (vaultRepBeforeTopUp < 3n * forkThresholdAttoRep) {
 			await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep - vaultRepBeforeTopUp, questionId)
 		}
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -555,10 +554,6 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 
-		const unresolvedDeposit = reportBond
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, unresolvedDeposit + 1n)
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -567,6 +562,10 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+
+		const unresolvedDeposit = reportBond
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, unresolvedDeposit + 1n)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const parentYesDepositsBeforeMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -944,9 +943,6 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 
-		const unresolvedDeposit = reportBond
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -955,6 +951,9 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+
+		const unresolvedDeposit = reportBond
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
@@ -1655,6 +1654,8 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		const recursiveDepositCount = 6n
 		const depositIndexes: bigint[] = []
 		for (let index = 0n; index < recursiveDepositCount; index += 1n) {
@@ -1662,8 +1663,6 @@ describe('Statoblast: escalation migration', () => {
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		}
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
 		const firstForkQuestionData = {
 			...questionData,
