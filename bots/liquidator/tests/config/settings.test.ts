@@ -46,7 +46,6 @@ const settings = {
 		execute: false,
 		historicalLogRecovery: false,
 		logLookbackBlocks: 256,
-		maxVaultsPerPool: 1000,
 		once: false,
 		pollMilliseconds: 12000,
 		stateFile: '.state/operator-state.json',

@@ -30,7 +30,7 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 			getBalance: async () => 0n,
 		})),
 		createWalletWriteClient: mock(() => ({ kind: 'write-client' as const })),
-		loadAllSecurityPools: mock(async () => []),
+		loadSecurityPoolLineage: mock(async () => []),
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalanceAttoRep: 1n,
 			currentWethBalanceAttoEth: 1n,

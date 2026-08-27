@@ -29,14 +29,14 @@ let loadAllSecurityPoolsCallOptions: ({ accountAddress?: Address; selectedSecuri
 let loadForkAuctionDetailsCalls = 0
 let childAuctionDetailsFactory: (securityPoolAddress: Address) => ForkAuctionDetails | Promise<ForkAuctionDetails> = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
 let recoveredPoolsFactory: () => ListedSecurityPool[] | Promise<ListedSecurityPool[]> = () => recoveredPools
-const loadAllSecurityPoolsMock = mock(async (_client: unknown, options?: { accountAddress?: Address; selectedSecurityPoolAddress?: Address; vaultDetailMode?: 'all' | 'selected' }) => {
-	loadAllSecurityPoolsCallOptions.push(options)
+const loadAllSecurityPoolsMock = mock(async (_client: unknown, parent: Address, accountAddress?: Address) => {
+	loadAllSecurityPoolsCallOptions.push({ ...(accountAddress === undefined ? {} : { accountAddress }), selectedSecurityPoolAddress: parent, vaultDetailMode: 'selected' })
 	return recoveredPoolsFactory()
 })
 
 mock.module('../../../protocol/index.js', () => ({
 	...actualContracts,
-	loadAllSecurityPools: loadAllSecurityPoolsMock,
+	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1
 		return childAuctionDetailsFactory(securityPoolAddress)

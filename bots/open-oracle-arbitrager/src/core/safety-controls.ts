@@ -70,6 +70,7 @@ export function utcDayGasSpentWeth(positions: readonly Pick<RecordedRiskPosition
 
 export function positionRiskLimitMismatch(
 	parameters: {
+		archivedDailyGasSpentAttoWeth?: bigint
 		capitalAtRiskAttoWeth: bigint
 		positions: readonly RecordedRiskPosition[]
 		projectedGasCostAttoWeth: bigint
@@ -79,7 +80,7 @@ export function positionRiskLimitMismatch(
 ) {
 	const openPositions = parameters.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedAttoWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(parameters.positions, now)
+	const dailyGasSpentAttoWeth = utcDayGasSpentWeth(parameters.positions, now) + (parameters.archivedDailyGasSpentAttoWeth ?? 0n)
 	return riskLimitMismatch(
 		{
 			capitalAtRiskAttoWeth: parameters.capitalAtRiskAttoWeth,

@@ -365,6 +365,12 @@ describe('operator execution history', () => {
 			opportunities: [],
 			paused: false,
 			positions: [base, { ...base, closedAt: new Date(1).toISOString(), realizedNetProfitEth: '-0.04', reportId: '2', status: 'closed' }],
+			positionArchive: {
+				gasSpentByUtcDay: { [new Date().toISOString().slice(0, 10)]: '0.01' },
+				hedgedProfitBeforeGasEth: '0.3',
+				positionCount: 3,
+				realizedNetProfitEth: '0.2',
+			},
 			priceHistory: [],
 			reportPaths: [],
 			status: 'running',
@@ -374,9 +380,11 @@ describe('operator execution history', () => {
 		}
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.consecutivePollFailures).toBe(2)
-		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0.2')
+		expect(snapshot.positionRecordCount).toBe(5)
+		expect(snapshot.risk.usage.dailyGasSpentWeth).toBe('0.01')
+		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0.5')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0.07')
-		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.04')
+		expect(snapshot.totalRealizedNetProfitEth).toBe('0.16')
 	})
 
 	test('excludes staged entry quotes from actual position P&L totals', () => {

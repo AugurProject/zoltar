@@ -5,6 +5,7 @@ export type DeploymentConfiguration = Readonly<{
 	chainName: string
 	rpcUrl: string
 	securityPoolFactory: Address
+	zoltar: Address
 	factory: Address
 	router: Address
 	feeBps: number

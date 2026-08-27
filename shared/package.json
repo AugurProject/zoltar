@@ -48,6 +48,11 @@
 			"types": "./ts/liquidation.ts",
 			"default": "./js/liquidation.js"
 		},
+		"./logScan": {
+			"types": "./ts/logScan.ts",
+			"bun": "./ts/logScan.ts",
+			"default": "./js/logScan.js"
+		},
 		"./truthAuctionTickMath": {
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"
