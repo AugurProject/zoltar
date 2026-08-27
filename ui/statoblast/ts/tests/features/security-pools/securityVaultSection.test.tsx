@@ -137,9 +137,15 @@ const terminalOrdinaryGameCases = [
 		name: 'fork-migration',
 		universeHasForked: true,
 	},
+	{
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		lifecycleState: 'forkTruthAuction',
+		name: 'truth-auction',
+		universeHasForked: true,
+	},
 ] satisfies ReadonlyArray<{
 	expectedReason: string
-	lifecycleState: 'ended' | 'forkMigration' | 'poolForked'
+	lifecycleState: 'ended' | 'forkMigration' | 'forkTruthAuction' | 'poolForked'
 	name: string
 	universeHasForked: boolean
 }>
