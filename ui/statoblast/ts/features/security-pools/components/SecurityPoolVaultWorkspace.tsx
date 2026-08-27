@@ -63,6 +63,8 @@ export function SecurityPoolVaultWorkspace({
 	vaultView: SelectedVaultView
 	walletAddress: string | undefined
 }) {
+	const vaultLookupActionLabel = securityVault.securityVaultError === undefined ? commonCopy.refresh : commonCopy.retry
+
 	return (
 		<div className='workflow-stack vault-workspace'>
 			<SectionBlock
@@ -83,7 +85,7 @@ export function SecurityPoolVaultWorkspace({
 					placeholder={commonCopy.hexValuePlaceholder}
 					action={
 						<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
-							{securityVault.loadingSecurityVault ? <LoadingText>{securityPoolCopy.refreshing}</LoadingText> : commonCopy.refresh}
+							{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : vaultLookupActionLabel}
 						</button>
 					}
 				/>

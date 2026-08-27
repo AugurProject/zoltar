@@ -827,7 +827,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('Open pool')
-			await driver.waitForBodyWithoutText('Loading vault…')
+			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
 			await driver.waitForBodyText('REP BACKING')
@@ -862,7 +862,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
-			await driver.waitForBodyWithoutText('Loading vault…')
+			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
 			await driver.waitForBodyText('REP BACKING')
@@ -968,6 +968,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.clickButton('Dismiss')
 				await driver.clickButton('Vaults')
 				await driver.waitForBodyText('New vault REP backing is unavailable after ordinary escalation starts.')
+				await driver.waitForBodyWithoutText('Loading vault details…')
 				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
 				if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
 				if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
