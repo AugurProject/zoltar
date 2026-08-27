@@ -223,6 +223,7 @@ export function ReportingSection({
 }: ReportingSectionProps) {
 	const presetBlockerId = useId()
 	const reportingStageDetailId = useId()
+	const reportDisabledReasonId = useId()
 	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
@@ -478,6 +479,8 @@ export function ReportingSection({
 	}
 	const shouldRenderSharedReportSettlementDisabledReason = sharedReportSettlementDisabledReason !== undefined && sharedReportSettlementDisabledReasonId === settlementDisabledReasonId
 	const reportDisabledReasonElementId = sharedReportSettlementDisabledReasonId ?? (reportingStageBanner?.detail === reportActionDisabledReason ? reportingStageDetailId : undefined)
+	const standaloneReportDisabledReason = reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
+	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined ? undefined : reportDisabledReasonId)
 	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
@@ -657,7 +660,7 @@ export function ReportingSection({
 								<LoadingAwareText>{sharedReportSettlementDisabledReason}</LoadingAwareText>
 							</p>
 						) : undefined}
-						<div className='actions'>
+						<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
 							{reportingRepApprovalAction}
 							<TransactionActionButton
 								idleLabel={reportButtonLabel}
@@ -665,10 +668,15 @@ export function ReportingSection({
 								onClick={onReportOutcome}
 								pending={reportingActiveAction === 'reportOutcome'}
 								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
-								disabledReasonElementId={reportDisabledReasonElementId}
-								showDisabledReason={reportDisabledReasonElementId === undefined}
+								disabledReasonElementId={effectiveReportDisabledReasonElementId}
+								showDisabledReason={false}
 							/>
 						</div>
+						{standaloneReportDisabledReason === undefined ? undefined : (
+							<p className='detail disabled-reason' id={reportDisabledReasonId}>
+								<LoadingAwareText>{standaloneReportDisabledReason}</LoadingAwareText>
+							</p>
+						)}
 					</div>
 				</SectionBlock>
 			) : undefined}
