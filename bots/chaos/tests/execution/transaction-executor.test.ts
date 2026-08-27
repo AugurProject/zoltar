@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
+import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, encodeAbiParameters, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
@@ -13,6 +13,8 @@ const sender = getAddress('0x0000000000000000000000000000000000000001')
 const caller = getAddress('0x0000000000000000000000000000000000000002')
 const target = getAddress('0x0000000000000000000000000000000000000003')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
+const childRepSplitSignature = 'ChildRepSplit(address,uint256,uint256,uint256)'
+const childRepSplitTopic = keccak256(toHex(childRepSplitSignature))
 
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
@@ -554,6 +556,43 @@ function executablePlan(): OperationPlan {
 	}
 }
 
+function canonicalLifecyclePlan(): OperationPlan {
+	const base = executablePlan()
+	const step = base.steps[0]
+	const targetAttoRep = 100n.toString()
+	if (step === undefined) throw new Error('Execution test plan is missing its step')
+	return {
+		...base,
+		classification: 'lifecycle-obligation',
+		definitionId: 'statoblast.fork.migrate-rep',
+		id: 'plan:migrate-rep-receipt',
+		label: 'Fork workflow: migrate-rep',
+		metadata: { outcome: '0', pool: target, targetAttoRep },
+		obligation: true,
+		priority: 'urgent',
+		steps: [
+			{
+				...step,
+				evidence: [
+					{
+						abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+						canonicalLifecycleConfirmation: true,
+						emitter: target,
+						equals: targetAttoRep,
+						field: 'childPoolRepSplitAttoRep',
+						indexed: { outcomeIndex: '0', parent: target },
+						kind: 'decoded-event-field',
+						signature: childRepSplitSignature,
+						topic0: childRepSplitTopic,
+					},
+				],
+				id: 'migrate-rep',
+				label: 'migrate-rep',
+			},
+		],
+	}
+}
+
 function executionRpcServer(options: { ethCall?: 'success' | 'unavailable'; head?: bigint } = {}) {
 	const requestedMethods: string[] = []
 	let currentHead = options.head ?? 99n
@@ -658,6 +697,168 @@ function executionRpcServer(options: { ethCall?: 'success' | 'unavailable'; head
 		url: `http://127.0.0.1:${server.port.toString()}`,
 	}
 }
+
+type FinalizedExecutionReceiptState = {
+	head: bigint
+	logs: Array<{ address: typeof target; data: `0x${string}`; topics: `0x${string}`[] }>
+	transactionHash?: `0x${string}` | undefined
+}
+
+function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
+	const server = Bun.serve({
+		port: 0,
+		async fetch(request) {
+			const body = rpcRequest(await request.json())
+			if (!('method' in body) || typeof body.method !== 'string') return new Response('Expected a JSON-RPC method', { status: 400 })
+			const id = 'id' in body ? body.id : 1
+			switch (body.method) {
+				case 'eth_chainId':
+					return Response.json({ id, jsonrpc: '2.0', result: '0x1' })
+				case 'eth_blockNumber':
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(state.head) })
+				case 'eth_getBalance':
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(10n ** 20n) })
+				case 'eth_getTransactionCount':
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(3n) })
+				case 'eth_call':
+					return Response.json({ id, jsonrpc: '2.0', result: '0x' })
+				case 'eth_estimateGas':
+					return Response.json({ id, jsonrpc: '2.0', result: '0x5208' })
+				case 'eth_sendRawTransaction': {
+					const params = 'params' in body ? body.params : undefined
+					const serializedTransaction = Array.isArray(params) ? params[0] : undefined
+					if (typeof serializedTransaction !== 'string' || !isHex(serializedTransaction)) return new Response('Expected a serialized transaction', { status: 400 })
+					state.transactionHash = keccak256(serializedTransaction)
+					state.head = 112n
+					return Response.json({ id, jsonrpc: '2.0', result: state.transactionHash })
+				}
+				case 'eth_getTransactionReceipt':
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result:
+							state.transactionHash === undefined
+								? null
+								: {
+										blockHash: receiptBlockHash,
+										blockNumber: toHex(100n),
+										contractAddress: null,
+										cumulativeGasUsed: '0x5208',
+										effectiveGasPrice: '0x1',
+										from: sender,
+										gasUsed: '0x5208',
+										logs: state.logs.map((log, index) => ({
+											...log,
+											blockHash: receiptBlockHash,
+											blockNumber: toHex(100n),
+											logIndex: toHex(index),
+											removed: false,
+											transactionHash: state.transactionHash,
+											transactionIndex: '0x0',
+										})),
+										logsBloom: `0x${'00'.repeat(256)}`,
+										status: '0x1',
+										to: target,
+										transactionHash: state.transactionHash,
+										transactionIndex: '0x0',
+										type: '0x2',
+									},
+					})
+				case 'eth_getBlockByNumber': {
+					if (!('params' in body) || !Array.isArray(body.params) || typeof body.params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
+					const blockNumber = BigInt(body.params[0])
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result: {
+							baseFeePerGas: '0x1',
+							difficulty: '0x0',
+							extraData: '0x',
+							gasLimit: '0x1c9c380',
+							gasUsed: '0x5208',
+							hash: blockNumber === 100n ? receiptBlockHash : finalityBlockHash,
+							logsBloom: `0x${'00'.repeat(256)}`,
+							miner: zeroAddress,
+							mixHash: `0x${'00'.repeat(32)}`,
+							nonce: '0x0000000000000000',
+							number: toHex(blockNumber),
+							parentHash: `0x${'44'.repeat(32)}`,
+							receiptsRoot: `0x${'55'.repeat(32)}`,
+							sha3Uncles: `0x${'66'.repeat(32)}`,
+							size: '0x1',
+							stateRoot: `0x${'77'.repeat(32)}`,
+							timestamp: toHex(receiptClockTimestamp),
+							totalDifficulty: '0x0',
+							transactions: [],
+							transactionsRoot: `0x${'88'.repeat(32)}`,
+							uncles: [],
+						},
+					})
+				}
+				default:
+					return new Response(`Unexpected RPC method ${body.method}`, { status: 500 })
+			}
+		},
+	})
+	servers.push(server)
+	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
+	return `http://127.0.0.1:${server.port.toString()}`
+}
+
+async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['logs']) {
+	const directory = await mkdtemp('/tmp/zoltar-chaos-finalized-execution-')
+	directories.push(directory)
+	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
+	const receiptState: FinalizedExecutionReceiptState = { head: 99n, logs }
+	const firstUrl = finalizedExecutionRpcServer(receiptState)
+	const secondUrl = finalizedExecutionRpcServer(receiptState)
+	const configured = settings(firstUrl, [secondUrl])
+	configured.runtime.stateFile = join(directory, 'state.json')
+	configured.strategy.maximumGasCostAttoEth = 10n ** 18n
+	const pool = createRpcEndpointPool([firstUrl, secondUrl])
+	const state = initialRuntimeState(false, account.address, 1, initialDurableState(1, false, 'profile:finalized-receipt', account.address))
+	return {
+		environment: {
+			chain: mainnet,
+			clock: () => Number(receiptClockTimestamp * 1_000n),
+			pool,
+			sender: account.address,
+			settings: configured,
+			state,
+			wallet: createWalletClient({ account, chain: mainnet, transport: pool.transport }),
+		} satisfies ExecutionEnvironment,
+		state,
+		stateFile: configured.runtime.stateFile,
+	}
+}
+
+describe('canonical lifecycle receipt disposition', () => {
+	test('keeps a successful empty-log execution waiting for canonical confirmation', async () => {
+		const { environment, state, stateFile } = await finalizedExecutionFixture([])
+
+		const workflow = await executeOperationPlan(environment, canonicalLifecyclePlan())
+
+		expect(workflow.status).toBe('waiting-obligation')
+		expect(workflow.steps[0]).toMatchObject({ status: 'confirmed', transactionHash: expect.stringMatching(/^0x[0-9a-f]{64}$/) })
+		expect(state.pendingTransactions).toHaveLength(0)
+		expect((await loadDurableState(stateFile, 1)).workflows[0]?.status).toBe('waiting-obligation')
+	})
+
+	test('completes immediately from an exact ChildRepSplit event', async () => {
+		const { environment, stateFile } = await finalizedExecutionFixture([
+			{
+				address: target,
+				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [100n, 0n]),
+				topics: [childRepSplitTopic, toHex(BigInt(target), { size: 32 }), toHex(0n, { size: 32 })],
+			},
+		])
+
+		const workflow = await executeOperationPlan(environment, canonicalLifecyclePlan())
+
+		expect(workflow.status).toBe('completed')
+		expect((await loadDurableState(stateFile, 1)).workflows[0]?.status).toBe('completed')
+	})
+})
 
 async function postJournalExecutionFixture(postJournalHead: bigint) {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-execution-')

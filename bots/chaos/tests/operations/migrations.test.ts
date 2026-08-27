@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
+import { decodeFunctionData, encodeAbiParameters, toHex } from '../support/bot-shared.ts'
 import { securityPoolForkerAbi, zoltarAbi } from '../../src/contracts/abi.ts'
-import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { stepReceiptEvidenceDisposition, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import type { OperationEvidence } from '../../src/operations/types.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
+import { beginLifecycleObligation, completeLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from '../../src/runtime/obligations.ts'
+import { createDurableWorkflow, markWorkflowStepConfirmed, markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
+import type { DurableObligation, DurableObligationTombstone, DurableWorkflow } from '../../src/state/operator-state.ts'
 import { hash, snapshotFixture } from './fixture.ts'
 
 const options = {
@@ -103,7 +107,16 @@ describe('indexed REP migration operations', () => {
 		const step = plan.steps[0]
 		if (step === undefined) throw new Error('Expected a migrateRepToZoltar step')
 		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toEqual({ args: [pool.address, [0n]], functionName: 'migrateRepToZoltar' })
-		expect(step.evidence).toEqual([{ kind: 'receipt-success' }])
+		expect(step.evidence).toEqual([
+			expect.objectContaining({
+				canonicalLifecycleConfirmation: true,
+				equals: 100n.toString(),
+				field: 'childPoolRepSplitAttoRep',
+				indexed: { outcomeIndex: '0', parent: pool.address },
+				kind: 'decoded-event-field',
+				signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
+			}),
+		])
 		expect(() =>
 			validateStepReceiptEvidence(step, {
 				blockHash: hash(101),
@@ -112,7 +125,61 @@ describe('indexed REP migration operations', () => {
 				status: 'success',
 				transactionHash: hash(102),
 			}),
-		).not.toThrow()
+		).toThrow('requires canonical lifecycle confirmation')
+
+		const receipt = {
+			blockHash: hash(101),
+			blockNumber: 101n,
+			logs: [],
+			status: 'success' as const,
+			transactionHash: hash(102),
+		}
+		expect(stepReceiptEvidenceDisposition(step, receipt)).toBe('waiting-canonical')
+		const evidence = step.evidence[0] as Extract<OperationEvidence, { kind: 'decoded-event-field' }> | undefined
+		if (evidence === undefined) throw new Error('Expected decoded ChildRepSplit evidence')
+		const matchingReceipt = {
+			...receipt,
+			logs: [
+				{
+					address: evidence.emitter,
+					data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [100n, 0n]),
+					topics: [evidence.topic0, toHex(BigInt(pool.address), { size: 32 }), toHex(0n, { size: 32 })],
+				},
+			],
+		}
+		expect(stepReceiptEvidenceDisposition(step, matchingReceipt)).toBe('confirmed')
+		expect(
+			stepReceiptEvidenceDisposition(step, {
+				...matchingReceipt,
+				logs: matchingReceipt.logs.map(log => ({ ...log, topics: [evidence.topic0, toHex(BigInt(pool.address), { size: 32 }), toHex(1n, { size: 32 })] })),
+			}),
+		).toBe('waiting-canonical')
+		const eventWorkflow = createDurableWorkflow(plan)
+		markWorkflowStepConfirmed(eventWorkflow, step.id, matchingReceipt.transactionHash)
+		expect(eventWorkflow.status).toBe('completed')
+
+		const state = {
+			lastScannedBlock: 100n,
+			obligationTombstones: [] as DurableObligationTombstone[],
+			obligations: [] as DurableObligation[],
+			pendingTransactions: [],
+			workflows: [] as DurableWorkflow[],
+		}
+		const initialEvaluations = evaluateOperationCatalog(snapshot, options)
+		synchronizeLifecycleObligations(state, initialEvaluations, canonicalLifecyclePresence(snapshot, options), true, 100n, BigInt(snapshot.anchor.timestamp))
+		const obligation = obligationForPlan(state, plan)
+		if (obligation === undefined) throw new Error('Expected a durable REP migration obligation')
+		const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
+		if (workflow === undefined) throw new Error('Expected a durable REP migration workflow')
+		beginLifecycleObligation(obligation)
+		markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
+		waitForCanonicalLifecycleConfirmation(obligation)
+		expect(completeLifecycleObligation(state, obligation)).toBeFalse()
+
+		synchronizeLifecycleObligations(state, initialEvaluations, canonicalLifecyclePresence(snapshot, options), true, 101n, BigInt(snapshot.anchor.timestamp))
+		expect(workflow.status).toBe('waiting-obligation')
+		expect(obligation.status).toBe('pending')
+		expect(obligationForPlan(state, plan)).toBeUndefined()
 
 		const policyDisabled = { ...options, allowIrreversibleOperations: false }
 		expect(urgentOperationPlans(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
@@ -120,9 +187,13 @@ describe('indexed REP migration operations', () => {
 
 		pool.forkRepMigrationProgressByOutcome['0'] = '100'
 		expect(canonicalLifecyclePresence(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
+		synchronizeLifecycleObligations(state, evaluateOperationCatalog(snapshot, options), canonicalLifecyclePresence(snapshot, options), true, 102n, BigInt(snapshot.anchor.timestamp))
+		expect(workflow.status).toBe('completed')
+		expect(obligation.status).toBe('completed')
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: obligation.id, resolution: 'completed', resolvedAtBlock: '102' }))
 	})
 
-	test('retains raw pool migration presence when the private inclusion margin has closed', () => {
+	test('retains raw pool migration presence past actionability until indexed progress reaches the target', () => {
 		const { pool, snapshot } = forkedSnapshot()
 		pool.forkRepMigrationTargetAttoRep = '100'
 		pool.forkRepMigrationProgressByOutcome = { '0': '25', '1': '100', '2': '100' }
@@ -134,8 +205,14 @@ describe('indexed REP migration operations', () => {
 			ecosystem: 'statoblast',
 			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
 		})
+		snapshot.anchor.timestamp = (deadline + 1n).toString()
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			definitionId: 'statoblast.fork.migrate-rep',
+			ecosystem: 'statoblast',
+			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
+		})
 		pool.forkRepMigrationProgressByOutcome['0'] = '101'
-		expect(() => canonicalLifecyclePresence(snapshot, options)).toThrow('REP migration progress exceeds its fork target')
+		expect(canonicalLifecyclePresence(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
 	})
 
 	test('materializes unresolved escalation entitlements for categorical and scalar routes above outcome two', () => {

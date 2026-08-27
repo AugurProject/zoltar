@@ -28,7 +28,7 @@ runs:
       shell: bash
       run: |
         bun install --frozen-lockfile
-        if [[ "${{ inputs.directory }}" == "bots/open-oracle-arbitrager" || "${{ inputs.directory }}" == "bots/liquidator" || "${{ inputs.directory }}" == "bots/chaos" ]]; then
+        if [[ "${{ inputs.directory }}" == "bots/open-oracle-arbitrager" || "${{ inputs.directory }}" == "bots/liquidator" ]]; then
           (cd bots/shared && bun install --frozen-lockfile)
         fi
 

@@ -328,6 +328,67 @@ describe('chaos-bot durable state', () => {
 		expect((await stat(path)).mode & 0o777).toBe(0o600)
 	})
 
+	test('round-trips a finalized lifecycle receipt waiting for canonical confirmation', async () => {
+		const path = await statePath()
+		const durableWorkflow = workflow()
+		const targetAttoRep = 100n.toString()
+		const step = durableWorkflow.steps[0]
+		const evidence = step?.evidence[0]
+		if (step === undefined || evidence?.kind !== 'decoded-event-field') throw new Error('Expected decoded lifecycle event evidence')
+		durableWorkflow.classification = 'lifecycle-obligation'
+		durableWorkflow.ecosystem = 'statoblast'
+		durableWorkflow.label = 'Fork workflow: migrate-rep'
+		durableWorkflow.metadata = { outcome: '0', pool: emitter, targetAttoRep }
+		durableWorkflow.obligation = true
+		durableWorkflow.operationId = 'statoblast.fork.migrate-rep'
+		durableWorkflow.planId = 'plan:migrate-rep'
+		durableWorkflow.priority = 'urgent'
+		durableWorkflow.risk = 'irreversible'
+		durableWorkflow.status = 'waiting-obligation'
+		delete durableWorkflow.semanticDeadlineBlockNumber
+		step.confirmedAt = createdAt
+		step.evidence = [{ ...evidence, canonicalLifecycleConfirmation: true }]
+		step.status = 'confirmed'
+		step.transactionHash = topic0
+		delete step.transactionIntentId
+
+		const state = initialDurableState(1, false, 'profile:test')
+		state.workflows = [durableWorkflow]
+		state.obligations = [
+			{
+				attemptCount: 1,
+				blockers: ['A finalized transaction is waiting for complete canonical lifecycle confirmation'],
+				createdAt,
+				ecosystem: 'statoblast',
+				id: 'obligation:rep-migration',
+				label: durableWorkflow.label,
+				metadata: durableWorkflow.metadata,
+				operationId: durableWorkflow.operationId,
+				status: 'pending',
+				updatedAt: createdAt,
+				workflowId: durableWorkflow.id,
+			},
+		]
+
+		await saveDurableState(path, state)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.workflows[0]?.status).toBe('waiting-obligation')
+		expect(restored.workflows[0]?.steps[0]).toMatchObject({ status: 'confirmed', transactionHash: topic0 })
+		expect(restored.workflows[0]?.steps[0]?.evidence[0]).toMatchObject({ canonicalLifecycleConfirmation: true, kind: 'decoded-event-field' })
+		expect(restored.obligations[0]).toMatchObject({ status: 'pending', workflowId: durableWorkflow.id })
+
+		const malformed = JSON.parse(await readFile(path, 'utf8')) as { workflows: Array<Record<string, unknown>> }
+		const malformedWorkflow = malformed.workflows[0]
+		if (malformedWorkflow === undefined) throw new Error('Expected a persisted waiting workflow')
+		malformedWorkflow['classification'] = 'selectable'
+		await writeFile(path, `${JSON.stringify(malformed)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('outside a lifecycle obligation')
+
+		malformedWorkflow['status'] = 'running'
+		await writeFile(path, `${JSON.stringify(malformed)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('uses canonical lifecycle confirmation outside a lifecycle obligation')
+	})
+
 	test('round-trips a classified finalized workflow failure', async () => {
 		const path = await statePath()
 		const state = await populatedState()

@@ -9,7 +9,7 @@ import { discoverEcosystemSnapshot } from '../monitoring/discovery.ts'
 import { carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
 import { archiveCarryProofJournalForProfileReset, CarryProofJournalIdentityMismatchError, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
-import { loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../monitoring/topology-cache.ts'
+import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import type { WalletBalanceState } from '../state/operator-state.ts'
@@ -173,6 +173,15 @@ function immutableTopologyIdentity(settings: OperatorSettings): ImmutableTopolog
 	return {
 		chainId: settings.network.chainId,
 		...settings.deployment,
+	}
+}
+
+export async function loadTopologyCacheForScan(parameters: { identity: ImmutableTopologyIdentity; limits: ImmutableTopologyResidentLimits; previous?: CanonicalImmutableTopologyCache; statePath: string }) {
+	try {
+		return parameters.previous === undefined ? await loadImmutableTopologyCache(parameters.statePath, parameters.identity, parameters.limits) : validateImmutableTopologyCache(parameters.previous, parameters.limits)
+	} catch (error) {
+		if (!immutableTopologyCacheExceedsConfiguredResidentLimits(error)) throw error
+		return undefined
 	}
 }
 
@@ -507,9 +516,14 @@ export async function performCanonicalScan(
 			carryProfileResetAuthorized,
 		))
 	const topologyIdentity = immutableTopologyIdentity(settings)
-	const cachedTopology = previousTopologyCache ?? (await loadImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity))
+	const cachedTopology = await loadTopologyCacheForScan({
+		identity: topologyIdentity,
+		limits: settings.discovery,
+		...(previousTopologyCache === undefined ? {} : { previous: previousTopologyCache }),
+		statePath: settings.runtime.stateFile,
+	})
 	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, compatibleIndex, cachedTopology)
-	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache)
+	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
 	const [updated, carryUpdated] = discoveryComplete ? await Promise.all([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]

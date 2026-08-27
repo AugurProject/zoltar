@@ -17,6 +17,7 @@ import {
 	markWorkflowFailed,
 	markWorkflowForRediscovery,
 	markWorkflowStepConfirmed,
+	markWorkflowStepWaitingCanonical,
 	markWorkflowIntentBroadcastAttempt,
 	markWorkflowStepSigned,
 	markWorkflowStepSubmitted,
@@ -25,7 +26,7 @@ import {
 	retainWorkflow,
 	startWorkflow,
 } from '../runtime/workflows.ts'
-import { requireSuccessfulReceipt, validateStepReceiptEvidence, type BalanceEvidenceObservation, type StorageEvidenceObservation } from './receipt-validation.ts'
+import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type BalanceEvidenceObservation, type ReceiptEvidenceDisposition, type StorageEvidenceObservation } from './receipt-validation.ts'
 import { assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
@@ -1058,8 +1059,9 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		await persist(environment)
 		throw new TransactionAwaitingRecovery(step.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
 	}
+	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {
-		validateStepReceiptEvidence(step, receipt, {
+		evidenceDisposition = stepReceiptEvidenceDisposition(step, receipt, {
 			balances: balanceObservations(step.evidence, beforeBalances, afterBalances),
 			storage: storageObservations(step.evidence, beforeStorage, afterStorage),
 		})
@@ -1078,13 +1080,14 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		throw error
 	}
 	environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
-	markWorkflowStepConfirmed(workflow, step.id, receipt.transactionHash)
+	if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
+	else markWorkflowStepConfirmed(workflow, step.id, receipt.transactionHash)
 	recordActivity(environment.state, {
 		ecosystem: plan.ecosystem,
 		hash: receipt.transactionHash,
-		message: step.label,
+		message: evidenceDisposition === 'waiting-canonical' ? `${step.label}; waiting for canonical lifecycle confirmation` : step.label,
 		operationId: plan.definitionId,
-		status: 'confirmed',
+		status: evidenceDisposition === 'waiting-canonical' ? 'pending' : 'confirmed',
 		type: 'transaction',
 	})
 	await persist(environment)

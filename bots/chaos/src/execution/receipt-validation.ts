@@ -61,7 +61,7 @@ function canonicalDecodedScalar(value: unknown, label: string) {
 	throw new Error(`${label} is not a scalar event field`)
 }
 
-function decodedEventArguments(evidence: Extract<OperationEvidence, { kind: 'decoded-event-field' }>, receipt: SuccessfulReceiptEvidence) {
+function matchingDecodedEventArguments(evidence: Extract<OperationEvidence, { kind: 'decoded-event-field' }>, receipt: SuccessfulReceiptEvidence) {
 	const matchingLogs = receipt.logs.filter(log => sameAddress(log.address, evidence.emitter) && log.topics[0]?.toLowerCase() === evidence.topic0.toLowerCase())
 	for (const log of matchingLogs) {
 		try {
@@ -78,6 +78,12 @@ function decodedEventArguments(evidence: Extract<OperationEvidence, { kind: 'dec
 			void error
 		}
 	}
+	return undefined
+}
+
+function decodedEventArguments(evidence: Extract<OperationEvidence, { kind: 'decoded-event-field' }>, receipt: SuccessfulReceiptEvidence) {
+	const argumentsByName = matchingDecodedEventArguments(evidence, receipt)
+	if (argumentsByName !== undefined) return argumentsByName
 	throw new Error(`${evidence.signature} did not match the required indexed fields`)
 }
 
@@ -134,8 +140,24 @@ function validateStorageEvidence(evidence: Extract<OperationEvidence, { kind: 's
 	}
 }
 
-export function validateStepReceiptEvidence(step: { evidence: readonly OperationEvidence[]; label: OperationStep['label'] }, receipt: SuccessfulReceiptEvidence, observations: SemanticEvidenceObservations = {}) {
+function decodedEventEvidenceMatches(evidence: Extract<OperationEvidence, { kind: 'decoded-event-field' }>, receipt: SuccessfulReceiptEvidence) {
+	const argumentsByName = matchingDecodedEventArguments(evidence, receipt)
+	if (argumentsByName === undefined) return false
+	try {
+		const actual = canonicalDecodedScalar(argumentsByName[evidence.field], `${evidence.signature}.${evidence.field}`)
+		const expected = canonicalDecodedScalar(evidence.equals, `${evidence.signature}.${evidence.field} expectation`)
+		return actual === expected
+	} catch (error) {
+		void error
+		return false
+	}
+}
+
+export type ReceiptEvidenceDisposition = 'confirmed' | 'waiting-canonical'
+
+export function stepReceiptEvidenceDisposition(step: { evidence: readonly OperationEvidence[]; label: OperationStep['label'] }, receipt: SuccessfulReceiptEvidence, observations: SemanticEvidenceObservations = {}): ReceiptEvidenceDisposition {
 	if (step.evidence.length === 0) throw new Error(`${step.label} does not declare semantic receipt evidence`)
+	let disposition: ReceiptEvidenceDisposition = 'confirmed'
 	for (const evidence of step.evidence) {
 		if (evidence.kind === 'receipt-success') continue
 		if (evidence.kind === 'event') {
@@ -144,6 +166,10 @@ export function validateStepReceiptEvidence(step: { evidence: readonly Operation
 			continue
 		}
 		if (evidence.kind === 'decoded-event-field') {
+			if (evidence.canonicalLifecycleConfirmation === true) {
+				if (!decodedEventEvidenceMatches(evidence, receipt)) disposition = 'waiting-canonical'
+				continue
+			}
 			validateDecodedEventEvidence(evidence, receipt)
 			continue
 		}
@@ -152,6 +178,13 @@ export function validateStepReceiptEvidence(step: { evidence: readonly Operation
 			continue
 		}
 		validateStorageEvidence(evidence, observations)
+	}
+	return disposition
+}
+
+export function validateStepReceiptEvidence(step: { evidence: readonly OperationEvidence[]; label: OperationStep['label'] }, receipt: SuccessfulReceiptEvidence, observations: SemanticEvidenceObservations = {}) {
+	if (stepReceiptEvidenceDisposition(step, receipt, observations) === 'waiting-canonical') {
+		throw new Error(`${step.label} requires canonical lifecycle confirmation`)
 	}
 	return receipt
 }

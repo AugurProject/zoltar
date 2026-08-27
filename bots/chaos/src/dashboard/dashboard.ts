@@ -1089,25 +1089,30 @@ function renderEcosystems(values: OperationEvaluation[]) {
 			metric.append(node('strong', undefined, amount.toString()), node('span', undefined, label))
 			metrics.append(metric)
 		}
-		let summary: HTMLElement
-		if (eligible.length > 0) summary = node('p', 'muted', 'At least one exact operation can be simulated now.')
-		else if (operations.length === 0) summary = node('p', 'muted', 'Waiting for protocol discovery.')
+		let summary: HTMLElement | undefined
+		if (operations.length === 0) summary = node('p', 'muted', 'Waiting for protocol discovery.')
 		else {
-			const blockers = [
-				...new Set(
-					operations.flatMap(value => {
-						const operation = value.label ?? value.id ?? 'Unnamed operation'
-						let reasons = value.blockers
-						if (value.enabled === false) reasons = ['Disabled by operator policy']
-						else if (reasons.length === 0) reasons = ['No eligible candidate in current state']
-						return reasons.map(reason => `${operation}: ${reason}`)
-					}),
-				),
-			].slice(0, 3)
-			summary = node('ul', 'blocker-list')
-			for (const blocker of blockers) summary.append(node('li', undefined, blocker))
+			const blockers =
+				eligible.length > 0
+					? []
+					: [
+							...new Set(
+								operations.flatMap(value => {
+									const operation = value.label ?? value.id ?? 'Unnamed operation'
+									let reasons = value.blockers
+									if (value.enabled === false) reasons = ['Disabled by operator policy']
+									else if (reasons.length === 0) reasons = ['No eligible candidate in current state']
+									return reasons.map(reason => `${operation}: ${reason}`)
+								}),
+							),
+						].slice(0, 3)
+			if (blockers.length > 0) {
+				summary = node('ul', 'blocker-list')
+				for (const blocker of blockers) summary.append(node('li', undefined, blocker))
+			}
 		}
-		card.append(heading, metrics, summary)
+		card.append(heading, metrics)
+		if (summary !== undefined) card.append(summary)
 		return card
 	})
 	ecosystemGrid.replaceChildren(...cards)
@@ -1159,7 +1164,7 @@ function renderTopology(value: Topology) {
 		if (value.truncated === true) {
 			topologyStatus.textContent = `${visibleTotal.toString()} of ${discoveredTotal.toString()} anchored protocol identities shown · dashboard projection is capped; canonical discovery is ${value.complete === false ? 'incomplete' : 'complete'}.`
 		} else {
-			topologyStatus.textContent = `${visibleTotal.toString()} anchored protocol identit${visibleTotal === 1 ? 'y' : 'ies'} · ${value.complete === false ? 'discovery is incomplete' : 'sanitized canonical snapshot'}.`
+			topologyStatus.textContent = `${visibleTotal.toString()} protocol identit${visibleTotal === 1 ? 'y' : 'ies'} · discovery ${value.complete === false ? 'incomplete' : 'complete'}.`
 		}
 	}
 	renderTopologyGroup(topologyUniverses, value.universes, source =>

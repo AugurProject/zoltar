@@ -1,25 +1,58 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { encodeAbiParameters, type Address } from '../support/bot-shared.ts'
 import {
+	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
 	assertCanonicalPoolGraph,
 	authenticatePoolProtocolBindings,
 	canonicalDiscoveryWarnings,
 	collectCountedPages,
 	DISCOVERY_RPC_CONCURRENCY,
+	DISCOVERY_RPC_QUEUE_LIMIT,
 	discoverEcosystemSnapshot,
+	discoverShareInventory,
 	discoverStagedOperations,
 	forkMigrationWindowIsOpen,
 	forkRepMigrationTarget,
 	limitDiscoveryConcurrency,
+	mapWithConcurrency,
 	minimumSafeVaultDeposit,
 	relevantTokenSpenders,
 	trustedIndexedReportsForDiscovery,
 	type ChaosReadClient,
 } from '../../src/monitoring/discovery.ts'
 import type { OracleGameSnapshot } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { force: true, recursive: true })))
+})
+
+async function temporaryStatePath() {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-discovery-'))
+	temporaryDirectories.push(directory)
+	return join(directory, 'operator.json')
+}
+
+function topologyIdentity(): ImmutableTopologyIdentity {
+	return {
+		chainId: 31_337,
+		openOracle: address(6),
+		questionData: address(3),
+		securityPoolFactory: address(4),
+		securityPoolForker: address(5),
+		tradingFactory: address(8),
+		tradingRouter: address(9),
+		weth: address(7),
+		zoltar: address(2),
+	}
+}
 
 interface GraphOverrides {
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
@@ -28,6 +61,15 @@ interface GraphOverrides {
 	historicalBlockHashes?: Readonly<Record<string, `0x${string}`>>
 	outcomeLabelPage?: (questionId: bigint, start: bigint, count: bigint) => readonly string[]
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
+	poolDeployments?: readonly {
+		parent: Address
+		priceOracleManagerAndOperatorQueuer: Address
+		questionId: bigint
+		securityPool: Address
+		shareToken: Address
+		truthAuction: Address
+		universeId: bigint
+	}[]
 	questionIds?: readonly bigint[]
 	routerFactory?: Address
 	tradingSecurityPoolFactory?: Address
@@ -111,9 +153,13 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
 				}
 				case 'securityPoolDeploymentCount':
-					return 0n
-				case 'securityPoolDeploymentsRange':
-					return []
+					return BigInt(graph.poolDeployments?.length ?? 0)
+				case 'securityPoolDeploymentsRange': {
+					const start = parameters.args?.[0]
+					const count = parameters.args?.[1]
+					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Pool-deployment page arguments required')
+					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
+				}
 				case 'balanceOf':
 				case 'allowance':
 					return 0n
@@ -227,11 +273,134 @@ describe('anchored ecosystem discovery', () => {
 			},
 		})
 		const limited = limitDiscoveryConcurrency(client)
-		await Promise.all(Array.from({ length: 10_000 }, () => limited.getChainId()))
+		const settled = await Promise.allSettled(Array.from({ length: DISCOVERY_RPC_CONCURRENCY + DISCOVERY_RPC_QUEUE_LIMIT + 1 }, () => limited.getChainId()))
 		expect(peak).toBe(DISCOVERY_RPC_CONCURRENCY)
+		expect(settled.filter(result => result.status === 'rejected')).toHaveLength(1)
+		expect(settled.find(result => result.status === 'rejected')).toMatchObject({ reason: expect.objectContaining({ message: `Discovery RPC queue exceeded its ${DISCOVERY_RPC_QUEUE_LIMIT.toString()}-request safety limit` }) })
 	})
 
-	test('uses topology limits as page sizes and exhausts questions and the universe tree', async () => {
+	test('drains in-flight bounded workers and stops assigning work before rejecting', async () => {
+		let release: (() => void) | undefined
+		const gate = new Promise<void>(resolve => {
+			release = resolve
+		})
+		const started: number[] = []
+		let observedFailure: Error | undefined
+		const completion = mapWithConcurrency(
+			Array.from({ length: 30 }, (_, index) => index),
+			DISCOVERY_RPC_CONCURRENCY,
+			async (_value, index) => {
+				started.push(index)
+				if (index === 0) throw new Error('first worker failed')
+				await gate
+				return index
+			},
+		).then(
+			() => undefined,
+			error => {
+				if (error instanceof Error) observedFailure = error
+			},
+		)
+		await new Promise(resolve => setTimeout(resolve, 0))
+		try {
+			expect(observedFailure).toBeUndefined()
+			expect(started).toEqual(Array.from({ length: DISCOVERY_RPC_CONCURRENCY }, (_, index) => index))
+		} finally {
+			release?.()
+			await completion
+		}
+		expect(observedFailure?.message).toBe('first worker failed')
+		expect(started).toEqual(Array.from({ length: DISCOVERY_RPC_CONCURRENCY }, (_, index) => index))
+		expect(await mapWithConcurrency([1, 2, 3], DISCOVERY_RPC_CONCURRENCY, async value => value * 2)).toEqual([2, 4, 6])
+		let undefinedRejectionObserved = false
+		let undefinedRejectionStarts = 0
+		try {
+			await mapWithConcurrency([1, 2, 3], 1, async () => {
+				undefinedRejectionStarts += 1
+				throw undefined
+			})
+		} catch (error) {
+			undefinedRejectionObserved = true
+			expect(error).toBeUndefined()
+		}
+		expect(undefinedRejectionObserved).toBeTrue()
+		expect(undefinedRejectionStarts).toBe(1)
+	})
+
+	test('rejects an aggregate pool-by-universe fan-out before issuing RPC requests', async () => {
+		const fake = fakeClient(10n)
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxPools: 101, maxQuestions: 1, maxStagedOperationsPerPool: 1, maxUniverses: 100, maxVaultsPerPool: 1 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('maxPools × maxUniverses exceeds the 10000-item discovery safety envelope')
+		expect(fake.requested()).toBeUndefined()
+		expect(fake.contractReads).toEqual([])
+	})
+
+	test('preflights categorical share-migration fan-out at the aggregate boundary', async () => {
+		const fixture = snapshotFixture()
+		const pool = fixture.pools[0]
+		const universe = fixture.universes[0]
+		const question = fixture.questions[0]
+		if (pool === undefined || universe === undefined || question === undefined) throw new Error('Share-inventory fixture is incomplete')
+		const reads: string[] = []
+		const client = new Proxy({} as ChaosReadClient, {
+			get(_target, property) {
+				if (property !== 'readContract') throw new Error(`Unexpected client method ${String(property)}`)
+				return async (parameters: { functionName: string }) => {
+					reads.push(parameters.functionName)
+					if (parameters.functionName === 'balanceOf') return 0n
+					if (parameters.functionName === 'isApprovedForAll') return false
+					if (parameters.functionName === 'getChildUniverseId') return 1n
+					throw new Error(`Unexpected share-inventory read ${parameters.functionName}`)
+				}
+			},
+		})
+		const context = { anchorBlockNumber: 10n, client, deployments: fixture.deployments, wallet: fixture.wallet.address }
+		const forkedUniverse = { ...universe, forkQuestionId: question.id, forkTime: '1' }
+		const withinQuestion = { ...question, kind: 'categorical' as const, outcomeLabels: Array.from({ length: 2_498 }, (_, index) => `Outcome ${index.toString()}`) }
+		const warnings: string[] = []
+		expect(await discoverShareInventory(context, [pool], fixture.pairs, [forkedUniverse], [withinQuestion], 10n, warnings)).toHaveLength(1)
+		expect(warnings).toEqual([])
+		expect(reads.filter(name => name === 'getChildUniverseId')).toHaveLength(2_499)
+
+		reads.length = 0
+		const overflowQuestion = { ...withinQuestion, outcomeLabels: [...withinQuestion.outcomeLabels, 'Overflow'] }
+		expect(await discoverShareInventory(context, [pool], fixture.pairs, [forkedUniverse], [overflowQuestion], 10n, warnings)).toEqual([])
+		expect(warnings).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10002 entries, exceeding the configured 10000-entry aggregate limit'])
+		expect(reads).toEqual([])
+	})
+
+	test('preflights reused pair operators without allocating quadratic approval state', async () => {
+		const fixture = snapshotFixture()
+		const templatePool = fixture.pools[0]
+		const templatePair = fixture.pairs[0]
+		const templateUniverse = fixture.universes[0]
+		if (templatePool === undefined || templatePair === undefined || templateUniverse === undefined) throw new Error('Share-inventory fixture is incomplete')
+		const pools = Array.from({ length: 100 }, (_, index) => ({ ...templatePool, address: address(1_000 + index), coordinator: address(2_000 + index), universeId: index.toString() }))
+		const pairs = pools.map((pool, index) => ({ ...templatePair, address: address(3_000 + index), pool: pool.address, universeId: pool.universeId }))
+		const universes = pools.map((pool, index) => ({ ...templateUniverse, id: pool.universeId, repToken: address(4_000 + index) }))
+		let reads = 0
+		const client = new Proxy({} as ChaosReadClient, {
+			get() {
+				return async () => {
+					reads += 1
+					throw new Error('Share-inventory RPC must not start after an oversized preflight')
+				}
+			},
+		})
+		const warnings: string[] = []
+		expect(await discoverShareInventory({ anchorBlockNumber: 10n, client, deployments: fixture.deployments, wallet: fixture.wallet.address }, pools, pairs, universes, fixture.questions, 10n, warnings)).toEqual([])
+		expect(warnings).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10100 entries, exceeding the configured 10000-entry aggregate limit'])
+		expect(reads).toBe(0)
+	})
+
+	test('treats topology limits as strict resident totals and fails closed when registries exceed them', async () => {
 		const fake = fakeClient(10n, hash(1), {
 			childOutcomesByUniverse: { '0': [1n, 2n, 3n] },
 			questionIds: [101n, 102n, 103n],
@@ -243,9 +412,168 @@ describe('anchored ecosystem discovery', () => {
 			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
 			wallet: address(1),
 		})
-		expect(snapshot.questions.map(question => question.id)).toEqual(['101', '102', '103'])
-		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2', '3'])
-		expect(snapshot.warnings).toEqual([])
+		expect(snapshot.questions).toEqual([])
+		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1'])
+		expect(snapshot.warnings).toContain('Question discovery truncated while bounded catch-up authenticated 2 of 3 canonical entries')
+		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery truncated'))).toBeTrue()
+	})
+
+	test('bounds a wide universe fan-out to the resident envelope without building an unbounded queue', async () => {
+		const childOutcomes = Array.from({ length: 1_000 }, (_, index) => BigInt(index + 1))
+		const fake = fakeClient(10n, hash(1), { childOutcomesByUniverse: { '0': childOutcomes } })
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+			wallet: address(1),
+		})
+		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2'])
+		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery truncated at 3 retained universes'))).toBeTrue()
+		expect(fake.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses').map(read => read.args)).toEqual([[0n, 0n, 3n]])
+	})
+
+	test('advances oversized counted-registry cursors across restarts while retaining no historical topology', async () => {
+		const statePath = await temporaryStatePath()
+		const questionIds = Array.from({ length: 11 }, (_, index) => BigInt(100 + index))
+		const poolDeployments = Array.from({ length: 11 }, (_, index) => ({
+			parent: address(0),
+			priceOracleManagerAndOperatorQueuer: address(1_000 + index),
+			questionId: questionIds[index] ?? 0n,
+			securityPool: address(2_000 + index),
+			shareToken: address(3_000 + index),
+			truthAuction: address(4_000 + index),
+			universeId: 0n,
+		}))
+		const limits = { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		let previousAnchor: bigint | undefined
+		for (let cycle = 0; cycle < 4; cycle += 1) {
+			const anchor = 10n + BigInt(cycle)
+			const historicalBlockHashes = previousAnchor === undefined ? {} : { [previousAnchor.toString()]: hash(Number(previousAnchor)) }
+			const fake = fakeClient(anchor, hash(Number(anchor)), { historicalBlockHashes, poolDeployments, questionIds })
+			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			let checkpoint: CanonicalImmutableTopologyCache | undefined
+			const snapshot = await discoverEcosystemSnapshot({
+				anchorBlockNumber: anchor,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits,
+				recordTopologyCache: value => {
+					checkpoint = value
+				},
+				...(restored === undefined ? {} : { topologyCache: restored }),
+				wallet: address(1),
+			})
+			if (checkpoint === undefined) throw new Error('Oversized discovery did not record its durable cursor')
+			const expectedCursor = Math.min((cycle + 1) * limits.maxQuestions, questionIds.length)
+			expect(checkpoint.discoveryCursors.questions).toMatchObject({ canonicalCount: questionIds.length.toString(), nextIndex: expectedCursor.toString(), retentionMode: 'overflow' })
+			expect(checkpoint.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: poolDeployments.length.toString(), nextIndex: expectedCursor.toString(), retentionMode: 'overflow' })
+			expect(checkpoint.questions).toEqual([])
+			expect(checkpoint.poolDeployments).toEqual([])
+			expect(snapshot.questions).toEqual([])
+			expect(snapshot.pools).toEqual([])
+			expect(fake.contractReads.filter(read => read.functionName === 'getQuestions')).toHaveLength(1)
+			expect(fake.contractReads.filter(read => read.functionName === 'securityPoolDeploymentsRange')).toHaveLength(1)
+			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(0)
+			expect(fake.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(0)
+			expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(0)
+			await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint, limits)
+			previousAnchor = anchor
+		}
+		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		expect(exact?.discoveryCursors.questions).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
+		expect(exact?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
+		expect(exact?.questions).toEqual([])
+		expect(exact?.poolDeployments).toEqual([])
+	})
+
+	test('advances an oversized newest-first vault registry across restarts and safely rebuilds after a limit increase', async () => {
+		const statePath = await temporaryStatePath()
+		const pool = address(20).toLowerCase()
+		const oldestFirst = Array.from({ length: 11 }, (_, index) => address(500 + index))
+		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		const canonicalCounts = [5, 7, 9, 11]
+		const expectedCalls: Array<[bigint, bigint]> = [
+			[2n, 3n],
+			[1n, 3n],
+			[0n, 3n],
+			[0n, 2n],
+		]
+		for (let cycle = 0; cycle < expectedCalls.length; cycle += 1) {
+			const canonicalCount = canonicalCounts[cycle]
+			if (canonicalCount === undefined) throw new Error(`Missing canonical vault count for cycle ${cycle.toString()}`)
+			const newestFirst = [...oldestFirst.slice(0, canonicalCount)].reverse()
+			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			const calls: Array<[bigint, bigint]> = []
+			const advanced = await advanceVaultRegistryCursor({
+				cachedVaults: restored?.vaultsByPool[pool] ?? [],
+				canonicalCount: BigInt(canonicalCount),
+				cursor: restored?.discoveryCursors.vaultsByPool[pool],
+				label: `Vault registry ${pool}`,
+				limit: limits.maxVaultsPerPool,
+				readNewestFirstPage: async (start, count) => {
+					calls.push([start, count])
+					return newestFirst.slice(Number(start), Number(start + count))
+				},
+			})
+			const expectedNextIndex = Math.min((cycle + 1) * limits.maxVaultsPerPool, oldestFirst.length)
+			const expectedCall = expectedCalls[cycle]
+			if (expectedCall === undefined) throw new Error(`Missing expected vault page call for cycle ${cycle.toString()}`)
+			expect(calls).toEqual([expectedCall])
+			expect(advanced.cursor).toMatchObject({ canonicalCount: canonicalCount.toString(), nextIndex: expectedNextIndex.toString(), retentionMode: 'overflow' })
+			expect(advanced.vaults).toEqual([])
+			await saveImmutableTopologyCache(
+				statePath,
+				topologyIdentity(),
+				{
+					anchor: { blockHash: hash(600 + cycle), blockNumber: (600 + cycle).toString() },
+					discoveryCursors: {
+						poolDeployments: restored?.discoveryCursors.poolDeployments ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
+						questions: restored?.discoveryCursors.questions ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
+						vaultsByPool: { [pool]: advanced.cursor },
+					},
+					pairsByPool: {},
+					poolDeployments: [],
+					questions: [],
+					schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
+					universeChildren: { '0': { childUniverseIds: [], outcomeIndexes: [] } },
+					vaultsByPool: {},
+				},
+				limits,
+			)
+		}
+		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		const exactCursor = exact?.discoveryCursors.vaultsByPool[pool]
+		if (exactCursor === undefined) throw new Error('Exact oversized vault cursor was not persisted')
+		expect(exactCursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
+
+		const newestFirst = [...oldestFirst].reverse()
+		const rebuildCalls: Array<[bigint, bigint]> = []
+		const rebuilt = await advanceVaultRegistryCursor({
+			cachedVaults: [],
+			canonicalCount: 11n,
+			cursor: exactCursor,
+			label: `Vault registry ${pool}`,
+			limit: 11,
+			readNewestFirstPage: async (start, count) => {
+				rebuildCalls.push([start, count])
+				return newestFirst.slice(Number(start), Number(start + count))
+			},
+		})
+		expect(rebuildCalls).toEqual([[0n, 11n]])
+		expect(rebuilt.cursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'resident' })
+		expect(rebuilt.cursor.commitment).toBe(exactCursor.commitment)
+		expect(rebuilt.vaults).toEqual(newestFirst)
+		await expect(
+			advanceVaultRegistryCursor({
+				cachedVaults: [],
+				canonicalCount: 10n,
+				cursor: exactCursor,
+				label: `Vault registry ${pool}`,
+				limit: 11,
+				readNewestFirstPage: async () => [],
+			}),
+		).rejects.toThrow('no longer extends its authenticated cursor')
 	})
 
 	test('exhausts categorical outcome labels beyond the first 256-entry page', async () => {
@@ -305,6 +633,39 @@ describe('anchored ecosystem discovery', () => {
 		).rejects.toThrow('Question 101 outcome labels exceed the configured 1-byte UTF-8 discovery limit')
 	})
 
+	test('discovers and persists an escaped outcome label at the shared UTF-8 byte boundary', async () => {
+		const statePath = await temporaryStatePath()
+		const boundaryLabel = '\u0000'.repeat(IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES)
+		const fake = fakeClient(10n, hash(10), {
+			outcomeLabelsByQuestion: { '101': [boundaryLabel] },
+			questionIds: [101n],
+		})
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			recordTopologyCache: value => {
+				checkpoint = value
+			},
+			wallet: address(1),
+		})
+		if (checkpoint === undefined) throw new Error('Boundary-label discovery did not produce a topology checkpoint')
+		expect(snapshot.questions[0]?.outcomeLabels[0]?.length).toBe(IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES)
+		await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint)
+		const restored = await loadImmutableTopologyCache(statePath, topologyIdentity())
+		expect(restored?.questions[0]?.outcomeLabels[0]).toBe(boundaryLabel)
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxOutcomeLabelUtf8BytesPerQuestion: IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES + 1 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('immutable-topology safety envelope')
+	})
+
 	test('reuses only checkpoint-authenticated immutable topology and pages from prior collection boundaries', async () => {
 		const first = fakeClient(10n, hash(10), {
 			childOutcomesByUniverse: { '0': [1n, 2n, 3n] },
@@ -316,7 +677,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: first.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				checkpoint = value
 				initialChanged = changed
@@ -337,7 +698,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: next.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				nextCheckpoint = value
 				extendedChanged = changed
@@ -352,7 +713,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(next.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(1)
 		expect(next.contractReads.filter(read => read.functionName === 'getQuestions').map(read => read.args)).toEqual([[3n, 1n]])
 		expect(next.contractReads.filter(read => read.functionName === 'forkBurnDivisor')).toHaveLength(1)
-		expect(next.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses' && read.args?.[0] === 0n).map(read => read.args)).toEqual([[0n, 3n, 2n]])
+		expect(next.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses' && read.args?.[0] === 0n).map(read => read.args)).toEqual([[0n, 3n, 7n]])
 		expect(nextCheckpoint?.anchor).toEqual({ blockHash: hash(11), blockNumber: '11' })
 		expect(extendedChanged).toBe(true)
 
@@ -368,7 +729,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 12n,
 			client: unchanged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (value, changed) => {
 				unchangedCheckpoint = value
 				unchangedChanged = changed
@@ -390,7 +751,7 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 11n,
 			client: reorged.client,
 			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
-			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 			recordTopologyCache: (_value, changed) => {
 				reorgChanged = changed
 			},
@@ -402,9 +763,14 @@ describe('anchored ecosystem discovery', () => {
 		expect(reorgChanged).toBe(true)
 	})
 
-	test('discards and rebuilds an ahead, current-hash-mismatched, or unreadable topology checkpoint', async () => {
+	test('rebuilds a noncanonical topology checkpoint and treats an unavailable history probe as an endpoint failure', async () => {
 		const base: CanonicalImmutableTopologyCache = {
 			anchor: { blockHash: hash(10), blockNumber: '10' },
+			discoveryCursors: {
+				poolDeployments: { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
+				questions: { canonicalCount: '1', commitment: hash(20), nextIndex: '1', residentLimit: '100', retentionMode: 'resident' },
+				vaultsByPool: {},
+			},
 			pairsByPool: {},
 			poolDeployments: [],
 			questions: [{ createdAt: '1', endTime: '3', id: '101', kind: 'binary', numTicks: '2', outcomeLabels: ['Yes', 'No'], startTime: '2' }],
@@ -415,7 +781,6 @@ describe('anchored ecosystem discovery', () => {
 		const cases = [
 			{ anchorBlockNumber: 9n, cache: base, graph: { questionIds: [101n] } },
 			{ anchorBlockNumber: 10n, cache: base, graph: { questionIds: [101n] }, hash: hash(11) },
-			{ anchorBlockNumber: 11n, cache: base, graph: { historicalBlockErrors: ['10'], questionIds: [101n] } },
 		]
 		for (const candidate of cases) {
 			const fake = fakeClient(candidate.anchorBlockNumber, candidate.hash ?? hash(Number(candidate.anchorBlockNumber)), candidate.graph)
@@ -433,6 +798,17 @@ describe('anchored ecosystem discovery', () => {
 			expect(changed).toBe(true)
 			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(1)
 		}
+		const unavailable = fakeClient(11n, hash(11), { historicalBlockErrors: ['10'], questionIds: [101n] })
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 11n,
+				client: unavailable.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				topologyCache: base,
+				wallet: address(1),
+			}),
+		).rejects.toThrow('Historical block 10 unavailable')
+		expect(unavailable.contractReads).toEqual([])
 	})
 
 	test('exhausts a counted pool-style collection in bounded pages', async () => {
@@ -441,17 +817,38 @@ describe('anchored ecosystem discovery', () => {
 		const discovered = await collectCountedPages({
 			count: BigInt(values.length),
 			label: 'Pool discovery',
+			maximumItems: values.length,
 			pageSize: 2,
 			readPage: async (start, count) => {
 				calls.push([start, count])
 				return values.slice(Number(start), Number(start + count))
 			},
+			start: 0n,
 		})
-		expect(discovered).toEqual(values)
+		expect(discovered).toEqual({ complete: true, nextStart: 5n, values })
 		expect(calls).toEqual([
 			[0n, 2n],
 			[2n, 2n],
 			[4n, 1n],
+		])
+	})
+
+	test('bounds a counted collection to one cycle and resumes from its durable cursor', async () => {
+		const calls: Array<[bigint, bigint]> = []
+		const values = Array.from({ length: 11 }, (_, index) => BigInt(index + 10))
+		const readPage = async (start: bigint, count: bigint) => {
+			calls.push([start, count])
+			return values.slice(Number(start), Number(start + count))
+		}
+		const first = await collectCountedPages({ count: BigInt(values.length), label: 'Question discovery', maximumItems: 3, pageSize: 2, readPage, start: 0n })
+		expect(first).toEqual({ complete: false, nextStart: 3n, values: [10n, 11n, 12n] })
+		const second = await collectCountedPages({ count: BigInt(values.length), label: 'Question discovery', maximumItems: 3, pageSize: 2, readPage, start: first.nextStart })
+		expect(second).toEqual({ complete: false, nextStart: 6n, values: [13n, 14n, 15n] })
+		expect(calls).toEqual([
+			[0n, 2n],
+			[2n, 1n],
+			[3n, 2n],
+			[5n, 1n],
 		])
 	})
 
@@ -649,8 +1046,11 @@ describe('anchored ecosystem discovery', () => {
 						if (parameters.functionName === 'getActiveStagedOperations') {
 							pageRequests.push(parameters.args ?? [])
 							const start = parameters.args?.[0]
-							if (start === 0n) return [[42n], [operation()]]
-							if (start === 1n) return [[43n], [operation()]]
+							if (start === 0n)
+								return [
+									[42n, 43n],
+									[operation(), operation()],
+								]
 							return [[], []]
 						}
 						throw new Error(`Unexpected read ${parameters.functionName}`)
@@ -666,21 +1066,23 @@ describe('anchored ecosystem discovery', () => {
 				throw new Error(`Unexpected client method ${String(property)}`)
 			},
 		})
-		const executable = await discoverStagedOperations(client, pool, 555n, 1, [])
+		const overflowWarnings: string[] = []
+		expect(await discoverStagedOperations(client, pool, 555n, 1, overflowWarnings)).toEqual([])
+		expect(overflowWarnings).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 2 exceeds the configured 1-entry resident limit`])
+		expect(pageRequests).toEqual([])
+
+		const executable = await discoverStagedOperations(client, pool, 555n, 2, [])
 		expect(executable[0]).toMatchObject({ executionExpectedResult: '0x', executionExpectedSuccess: true, operation: 1 })
 		expect(executable).toHaveLength(2)
-		expect(pageRequests).toEqual([
-			[0n, 1n],
-			[1n, 1n],
-		])
+		expect(pageRequests).toEqual([[0n, 2n]])
 		expect(simulations[0]).toMatchObject({ account: pool.coordinator, args: [fixture.wallet.address, 100n], functionName: 'withdrawRepFromVault' })
 		simulationFailure = new Error('execution reverted: stale withdrawal')
-		expect((await discoverStagedOperations(client, pool, 555n, 1, []))[0]?.executionExpectedSuccess).toBe(false)
+		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
 		simulationFailure = new Error('RPC connection closed')
-		await expect(discoverStagedOperations(client, pool, 555n, 1, [])).rejects.toThrow('RPC connection closed')
+		await expect(discoverStagedOperations(client, pool, 555n, 2, [])).rejects.toThrow('RPC connection closed')
 		simulationFailure = undefined
 		receiver = address(99)
-		expect((await discoverStagedOperations(client, pool, 555n, 1, []))[0]?.executionExpectedSuccess).toBe(false)
+		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
 	})
 
 	test('canonicalizes concurrent warnings before quorum comparison', () => {

@@ -683,6 +683,19 @@ browserTest(
 								rows: document.querySelectorAll('#catalog-rows tr').length,
 							})`),
 					).toEqual({ candidate: '2', rows: 4 })
+					expect(
+						await cdp.evaluate(`(() => {
+							const shell = document.querySelector('.table-shell')
+							const headers = [...document.querySelectorAll('.table-shell thead th')]
+							if (!(shell instanceof HTMLElement)) return undefined
+							const eligibilityBounds = headers.at(-1)?.getBoundingClientRect()
+							return {
+								allColumnsVisible: eligibilityBounds !== undefined && eligibilityBounds.right <= shell.getBoundingClientRect().right + 1,
+								headerLabels: headers.map(header => header.textContent?.trim()),
+								horizontalOverflow: shell.scrollWidth > shell.clientWidth,
+							}
+						})()`),
+					).toEqual({ allColumnsVisible: true, headerLabels: ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility'], horizontalOverflow: false })
 					await cdp.evaluate(`(() => {
 							const filter = document.querySelector('#catalog-classification-filter')
 							if (!(filter instanceof HTMLSelectElement)) return
@@ -694,7 +707,7 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
 				await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", `${viewport.label} anchored topology did not render`)
-				expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 anchored protocol identities · sanitized canonical snapshot.')
+				expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 protocol identities · discovery complete.')
 				expect(
 					await cdp.evaluate(`({
 							auctions: document.querySelectorAll('#topology-auctions .topology-row').length,
@@ -704,6 +717,18 @@ browserTest(
 							universes: document.querySelectorAll('#topology-universes .topology-row').length,
 						})`),
 				).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
+				const topologyPresentation = await cdp.evaluate(`({
+					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
+					topbarBackground: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+				})`)
+				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('rgb(9, 11, 13)')
+				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
+				expect(summaryHeights).toHaveLength(5)
+				if (!Array.isArray(summaryHeights)) throw new Error('Missing topology summary bounds')
+				for (const height of summaryHeights) {
+					if (typeof height !== 'number') throw new Error('Missing topology summary bounds')
+					expect(height).toBeGreaterThanOrEqual(44)
+				}
 				await expectVisibleIdentifiers(topologyIdentifiers, viewport.width === 390 ? 44 : 32, '.topology-panel .compact-identifier')
 				const ecosystemCards = await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-card')].map(card => ({
 					blockers: [...card.querySelectorAll('.blocker-list li')].map(item => item.textContent),
@@ -713,7 +738,7 @@ browserTest(
 				}))`)
 				const openOracleCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'open-oracle') : undefined
 				const tradingCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'trading') : undefined
-				expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Ready', summary: 'At least one exact operation can be simulated now.' })
+				expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Ready' })
 				expect(tradingCard).toEqual({ blockers: ['Router enter: No safe route exists'], ecosystem: 'trading', readiness: 'Blocked', summary: 'Router enter: No safe route exists' })
 				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
 					configurable: true,
@@ -837,6 +862,28 @@ browserTest(
 					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
 					pauseNoteVisible: true,
 				})
+				const disabledButtonPresentation = await cdp.evaluate(`(() => {
+					const button = document.querySelector('#save-settings')
+					if (!(button instanceof HTMLButtonElement)) return undefined
+					const style = getComputedStyle(button)
+					const luminance = value => {
+						const channels = value.match(/\\d+(?:\\.\\d+)?/g)?.slice(0, 3).map(Number)
+						if (channels?.length !== 3) return undefined
+						const linear = channels.map(channel => {
+							const normalized = channel / 255
+							return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+						})
+						return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+					}
+					const foreground = luminance(style.color)
+					const background = luminance(style.backgroundColor)
+					return {
+						contrast: foreground === undefined || background === undefined ? undefined : (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
+						opacity: style.opacity,
+					}
+				})()`)
+				expect(Reflect.get(disabledButtonPresentation, 'opacity')).toBe('1')
+				expect(Reflect.get(disabledButtonPresentation, 'contrast')).toBeGreaterThanOrEqual(4.5)
 				failNextStateRead = true
 				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/signer`] })
 				await cdp.evaluate(`(() => {

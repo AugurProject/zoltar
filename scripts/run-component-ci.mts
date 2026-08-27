@@ -19,10 +19,6 @@ const definitions: Readonly<Record<string, { readonly directory: string; readonl
 		directory: 'bots/liquidator',
 		commands: [['bun', 'run', 'check'], botAudit],
 	},
-	chaos: {
-		directory: 'bots/chaos',
-		commands: [['bun', 'run', 'check'], botAudit],
-	},
 	'augur-scan': {
 		directory: 'augurScan',
 		commands: [['bun', 'run', 'typecheck'], ['bun', 'run', 'check'], ['bun', 'run', 'test'], augurScanAudit],

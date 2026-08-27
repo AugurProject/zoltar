@@ -17,6 +17,8 @@ const CARRY_DEPOSIT_CONSUMED_SIGNATURE = 'CarryDepositConsumed(uint256,uint256,a
 const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, uint8 outcome, uint256 attoRepAmount, uint8 reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot)'
 const CLAIM_DEPOSIT_SIGNATURE = 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'
 const CLAIM_DEPOSIT_ABI = 'event ClaimDeposit(address indexed depositor, uint8 indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep)'
+const CHILD_REP_SPLIT_SIGNATURE = 'ChildRepSplit(address,uint256,uint256,uint256)'
+const CHILD_REP_SPLIT_ABI = 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)'
 const VAULT_MIGRATION_SIGNATURE = 'VaultMigrationCheckpoint(address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)'
 const VAULT_MIGRATION_ABI =
 	'event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentCapacityOwnershipAttoRep, uint256 resultingChildRepBackingUnits, uint256 resultingChildCapacityOwnershipAttoRep, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalCapacityOwnershipAttoRep, uint256 resultingChildTotalCapacityOwnershipAttoRep, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)'
@@ -54,6 +56,20 @@ function decodedVaultMigrationEvidence(snapshot: EcosystemSnapshot, pool: PoolSn
 		kind: 'decoded-event-field',
 		signature: VAULT_MIGRATION_SIGNATURE,
 		topic0: eventTopic(VAULT_MIGRATION_SIGNATURE),
+	}
+}
+
+function decodedChildRepSplitEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string): OperationEvidence {
+	return {
+		abi: CHILD_REP_SPLIT_ABI,
+		canonicalLifecycleConfirmation: true,
+		emitter: snapshot.deployments.securityPoolForker,
+		equals: pool.forkRepMigrationTargetAttoRep,
+		field: 'childPoolRepSplitAttoRep',
+		indexed: { outcomeIndex: outcome, parent: pool.address },
+		kind: 'decoded-event-field',
+		signature: CHILD_REP_SPLIT_SIGNATURE,
+		topic0: eventTopic(CHILD_REP_SPLIT_SIGNATURE),
 	}
 }
 
@@ -1103,14 +1119,12 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 	}
 	const migrateRepPresenceCandidates = (snapshot: EcosystemSnapshot): ForkCandidate[] =>
 		snapshot.pools.flatMap(pool => {
-			if (pool.systemState !== 1 || amount(pool.forkActivationTime) === 0n) return []
+			if (amount(pool.forkActivationTime) === 0n) return []
 			const deadline = amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-			if (amount(snapshot.anchor.timestamp) > deadline) return []
 			const target = amount(pool.forkRepMigrationTargetAttoRep)
 			if (target === 0n) return []
 			return forkOutcomesForPool(snapshot, pool).flatMap(outcome => {
 				const progress = amount(pool.forkRepMigrationProgressByOutcome[outcome] ?? '0')
-				if (progress > target) throw new Error(`Pool ${pool.address} outcome ${outcome} REP migration progress exceeds its fork target`)
 				return progress < target ? [{ deadline, outcome, pool }] : []
 			})
 		})
@@ -1144,7 +1158,7 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 	}
 	const candidates = (snapshot: EcosystemSnapshot): ForkCandidate[] => {
 		const now = amount(snapshot.anchor.timestamp)
-		if (kind === 'migrate-rep') return migrateRepPresenceCandidates(snapshot).filter(candidate => candidate.deadline !== undefined && now + MINING_SAFETY_SECONDS <= candidate.deadline && isOpenChildRoute(snapshot, candidate.pool, candidate.outcome))
+		if (kind === 'migrate-rep') return migrateRepPresenceCandidates(snapshot).filter(candidate => candidate.pool.systemState === 1 && candidate.deadline !== undefined && now + MINING_SAFETY_SECONDS <= candidate.deadline && isOpenChildRoute(snapshot, candidate.pool, candidate.outcome))
 		if (kind === 'migrate-vault') return []
 		return snapshot.pools.flatMap<ForkCandidate>(pool => {
 			const universe = snapshot.universes.find(value => value.id === pool.universeId)
@@ -1186,7 +1200,7 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 			const child = childForOutcome(snapshot, candidate.pool, outcome)
 			evidence = [decodedVaultMigrationEvidence(snapshot, candidate.pool, 'outcomeIndex', outcome, child), decodedVaultMigrationEvidence(snapshot, candidate.pool, 'resultingParentRepBackingUnits', '0', child)]
 		} else if (kind === 'own-question') evidence = [eventEvidence(snapshot.deployments.zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')]
-		else evidence = [{ kind: 'receipt-success' }]
+		else evidence = [decodedChildRepSplitEvidence(snapshot, candidate.pool, outcome)]
 		const metadata: Record<string, string | number | boolean> = kind === 'migrate-vault' ? { pool: candidate.pool.address } : { outcome, pool: candidate.pool.address }
 		if (kind === 'migrate-rep') metadata['targetAttoRep'] = candidate.pool.forkRepMigrationTargetAttoRep
 		let postconditions = ['Fork workflow advances without violating canonical parent/child accounting']
@@ -1216,6 +1230,9 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 		if (candidate.deadline !== undefined) plan.deadlineTimestamp = candidate.deadline.toString()
 		return plan
 	}
+	let discoveryInputs = ['pool fork state', 'universe tree', 'wallet vault state']
+	if (kind === 'migrate-vault') discoveryInputs = ['pool fork state', 'universe tree', 'wallet source-vault backing', 'existing canonical child route state']
+	if (kind === 'migrate-rep') discoveryInputs = ['pool fork state', 'universe tree', 'canonical indexed child REP split progress']
 	return {
 		buildPlan(snapshot, options) {
 			if (kind === 'migrate-vault') {
@@ -1255,7 +1272,7 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 		classification: kind === 'create-child' || kind === 'migrate-rep' || kind === 'migrate-vault' ? 'lifecycle-obligation' : 'selectable',
 		contract: 'SecurityPoolForker',
 		description: kind === 'migrate-vault' ? 'Migrates the wallet vault through one canonical child route and requires terminal zero source backing in the receipt.' : `Advances the permissionless ${kind} phase of pool fork migration.`,
-		discoveryInputs: kind === 'migrate-vault' ? ['pool fork state', 'universe tree', 'wallet source-vault backing', 'existing canonical child route state'] : ['pool fork state', 'universe tree', 'wallet vault state'],
+		discoveryInputs,
 		ecosystem: 'statoblast',
 		evaluate(snapshot, options) {
 			const found = kind === 'migrate-vault' ? vaultMigrationCandidates(snapshot).length > 0 : candidates(snapshot).length > 0

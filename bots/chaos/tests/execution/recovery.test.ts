@@ -6,14 +6,19 @@ import type { OperatorSettings } from '../../src/config/settings.ts'
 import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, recoverPendingTransactions, transactionIsStrictNonceCancellation } from '../../src/execution/recovery.ts'
 import type { ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
-import { createDurableWorkflow, markWorkflowStepSigned } from '../../src/runtime/workflows.ts'
-import { initialDurableState, initialRuntimeState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
+import { createDurableWorkflow, markWorkflowStepSigned, markWorkflowStepSubmitted } from '../../src/runtime/workflows.ts'
+import { initialDurableState, initialRuntimeState, loadDurableState, loadRuntimeState, saveDurableState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
 
 const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = []
 const directories: string[] = []
 const target = getAddress('0x0000000000000000000000000000000000000020')
 const openOracle = getAddress('0x0000000000000000000000000000000000000021')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
+const childRepSplitSignature = 'ChildRepSplit(address,uint256,uint256,uint256)'
+const childRepSplitTopic = keccak256(toHex(childRepSplitSignature))
+const recoveryReceiptBlockHash = `0x${'aa'.repeat(32)}` as const
+const recoveryFinalityBlockHash = `0x${'bb'.repeat(32)}` as const
+const recoveryReceiptClockTimestamp = 2_000_000n
 
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
@@ -181,6 +186,44 @@ function recoveryPlan(downstreamPreflight = false, transactionValue = 0n): Opera
 	}
 }
 
+function canonicalLifecycleRecoveryPlan(): OperationPlan {
+	const plan = recoveryPlan()
+	const step = plan.steps[0]
+	const targetAttoRep = 100n.toString()
+	if (step === undefined) throw new Error('Recovery test plan is missing its step')
+	return {
+		...plan,
+		classification: 'lifecycle-obligation',
+		definitionId: 'statoblast.fork.migrate-rep',
+		ecosystem: 'statoblast',
+		id: 'plan:recovered-migrate-rep',
+		label: 'Fork workflow: migrate-rep',
+		metadata: { outcome: '0', pool: target, targetAttoRep },
+		obligation: true,
+		priority: 'urgent',
+		steps: [
+			{
+				...step,
+				evidence: [
+					{
+						abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+						canonicalLifecycleConfirmation: true,
+						emitter: target,
+						equals: targetAttoRep,
+						field: 'childPoolRepSplitAttoRep',
+						indexed: { outcomeIndex: '0', parent: target },
+						kind: 'decoded-event-field',
+						signature: childRepSplitSignature,
+						topic0: childRepSplitTopic,
+					},
+				],
+				id: 'migrate-rep',
+				label: 'migrate-rep',
+			},
+		],
+	}
+}
+
 function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile: string): OperatorSettings {
 	return {
 		connectivity: {
@@ -229,6 +272,189 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 		},
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 		version: 1,
+	}
+}
+
+type FinalizedRecoveryRpcState = {
+	account: `0x${string}`
+	originalHash: `0x${string}`
+	receiptHash: `0x${string}`
+	replacementHash?: `0x${string}` | undefined
+}
+
+function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
+	const server = Bun.serve({
+		port: 0,
+		async fetch(request) {
+			const body = rpcRequest(await request.json())
+			if (!('method' in body) || typeof body.method !== 'string') return new Response('Expected a JSON-RPC method', { status: 400 })
+			const id = 'id' in body ? body.id : 1
+			const params = 'params' in body && Array.isArray(body.params) ? body.params : []
+			const requestedHash = params[0]
+			switch (body.method) {
+				case 'eth_chainId':
+					return Response.json({ id, jsonrpc: '2.0', result: '0x1' })
+				case 'eth_blockNumber':
+					return Response.json({ id, jsonrpc: '2.0', result: toHex(112n) })
+				case 'eth_getTransactionByHash':
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result:
+							typeof requestedHash === 'string' && requestedHash.toLowerCase() === state.replacementHash?.toLowerCase()
+								? {
+										blockHash: recoveryReceiptBlockHash,
+										blockNumber: toHex(100n),
+										from: state.account,
+										gas: toHex(100_000n),
+										hash: state.replacementHash,
+										input: '0x1234',
+										maxFeePerGas: '0x3',
+										maxPriorityFeePerGas: '0x1',
+										nonce: '0x3',
+										to: target,
+										transactionIndex: '0x0',
+										type: '0x2',
+										value: '0x0',
+									}
+								: null,
+					})
+				case 'eth_getTransactionReceipt':
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result:
+							typeof requestedHash === 'string' && requestedHash.toLowerCase() === state.receiptHash.toLowerCase()
+								? {
+										blockHash: recoveryReceiptBlockHash,
+										blockNumber: toHex(100n),
+										contractAddress: null,
+										cumulativeGasUsed: '0x5208',
+										effectiveGasPrice: '0x1',
+										from: state.account,
+										gasUsed: '0x5208',
+										logs: [],
+										logsBloom: `0x${'00'.repeat(256)}`,
+										status: '0x1',
+										to: target,
+										transactionHash: state.receiptHash,
+										transactionIndex: '0x0',
+										type: '0x2',
+									}
+								: null,
+					})
+				case 'eth_getBlockByNumber': {
+					if (typeof params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
+					const blockNumber = BigInt(params[0])
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result: {
+							baseFeePerGas: '0x1',
+							difficulty: '0x0',
+							extraData: '0x',
+							gasLimit: '0x1c9c380',
+							gasUsed: '0x5208',
+							hash: blockNumber === 100n ? recoveryReceiptBlockHash : recoveryFinalityBlockHash,
+							logsBloom: `0x${'00'.repeat(256)}`,
+							miner: zeroAddress,
+							mixHash: `0x${'00'.repeat(32)}`,
+							nonce: '0x0000000000000000',
+							number: toHex(blockNumber),
+							parentHash: `0x${'44'.repeat(32)}`,
+							receiptsRoot: `0x${'55'.repeat(32)}`,
+							sha3Uncles: `0x${'66'.repeat(32)}`,
+							size: '0x1',
+							stateRoot: `0x${'77'.repeat(32)}`,
+							timestamp: toHex(recoveryReceiptClockTimestamp),
+							totalDifficulty: '0x0',
+							transactions: [],
+							transactionsRoot: `0x${'88'.repeat(32)}`,
+							uncles: [],
+						},
+					})
+				}
+				default:
+					return new Response(`Unexpected RPC method ${body.method}`, { status: 500 })
+			}
+		},
+	})
+	servers.push(server)
+	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
+	return `http://127.0.0.1:${server.port.toString()}`
+}
+
+async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
+	const directory = await mkdtemp('/tmp/zoltar-chaos-finalized-recovery-')
+	directories.push(directory)
+	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
+	const serializedTransaction = await account.signTransaction({
+		chainId: 1,
+		data: '0x1234',
+		gas: 100_000n,
+		maxFeePerGas: 2n,
+		maxPriorityFeePerGas: 1n,
+		nonce: 3n,
+		to: target,
+		value: 0n,
+	})
+	const originalHash = keccak256(serializedTransaction)
+	const replacementHash = `0x${'99'.repeat(32)}` as const
+	const rpcState: FinalizedRecoveryRpcState = {
+		account: account.address,
+		originalHash,
+		receiptHash: mode === 'original' ? originalHash : replacementHash,
+		...(mode === 'replacement' ? { replacementHash } : {}),
+	}
+	const firstUrl = finalizedRecoveryRpcServer(rpcState)
+	const secondUrl = finalizedRecoveryRpcServer(rpcState)
+	const stateFile = join(directory, 'state.json')
+	const settings = recoverySettings(firstUrl, [secondUrl], stateFile)
+	const plan = canonicalLifecycleRecoveryPlan()
+	const workflow = createDurableWorkflow(plan)
+	const step = plan.steps[0]
+	if (step === undefined) throw new Error('Recovery test plan is missing its step')
+	const intent: PendingTransactionIntent = {
+		data: '0x1234',
+		hash: originalHash,
+		id: `intent:${originalHash.slice(2)}`,
+		label: step.label,
+		maxBlockNumber: 120n,
+		mode: 'public',
+		nonce: 3n,
+		operationId: plan.definitionId,
+		...(mode === 'replacement' ? { replacementHash } : {}),
+		semanticExpectation: { balanceBaselines: [], evidence: step.evidence, postconditions: plan.postconditions, storageBaselines: [] },
+		sender: account.address,
+		serializedTransaction,
+		signedAt: new Date().toISOString(),
+		status: 'confirmation-unknown',
+		stepId: step.id,
+		submissionBlock: 99n,
+		submittedAt: new Date().toISOString(),
+		to: target,
+		value: 0n,
+		workflowId: workflow.id,
+	}
+	markWorkflowStepSigned(workflow, intent.stepId, intent.id, intent.hash)
+	markWorkflowStepSubmitted(workflow, intent.stepId)
+	const state = initialRuntimeState(false, account.address, 1, initialDurableState(1, false, 'profile:finalized-recovery', account.address))
+	state.pendingTransactions.push(intent)
+	state.workflows.push(workflow)
+	await saveDurableState(stateFile, state)
+	const recoveredState = await loadRuntimeState(stateFile, false, account.address, 1)
+	const pool = createRpcEndpointPool([firstUrl, secondUrl])
+	return {
+		environment: {
+			chain: mainnet,
+			clock: () => Number(recoveryReceiptClockTimestamp * 1_000n),
+			pool,
+			sender: account.address,
+			settings,
+			state: recoveredState,
+		} satisfies ExecutionEnvironment,
+		state: recoveredState,
+		stateFile,
 	}
 }
 
@@ -364,6 +590,32 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 }
 
 describe('pending chaos transaction recovery decisions', () => {
+	test('restores a persisted successful empty-log receipt as waiting for canonical confirmation', async () => {
+		const fixture = await finalizedRecoveryEnvironment('original')
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).resolves.toBe(true)
+
+		expect(fixture.state.pendingTransactions).toHaveLength(0)
+		expect(fixture.state.workflows[0]?.status).toBe('waiting-obligation')
+		expect(fixture.state.workflows[0]?.steps[0]).toMatchObject({ status: 'confirmed', transactionHash: expect.stringMatching(/^0x[0-9a-f]{64}$/) })
+		const durable = await loadDurableState(fixture.stateFile, 1)
+		expect(durable.pendingTransactions).toHaveLength(0)
+		expect(durable.workflows[0]?.status).toBe('waiting-obligation')
+	})
+
+	test('restores a queued exact replacement empty-log receipt as waiting for canonical confirmation', async () => {
+		const fixture = await finalizedRecoveryEnvironment('replacement')
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).resolves.toBe(true)
+
+		expect(fixture.state.pendingTransactions).toHaveLength(0)
+		expect(fixture.state.workflows[0]?.status).toBe('waiting-obligation')
+		expect(fixture.state.workflows[0]?.steps[0]).toMatchObject({ status: 'confirmed', transactionHash: `0x${'99'.repeat(32)}` })
+		const durable = await loadDurableState(fixture.stateFile, 1)
+		expect(durable.pendingTransactions).toHaveLength(0)
+		expect(durable.workflows[0]?.status).toBe('waiting-obligation')
+	})
+
 	test('resubmits when exact-attester ETH funding equals the signed maximum cost plus reserve', async () => {
 		const fixture = await forkedRecoveryEnvironment({
 			ethBalanceAttoEth: 200_105n,

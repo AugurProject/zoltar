@@ -3,9 +3,20 @@ import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transactio
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { captureWorkflowIntentSubmissionJournal, durableWorkflowPlan, markWorkflowFailed, markWorkflowIntentBroadcastAttempt, markWorkflowStepConfirmed, markWorkflowStepSubmitted, requireWorkflowStep, recoverableWorkflowForIntent, restoreWorkflowIntentSubmissionJournal } from '../runtime/workflows.ts'
+import {
+	captureWorkflowIntentSubmissionJournal,
+	durableWorkflowPlan,
+	markWorkflowFailed,
+	markWorkflowIntentBroadcastAttempt,
+	markWorkflowStepConfirmed,
+	markWorkflowStepSubmitted,
+	markWorkflowStepWaitingCanonical,
+	requireWorkflowStep,
+	recoverableWorkflowForIntent,
+	restoreWorkflowIntentSubmissionJournal,
+} from '../runtime/workflows.ts'
 import { recordActivity, saveDurableState, type PendingTransactionIntent } from '../state/operator-state.ts'
-import { requireSuccessfulReceipt, validateStepReceiptEvidence } from './receipt-validation.ts'
+import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type ReceiptEvidenceDisposition } from './receipt-validation.ts'
 import {
 	balanceObservations,
 	agreedMaximumGasEstimate,
@@ -221,8 +232,9 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 		await persist(environment)
 		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
 	}
+	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {
-		validateStepReceiptEvidence({ evidence: intent.semanticExpectation.evidence, label: intent.label }, receipt, observations)
+		evidenceDisposition = stepReceiptEvidenceDisposition({ evidence: intent.semanticExpectation.evidence, label: intent.label }, receipt, observations)
 	} catch (error) {
 		removeIntent(environment, intent.id)
 		markWorkflowFailed(workflow, intent.stepId, error, 'semantic-failure')
@@ -237,12 +249,13 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 		throw error
 	}
 	removeIntent(environment, intent.id)
-	markWorkflowStepConfirmed(workflow, intent.stepId, receipt.transactionHash)
+	if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, intent.stepId, receipt.transactionHash)
+	else markWorkflowStepConfirmed(workflow, intent.stepId, receipt.transactionHash)
 	recordActivity(environment.state, {
 		hash: intent.hash,
-		message: `Recovered confirmation: ${intent.label}`,
+		message: evidenceDisposition === 'waiting-canonical' ? `Recovered confirmation awaiting canonical lifecycle evidence: ${intent.label}` : `Recovered confirmation: ${intent.label}`,
 		operationId: intent.operationId,
-		status: 'confirmed',
+		status: evidenceDisposition === 'waiting-canonical' ? 'pending' : 'confirmed',
 		type: 'recovery',
 	})
 	await persist(environment)
@@ -507,9 +520,9 @@ class ReplacementTransactionFailed extends Error {
 async function resolveQueuedReplacement(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
 	const replacementHash = intent.replacementHash
 	if (replacementHash === undefined) return false
-	let receipt: Awaited<ReturnType<typeof verifyRecoveredReplacement>>
+	let verified: Awaited<ReturnType<typeof verifyRecoveredReplacement>>
 	try {
-		receipt = await verifyRecoveredReplacement(environment, intent, replacementHash)
+		verified = await verifyRecoveredReplacement(environment, intent, replacementHash)
 	} catch (error) {
 		if (!(error instanceof ReplacementTransactionFailed)) throw error
 		removeIntent(environment, intent.id)
@@ -527,12 +540,13 @@ async function resolveQueuedReplacement(environment: ExecutionEnvironment, inten
 	}
 	removeIntent(environment, intent.id)
 	const workflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
-	markWorkflowStepConfirmed(workflow, intent.stepId, receipt.transactionHash)
+	if (verified.evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, intent.stepId, verified.receipt.transactionHash)
+	else markWorkflowStepConfirmed(workflow, intent.stepId, verified.receipt.transactionHash)
 	recordActivity(environment.state, {
-		hash: receipt.transactionHash,
-		message: `Verified replacement confirmed: ${intent.label}`,
+		hash: verified.receipt.transactionHash,
+		message: verified.evidenceDisposition === 'waiting-canonical' ? `Verified replacement awaiting canonical lifecycle evidence: ${intent.label}` : `Verified replacement confirmed: ${intent.label}`,
 		operationId: intent.operationId,
-		status: 'confirmed',
+		status: verified.evidenceDisposition === 'waiting-canonical' ? 'pending' : 'confirmed',
 		type: 'recovery',
 	})
 	await persist(environment)
@@ -673,10 +687,11 @@ export async function verifyRecoveredReplacement(environment: ExecutionEnvironme
 	} catch (error) {
 		throw new TransactionAwaitingRecovery(intent.label, replacementHash, `replacement evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
 	}
+	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {
-		validateStepReceiptEvidence({ evidence: intent.semanticExpectation.evidence, label: intent.label }, successful, observations)
+		evidenceDisposition = stepReceiptEvidenceDisposition({ evidence: intent.semanticExpectation.evidence, label: intent.label }, successful, observations)
 	} catch (error) {
 		throw new ReplacementTransactionFailed(`Replacement transaction ${replacementHash} failed semantic validation`, error)
 	}
-	return successful
+	return { evidenceDisposition, receipt: successful }
 }

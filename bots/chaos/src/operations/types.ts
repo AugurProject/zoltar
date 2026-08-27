@@ -359,7 +359,18 @@ export interface EligibilityResult {
 
 export type OperationEvidence =
 	| { kind: 'event'; emitter: Address; topic0: Hash; signature: string }
-	| { kind: 'decoded-event-field'; emitter: Address; topic0: Hash; signature: string; abi: string; indexed: Record<string, string>; field: string; equals: string | number | boolean }
+	| {
+			kind: 'decoded-event-field'
+			emitter: Address
+			topic0: Hash
+			signature: string
+			abi: string
+			indexed: Record<string, string>
+			field: string
+			equals: string | number | boolean
+			/** A missing receipt event leaves a lifecycle workflow pending for canonical discovery. */
+			canonicalLifecycleConfirmation?: true
+	  }
 	| { kind: 'balance-change'; account: Address; asset: 'ETH' | Address; direction: 'increase' | 'decrease' | 'any' }
 	| { kind: 'storage-postcondition'; contract: Address; abi: string; functionName: string; args: Array<string | boolean>; relation: 'changed' | 'equals' | 'greater-than' | 'at-least'; expected?: string }
 	| { kind: 'receipt-success' }

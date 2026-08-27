@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { auctionAbi, coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi, liquidationApprovalRegistryAbi, openOracleAbi, questionDataAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, zoltarAbi } from '../contracts/abi.ts'
+import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
 	AuctionBidSnapshot,
@@ -21,18 +23,32 @@ import type {
 } from '../operations/types.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from './protocol-index.ts'
-import { cloneImmutableTopologyData, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CachedPoolDeployment, type CanonicalImmutableTopologyCache, type ImmutableTopologyData } from './topology-cache.ts'
+import {
+	cloneImmutableTopologyData,
+	emptyCountedRegistryCursor,
+	emptyImmutableTopologyData,
+	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
+	IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES,
+	IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES,
+	type CachedPoolDeployment,
+	type CanonicalImmutableTopologyCache,
+	type CountedRegistryCursor,
+	type ImmutableTopologyData,
+} from './topology-cache.ts'
 
 export type ChaosReadClient = PublicClient<Transport, Chain>
 
 export const DISCOVERY_RPC_CONCURRENCY = 12
+export const DISCOVERY_RPC_QUEUE_LIMIT = DISCOVERY_RPC_CONCURRENCY * 4
+export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
+const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 const OUTCOME_LABEL_PAGE_SIZE = 256n
 // Zoltar persists and emits every non-empty label in one createQuestion
 // transaction. These ceilings are far above a practical transaction-sized
 // domain, but still make a hostile endpoint's pagination and memory finite.
 const DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION = 4_096
-const DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION = 4 * 1024 * 1024
+const DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION = IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES
 const utf8Encoder = new TextEncoder()
 
 export function forkMigrationWindowIsOpen(systemState: bigint, forkActivationTime: bigint, timestamp: bigint) {
@@ -44,7 +60,10 @@ export function limitDiscoveryConcurrency(client: ChaosReadClient, maximum = DIS
 	let active = 0
 	const waiting: Array<() => void> = []
 	const schedule = async <T>(work: () => Promise<T>) => {
-		if (active >= maximum) await new Promise<void>(resolve => waiting.push(resolve))
+		if (active >= maximum) {
+			if (waiting.length >= DISCOVERY_RPC_QUEUE_LIMIT) throw new Error(`Discovery RPC queue exceeded its ${DISCOVERY_RPC_QUEUE_LIMIT.toString()}-request safety limit`)
+			await new Promise<void>(resolve => waiting.push(resolve))
+		}
 		active += 1
 		try {
 			return await work()
@@ -145,6 +164,25 @@ function requirePositiveLimit(value: unknown, label: string) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive safe integer`)
 }
 
+function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
+	for (const [label, value] of [
+		['maxOutcomeLabelsPerQuestion', limits.maxOutcomeLabelsPerQuestion],
+		['maxPools', limits.maxPools],
+		['maxQuestions', limits.maxQuestions],
+		['maxStagedOperationsPerPool', limits.maxStagedOperationsPerPool],
+		['maxUniverses', limits.maxUniverses],
+		['maxVaultsPerPool', limits.maxVaultsPerPool],
+	] as const) {
+		if (value > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`${label} exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
+	}
+	if (limits.maxOutcomeLabelUtf8BytesPerQuestion > IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES) {
+		throw new Error(`maxOutcomeLabelUtf8BytesPerQuestion exceeds the ${IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES.toString()}-byte immutable-topology safety envelope`)
+	}
+	if (limits.maxPools * limits.maxUniverses > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxUniverses exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
+	if (limits.maxPools * limits.maxVaultsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxVaultsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
+	if (limits.maxPools * limits.maxStagedOperationsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxStagedOperationsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
+}
+
 const CONTRACT_REVERT_MESSAGE = /(?:execution reverted|\brevert(?:ed|ing)?\b|always failing transaction)/i
 const stagedRouteIneligibilityErrors = new WeakSet<Error>()
 
@@ -179,26 +217,23 @@ async function immutableTopologyForAnchor(context: EcosystemDiscoveryContext, bl
 	if (cachedBlockNumber === block.number) {
 		return cached.anchor.blockHash.toLowerCase() === block.hash.toLowerCase() ? { reset: false, topology: cloneImmutableTopologyData(cached) } : { reset: true, topology: emptyImmutableTopologyData() }
 	}
-	let cachedBlock: Awaited<ReturnType<ChaosReadClient['getBlock']>>
-	try {
-		cachedBlock = await context.client.getBlock({ blockNumber: cachedBlockNumber })
-	} catch (error) {
-		if (error instanceof Error) return { reset: true, topology: emptyImmutableTopologyData() }
-		throw new Error('Immutable topology canonical-history probe threw a non-Error value', { cause: error })
-	}
+	const cachedBlock = await context.client.getBlock({ blockNumber: cachedBlockNumber })
 	if (cachedBlock.hash == null || cachedBlock.number !== cachedBlockNumber || cachedBlock.hash.toLowerCase() !== cached.anchor.blockHash.toLowerCase()) {
 		return { reset: true, topology: emptyImmutableTopologyData() }
 	}
 	return { reset: false, topology: cloneImmutableTopologyData(cached) }
 }
 
-export async function collectCountedPages<T>(parameters: { count: bigint; label: string; pageSize: number; readPage: (start: bigint, count: bigint) => Promise<readonly T[]> }) {
+export async function collectCountedPages<T>(parameters: { count: bigint; label: string; maximumItems: number; pageSize: number; readPage: (start: bigint, count: bigint) => Promise<readonly T[]>; start: bigint }) {
 	if (parameters.count < 0n) throw new Error(`${parameters.label} count cannot be negative`)
+	if (parameters.start < 0n || parameters.start > parameters.count) throw new Error(`${parameters.label} cursor is outside its canonical count`)
+	requirePositiveLimit(parameters.maximumItems, `${parameters.label} cycle item limit`)
 	requirePositiveLimit(parameters.pageSize, `${parameters.label} page size`)
 	const values: T[] = []
 	const pageSize = BigInt(parameters.pageSize)
-	for (let start = 0n; start < parameters.count; ) {
-		const remaining = parameters.count - start
+	const cycleEnd = parameters.start + BigInt(parameters.maximumItems) < parameters.count ? parameters.start + BigInt(parameters.maximumItems) : parameters.count
+	for (let start = parameters.start; start < cycleEnd; ) {
+		const remaining = cycleEnd - start
 		const requested = remaining < pageSize ? remaining : pageSize
 		const page = await parameters.readPage(start, requested)
 		if (page.length !== Number(requested)) {
@@ -207,7 +242,134 @@ export async function collectCountedPages<T>(parameters: { count: bigint; label:
 		values.push(...page)
 		start += requested
 	}
-	return values
+	const nextStart = parameters.start + BigInt(values.length)
+	return { complete: nextStart === parameters.count, nextStart, values }
+}
+
+function updateRegistryCommitment(previous: Hash, start: bigint, values: readonly string[]) {
+	let commitment = previous
+	for (let offset = 0; offset < values.length; offset += 1) {
+		const value = values[offset]
+		if (value === undefined) throw new Error(`Immutable registry commitment lost value ${offset.toString()}`)
+		const hasher = createHash('sha256')
+		hasher.update(commitment, 'utf8')
+		hasher.update(`:${(start + BigInt(offset)).toString()}:${Buffer.byteLength(value, 'utf8').toString()}:`, 'utf8')
+		hasher.update(value, 'utf8')
+		commitment = `0x${hasher.digest('hex')}` as Hash
+	}
+	return commitment
+}
+
+function cursorWithCanonicalCount(cursor: CountedRegistryCursor | undefined, count: bigint, residentLimit: number, retentionMode: CountedRegistryCursor['retentionMode']) {
+	const current = cursor ?? emptyCountedRegistryCursor()
+	if (BigInt(current.nextIndex) > count || BigInt(current.canonicalCount) > count) throw new Error(`Immutable registry count ${count.toString()} no longer extends its authenticated cursor`)
+	return { ...current, canonicalCount: count.toString(), residentLimit: residentLimit.toString(), retentionMode }
+}
+
+function assertRegistryCountNotRegressed(cursor: CountedRegistryCursor | undefined, count: bigint, label: string) {
+	if (cursor !== undefined && (BigInt(cursor.nextIndex) > count || BigInt(cursor.canonicalCount) > count)) {
+		throw new Error(`${label} canonical count ${count.toString()} no longer extends its authenticated cursor`)
+	}
+}
+
+function registryCatchUpWarning(label: string, cursor: CountedRegistryCursor) {
+	return BigInt(cursor.nextIndex) < BigInt(cursor.canonicalCount)
+		? `${label} discovery truncated while bounded catch-up authenticated ${cursor.nextIndex} of ${cursor.canonicalCount} canonical entries`
+		: `${label} discovery truncated after authenticating the exact canonical total ${cursor.canonicalCount}; configured resident safety envelope cannot hold complete topology (entry limit ${cursor.residentLimit})`
+}
+
+function sameRegistryCursor(left: CountedRegistryCursor, right: CountedRegistryCursor) {
+	return left.canonicalCount === right.canonicalCount && left.commitment === right.commitment && left.nextIndex === right.nextIndex && left.residentLimit === right.residentLimit && left.retentionMode === right.retentionMode
+}
+
+export async function advanceVaultRegistryCursor(parameters: { cachedVaults: readonly Address[]; canonicalCount: bigint; cursor: CountedRegistryCursor | undefined; label: string; limit: number; readNewestFirstPage: (start: bigint, count: bigint) => Promise<readonly Address[]> }) {
+	requirePositiveLimit(parameters.limit, `${parameters.label} resident limit`)
+	let changed = false
+	let cachedVaults = [...parameters.cachedVaults]
+	let cursor = parameters.cursor
+	assertRegistryCountNotRegressed(cursor, parameters.canonicalCount, parameters.label)
+	const retentionMode: CountedRegistryCursor['retentionMode'] = parameters.canonicalCount <= BigInt(parameters.limit) ? 'resident' : 'overflow'
+	if (cursor?.retentionMode === 'overflow' && retentionMode === 'resident') {
+		cursor = emptyCountedRegistryCursor()
+		cachedVaults = []
+		changed = true
+	}
+	if (retentionMode === 'overflow' && cachedVaults.length > 0) {
+		cachedVaults = []
+		changed = true
+	}
+	const canonicalCursor = cursorWithCanonicalCount(cursor, parameters.canonicalCount, parameters.limit, retentionMode)
+	if (cursor === undefined || !sameRegistryCursor(cursor, canonicalCursor)) changed = true
+	cursor = canonicalCursor
+	if (cursor.retentionMode === 'resident' && BigInt(cachedVaults.length) !== BigInt(cursor.nextIndex)) throw new Error(`${parameters.label} cursor does not match its retained canonical prefix`)
+	const collected = await collectCountedPages({
+		count: parameters.canonicalCount,
+		label: parameters.label,
+		maximumItems: parameters.limit,
+		pageSize: parameters.limit,
+		readPage: async (start, pageCount) => {
+			const end = start + pageCount
+			const newestFirst = await parameters.readNewestFirstPage(parameters.canonicalCount - end, pageCount)
+			return [...newestFirst].reverse().map(getAddress)
+		},
+		start: BigInt(cursor.nextIndex),
+	})
+	const newlyRegisteredVaults = collected.values
+	if (newlyRegisteredVaults.length > 0) {
+		cursor = {
+			...cursor,
+			commitment: updateRegistryCommitment(
+				cursor.commitment,
+				BigInt(cursor.nextIndex),
+				newlyRegisteredVaults.map(vault => vault.toLowerCase()),
+			),
+			nextIndex: collected.nextStart.toString(),
+		}
+		changed = true
+	}
+	const vaults = cursor.retentionMode === 'resident' ? [...newlyRegisteredVaults].reverse().concat(cachedVaults) : []
+	if (cursor.retentionMode === 'resident' && (BigInt(vaults.length) !== parameters.canonicalCount || new Set(vaults.map(vault => vault.toLowerCase())).size !== vaults.length)) {
+		throw new Error(`${parameters.label} contains duplicate or missing immutable entries`)
+	}
+	return { changed, complete: collected.complete, cursor, vaults }
+}
+
+async function drainConcurrent<T extends readonly unknown[] | []>(values: T) {
+	const settled = await Promise.allSettled(values)
+	for (const result of settled) if (result.status === 'rejected') throw result.reason
+	return await Promise.all(values)
+}
+
+export async function mapWithConcurrency<T, R>(values: readonly T[], maximum: number, mapper: (value: T, index: number) => Promise<R>): Promise<R[]> {
+	requirePositiveLimit(maximum, 'Mapping concurrency')
+	const results: Array<{ value: R } | undefined> = Array.from({ length: values.length })
+	let nextIndex = 0
+	let failure: { error: unknown } | undefined
+	const worker = async () => {
+		for (;;) {
+			if (failure !== undefined) return
+			const index = nextIndex
+			if (index >= values.length) return
+			nextIndex += 1
+			const value = values[index]
+			if (value === undefined) {
+				failure ??= { error: new Error(`Bounded mapping lost value ${index.toString()}`) }
+				return
+			}
+			try {
+				results[index] = { value: await mapper(value, index) }
+			} catch (error) {
+				failure ??= { error }
+				return
+			}
+		}
+	}
+	await drainConcurrent(Array.from({ length: Math.min(maximum, values.length) }, worker))
+	if (failure !== undefined) throw failure.error
+	return results.map((value, index) => {
+		if (value === undefined) throw new Error(`Bounded mapping lost result ${index.toString()}`)
+		return value.value
+	})
 }
 
 export function canonicalDiscoveryWarnings(warnings: readonly string[]) {
@@ -243,7 +405,7 @@ export interface PoolProtocolBindingAuthentication {
 /** Authenticates the immutable oracle and token bindings that authorize pool transactions. */
 export async function authenticatePoolProtocolBindings(authentication: PoolProtocolBindingAuthentication) {
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
-	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await Promise.all([
+	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'openOracle' }),
 		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
 		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
@@ -325,7 +487,7 @@ export function forkRepMigrationTarget(forkData: { auctionableAttoRepAtFork: big
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
-	const [questionData, forkerZoltar, tradingSecurityPoolFactory, routerFactory] = await Promise.all([
+	const [questionData, forkerZoltar, tradingSecurityPoolFactory, routerFactory] = await drainConcurrent([
 		client.readContract({ abi: zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'zoltarQuestionData' }),
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' }),
@@ -406,11 +568,23 @@ export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: 
 	return [...spenders.values()].sort((left, right) => left.toLowerCase().localeCompare(right.toLowerCase()))
 }
 
-async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState) {
+async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments, wallet } = context
 	const queue = [0n]
+	const queuedIds = new Set<string>(['0'])
 	const seen = new Set<string>()
+	const retainedUniverseIds = new Set<string>(['0'])
 	const universes: UniverseSnapshot[] = []
+	let truncated = false
+	const cachedUniverseIds = new Set<string>(['0'])
+	for (const [universeId, children] of Object.entries(topology.universeChildren)) {
+		cachedUniverseIds.add(universeId)
+		for (const childId of children.childUniverseIds) cachedUniverseIds.add(childId)
+	}
+	if (cachedUniverseIds.size > limits.maxUniverses) {
+		topology.universeChildren = {}
+		mutation.changed = true
+	}
 	const forkBurnDivisor = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'forkBurnDivisor' })
 	const migrationProgressByUniverse = new Map<string, MigrationRepSplitProgressSnapshot[]>()
 	for (const progress of context.indexedMigrationRepSplits ?? []) {
@@ -419,12 +593,13 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		migrationProgressByUniverse.set(progress.universeId, routes)
 	}
 	for (const routes of migrationProgressByUniverse.values()) routes.sort((left, right) => compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex))
-	while (queue.length > 0) {
-		const universeId = queue.shift()
+	for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+		const universeId = queue[queueIndex]
 		if (universeId === undefined) throw new Error('Universe traversal lost its current entry')
+		queuedIds.delete(universeId.toString())
 		if (seen.has(universeId.toString())) continue
 		seen.add(universeId.toString())
-		const [raw, threshold, nonDecisionThreshold, migration] = await Promise.all([
+		const [raw, threshold, nonDecisionThreshold, migration] = await drainConcurrent([
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
@@ -439,16 +614,37 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		const outcomes = (cachedChildren?.outcomeIndexes ?? []).map(outcome => BigInt(outcome))
 		const childIds = (cachedChildren?.childUniverseIds ?? []).map(childId => BigInt(childId))
 		if (outcomes.length !== childIds.length) throw new Error(`Universe ${universeId.toString()} immutable child cache has mismatched arrays`)
-		const childPageSize = BigInt(limits.maxUniverses)
-		for (let start = BigInt(outcomes.length); ; ) {
-			const [pageOutcomes, pageChildIds, pageChildren] = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId, start, childPageSize], blockNumber, functionName: 'getDeployedChildUniverses' })
-			if (pageOutcomes.length !== pageChildIds.length || pageOutcomes.length !== pageChildren.length) throw new Error(`Universe ${universeId.toString()} returned mismatched child arrays`)
-			if (pageOutcomes.length > limits.maxUniverses) throw new Error(`Universe ${universeId.toString()} exceeded the requested child page size`)
-			outcomes.push(...pageOutcomes)
-			childIds.push(...pageChildIds)
-			if (pageOutcomes.length > 0) mutation.changed = true
-			if (pageOutcomes.length < limits.maxUniverses) break
-			start += BigInt(pageOutcomes.length)
+		for (const childId of childIds) {
+			if (retainedUniverseIds.size >= limits.maxUniverses && !retainedUniverseIds.has(childId.toString())) {
+				truncated = true
+				break
+			}
+			retainedUniverseIds.add(childId.toString())
+		}
+		if (!truncated) {
+			for (let start = BigInt(outcomes.length); ; ) {
+				const remainingSlots = limits.maxUniverses - retainedUniverseIds.size
+				const requestedPageSize = BigInt(Math.max(1, Math.min(limits.maxUniverses, remainingSlots + 1)))
+				const [pageOutcomes, pageChildIds, pageChildren] = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId, start, requestedPageSize], blockNumber, functionName: 'getDeployedChildUniverses' })
+				if (pageOutcomes.length !== pageChildIds.length || pageOutcomes.length !== pageChildren.length) throw new Error(`Universe ${universeId.toString()} returned mismatched child arrays`)
+				if (BigInt(pageOutcomes.length) > requestedPageSize) throw new Error(`Universe ${universeId.toString()} exceeded the requested child page size`)
+				const accepted = Math.min(pageOutcomes.length, remainingSlots)
+				for (let index = 0; index < accepted; index += 1) {
+					const outcome = pageOutcomes[index]
+					const childId = pageChildIds[index]
+					if (outcome === undefined || childId === undefined) throw new Error(`Universe ${universeId.toString()} omitted a retained child route`)
+					outcomes.push(outcome)
+					childIds.push(childId)
+					retainedUniverseIds.add(childId.toString())
+				}
+				if (accepted > 0) mutation.changed = true
+				if (accepted < pageOutcomes.length) {
+					truncated = true
+					break
+				}
+				if (BigInt(pageOutcomes.length) < requestedPageSize) break
+				start += BigInt(pageOutcomes.length)
+			}
 		}
 		if (new Set(outcomes.map(outcome => outcome.toString())).size !== outcomes.length || new Set(childIds.map(childId => childId.toString())).size !== childIds.length) {
 			throw new Error(`Universe ${universeId.toString()} returned duplicate immutable child routes`)
@@ -457,7 +653,13 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 			childUniverseIds: childIds.map(childId => childId.toString()),
 			outcomeIndexes: outcomes.map(outcome => outcome.toString()),
 		}
-		for (const childId of childIds) queue.push(childId)
+		for (const childId of childIds) {
+			const childKey = childId.toString()
+			if (!seen.has(childKey) && !queuedIds.has(childKey)) {
+				queue.push(childId)
+				queuedIds.add(childKey)
+			}
+		}
 		const snapshot: UniverseSnapshot = {
 			forkBurnDivisor: forkBurnDivisor.toString(),
 			forkQuestionId: forkQuestionId.toString(),
@@ -477,24 +679,57 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		}
 		universes.push(snapshot)
 	}
+	if (truncated) warnings.push(`Universe discovery truncated at ${universes.length.toString()} retained universes because the configured resident limit is ${limits.maxUniverses.toString()}`)
 	return universes
 }
 
-async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState) {
+async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments } = context
 	const count = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
-	if (count < BigInt(topology.questions.length)) {
-		throw new Error(`Question registry count ${count.toString()} is below immutable cache count ${topology.questions.length.toString()}`)
+	let cursor = topology.discoveryCursors.questions
+	assertRegistryCountNotRegressed(cursor, count, 'Question registry')
+	let retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxQuestions) ? 'resident' : 'overflow'
+	if (cursor.retentionMode === 'overflow' && retentionMode === 'resident' && BigInt(cursor.residentLimit) >= BigInt(limits.maxQuestions)) retentionMode = 'overflow'
+	if (cursor.retentionMode === 'overflow' && retentionMode === 'resident') {
+		cursor = emptyCountedRegistryCursor()
+		topology.questions = []
+		mutation.changed = true
 	}
-	const ids = await collectCountedPages({
-		count: count - BigInt(topology.questions.length),
+	if (retentionMode === 'overflow' && topology.questions.length > 0) {
+		topology.questions = []
+		mutation.changed = true
+	}
+	const canonicalCursor = cursorWithCanonicalCount(cursor, count, limits.maxQuestions, retentionMode)
+	if (!sameRegistryCursor(cursor, canonicalCursor)) mutation.changed = true
+	cursor = canonicalCursor
+	if (cursor.retentionMode === 'resident' && BigInt(topology.questions.length) !== BigInt(cursor.nextIndex)) throw new Error('Question registry cursor does not match its retained canonical prefix')
+	const collected = await collectCountedPages({
+		count,
 		label: 'Question discovery',
+		maximumItems: limits.maxQuestions,
 		pageSize: limits.maxQuestions,
-		readPage: async (start, pageCount) => await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [start + BigInt(topology.questions.length), pageCount], blockNumber, functionName: 'getQuestions' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
+		start: BigInt(cursor.nextIndex),
 	})
-	const discovered = await Promise.all(
-		ids.map(async questionId => {
-			const [question, createdAt, labels] = await Promise.all([
+	if (collected.values.length > 0) {
+		cursor = {
+			...cursor,
+			commitment: updateRegistryCommitment(
+				cursor.commitment,
+				BigInt(cursor.nextIndex),
+				collected.values.map(questionId => questionId.toString()),
+			),
+			nextIndex: collected.nextStart.toString(),
+		}
+		mutation.changed = true
+	}
+	if (cursor.retentionMode === 'resident' && collected.values.length > 0) {
+		let residentBytes = topology.questions.reduce((total, question) => total + Buffer.byteLength(JSON.stringify(question), 'utf8'), 0)
+		let residentItems = topology.questions.reduce((total, question) => total + 1 + question.outcomeLabels.length, 0)
+		let overflowed = false
+		const discovered = await mapWithConcurrency(collected.values, DISCOVERY_RPC_CONCURRENCY, async questionId => {
+			if (overflowed) return undefined
+			const [question, createdAt, labels] = await drainConcurrent([
 				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
 				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
 				discoverOutcomeLabels(client, deployments.questionData, questionId, blockNumber, limits),
@@ -512,25 +747,41 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 				outcomeLabels: [...labels],
 				startTime: startTime.toString(),
 			}
+			const snapshotBytes = Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
+			residentBytes += snapshotBytes
+			residentItems += 1 + snapshot.outcomeLabels.length
+			if (snapshotBytes > IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES || residentBytes > DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES || residentItems > DISCOVERY_AGGREGATE_ITEM_LIMIT) {
+				overflowed = true
+				return undefined
+			}
 			return snapshot
-		}),
-	)
-	if (discovered.length > 0) mutation.changed = true
-	const questions = [...topology.questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] })), ...discovered]
-	if (BigInt(questions.length) !== count) throw new Error('Question registry cache did not reach the canonical question count')
-	if (new Set(questions.map(question => question.id)).size !== questions.length) throw new Error('Question registry contains duplicate immutable question IDs')
-	topology.questions = questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
-	return questions
+		})
+		if (overflowed) {
+			topology.questions = []
+			cursor = { ...cursor, retentionMode: 'overflow' }
+		} else {
+			for (const question of discovered) {
+				if (question === undefined) throw new Error('Question discovery omitted a retained result without exceeding its resident envelope')
+				topology.questions.push({ ...question, outcomeLabels: [...question.outcomeLabels] })
+			}
+		}
+	}
+	topology.discoveryCursors.questions = cursor
+	if (cursor.retentionMode === 'overflow' || !collected.complete) warnings.push(registryCatchUpWarning('Question', cursor))
+	if (cursor.retentionMode === 'overflow') return []
+	if (!collected.complete || BigInt(topology.questions.length) !== count) throw new Error('Resident question registry did not reach its canonical count within the configured envelope')
+	if (new Set(topology.questions.map(question => question.id)).size !== topology.questions.length) throw new Error('Question registry contains duplicate immutable question IDs')
+	return topology.questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
 }
 
 async function discoverVault(client: ChaosReadClient, pool: Address, escalationGame: Address, vault: Address, blockNumber: bigint): Promise<VaultSnapshot> {
-	const [state, openInterest, badDebt] = await Promise.all([
+	const [state, openInterest, badDebt] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'securityVaults' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'getVaultOpenInterestAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'vaultBadDebtAttoEth' }),
 	])
 	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex] = state
-	const [repBackingAttoRep, disputeStakedAttoRep] = await Promise.all([
+	const [repBackingAttoRep, disputeStakedAttoRep] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [repBackingUnits], blockNumber, functionName: 'backingUnitsToAttoRep' }),
 		escalationGame === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], blockNumber, functionName: 'disputeStakedRepByVaultAttoRep' }),
 	])
@@ -548,11 +799,16 @@ async function discoverVault(client: ChaosReadClient, pool: Address, escalationG
 }
 
 export async function discoverStagedOperations(client: ChaosReadClient, pool: PoolSnapshot, blockNumber: bigint, limit: number, warnings: string[]) {
-	const [count, pendingIds] = await Promise.all([client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' }), client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })])
-	void warnings
-	const entries = await collectCountedPages({
+	const count = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
+	if (count > BigInt(limit)) {
+		warnings.push(`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total ${count.toString()} exceeds the configured ${limit.toString()}-entry resident limit`)
+		return []
+	}
+	const pendingIds = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
+	const collected = await collectCountedPages({
 		count,
 		label: `Staged-operation discovery for ${pool.coordinator}`,
+		maximumItems: limit,
 		pageSize: limit,
 		readPage: async (start, pageCount) => {
 			const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
@@ -563,131 +819,131 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 				return { id, operation }
 			})
 		},
+		start: 0n,
 	})
+	const entries = collected.values
 	if (entries.length === 0) return []
 	const pending = new Set(pendingIds.map(id => id.toString()))
 	let liquidationConfiguration: Promise<readonly [bigint, Address]> | undefined
 	const getLiquidationConfiguration = () => {
-		liquidationConfiguration ??= Promise.all([
+		liquidationConfiguration ??= drainConcurrent([
 			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
 			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'liquidationApprovalRegistry' }).then(getAddress),
 		])
 		return liquidationConfiguration
 	}
-	return await Promise.all(
-		entries.map(async ({ id, operation }): Promise<StagedOperationSnapshot> => {
-			const operationType = bigintToSafeNumber(operation.operation)
-			let executionExpectedSuccess = false
-			let executionExpectedResult: Hex = '0x'
-			let liquidationMinimumReceiverHealthFactorBps = 0n
-			let liquidationMinPriceDistanceBps = 0n
-			if (operationType === 0) {
-				try {
-					const [minLiquidationPriceDistanceBps, registry] = await getLiquidationConfiguration()
-					const hasApproval = operation.liquidationApprovalId.toLowerCase() !== zeroHash
-					let minimumReceiverHealthFactorBps = 10_000n
-					if (hasApproval) {
-						if (sameAddress(operation.receiverVault, operation.operator)) throw stagedRouteIneligible('Delegated liquidation receiver is its operator')
-						const [registryCoordinator, reservation, approval] = await Promise.all([
-							client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, blockNumber, functionName: 'coordinator' }).then(getAddress),
-							client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, args: [id], blockNumber, functionName: 'liquidationReservations' }),
-							client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, args: [operation.liquidationApprovalId], blockNumber, functionName: 'getLiquidationApproval' }),
-						])
-						if (!sameAddress(registryCoordinator, pool.coordinator)) throw stagedRouteIneligible('Liquidation registry coordinator does not match the staged coordinator')
-						if (reservation.approvalId.toLowerCase() !== operation.liquidationApprovalId.toLowerCase()) throw stagedRouteIneligible('Liquidation reservation approval does not match the staged route')
-						if (reservation.reservedDebtAttoEth !== operation.reservedLiquidationDebtAttoEth || reservation.reservedDebtAttoEth === 0n) throw stagedRouteIneligible('Liquidation reservation amount does not match the staged route')
-						if (reservation.settled) throw stagedRouteIneligible('Liquidation reservation is already settled')
-						const params = approval.params
-						if (!sameAddress(params.securityPool, pool.address) || !sameAddress(params.receiverVault, operation.receiverVault) || !sameAddress(params.operator, operation.operator)) {
-							throw stagedRouteIneligible('Liquidation approval roles do not match the staged route')
-						}
-						if (params.targetVault !== zeroAddress && !sameAddress(params.targetVault, operation.targetVault)) throw stagedRouteIneligible('Liquidation approval target does not match the staged route')
-						if (params.minPostLiquidationHealthFactorBps < 10_000n) throw stagedRouteIneligible('Liquidation approval health factor is below the protocol minimum')
-						if (approval.reservedDebtAttoEth < reservation.reservedDebtAttoEth) throw stagedRouteIneligible('Liquidation approval aggregate reservation is below the operation reservation')
-						minimumReceiverHealthFactorBps = params.minPostLiquidationHealthFactorBps
-					} else {
-						if (operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Direct liquidation has a delegated reservation')
-						if (!sameAddress(operation.receiverVault, operation.operator)) throw stagedRouteIneligible('Direct liquidation receiver is not its operator')
+	return await mapWithConcurrency(entries, DISCOVERY_RPC_CONCURRENCY, async ({ id, operation }): Promise<StagedOperationSnapshot> => {
+		const operationType = bigintToSafeNumber(operation.operation)
+		let executionExpectedSuccess = false
+		let executionExpectedResult: Hex = '0x'
+		let liquidationMinimumReceiverHealthFactorBps = 0n
+		let liquidationMinPriceDistanceBps = 0n
+		if (operationType === 0) {
+			try {
+				const [minLiquidationPriceDistanceBps, registry] = await getLiquidationConfiguration()
+				const hasApproval = operation.liquidationApprovalId.toLowerCase() !== zeroHash
+				let minimumReceiverHealthFactorBps = 10_000n
+				if (hasApproval) {
+					if (sameAddress(operation.receiverVault, operation.operator)) throw stagedRouteIneligible('Delegated liquidation receiver is its operator')
+					const [registryCoordinator, reservation, approval] = await drainConcurrent([
+						client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, blockNumber, functionName: 'coordinator' }).then(getAddress),
+						client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, args: [id], blockNumber, functionName: 'liquidationReservations' }),
+						client.readContract({ abi: liquidationApprovalRegistryAbi, address: registry, args: [operation.liquidationApprovalId], blockNumber, functionName: 'getLiquidationApproval' }),
+					])
+					if (!sameAddress(registryCoordinator, pool.coordinator)) throw stagedRouteIneligible('Liquidation registry coordinator does not match the staged coordinator')
+					if (reservation.approvalId.toLowerCase() !== operation.liquidationApprovalId.toLowerCase()) throw stagedRouteIneligible('Liquidation reservation approval does not match the staged route')
+					if (reservation.reservedDebtAttoEth !== operation.reservedLiquidationDebtAttoEth || reservation.reservedDebtAttoEth === 0n) throw stagedRouteIneligible('Liquidation reservation amount does not match the staged route')
+					if (reservation.settled) throw stagedRouteIneligible('Liquidation reservation is already settled')
+					const params = approval.params
+					if (!sameAddress(params.securityPool, pool.address) || !sameAddress(params.receiverVault, operation.receiverVault) || !sameAddress(params.operator, operation.operator)) {
+						throw stagedRouteIneligible('Liquidation approval roles do not match the staged route')
 					}
-					if (sameAddress(operation.receiverVault, operation.targetVault)) throw stagedRouteIneligible('Liquidation receiver is its target')
-					liquidationMinimumReceiverHealthFactorBps = minimumReceiverHealthFactorBps
-					liquidationMinPriceDistanceBps = minLiquidationPriceDistanceBps
-					const simulation = await client.simulateContract({
-						account: pool.coordinator,
-						abi: securityPoolAbi,
-						address: pool.address,
-						args: [
-							{
-								minLiquidationPriceDistanceBps,
-								minimumReceiverHealthFactorBps,
-								operationId: id,
-								operator: operation.operator,
-								receiverVault: operation.receiverVault,
-								requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationAmountAttoRepOrAttoEth,
-								snapshot: {
-									targetBackingUnits: operation.snapshotTargetBackingUnits,
-									targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
-									totalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
-									totalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
-								},
-								targetVault: operation.targetVault,
+					if (params.targetVault !== zeroAddress && !sameAddress(params.targetVault, operation.targetVault)) throw stagedRouteIneligible('Liquidation approval target does not match the staged route')
+					if (params.minPostLiquidationHealthFactorBps < 10_000n) throw stagedRouteIneligible('Liquidation approval health factor is below the protocol minimum')
+					if (approval.reservedDebtAttoEth < reservation.reservedDebtAttoEth) throw stagedRouteIneligible('Liquidation approval aggregate reservation is below the operation reservation')
+					minimumReceiverHealthFactorBps = params.minPostLiquidationHealthFactorBps
+				} else {
+					if (operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Direct liquidation has a delegated reservation')
+					if (!sameAddress(operation.receiverVault, operation.operator)) throw stagedRouteIneligible('Direct liquidation receiver is not its operator')
+				}
+				if (sameAddress(operation.receiverVault, operation.targetVault)) throw stagedRouteIneligible('Liquidation receiver is its target')
+				liquidationMinimumReceiverHealthFactorBps = minimumReceiverHealthFactorBps
+				liquidationMinPriceDistanceBps = minLiquidationPriceDistanceBps
+				const simulation = await client.simulateContract({
+					account: pool.coordinator,
+					abi: securityPoolAbi,
+					address: pool.address,
+					args: [
+						{
+							minLiquidationPriceDistanceBps,
+							minimumReceiverHealthFactorBps,
+							operationId: id,
+							operator: operation.operator,
+							receiverVault: operation.receiverVault,
+							requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationAmountAttoRepOrAttoEth,
+							snapshot: {
+								targetBackingUnits: operation.snapshotTargetBackingUnits,
+								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
+								totalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
+								totalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
 							},
-						],
-						blockNumber,
-						functionName: 'performLiquidation',
-					})
-					executionExpectedResult = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], simulation.result)
-					executionExpectedSuccess = true
-				} catch (error) {
-					if (!isStagedRouteIneligible(error) && !contractSimulationReverted(error)) throw error
-					// The exact liquidation snapshot, registry reservation, or current
-					// accounting no longer satisfies the pool. Execution must fail closed.
-				}
-			} else if (operationType === 1) {
-				try {
-					if (!sameAddress(operation.operator, operation.receiverVault) || !sameAddress(operation.operator, operation.targetVault)) throw stagedRouteIneligible('Staged withdrawal is not an exact self route')
-					if (operation.liquidationApprovalId.toLowerCase() !== zeroHash || operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Staged withdrawal carries liquidation approval state')
-					await client.simulateContract({
-						account: pool.coordinator,
-						abi: securityPoolAbi,
-						address: pool.address,
-						args: [operation.operator, operation.operationAmountAttoRepOrAttoEth],
-						blockNumber,
-						functionName: 'withdrawRepFromVault',
-					})
-					executionExpectedSuccess = true
-				} catch (error) {
-					if (!isStagedRouteIneligible(error) && !contractSimulationReverted(error)) throw error
-					// The coordinator catches downstream reverts and emits success=false. A
-					// direct anchored simulation is therefore required before execution.
-				}
+							targetVault: operation.targetVault,
+						},
+					],
+					blockNumber,
+					functionName: 'performLiquidation',
+				})
+				executionExpectedResult = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], simulation.result)
+				executionExpectedSuccess = true
+			} catch (error) {
+				if (!isStagedRouteIneligible(error) && !contractSimulationReverted(error)) throw error
+				// The exact liquidation snapshot, registry reservation, or current
+				// accounting no longer satisfies the pool. Execution must fail closed.
 			}
-			return {
-				amount: operation.operationAmountAttoRepOrAttoEth.toString(),
-				coordinator: pool.coordinator,
-				executionExpectedResult,
-				executionExpectedSuccess,
-				id: id.toString(),
-				isPendingSettlement: pending.has(id.toString()),
-				liquidationApprovalId: operation.liquidationApprovalId,
-				liquidationMinimumReceiverHealthFactorBps: liquidationMinimumReceiverHealthFactorBps.toString(),
-				liquidationMinPriceDistanceBps: liquidationMinPriceDistanceBps.toString(),
-				operation: operationType,
-				operator: getAddress(operation.operator),
-				queuedAt: operation.queuedAt.toString(),
-				receiverVault: getAddress(operation.receiverVault),
-				reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
-				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
-				snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
-				snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep.toString(),
-				snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth.toString(),
-				snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep.toString(),
-				snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits.toString(),
-				targetVault: getAddress(operation.targetVault),
-				validForSeconds: operation.validForSeconds.toString(),
+		} else if (operationType === 1) {
+			try {
+				if (!sameAddress(operation.operator, operation.receiverVault) || !sameAddress(operation.operator, operation.targetVault)) throw stagedRouteIneligible('Staged withdrawal is not an exact self route')
+				if (operation.liquidationApprovalId.toLowerCase() !== zeroHash || operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Staged withdrawal carries liquidation approval state')
+				await client.simulateContract({
+					account: pool.coordinator,
+					abi: securityPoolAbi,
+					address: pool.address,
+					args: [operation.operator, operation.operationAmountAttoRepOrAttoEth],
+					blockNumber,
+					functionName: 'withdrawRepFromVault',
+				})
+				executionExpectedSuccess = true
+			} catch (error) {
+				if (!isStagedRouteIneligible(error) && !contractSimulationReverted(error)) throw error
+				// The coordinator catches downstream reverts and emits success=false. A
+				// direct anchored simulation is therefore required before execution.
 			}
-		}),
-	)
+		}
+		return {
+			amount: operation.operationAmountAttoRepOrAttoEth.toString(),
+			coordinator: pool.coordinator,
+			executionExpectedResult,
+			executionExpectedSuccess,
+			id: id.toString(),
+			isPendingSettlement: pending.has(id.toString()),
+			liquidationApprovalId: operation.liquidationApprovalId,
+			liquidationMinimumReceiverHealthFactorBps: liquidationMinimumReceiverHealthFactorBps.toString(),
+			liquidationMinPriceDistanceBps: liquidationMinPriceDistanceBps.toString(),
+			operation: operationType,
+			operator: getAddress(operation.operator),
+			queuedAt: operation.queuedAt.toString(),
+			receiverVault: getAddress(operation.receiverVault),
+			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
+			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
+			snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
+			snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep.toString(),
+			snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth.toString(),
+			snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep.toString(),
+			snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits.toString(),
+			targetVault: getAddress(operation.targetVault),
+			validForSeconds: operation.validForSeconds.toString(),
+		}
+	})
 }
 
 function cachePoolDeployment(deployment: { parent: Address; priceOracleManagerAndOperatorQueuer: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
@@ -715,16 +971,54 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 	}
 	for (const routes of childProgressByPool.values()) routes.sort((left, right) => compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex))
 	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'securityPoolDeploymentCount' })
-	const cachedDeploymentCount = topology.poolDeployments.length
-	if (count < BigInt(topology.poolDeployments.length)) {
-		throw new Error(`Security-pool registry count ${count.toString()} is below immutable cache count ${topology.poolDeployments.length.toString()}`)
+	const questionCursor = topology.discoveryCursors.questions
+	const dependenciesComplete = questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && !warnings.some(warning => /Universe discovery.*truncated/i.test(warning))
+	let cursor = topology.discoveryCursors.poolDeployments
+	assertRegistryCountNotRegressed(cursor, count, 'Security-pool registry')
+	const retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxPools) && dependenciesComplete ? 'resident' : 'overflow'
+	if (cursor.retentionMode === 'overflow' && retentionMode === 'resident') {
+		cursor = emptyCountedRegistryCursor()
+		topology.poolDeployments = []
+		mutation.changed = true
 	}
-	const newDeployments = await collectCountedPages({
-		count: count - BigInt(cachedDeploymentCount),
+	if (retentionMode === 'overflow') {
+		if (topology.poolDeployments.length > 0 || Object.keys(topology.pairsByPool).length > 0 || Object.keys(topology.vaultsByPool).length > 0 || Object.keys(topology.discoveryCursors.vaultsByPool).length > 0) mutation.changed = true
+		topology.poolDeployments = []
+		topology.pairsByPool = {}
+		topology.vaultsByPool = {}
+		topology.discoveryCursors.vaultsByPool = {}
+	}
+	const canonicalCursor = cursorWithCanonicalCount(cursor, count, limits.maxPools, retentionMode)
+	if (!sameRegistryCursor(cursor, canonicalCursor)) mutation.changed = true
+	cursor = canonicalCursor
+	if (cursor.retentionMode === 'resident' && BigInt(topology.poolDeployments.length) !== BigInt(cursor.nextIndex)) throw new Error('Security-pool registry cursor does not match its retained canonical prefix')
+	const collectedDeployments = await collectCountedPages({
+		count,
 		label: 'Pool discovery',
+		maximumItems: limits.maxPools,
 		pageSize: limits.maxPools,
-		readPage: async (start, pageCount) => await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start + BigInt(cachedDeploymentCount), pageCount], blockNumber, functionName: 'securityPoolDeploymentsRange' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start, pageCount], blockNumber, functionName: 'securityPoolDeploymentsRange' }),
+		start: BigInt(cursor.nextIndex),
 	})
+	const newDeployments = collectedDeployments.values
+	if (newDeployments.length > 0) {
+		cursor = {
+			...cursor,
+			commitment: updateRegistryCommitment(
+				cursor.commitment,
+				BigInt(cursor.nextIndex),
+				newDeployments.map(deployment => JSON.stringify(cachePoolDeployment(deployment))),
+			),
+			nextIndex: collectedDeployments.nextStart.toString(),
+		}
+		mutation.changed = true
+	}
+	topology.discoveryCursors.poolDeployments = cursor
+	if (cursor.retentionMode === 'overflow' || !collectedDeployments.complete) {
+		warnings.push(dependenciesComplete ? registryCatchUpWarning('Pool', cursor) : `Pool discovery truncated while prerequisite question or universe topology is incomplete; authenticated ${cursor.nextIndex} of ${cursor.canonicalCount} canonical pool entries`)
+		return { pools: [], staged: [] }
+	}
+	const cachedDeploymentCount = topology.poolDeployments.length
 	if (newDeployments.length > 0) mutation.changed = true
 	const deploymentsPage = [...topology.poolDeployments.map(deployment => ({ ...deployment })), ...newDeployments.map(cachePoolDeployment)]
 	if (BigInt(deploymentsPage.length) !== count) throw new Error('Security-pool registry cache did not reach the canonical deployment count')
@@ -778,7 +1072,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			poolQuestionData,
 			poolCoordinator,
 			coordinatorPool,
-		] = await Promise.all([
+		] = await drainConcurrent([
 			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
 			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
 			cachedDeployment ? Promise.resolve(BigInt(deployment.universeId)) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'universeId' }),
@@ -864,7 +1158,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 		const [escalationCanTriggerOwnFork, escalationForkContinuation, escalationForkCarryFundingComplete, escalationForkResumedAt, escalationGameEndTime, escalationHasReachedNonDecision, escalationNonDecisionState, escalationStartBondAttoRep, escalationNonDecisionThresholdAttoRep, escalationOutcomeBalancesAttoRep] =
 			escalationAddress === zeroAddress
 				? [false, false, false, 0n, 0n, false, 0n, 0n, 0n, [0n, 0n, 0n] as const]
-				: await Promise.all([
+				: await drainConcurrent([
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'canTriggerOwnFork' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkContinuation' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'isForkCarryFundingComplete' }),
@@ -876,7 +1170,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getOutcomeBalancesAttoRep' }),
 					])
-		const [poolRepBalanceAttoRep, escalationRepBalanceAttoRep, unassignedRepBackingAttoRep] = await Promise.all([
+		const [poolRepBalanceAttoRep, escalationRepBalanceAttoRep, unassignedRepBackingAttoRep] = await drainConcurrent([
 			client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
 			escalationAddress === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [escalationAddress], blockNumber, functionName: 'balanceOf' }),
 			client.readContract({ abi: securityPoolAbi, address, args: [unassignedPosition[0]], blockNumber, functionName: 'backingUnitsToAttoRep' }),
@@ -894,7 +1188,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 		const safeEscalationDepositMaximumsAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString] = [canonicalUintString(0n), canonicalUintString(0n), canonicalUintString(0n)]
 		const escalationMaximum = escalationAddress === zeroAddress ? initialEscalationDeposit : escalationStartBondAttoRep
 		if (systemState === 0n && !awaitingForkContinuation && escalationMaximum > 0n) {
-			await Promise.all(
+			await drainConcurrent(
 				[0, 1, 2].map(async outcome => {
 					try {
 						await client.simulateContract({ abi: securityPoolAbi, account: wallet, address, args: [outcome, escalationMaximum], blockNumber, functionName: 'depositToEscalationGame' })
@@ -908,39 +1202,26 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 		}
 		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
 		const vaultCacheKey = address.toLowerCase()
-		const cachedVaults = topology.vaultsByPool[vaultCacheKey] ?? []
-		if (vaultCount < BigInt(cachedVaults.length)) {
-			throw new Error(`Vault registry ${address} count ${vaultCount.toString()} is below immutable cache count ${cachedVaults.length.toString()}`)
-		}
-		const newVaultCount = vaultCount - BigInt(cachedVaults.length)
-		const newlyRegisteredVaults = await collectCountedPages({
-			count: newVaultCount,
-			label: `Vault discovery for ${address}`,
-			pageSize: limits.maxVaultsPerPool,
-			readPage: async (start, pageCount) => await client.readContract({ abi: securityPoolAbi, address, args: [start, pageCount], blockNumber, functionName: 'getVaults' }),
+		const vaultRegistry = await advanceVaultRegistryCursor({
+			cachedVaults: topology.vaultsByPool[vaultCacheKey] ?? [],
+			canonicalCount: vaultCount,
+			cursor: topology.discoveryCursors.vaultsByPool[vaultCacheKey],
+			label: `Vault registry ${address}`,
+			limit: limits.maxVaultsPerPool,
+			readNewestFirstPage: async (start, pageCount) => await client.readContract({ abi: securityPoolAbi, address, args: [start, pageCount], blockNumber, functionName: 'getVaults' }),
 		})
-		if (newlyRegisteredVaults.length > 0) mutation.changed = true
-		if (newVaultCount > 0n && cachedVaults.length > 0) {
-			const boundary = await client.readContract({ abi: securityPoolAbi, address, args: [newVaultCount, 1n], blockNumber, functionName: 'getVaults' })
-			const previousHead = cachedVaults[0]
-			const boundaryVault = boundary[0]
-			if (boundary.length !== 1 || boundaryVault === undefined || previousHead === undefined || !sameAddress(getAddress(boundaryVault), previousHead)) {
-				throw new Error(`Vault registry ${address} no longer extends its immutable cached order`)
-			}
-		}
-		const discoveredVaults = [...newlyRegisteredVaults.map(vault => getAddress(vault)), ...cachedVaults]
-		if (BigInt(discoveredVaults.length) !== vaultCount || new Set(discoveredVaults.map(vault => vault.toLowerCase())).size !== discoveredVaults.length) {
-			throw new Error(`Vault registry ${address} contains duplicate or missing immutable entries`)
-		}
-		topology.vaultsByPool[vaultCacheKey] = [...discoveredVaults]
-		const inspectEveryVault = forkMigrationWindowIsOpen(systemState, forkActivationTime, anchorTimestamp)
+		if (vaultRegistry.changed) mutation.changed = true
+		topology.discoveryCursors.vaultsByPool[vaultCacheKey] = vaultRegistry.cursor
+		topology.vaultsByPool[vaultCacheKey] = [...vaultRegistry.vaults]
+		if (vaultRegistry.cursor.retentionMode === 'overflow' || !vaultRegistry.complete) warnings.push(registryCatchUpWarning(`Vault ${address}`, vaultRegistry.cursor))
+		const inspectEveryVault = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && forkMigrationWindowIsOpen(systemState, forkActivationTime, anchorTimestamp)
 		const uniqueVaults = new Map<string, Address>()
 		uniqueVaults.set(wallet.toLowerCase(), wallet)
 		if (inspectEveryVault) {
-			for (const vault of discoveredVaults) uniqueVaults.set(vault.toLowerCase(), getAddress(vault))
+			for (const vault of vaultRegistry.vaults) uniqueVaults.set(vault.toLowerCase(), getAddress(vault))
 		}
-		const vaults = await Promise.all([...uniqueVaults.values()].map(vault => discoverVault(client, address, escalationAddress, vault, blockNumber)))
-		const vaultDiscoveryComplete = inspectEveryVault || discoveredVaults.every(vault => sameAddress(vault, wallet))
+		const vaults = await mapWithConcurrency([...uniqueVaults.values()], DISCOVERY_RPC_CONCURRENCY, async vault => await discoverVault(client, address, escalationAddress, vault, blockNumber))
+		const vaultDiscoveryComplete = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && (inspectEveryVault || vaultRegistry.vaults.every(vault => sameAddress(vault, wallet)))
 		const walletVault = vaults.find(vault => sameAddress(vault.address, wallet))
 		if (walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
 		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault.repBackingUnits), totalRepBackingUnits, poolRepBalanceAttoRep)
@@ -1042,7 +1323,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 		if (rawPair === zeroAddress) continue
 		if (cachedPair === undefined) mutation.changed = true
 		const address = getAddress(rawPair)
-		const [status, feeBps, reserves, effectiveReserves, totalSupply, walletLiquidity, pairFactory, pairPool, pairShareToken, pairUniverseId, pairQuestionId] = await Promise.all([
+		const [status, feeBps, reserves, effectiveReserves, totalSupply, walletLiquidity, pairFactory, pairPool, pairShareToken, pairUniverseId, pairQuestionId] = await drainConcurrent([
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'tradingStatus' }),
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'feeBps' }),
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getReserves' }),
@@ -1113,7 +1394,7 @@ async function discoverTokenInventory(context: EcosystemDiscoveryContext, univer
 	}
 	const tokens: TokenInventory[] = []
 	for (const address of addresses.values()) {
-		const [balance, openOracleCredit, openOracleInternalAllowanceToSelf] = await Promise.all([
+		const [balance, openOracleCredit, openOracleInternalAllowanceToSelf] = await drainConcurrent([
 			client.readContract({ abi: erc20Abi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
 			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, address], blockNumber, functionName: 'tokenHolder' }),
 			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
@@ -1159,39 +1440,61 @@ export function trustedIndexedReportsForDiscovery(parameters: { deployments: Eco
 	return parameters.reports.filter(trustedReport)
 }
 
-async function discoverShareInventory(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], pairs: readonly PairSnapshot[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], blockNumber: bigint) {
+export async function discoverShareInventory(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], pairs: readonly PairSnapshot[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], blockNumber: bigint, warnings: string[]) {
 	const { client, deployments, wallet } = context
 	const shares: ShareInventory[] = []
-	const seen = new Set<string>()
 	const universeById = new Map(universes.map(universe => [universe.id, universe]))
 	const questionById = new Map(questions.map(question => [question.id, question]))
-	const pairsByShareToken = new Map<string, PairSnapshot[]>()
+	const operatorsByShareToken = new Map<string, Map<string, Address>>()
 	for (const pair of pairs) {
 		const key = pair.shareToken.toLowerCase()
-		const grouped = pairsByShareToken.get(key) ?? []
-		grouped.push(pair)
-		pairsByShareToken.set(key, grouped)
+		const operators = operatorsByShareToken.get(key) ?? new Map<string, Address>()
+		operators.set(deployments.tradingRouter.toLowerCase(), deployments.tradingRouter)
+		operators.set(pair.address.toLowerCase(), pair.address)
+		operatorsByShareToken.set(key, operators)
 	}
+	const operatorsFor = (shareToken: Address) => {
+		const key = shareToken.toLowerCase()
+		const operators = operatorsByShareToken.get(key) ?? new Map<string, Address>()
+		operators.set(deployments.tradingRouter.toLowerCase(), deployments.tradingRouter)
+		operatorsByShareToken.set(key, operators)
+		return operators
+	}
+	const migrationTargetsFor = (pool: PoolSnapshot) => {
+		const universe = universeById.get(pool.universeId)
+		if (universe === undefined || universe.forkTime === '0') return []
+		return validForkOutcomeRoutes(questionById.get(universe.forkQuestionId), universe.knownChildOutcomes)
+	}
+	const plannedKeys = new Set<string>()
+	let plannedFanout = 0n
+	for (const pool of pools) {
+		const key = `${pool.shareToken.toLowerCase()}:${pool.universeId}`
+		if (plannedKeys.has(key)) continue
+		plannedKeys.add(key)
+		const targetCount = BigInt(migrationTargetsFor(pool).length)
+		plannedFanout += BigInt(operatorsFor(pool.shareToken).size) + 4n * targetCount
+		if (plannedFanout > BigInt(DISCOVERY_AGGREGATE_ITEM_LIMIT)) {
+			warnings.push(`Share-inventory discovery truncated because planned approval and migration fan-out is at least ${plannedFanout.toString()} entries, exceeding the configured ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-entry aggregate limit`)
+			return []
+		}
+	}
+	const seen = new Set<string>()
 	for (const pool of pools) {
 		const key = `${pool.shareToken.toLowerCase()}:${pool.universeId}`
 		if (seen.has(key)) continue
 		seen.add(key)
 		const base = BigInt(pool.universeId) << 8n
-		const operators = new Map<string, Address>()
-		operators.set(deployments.tradingRouter.toLowerCase(), deployments.tradingRouter)
-		for (const pair of pairsByShareToken.get(pool.shareToken.toLowerCase()) ?? []) operators.set(pair.address.toLowerCase(), pair.address)
-		const [invalid, yes, no] = await Promise.all([0n, 1n, 2n].map(outcome => client.readContract({ abi: erc1155Abi, address: pool.shareToken, args: [wallet, base | outcome], blockNumber, functionName: 'balanceOf' })))
+		const operators = operatorsFor(pool.shareToken)
+		const [invalid, yes, no] = await drainConcurrent([0n, 1n, 2n].map(outcome => client.readContract({ abi: erc1155Abi, address: pool.shareToken, args: [wallet, base | outcome], blockNumber, functionName: 'balanceOf' })))
 		if (invalid === undefined || yes === undefined || no === undefined) throw new Error(`Share token ${pool.shareToken} returned incomplete balances`)
 		const approvals: Record<string, boolean> = {}
 		for (const operator of operators.values()) {
 			approvals[operator] = await client.readContract({ abi: erc1155Abi, address: pool.shareToken, args: [wallet, operator], blockNumber, functionName: 'isApprovedForAll' })
 		}
 		const migrationProgressByRoute: Record<string, string> = {}
-		const universe = universeById.get(pool.universeId)
-		const forkQuestion = universe === undefined ? undefined : questionById.get(universe.forkQuestionId)
-		const targetOutcomes = validForkOutcomeRoutes(forkQuestion, universe?.knownChildOutcomes)
-		if (universe !== undefined && universe.forkTime !== '0' && targetOutcomes.length > 0) {
-			const childUniverses = await Promise.all(targetOutcomes.map(targetOutcome => client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [BigInt(pool.universeId), BigInt(targetOutcome)], blockNumber, functionName: 'getChildUniverseId' })))
+		const targetOutcomes = migrationTargetsFor(pool)
+		if (targetOutcomes.length > 0) {
+			const childUniverses = await mapWithConcurrency(targetOutcomes, DISCOVERY_RPC_CONCURRENCY, async targetOutcome => await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [BigInt(pool.universeId), BigInt(targetOutcome)], blockNumber, functionName: 'getChildUniverseId' }))
 			const balances = [invalid, yes, no]
 			for (let sourceOutcome = 0; sourceOutcome < balances.length; sourceOutcome += 1) {
 				if ((balances[sourceOutcome] ?? 0n) === 0n) continue
@@ -1211,13 +1514,11 @@ async function discoverShareInventory(context: EcosystemDiscoveryContext, pools:
 }
 
 async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: readonly PairSnapshot[], blockNumber: bigint) {
-	return await Promise.all(
-		pairs.map(async pair => ({
-			allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [context.wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
-			balance: pair.walletLiquidity,
-			pair: pair.address,
-		})),
-	)
+	return await mapWithConcurrency(pairs, DISCOVERY_RPC_CONCURRENCY, async pair => ({
+		allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [context.wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
+		balance: pair.walletLiquidity,
+		pair: pair.address,
+	}))
 }
 
 async function discoverAuctions(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], blockNumber: bigint): Promise<AuctionSnapshot[]> {
@@ -1228,7 +1529,7 @@ async function discoverAuctions(context: EcosystemDiscoveryContext, pools: reado
 		const [minimumBid, finalized, pendingRefund, clearing] =
 			started === 0n
 				? [0n, false, 0n, [false, 0n] as const]
-				: await Promise.all([
+				: await drainConcurrent([
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
@@ -1274,6 +1575,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	context = { ...context, client: limitDiscoveryConcurrency(context.client) }
 	const limits = limitsWithDefaults(context.limits)
 	for (const [label, value] of Object.entries(limits)) requirePositiveLimit(value, label)
+	requireAggregateDiscoveryEnvelope(limits)
 	const block = await context.client.getBlock({ blockNumber: context.anchorBlockNumber })
 	if (block.hash === null || block.hash === undefined) throw new Error('Canonical discovery anchor has no block hash')
 	if (block.number === undefined) throw new Error('Canonical discovery anchor has no block number')
@@ -1287,20 +1589,20 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const topologyMutation = { changed: resolvedTopology.reset }
 	await authenticateConfiguredGraph(context, blockNumber)
 	const warnings: string[] = []
-	const [chainId, ethBalanceAttoEth, universes, questions, openOracleEthCredit] = await Promise.all([
+	const [chainId, ethBalanceAttoEth, universes, questions, openOracleEthCredit] = await drainConcurrent([
 		context.client.getChainId(),
 		context.client.getBalance({ address: context.wallet, blockNumber }),
-		discoverUniverses(context, blockNumber, limits, topology, topologyMutation),
-		discoverQuestions(context, blockNumber, limits, topology, topologyMutation),
+		discoverUniverses(context, blockNumber, limits, topology, topologyMutation, warnings),
+		discoverQuestions(context, blockNumber, limits, topology, topologyMutation, warnings),
 		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = await discoverPairs(context, pools, blockNumber, topology, topologyMutation)
 	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
-	const [tokens, shares, lpTokens, auctions, reports] = await Promise.all([
+	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
 		discoverTokenInventory(context, universes, pools, blockNumber),
-		discoverShareInventory(context, pools, pairs, universes, questions, blockNumber),
+		discoverShareInventory(context, pools, pairs, universes, questions, blockNumber, warnings),
 		discoverLpInventory(context, pairs, blockNumber),
 		discoverAuctions(context, pools, blockNumber),
 		verifyIndexedReports(context, blockNumber),

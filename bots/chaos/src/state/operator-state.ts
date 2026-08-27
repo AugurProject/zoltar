@@ -423,7 +423,10 @@ function parseEvidence(value: unknown, label: string): OperationEvidence {
 		}
 	}
 	if (kind === 'decoded-event-field') {
-		assertExactKeys(evidence, ['abi', 'emitter', 'equals', 'field', 'indexed', 'kind', 'signature', 'topic0'], [], label)
+		assertExactKeys(evidence, ['abi', 'emitter', 'equals', 'field', 'indexed', 'kind', 'signature', 'topic0'], ['canonicalLifecycleConfirmation'], label)
+		if (evidence['canonicalLifecycleConfirmation'] !== undefined && evidence['canonicalLifecycleConfirmation'] !== true) {
+			throw new Error(`${label}.canonicalLifecycleConfirmation must be true when present`)
+		}
 		const indexed = requiredRecord(evidence['indexed'], `${label}.indexed`)
 		if (Object.keys(indexed).length > 32) throw new Error(`${label}.indexed contains too many fields`)
 		const parsedIndexed: Record<string, string> = {}
@@ -435,6 +438,7 @@ function parseEvidence(value: unknown, label: string): OperationEvidence {
 		if (typeof equals !== 'string' && typeof equals !== 'boolean' && !(typeof equals === 'number' && Number.isSafeInteger(equals))) throw new Error(`${label}.equals must be a string, boolean, or safe integer`)
 		return {
 			abi: nonemptyString(evidence['abi'], `${label}.abi`, 65_536),
+			...(evidence['canonicalLifecycleConfirmation'] === true ? { canonicalLifecycleConfirmation: true as const } : {}),
 			emitter: getAddress(nonemptyString(evidence['emitter'], `${label}.emitter`)),
 			equals,
 			field: nonemptyString(evidence['field'], `${label}.field`, 128),
@@ -682,6 +686,18 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	}
 	const steps = workflow['steps'].map((step, stepIndex) => parseWorkflowStep(step, index, stepIndex))
 	if (new Set(steps.map(step => step.id)).size !== steps.length) throw new Error(`${label}.steps contains duplicate IDs`)
+	const terminalStep = steps.at(-1)
+	const terminalConfirmation = terminalStep?.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true) === true
+	const earlierConfirmation = steps.slice(0, -1).some(step => step.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true))
+	if ((terminalConfirmation || earlierConfirmation) && (classification !== 'lifecycle-obligation' || workflow['obligation'] !== true)) {
+		throw new Error(`${label} uses canonical lifecycle confirmation outside a lifecycle obligation`)
+	}
+	if (earlierConfirmation) throw new Error(`${label} must declare canonical confirmation only on its terminal step`)
+	if (status === 'waiting-obligation') {
+		if (classification !== 'lifecycle-obligation' || workflow['obligation'] !== true) throw new Error(`${label} cannot wait for canonical confirmation outside a lifecycle obligation`)
+		if (completedAt !== undefined || steps.some(step => step.status !== 'confirmed')) throw new Error(`${label} cannot wait for canonical confirmation with incomplete or completed workflow state`)
+		if (!terminalConfirmation) throw new Error(`${label} must declare canonical confirmation only on its terminal step`)
+	}
 	return {
 		classification,
 		...(completedAt === undefined ? {} : { completedAt }),

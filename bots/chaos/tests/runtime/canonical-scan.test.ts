@@ -1,11 +1,28 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getAddress, zeroHash } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../../src/contracts/surface.ts'
-import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, completeOperationCoverage, createChaosReadPool, discoveryCoverageIsComplete, planningOptions, sharedCanonicalBlockNumber, snapshotWithProtocolIndex, unavailableOperationCatalog, walletInventory } from '../../src/runtime/canonical-scan.ts'
+import {
+	applyExecutionPolicy,
+	blockExecutableEvaluations,
+	chaosReadClients,
+	completeOperationCoverage,
+	createChaosReadPool,
+	discoveryCoverageIsComplete,
+	loadTopologyCacheForScan,
+	planningOptions,
+	sharedCanonicalBlockNumber,
+	snapshotWithProtocolIndex,
+	unavailableOperationCatalog,
+	walletInventory,
+} from '../../src/runtime/canonical-scan.ts'
 import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../../src/operations/types.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { snapshotFixture } from '../operations/fixture.ts'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000001')
@@ -98,6 +115,53 @@ function snapshot(): EcosystemSnapshot {
 }
 
 describe('canonical scan policy', () => {
+	test('discards a valid disk or hot cache after discovery limits decrease while preserving corruption failures', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-canonical-topology-'))
+		try {
+			const statePath = join(directory, 'operator.json')
+			const identity: ImmutableTopologyIdentity = {
+				chainId: 11_155_111,
+				openOracle: oracle,
+				questionData: wallet,
+				securityPoolFactory: wallet,
+				securityPoolForker: wallet,
+				tradingFactory: wallet,
+				tradingRouter: wallet,
+				weth,
+				zoltar: wallet,
+			}
+			const cache: CanonicalImmutableTopologyCache = {
+				anchor: { blockHash: zeroHash, blockNumber: '10' },
+				discoveryCursors: {
+					poolDeployments: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '2', retentionMode: 'resident' },
+					questions: { canonicalCount: '2', commitment: zeroHash, nextIndex: '2', residentLimit: '2', retentionMode: 'resident' },
+					vaultsByPool: {},
+				},
+				pairsByPool: {},
+				poolDeployments: [],
+				questions: [0, 1].map(index => ({ createdAt: '1', endTime: '3', id: index.toString(), kind: 'binary' as const, numTicks: '2', outcomeLabels: ['Yes', 'No'], startTime: '2' })),
+				schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
+				universeChildren: {},
+				vaultsByPool: {},
+			}
+			await saveImmutableTopologyCache(statePath, identity, cache)
+			const lowered = { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 }
+			expect(await loadTopologyCacheForScan({ identity, limits: lowered, statePath })).toBeUndefined()
+			expect(await loadTopologyCacheForScan({ identity, limits: lowered, previous: cache, statePath })).toBeUndefined()
+
+			const storePath = immutableTopologySidecarDirectory(statePath)
+			const generation = (await readdir(storePath, { withFileTypes: true })).find(entry => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
+			if (generation === undefined) throw new Error('Immutable topology generation was not committed')
+			const generationPath = join(storePath, generation.name)
+			const questionChunk = (await readdir(generationPath)).find(name => name.startsWith('questions-'))
+			if (questionChunk === undefined) throw new Error('Immutable topology generation has no question chunk')
+			await writeFile(join(generationPath, questionChunk), '{not valid json', { mode: 0o600 })
+			await expect(loadTopologyCacheForScan({ identity, limits: { ...lowered, maxQuestions: 2 }, statePath })).rejects.toThrow('digest')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
 	test('anchors at the newest block supported by the configured quorum', () => {
 		expect(sharedCanonicalBlockNumber([112n, 112n, 80n], 2)).toBe(112n)
 		expect(sharedCanonicalBlockNumber([112n, 111n, 80n], 2)).toBe(111n)
@@ -213,6 +277,7 @@ describe('canonical scan policy', () => {
 	test('fails closed when any bounded discovery collection is truncated', () => {
 		expect(discoveryCoverageIsComplete([])).toBeTrue()
 		expect(discoveryCoverageIsComplete(['Pool discovery truncated at 100 entries'])).toBeFalse()
+		expect(discoveryCoverageIsComplete(['Share-inventory discovery truncated because planned fan-out exceeds its aggregate limit'])).toBeFalse()
 		expect(discoveryCoverageIsComplete(['A non-coverage advisory'])).toBeTrue()
 	})
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
-import { abandonLifecycleObligation, beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, retryLifecycleObligation, synchronizeLifecycleObligations as synchronizeLifecycleObligationsAtAnchor } from '../../src/runtime/obligations.ts'
+import { abandonLifecycleObligation, beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, retryLifecycleObligation, synchronizeLifecycleObligations as synchronizeLifecycleObligationsAtAnchor, waitForCanonicalLifecycleConfirmation } from '../../src/runtime/obligations.ts'
+import { markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
 import type { DurableObligation, DurableObligationTombstone, DurableWorkflow } from '../../src/state/operator-state.ts'
 
 function obligationState() {
@@ -102,6 +103,47 @@ describe('durable lifecycle obligations', () => {
 		workflow.completedAt = new Date().toISOString()
 		expect(completeLifecycleObligation(state, obligation)).toBeTrue()
 		expect(obligation.status).toBe('completed')
+	})
+
+	test('keeps finalized canonical-confirmation work pending until complete presence removes the identity', () => {
+		const value = { ...plan('10'), deadlineTimestamp: '1' }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+		const obligation = obligationForPlan(state, value)
+		if (obligation === undefined) throw new Error('Missing test obligation')
+		const workflow = state.workflows[0]
+		const step = workflow?.steps[0]
+		if (workflow === undefined || step === undefined) throw new Error('Missing test workflow')
+		step.evidence = [
+			{
+				abi: 'event CanonicalProgress(address indexed target, uint256 value)',
+				canonicalLifecycleConfirmation: true,
+				emitter: step.to,
+				equals: '1',
+				field: 'value',
+				indexed: { target: step.to },
+				kind: 'decoded-event-field',
+				signature: 'CanonicalProgress(address,uint256)',
+				topic0: `0x${'22'.repeat(32)}`,
+			},
+		]
+		beginLifecycleObligation(obligation)
+		markWorkflowStepWaitingCanonical(workflow, step.id, `0x${'11'.repeat(32)}`)
+		waitForCanonicalLifecycleConfirmation(obligation)
+
+		synchronizeLifecycleObligations(state, [], [], false, 11n, 2n)
+		expect(workflow.status).toBe('waiting-obligation')
+		expect(obligation.status).toBe('pending')
+		expect(state.obligationTombstones).toHaveLength(0)
+
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 12n, 2n)
+		expect(workflow.status).toBe('waiting-obligation')
+		expect(obligationForPlan(state, value)).toBeUndefined()
+
+		synchronizeLifecycleObligations(state, [], [], true, 13n, 2n)
+		expect(workflow.status).toBe('completed')
+		expect(obligation.status).toBe('completed')
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: obligation.id, resolution: 'completed', resolvedAtBlock: '13' }))
 	})
 
 	test('recovers a completed workflow with a fresh canonical tombstone after a crash', () => {

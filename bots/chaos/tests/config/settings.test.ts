@@ -231,6 +231,14 @@ describe('chaos-bot settings', () => {
 		}
 	})
 
+	test('bounds aggregate pool fan-out across universe, vault, and staged-operation registries', async () => {
+		const example = await storedExample()
+		const discovery = record(example['discovery'])
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 1, maxUniverses: 100, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxUniverses')
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 1, maxUniverses: 1, maxVaultsPerPool: 100 } })).toThrow('maxPools × discovery.maxVaultsPerPool')
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 100, maxUniverses: 1, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxStagedOperationsPerPool')
+	})
+
 	test('bounds the cursor-based protocol log update span', async () => {
 		const example = await storedExample()
 		expect(() => parseSettings({ ...example, runtime: { ...record(example['runtime']), protocolLogBlockSpan: 0 } })).toThrow('protocolLogBlockSpan')

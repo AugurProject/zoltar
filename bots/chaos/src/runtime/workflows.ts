@@ -26,6 +26,21 @@ function canonicalMetadata(metadata: OperationPlan['metadata']) {
 	return JSON.stringify(Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right))))
 }
 
+function stepRequiresCanonicalLifecycleConfirmation(step: Pick<DurableWorkflowStep, 'evidence'>) {
+	return step.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true)
+}
+
+export function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<OperationPlan, 'classification' | 'id' | 'obligation' | 'steps'>) {
+	if (!plan.steps.some(stepRequiresCanonicalLifecycleConfirmation)) return
+	if (plan.classification !== 'lifecycle-obligation' || !plan.obligation) {
+		throw new Error(`Plan ${plan.id} uses canonical lifecycle confirmation outside a lifecycle obligation`)
+	}
+	const terminalStep = plan.steps.at(-1)
+	if (terminalStep === undefined || !stepRequiresCanonicalLifecycleConfirmation(terminalStep) || plan.steps.slice(0, -1).some(stepRequiresCanonicalLifecycleConfirmation)) {
+		throw new Error(`Plan ${plan.id} must reserve canonical lifecycle confirmation for its terminal step`)
+	}
+}
+
 export function workflowMatchesContinuationPlan(workflow: DurableWorkflow, plan: OperationPlan) {
 	return workflow.ecosystem === plan.ecosystem && workflow.operationId === plan.definitionId && canonicalMetadata(workflow.metadata) === canonicalMetadata(plan.metadata)
 }
@@ -39,6 +54,7 @@ function sameConfirmedStep(existing: DurableWorkflowStep, fresh: DurableWorkflow
 }
 
 export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: OperationPlan) {
+	assertCanonicalLifecycleConfirmationBoundary(plan)
 	if (!workflowMatchesContinuationPlan(workflow, plan)) {
 		throw new Error(`Workflow ${workflow.id} does not match the canonical continuation plan`)
 	}
@@ -115,6 +131,7 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 }
 
 export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
+	assertCanonicalLifecycleConfirmationBoundary(plan)
 	const createdAt = now()
 	return {
 		classification: plan.classification,
@@ -240,6 +257,49 @@ export function markWorkflowStepConfirmed(workflow: DurableWorkflow, stepId: str
 	} else {
 		workflow.status = 'running'
 	}
+}
+
+export function markWorkflowStepWaitingCanonical(workflow: DurableWorkflow, stepId: string, hash: Hex) {
+	const timestamp = now()
+	const step = requireWorkflowStep(workflow, stepId)
+	const terminalStep = workflow.steps.at(-1)
+	if (workflow.classification !== 'lifecycle-obligation' || !workflow.obligation) {
+		throw new Error(`Workflow ${workflow.id} cannot wait for canonical confirmation outside a lifecycle obligation`)
+	}
+	if (terminalStep !== step || !stepRequiresCanonicalLifecycleConfirmation(step) || workflow.steps.slice(0, -1).some(stepRequiresCanonicalLifecycleConfirmation)) {
+		throw new Error(`Workflow ${workflow.id} can wait for canonical confirmation only on its declared terminal step`)
+	}
+	if (workflow.steps.some(candidate => candidate.id !== step.id && candidate.status !== 'confirmed')) {
+		throw new Error(`Workflow ${workflow.id} cannot wait for canonical confirmation before every prerequisite is confirmed`)
+	}
+	delete step.failure
+	delete step.failureKind
+	step.confirmedAt = timestamp
+	step.status = 'confirmed'
+	step.transactionHash = hash
+	delete workflow.completedAt
+	workflow.status = 'waiting-obligation'
+	workflow.updatedAt = timestamp
+}
+
+export function completeWorkflowFromCanonicalConfirmation(workflow: DurableWorkflow) {
+	const terminalStep = workflow.steps.at(-1)
+	if (
+		workflow.classification !== 'lifecycle-obligation' ||
+		!workflow.obligation ||
+		workflow.status !== 'waiting-obligation' ||
+		workflow.completedAt !== undefined ||
+		workflow.steps.some(step => step.status !== 'confirmed') ||
+		terminalStep === undefined ||
+		!stepRequiresCanonicalLifecycleConfirmation(terminalStep) ||
+		workflow.steps.slice(0, -1).some(stepRequiresCanonicalLifecycleConfirmation)
+	) {
+		throw new Error(`Workflow ${workflow.id} is not waiting for canonical lifecycle confirmation`)
+	}
+	const timestamp = now()
+	workflow.completedAt = timestamp
+	workflow.status = 'completed'
+	workflow.updatedAt = timestamp
 }
 
 export function markWorkflowFailed(workflow: DurableWorkflow, stepId: string, error: unknown, failureKind: DurableWorkflowFailureKind) {

@@ -35,6 +35,11 @@ function processLocks(): ChaosProcessLocks {
 function topologyCacheWithVaults(pool: Address, vaults: Address[]): CanonicalImmutableTopologyCache {
 	return {
 		anchor: { blockHash: zeroHash, blockNumber: '77' },
+		discoveryCursors: {
+			poolDeployments: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
+			questions: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
+			vaultsByPool: { [pool.toLowerCase()]: { canonicalCount: vaults.length.toString(), commitment: zeroHash, nextIndex: vaults.length.toString(), residentLimit: '100', retentionMode: 'resident' } },
+		},
 		pairsByPool: {},
 		poolDeployments: [],
 		questions: [],

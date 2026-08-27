@@ -4,11 +4,13 @@ import {
 	blockInterruptedWorkflows,
 	captureWorkflowIntentSubmissionJournal,
 	createDurableWorkflow,
+	completeWorkflowFromCanonicalConfirmation,
 	durableWorkflowPlan,
 	markWorkflowForRediscovery,
 	markWorkflowIntentBroadcastAttempt,
 	markWorkflowStepConfirmed,
 	markWorkflowStepSigned,
+	markWorkflowStepWaitingCanonical,
 	refreshWorkflowContinuation,
 	restoreWorkflowIntentSubmissionJournal,
 	workflowFailureHasTransaction,
@@ -86,6 +88,37 @@ function twoStepPlan(): OperationPlan {
 	}
 }
 
+function canonicalConfirmationPlan(position: 'prerequisite' | 'terminal' = 'terminal'): OperationPlan {
+	const value = twoStepPlan()
+	const confirmationIndex = position === 'prerequisite' ? 0 : 1
+	return {
+		...value,
+		classification: 'lifecycle-obligation',
+		obligation: true,
+		priority: 'urgent',
+		steps: value.steps.map((step, index) =>
+			index === confirmationIndex
+				? {
+						...step,
+						evidence: [
+							{
+								abi: 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)',
+								canonicalLifecycleConfirmation: true,
+								emitter: '0x0000000000000000000000000000000000000001',
+								equals: '100',
+								field: 'childPoolRepSplitAttoRep',
+								indexed: { outcomeIndex: '0', parent: '0x0000000000000000000000000000000000000002' },
+								kind: 'decoded-event-field',
+								signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
+								topic0: '0x1111111111111111111111111111111111111111111111111111111111111111',
+							},
+						],
+					}
+				: step,
+		),
+	}
+}
+
 describe('durable chaos workflows', () => {
 	test('tracks a signed step through workflow completion', () => {
 		const workflow = createDurableWorkflow(plan())
@@ -104,6 +137,20 @@ describe('durable chaos workflows', () => {
 		markWorkflowStepConfirmed(workflow, 'dust', hash)
 		expect(workflow.status).toBe('completed')
 		expect(workflow.steps[0]?.status).toBe('confirmed')
+	})
+
+	test('reserves canonical confirmation for a lifecycle obligation terminal step', () => {
+		const terminalPlan = canonicalConfirmationPlan()
+		expect(() => createDurableWorkflow({ ...terminalPlan, classification: 'selectable', obligation: false })).toThrow('outside a lifecycle obligation')
+		expect(() => createDurableWorkflow(canonicalConfirmationPlan('prerequisite'))).toThrow('terminal step')
+
+		const workflow = createDurableWorkflow(terminalPlan)
+		expect(() => markWorkflowStepWaitingCanonical(workflow, 'act', `0x${'11'.repeat(32)}`)).toThrow('before every prerequisite is confirmed')
+		markWorkflowStepConfirmed(workflow, 'approve', `0x${'22'.repeat(32)}`)
+		markWorkflowStepWaitingCanonical(workflow, 'act', `0x${'33'.repeat(32)}`)
+		expect(workflow.status).toBe('waiting-obligation')
+		completeWorkflowFromCanonicalConfirmation(workflow)
+		expect(workflow.status).toBe('completed')
 	})
 
 	test('journals an uncertain broadcast consistently before network submission', () => {

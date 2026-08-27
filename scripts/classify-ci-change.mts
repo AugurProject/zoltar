@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
 
-export const ciScopes = ['docs', 'core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan', 'infrastructure'] as const
+export const ciScopes = ['docs', 'core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan', 'infrastructure'] as const
 export type CiScope = (typeof ciScopes)[number]
 type PackageMatrixEntry = { readonly package: string; readonly directory: string; readonly artifacts: boolean }
 export type CiChangeClassification = {
@@ -25,11 +25,10 @@ const packageEntries: Readonly<Record<CiScope, PackageMatrixEntry | undefined>> 
 	'bot-shared': { package: 'bot-shared', directory: 'bots/shared', artifacts: false },
 	arbitrager: { package: 'arbitrager', directory: 'bots/open-oracle-arbitrager', artifacts: true },
 	liquidator: { package: 'liquidator', directory: 'bots/liquidator', artifacts: true },
-	chaos: { package: 'chaos', directory: 'bots/chaos', artifacts: true },
 	'augur-scan': { package: 'augur-scan', directory: 'augurScan', artifacts: false },
 	infrastructure: undefined,
 }
-const dependencies: Readonly<Record<CiScope, readonly CiScope[]>> = { docs: [], core: [], trading: [], 'bot-shared': ['arbitrager', 'liquidator', 'chaos'], arbitrager: [], liquidator: [], chaos: [], 'augur-scan': [], infrastructure: [] }
+const dependencies: Readonly<Record<CiScope, readonly CiScope[]>> = { docs: [], core: [], trading: [], 'bot-shared': ['arbitrager', 'liquidator'], arbitrager: [], liquidator: [], 'augur-scan': [], infrastructure: [] }
 const rootDocumentation = new Set(['AGENTS.md', 'LICENSE', 'README.md'])
 const rootInfrastructure = new Set(['reth', 'testnetwork'])
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
@@ -40,7 +39,6 @@ function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (filePath.startsWith('bots/shared/')) return 'bot-shared'
 	if (filePath.startsWith('bots/open-oracle-arbitrager/')) return 'arbitrager'
 	if (filePath.startsWith('bots/liquidator/')) return 'liquidator'
-	if (filePath.startsWith('bots/chaos/')) return 'chaos'
 	if (filePath.startsWith('augurScan/')) return 'augur-scan'
 	if (filePath.startsWith('shared/') || filePath.startsWith('ui/')) return 'core'
 	if (filePath.startsWith('solidity/')) return 'infrastructure'
@@ -52,8 +50,8 @@ function directScopeForPath(filePath: string): CiScope | 'full' {
 function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[], full: boolean): Set<CiScope> {
 	if (full) return new Set(ciScopes)
 	const result = new Set(direct)
-	if (filePaths.some(filePath => filePath.startsWith('shared/'))) for (const scope of ['trading', 'bot-shared', 'arbitrager', 'liquidator', 'chaos', 'augur-scan'] as const) result.add(scope)
-	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading', 'arbitrager', 'liquidator', 'chaos'] as const) result.add(scope)
+	if (filePaths.some(filePath => filePath.startsWith('shared/'))) for (const scope of ['trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan'] as const) result.add(scope)
+	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading', 'arbitrager', 'liquidator'] as const) result.add(scope)
 	const queue = [...result]
 	for (const scope of queue)
 		for (const dependent of dependencies[scope])

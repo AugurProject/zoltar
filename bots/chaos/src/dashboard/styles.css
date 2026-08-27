@@ -82,8 +82,11 @@ button:focus-visible:not(:disabled) {
 
 button:disabled,
 fieldset:disabled button {
+	border-color: #3a4449;
+	background: #20262a;
+	color: #aeb9b6;
 	cursor: not-allowed;
-	opacity: 0.48;
+	opacity: 1;
 }
 
 input,
@@ -109,7 +112,7 @@ input[type="checkbox"] {
 
 .topbar {
 	padding: 1rem clamp(1rem, 4vw, 3rem) 0;
-	background: rgb(9 11 13 / 92%);
+	background: var(--operator-background);
 }
 
 .brand {
@@ -758,6 +761,48 @@ table {
 	min-width: 72rem;
 	border-collapse: collapse;
 	font-size: 0.84rem;
+	table-layout: fixed;
+}
+
+.table-shell th:nth-child(1),
+.table-shell td:nth-child(1) {
+	width: 25%;
+}
+
+.table-shell th:nth-child(2),
+.table-shell td:nth-child(2) {
+	width: 9%;
+}
+
+.table-shell th:nth-child(3),
+.table-shell td:nth-child(3) {
+	width: 15%;
+}
+
+.table-shell th:nth-child(4),
+.table-shell td:nth-child(4) {
+	width: 11%;
+}
+
+.table-shell th:nth-child(5),
+.table-shell td:nth-child(5) {
+	width: 9%;
+}
+
+.table-shell th:nth-child(6),
+.table-shell td:nth-child(6) {
+	width: 31%;
+}
+
+.table-shell td,
+.table-shell .badge {
+	overflow-wrap: anywhere;
+}
+
+.table-shell .badge {
+	max-width: 100%;
+	text-align: center;
+	white-space: normal;
 }
 
 caption {
@@ -787,7 +832,7 @@ tbody tr:last-child td {
 }
 
 .operation-name {
-	min-width: 15rem;
+	min-width: 0;
 }
 
 .operation-name strong,
@@ -815,6 +860,7 @@ tbody tr:last-child td {
 
 .topology-panel {
 	margin-top: 1rem;
+	scroll-margin-top: 8rem;
 }
 
 .topology-grid {
@@ -837,7 +883,11 @@ tbody tr:last-child td {
 }
 
 .topology-grid summary {
+	display: list-item;
+	min-height: 2.75rem;
+	padding-block: 0.75rem;
 	cursor: pointer;
+	line-height: 1.25rem;
 }
 
 .topology-list {
@@ -1188,9 +1238,21 @@ fieldset {
 	}
 }
 
+@media (max-width: 80rem) {
+	.table-scroll-hint {
+		display: block;
+		margin: 0 0 0.65rem;
+		font-size: 0.76rem;
+	}
+}
+
 @media (max-width: 48rem) {
 	.topbar {
 		position: relative;
+	}
+
+	.topology-panel {
+		scroll-margin-top: 0;
 	}
 
 	.section-heading,
@@ -1202,12 +1264,6 @@ fieldset {
 
 	.section-status {
 		text-align: left;
-	}
-
-	.table-scroll-hint {
-		display: block;
-		margin: 0 0 0.65rem;
-		font-size: 0.76rem;
 	}
 
 	.ecosystem-grid {

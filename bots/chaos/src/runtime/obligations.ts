@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
-import { createDurableWorkflow, markWorkflowForRediscovery, markRetryableWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
 import type { DurableMetadata, DurableObligation, DurableObligationTombstone, DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
 
 export const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
@@ -194,12 +194,17 @@ export function synchronizeLifecycleObligations(
 			continue
 		}
 		const hasPendingIntent = state.pendingTransactions.some(intent => intent.workflowId === obligation.workflowId)
-		if (workflow !== undefined && !hasPendingIntent && !hasSemanticFailure(workflow) && deadlinePassed(workflow, currentBlock, currentTimestamp)) {
+		if (workflow !== undefined && workflow.status !== 'waiting-obligation' && !hasPendingIntent && !hasSemanticFailure(workflow) && deadlinePassed(workflow, currentBlock, currentTimestamp)) {
 			recoverTerminalObligation(state, obligation, workflow, currentBlock, 'Canonical lifecycle deadline passed before this bot could complete the operation; the expired instance was superseded without claiming semantic success')
 			continue
 		}
 		if (presenceComplete && !present.has(obligation.id) && workflow !== undefined && !hasPendingIntent && !hasSemanticFailure(workflow)) {
-			recoverTerminalObligation(state, obligation, workflow, currentBlock, 'Complete canonical lifecycle discovery no longer contains this outstanding identity; it was terminally superseded without claiming semantic success')
+			if (workflow.status === 'waiting-obligation') {
+				completeWorkflowFromCanonicalConfirmation(workflow)
+				recoverCompletedObligation(state, obligation, workflow, currentBlock)
+			} else {
+				recoverTerminalObligation(state, obligation, workflow, currentBlock, 'Complete canonical lifecycle discovery no longer contains this outstanding identity; it was terminally superseded without claiming semantic success')
+			}
 			continue
 		}
 		if (obligation.status !== 'failed') {
@@ -224,8 +229,11 @@ export function synchronizeLifecycleObligations(
 	return plans
 }
 
-export function obligationForPlan(state: Pick<RuntimeState, 'obligations'>, plan: OperationPlan) {
-	return state.obligations.find(obligation => obligation.id === operationInstanceId(plan) && obligation.status === 'pending')
+export function obligationForPlan(state: Pick<RuntimeState, 'obligations' | 'workflows'>, plan: OperationPlan) {
+	const obligation = state.obligations.find(candidate => candidate.id === operationInstanceId(plan) && candidate.status === 'pending')
+	if (obligation === undefined) return undefined
+	const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
+	return workflow?.status === 'waiting-obligation' ? undefined : obligation
 }
 
 export function beginLifecycleObligation(obligation: DurableObligation) {
@@ -235,6 +243,14 @@ export function beginLifecycleObligation(obligation: DurableObligation) {
 	obligation.lastAttemptAt = timestamp
 	delete obligation.lastError
 	obligation.status = 'executing'
+	obligation.updatedAt = timestamp
+}
+
+export function waitForCanonicalLifecycleConfirmation(obligation: DurableObligation) {
+	const timestamp = now()
+	obligation.blockers = ['A finalized transaction is waiting for complete canonical lifecycle confirmation']
+	delete obligation.lastError
+	obligation.status = 'pending'
 	obligation.updatedAt = timestamp
 }
 

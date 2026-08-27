@@ -19,7 +19,7 @@ import type { OperationPlan } from '../operations/types.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations } from './obligations.ts'
+import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
@@ -93,9 +93,11 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 }
 
 function registeredVaultCount(topologyCache: CanonicalImmutableTopologyCache, pool: Address) {
-	const registeredVaults = topologyCache.vaultsByPool[pool.toLowerCase()]
-	if (registeredVaults === undefined) throw new Error(`Canonical topology cache omitted the vault registry for pool ${pool}`)
-	return registeredVaults.length
+	const cursor = topologyCache.discoveryCursors.vaultsByPool[pool.toLowerCase()]
+	if (cursor === undefined) throw new Error(`Canonical topology cache omitted the vault registry cursor for pool ${pool}`)
+	const count = BigInt(cursor.canonicalCount)
+	if (count > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Canonical vault count for pool ${pool} exceeds the dashboard safe integer range`)
+	return Number(count)
 }
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {
@@ -323,7 +325,11 @@ async function executeLifecyclePlan(configuration: ConfigurationState, state: Ru
 			plan,
 		)
 		if (!completeLifecycleObligation(state, obligation)) {
-			throw new Error(`Lifecycle workflow ${obligation.workflowId} did not complete every step`)
+			const workflow = workflowForPlan(state, plan)
+			if (workflow?.status !== 'waiting-obligation') {
+				throw new Error(`Lifecycle workflow ${obligation.workflowId} did not complete every step`)
+			}
+			waitForCanonicalLifecycleConfirmation(obligation)
 		}
 		await persistState(configuration, state)
 	} catch (error) {
@@ -507,6 +513,8 @@ async function reconcilePendingWork(configuration: ConfigurationState, state: Ru
 		if (workflow.status === 'failed') {
 			retryableLifecycleFailure = retryableOnChainWorkflowFailure(workflow)
 			failLifecycleObligation(obligation, recoveryFailure ?? 'Recovered transaction failed on chain', false)
+		} else if (workflow.status === 'waiting-obligation') {
+			waitForCanonicalLifecycleConfirmation(obligation)
 		} else if (!completeLifecycleObligation(state, obligation) && workflow.status === 'blocked') {
 			failLifecycleObligation(obligation, 'Recovered a prerequisite; canonical rediscovery is required for the remaining lifecycle steps', true)
 		}

@@ -313,6 +313,66 @@ try {
 		const brandLeft = Reflect.get(layout, 'brandLeft')
 		if (typeof brandLeft !== 'number' || brandLeft < 0) throw new Error(`Dashboard route /${route} shifted the operator header: ${JSON.stringify(layout)}`)
 		if (Reflect.get(layout, 'currentNavigationVisible') !== true || Reflect.get(layout, 'scrollY') !== 0) throw new Error(`Dashboard route /${route} did not preserve a visible current navigation target at the top of the document: ${JSON.stringify(layout)}`)
+		if (route === 'catalog' && width >= 1_440) {
+			const catalogLayout = await evaluate(`(() => {
+				const shell = document.querySelector('.table-shell')
+				const headers = [...document.querySelectorAll('.table-shell thead th')]
+				if (!(shell instanceof HTMLElement)) return undefined
+				const shellBounds = shell.getBoundingClientRect()
+				const eligibilityBounds = headers.at(-1)?.getBoundingClientRect()
+				return {
+					clientWidth: shell.clientWidth,
+					headerLabels: headers.map(header => header.textContent?.trim()),
+					eligibilityRight: eligibilityBounds?.right,
+					scrollWidth: shell.scrollWidth,
+					shellRight: shellBounds.right,
+				}
+			})()`)
+			if (
+				typeof catalogLayout !== 'object' ||
+				catalogLayout === null ||
+				Array.isArray(catalogLayout) ||
+				Reflect.get(catalogLayout, 'clientWidth') !== Reflect.get(catalogLayout, 'scrollWidth') ||
+				JSON.stringify(Reflect.get(catalogLayout, 'headerLabels')) !== JSON.stringify(['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility']) ||
+				typeof Reflect.get(catalogLayout, 'eligibilityRight') !== 'number' ||
+				typeof Reflect.get(catalogLayout, 'shellRight') !== 'number' ||
+				Number(Reflect.get(catalogLayout, 'eligibilityRight')) > Number(Reflect.get(catalogLayout, 'shellRight')) + 1
+			) {
+				throw new Error(`Desktop catalog did not expose all six columns without hidden horizontal content: ${JSON.stringify(catalogLayout)}`)
+			}
+		}
+		const disabledButtonContrast = await evaluate(`(() => {
+			const rgb = value => {
+				const match = value.match(/^rgba?\\(\\s*(\\d+(?:\\.\\d+)?)\\s*,?\\s*(\\d+(?:\\.\\d+)?)\\s*,?\\s*(\\d+(?:\\.\\d+)?)/)
+				return match === null ? undefined : [Number(match[1]), Number(match[2]), Number(match[3])]
+			}
+			const luminance = value => {
+				const channels = rgb(value)
+				if (channels === undefined) return undefined
+				const linear = channels.map(channel => {
+					const normalized = channel / 255
+					return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+				})
+				return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+			}
+			return [...document.querySelectorAll('button:disabled')].flatMap(button => {
+				if (!(button instanceof HTMLButtonElement)) return []
+				const bounds = button.getBoundingClientRect()
+				if (bounds.width === 0 || bounds.height === 0) return []
+				const style = getComputedStyle(button)
+				const foreground = luminance(style.color)
+				const background = luminance(style.backgroundColor)
+				if (foreground === undefined || background === undefined) return [{ contrast: undefined, id: button.id, label: button.textContent?.trim() }]
+				return [{
+					contrast: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
+					id: button.id,
+					label: button.textContent?.trim(),
+				}]
+			})
+		})()`)
+		if (!Array.isArray(disabledButtonContrast) || disabledButtonContrast.some(result => typeof result !== 'object' || result === null || typeof Reflect.get(result, 'contrast') !== 'number' || Number(Reflect.get(result, 'contrast')) < 4.5)) {
+			throw new Error(`Dashboard route /${route} exposed an illegible disabled button: ${JSON.stringify(disabledButtonContrast)}`)
+		}
 		if (horizontalScroll === 'catalog-end') {
 			const scroll = await evaluate(`new Promise(resolve => {
 				const shell = document.querySelector('.table-shell')
@@ -363,6 +423,8 @@ try {
 				panel.scrollIntoView({ block: 'start' })
 				requestAnimationFrame(() => requestAnimationFrame(() => {
 					const bounds = panel.getBoundingClientRect()
+					const topbarColor = getComputedStyle(document.querySelector('.topbar')).backgroundColor
+					const topbarAlpha = topbarColor.startsWith('rgba(') ? Number(topbarColor.match(/,\\s*([0-9.]+)\\)$/)?.[1]) : 1
 					const identifiers = [...panel.querySelectorAll('.compact-identifier')].map(identifier => {
 						const full = identifier.querySelector('.identifier-full')
 						return {
@@ -371,11 +433,18 @@ try {
 							value: full instanceof HTMLTextAreaElement ? full.value : undefined,
 						}
 					})
-					resolve({ identifiers, top: bounds.top })
+					resolve({
+						identifiers,
+						summaryHeights: [...panel.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
+						top: bounds.top,
+						topbarColor,
+						topbarOpaque: topbarAlpha === 1,
+					})
 				}))
 			})`)
 			if (typeof topology !== 'object' || topology === null || Array.isArray(topology)) throw new Error('Anchored topology was not available for capture')
 			const identifiers = Reflect.get(topology, 'identifiers')
+			const summaryHeights = Reflect.get(topology, 'summaryHeights')
 			const top = Reflect.get(topology, 'top')
 			const values = Array.isArray(identifiers) ? identifiers.map(identifier => (typeof identifier === 'object' && identifier !== null ? Reflect.get(identifier, 'value') : undefined)) : []
 			if (
@@ -385,6 +454,10 @@ try {
 				!Array.isArray(identifiers) ||
 				identifiers.length !== 9 ||
 				identifiers.some(identifier => typeof identifier !== 'object' || identifier === null || Reflect.get(identifier, 'copy') !== true || Reflect.get(identifier, 'disclosure') !== true) ||
+				!Array.isArray(summaryHeights) ||
+				summaryHeights.length !== 5 ||
+				summaryHeights.some(summaryHeight => typeof summaryHeight !== 'number' || summaryHeight < 44) ||
+				Reflect.get(topology, 'topbarOpaque') !== true ||
 				values.some(value => typeof value !== 'string' || value.length < 42) ||
 				new Set(values).size < 6
 			) {
