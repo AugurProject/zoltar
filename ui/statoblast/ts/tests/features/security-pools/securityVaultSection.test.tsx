@@ -118,6 +118,32 @@ function createEndedPoolState() {
 	})
 }
 
+const terminalOrdinaryGameCases = [
+	{
+		expectedReason: 'REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.',
+		lifecycleState: 'ended',
+		name: 'ended',
+		universeHasForked: false,
+	},
+	{
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		lifecycleState: 'poolForked',
+		name: 'pool-forked',
+		universeHasForked: true,
+	},
+	{
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		lifecycleState: 'forkMigration',
+		name: 'fork-migration',
+		universeHasForked: true,
+	},
+] satisfies ReadonlyArray<{
+	expectedReason: string
+	lifecycleState: 'ended' | 'forkMigration' | 'poolForked'
+	name: string
+	universeHasForked: boolean
+}>
+
 describe('SecurityVaultSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -533,6 +559,29 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expect(depositButton.getAttribute('aria-describedby')).toBe(reasonElement.id)
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test.each(terminalOrdinaryGameCases)('prioritizes $name lifecycle recovery after an ordinary game has started', async ({ expectedReason, lifecycleState, universeHasForked }) => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState,
+						ordinaryEscalationGameStarted: true,
+						universeHasForked,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const reasonElement = documentQueries.getByText(expectedReason)
+		const depositButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		expect(depositButton.getAttribute('aria-describedby')).toBe(reasonElement.id)
+		expect(documentQueries.queryByText('New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.')).toBeNull()
 	})
 
 	test('preserves wallet recovery for lifecycle-enabled redemption after the pool ends', async () => {
