@@ -121,13 +121,13 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 			ORDER BY class.relname, attribute.attnum
 		`,
 		connection`
-			SELECT class.relname AS table_name, constraint.conname AS constraint_name,
-				pg_catalog.pg_get_constraintdef(constraint.oid, false) AS definition
-			FROM pg_catalog.pg_constraint constraint
-			JOIN pg_catalog.pg_class class ON class.oid = constraint.conrelid
+			SELECT class.relname AS table_name, constraint_record.conname AS constraint_name,
+				pg_catalog.pg_get_constraintdef(constraint_record.oid, false) AS definition
+			FROM pg_catalog.pg_constraint constraint_record
+			JOIN pg_catalog.pg_class class ON class.oid = constraint_record.conrelid
 			JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 			WHERE namespace.nspname = 'public'
-			ORDER BY class.relname, constraint.conname
+			ORDER BY class.relname, constraint_record.conname
 		`,
 		connection`
 			SELECT index_class.relname AS index_name, pg_catalog.pg_get_indexdef(index_class.oid, 0, false) AS definition
@@ -135,37 +135,38 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 			JOIN pg_catalog.pg_class index_class ON index_class.oid = index_record.indexrelid
 			JOIN pg_catalog.pg_namespace namespace ON namespace.oid = index_class.relnamespace
 			WHERE namespace.nspname = 'public' AND NOT EXISTS (
-				SELECT FROM pg_catalog.pg_constraint constraint WHERE constraint.conindid = index_record.indexrelid
+				SELECT FROM pg_catalog.pg_constraint constraint_record
+				WHERE constraint_record.conindid = index_record.indexrelid AND constraint_record.contype IN ('p', 'u', 'x')
 			)
 			ORDER BY index_class.relname
 		`,
 		connection`
 			SELECT kind || ':' || object_name AS signature FROM (
-				SELECT 'function' AS kind, procedure.proname AS object_name
-				FROM pg_catalog.pg_proc procedure JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure.pronamespace
+				SELECT 'function' AS kind, procedure_record.proname AS object_name
+				FROM pg_catalog.pg_proc procedure_record JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure_record.pronamespace
 				WHERE namespace.nspname = 'public'
 				UNION ALL
-				SELECT 'operator', operator.oprname
-				FROM pg_catalog.pg_operator operator JOIN pg_catalog.pg_namespace namespace ON namespace.oid = operator.oprnamespace
+				SELECT 'operator', operator_record.oprname
+				FROM pg_catalog.pg_operator operator_record JOIN pg_catalog.pg_namespace namespace ON namespace.oid = operator_record.oprnamespace
 				WHERE namespace.nspname = 'public'
 				UNION ALL
-				SELECT 'collation', collation.collname
-				FROM pg_catalog.pg_collation collation JOIN pg_catalog.pg_namespace namespace ON namespace.oid = collation.collnamespace
+				SELECT 'collation', collation_record.collname
+				FROM pg_catalog.pg_collation collation_record JOIN pg_catalog.pg_namespace namespace ON namespace.oid = collation_record.collnamespace
 				WHERE namespace.nspname = 'public'
 				UNION ALL
-				SELECT 'type', type.typname
-				FROM pg_catalog.pg_type type JOIN pg_catalog.pg_namespace namespace ON namespace.oid = type.typnamespace
-				WHERE namespace.nspname = 'public' AND type.typrelid = 0 AND type.typtype IN ('d', 'e', 'm', 'r')
+				SELECT 'type', type_record.typname
+				FROM pg_catalog.pg_type type_record JOIN pg_catalog.pg_namespace namespace ON namespace.oid = type_record.typnamespace
+				WHERE namespace.nspname = 'public' AND type_record.typrelid = 0 AND type_record.typtype IN ('d', 'e', 'm', 'r')
 				UNION ALL
 				SELECT 'relation', class.relname
 				FROM pg_catalog.pg_class class JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 				WHERE namespace.nspname = 'public' AND class.relkind NOT IN ('r', 'i', 'S')
 				UNION ALL
-				SELECT 'trigger', class.relname || '.' || trigger.tgname
-				FROM pg_catalog.pg_trigger trigger
-				JOIN pg_catalog.pg_class class ON class.oid = trigger.tgrelid
+				SELECT 'trigger', class.relname || '.' || trigger_record.tgname
+				FROM pg_catalog.pg_trigger trigger_record
+				JOIN pg_catalog.pg_class class ON class.oid = trigger_record.tgrelid
 				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
-				WHERE namespace.nspname = 'public' AND NOT trigger.tgisinternal
+				WHERE namespace.nspname = 'public' AND NOT trigger_record.tgisinternal
 				UNION ALL
 				SELECT 'rule', class.relname || '.' || rewrite.rulename
 				FROM pg_catalog.pg_rewrite rewrite
@@ -173,9 +174,9 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 				WHERE namespace.nspname = 'public' AND rewrite.rulename <> '_RETURN'
 				UNION ALL
-				SELECT 'policy', class.relname || '.' || policy.polname
-				FROM pg_catalog.pg_policy policy
-				JOIN pg_catalog.pg_class class ON class.oid = policy.polrelid
+				SELECT 'policy', class.relname || '.' || policy_record.polname
+				FROM pg_catalog.pg_policy policy_record
+				JOIN pg_catalog.pg_class class ON class.oid = policy_record.polrelid
 				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 				WHERE namespace.nspname = 'public'
 				UNION ALL

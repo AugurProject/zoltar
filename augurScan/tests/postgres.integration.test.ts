@@ -529,7 +529,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identitie
 		])
 	} finally {
 		await initializeSchema(database.sql)
-		await database.sql`DELETE FROM networks WHERE chain_id = ${migrationChainId}`
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()
 	}
 })
@@ -642,7 +642,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const boundaryExport = (await boundaryExportResponse?.text())?.trim().split('\n').filter(Boolean) ?? []
 			expect(boundaryExport).toHaveLength(1)
 			expect(JSON.parse(boundaryExport[0] ?? '{}')).toMatchObject({
-				chain_id: boundaryChainId,
+				chain_id: boundaryChainId.toString(),
 				previous_block: '2',
 				ancestor_block: '-1',
 				reason: 'start-boundary-advanced',
@@ -668,7 +668,13 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 					transactions: [
 						{
 							...transaction(),
-							receipt: { transactionHash, blockHash: hash, blockNumber: 2n, status: 'success', logs: [forwardLog] },
+							receipt: {
+								transactionHash,
+								blockHash: hash,
+								blockNumber: '2',
+								status: 'success',
+								logs: [{ ...forwardLog, blockNumber: '2' }],
+							},
 						},
 					],
 					logs: [forwardLog],
@@ -724,7 +730,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			expect(contractsAfterPromotionRemoval.has(orphanOnlyAddress.toLowerCase())).toBe(false)
 			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-after-promotion-removal', new Date('2026-02-15T00:00:00Z')), lease)
 			const retainedLogs = await database.sql`
-				SELECT block_number FROM logs WHERE chain_id = ${boundaryChainId} AND address = ${discoveredAddress.toLowerCase()} AND canonical
+				SELECT block_number FROM logs WHERE chain_id = ${boundaryChainId} AND emitter_address = ${discoveredAddress.toLowerCase()} AND canonical
 			`
 			expect(retainedLogs).toEqual([{ block_number: '2' }])
 			expect((await database.logScanCursors(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toEqual({
@@ -740,7 +746,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			await lease.release()
 		}
 	} finally {
-		await database.sql`DELETE FROM networks WHERE chain_id = ${boundaryChainId}`
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()
 	}
 })
@@ -1913,10 +1919,32 @@ postgresTest(
 				'0x' || lpad(to_hex(item + 20000), 64, '0'), 0, item, ${oracle.toLowerCase()}, 'Swap',
 				jsonb_build_object('yesForNo', true, 'amountIn', '1', 'amountOut', '1', 'feeAmount', '1',
 					'resultingYesReserve', item::text, 'resultingNoReserve', (item * 2)::text), true
-			FROM generate_series(2, 10003) item
-		`
+				FROM generate_series(2, 10003) item
+			`
 			await database.sql`
-			UPDATE networks SET indexed_block = 10003,
+				INSERT INTO logs (
+					chain_id, tx_hash, block_hash, block_number, transaction_index, log_index,
+					emitter_address, topics, data, event_name, arguments, argument_schema,
+					decode_status, summary, canonical, finalized
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					'0x' || lpad(to_hex(item), 64, '0'), item, 0, 10,
+					${oracle.toLowerCase()}, '[]'::jsonb, '0x', 'Sync',
+					jsonb_build_object('yesReserve', item::text, 'noReserve', (item * 2)::text),
+					'[]'::jsonb, 'decoded', 'Sync', true, true
+				FROM generate_series(2, 10003) item
+			`
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'),
+					'0x' || lpad(to_hex(item + 20000), 64, '0'), 10, item, ${oracle.toLowerCase()}, 'Sync',
+					jsonb_build_object('yesReserve', item::text, 'noReserve', (item * 2)::text), true
+				FROM generate_series(2, 10003) item
+			`
+			await database.sql`
+				UPDATE networks SET indexed_block = 10003,
 				indexed_hash = ${`0x${(10003).toString(16).padStart(64, '0')}`},
 				indexed_timestamp = timestamptz '2026-01-01 00:00:20+00' + make_interval(secs => 10003),
 				observed_block = 10003, finalized_block = 10003
@@ -2000,7 +2028,8 @@ postgresTest(
 					share_token_address, universe_id, fee_bps, canonical
 				)
 				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
-					1, item, '0x' || lpad(to_hex(item + 1000000), 40, '0'), ${oracle.toLowerCase()}, ${address.toLowerCase()}, 1, 30, true
+					1, item, '0x' || lpad(to_hex(item + 1000000), 40, '0'),
+					'0x' || lpad(to_hex(item + 2000000), 40, '0'), ${address.toLowerCase()}, 1, 30, true
 				FROM generate_series(2, 103) item
 			`
 			await database.sql`
@@ -2094,9 +2123,19 @@ postgresTest(
 				database.sql,
 			)
 			if (secondResponse === undefined) throw new Error('report detail continuation did not return a response')
-			const second = (await secondResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean } } }
-			expect(second.data.rounds).toMatchObject({ hasMore: false })
+			const second = (await secondResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean; nextCursor: string } } }
+			expect(second.data.rounds).toMatchObject({ hasMore: true })
 			expect(second.data.rounds.items).toHaveLength(1)
+			const thirdResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(second.data.rounds.nextCursor)}`,
+				),
+				database.sql,
+			)
+			if (thirdResponse === undefined) throw new Error('report detail final continuation did not return a response')
+			const third = (await thirdResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean } } }
+			expect(third.data.rounds).toMatchObject({ hasMore: false })
+			expect(third.data.rounds.items).toHaveLength(1)
 
 			await database.sql`
 			INSERT INTO transactions (
@@ -2132,14 +2171,14 @@ postgresTest(
 				data: { items: Array<{ report_id: string; tx_hash: string }>; nextCursor: string }
 			}
 			expect(firstCatalog.data.items).toHaveLength(1)
-			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '7', tx_hash: `0x${'e'.repeat(64)}` })
+			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '103', tx_hash: `0x${(20103).toString(16).padStart(64, '0')}` })
 			const secondCatalogResponse = await handleApi(
 				new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`),
 				database.sql,
 			)
 			if (secondCatalogResponse === undefined) throw new Error('report catalog continuation did not return a response')
 			const secondCatalog = (await secondCatalogResponse.json()) as { data: { items: Array<{ report_id: string }> } }
-			expect(secondCatalog.data.items.map((item) => item.report_id)).toEqual(['8'])
+			expect(secondCatalog.data.items.map((item) => item.report_id)).toEqual(['102'])
 
 			const tradingResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
 			if (tradingResponse === undefined) throw new Error('trading endpoint did not return a response')
@@ -2347,7 +2386,7 @@ postgresTest(
 			}
 			expect(boundary.data).toMatchObject({
 				summary: { swaps_7d: 10000 },
-				observationsTruncated: true,
+				observationsTruncated: false,
 				observationRange: { firstTimestamp: '1767225624', count: 10000 },
 			})
 
@@ -2534,7 +2573,7 @@ postgresTest(
 			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${operationsChainId} AND hash = ${hash}`
 			for (const table of ['pools', 'pool_state_events', 'vault_snapshots', 'escalation_game_events', 'truth_auction_events'])
 				await database.sql.unsafe(`UPDATE ${table} SET canonical = true WHERE chain_id = $1`, [operationsChainId])
-			const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n)
+			const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n, 1_000)
 			expect(new Set(resampleTargets.map((target) => target.entityType))).toEqual(new Set(['pool', 'vault']))
 		} finally {
 			await database.close()
