@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { privateKeyToAccount, type Hex } from '#ethereum'
-import { acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosition, savePositionJournal } from '#state/position-store'
+import { acquirePositionJournalLock, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState } from '#state/position-store'
 
 const usage = `Close one fully investigated recovery-required position without submitting a transaction.
 
@@ -54,7 +54,8 @@ const chainId = Number(values.get('chain-id'))
 if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('--chain-id must be a positive integer')
 const journalLock = await acquirePositionJournalLock(positionFile)
 try {
-	const positions = await loadPositionJournal(positionFile, chainId)
+	const journal = await loadPositionJournalState(positionFile, chainId)
+	const positions = journal.positions
 	const index = positions.findIndex(position => position.reportId === reportId)
 	if (index === -1) throw new Error(`Position ${reportId} was not found`)
 	const position = positions[index]
@@ -70,9 +71,8 @@ try {
 		realizedNetProfitEth: values.get('realized-net-profit-eth'),
 		recordedBy: account.address,
 	})
-	const updated = [...positions]
-	updated[index] = reconciled
-	await savePositionJournal(positionFile, updated, chainId)
+	const updated = [reconciled, ...positions.slice(0, index), ...positions.slice(index + 1)]
+	await savePositionJournalState(positionFile, { archived: journal.archived, positions: updated }, chainId)
 	console.log(`report=${reportId} status=closed signer=${account.address} pnl=${reconciled.manualReconciliation?.pnlStatus ?? 'unavailable'} journal=${positionFile}`)
 } finally {
 	await journalLock.release()

@@ -687,6 +687,24 @@ describe('shared ethereum compatibility layer', () => {
 				eventName: 'Mixed',
 			}),
 		).toEqual(mixedIndexedTopics)
+		const partiallyFilteredEventAbi = [
+			{
+				inputs: [
+					{ indexed: true, name: 'pool', type: 'address' },
+					{ indexed: true, name: 'parent', type: 'address' },
+					{ indexed: true, name: 'universeId', type: 'uint248' },
+				],
+				name: 'Deployment',
+				type: 'event',
+			},
+		] as const
+		expect(
+			encodeEventTopics({
+				abi: partiallyFilteredEventAbi,
+				args: { universeId: 7n },
+				eventName: 'Deployment',
+			}),
+		).toEqual([keccak256('Deployment(address,address,uint248)'), null, null, `0x${'00'.repeat(31)}07`])
 		expect(keccak256('0x1')).toBe(keccak256('0x01'))
 		expect(
 			getCreate2Address({

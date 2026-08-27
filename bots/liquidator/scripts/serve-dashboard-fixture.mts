@@ -119,7 +119,6 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		systemState,
 		totalCapacityOwnershipRep: '1644.2',
 		totalPoolHeldRep: '14628.817',
-		truncatedVaults: false,
 		universeId,
 		vaults: [],
 	}
