@@ -79,6 +79,12 @@
 						<p class="eyebrow">System entities</p>
 						<h2 id="system-heading">Protocol system state</h2>
 					</div>
+					<form id="history-range" class="history-range" aria-label="Historical block range">
+						<label>From block <input id="history-from-block" name="fromBlock" type="number" inputmode="numeric" min="0" placeholder="Index start" /></label>
+						<label>To block <input id="history-to-block" name="toBlock" type="number" inputmode="numeric" min="0" placeholder="Indexed head" /></label>
+						<button class="secondary compact" type="submit">Apply range</button>
+						<button id="history-range-clear" class="secondary compact" type="button">Clear</button>
+					</form>
 				</div>
 				<div id="system-alert" class="system-alert" role="alert" hidden></div>
 				<div id="system-status" class="system-status" role="status" aria-live="polite" hidden></div>
@@ -123,6 +129,9 @@
 					<a href="/operations/escalations">Escalations</a>
 					<a href="/operations/auctions">Auctions</a>
 					<a href="/operations/risk">Risk</a>
+					<a href="/operations/forks">Forks</a>
+					<a href="/operations/trading">Trading</a>
+					<a href="/operations/integrity">Chain history</a>
 				</nav>
 				<div id="operations-status" class="system-status" role="status" aria-live="polite">Loading protocol operations…</div>
 				<div id="operations-content" class="operations-content" aria-busy="true"></div>

@@ -13,6 +13,39 @@ export const isJsonValue = (value: unknown): value is JsonValue => {
 export const isJsonRecord = (value: unknown): value is Record<string, JsonValue> => isRecord(value) && Object.values(value).every(isJsonValue)
 export const isNullableJsonRecord = (value: unknown): value is Record<string, JsonValue> | null => value === null || isJsonRecord(value)
 
+export interface EntityHistoryCoverageValue {
+	requestedFromBlock: string
+	requestedToBlock: string
+	indexedFromBlock: string
+	indexedThroughBlock?: string
+	indexedThroughHash?: string | null
+	limit: number
+	offset: number
+	series: Record<string, number>
+	complete: boolean
+	rangeCovered?: boolean
+	hasPreviousPages?: boolean
+	nextOffset?: number
+}
+
+const isNonNegativeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+export const isEntityHistoryCoverageValue = (value: unknown): value is EntityHistoryCoverageValue =>
+	isRecord(value) &&
+	isString(value['requestedFromBlock']) &&
+	isString(value['requestedToBlock']) &&
+	isString(value['indexedFromBlock']) &&
+	(value['indexedThroughBlock'] === undefined || isString(value['indexedThroughBlock'])) &&
+	(value['indexedThroughHash'] === undefined || isNullableString(value['indexedThroughHash'])) &&
+	isNonNegativeInteger(value['limit']) &&
+	isNonNegativeInteger(value['offset']) &&
+	isRecord(value['series']) &&
+	Object.values(value['series']).every(isNonNegativeInteger) &&
+	typeof value['complete'] === 'boolean' &&
+	(value['rangeCovered'] === undefined || typeof value['rangeCovered'] === 'boolean') &&
+	(value['hasPreviousPages'] === undefined || typeof value['hasPreviousPages'] === 'boolean') &&
+	(value['nextOffset'] === undefined || isNonNegativeInteger(value['nextOffset']))
+
 export const isNetworkRecordValue = (value: unknown): boolean =>
 	isRecord(value) &&
 	isString(value['chain_id']) &&

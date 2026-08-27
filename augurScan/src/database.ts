@@ -284,6 +284,26 @@ export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
 	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
 }
 
+type ReorganizationReason = 'chain-reorg' | 'manifest-reset' | 'start-boundary-advanced'
+
+const recordChainReorganization = async (
+	transaction: TransactionSQL,
+	chainId: number,
+	previousBlock: bigint | undefined,
+	previousHash: string | undefined,
+	ancestorBlock: bigint,
+	ancestorHash: string | undefined,
+	depth: bigint,
+	reason: ReorganizationReason,
+): Promise<void> => {
+	await transaction`
+		INSERT INTO chain_reorganizations
+			(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
+		VALUES
+			(${chainId}, ${previousBlock?.toString() ?? null}, ${previousHash ?? null}, ${ancestorBlock.toString()}, ${ancestorHash ?? null}, ${depth.toString()}, ${reason})
+	`
+}
+
 const canonicalHistoryTables = [
 	'blocks',
 	'transactions',
@@ -561,7 +581,7 @@ export class ScannerDatabase {
 	): Promise<boolean> {
 		const operation = async (transaction: TransactionSQL): Promise<boolean> => {
 			const existingRows = await transaction`
-				SELECT start_block, indexed_block
+				SELECT start_block, indexed_block, indexed_hash
 				FROM networks
 				WHERE chain_id = ${network.chainId}
 				FOR UPDATE
@@ -655,15 +675,26 @@ export class ScannerDatabase {
 			if (manifestChanged && resetCanonicalHistoryOnManifestChange && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
 				await invalidateCanonicalHistory(transaction, network.chainId)
 				const previousBlock = BigInt(String(existing['indexed_block']))
+				const depth = previousBlock - network.startBlock + 1n
+				await recordChainReorganization(
+					transaction,
+					network.chainId,
+					previousBlock,
+					typeof existing['indexed_hash'] === 'string' ? existing['indexed_hash'] : undefined,
+					-1n,
+					undefined,
+					depth,
+					'manifest-reset',
+				)
 				await transaction`
 					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
-						last_reorg_at = now(), last_reorg_depth = ${(previousBlock - network.startBlock + 1n).toString()}, updated_at = now()
+						last_reorg_at = now(), last_reorg_depth = ${depth.toString()}, updated_at = now()
 					WHERE chain_id = ${network.chainId}
 				`
 				await lockLiveEventWriter(transaction)
 				await transaction`
 					INSERT INTO live_events (event, payload)
-					VALUES ('reorg', (${JSON.stringify({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: (previousBlock - network.startBlock + 1n).toString() })}::text)::jsonb)
+					VALUES ('reorg', (${JSON.stringify({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: depth.toString() })}::text)::jsonb)
 				`
 			}
 			return manifestChanged
@@ -1049,6 +1080,16 @@ export class ScannerDatabase {
 			`
 			const previousBlock = BigInt(String(checkpoint['indexed_block']))
 			const reorgDepth = rewindDepth(previousBlock, BigInt(String(checkpoint['start_block'])), ancestor)
+			await recordChainReorganization(
+				transaction,
+				chainId,
+				previousBlock,
+				typeof checkpoint['indexed_hash'] === 'string' ? checkpoint['indexed_hash'] : undefined,
+				ancestor,
+				ancestorHash,
+				reorgDepth,
+				'chain-reorg',
+			)
 			await transaction`
 				UPDATE networks SET indexed_block = ${ancestor < 0n ? null : ancestor.toString()}, indexed_hash = ${ancestorHash ?? null},
 					indexed_timestamp = (SELECT timestamp FROM blocks WHERE chain_id = ${chainId} AND hash = ${ancestorHash ?? null}), phase = 'backfilling',
@@ -1179,7 +1220,7 @@ export class ScannerDatabase {
 						if (projection.domain === 'trading')
 							await transaction`
 								INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
-								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
+								VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${JSON.stringify(projection.data)}::text)::jsonb, true)
 								ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
 							`
 						if (projection.domain === 'fork')
@@ -1347,7 +1388,7 @@ export class ScannerDatabase {
 
 	async advanceNetworkStartBlock(chainId: number, startBlock: bigint, lease: IndexerLease): Promise<boolean> {
 		return await withIndexerLease(lease, async (transaction) => {
-			const rows = await transaction`SELECT start_block, indexed_block FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+			const rows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const row = rows[0]
 			if (row === undefined) throw new DatabaseConsistencyError(`Network ${chainId} is not initialized`)
 			const storedStartBlock = BigInt(String(row['start_block']))
@@ -1355,6 +1396,16 @@ export class ScannerDatabase {
 			const previousBlock = row['indexed_block'] === null || row['indexed_block'] === undefined ? undefined : BigInt(String(row['indexed_block']))
 			const invalidatedDepth = previousBlock === undefined ? 0n : previousBlock - storedStartBlock + 1n
 			await invalidateCanonicalHistory(transaction, chainId, startBlock)
+			await recordChainReorganization(
+				transaction,
+				chainId,
+				previousBlock,
+				typeof row['indexed_hash'] === 'string' ? row['indexed_hash'] : undefined,
+				-1n,
+				undefined,
+				invalidatedDepth,
+				'start-boundary-advanced',
+			)
 			await transaction`
 				UPDATE networks SET start_block = ${startBlock.toString()}, indexed_block = NULL, indexed_hash = NULL,
 					indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling', last_poll_at = now(),

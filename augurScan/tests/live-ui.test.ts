@@ -7,6 +7,8 @@ import {
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
+	collectDualCursorCollections,
+	collectOffsetCollections,
 	compactIndexerDuration,
 	compareCanonicalEventPosition,
 	contractDeploymentBlockActionLabel,
@@ -15,6 +17,7 @@ import {
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
+	entityHistoryContinuationPresentation,
 	indexerConnectionStatus,
 	indexerHeadFreshness,
 	indexerHeadFreshnessTransitionDelay,
@@ -41,6 +44,7 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	showIndexerSyncDetails,
+	summarizeHistoryCollections,
 	transactionRetryMode,
 } from '../browser/live-update.ts'
 
@@ -68,6 +72,12 @@ test('retains every distinct catalog record across a delayed 251-record live ref
 	expect(snapshot.nextCursor).toBeUndefined()
 })
 
+test('uses stable identities for historical operations catalogs', () => {
+	expect(operationsCatalogRecordKey('forks', { universe_identity: '7' })).toBe('7')
+	expect(operationsCatalogRecordKey('trading', { pair_address: '0xpair' })).toBe('0xpair')
+	expect(operationsCatalogRecordKey('integrity', { id: '42' })).toBe('42')
+})
+
 test('retains detail evidence to the prior visible depth using canonical log identity', async () => {
 	const records = Array.from({ length: 151 }, (_, index) => ({
 		block_hash: '0xblock',
@@ -91,6 +101,116 @@ test('retains detail evidence to the prior visible depth using canonical log ide
 	expect(snapshot.items).toHaveLength(151)
 	expect(new Set(snapshot.items.map(operationsDetailRecordKey)).size).toBe(151)
 	expect(snapshot.nextCursor).toBeUndefined()
+})
+
+test('loads and combines risk-history collections through the requested offset', async () => {
+	const requestedOffsets: number[] = []
+	const result = await collectOffsetCollections(
+		async (offset) => {
+			requestedOffsets.push(offset)
+			if (offset === 0)
+				return {
+					collections: { stateSnapshots: [{ id: 'new' }], liquidations: [] },
+					nextOffset: 100,
+				}
+			return {
+				collections: { stateSnapshots: [{ id: 'old' }], liquidations: [{ id: 'liquidation' }] },
+				nextOffset: 200,
+			}
+		},
+		['stateSnapshots', 'liquidations'],
+		100,
+	)
+	expect(requestedOffsets).toEqual([0, 100])
+	expect(result).toEqual({
+		collections: { stateSnapshots: [{ id: 'new' }, { id: 'old' }], liquidations: [{ id: 'liquidation' }] },
+		loadedOffset: 100,
+		nextOffset: 200,
+	})
+})
+
+test('paginates pool and vault risk catalogs independently and restores both visible depths', async () => {
+	const pools = Array.from({ length: 351 }, (_, index) => ({ address: `pool-${index}` }))
+	const vaults = Array.from({ length: 376 }, (_, index) => ({ address: `vault-${index}` }))
+	const requests: Array<{ leftCursor?: number; rightCursor?: number; limit: number }> = []
+	const result = await collectDualCursorCollections<{ address: string }, number>(
+		async ({ leftCursor, rightCursor, limit }) => {
+			requests.push({ ...(leftCursor === undefined ? {} : { leftCursor }), ...(rightCursor === undefined ? {} : { rightCursor }), limit })
+			const leftOffset = leftCursor ?? 0
+			const rightOffset = rightCursor ?? 0
+			return {
+				left: pools.slice(leftOffset, leftOffset + limit),
+				right: vaults.slice(rightOffset, rightOffset + limit),
+				...(leftOffset + limit < pools.length ? { leftNextCursor: leftOffset + limit } : {}),
+				...(rightOffset + limit < vaults.length ? { rightNextCursor: rightOffset + limit } : {}),
+			}
+		},
+		275,
+		325,
+		(item) => item.address,
+		(item) => item.address,
+	)
+	expect(result.left.length).toBeGreaterThanOrEqual(275)
+	expect(result.right.length).toBeGreaterThanOrEqual(325)
+	expect(result.leftNextCursor).toBe(300)
+	expect(result.rightNextCursor).toBe(325)
+	expect(requests).toEqual([
+		{ limit: 100 },
+		{ leftCursor: 100, rightCursor: 100, limit: 100 },
+		{ leftCursor: 200, rightCursor: 200, limit: 100 },
+		{ rightCursor: 300, limit: 25 },
+	])
+})
+
+test('makes a state-history series larger than the API page limit fully reachable', async () => {
+	const records = Array.from({ length: 1_001 }, (_, index) => ({ block_number: String(23_000_000 + index) }))
+	const requestedOffsets: number[] = []
+	const result = await collectOffsetCollections(
+		async (offset) => {
+			requestedOffsets.push(offset)
+			const snapshots = records.slice(offset, offset + 1_000)
+			return {
+				collections: { snapshots },
+				...(offset + snapshots.length < records.length ? { nextOffset: offset + 1_000 } : {}),
+			}
+		},
+		['snapshots'],
+		1_000,
+	)
+	expect(requestedOffsets).toEqual([0, 1_000])
+	expect(result.collections['snapshots']).toHaveLength(1_001)
+	expect(result.nextOffset).toBeUndefined()
+})
+
+test('shows only one visible pending phrase while state history continues loading', () => {
+	const pending = entityHistoryContinuationPresentation('pending')
+	const visiblePendingPhrases = [pending.buttonLabel, ...(pending.statusVisuallyHidden ? [] : [pending.statusText])]
+	expect(visiblePendingPhrases).toEqual(['Showing older history…'])
+
+	const failure = entityHistoryContinuationPresentation('error')
+	expect(failure).toEqual({
+		buttonLabel: 'Retry older history',
+		statusText: 'Older historical records could not be loaded.',
+		statusVisuallyHidden: false,
+	})
+})
+
+test('summarizes loaded risk history with exact block boundaries and per-series counts', () => {
+	expect(
+		summarizeHistoryCollections(
+			{
+				stateSnapshots: [{ block_number: '23184707' }, { block_number: 23_184_207 }],
+				accountingSnapshots: [{ block_number: 23_184_707n }],
+				lifecycleEvents: [{ block_number: 'not-a-block' }],
+				liquidations: [],
+			},
+			['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'],
+		),
+	).toEqual({
+		counts: { stateSnapshots: 2, accountingSnapshots: 1, lifecycleEvents: 1, liquidations: 0 },
+		oldestBlock: 23_184_207n,
+		newestBlock: 23_184_707n,
+	})
 })
 
 test('orders lifecycle evidence by canonical block, transaction, and log position', () => {

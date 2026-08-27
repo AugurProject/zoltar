@@ -7,7 +7,8 @@ import { indexerOwnershipStatuses, startIndexers } from './indexer.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
-import { initializeSchema } from './schema.ts'
+import { abiSourceHash } from './metadata.ts'
+import { CURRENT_SCHEMA_VERSION, initializeSchema } from './schema.ts'
 
 installConsoleTimestamps()
 
@@ -18,6 +19,27 @@ const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)
 const liveDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2, 1)
 const networks = await loadNetworks()
+const packageMetadata = (await Bun.file(path.resolve(import.meta.dir, '../package.json')).json()) as { readonly version?: unknown }
+if (typeof packageMetadata.version !== 'string') throw new Error('augurScan package version is missing')
+const networkConfiguration = networks.map((network) => ({
+	id: network.id,
+	chainId: network.chainId,
+	startBlock: network.startBlock.toString(),
+	confirmationDepth: network.confirmationDepth.toString(),
+	contracts: network.contracts.map(([address, label, kind, deploymentBlock]) => ({
+		address,
+		label,
+		kind,
+		...(deploymentBlock === undefined ? {} : { deploymentBlock: deploymentBlock.toString() }),
+	})),
+}))
+const runRows = await database.sql`
+	INSERT INTO indexer_runs (schema_version, app_version, abi_source_hash, network_configuration)
+	VALUES (${CURRENT_SCHEMA_VERSION}, ${packageMetadata.version}, ${abiSourceHash}, ${JSON.stringify(networkConfiguration)}::jsonb)
+	RETURNING id
+`
+const indexerRunId = Number(runRows[0]?.['id'])
+if (!Number.isSafeInteger(indexerRunId)) throw new Error('Unable to record augurScan indexer-run provenance')
 
 const bus = new LiveBus(liveDatabase)
 let prunePromise: Promise<void> | undefined
@@ -153,6 +175,11 @@ const shutdown = (): Promise<void> => {
 		await bus.close()
 		await server.stop()
 		await Promise.allSettled(indexers)
+		try {
+			await database.sql`UPDATE indexer_runs SET stopped_at = now() WHERE id = ${indexerRunId}`
+		} catch (error) {
+			console.error(`Unable to record indexer-run shutdown (${error instanceof Error ? error.name : typeof error})`)
+		}
 		await liveDatabase.close()
 		await apiDatabase.close()
 		await healthDatabase.close()

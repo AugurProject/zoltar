@@ -1456,6 +1456,7 @@ class NetworkIndexer {
 				storedLogs.push({
 					...position,
 					address: getAddress(log.address),
+					contractKind: contract.kind,
 					topics: log.topics,
 					data: log.data,
 					decoded: decodeLogRecord(contract.kind, log.topics, log.data, displayLabels, tokenMetadata, contract.address, contractKinds, displayContext),

@@ -29,6 +29,8 @@ type CatalogFile = {
 
 const catalogFile = (await Bun.file(path.resolve(import.meta.dir, '../config/abis.json')).json()) as CatalogFile
 
+export const abiSourceHash = catalogFile.sourceHash
+
 const kindToContractName: Readonly<Record<string, string>> = {
 	ammFactory: 'TwoWayConstantProductFactory',
 	ammPair: 'TwoWayConstantProductPair',

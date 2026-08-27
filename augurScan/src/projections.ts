@@ -134,7 +134,7 @@ type UniswapPriceProjection = {
 
 type DomainEventProjection = {
 	type: 'domainEvent'
-	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'approval' | 'trading' | 'fork'
+	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'approval' | 'trading' | 'fork' | 'system'
 	entityType: string
 	entityIdentity: string
 	semanticEventKind: string
@@ -515,6 +515,10 @@ const definitions = (
 // generic ERC approvals/transfers while covering every protocol lifecycle event
 // emitted by the contracts represented in the operations views.
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
+	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
+	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
+	...definitions('system', 'reputation-token', ['TheoreticalSupplySet', 'Mint', 'Burn']),
+	...definitions('system', 'share-token', ['AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
 	...definitions('oracle', 'price-coordinator', [
 		'CoordinatorStateCheckpoint',
@@ -527,6 +531,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'RepEthPriceSet',
 		'SecurityPoolSet',
 		'StagedOperationQueued',
+		'InternalApproval',
 	]),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
@@ -543,23 +548,31 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'LocalDepositAppended',
 		'NonDecisionReached',
 		'ResidualRepSweptToSecurityPool',
+		'ForkContinuationResidualRepBurned',
 		'TruthAuctionHaircutApplied',
 		'VaultEscrowUpdated',
 		'VaultUnresolvedTotalsExported',
 	]),
 	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundDeferred', 'PendingEthRefundWithdrawn']),
-	...definitions('risk', 'pool', [
-		'AwaitingForkContinuationSet',
-		'CompleteSetCreated',
-		'CompleteSetRedeemed',
-		'EscalationGameSet',
-		'PoolAccountingCheckpoint',
-		'PoolForkModeActivated',
-		'ShareTokenSupplySet',
-		'SharesRedeemed',
-		'SystemStateSet',
-		'TotalRepBackingUnitsSet',
-	]),
+	...definitions(
+		'risk',
+		'pool',
+		[
+			'DeploySecurityPool',
+			'SecurityPoolRegistered',
+			'AwaitingForkContinuationSet',
+			'CompleteSetCreated',
+			'CompleteSetRedeemed',
+			'EscalationGameSet',
+			'PoolAccountingCheckpoint',
+			'PoolForkModeActivated',
+			'ShareTokenSupplySet',
+			'SharesRedeemed',
+			'SystemStateSet',
+			'TotalRepBackingUnitsSet',
+		],
+		['securityPool'],
+	),
 	...definitions(
 		'risk',
 		'vault',
@@ -571,7 +584,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 			'VaultAccountingCheckpoint',
 			'VaultBadDebtRecorded',
 			'VaultLiquidated',
-			'VaultTargetHealthFactorSet',
+			'VaultDepositTargetHealthFactorRecorded',
 		],
 		['vault', 'targetVault'],
 	),
@@ -588,13 +601,21 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		],
 		['approvalId', 'receiverVault'],
 	),
-	...definitions('trading', 'amm', ['LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync']),
+	...definitions(
+		'trading',
+		'amm',
+		['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer'],
+		['pair'],
+	),
 	...definitions(
 		'fork',
 		'fork',
 		[
+			'UniverseInitialized',
 			'UniverseForked',
 			'DeployChild',
+			'EscalationMigrationEntitlementInitialized',
+			'EscalationMigrationEntitlementMaterialized',
 			'MigrationRepAdded',
 			'MigrationRepSplit',
 			'RepBurned',
@@ -611,11 +632,12 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 			'TruthAuctionStarted',
 			'VaultBadDebtMigrated',
 			'VaultMigrationCheckpoint',
-			'Migrate',
 		],
-		['childUniverseId', 'universeId', 'childPool', 'parentPool', 'securityPool'],
+		['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool'],
 	),
 }
+
+export const semanticEventNames = Object.freeze(Object.keys(eventDomains).sort())
 
 const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
 	const eventName = log.decoded.name
@@ -623,6 +645,8 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
+	if (eventName === 'PairCreated' && log.contractKind !== 'ammFactory') return undefined
+	if (eventName === 'Transfer' && log.contractKind !== 'ammPair') return undefined
 	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4
 	// also emit an event named Swap, but their sqrt-price shape belongs to the
 	// dedicated Uniswap projection and cannot be interpreted as Augur reserves.
@@ -658,9 +682,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 				? `${log.address.toLowerCase()}:${identitySuffix}`
 				: definition.entityType === 'liquidation-approval' && approvalIdentity !== undefined
 					? `${log.address.toLowerCase()}:${approvalIdentity}`
-					: definition.domain === 'fork' && identitySuffix !== undefined
-						? identitySuffix
-						: log.address.toLowerCase()
+					: (identitySuffix ?? log.address.toLowerCase())
 	return {
 		type: 'domainEvent',
 		domain: definition.domain,

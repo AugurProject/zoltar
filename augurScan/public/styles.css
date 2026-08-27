@@ -405,6 +405,25 @@ main {
 .operations-panel h3 {
 	margin-bottom: 0.75rem;
 }
+.operations-panel-scope {
+	display: inline-flex;
+	margin: -0.25rem 0 0.75rem;
+	padding: 0.25rem 0.5rem;
+	border: 1px solid rgba(86, 215, 208, 0.28);
+	border-radius: 99px;
+	color: var(--cyan);
+	background: rgba(86, 215, 208, 0.07);
+	font-size: 0.66rem;
+	letter-spacing: 0.03em;
+}
+.operations-panel-scanner-wide {
+	border-color: rgba(167, 139, 250, 0.42);
+}
+.operations-panel-scanner-wide .operations-panel-scope {
+	border-color: rgba(167, 139, 250, 0.35);
+	color: #c4b5fd;
+	background: rgba(167, 139, 250, 0.08);
+}
 .operations-list {
 	display: grid;
 	gap: 0.55rem;
@@ -489,6 +508,34 @@ a.operations-row:focus-visible {
 .operations-row code {
 	max-width: 20rem;
 	overflow-wrap: anywhere;
+}
+.operations-exact-evidence {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.55rem;
+	margin: 0;
+}
+.operations-exact-evidence div {
+	min-width: 0;
+	padding: 0.55rem;
+	border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+	border-radius: 6px;
+	background: rgba(5, 9, 13, 0.28);
+}
+.operations-exact-evidence dt {
+	color: var(--muted);
+	font-size: 0.61rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.operations-exact-evidence dd {
+	margin: 0.28rem 0 0;
+	overflow-wrap: anywhere;
+	word-break: break-all;
+	font:
+		0.68rem / 1.45 ui-monospace,
+		monospace;
 }
 .operations-evidence {
 	text-align: right;
@@ -994,6 +1041,71 @@ a.operations-row:focus-visible {
 	color: var(--muted);
 	font-size: 0.66rem;
 }
+
+.history-range {
+	display: flex;
+	align-items: end;
+	gap: 0.55rem;
+	flex-wrap: wrap;
+}
+
+.history-range label {
+	display: grid;
+	gap: 0.25rem;
+	font-size: 0.75rem;
+	color: var(--muted);
+}
+
+.history-range input {
+	width: 9rem;
+}
+
+.history-coverage {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: 1rem;
+	padding: 0.75rem 0.9rem;
+	border: 1px solid var(--line);
+	border-radius: 0.65rem;
+	background: var(--panel-2);
+	font-size: 0.82rem;
+}
+
+.history-coverage span {
+	color: var(--muted);
+	text-align: right;
+}
+
+.history-coverage-pagination {
+	display: grid;
+	grid-column: 1 / -1;
+	justify-items: start;
+	gap: 0.55rem;
+}
+
+.state-history-status {
+	min-height: 1.1rem;
+	margin: 0;
+	color: var(--muted);
+	font:
+		0.68rem / 1.4 ui-monospace,
+		monospace;
+}
+
+.history-coverage.incomplete {
+	border-color: var(--amber);
+}
+
+.chart-series + .chart-series {
+	margin-top: 0.75rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--line);
+}
+
+.chart-series h5 {
+	margin: 0 0 0.25rem;
+}
 .static-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1194,7 +1306,33 @@ button[aria-busy="true"]:disabled {
 }
 .activity-summary {
 	min-height: 1.1rem;
-	margin: -0.2rem 0 0.55rem;
+	margin: 0.55rem 0;
+	color: var(--muted);
+	font:
+		0.68rem / 1.4 ui-monospace,
+		monospace;
+}
+.operations-pagination-complete {
+	display: inline-flex;
+	align-items: center;
+	width: fit-content;
+	max-width: 100%;
+	min-height: 32px;
+	margin: 0.55rem 0 0;
+	padding: 0.35rem 0.7rem;
+	border: 1px solid rgba(86, 215, 208, 0.24);
+	border-radius: 7px;
+	background: rgba(86, 215, 208, 0.05);
+}
+.operations-history-pagination {
+	display: grid;
+	justify-items: start;
+	gap: 0.55rem;
+	margin-top: 0.75rem;
+}
+.operations-history-status {
+	min-height: 1.1rem;
+	margin: 0;
 	color: var(--muted);
 	font:
 		0.68rem / 1.4 ui-monospace,
@@ -2147,6 +2285,9 @@ dialog::backdrop {
 	.operations-row {
 		grid-template-columns: minmax(0, 1fr);
 	}
+	.operations-exact-evidence {
+		grid-template-columns: minmax(0, 1fr);
+	}
 	.operations-evidence {
 		text-align: left;
 	}
@@ -2212,6 +2353,27 @@ dialog::backdrop {
 	}
 	.section-heading {
 		align-items: start;
+	}
+	.system-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.history-range {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		width: 100%;
+	}
+	.history-range label {
+		grid-column: 1 / -1;
+	}
+	.history-range input {
+		width: 100%;
+	}
+	.history-coverage {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.history-coverage span {
+		text-align: left;
 	}
 	.network-cards {
 		grid-template-columns: 1fr;

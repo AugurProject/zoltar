@@ -69,6 +69,7 @@ export type StoredLog = {
 	readonly transactionIndex: number
 	readonly logIndex: number
 	readonly address: Address
+	readonly contractKind?: string
 	readonly topics: readonly Hex[]
 	readonly data: Hex
 	readonly decoded: DecodedRecord

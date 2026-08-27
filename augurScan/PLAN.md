@@ -8,7 +8,7 @@ The scanner owns its application, configuration, and database inputs under `/aug
 
 ## Delivered architecture
 
-The shipped stack is Bun and TypeScript, the repository's `micro-eth-signer`-based adapter for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app initializes the complete schema in an empty database before it serves traffic and rejects incompatible databases instead of upgrading them.
+The shipped stack is Bun and TypeScript, the repository's `micro-eth-signer`-based adapter for JSON-RPC and ABI primitives, PostgreSQL for persistence, a Bun-native HTTP/SSE server, and a dependency-free HTML/CSS/JavaScript browser UI. Dependency versions and container images are pinned. `compose.yaml` starts the app and its persistent database; the app initializes an empty database, applies supported forward migrations transactionally, records migration/run provenance, and rejects unknown layouts without modifying them.
 
 Configuration is checked in under `config/`:
 
@@ -22,7 +22,7 @@ At runtime one connection-scoped advisory lock elects an indexer for each chain.
 
 Each block transaction commits atomically with its receipt, top-level protocol action, logs, decode results, argument schemas, newly discovered contracts, token metadata observations, state measurements, and checkpoint. Integers remain exact strings or PostgreSQL numeric values.
 
-Logs and top-level calls involving protocol activity sources select receipts for indexing and dynamic discovery. Shared WETH, REP, Multicall3, and proxy-deployer contracts never select unrelated receipts, but their known logs are retained when either activity-source path selected the receipt. Registration events add pools, share tokens, price coordinators, truth auctions, escalation games, and child reputation tokens. A fixed-point receipt pass retains initializer logs that occur before their registration log. Unknown or malformed events keep their topics, data, and decode error.
+Logs emitted by protocol activity sources or tracked REP tokens select receipts for indexing and dynamic discovery; configured Uniswap factory and PoolManager filters can select them too. For each selected receipt, augurScan also stores its top-level call. A tracked REP token therefore selects unrelated transfers emitted by that token. Shared WETH, USDC, Multicall3, scalar-outcome, and proxy-deployer contracts do not select unrelated receipts, but their known logs are retained when another source selected the receipt. Registration events add pools, share tokens, price coordinators, truth auctions, escalation games, and child reputation tokens. A fixed-point receipt pass retains initializer logs that occur before their registration log. Unknown or malformed events keep their topics, data, and decode error.
 
 Token display rules are keyed by contract kind, event/function, and argument. Semantic `atto*` fields, the OpenOracle ETH sentinel, and known REP/share/WETH kinds use fixed 18-decimal protocol units; configured USDC uses a fixed 6-decimal unit. Arbitrary token values use canonical metadata read at an indexed block and fall back to exact base units only when that metadata is unavailable. Failed metadata reads retry with bounded block backoff and follow canonical reorg state.
 
@@ -44,12 +44,15 @@ The browser provides:
 - bounded canonical tagged-block reads for current pool, vault, escalation, and auction values, with retained read failures and stale-on-reorg semantics;
 - stable keyset pagination; full-window exact AMM volume and fee summaries; and explicitly bounded price-impact, TWAP-coverage, and candlestick observations;
 - pool-level OpenOracle coordinator history plus REP/WETH, REP/native-ETH, REP/USDC, and liquidity histories.
+- explicit state-history block ranges, pagination and coverage metadata; actual-time charts; and NDJSON evidence export;
+- durable chain-reorganization records, canonical/orphan log selection, and schema/application/ABI/network provenance;
+- first-class fork, AMM-market, LP-position, reporter-participation, liquidation-history, and chain-integrity views.
 
 ## Delivery and validation
 
 The implementation is delivered in these completed slices:
 
-1. Isolated configuration, ABI snapshot, Docker packaging, fresh-database schema initialization, and health endpoints.
+1. Isolated configuration, ABI snapshot, Docker packaging, transactional schema initialization/migration, and health endpoints.
 2. Resumable multi-network indexing, polling, advisory leases, RPC recovery, reorg retention, dynamic discovery, exact decoding, and SSE commit notices.
 3. Log/action APIs and responsive activity/evidence UI.
 4. Event-replayed system catalogs and historical charts.
@@ -59,4 +62,4 @@ Acceptance requires an empty-volume Compose start to expose the UI and begin eac
 
 ## Deferred scope
 
-Provider-specific internal-call tracing, automatic re-decoding after an ABI snapshot change, arbitrary user-selected historical state-at-block queries, normalized cross-venue liquidity, manipulation-resistant TWAP claims, very large deployment load testing, and automated backup/restore drills remain future work. A production operator must still choose archival-capable RPC providers, verified deployment start blocks, credentials, resource limits, backup schedules, and external access controls.
+Provider-specific internal-call tracing and failed-call ingestion, automatic re-decoding after an ABI snapshot change, arbitrary contract state-at-block reads, normalized cross-venue liquidity, manipulation-resistant TWAP claims, very large deployment load testing, and automated backup/restore drills remain future work. Historical event APIs do support explicit block ranges, but they do not infer calls that emitted no retained log. A production operator must still choose archival-capable RPC providers, verified deployment start blocks, credentials, resource limits, backup schedules, and external access controls.

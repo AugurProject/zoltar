@@ -55,8 +55,14 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
-export const operationsCatalogRecordKey = (section: 'auctions' | 'escalations' | 'reports', record: Readonly<Record<string, unknown>>): string => {
+export const operationsCatalogRecordKey = (
+	section: 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'trading',
+	record: Readonly<Record<string, unknown>>,
+): string => {
 	if (section === 'reports') return `${String(record['open_oracle_address'] ?? '')}:${String(record['report_id'] ?? '')}`
+	if (section === 'trading') return String(record['pair_address'] ?? '')
+	if (section === 'integrity') return String(record['id'] ?? '')
+	if (section === 'forks') return String(record['universe_identity'] ?? '')
 	return String(record[section === 'auctions' ? 'auction_address' : 'game_address'] ?? '')
 }
 
@@ -157,6 +163,96 @@ export const collectCanonicalPages = async <T, Cursor = string>(
 	return { items: targetCount > 0 ? items.slice(0, targetCount) : items, nextCursor: cursor }
 }
 
+export const collectOffsetCollections = async <T>(
+	fetchPage: (offset: number) => Promise<{ readonly collections: Readonly<Record<string, readonly T[]>>; readonly nextOffset?: number }>,
+	collectionKeys: readonly string[],
+	throughOffset: number,
+): Promise<{ readonly collections: Readonly<Record<string, readonly T[]>>; readonly loadedOffset: number; readonly nextOffset?: number }> => {
+	const collections: Record<string, T[]> = {}
+	for (const key of collectionKeys) collections[key] = []
+	let offset = 0
+	while (true) {
+		const page = await fetchPage(offset)
+		for (const key of collectionKeys) {
+			const retained = collections[key]
+			if (retained === undefined) throw new Error(`History collection ${key} was not initialized`)
+			retained.push(...(page.collections[key] ?? []))
+		}
+		if (page.nextOffset === undefined || offset >= throughOffset)
+			return { collections, loadedOffset: offset, ...(page.nextOffset === undefined ? {} : { nextOffset: page.nextOffset }) }
+		if (!Number.isSafeInteger(page.nextOffset) || page.nextOffset <= offset) throw new Error('History continuation offset did not advance')
+		offset = page.nextOffset
+	}
+}
+
+export const collectDualCursorCollections = async <T, Cursor = string>(
+	fetchPage: (options: { readonly leftCursor?: Cursor; readonly rightCursor?: Cursor; readonly limit: number }) => Promise<{
+		readonly left: readonly T[]
+		readonly right: readonly T[]
+		readonly leftNextCursor?: Cursor
+		readonly rightNextCursor?: Cursor
+	}>,
+	leftTargetCount: number,
+	rightTargetCount: number,
+	leftKeyFor: (record: T) => string,
+	rightKeyFor: (record: T) => string,
+): Promise<{ readonly left: readonly T[]; readonly right: readonly T[]; readonly leftNextCursor?: Cursor; readonly rightNextCursor?: Cursor }> => {
+	let left: T[] = []
+	let right: T[] = []
+	let leftNextCursor: Cursor | undefined
+	let rightNextCursor: Cursor | undefined
+	let firstPage = true
+	do {
+		const requestLeft = firstPage || (left.length < leftTargetCount && leftNextCursor !== undefined)
+		const requestRight = firstPage || (right.length < rightTargetCount && rightNextCursor !== undefined)
+		if (!requestLeft && !requestRight) break
+		const remaining = Math.max(requestLeft ? Math.max(leftTargetCount - left.length, 1) : 0, requestRight ? Math.max(rightTargetCount - right.length, 1) : 0)
+		const page = await fetchPage({
+			...(requestLeft && leftNextCursor !== undefined ? { leftCursor: leftNextCursor } : {}),
+			...(requestRight && rightNextCursor !== undefined ? { rightCursor: rightNextCursor } : {}),
+			limit: firstPage ? 100 : Math.min(100, remaining),
+		})
+		left = mergeUniqueRecords(left, page.left, leftKeyFor)
+		right = mergeUniqueRecords(right, page.right, rightKeyFor)
+		if (requestLeft) leftNextCursor = page.leftNextCursor
+		if (requestRight) rightNextCursor = page.rightNextCursor
+		firstPage = false
+	} while (left.length < leftTargetCount || right.length < rightTargetCount)
+	return {
+		left,
+		right,
+		...(leftNextCursor === undefined ? {} : { leftNextCursor }),
+		...(rightNextCursor === undefined ? {} : { rightNextCursor }),
+	}
+}
+
+const historyBlockNumber = (value: unknown): bigint | undefined => {
+	if (typeof value === 'bigint' && value >= 0n) return value
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
+	if (typeof value === 'string' && /^\d+$/.test(value)) return BigInt(value)
+	return undefined
+}
+
+export const summarizeHistoryCollections = (
+	collections: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>,
+	collectionKeys: readonly string[],
+): { readonly counts: Readonly<Record<string, number>>; readonly oldestBlock?: bigint; readonly newestBlock?: bigint } => {
+	const counts: Record<string, number> = {}
+	let oldestBlock: bigint | undefined
+	let newestBlock: bigint | undefined
+	for (const key of collectionKeys) {
+		const records = collections[key] ?? []
+		counts[key] = records.length
+		for (const record of records) {
+			const blockNumber = historyBlockNumber(record['block_number'])
+			if (blockNumber === undefined) continue
+			if (oldestBlock === undefined || blockNumber < oldestBlock) oldestBlock = blockNumber
+			if (newestBlock === undefined || blockNumber > newestBlock) newestBlock = blockNumber
+		}
+	}
+	return { counts, ...(oldestBlock === undefined ? {} : { oldestBlock }), ...(newestBlock === undefined ? {} : { newestBlock }) }
+}
+
 export const reconcilePaginatedTotal = (currentTotal: number, responseTotal: number, append: boolean): number =>
 	append ? Math.max(currentTotal, responseTotal) : responseTotal
 
@@ -188,6 +284,19 @@ export const queuedPaginationPresentation = (canonicalRefreshRequired: boolean) 
 	busy: !canonicalRefreshRequired,
 	label: canonicalRefreshRequired ? 'Show more' : 'Loading more…',
 })
+
+export const entityHistoryContinuationPresentation = (state: 'pending' | 'error') =>
+	state === 'pending'
+		? {
+				buttonLabel: 'Showing older history…',
+				statusText: 'Loading older historical records…',
+				statusVisuallyHidden: true,
+			}
+		: {
+				buttonLabel: 'Retry older history',
+				statusText: 'Older historical records could not be loaded.',
+				statusVisuallyHidden: false,
+			}
 
 export const transactionRetryMode = (appendFailure: boolean, hasLoadedTransactions: boolean) => ({
 	append: appendFailure,

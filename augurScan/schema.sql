@@ -1,5 +1,5 @@
 -- Authoritative augurScan schema for a new, empty PostgreSQL database.
--- This file intentionally contains no upgrade or historical-data transforms.
+-- Forward migrations for retained databases live under migrations/.
 
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg12+2)
@@ -1555,6 +1555,50 @@ ALTER TABLE ONLY public.universe_events
 
 ALTER TABLE ONLY public.vault_snapshots
     ADD CONSTRAINT vault_snapshots_chain_id_block_hash_tx_hash_log_index_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
+
+
+--
+-- Historical integrity and scanner provenance
+--
+
+CREATE TABLE public.augurscan_schema_migrations (
+    schema_version text NOT NULL,
+    description text NOT NULL,
+    applied_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT augurscan_schema_migrations_pkey PRIMARY KEY (schema_version)
+);
+
+CREATE TABLE public.chain_reorganizations (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    chain_id bigint NOT NULL,
+    previous_block bigint,
+    previous_hash text,
+    ancestor_block bigint NOT NULL,
+    ancestor_hash text,
+    depth bigint NOT NULL,
+    reason text NOT NULL,
+    detected_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chain_reorganizations_pkey PRIMARY KEY (id),
+    CONSTRAINT chain_reorganizations_chain_id_fkey FOREIGN KEY (chain_id) REFERENCES public.networks(chain_id),
+    CONSTRAINT chain_reorganizations_depth_check CHECK ((depth >= 0)),
+    CONSTRAINT chain_reorganizations_reason_check CHECK ((reason = ANY (ARRAY['chain-reorg'::text, 'manifest-reset'::text, 'start-boundary-advanced'::text])))
+);
+
+CREATE INDEX chain_reorganizations_history
+    ON public.chain_reorganizations USING btree (chain_id, detected_at DESC, id DESC);
+
+CREATE TABLE public.indexer_runs (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    schema_version text NOT NULL,
+    app_version text NOT NULL,
+    abi_source_hash text NOT NULL,
+    network_configuration jsonb NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    stopped_at timestamp with time zone,
+    CONSTRAINT indexer_runs_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX indexer_runs_started_at ON public.indexer_runs USING btree (started_at DESC, id DESC);
 
 
 --

@@ -2,7 +2,7 @@
 
 augurScan is a read-only activity explorer for the Zoltar/Augur protocol. It indexes multiple configured networks from Ethereum JSON-RPC into PostgreSQL while the web UI shows one globally selected network at a time. The indexer detects each configured contract's deployment boundary before range-scanning its logs, fetches transaction evidence only for matching log transactions, decodes them with a self-contained ABI catalog, retains raw evidence and orphaned reorg history, and streams committed updates to the UI.
 
-The selector in the top-right header sets the `chainId` URL parameter for Activity, **Operations**, **System state**, **Contracts**, and **Rich list**. Operations summarizes index freshness, OpenOracle reports, escalation games, truth auctions, current pool/vault risk, fork/migration evidence, price provenance, and recent semantic changes. Its catalogs live at `/operations/reports`, `/operations/escalations`, `/operations/auctions`, and `/operations/risk`; catalog rows open direct report, escalation, auction, fork, pool-risk, and vault-risk routes. System state derives bounded registries for indexed security pools, questions, vaults, and Zoltar universes. Pool details show coordinator/OpenOracle history, conditional YES/NO prices, REP/WETH and REP/native-ETH curves, REP/USDC curves, exact venue liquidity evidence, and a link to the pair's AMM analytics. Contracts links each selection to deployment evidence without showing scanner-internal registry provenance or discovery bookkeeping.
+The selector in the top-right header sets the `chainId` URL parameter for Activity, **Operations**, **System state**, **Contracts**, and **Rich list**. Operations summarizes index freshness, OpenOracle reports, escalation games, truth auctions, current pool/vault risk, fork/migration evidence, trading history, chain replacements, scanner provenance, price provenance, and recent semantic changes. Its catalogs live at `/operations/reports`, `/operations/escalations`, `/operations/auctions`, `/operations/risk`, `/operations/forks`, `/operations/trading`, and `/operations/integrity`; catalog rows open direct report, escalation, auction, fork, market, pool-risk, and vault-risk routes. System state derives bounded registries for indexed security pools, questions, vaults, and Zoltar universes. Pool details show coordinator/OpenOracle history, conditional YES/NO prices, REP/WETH and REP/native-ETH curves, REP/USDC curves, exact venue liquidity evidence, and a link to the pair's AMM analytics. Contracts links each selection to deployment evidence without showing scanner-internal registry provenance or discovery bookkeeping.
 
 Direct browser routes are `/operations/report/:openOracleAddress/:reportId`, `/operations/escalation/:gameAddress`, `/operations/auction/:auctionAddress`, `/operations/fork/:universeIdentity`, `/operations/risk/pool/:poolAddress`, `/operations/risk/vault/:poolAddress/:vaultAddress`, and `/operations/trading/:marketAddress`. Preserve the selected network with the `chainId` query parameter when constructing a link.
 
@@ -52,7 +52,7 @@ bun run dev
 
 The browser source lives under `browser/`. `bun run build` bundles `browser/app.ts` and its helpers to the stable browser entry point `public/app.js`; that generated file is ignored and must not be edited. `bun run dev`, `bun run start`, and `bun run qa:serve` build it automatically, and development mode rebuilds it when browser TypeScript changes.
 
-Local development expects PostgreSQL at `POSTGRES_URL`. augurScan supports fresh databases only: on first start it applies the complete [`schema.sql`](schema.sql) in one explicit transaction under a PostgreSQL advisory lock, then records the schema version. Later starts accept that version without reapplying the schema. A non-empty database without the current augurScan schema marker, or a database with another schema version, is rejected with an instruction to wipe it; augurScan never upgrades or transforms an existing database. After a wipe, the indexer retrieves chain history again from RPC starting at the configured or automatically discovered effective boundary. This single transaction boundary also avoids the PostgreSQL “already/no transaction in progress” warnings. For the Compose setup, first run the shared-network command under **Start with Docker**. Use `docker compose down --volumes` to delete an incompatible database and `docker compose up --build` to initialize a fresh one.
+Local development expects PostgreSQL at `POSTGRES_URL`. On first start, augurScan applies the complete [`schema.sql`](schema.sql) in one explicit transaction under a PostgreSQL advisory lock and records schema version 2. A version 1 database is upgraded in place with the ordered migration under [`migrations/`](migrations/); the migration retains raw and orphaned evidence, backfills newly classified historical projections, and records its completion in `augurscan_schema_migrations`. Before accepting either supported marker, startup fingerprints the complete public layout: tables, identity sequences, column types/nullability/defaults, constraints, and non-constraint indexes must match exactly, and unexpected public objects are rejected. The post-migration layout is checked again before the marker update commits. Restore a compatible backup or run the intervening supported augurScan release instead of deleting historical evidence. Back up PostgreSQL before every release upgrade and test restore procedures independently; augurScan records migration provenance but does not create operator backups. The same transaction boundary prevents partially applied initialization or migration work.
 
 `POSTGRES_URL` must connect directly to PostgreSQL or through a session-mode pooler. The per-network writer lease is a session-level advisory lock and is not compatible with transaction-mode pooling. At acquisition, augurScan records the PostgreSQL backend PID and verifies that later lease checks remain on that backend. If a proxy moves the reserved connection, the indexer reports an actionable `DatabaseConsistencyError` instead of treating the new backend as the lease owner.
 
@@ -86,10 +86,10 @@ The script reads Solidity and deployment-address sources from the parent reposit
 
 - Every enabled network has an independent loop. Chain IDs are verified before indexing.
 - Historical scans run continuously until caught up; live networks poll their RPC head every 12 seconds and ingest every missed block.
-- Each JSON-RPC request has a timeout and bounded transport retries on its selected provider. If verification or a polling operation still fails across the provider pool, that network reports a redacted degraded error and retries indefinitely with jittered exponential backoff capped at five minutes. Blocks committed earlier in the operation remain durable, and the next attempt resumes from their checkpoint; a block whose database transaction fails does not advance it. Other enabled networks continue independently. Every provider used for backfill must retain runtime bytecode history from the configured discovery floor and each block and receipt from the effective start stored for the index.
+- Each JSON-RPC request has a timeout and bounded transport retries on its selected provider. If verification or a polling operation still fails across the provider pool, that network reports a redacted degraded error and retries indefinitely with jittered exponential backoff capped at five minutes. Blocks committed earlier in the operation remain durable, and the next attempt resumes from their checkpoint; a block whose database transaction fails does not advance it. Other enabled networks continue independently. Every provider used for backfill must retain runtime bytecode history from the configured discovery floor, every block header from the effective start stored for the index, and every transaction and receipt selected by the queried logs.
 - Before querying a range, augurScan checks unresolved manifest activity sources for runtime bytecode at the range end. Addresses without code are omitted. When code appears, historical bytecode lookup finds the first deployed block and that inclusive block becomes the address's log boundary. A provider that cannot supply trustworthy deployment history causes that address to fall back to the complete stored index range, so this optimization cannot silently omit activity.
-- Protocol activity-source addresses are queried with inclusive `eth_getLogs` ranges beginning at their individual deployment boundaries. Matching hashes select the only transactions and receipts fetched; failed transactions and successful transactions without a matching protocol log are intentionally outside the index. Shared WETH, REP, Multicall3, and permissionless proxy-deployer addresses remain labeled and ABI/token-aware but never select receipts from unrelated public traffic; their known logs are retained when a selected receipt contains them.
-- Every queried activity-source address has an independent PostgreSQL cursor recording its effective scan boundary and last successfully retrieved block. Configured REP and WETH identities also receive coverage cursors because they determine which Uniswap events pass the historical market filters, even though augurScan does not query their logs directly. A cursor boundary is the deployment or discovery block when known, or the stored effective start when deployment detection requires conservative fallback. Deployment observations and all cursors covered by a successful segment advance atomically with that segment's final block commit. Dynamic contracts start at their discovery block; reorg recovery rewinds affected deployment observations and cursors and removes orphan-only datasets.
+- Protocol activity-source addresses and every tracked REP-token address are queried with inclusive `eth_getLogs` ranges beginning at their individual deployment boundaries. Matching hashes select the only transactions and receipts fetched; a tracked REP token therefore selects unrelated transfers emitted by that token. Filtered Uniswap factory and PoolManager events can also select receipts. Failed transactions and successful transactions without one of these matching logs are intentionally outside the index. This is a declared coverage boundary, not an implication that no failed call occurred. Shared WETH, USDC, Multicall3, scalar-outcome, and permissionless proxy-deployer addresses remain labeled and ABI/token-aware but never select receipts from unrelated public traffic; their known logs are retained when another source selected the receipt.
+- Every directly queried log source has an independent PostgreSQL cursor recording its effective scan boundary and last successfully retrieved block. Configured WETH and USDC identities also receive coverage cursors because they determine which Uniswap events pass the historical market filters, even though augurScan does not query their logs directly. A cursor boundary is the deployment or discovery block when known, or the stored effective start when deployment detection requires conservative fallback. Deployment observations and all cursors covered by a successful segment advance atomically with that segment's final block commit. Dynamic contracts start at their discovery block; reorg recovery rewinds affected deployment observations and cursors and removes orphan-only datasets.
 - Range-size and result-limit failures split the current inclusive query in half without overlapping its successor. For example, rejected `0-100` and `0-50` requests can become a successful `0-25`; the next inclusive request begins at `26`, not `25`. Unrelated authentication, transport, and chain errors are preserved for normal provider failover.
 - Factory and registry events discover pools, share tokens, price coordinators, truth auctions, escalation games, child REP tokens, Augur AMM pairs, and exact REP/WETH or REP/USDC Uniswap V2/V3 pools. V4 activity is selected by standard hookless REP/native-ETH and address-sorted REP/USDC pool IDs; discovering child REP expands those filters in the discovery block and remaining scan range. Receipts are decoded to a fixed point so constructor/initializer logs that precede the registration event are retained.
 - Token name, symbol, and decimals are read at the indexed block and cached for known/discovered tokens and token-bearing OpenOracle logs or calls. Failed reads retry with bounded backoff and metadata observations follow active-chain reorg state. Known REP/share/WETH kinds and the OpenOracle ETH sentinel have fixed 18-decimal protocol units, while configured USDC has a fixed 6-decimal unit; only arbitrary tokens whose metadata is unavailable fall back to exact base units.
@@ -101,86 +101,121 @@ The script reads Solidity and deployment-address sources from the parent reposit
 - Unknown and failed ABI decodes retain topics, data, and the decoder error. Updating the ABI catalog never removes raw evidence.
 - At the live head, each network refreshes the least-recently measured known addresses in bounded batches. ETH (or SepoliaETH), WETH, and every known genesis-or-child REP balance are read at one indexed block and stored historically. REP token balances remain separate so balances with different universe semantics are never summed.
 
-Version 0.1 indexes transactions selected by protocol-emitter logs and every known-contract log contained in those receipts. It does not index failed calls, successful calls without protocol logs, or unrelated traffic involving shared dependencies.
+Version 0.1 indexes transactions selected by protocol activity-source logs, tracked REP-token logs, or the configured Uniswap event filters, plus every known-contract log contained in those receipts. It does not index failed calls, successful calls without a selecting log, or unrelated traffic involving excluded shared dependencies such as WETH, USDC, Multicall3, scalar-outcome contracts, and permissionless proxy deployers.
 
-## Operations
+## Preserve and audit history
 
-- Liveness: `GET /health/live`
-- Database readiness: `GET /health/ready`
-- Indexer freshness and recent chain-integrity audit: `GET /health/indexers`
-- Network status: `GET /api/v1/networks`
-- Operations overview with an `asOf` envelope: `GET /api/v1/operations?chainId=:chainId`
-- Report, escalation, auction, risk, and fork catalogs: `GET /api/v1/state/{reports|escalations|auctions|risk|forks}?chainId=:chainId`
-- Report detail: `GET /api/v1/state/reports/:chainId/:openOracleAddress/:reportId`
-- Escalation and auction detail: `GET /api/v1/state/{escalations|auctions}/:chainId/:contractAddress`
-- Pool and vault risk detail: `GET /api/v1/state/risk/pools/:chainId/:poolAddress` and `GET /api/v1/state/risk/vaults/:chainId/:poolAddress/:vaultAddress`
-- Fork detail: `GET /api/v1/state/forks/:chainId/:universeIdentity`
-- AMM swaps, liquidity events, exact price impact, volume, fees, TWAP coverage, and hourly candles: `GET /api/v1/state/trading/:chainId/:marketAddress`
-- Canonical semantic timeline: `GET /api/v1/state/timeline/:chainId/:entityType/:entityIdentity`
-- Paginated logs: `GET /api/v1/logs?chainId=:chainId`
-- Full log occurrence: `GET /api/v1/logs/:chainId/:blockHash/:txHash/:logIndex`
-- Top-level protocol actions: `GET /api/v1/actions`
-- System contract registry and deployment evidence: `GET /api/v1/contracts?chainId=:chainId`
-- Contract identity: `GET /api/v1/contracts/:chainId/:address`
-- Durable live commit/reorg/status notifications with seven-day `Last-Event-ID` replay: `GET /api/v1/stream`. A cursor older than that window receives a reset event so the UI reloads current state. The server disables Bun's per-request idle timeout for this endpoint and sends heartbeats so an idle indexer does not truncate the stream.
-- Bounded address rankings with ETH or SepoliaETH and bounded per-token REP/WETH breakdowns: `GET /api/v1/richlist?chainId=:chainId`
-- Snapshot-bound transactions sent by one address: `GET /api/v1/address-transactions?chainId=:chainId&address=:address`. Follow the opaque `nextCursor` to read later pages without newly indexed blocks shifting the result set. The cursor is bound to the chain, address, snapshot block and hash, and stable transaction total. If a reorg or historical insertion invalidates that snapshot, the endpoint returns `409 Transaction history changed; restart pagination`; restart from the first page without a cursor.
-- Known protocol identity for an address: `GET /api/v1/address-identity?chainId=:chainId&address=:address`
-- Pools, questions, vaults, and universes: `GET /api/v1/state/catalog?chainId=:chainId`
-- Pool history, including its bounded AMM, coordinator REP/ETH, OpenOracle, and Uniswap REP/WETH, REP/USDC, and REP/native-ETH series: `GET /api/v1/state/pools/:chainId/:poolAddress`
-- Vault history: `GET /api/v1/state/vaults/:chainId/:poolAddress/:vaultAddress`
-- Question usage: `GET /api/v1/state/questions/:chainId/:questionId`
-- Universe history: `GET /api/v1/state/universes/:chainId/:universeId`
+Run these commands from `augurScan/`. They assume the Compose deployment above and mainnet chain ID `1`; change `AUGURSCAN_CHAIN_ID` for another indexed network.
 
-The Operations overview caps its event collections at 250 reports, 250 escalations, 250 auctions, 250 pools, 250 vaults, 100 fork/migration events, 30 recent semantic changes, and the latest coordinator price, so its displayed counts describe those returned collections. Dedicated report, escalation, and auction catalogs load their own keyset-paged endpoints and expose an accessible continuation instead of inheriting the overview cap. Detail pages use the same bounded continuation and refetch their currently visible depth after a committed-block refresh, so appended evidence is not replaced by the first page. Risk catalogs bound pools and vaults independently; their opaque `poolCursor` and `vaultCursor` values are address keysets tied to the indexed block and hash. These cursors do not paginate liquidation approvals. The risk overview and catalog include the newest 100 chain-wide approval transitions. A pool detail instead includes the newest 100 transitions whose installed approval names that security pool. A vault detail further requires the installed approval's receiver or target vault to match. Later reserve, release, consume, and revoke transitions inherit those relationships only from the matching Set event in the same registry. A consumed-transition summary labels consumed debt and unused reserved debt released by that transition separately. A receiver-vault nonce invalidation has no pool relationship, so it remains in the chain-wide list but not a pool-scoped detail. Report, escalation, auction, fork, trading, and timeline catalogs/details use opaque newest-first keyset cursors bound to the indexed block and hash; a changed head returns `409`, after which the client restarts from the first page. The cursor includes block, transaction hash, and log index so multiple transactions at one block cannot be skipped. Pool and vault history endpoints are separate bounded, non-cursor responses: their `limit` applies independently to each returned series and `truncated` indicates that at least one series has more records.
+1. Set the API location and take a custom-format backup before every upgrade.
 
-Risk endpoints return tagged snapshot evidence including block, method, availability, protocol state, and scanner severity. Vault health with nonzero open interest requires pool and vault snapshots from the same block hash. A mismatch is unavailable and exposes both evidence boundaries until coherent sampling catches up. A coherent snapshot that depends on a protocol-invalid coordinator price is also unavailable, exposes price provenance, and remains unavailable until the protocol price becomes valid. Pool capacity is similarly marked unusable for risk decisions when its nonzero settlement collateral or minting capacity depends on an invalid price. Directly observed pool or vault bad debt remains `critical` even when the price is invalid because that state does not depend on a price calculation.
+   ```bash
+   export AUGURSCAN_URL=http://localhost:3000
+   export AUGURSCAN_CHAIN_ID=1
+   docker compose exec -T postgres pg_dump -U augurscan -d augurscan --format=custom > augurscan-before-upgrade.dump
+   test -s augurscan-before-upgrade.dump
+   ```
 
-`GET /health/indexers` includes process-local `ownership` diagnostics for every indexer that has attempted ownership. `failuresTotal` and `reacquisitionsTotal` are counters since process start; `consecutiveFailures`, `lastFailureAt`, and `lastFailureStage` identify an active recovery loop; `active` and `backendPid` identify the session currently used by this replica. These fields are operational diagnostics, not durable protocol data, and reset when the app restarts.
+2. Prove that the backup restores into a separate database. A successful schema-version query is the restore check; the live `augurscan` database is not changed. Keep `augurscan_restore` until the deterministic export in step 6 finishes.
 
-Ownership failures identify the network, lifecycle stage (`acquire`, `verify`, `seed`, `owned-run`, `record-failure`, or `release`), consecutive failure count, retry delay, backend PID when known, and a sanitized reason. Rapid failures use jittered exponential backoff capped at five minutes. A successful takeover or reconnection emits an `indexer ownership reacquired` log before indexing resumes. `standby` remains the expected state when another replica owns the chain's lease and is not reported as a failure.
+   ```bash
+   docker compose exec -T postgres dropdb -U augurscan --if-exists augurscan_restore
+   docker compose exec -T postgres createdb -U augurscan augurscan_restore
+   docker compose exec -T postgres pg_restore -U augurscan -d augurscan_restore --exit-on-error --no-owner < augurscan-before-upgrade.dump
+   docker compose exec -T postgres psql -U augurscan -d augurscan_restore -c 'SELECT schema_version FROM augurscan_schema WHERE singleton'
+   ```
 
-For `acquire` or `owned-run` connection errors, restore PostgreSQL connectivity and allow the loop to reacquire from its last committed checkpoint; incomplete block transactions roll back and do not require a rebuild. A repeated `verify` error that says the backend moved requires a direct endpoint or session-mode pooler. A repeated `seed` `DatabaseConsistencyError` about a configured discovery floor above the stored start requires restoring the prior setting or deliberately rebuilding from the new boundary. A `seed` consistency error for newly tracked history before the stored start also requires a rebuild. Do not delete the database merely for a transient lease loss.
+3. Upgrade and wait for database readiness. Supported schema migrations run transactionally during startup.
 
-The pool-history response adds these price members. Their exact JSON shapes are:
+   ```bash
+   docker compose up --build --force-recreate --detach
+   until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
+   ```
 
-```text
-market?: {
-  chain_id: string; block_hash: string; tx_hash: string; log_index: number; block_number: string;
-  pair_address: string; pool_address: string; share_token_address: string;
-  universe_id: string; fee_bps: string; canonical: boolean; timestamp: string;
-}
-ammPrices: Array<{
-  chain_id: string; block_hash: string; tx_hash: string; log_index: number; block_number: string;
-  pair_address: string; yes_reserve_atto_shares: string; no_reserve_atto_shares: string;
-  conditional_yes_bps: string; conditional_no_bps: string; canonical: boolean; timestamp: string;
-}>
-repEthPrices: Array<{
-  chain_id: string; block_hash: string; tx_hash: string; log_index: number; block_number: string;
-  coordinator_address: string; event_name: "RepEthPriceSet" | "PriceReported";
-  report_id: string | null; rep_per_eth_1e18: string; settlement_timestamp: string | null;
-  canonical: boolean; timestamp: string;
-}>
-uniswapRepEthPrices: Array<{
-  chain_id: string; block_hash: string; tx_hash: string; log_index: number; block_number: string;
-  venue: "v2" | "v3" | "v4"; market_id: string; event_name: "Initialize" | "Swap" | "Sync";
-  contract_address: string; token0_address: string; token1_address: string;
-  fee_hundredths_bip: string; tick_spacing: number | null; hooks_address: string | null;
-  quote_symbol: "ETH" | "WETH" | "USDC"; quote_token_address: string;
-  rep_per_eth_1e18: string; liquidity_value: string | null; timestamp: string;
-}>
-openOracleHistory: Array<{
-  block_number: string; block_hash: string; tx_hash: string; log_index: number;
-  event_name: string; arguments: object; summary: string; coordinator_address: string; timestamp: string;
-}>
-```
+4. Audit the current checkpoint, cursor positions, and recent canonical continuity. The request can return HTTP 503 for a stale indexer or an integrity failure, so `--fail-with-body` preserves the diagnostic body. `integrityIssues` is empty only when those checks pass; the parent-hash continuity scan starts at the greater of the configured start block and `indexed_block - 10000`, so this health endpoint does not re-audit older retained continuity. Also resolve any stale network reported by `staleChainIds`, then use the replacement review and exports below for the wider historical audit.
 
-Except for `log_index` and non-null `tick_spacing`, which are JSON numbers, `chain_id`, `block_number`, onchain integer values, reserves, and basis points are lossless decimal strings. `timestamp` and non-null `settlement_timestamp` are ISO 8601 strings. `market` is omitted when no canonical pair has been indexed. The price arrays are empty when there are no observations. Initialization REP/ETH rows have null report and settlement fields; accepted settlements populate both.
+   ```bash
+   curl --fail-with-body --silent --show-error "$AUGURSCAN_URL/health/indexers"
+   ```
 
-`truncated` becomes true when snapshots, lifecycle events, AMM prices, coordinator REP/ETH prices, Uniswap price observations, or OpenOracle history exceed `limit`; each returned series contains its newest `limit` observations ordered from oldest to newest.
+5. Review durable replacements and process provenance. Open `$AUGURSCAN_URL/operations/integrity?chainId=$AUGURSCAN_CHAIN_ID` in a browser and select **Show more indexed records** until the control is replaced by **All indexed records are shown.** API clients must follow `data.nextCursor` while `data.hasMore` is true; `/api/v1/reorgs` clients instead increase `offset` until `offset + items.length` equals `total`. The migrations shown alongside them are global, and the run list is the latest 25 global process runs repeated on every replacement page. `/api/v1/provenance` expands that global run list to 100; if its `runsTruncated` is true, query the protected `indexer_runs` table for older runs. These catalogs explain recorded replacements but do not replace the recent-window continuity result from step 4.
 
-The UI always sends its selected `chainId` to the logs, rich-list, and state-catalog endpoints. Direct API clients may omit it to query all configured networks. State catalog responses default to 500 and cap at 1,000 rows per entity class. History endpoints default `limit` to 1,000 and cap it at 2,000 records per returned series; `truncated` is true when any series has more records. These bounds keep database transactions, JSON normalization, and graph rendering predictable.
+6. Start an isolated, indexer-disabled app against the restored database, then export bounded evidence until the continuation header is absent. The alternate host port lets the live service continue running.
 
-Back up the named volume with normal PostgreSQL tooling (`pg_dump`/`pg_restore`). Stop the app gracefully before infrastructure maintenance. `docker compose down` preserves history; `docker compose down --volumes` intentionally deletes it.
+   ```bash
+   set -eu
+   export AUGURSCAN_LIVE_URL=$AUGURSCAN_URL
+   export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$$"
+   stop_augurscan_export() {
+     docker stop "$AUGURSCAN_EXPORT_CONTAINER" >/dev/null 2>&1 || true
+   }
+   trap stop_augurscan_export EXIT INT TERM
+   docker compose run --detach --rm --no-deps \
+     --name "$AUGURSCAN_EXPORT_CONTAINER" \
+     --publish 127.0.0.1:3002:3000 \
+     --env DISABLE_INDEXER=1 \
+     app sh -c 'export POSTGRES_URL="${POSTGRES_URL%/*}/augurscan_restore"; exec bun augurScan/src/server.ts'
+   export AUGURSCAN_URL=http://localhost:3002
+   until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
+   AUGURSCAN_EXPORT_DATASETS=${AUGURSCAN_EXPORT_DATASETS:-"logs reorgs"}
+   for AUGURSCAN_EXPORT_DATASET in $AUGURSCAN_EXPORT_DATASETS; do
+     case "$AUGURSCAN_EXPORT_DATASET" in
+       logs)
+         AUGURSCAN_EXPORT_OFFSET=${AUGURSCAN_LOGS_EXPORT_OFFSET:-0}
+         AUGURSCAN_EXPORT_RETRY_VARIABLE=AUGURSCAN_LOGS_EXPORT_OFFSET
+         AUGURSCAN_CANONICAL_QUERY='&canonical=all'
+         ;;
+       reorgs)
+         AUGURSCAN_EXPORT_OFFSET=${AUGURSCAN_REORGS_EXPORT_OFFSET:-0}
+         AUGURSCAN_EXPORT_RETRY_VARIABLE=AUGURSCAN_REORGS_EXPORT_OFFSET
+         AUGURSCAN_CANONICAL_QUERY=
+         ;;
+       timeline)
+         AUGURSCAN_EXPORT_OFFSET=${AUGURSCAN_TIMELINE_EXPORT_OFFSET:-0}
+         AUGURSCAN_EXPORT_RETRY_VARIABLE=AUGURSCAN_TIMELINE_EXPORT_OFFSET
+         AUGURSCAN_CANONICAL_QUERY='&canonical=all'
+         ;;
+       *)
+         echo "Unsupported export dataset: $AUGURSCAN_EXPORT_DATASET" >&2
+         exit 1
+         ;;
+     esac
+     while :; do
+       AUGURSCAN_EXPORT_PAGE="augurscan-$AUGURSCAN_EXPORT_DATASET-$AUGURSCAN_EXPORT_OFFSET.ndjson"
+       AUGURSCAN_EXPORT_PART="$AUGURSCAN_EXPORT_PAGE.part"
+       AUGURSCAN_HEADERS_PART="$AUGURSCAN_EXPORT_PAGE.headers.part"
+       if ! curl --fail-with-body --silent --show-error --dump-header "$AUGURSCAN_HEADERS_PART" \
+         --output "$AUGURSCAN_EXPORT_PART" \
+         "$AUGURSCAN_URL/api/v1/export?chainId=$AUGURSCAN_CHAIN_ID&dataset=$AUGURSCAN_EXPORT_DATASET$AUGURSCAN_CANONICAL_QUERY&offset=$AUGURSCAN_EXPORT_OFFSET&limit=50000"; then
+         echo "Export failed. Retry only this dataset with:" >&2
+         echo "AUGURSCAN_EXPORT_DATASETS=$AUGURSCAN_EXPORT_DATASET $AUGURSCAN_EXPORT_RETRY_VARIABLE=$AUGURSCAN_EXPORT_OFFSET" >&2
+         exit 1
+       fi
+       AUGURSCAN_NEXT_OFFSET=$(tr -d '\r' < "$AUGURSCAN_HEADERS_PART" | awk 'tolower($1) == "x-augurscan-next-offset:" { print $2 }')
+       mv "$AUGURSCAN_EXPORT_PART" "$AUGURSCAN_EXPORT_PAGE"
+       mv "$AUGURSCAN_HEADERS_PART" "$AUGURSCAN_EXPORT_PAGE.headers"
+       test -n "$AUGURSCAN_NEXT_OFFSET" || break
+       AUGURSCAN_EXPORT_OFFSET=$AUGURSCAN_NEXT_OFFSET
+     done
+   done
+   stop_augurscan_export
+   docker compose exec -T postgres dropdb -U augurscan --if-exists augurscan_restore
+   trap - EXIT INT TERM
+   export AUGURSCAN_URL=$AUGURSCAN_LIVE_URL
+   ```
+
+   Only a successful request is renamed from `.part` to newline-delimited JSON. The final response has no `x-augurscan-next-offset` header. The default dataset list exports logs and reorganizations consecutively, gives each an independent initial offset of zero, and includes the dataset in every filename. Set `AUGURSCAN_EXPORT_DATASETS=timeline` for semantic history, or select one dataset together with its dataset-specific retry offset after a failed page. Add `fromBlock` and `toBlock` to constrain an audit interval. The endpoint rejects offsets above 10,000,000, so split a larger export into block ranges that remain below that ceiling. For a recorded replacement range, export `canonical=orphaned` logs and compare their block hashes with a `canonical=canonical` export of the same range.
+
+   Export offsets are not inherently snapshot-bound. The isolated container derives the restore URL from the Compose-resolved app `POSTGRES_URL`, so it uses the same credential whether `POSTGRES_PASSWORD` came from the shell or `.env`; only the database name changes. The restored database keeps the chain evidence stable while these pages are read; startup only migrates the supported schema and records that isolated process run. A failed page stops the isolated app but keeps `augurscan_restore` and its current offset available for a retry; drop that database only after a complete export. If you deliberately export the live database instead, a reorganization or reset can insert or reclassify rows ahead of the current offset. Record `/api/v1/networks` and `/health/indexers` before and after; if a network's `indexed_hash` changes because of a replacement or the integrity result degrades, discard the pages and restart at offset `0`.
+
+7. Stop the app gracefully before database infrastructure maintenance.
+
+   ```bash
+   docker compose stop app
+   ```
+
+   `docker compose down` preserves the named history volume. `docker compose down --volumes` deletes it and must only be used when that loss is intentional and a tested backup exists.
+
+The complete endpoint and pagination contract is in [API_REFERENCE.md](API_REFERENCE.md). Historical evidence semantics, completeness rules, and projection identities are in [STATE_MODEL.md](STATE_MODEL.md).
 
 Do not expose PostgreSQL publicly. Replace the local default database password for shared deployments, keep RPC URLs server-side, and place the app behind authenticated access if decoded operational history is sensitive.

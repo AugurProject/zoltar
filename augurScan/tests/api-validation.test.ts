@@ -5,6 +5,7 @@ import {
 	isAddressIdentityValue,
 	isAmmPriceValue,
 	isChartRowValue,
+	isEntityHistoryCoverageValue,
 	isLogDetailValue,
 	isNetworkRecordValue,
 	isPoolStateEntityValue,
@@ -15,6 +16,24 @@ import {
 	isUniverseStateEntityValue,
 	isVaultStateEntityValue,
 } from '../browser/api-validation.ts'
+
+test('validates state-history range and completeness metadata', () => {
+	const coverage = {
+		requestedFromBlock: '0',
+		requestedToBlock: '100',
+		indexedFromBlock: '5',
+		indexedThroughBlock: '100',
+		indexedThroughHash: `0x${'1'.repeat(64)}`,
+		limit: 1000,
+		offset: 0,
+		series: { snapshots: 10, events: 2 },
+		complete: false,
+		nextOffset: 1000,
+	}
+	expect(isEntityHistoryCoverageValue(coverage)).toBeTrue()
+	expect(isEntityHistoryCoverageValue({ ...coverage, complete: 'yes' })).toBeFalse()
+	expect(isEntityHistoryCoverageValue({ ...coverage, series: { snapshots: -1 } })).toBeFalse()
+})
 
 const activity = {
 	chain_id: '1',
@@ -85,6 +104,8 @@ const richListRecord = {
 
 test('accepts production-shaped unknown logs, unknown calldata, partial related logs, and pending balances', () => {
 	expect(isActivityRecordValue(activity)).toBeTrue()
+	expect(isActivityRecordValue({ ...activity, chain_id: 1 })).toBeFalse()
+	expect(isActivityRecordValue({ ...activity, log_index: '3' })).toBeFalse()
 	expect(isAccountTransactionValue(accountTransaction)).toBeTrue()
 	expect(isAccountTransactionValue({ ...accountTransaction, roles: ['referenced'], pool_addresses: null })).toBeTrue()
 	expect(isRichListRecordValue(richListRecord)).toBeTrue()

@@ -19,6 +19,7 @@ COPY --from=dependencies /workspace/node_modules ./node_modules
 COPY augurScan/package.json augurScan/bun.lock ./
 COPY augurScan/config ./augurScan/config
 COPY augurScan/schema.sql ./augurScan/schema.sql
+COPY augurScan/migrations ./augurScan/migrations
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
 COPY augurScan/src ./augurScan/src
 COPY shared/ts/ethereum.ts ./shared/ts/ethereum.ts

@@ -17,7 +17,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex } from '../src/ethereum.ts'
-import { initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
+import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
 
@@ -324,6 +324,226 @@ postgresTest('rejects every public namespace object before fresh schema initiali
 	}
 })
 
+postgresTest('rejects incomplete, altered, and extended layouts despite a current schema marker', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	try {
+		await initializeSchema(database.sql)
+
+		await database.sql.unsafe('DROP INDEX public.protocol_timeline_recent')
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe(
+				'CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical',
+			)
+		}
+
+		await database.sql.unsafe('ALTER TABLE public.actions ALTER COLUMN summary TYPE character varying USING summary::character varying')
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe('ALTER TABLE public.actions ALTER COLUMN summary TYPE text USING summary::text')
+		}
+
+		await database.sql.unsafe('CREATE TABLE public.augurscan_layout_intruder (id integer)')
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe('DROP TABLE public.augurscan_layout_intruder')
+		}
+
+		await initializeSchema(database.sql)
+	} finally {
+		await database.close()
+	}
+})
+
+postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identities and source provenance', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const migrationChainId = chainId + 20 + process.pid
+	const forkLogs = [
+		{ block: 100n, parentUniverseId: '10', childUniverseId: '11', canonical: true },
+		{ block: 101n, parentUniverseId: '20', childUniverseId: '21', canonical: false },
+	] as const
+	const pairLogs = [
+		{ block: 102n, pair: pairAddress.toLowerCase(), canonical: true, augur: true },
+		{ block: 103n, pair: inverseUniswapPairAddress.toLowerCase(), canonical: false, augur: false },
+	] as const
+	try {
+		await initializeSchema(database.sql)
+		await database.sql`DELETE FROM networks WHERE chain_id = ${migrationChainId}`
+		await database.sql.unsafe('DROP TABLE public.chain_reorganizations, public.indexer_runs, public.augurscan_schema_migrations')
+		await database.sql`UPDATE augurscan_schema SET schema_version = '1' WHERE singleton`
+		await database.sql.unsafe('DROP INDEX public.protocol_timeline_recent')
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe(
+				'CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical',
+			)
+		}
+		await database.sql.unsafe('CREATE TABLE public.augurscan_v1_layout_intruder (id integer)')
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe('DROP TABLE public.augurscan_v1_layout_intruder')
+		}
+		await database.sql`
+			INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block)
+			VALUES (${migrationChainId}, ${`migration-${migrationChainId}`}, 'Migration fixture', 'https://example.invalid', 0)
+		`
+		for (const item of [...forkLogs, ...pairLogs]) {
+			const hash = blockHash(`v1-migration-block-${item.block}`)
+			const txHash = blockHash(`v1-migration-transaction-${item.block}`)
+			await database.sql`
+				INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical)
+				VALUES (${migrationChainId}, ${item.block.toString()}, ${hash}, ${blockHash(`v1-migration-parent-${item.block}`)}, now(), ${item.canonical})
+			`
+			await database.sql`
+				INSERT INTO transactions
+					(chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical)
+				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${item.block.toString()}, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, ${item.canonical})
+			`
+		}
+		for (const item of forkLogs) {
+			const hash = blockHash(`v1-migration-block-${item.block}`)
+			const txHash = blockHash(`v1-migration-transaction-${item.block}`)
+			const argumentsValue = {
+				universeId: item.parentUniverseId,
+				childUniverseId: item.childUniverseId,
+				outcomeIndex: '1',
+				childReputationToken: rediscoveredAddress.toLowerCase(),
+				childUniverseTheoreticalSupplyAttoRep: 100n.toString(),
+			}
+			await database.sql`
+				INSERT INTO logs
+					(chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data,
+					 event_name, arguments, decode_status, summary, canonical)
+				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${item.block.toString()}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x',
+					'DeployChild', (${JSON.stringify(argumentsValue)}::text)::jsonb, 'decoded', 'DeployChild', ${item.canonical})
+			`
+			await database.sql`
+				INSERT INTO protocol_timeline_entries
+					(chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind,
+					 summary_data, source_contract, source_event, canonical)
+				VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, ${item.block.toString()}, 'fork', ${item.childUniverseId}, 'DeployChild',
+					(${JSON.stringify(argumentsValue)}::text)::jsonb, ${address.toLowerCase()}, 'DeployChild', ${item.canonical})
+			`
+			await database.sql`
+				INSERT INTO fork_migration_events
+					(chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical)
+				VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, ${item.block.toString()}, ${item.childUniverseId}, 'DeployChild',
+					(${JSON.stringify(argumentsValue)}::text)::jsonb, ${item.canonical})
+			`
+		}
+		for (const item of pairLogs) {
+			const hash = blockHash(`v1-migration-block-${item.block}`)
+			const txHash = blockHash(`v1-migration-transaction-${item.block}`)
+			const argumentsValue = {
+				securityPool: discoveredAddress.toLowerCase(),
+				shareToken: wethAddress.toLowerCase(),
+				universeId: '10',
+				pair: item.pair,
+				feeBps: '30',
+			}
+			await database.sql`
+				INSERT INTO logs
+					(chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data,
+					 event_name, arguments, decode_status, summary, canonical)
+				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${item.block.toString()}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x',
+					'PairCreated', (${JSON.stringify(argumentsValue)}::text)::jsonb, 'decoded', 'PairCreated', ${item.canonical})
+			`
+			if (item.augur) {
+				await database.sql`
+					INSERT INTO amm_markets
+						(chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address, share_token_address, universe_id, fee_bps, canonical)
+					VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, ${item.block.toString()}, ${item.pair}, ${discoveredAddress.toLowerCase()},
+						${wethAddress.toLowerCase()}, 10, 30, ${item.canonical})
+				`
+			}
+		}
+
+		await initializeSchema(database.sql)
+		const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
+		expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
+		const migratedTimeline = await database.sql`
+			SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
+			WHERE chain_id = ${migrationChainId} ORDER BY block_number
+		`
+		expect(migratedTimeline).toEqual([
+			{ entity_identity: '10', source_event: 'DeployChild', canonical: true },
+			{ entity_identity: '20', source_event: 'DeployChild', canonical: false },
+			{ entity_identity: pairAddress.toLowerCase(), source_event: 'PairCreated', canonical: true },
+		])
+		const migratedTrades = await database.sql`
+			SELECT market_address, canonical FROM amm_trade_events
+			WHERE chain_id = ${migrationChainId} AND event_name = 'PairCreated' ORDER BY block_number
+		`
+		expect(migratedTrades).toEqual([{ market_address: pairAddress.toLowerCase(), canonical: true }])
+		const migratedForkEvents = await database.sql`
+			SELECT universe_identity, canonical FROM fork_migration_events
+			WHERE chain_id = ${migrationChainId} ORDER BY block_number
+		`
+		expect(migratedForkEvents).toEqual([
+			{ universe_identity: '10', canonical: true },
+			{ universe_identity: '20', canonical: false },
+		])
+	} finally {
+		await initializeSchema(database.sql)
+		await database.sql`DELETE FROM networks WHERE chain_id = ${migrationChainId}`
+		await database.close()
+	}
+})
+
+postgresTest('limits health continuity auditing to the latest 10,000 indexed blocks', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const auditChainId = chainId + 40 + process.pid
+	const oldFirstHash = blockHash('integrity-window-old-first')
+	const oldSecondHash = blockHash('integrity-window-old-second')
+	const recentHash = blockHash('integrity-window-recent')
+	const checkpointHash = blockHash('integrity-window-checkpoint')
+	try {
+		await initializeSchema(database.sql)
+		await database.sql`DELETE FROM blocks WHERE chain_id = ${auditChainId}`
+		await database.sql`DELETE FROM networks WHERE chain_id = ${auditChainId}`
+		await database.sql`
+			INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block)
+			VALUES (${auditChainId}, ${`integrity-window-${auditChainId}`}, 'Integrity window fixture', 'https://example.invalid', 0)
+		`
+		await database.sql`
+			INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES
+				(${auditChainId}, 1, ${oldFirstHash}, ${blockHash('integrity-window-genesis')}, now(), true),
+				(${auditChainId}, 2, ${oldSecondHash}, ${blockHash('integrity-window-wrong-old-parent')}, now(), true),
+				(${auditChainId}, 19999, ${recentHash}, ${blockHash('integrity-window-unretained-parent')}, now(), true),
+				(${auditChainId}, 20000, ${checkpointHash}, ${recentHash}, now(), true)
+		`
+		await database.sql`
+			UPDATE networks SET indexed_block = 20000, indexed_hash = ${checkpointHash}, indexed_timestamp = now()
+			WHERE chain_id = ${auditChainId}
+		`
+
+		const oldDiscontinuityOutsideWindow = (await database.auditIntegrity()).filter((issue) => issue.chainId === auditChainId)
+		expect(oldDiscontinuityOutsideWindow).toEqual([])
+
+		await database.sql`
+			UPDATE blocks SET parent_hash = ${blockHash('integrity-window-wrong-recent-parent')}
+			WHERE chain_id = ${auditChainId} AND hash = ${checkpointHash}
+		`
+		expect(await database.auditIntegrity()).toContainEqual({
+			chainId: auditChainId,
+			code: 'canonical_discontinuity',
+			detail: 'Canonical block 20000 does not extend the preceding stored block',
+		})
+	} finally {
+		await database.sql`DELETE FROM blocks WHERE chain_id = ${auditChainId}`
+		await database.sql`DELETE FROM networks WHERE chain_id = ${auditChainId}`
+		await database.close()
+	}
+})
+
 postgresTest('advances the canonical coverage floor when RPC log history is pruned', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
@@ -378,6 +598,18 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 				SELECT event, payload FROM live_events WHERE (payload->>'chainId')::integer = ${boundaryChainId} ORDER BY id DESC LIMIT 1
 			`
 			expect(boundaryEvents[0]).toMatchObject({ event: 'reorg', payload: { ancestor: '-1', depth: '2', startBlock: '2' } })
+			const boundaryExportResponse = await handleApi(
+				new Request(`http://localhost/api/v1/export?chainId=${boundaryChainId}&dataset=reorgs&fromBlock=100&toBlock=200`),
+				database.sql,
+			)
+			const boundaryExport = (await boundaryExportResponse?.text())?.trim().split('\n').filter(Boolean) ?? []
+			expect(boundaryExport).toHaveLength(1)
+			expect(JSON.parse(boundaryExport[0] ?? '{}')).toMatchObject({
+				chain_id: boundaryChainId,
+				previous_block: '2',
+				ancestor_block: '-1',
+				reason: 'start-boundary-advanced',
+			})
 			expect(await database.networkStartBlock(boundaryChainId)).toBe(2n)
 			expect(await database.checkpoint(boundaryChainId)).toBeUndefined()
 			const retainedContracts = await database.contracts(boundaryChainId, lease)
@@ -717,6 +949,18 @@ postgresTest('initializes, resumes, retains an orphan, and serves only its canon
 		})
 		expect((await database.contracts(chainId)).get(address.toLowerCase())).toMatchObject({ deploymentBlock: 2n, deploymentCheckedBlock: 2n })
 		await database.rewind(chainId, 1n, first.hash, writeLease)
+		const recordedReorganizations = await database.sql`
+			SELECT previous_block::text, previous_hash, ancestor_block::text, ancestor_hash, depth::text, reason
+			FROM chain_reorganizations WHERE chain_id = ${chainId} ORDER BY id DESC LIMIT 1
+		`
+		expect(recordedReorganizations[0]).toEqual({
+			previous_block: '2',
+			previous_hash: orphan.hash,
+			ancestor_block: '1',
+			ancestor_hash: first.hash,
+			depth: '1',
+			reason: 'chain-reorg',
+		})
 		const canonicalOrphanPrices =
 			await database.sql`SELECT * FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND block_hash = ${orphan.hash} AND canonical`
 		expect(canonicalOrphanPrices).toHaveLength(0)
@@ -814,6 +1058,13 @@ postgresTest('initializes, resumes, retains an orphan, and serves only its canon
 				timestamp: '2026-01-02T00:00:00.000Z',
 			},
 		])
+		expect(poolHistory.coverage).toMatchObject({
+			requestedFromBlock: '1',
+			requestedToBlock: '2',
+			indexedFromBlock: '1',
+			indexedThroughBlock: '2',
+			complete: true,
+		})
 		expect(poolHistory.repEthPrices).toEqual([
 			{
 				chain_id: chainId.toString(),
@@ -991,6 +1242,117 @@ postgresTest('initializes, resumes, retains an orphan, and serves only its canon
 		const orphanDetailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0`), database.sql)
 		expect(orphanDetailResponse?.status).toBe(404)
 		expect(await orphanDetailResponse?.json()).toEqual({ error: 'Log not found' })
+		const orphanHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&canonical=orphaned`), database.sql)
+		expect(await orphanHistoryResponse?.json()).toMatchObject({
+			items: [expect.objectContaining({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' })],
+			canonical: 'orphaned',
+		})
+		const orphanHistoryDetailResponse = await handleApi(
+			new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0?canonical=all`),
+			database.sql,
+		)
+		expect(orphanHistoryDetailResponse?.status).toBe(200)
+		expect(await orphanHistoryDetailResponse?.json()).toMatchObject({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' })
+		const firstLogPageResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1`), database.sql)
+		const firstLogPage = (await firstLogPageResponse?.json()) as { items: Array<Record<string, unknown>>; nextCursor?: string }
+		expect(firstLogPage.items).toHaveLength(1)
+		expect(firstLogPage.nextCursor).toBeString()
+		const secondLogPageResponse = await handleApi(
+			new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
+			database.sql,
+		)
+		const secondLogPage = (await secondLogPageResponse?.json()) as { items: Array<Record<string, unknown>> }
+		expect(secondLogPage.items).toHaveLength(1)
+		expect(secondLogPage.items[0]).not.toMatchObject({
+			block_hash: firstLogPage.items[0]?.['block_hash'],
+			log_index: firstLogPage.items[0]?.['log_index'],
+		})
+		const reorganizationResponse = await handleApi(new Request(`http://localhost/api/v1/reorgs?chainId=${chainId}`), database.sql)
+		expect(await reorganizationResponse?.json()).toMatchObject({
+			items: [expect.objectContaining({ previous_hash: orphan.hash, ancestor_hash: first.hash, depth: '1', reason: 'chain-reorg' })],
+			total: 1,
+		})
+		await database.sql`
+			INSERT INTO chain_reorganizations
+				(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
+			VALUES (${chainId}, 2, ${replacement.hash}, 1, ${first.hash}, 1, 'manifest-reset')
+		`
+		const firstIntegrityPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1`), database.sql)
+		const firstIntegrityPage = (await firstIntegrityPageResponse?.json()) as {
+			data: { items: unknown[]; total: number; offset: number; hasMore: boolean; nextCursor?: string }
+		}
+		expect(firstIntegrityPage.data).toMatchObject({ total: 2, offset: 0, hasMore: true })
+		expect(firstIntegrityPage.data.items).toHaveLength(1)
+		expect(firstIntegrityPage.data.nextCursor).toBeString()
+		const secondIntegrityPageResponse = await handleApi(
+			new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstIntegrityPage.data.nextCursor ?? '')}`),
+			database.sql,
+		)
+		expect(await secondIntegrityPageResponse?.json()).toMatchObject({
+			chainId,
+			data: { total: 2, offset: 1, hasMore: false, items: [expect.any(Object)] },
+		})
+		await database.sql`
+			INSERT INTO log_scan_cursors (chain_id, contract_address, start_block, last_retrieved_block)
+			VALUES (${chainId}, ${rediscoveredAddress.toLowerCase()}, 1, 3)
+		`
+		expect(await database.auditIntegrity()).toContainEqual({
+			chainId,
+			code: 'log_cursor_ahead',
+			detail: `Log cursor for ${rediscoveredAddress.toLowerCase()} is ahead of the network checkpoint`,
+		})
+		await database.sql`DELETE FROM log_scan_cursors WHERE chain_id = ${chainId} AND contract_address = ${rediscoveredAddress.toLowerCase()}`
+		for (const runCount of [99, 100, 101]) {
+			await database.sql`DELETE FROM indexer_runs`
+			await database.sql`
+				INSERT INTO indexer_runs (schema_version, app_version, abi_source_hash, network_configuration, started_at)
+				SELECT ${CURRENT_SCHEMA_VERSION}, 'fixture-' || run_number::text, 'fixture-hash', '[]'::jsonb,
+					'2026-01-01T00:00:00Z'::timestamptz + run_number * interval '1 second'
+				FROM generate_series(1, ${runCount}) AS generated(run_number)
+			`
+			const runProvenanceResponse = await handleApi(new Request('http://localhost/api/v1/provenance'), database.sql)
+			const runProvenance = (await runProvenanceResponse?.json()) as { runs: unknown[]; runLimit: number; runsTruncated: boolean }
+			expect(runProvenance.runs).toHaveLength(Math.min(runCount, 100))
+			expect(runProvenance).toMatchObject({
+				runLimit: 100,
+				runsTruncated: runCount > 100,
+			})
+		}
+		await database.sql`DELETE FROM indexer_runs`
+		const provenanceResponse = await handleApi(new Request('http://localhost/api/v1/provenance'), database.sql)
+		expect(await provenanceResponse?.json()).toMatchObject({
+			migrations: [expect.objectContaining({ schema_version: CURRENT_SCHEMA_VERSION, description: 'Current schema initialization' })],
+		})
+		const orphanExportResponse = await handleApi(
+			new Request(`http://localhost/api/v1/export?chainId=${chainId}&dataset=logs&canonical=orphaned&fromBlock=2&toBlock=2`),
+			database.sql,
+		)
+		expect(orphanExportResponse?.headers.get('content-type')).toContain('application/x-ndjson')
+		expect((await orphanExportResponse?.text())?.trim()).toContain(orphan.hash)
+		const readSingleRowExport = async (dataset: 'logs' | 'timeline'): Promise<readonly Record<string, unknown>[]> => {
+			const rows: Record<string, unknown>[] = []
+			let offset = '0'
+			for (;;) {
+				const exportResponse = await handleApi(
+					new Request(`http://localhost/api/v1/export?chainId=${chainId}&dataset=${dataset}&canonical=all&fromBlock=2&toBlock=2&limit=1&offset=${offset}`),
+					database.sql,
+				)
+				if (exportResponse === undefined) throw new Error(`${dataset} export did not return a response`)
+				const body = (await exportResponse.text()).trim()
+				if (body !== '') rows.push(JSON.parse(body) as Record<string, unknown>)
+				const nextOffset = exportResponse.headers.get('x-augurscan-next-offset')
+				if (nextOffset === null) return rows
+				offset = nextOffset
+			}
+		}
+		for (const dataset of ['logs', 'timeline'] as const) {
+			const firstRead = await readSingleRowExport(dataset)
+			const secondRead = await readSingleRowExport(dataset)
+			expect(firstRead.length).toBeGreaterThan(1)
+			expect(secondRead).toEqual(firstRead)
+			const identities = firstRead.map((row) => [row['block_hash'], row['tx_hash'], row['log_index'], row['entity_type'], row['entity_identity']].join(':'))
+			expect(new Set(identities).size).toBe(firstRead.length)
+		}
 		const senderLogsResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&address=${address.toLowerCase()}`), database.sql)
 		if (senderLogsResponse === undefined) throw new Error('sender-filtered logs API did not return a response')
 		const senderLogs = (await senderLogsResponse.json()) as { items: Array<{ origin_address: string; arguments: Record<string, unknown> }> }
@@ -1283,9 +1645,18 @@ postgresTest('initializes, resumes, retains an orphan, and serves only its canon
 		`
 		const largePageResponse = await database.read((sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
 		if (largePageResponse === undefined) throw new Error('large rich-list page did not return a response')
-		const largePage = (await largePageResponse.json()) as { items: unknown[]; total: number }
+		const largePage = (await largePageResponse.json()) as { items: Array<{ address: string }>; total: number }
 		expect(largePage).toMatchObject({ total: 5001 })
 		expect(largePage.items).toHaveLength(10)
+		const secondLargePageResponse = await database.read(
+			(sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=10`), sql),
+			8_000,
+		)
+		if (secondLargePageResponse === undefined) throw new Error('second large rich-list page did not return a response')
+		const secondLargePage = (await secondLargePageResponse.json()) as { items: Array<{ address: string }>; total: number; offset: number }
+		expect(secondLargePage).toMatchObject({ total: 5001, offset: 10 })
+		expect(secondLargePage.items).toHaveLength(10)
+		expect(new Set([...largePage.items.map((item) => item.address), ...secondLargePage.items.map((item) => item.address)]).size).toBe(20)
 		const largeBeyondEndResponse = await database.read(
 			(sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=100000`), sql),
 			8_000,
@@ -1558,6 +1929,118 @@ postgresTest(
 					'targetHealthFactorBps', '12000', 'badDebtAttoEth', '0'), true
 			)
 		`
+			await database.sql`
+				INSERT INTO logs (
+					chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address,
+					topics, data, event_name, arguments, argument_schema, decode_status, summary, canonical, finalized
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item + 20000), 64, '0'), '0x' || lpad(to_hex(item), 64, '0'),
+					item, 0, evidence.log_index, ${oracle.toLowerCase()}, '[]'::jsonb, '0x', evidence.event_name,
+					CASE evidence.log_index
+						WHEN 1 THEN jsonb_build_object('pair', '0x' || lpad(to_hex(item + 1000000), 40, '0'))
+						WHEN 2 THEN jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'amount', item::text)
+						WHEN 4 THEN jsonb_build_object('universeId', item::text, 'migrator', ${address.toLowerCase()}::text)
+						WHEN 5 THEN jsonb_build_object('reportId', item::text, 'currentReporter', ${address.toLowerCase()}::text)
+						ELSE jsonb_build_object('universeId', (item + 1000)::text)
+					END,
+					'[]'::jsonb, 'decoded', evidence.event_name, true, true
+				FROM generate_series(2, 261) item
+				CROSS JOIN (VALUES (1, 'PairCreated'), (2, 'Transfer'), (6, 'UniverseForked')) evidence(log_index, event_name)
+				UNION ALL
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item + 20000), 64, '0'), '0x' || lpad(to_hex(item), 64, '0'),
+					item, 0, evidence.log_index, ${oracle.toLowerCase()}, '[]'::jsonb, '0x', evidence.event_name,
+					CASE evidence.log_index
+						WHEN 4 THEN jsonb_build_object('universeId', item::text, 'migrator', ${address.toLowerCase()}::text)
+						ELSE jsonb_build_object('reportId', item::text, 'currentReporter', ${address.toLowerCase()}::text)
+					END,
+					'[]'::jsonb, 'decoded', evidence.event_name, true, true
+				FROM generate_series(2, 103) item
+				CROSS JOIN (VALUES (4, 'MigrationRepAdded'), (5, 'ReportSubmitted')) evidence(log_index, event_name)
+			`
+			await database.sql`
+				INSERT INTO amm_markets (
+					chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address,
+					share_token_address, universe_id, fee_bps, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					1, item, '0x' || lpad(to_hex(item + 1000000), 40, '0'), ${oracle.toLowerCase()}, ${address.toLowerCase()}, 1, 30, true
+				FROM generate_series(2, 103) item
+			`
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					2, item, '0x' || lpad(to_hex(item + 1000000), 40, '0'), 'Transfer',
+					jsonb_build_object('from', '0x0000000000000000000000000000000000000000', 'to', ${address.toLowerCase()}::text, 'amount', item::text), true
+				FROM generate_series(2, 103) item
+			`
+			await database.sql`
+				INSERT INTO logs (
+					chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address,
+					topics, data, event_name, arguments, argument_schema, decode_status, summary, canonical, finalized
+				) VALUES (
+					${operationsChainId}, ${`0x${(20002).toString(16).padStart(64, '0')}`}, ${`0x${(2).toString(16).padStart(64, '0')}`},
+					2, 0, 3, ${`0x${(1000002).toString(16).padStart(40, '0')}`}, '[]'::jsonb, '0x', 'Transfer',
+					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'amount', '999'),
+					'[]'::jsonb, 'decoded', 'Transfer', true, true
+				)
+			`
+			await database.sql`
+				INSERT INTO amm_trade_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical
+				) VALUES (
+					${operationsChainId}, ${`0x${(2).toString(16).padStart(64, '0')}`}, ${`0x${(20002).toString(16).padStart(64, '0')}`},
+					3, 2, ${`0x${(1000002).toString(16).padStart(40, '0')}`}, 'Transfer',
+					jsonb_build_object('from', ${address.toLowerCase()}::text, 'to', ${address.toLowerCase()}::text, 'amount', '999'), true
+				)
+			`
+			await database.sql`
+				INSERT INTO fork_migration_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					4, item, item::text, 'MigrationRepAdded', jsonb_build_object('universeId', item::text, 'migrator', ${address.toLowerCase()}::text), true
+				FROM generate_series(2, 103) item
+				UNION ALL
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					6, item, (item + 1000)::text, 'UniverseForked', jsonb_build_object('universeId', (item + 1000)::text), true
+				FROM generate_series(2, 261) item
+			`
+			await database.sql`
+				INSERT INTO open_oracle_report_events (
+					chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address,
+					report_id, event_name, round_number, report_data, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					5, item, ${oracle.toLowerCase()}, item, 'ReportSubmitted', 1,
+					jsonb_build_object('reportId', item::text, 'currentReporter', ${address.toLowerCase()}::text), true
+				FROM generate_series(2, 103) item
+			`
+			await database.sql`
+				INSERT INTO pools (
+					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
+					universe_id, question_id, truth_auction_address, coordinator_address, share_token_address,
+					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
+					initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					1, item, '0x' || lpad(to_hex(item + 2000000), 40, '0'), ${address.toLowerCase()}, 1, 1,
+					${address.toLowerCase()}, ${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, 0, 0, true
+				FROM generate_series(2, 261) item
+			`
+			await database.sql`
+				INSERT INTO vault_snapshots (
+					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address,
+					rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index,
+					vault_fee_remainder, resulting_total_rep_backing_units,
+					resulting_fee_eligible_capacity_ownership_atto_rep, canonical
+				)
+				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
+					2, item, '0x' || lpad(to_hex(item + 2000000), 40, '0'), '0x' || lpad(to_hex(item + 3000000), 40, '0'),
+					100, 100, 0, 0, 0, 100, 100, true
+				FROM generate_series(2, 261) item
+			`
 
 			const firstResponse = await handleApi(
 				new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1`),
@@ -1637,6 +2120,160 @@ postgresTest(
 				observationsTruncated: true,
 				observationRange: { firstTimestamp: '1767225624', lastTimestamp: '1767235623', count: 10000 },
 			})
+
+			const selfTransferMarket = `0x${(1000002).toString(16).padStart(40, '0')}`
+			const selfTransferResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${selfTransferMarket}`),
+				database.sql,
+			)
+			if (selfTransferResponse === undefined) throw new Error('self-transfer trading endpoint did not return a response')
+			const selfTransfer = (await selfTransferResponse.json()) as {
+				data: { lpPositions: Array<{ address: string; received_liquidity: string; sent_liquidity: string; balance: string }> }
+			}
+			expect(selfTransfer.data.lpPositions).toContainEqual({
+				address: address.toLowerCase(),
+				received_liquidity: '1001',
+				sent_liquidity: '999',
+				balance: '2',
+			})
+
+			const portfolioResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}`),
+				database.sql,
+			)
+			if (portfolioResponse === undefined) throw new Error('portfolio endpoint did not return a response')
+			const portfolio = (await portfolioResponse.json()) as {
+				data: {
+					lp_positions: Array<{ market_address: string; balance: string }>
+					fork_participation: Array<{ universe_identity: string }>
+					report_participation: Array<{ report_id: string }>
+					portfolioPagination: Record<'lp' | 'forks' | 'reports', { total: number; hasMore: boolean; nextCursor: string }>
+				}
+			}
+			expect(portfolio.data.lp_positions).toHaveLength(100)
+			expect(portfolio.data.fork_participation).toHaveLength(100)
+			expect(portfolio.data.report_participation).toHaveLength(100)
+			for (const kind of ['lp', 'forks', 'reports'] as const) expect(portfolio.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: true })
+
+			const portfolioContinuationUrl = new URL('http://localhost/api/v1/state/address-portfolio')
+			portfolioContinuationUrl.search = new URLSearchParams({
+				chainId: String(operationsChainId),
+				address: address.toLowerCase(),
+				lpCursor: portfolio.data.portfolioPagination.lp.nextCursor,
+				forkCursor: portfolio.data.portfolioPagination.forks.nextCursor,
+				reportCursor: portfolio.data.portfolioPagination.reports.nextCursor,
+			}).toString()
+			const portfolioContinuationResponse = await handleApi(new Request(portfolioContinuationUrl), database.sql)
+			if (portfolioContinuationResponse === undefined) throw new Error('portfolio continuation did not return a response')
+			const portfolioContinuation = (await portfolioContinuationResponse.json()) as typeof portfolio
+			expect(portfolioContinuation.data.lp_positions).toHaveLength(2)
+			expect(portfolioContinuation.data.fork_participation).toHaveLength(2)
+			expect(portfolioContinuation.data.report_participation).toHaveLength(2)
+			for (const kind of ['lp', 'forks', 'reports'] as const)
+				expect(portfolioContinuation.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: false })
+			expect(new Set([...portfolio.data.lp_positions, ...portfolioContinuation.data.lp_positions].map((item) => item.market_address)).size).toBe(102)
+			expect(portfolioContinuation.data.lp_positions.find((item) => item.market_address === selfTransferMarket)).toMatchObject({ balance: '2' })
+
+			const changedPortfolioCursor = JSON.parse(atob(portfolio.data.portfolioPagination.lp.nextCursor)) as unknown[]
+			changedPortfolioCursor[5] = 103
+			const changedPortfolioResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}&lpCursor=${encodeURIComponent(btoa(JSON.stringify(changedPortfolioCursor)))}`,
+				),
+				database.sql,
+			)
+			expect(changedPortfolioResponse?.status).toBe(409)
+
+			const riskCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250`), database.sql)
+			if (riskCatalogResponse === undefined) throw new Error('risk catalog did not return a response')
+			const riskCatalog = (await riskCatalogResponse.json()) as {
+				data: {
+					pools: unknown[]
+					vaults: unknown[]
+					pagination: {
+						poolTotal: number
+						poolHasMore: boolean
+						poolNextCursor: string
+						vaultTotal: number
+						vaultHasMore: boolean
+						vaultNextCursor: string
+					}
+				}
+			}
+			expect(riskCatalog.data.pools).toHaveLength(250)
+			expect(riskCatalog.data.vaults).toHaveLength(250)
+			expect(riskCatalog.data.pagination).toMatchObject({
+				poolTotal: 261,
+				poolHasMore: true,
+				vaultTotal: 261,
+				vaultHasMore: true,
+			})
+			const riskContinuationResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250&poolCursor=${encodeURIComponent(riskCatalog.data.pagination.poolNextCursor)}&vaultCursor=${encodeURIComponent(riskCatalog.data.pagination.vaultNextCursor)}`,
+				),
+				database.sql,
+			)
+			if (riskContinuationResponse === undefined) throw new Error('risk catalog continuation did not return a response')
+			const riskContinuation = (await riskContinuationResponse.json()) as typeof riskCatalog
+			expect(riskContinuation.data.pools).toHaveLength(11)
+			expect(riskContinuation.data.vaults).toHaveLength(11)
+			expect(riskContinuation.data.pagination).toMatchObject({
+				poolTotal: 261,
+				poolHasMore: false,
+				vaultTotal: 261,
+				vaultHasMore: false,
+			})
+
+			const forkCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/forks?chainId=${operationsChainId}&limit=250`), database.sql)
+			if (forkCatalogResponse === undefined) throw new Error('fork catalog did not return a response')
+			const forkCatalog = (await forkCatalogResponse.json()) as {
+				data: { items: Array<{ universe_identity: string }>; total: number; hasMore: boolean; nextCursor: string }
+			}
+			expect(forkCatalog.data).toMatchObject({ total: 260, hasMore: true })
+			expect(forkCatalog.data.items).toHaveLength(250)
+			const forkContinuationResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/forks?chainId=${operationsChainId}&limit=250&cursor=${encodeURIComponent(forkCatalog.data.nextCursor)}`),
+				database.sql,
+			)
+			if (forkContinuationResponse === undefined) throw new Error('fork catalog continuation did not return a response')
+			const forkContinuation = (await forkContinuationResponse.json()) as typeof forkCatalog
+			expect(forkContinuation.data).toMatchObject({ total: 260, hasMore: false })
+			expect(forkContinuation.data.items).toHaveLength(10)
+			expect(new Set([...forkCatalog.data.items, ...forkContinuation.data.items].map((item) => item.universe_identity)).size).toBe(260)
+
+			const sameBlockPool = `0x${(4000002).toString(16).padStart(40, '0')}`
+			await database.sql`
+				INSERT INTO pools (
+					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
+					universe_id, question_id, truth_auction_address, coordinator_address, share_token_address,
+					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
+					initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+				) VALUES (
+					${operationsChainId}, ${`0x${(2).toString(16).padStart(64, '0')}`}, ${`0x${(20002).toString(16).padStart(64, '0')}`},
+					6, 2, ${sameBlockPool}, ${address.toLowerCase()}, 1, 1, ${address.toLowerCase()},
+					${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, 0, 0, true
+				)
+			`
+			const firstQuestionHistoryResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1`),
+				database.sql,
+			)
+			if (firstQuestionHistoryResponse === undefined) throw new Error('question history did not return a response')
+			const firstQuestionHistory = (await firstQuestionHistoryResponse.json()) as {
+				pools: Array<{ pool_address: string }>
+				coverage: { nextOffset: number }
+			}
+			expect(firstQuestionHistory.pools).toHaveLength(1)
+			expect(firstQuestionHistory.coverage.nextOffset).toBe(1)
+			const secondQuestionHistoryResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1&offset=1`),
+				database.sql,
+			)
+			if (secondQuestionHistoryResponse === undefined) throw new Error('question history continuation did not return a response')
+			const secondQuestionHistory = (await secondQuestionHistoryResponse.json()) as { pools: Array<{ pool_address: string }> }
+			expect(secondQuestionHistory.pools).toHaveLength(1)
+			expect(secondQuestionHistory.pools[0]?.pool_address).not.toBe(firstQuestionHistory.pools[0]?.pool_address)
 
 			await database.sql`DELETE FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND block_number IN (2, 3)`
 			await database.sql`
