@@ -5,9 +5,9 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import type { OperatorSettings } from '../config/settings.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../contracts/surface.ts'
-import { discoverEcosystemSnapshot } from '../monitoring/discovery.ts'
-import { carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
-import { archiveCarryProofJournalForProfileReset, CarryProofJournalIdentityMismatchError, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
+import { discoverEcosystemSnapshot, drainConcurrent, limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery.ts'
+import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
+import { carryProofJournalDigest, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
@@ -15,6 +15,8 @@ import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation,
 import type { WalletBalanceState } from '../state/operator-state.ts'
 
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
+
+const readClientsByPool = new WeakMap<RpcPool, Map<string, ChaosReadClient>>()
 
 export type CanonicalAnchor = {
 	blockHash: `0x${string}`
@@ -66,8 +68,20 @@ export function createChaosReadPool(settings: OperatorSettings) {
 
 export function chaosReadClients(settings: OperatorSettings, pool: RpcPool) {
 	const chain = chaosChain(settings)
+	let clients = readClientsByPool.get(pool)
+	if (clients === undefined) {
+		clients = new Map()
+		readClientsByPool.set(pool, clients)
+	}
 	return chaosReadEndpoints(settings).map(rpcUrl => ({
-		client: createPublicClient({ chain, transport: pool.transportFor(rpcUrl) }),
+		client: (() => {
+			const clientKey = `${chain.id.toString()}:${rpcUrl}`
+			const current = clients.get(clientKey)
+			if (current !== undefined) return current
+			const created = limitDiscoveryConcurrency(createPublicClient({ chain, transport: pool.transportFor(rpcUrl) }))
+			clients.set(clientKey, created)
+			return created
+		})(),
 		endpoint: endpointLabel(rpcUrl),
 	}))
 }
@@ -476,13 +490,7 @@ export function walletInventory(snapshot: EcosystemSnapshot): WalletBalanceState
 }
 
 async function loadCarryJournalForScan(settings: OperatorSettings, identity: CarryProofJournalIdentity, profileResetAuthorized: boolean) {
-	try {
-		return await loadCarryProofJournal(settings.runtime.stateFile, identity)
-	} catch (error) {
-		if (!profileResetAuthorized || !(error instanceof CarryProofJournalIdentityMismatchError)) throw error
-		await archiveCarryProofJournalForProfileReset(settings.runtime.stateFile)
-		return await loadCarryProofJournal(settings.runtime.stateFile, identity)
-	}
+	return await loadCarryProofJournal(settings.runtime.stateFile, identity, { allowProfileReset: profileResetAuthorized })
 }
 
 export async function performCanonicalScan(
@@ -515,6 +523,7 @@ export async function performCanonicalScan(
 			},
 			carryProfileResetAuthorized,
 		))
+	const compatibleCarryJournalRevision = carryProofJournalDigest(compatibleCarryJournal)
 	const topologyIdentity = immutableTopologyIdentity(settings)
 	const cachedTopology = await loadTopologyCacheForScan({
 		identity: topologyIdentity,
@@ -526,9 +535,12 @@ export async function performCanonicalScan(
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
-	const [updated, carryUpdated] = discoveryComplete ? await Promise.all([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]
+	const [updated, carryUpdated] = discoveryComplete ? await drainConcurrent([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]
 	const carryJournal = carryUpdated?.journal ?? compatibleCarryJournal
-	await saveCarryProofJournal(settings.runtime.stateFile, carryJournal)
+	await saveCarryProofJournal(settings.runtime.stateFile, carryJournal, {
+		allowCanonicalReset: carryUpdated?.reset === true,
+		expectedCurrentRevision: compatibleCarryJournalRevision,
+	})
 	const indexedThroughBlock = updated?.toBlock ?? compatibleIndex?.cursor.blockNumber ?? 'not started'
 	const carryIndexedThroughBlock = carryUpdated?.toBlock ?? carryJournal.cursor.blockNumber
 	const indexedSnapshot =
@@ -540,10 +552,14 @@ export async function performCanonicalScan(
 				}
 	const snapshot: EcosystemSnapshot = {
 		...indexedSnapshot,
+		forkedCarryWithdrawalPresence: carryUpdated?.complete === true ? carryUpdated.withdrawalPresence.map(candidate => ({ ...candidate })) : [],
 		forkedCarryWithdrawals: carryUpdated?.complete === true ? carryUpdated.withdrawals.map(candidate => ({ ...candidate, proof: { ...candidate.proof, merkleMountainRangeSiblings: [...candidate.proof.merkleMountainRangeSiblings], nullifierSiblings: [...candidate.proof.nullifierSiblings] } })) : [],
 		warnings: [
 			...indexedSnapshot.warnings,
 			...(carryUpdated?.complete === true ? [] : [discoveryComplete ? `Carry proof journal is backfilling through block ${carryIndexedThroughBlock} of ${anchor.blockNumber.toString()}` : `Carry proof journal is paused at block ${carryIndexedThroughBlock} until canonical discovery is complete`]),
+			...(carryUpdated?.complete === true && carryUpdated.withdrawalCandidateCount > CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES
+				? [`Carry proof action verification is rotating up to ${CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES.toString()} anchored proofs across ${carryUpdated.withdrawalCandidateCount.toString()} raw unconsumed wallet identities; lifecycle presence remains complete`]
+				: []),
 		],
 	}
 	const allIndexesComplete = updated?.complete === true && carryUpdated?.complete === true

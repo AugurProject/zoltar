@@ -377,9 +377,9 @@
 									<div class="switch-row danger-switch">
 										<div>
 											<label for="execute">Submit live transactions</label>
-											<p>Off is dry-run mode. Live mode can spend gas and protocol assets.</p>
+											<p id="execute-help">Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.</p>
 										</div>
-										<input id="execute" name="execute" type="checkbox" />
+										<input id="execute" name="execute" type="checkbox" aria-describedby="execute-help" />
 									</div>
 									<div class="switch-row">
 										<div>
@@ -398,7 +398,7 @@
 									<div class="form-grid">
 										<label
 											>Minimum random delay
-											<span class="input-with-unit"><input id="min-delay" min="60" max="3600" inputmode="numeric" type="number" required /><span>seconds</span></span>
+											<span class="input-with-unit"><input id="min-delay" min="60" max="3599" inputmode="numeric" type="number" required /><span>seconds</span></span>
 										</label>
 										<label
 											>Maximum random delay
@@ -450,11 +450,11 @@
 			</section>
 		</main>
 
-		<dialog id="resume-dialog" class="operator-dialog">
+		<dialog id="resume-dialog" class="operator-dialog" aria-labelledby="resume-dialog-title">
 			<div class="dialog-body">
 				<div>
 					<p class="eyebrow">Safety confirmation</p>
-					<h2>Resume chaos scheduling?</h2>
+					<h2 id="resume-dialog-title">Resume chaos scheduling?</h2>
 				</div>
 				<p>Recovery work may run immediately. A new randomized operation runs only when its timer is due and its exact transaction passes simulation.</p>
 				<ul id="resume-preflight" class="preflight-list"></ul>

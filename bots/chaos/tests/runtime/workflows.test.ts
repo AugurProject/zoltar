@@ -12,6 +12,7 @@ import {
 	markWorkflowStepSigned,
 	markWorkflowStepWaitingCanonical,
 	refreshWorkflowContinuation,
+	retainWorkflow,
 	restoreWorkflowIntentSubmissionJournal,
 	workflowFailureHasTransaction,
 	workflowNeedsContinuation,
@@ -120,6 +121,18 @@ function canonicalConfirmationPlan(position: 'prerequisite' | 'terminal' = 'term
 }
 
 describe('durable chaos workflows', () => {
+	test('reuses a retained plan only for the same canonical workflow identity', () => {
+		const original: OperationPlan = { ...plan(), metadata: { reportId: '1', selfDispute: false } }
+		const state = { workflows: [] as DurableWorkflow[] }
+		const retained = retainWorkflow(state, original)
+		expect(retainWorkflow(state, { ...original, metadata: { selfDispute: false, reportId: '1' } })).toBe(retained)
+		expect(state.workflows).toHaveLength(1)
+		expect(() => retainWorkflow(state, { ...original, definitionId: 'open-oracle.settle' })).toThrow(/plan id .* collides with a different operation identity/i)
+		expect(() => retainWorkflow(state, { ...original, ecosystem: 'trading' })).toThrow(/plan id .* collides with a different operation identity/i)
+		expect(() => retainWorkflow(state, { ...original, metadata: { reportId: '2', selfDispute: false } })).toThrow(/plan id .* collides with a different operation identity/i)
+		expect(state.workflows).toHaveLength(1)
+	})
+
 	test('tracks a signed step through workflow completion', () => {
 		const workflow = createDurableWorkflow(plan())
 		expect(durableWorkflowPlan(workflow).steps[0]?.preflightCalls).toEqual([

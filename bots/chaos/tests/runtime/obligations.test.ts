@@ -51,17 +51,35 @@ function evaluation(value: OperationPlan): EvaluatedOperation {
 	return {
 		definition: {
 			classification: 'lifecycle-obligation',
-			contract: 'OpenOracle',
+			contract: value.ecosystem === 'statoblast' ? 'SecurityPool' : 'OpenOracle',
 			description: 'settles',
 			discoveryInputs: [],
-			ecosystem: 'open-oracle',
+			ecosystem: value.ecosystem,
 			id: value.definitionId,
 			label: value.label,
-			method: 'settle',
+			method: value.ecosystem === 'statoblast' ? 'withdrawForkedEscalationDeposits' : 'settle',
 			risk: 'low',
 		},
 		eligibility: { blockers: [], eligible: true },
 		plan: value,
+	}
+}
+
+function carryPlan(parentDepositIndex: string, block = '10'): OperationPlan {
+	return {
+		...plan(block),
+		definitionId: 'statoblast.escalation.withdraw-forked',
+		ecosystem: 'statoblast',
+		id: `withdraw-forked:${parentDepositIndex}:${block}`,
+		label: 'Withdraw forked escalation deposit',
+		metadata: {
+			game: '0x0000000000000000000000000000000000000002',
+			outcome: 1,
+			parentDepositIndex,
+			pool: '0x0000000000000000000000000000000000000003',
+			sourceGame: '0x0000000000000000000000000000000000000004',
+			sourceNodeId: parentDepositIndex,
+		},
 	}
 }
 
@@ -144,6 +162,60 @@ describe('durable lifecycle obligations', () => {
 		expect(workflow.status).toBe('completed')
 		expect(obligation.status).toBe('completed')
 		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: obligation.id, resolution: 'completed', resolvedAtBlock: '13' }))
+	})
+
+	test('keeps off-page carry identities live while complete absence resolves them without wedging unrelated obligations', () => {
+		const waitingCarry = carryPlan('40')
+		const pendingCarry = carryPlan('41')
+		const unrelated = plan('10')
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(waitingCarry), evaluation(pendingCarry), evaluation(unrelated)], [...presence(waitingCarry), ...presence(pendingCarry), ...presence(unrelated)], true, 10n)
+
+		const waitingObligation = obligationForPlan(state, waitingCarry)
+		const pendingObligation = obligationForPlan(state, pendingCarry)
+		const unrelatedObligation = obligationForPlan(state, unrelated)
+		const waitingWorkflow = state.workflows.find(workflow => workflow.id === waitingObligation?.workflowId)
+		const waitingStep = waitingWorkflow?.steps[0]
+		const waitingParentDepositIndex = waitingCarry.metadata['parentDepositIndex']
+		if (waitingObligation === undefined || pendingObligation === undefined || unrelatedObligation === undefined || waitingWorkflow === undefined || waitingStep === undefined || waitingParentDepositIndex === undefined) {
+			throw new Error('Missing paged carry lifecycle fixture')
+		}
+		waitingStep.evidence = [
+			{
+				abi: 'event CarryDepositConsumed(uint256 indexed parentDepositIndex)',
+				canonicalLifecycleConfirmation: true,
+				emitter: waitingStep.to,
+				equals: waitingParentDepositIndex,
+				field: 'parentDepositIndex',
+				indexed: {},
+				kind: 'decoded-event-field',
+				signature: 'CarryDepositConsumed(uint256)',
+				topic0: `0x${'44'.repeat(32)}`,
+			},
+		]
+		beginLifecycleObligation(waitingObligation)
+		markWorkflowStepWaitingCanonical(waitingWorkflow, waitingStep.id, `0x${'55'.repeat(32)}`)
+		waitForCanonicalLifecycleConfirmation(waitingObligation)
+
+		// The rotating proof/action page contains neither carry item, but the
+		// complete lightweight presence set still proves that both identities exist.
+		synchronizeLifecycleObligations(state, [], [...presence(waitingCarry), ...presence(pendingCarry)], true, 11n)
+
+		expect(waitingWorkflow.status).toBe('waiting-obligation')
+		expect(waitingObligation.status).toBe('pending')
+		expect(pendingObligation).toMatchObject({ blockers: ['The lifecycle item is not currently eligible at the canonical snapshot'], status: 'pending' })
+		expect(unrelatedObligation.status).toBe('abandoned')
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: unrelatedObligation.id, resolution: 'abandoned', resolvedAtBlock: '11' }))
+
+		// Once complete lightweight discovery removes the carry identities, a
+		// submitted item completes and an unsubmitted item is terminally superseded.
+		synchronizeLifecycleObligations(state, [], [], true, 12n)
+
+		expect(waitingWorkflow.status).toBe('completed')
+		expect(waitingObligation.status).toBe('completed')
+		expect(pendingObligation.status).toBe('abandoned')
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: waitingObligation.id, resolution: 'completed', resolvedAtBlock: '12' }))
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: pendingObligation.id, resolution: 'abandoned', resolvedAtBlock: '12' }))
 	})
 
 	test('recovers a completed workflow with a fresh canonical tombstone after a crash', () => {

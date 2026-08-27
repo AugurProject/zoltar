@@ -1032,6 +1032,12 @@ function renderCatalog(values: OperationEvaluation[]) {
 		riskCell.append(riskBadge)
 		const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
 		const eligibilityCell = node('td')
+		nameCell.dataset['label'] = 'Operation'
+		ecosystemCell.dataset['label'] = 'Ecosystem'
+		classificationCell.dataset['label'] = 'Classification'
+		riskCell.dataset['label'] = 'Risk'
+		candidatesCell.dataset['label'] = 'Candidates'
+		eligibilityCell.dataset['label'] = 'Eligibility'
 		const enabled = value.enabled !== false
 		const independentlyExecutable = operationIsIndependentlyExecutable(value)
 		const eligible = independentlyExecutable && enabled && value.eligible === true
@@ -1549,6 +1555,7 @@ function openResumeDialog() {
 		}),
 	)
 	resumeDialog.showModal()
+	cancelResume.focus()
 }
 
 function parseDelay(input: HTMLInputElement, name: string) {
@@ -1557,10 +1564,17 @@ function parseDelay(input: HTMLInputElement, name: string) {
 	return value
 }
 
-function parseReserve(input: HTMLInputElement, name: string) {
+function parseReserve(input: HTMLInputElement, name: string, requirement: 'live-reserve' | 'non-negative' | 'positive' = 'non-negative') {
 	const value = input.value.trim()
-	if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) throw new Error(`${name} must be a non-negative decimal amount.`)
+	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${name} must be a non-negative decimal amount with at most 18 places.`)
+	if (requirement !== 'non-negative' && /^0(?:\.0+)?$/.test(value)) throw new Error(`${name} must be greater than zero${requirement === 'live-reserve' ? ' for live execution' : ''}.`)
 	return value
+}
+
+function decimalAtto(value: string) {
+	const [whole, fraction = ''] = value.split('.')
+	if (whole === undefined) throw new Error('Decimal amount is missing its whole-number component.')
+	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
 }
 
 let currentSectionLink: HTMLAnchorElement | undefined
@@ -1858,7 +1872,7 @@ settingsForm.addEventListener('submit', event => {
 		try {
 			const minDelaySeconds = parseDelay(minDelayInput, 'Minimum delay')
 			const maxDelaySeconds = parseDelay(maxDelayInput, 'Maximum delay')
-			if (minDelaySeconds > maxDelaySeconds) throw new Error('Minimum delay cannot be greater than maximum delay.')
+			if (minDelaySeconds >= maxDelaySeconds) throw new Error('Minimum delay must be at least one second less than maximum delay.')
 			const workflowValidForBlocks = Number(workflowValidBlocksInput.value)
 			if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks < 64 || workflowValidForBlocks > 1_000_000) throw new Error('Workflow validity must be a whole number from 64 through 1000000 blocks.')
 			const enabledEcosystems = [...document.querySelectorAll('[data-ecosystem-toggle]')].flatMap(toggle => {
@@ -1866,6 +1880,12 @@ settingsForm.addEventListener('submit', event => {
 				return [toggle.dataset['ecosystemToggle']]
 			})
 			if (enabledEcosystems.length === 0) throw new Error('Enable at least one ecosystem.')
+			const maximumEthPerOperation = parseReserve(maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
+			const maximumGasCostEth = parseReserve(maximumGasCostInput, 'Maximum gas cost', 'positive')
+			const maximumRepPerOperation = parseReserve(maximumRepOperationInput, 'Maximum REP per operation', 'positive')
+			const minimumEthReserve = parseReserve(reserveEthInput, 'ETH reserve', executeInput.checked ? 'live-reserve' : 'non-negative')
+			const minimumRepReserve = parseReserve(reserveRepInput, 'REP reserve', executeInput.checked ? 'live-reserve' : 'non-negative')
+			if (executeInput.checked && decimalAtto(minimumEthReserve) < decimalAtto(maximumGasCostEth)) throw new Error('ETH reserve must retain at least one maximum-gas-cost-sized safety floor.')
 			await put('/api/settings', {
 				revision: settingsRevision,
 				patch: {
@@ -1875,11 +1895,11 @@ settingsForm.addEventListener('submit', event => {
 						allowHighRiskOperations: highRiskInput.checked,
 						allowIrreversibleOperations: irreversibleInput.checked,
 						enabledEcosystems,
-						maximumEthPerOperation: parseReserve(maximumEthOperationInput, 'Maximum ETH per operation'),
-						maximumGasCostEth: parseReserve(maximumGasCostInput, 'Maximum gas cost'),
-						maximumRepPerOperation: parseReserve(maximumRepOperationInput, 'Maximum REP per operation'),
-						minimumEthReserve: parseReserve(reserveEthInput, 'ETH reserve'),
-						minimumRepReserve: parseReserve(reserveRepInput, 'REP reserve'),
+						maximumEthPerOperation,
+						maximumGasCostEth,
+						maximumRepPerOperation,
+						minimumEthReserve,
+						minimumRepReserve,
 						workflowValidForBlocks,
 					},
 				},

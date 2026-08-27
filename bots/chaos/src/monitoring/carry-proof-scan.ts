@@ -1,18 +1,20 @@
 import { createHash } from 'node:crypto'
-import { encodeAbiParameters, getAddress, hexToBytes, keccak256, toHex, zeroAddress, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, hexToBytes, keccak256, toHex, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { logRangeLimitError } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '../config/settings.ts'
 import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '../contracts/abi.ts'
 import { eventTopic } from '../operations/planning.ts'
-import type { ForkedCarryWithdrawalSnapshot } from '../operations/types.ts'
+import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot } from '../operations/types.ts'
 import { carryCommitment, computeNullifierRootFromProof, sparseNullifierRoot, type CarryOutcome, type CarryTriple } from './carry-proof-index.ts'
+import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency } from './discovery.ts'
 import {
-	appendCarryProofJournalEvents,
+	appendCarryProofJournalEventsWithCompaction,
 	CARRY_DEPOSIT_CONSUMED_SIGNATURE,
 	carryProofJournalDigest,
 	CLAIM_DEPOSIT_SIGNATURE,
 	compactCarryProofJournal,
+	createCarryProofJournalIncrementalReplay,
 	createCarryProofJournal,
-	deriveTruthAuctionHaircutJournalEventAccounting,
 	DISPUTE_STAKED_REP_DRAINED_SIGNATURE,
 	FORK_CARRY_CHECKPOINT_SIGNATURE,
 	LOCAL_DEPOSIT_APPENDED_SIGNATURE,
@@ -22,11 +24,8 @@ import {
 	TRUTH_AUCTION_HAIRCUT_SIGNATURE,
 	validateCarryProofJournal,
 	type CarryJournalPosition,
-	type CarryDepositConsumedJournalEvent,
 	type CarryProofJournal,
 	type CarryProofJournalEvent,
-	type CarryJournalRawAccounting,
-	type ReplayedCarryGame,
 	type TruthAuctionHaircutJournalEvent,
 } from './carry-proof-journal.ts'
 
@@ -61,7 +60,9 @@ export interface CarryProofScanUpdate {
 	fromBlock: string
 	toBlock: string
 	withdrawals: ForkedCarryWithdrawalSnapshot[]
+	withdrawalPresence: ForkedCarryWithdrawalPresenceSnapshot[]
 	withdrawalsDigest: Hash
+	withdrawalCandidateCount: number
 }
 
 type CanonicalLog = {
@@ -78,6 +79,8 @@ type CanonicalLog = {
 
 const HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/
 const UINT256_LIMIT = 1n << 256n
+export const CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES = 32
+export const CARRY_PROOF_SCAN_MAXIMUM_LOGS_PER_RESPONSE = 16_384
 const LOCAL_DEPOSIT_APPENDED_TOPIC = eventTopic(LOCAL_DEPOSIT_APPENDED_SIGNATURE)
 const FORK_CARRY_CHECKPOINT_TOPIC = eventTopic(FORK_CARRY_CHECKPOINT_SIGNATURE)
 const CARRY_DEPOSIT_CONSUMED_TOPIC = eventTopic(CARRY_DEPOSIT_CONSUMED_SIGNATURE)
@@ -85,8 +88,11 @@ const CLAIM_DEPOSIT_TOPIC = eventTopic(CLAIM_DEPOSIT_SIGNATURE)
 const TRUTH_AUCTION_HAIRCUT_TOPIC = eventTopic(TRUTH_AUCTION_HAIRCUT_SIGNATURE)
 const DISPUTE_STAKED_REP_DRAINED_TOPIC = eventTopic(DISPUTE_STAKED_REP_DRAINED_SIGNATURE)
 const SECURITY_POOL_FORK_SNAPSHOT_TOPIC = eventTopic(SECURITY_POOL_FORK_SNAPSHOT_SIGNATURE)
-const CARRY_TOPICS = new Set([LOCAL_DEPOSIT_APPENDED_TOPIC, FORK_CARRY_CHECKPOINT_TOPIC, CARRY_DEPOSIT_CONSUMED_TOPIC, CLAIM_DEPOSIT_TOPIC, TRUTH_AUCTION_HAIRCUT_TOPIC, DISPUTE_STAKED_REP_DRAINED_TOPIC, SECURITY_POOL_FORK_SNAPSHOT_TOPIC].map(topic => topic.toLowerCase()))
+const CARRY_TOPIC0_FILTER = [LOCAL_DEPOSIT_APPENDED_TOPIC, FORK_CARRY_CHECKPOINT_TOPIC, CARRY_DEPOSIT_CONSUMED_TOPIC, CLAIM_DEPOSIT_TOPIC, TRUTH_AUCTION_HAIRCUT_TOPIC, DISPUTE_STAKED_REP_DRAINED_TOPIC, SECURITY_POOL_FORK_SNAPSHOT_TOPIC] as const
+const CARRY_TOPICS = new Set(CARRY_TOPIC0_FILTER.map(topic => topic.toLowerCase()))
 const CONSUMED_NULLIFIER_LEAF = toHex(1n, { size: 32 })
+
+class CarryCanonicalHistoryMismatchError extends Error {}
 
 function sameAddress(left: Address, right: Address) {
 	return left.toLowerCase() === right.toLowerCase()
@@ -108,16 +114,30 @@ function canonicalOrdinal(value: bigint | number, label: string) {
 
 function orderedCanonicalLogs(logs: readonly CanonicalLog[], fromBlock: bigint, toBlock: bigint) {
 	const identities = new Set<string>()
+	const transactionHashByPosition = new Map<string, Hash>()
+	const transactionIndexByHash = new Map<string, bigint>()
 	for (const log of logs) {
 		if (log.removed) throw new Error('Carry proof scan returned a removed canonical log')
 		if (log.blockHash == null || log.blockNumber == null || log.transactionHash == null || log.transactionIndex == null || log.logIndex == null) {
 			throw new Error('Carry proof scan returned a log without a canonical position')
 		}
 		requireHash(log.blockHash, 'Carry log block hash')
-		requireHash(log.transactionHash, 'Carry log transaction hash')
 		if (log.blockNumber < fromBlock || log.blockNumber > toBlock) throw new Error('Carry proof scan returned a log outside the requested block range')
 		const transactionIndex = canonicalOrdinal(log.transactionIndex, 'Carry log transaction index')
 		const logIndex = canonicalOrdinal(log.logIndex, 'Carry log index')
+		const transactionHash = requireHash(log.transactionHash, 'Carry log transaction hash')
+		const transactionPosition = `${log.blockNumber.toString()}:${transactionIndex.toString()}`
+		const positionedHash = transactionHashByPosition.get(transactionPosition)
+		if (positionedHash !== undefined && positionedHash.toLowerCase() !== transactionHash.toLowerCase()) {
+			throw new Error(`Carry proof scan returned distinct transaction hashes at block transaction position ${transactionPosition}`)
+		}
+		transactionHashByPosition.set(transactionPosition, transactionHash)
+		const transactionIdentity = `${log.blockNumber.toString()}:${transactionHash.toLowerCase()}`
+		const identifiedIndex = transactionIndexByHash.get(transactionIdentity)
+		if (identifiedIndex !== undefined && identifiedIndex !== transactionIndex) {
+			throw new Error(`Carry proof scan returned transaction ${transactionHash} at multiple indexes in block ${log.blockNumber.toString()}`)
+		}
+		transactionIndexByHash.set(transactionIdentity, transactionIndex)
 		const identity = `${log.blockHash.toLowerCase()}:${log.transactionHash.toLowerCase()}:${logIndex.toString()}`
 		if (identities.has(identity)) throw new Error(`Carry proof scan returned duplicate log ${identity}`)
 		identities.add(identity)
@@ -136,6 +156,20 @@ function orderedCanonicalLogs(logs: readonly CanonicalLog[], fromBlock: bigint, 
 		if (leftIndex === rightIndex) return 0
 		return leftIndex < rightIndex ? -1 : 1
 	})
+}
+
+async function boundedCarryLogPrefix(client: CarryScanClient, addresses: readonly Address[], fromBlock: bigint, toBlock: bigint): Promise<{ logs: readonly CanonicalLog[]; toBlock: bigint }> {
+	try {
+		const logs = await client.getLogs({ address: [...addresses], fromBlock, toBlock, topics: [[...CARRY_TOPIC0_FILTER]] })
+		if (logs.length <= CARRY_PROOF_SCAN_MAXIMUM_LOGS_PER_RESPONSE) return { logs, toBlock }
+		if (fromBlock === toBlock) {
+			throw new Error(`Carry proof scan block ${fromBlock.toString()} exceeds its ${CARRY_PROOF_SCAN_MAXIMUM_LOGS_PER_RESPONSE.toString()}-log response safety limit`)
+		}
+	} catch (error) {
+		if (!logRangeLimitError(error) || fromBlock === toBlock) throw error
+	}
+	const midpoint = fromBlock + (toBlock - fromBlock) / 2n
+	return await boundedCarryLogPrefix(client, addresses, fromBlock, midpoint)
 }
 
 function readUnsigned(bytes: Uint8Array, offset: number, label: string) {
@@ -208,15 +242,7 @@ function triple<T>(first: T, second: T, third: T): CarryTriple<T> {
 	return [first, second, third]
 }
 
-function journalAtPrefix(journal: CarryProofJournal, additions: readonly CarryProofJournalEvent[], cursor: CarryJournalPosition): CarryProofJournal {
-	return {
-		...journal,
-		cursor: { blockHash: cursor.blockHash, blockNumber: cursor.blockNumber },
-		events: [...journal.events, ...additions],
-	}
-}
-
-function decodeGameEvent(log: CanonicalLog, route: CarryScanRoute, sourceRouteByGame: ReadonlyMap<string, CarryScanRoute>, prefix: CarryProofJournal, additions: readonly CarryProofJournalEvent[]): CarryProofJournalEvent | undefined {
+function decodeGameEvent(log: CanonicalLog, route: CarryScanRoute, sourceRouteByGame: ReadonlyMap<string, CarryScanRoute>, incrementalReplay: ReturnType<typeof createCarryProofJournalIncrementalReplay>): CarryProofJournalEvent | undefined {
 	const topic0 = log.topics[0]
 	if (topic0 === undefined || !CARRY_TOPICS.has(topic0.toLowerCase())) return undefined
 	const base = { emitter: route.escalationGame, pool: route.pool, position: position(log) }
@@ -294,7 +320,7 @@ function decodeGameEvent(log: CanonicalLog, route: CarryScanRoute, sourceRouteBy
 		const bytes = dataWords(log.data, 4, 'TruthAuctionHaircutApplied')
 		const repBeforeAttoRep = readUnsigned(bytes, 0, 'TruthAuctionHaircutApplied REP before').toString()
 		const repRemainingAttoRep = readUnsigned(bytes, 64, 'TruthAuctionHaircutApplied REP remaining').toString()
-		const accounting = deriveTruthAuctionHaircutJournalEventAccounting(journalAtPrefix(prefix, additions, base.position), {
+		const accounting = incrementalReplay.deriveTruthAuctionHaircutAccounting({
 			game: route.escalationGame,
 			pool: route.pool,
 			repBeforeAttoRep,
@@ -366,8 +392,29 @@ function decodeForkerEvent(log: CanonicalLog, securityPoolForker: Address, route
 async function canonicalBlockHash(client: CarryScanClient, blockNumber: bigint, expected?: Hash) {
 	const block = await client.getBlock({ blockNumber })
 	if (block.hash == null || block.number !== blockNumber) throw new Error(`Carry proof scan block ${blockNumber.toString()} has no canonical identity`)
-	if (expected !== undefined && block.hash.toLowerCase() !== expected.toLowerCase()) throw new Error(`Carry proof scan block ${blockNumber.toString()} hash does not match the expected canonical hash`)
+	if (expected !== undefined && block.hash.toLowerCase() !== expected.toLowerCase()) {
+		throw new CarryCanonicalHistoryMismatchError(`Carry proof scan block ${blockNumber.toString()} hash does not match the expected canonical hash`)
+	}
 	return block.hash
+}
+
+async function authenticateCanonicalLogBlocks(client: CarryScanClient, logs: readonly CanonicalLog[]) {
+	const declaredBlocks = new Map<string, { blockHash: Hash; blockNumber: bigint }>()
+	for (const log of logs) {
+		if (log.blockHash == null || log.blockNumber == null) throw new Error('Carry log lost its canonical block identity')
+		const blockHash = requireHash(log.blockHash, 'Carry log block hash')
+		const cacheKey = log.blockNumber.toString()
+		const existing = declaredBlocks.get(cacheKey)
+		if (existing !== undefined && existing.blockHash.toLowerCase() !== blockHash.toLowerCase()) {
+			throw new Error(`Carry proof scan returned conflicting block hashes for block ${cacheKey}`)
+		}
+		declaredBlocks.set(cacheKey, { blockHash, blockNumber: log.blockNumber })
+	}
+	const authenticated = await mapWithConcurrency([...declaredBlocks.values()], DISCOVERY_RPC_CONCURRENCY, async declaration => ({
+		blockHash: await canonicalBlockHash(client, declaration.blockNumber, declaration.blockHash),
+		blockNumber: declaration.blockNumber,
+	}))
+	return new Map(authenticated.map(({ blockHash, blockNumber }) => [blockNumber.toString(), blockHash]))
 }
 
 function validateIdentity(context: CarryProofScanContext, journal: CarryProofJournal) {
@@ -398,98 +445,6 @@ function truthAuctionRetention(journal: CarryProofJournal, game: Address, amount
 	const repRemainingAttoRep = haircut?.repRemainingAttoRep ?? compactedHaircut?.repRemainingAttoRep
 	if (repBeforeAttoRep === undefined || repRemainingAttoRep === undefined) return amountAttoRep
 	return (amountAttoRep * BigInt(repRemainingAttoRep)) / BigInt(repBeforeAttoRep)
-}
-
-type RawCarryAccounting = {
-	inheritedTotalsAttoRep: [bigint, bigint, bigint]
-	localTotalsAttoRep: [bigint, bigint, bigint]
-}
-
-function consumptionSlot(game: ReplayedCarryGame, event: CarryDepositConsumedJournalEvent) {
-	const matching = game.state.outcomes[event.outcome].currentSlots.filter(slot => slot.leaf.parentDepositIndex === event.parentDepositIndex && slot.leaf.sourceNodeId === event.sourceNodeId && slot.leaf.amountAttoRep === event.amountAttoRep && sameAddress(slot.leaf.depositor, event.depositor))
-	if (matching.length !== 1) {
-		throw new Error(`Carry consumption ${event.position.transactionHash}:${event.position.logIndex} does not identify exactly one replayed leaf`)
-	}
-	const slot = matching[0]
-	if (slot === undefined) throw new Error('Carry consumption replayed leaf is missing')
-	return slot
-}
-
-async function rawCarryAccountingAtBlock(context: CarryProofScanContext, journal: CarryProofJournal, game: ReplayedCarryGame, blockNumber: bigint): Promise<RawCarryAccounting> {
-	const compactedGame = journal.checkpoint?.games.find(entry => sameAddress(entry.game, game.game))
-	const checkpointIndex = compactedGame === undefined ? journal.events.findIndex(event => event.kind === 'fork-carry-checkpoint' && sameAddress(event.emitter, game.game)) : -1
-	if (compactedGame !== undefined && compactedGame.rawAccounting === null) throw new Error(`Compacted carry game ${game.game} is missing inherited raw accounting`)
-	let inheritedTotalsAttoRep: [bigint, bigint, bigint]
-	let localTotalsAttoRep: [bigint, bigint, bigint]
-	if (compactedGame === undefined) {
-		const checkpoint = checkpointIndex < 0 ? undefined : journal.events[checkpointIndex]
-		if (checkpoint?.kind !== 'fork-carry-checkpoint') throw new Error(`Carry game ${game.game} has no replayed fork checkpoint`)
-		inheritedTotalsAttoRep = [BigInt(checkpoint.unresolvedTotalsAttoRep[0]), BigInt(checkpoint.unresolvedTotalsAttoRep[1]), BigInt(checkpoint.unresolvedTotalsAttoRep[2])]
-		localTotalsAttoRep = [0n, 0n, 0n]
-	} else {
-		const rawAccounting = compactedGame.rawAccounting
-		if (rawAccounting === null) throw new Error(`Compacted carry game ${game.game} is missing inherited raw accounting`)
-		inheritedTotalsAttoRep = [BigInt(rawAccounting.inheritedTotalsAttoRep[0]), BigInt(rawAccounting.inheritedTotalsAttoRep[1]), BigInt(rawAccounting.inheritedTotalsAttoRep[2])]
-		localTotalsAttoRep = [BigInt(rawAccounting.localTotalsAttoRep[0]), BigInt(rawAccounting.localTotalsAttoRep[1]), BigInt(rawAccounting.localTotalsAttoRep[2])]
-	}
-	const relevantEvents = journal.events
-		.slice(checkpointIndex + 1)
-		.filter((event): event is CarryDepositConsumedJournalEvent | Extract<CarryProofJournalEvent, { kind: 'local-deposit-appended' }> => sameAddress(event.emitter, game.game) && (event.kind === 'carry-deposit-consumed' || event.kind === 'local-deposit-appended'))
-	const inheritedConsumptions = relevantEvents.flatMap(event => {
-		if (event.kind !== 'carry-deposit-consumed') return []
-		const slot = consumptionSlot(game, event)
-		return sameAddress(slot.originGame, game.game) ? [] : [{ event, slot }]
-	})
-	const sourceBasisByEvent = new Map<CarryDepositConsumedJournalEvent, bigint>()
-	const readBatchSize = 32
-	for (let start = 0; start < inheritedConsumptions.length; start += readBatchSize) {
-		const batch = inheritedConsumptions.slice(start, start + readBatchSize)
-		const values = await Promise.all(
-			batch.map(({ event, slot }) =>
-				context.client.readContract({
-					abi: escalationGameAbi,
-					address: game.game,
-					args: [BigInt(event.amountAttoRep), BigInt(slot.leaf.cumulativeAmountAttoRep), BigInt(event.parentDepositIndex)],
-					blockNumber,
-					functionName: 'applyInheritedSourceStorageBasis',
-				}),
-			),
-		)
-		for (let index = 0; index < batch.length; index += 1) {
-			const entry = batch[index]
-			const value = values[index]
-			if (entry === undefined || value === undefined) throw new Error('Carry source-basis replay batch is incomplete')
-			sourceBasisByEvent.set(entry.event, value)
-		}
-	}
-	for (const event of relevantEvents) {
-		if (event.kind === 'local-deposit-appended') {
-			localTotalsAttoRep[event.outcome] += BigInt(event.amountAttoRep)
-			continue
-		}
-		const slot = consumptionSlot(game, event)
-		if (sameAddress(slot.originGame, game.game)) {
-			const amountAttoRep = BigInt(event.amountAttoRep)
-			if (amountAttoRep > localTotalsAttoRep[event.outcome]) throw new Error('Carry local consumption exceeds reconstructed raw local REP')
-			localTotalsAttoRep[event.outcome] -= amountAttoRep
-			continue
-		}
-		const sourceBasisAttoRep = sourceBasisByEvent.get(event)
-		if (sourceBasisAttoRep === undefined) throw new Error('Carry inherited consumption is missing its anchored source storage basis')
-		const inheritedConsumedAttoRep = sourceBasisAttoRep < inheritedTotalsAttoRep[event.outcome] ? sourceBasisAttoRep : inheritedTotalsAttoRep[event.outcome]
-		inheritedTotalsAttoRep[event.outcome] -= inheritedConsumedAttoRep
-		const localConsumedAttoRep = sourceBasisAttoRep - inheritedConsumedAttoRep
-		if (localConsumedAttoRep > localTotalsAttoRep[event.outcome]) throw new Error('Carry inherited consumption exceeds reconstructed raw carry REP')
-		localTotalsAttoRep[event.outcome] -= localConsumedAttoRep
-	}
-	return { inheritedTotalsAttoRep, localTotalsAttoRep }
-}
-
-function rawAccountingStrings(accounting: RawCarryAccounting): CarryJournalRawAccounting {
-	return {
-		inheritedTotalsAttoRep: [accounting.inheritedTotalsAttoRep[0].toString(), accounting.inheritedTotalsAttoRep[1].toString(), accounting.inheritedTotalsAttoRep[2].toString()],
-		localTotalsAttoRep: [accounting.localTotalsAttoRep[0].toString(), accounting.localTotalsAttoRep[1].toString(), accounting.localTotalsAttoRep[2].toString()],
-	}
 }
 
 function exactHashes(actual: readonly Hash[], expected: readonly Hash[], label: string) {
@@ -544,16 +499,12 @@ function computeWinningEconomics(parameters: { actualForkThresholdAttoRep: bigin
 }
 
 async function verifiedWithdrawalCandidates(context: CarryProofScanContext, journal: CarryProofJournal, routeByGame: ReadonlyMap<string, CarryScanRoute>) {
-	const replay = replayCarryProofJournal(journal, context.wallet)
+	// Rotate the bounded page by canonical anchor so ineligible early leaves can
+	// never permanently starve later wallet proofs, even on very large journals.
+	const replay = replayCarryProofJournal(journal, context.wallet, CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, context.anchorBlockNumber)
 	const candidates: ForkedCarryWithdrawalSnapshot[] = []
-	const rawAccountingByGame = new Map<string, Promise<RawCarryAccounting>>()
-	for (const candidate of replay.proofCandidates) {
-		const childRoute = routeByGame.get(candidate.game.toLowerCase())
-		const sourceRoute = routeByGame.get(candidate.sourceGame.toLowerCase())
-		const replayedGame = replay.games[candidate.game.toLowerCase()]
-		if (childRoute === undefined || sourceRoute === undefined || replayedGame === undefined) throw new Error('Carry proof candidate has an incomplete discovered source/child graph')
-		if (!sameAddress(childRoute.pool, candidate.pool)) throw new Error('Carry proof candidate pool differs from its discovered child route')
-		const [poolParent, poolGame, poolForker, poolState, poolResolved, gamePool, snapshotInitialized, finalResolution, poolQuestionOutcome, sourcePoolGame, directClaimed, directPrincipals, outcomeStates, forkSnapshot] = await Promise.all([
+	const anchoredGameReads = async (candidate: (typeof replay.proofCandidates)[number], sourceRoute: CarryScanRoute) => {
+		const [poolParent, poolGame, poolForker, poolState, poolResolved, gamePool, snapshotInitialized, finalResolution, poolQuestionOutcome, sourcePoolGame, directPrincipals, outcomeStates, forkSnapshot, bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar] = await drainConcurrent([
 			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'parent' }),
 			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'escalationGame' }),
 			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'securityPoolForker' }),
@@ -564,11 +515,42 @@ async function verifiedWithdrawalCandidates(context: CarryProofScanContext, jour
 			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getFinalQuestionResolution' }),
 			context.client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [candidate.pool], blockNumber: context.anchorBlockNumber, functionName: 'getQuestionOutcome' }),
 			context.client.readContract({ abi: securityPoolAbi, address: sourceRoute.pool, blockNumber: context.anchorBlockNumber, functionName: 'escalationGame' }),
-			context.client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [sourceRoute.pool, candidate.outcome, BigInt(candidate.parentDepositIndex)], blockNumber: context.anchorBlockNumber, functionName: 'isEscalationDepositClaimedDirectly' }),
-			Promise.all(([0, 1, 2] as const).map(index => context.client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [sourceRoute.pool, index], blockNumber: context.anchorBlockNumber, functionName: 'getDirectlyClaimedEscalationPrincipal' }))),
-			Promise.all(([0, 1, 2] as const).map(index => context.client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [index], blockNumber: context.anchorBlockNumber, functionName: 'getOutcomeState' }))),
+			drainConcurrent(([0, 1, 2] as const).map(index => context.client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [sourceRoute.pool, index], blockNumber: context.anchorBlockNumber, functionName: 'getDirectlyClaimedEscalationPrincipal' }))),
+			drainConcurrent(([0, 1, 2] as const).map(index => context.client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [index], blockNumber: context.anchorBlockNumber, functionName: 'getOutcomeState' }))),
 			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getForkCarrySnapshot' }),
+			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getBindingCapitalAttoRep' }),
+			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
+			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getEscalationGameEndDate' }),
+			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'universeId' }),
+			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'zoltar' }),
 		])
+		const [forkThreshold, forkTime] = await drainConcurrent([
+			context.client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber: context.anchorBlockNumber, functionName: 'getForkThresholdAttoRep' }),
+			context.client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber: context.anchorBlockNumber, functionName: 'getForkTime' }),
+		])
+		return { bindingCapital, directPrincipals, finalResolution, forkSnapshot, forkThreshold, forkTime, gameEnd, gamePool, nonDecisionThreshold, outcomeStates, poolForker, poolGame, poolParent, poolQuestionOutcome, poolResolved, poolState, snapshotInitialized, sourcePoolGame }
+	}
+	const anchoredReadsByGame = new Map<string, ReturnType<typeof anchoredGameReads>>()
+	const validatedGames = new Set<string>()
+	const currentCarryRootsByGame = new Map<string, CarryTriple<Hash>>()
+	for (const candidate of replay.proofCandidates) {
+		const childRoute = routeByGame.get(candidate.game.toLowerCase())
+		const sourceRoute = routeByGame.get(candidate.sourceGame.toLowerCase())
+		const claimSourceRoute = routeByGame.get(candidate.claimSourceGame.toLowerCase())
+		const replayedGame = replay.games[candidate.game.toLowerCase()]
+		if (childRoute === undefined || sourceRoute === undefined || claimSourceRoute === undefined || replayedGame === undefined) throw new Error('Carry proof candidate has an incomplete discovered claim-source/source/child graph')
+		if (!sameAddress(childRoute.pool, candidate.pool)) throw new Error('Carry proof candidate pool differs from its discovered child route')
+		const gameKey = candidate.game.toLowerCase()
+		let anchoredReads = anchoredReadsByGame.get(gameKey)
+		if (anchoredReads === undefined) {
+			anchoredReads = anchoredGameReads(candidate, sourceRoute)
+			anchoredReadsByGame.set(gameKey, anchoredReads)
+		}
+		const [anchored, directClaimed] = await drainConcurrent([
+			anchoredReads,
+			context.client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [claimSourceRoute.pool, candidate.outcome, BigInt(candidate.parentDepositIndex)], blockNumber: context.anchorBlockNumber, functionName: 'isEscalationDepositClaimedDirectly' }),
+		])
+		const { bindingCapital, directPrincipals, finalResolution, forkSnapshot, forkThreshold, forkTime, gameEnd, gamePool, nonDecisionThreshold, outcomeStates, poolForker, poolGame, poolParent, poolQuestionOutcome, poolResolved, poolState, snapshotInitialized, sourcePoolGame } = anchored
 		if (!sameAddress(poolParent, sourceRoute.pool) || !sameAddress(poolGame, candidate.game) || !sameAddress(gamePool, candidate.pool) || !sameAddress(sourcePoolGame, candidate.sourceGame)) {
 			throw new Error('Carry proof candidate source/child game and pool graph does not match the anchor')
 		}
@@ -576,46 +558,49 @@ async function verifiedWithdrawalCandidates(context: CarryProofScanContext, jour
 		const finalOutcome = BigInt(finalResolution)
 		if (BigInt(poolState) !== 0n || !poolResolved || !snapshotInitialized) continue
 		if (finalOutcome !== BigInt(candidate.outcome) || BigInt(poolQuestionOutcome) !== BigInt(candidate.outcome)) continue
-		if (directClaimed) continue
-		let rawAccountingPromise = rawAccountingByGame.get(candidate.game.toLowerCase())
-		if (rawAccountingPromise === undefined) {
-			rawAccountingPromise = rawCarryAccountingAtBlock(context, journal, replayedGame, context.anchorBlockNumber)
-			rawAccountingByGame.set(candidate.game.toLowerCase(), rawAccountingPromise)
+		if (directClaimed) throw new Error('Carry proof candidate is directly claimed on-chain but absent from the canonical claim journal')
+		const replayedRawAccounting = replayedGame.rawAccounting
+		if (replayedRawAccounting === null) throw new Error(`Carry proof candidate game ${candidate.game} is missing canonical raw accounting`)
+		const rawAccounting = {
+			inheritedTotalsAttoRep: [BigInt(replayedRawAccounting.inheritedTotalsAttoRep[0]), BigInt(replayedRawAccounting.inheritedTotalsAttoRep[1]), BigInt(replayedRawAccounting.inheritedTotalsAttoRep[2])] as const,
+			localTotalsAttoRep: [BigInt(replayedRawAccounting.localTotalsAttoRep[0]), BigInt(replayedRawAccounting.localTotalsAttoRep[1]), BigInt(replayedRawAccounting.localTotalsAttoRep[2])] as const,
 		}
-		const rawAccounting = await rawAccountingPromise
-		for (const index of [0, 1, 2] as const) {
-			const replayedOutcome = replayedGame.state.outcomes[index]
-			const onchain = outcomeStates[index]
-			const snapshotCommitment = carryCommitment(replayedOutcome.snapshotSlots)
-			const currentCommitment = carryCommitment(replayedOutcome.currentSlots)
-			const currentNullifierRoot = sparseNullifierRoot(replayedOutcome.nullifier)
-			const rawInherited = rawAccounting.inheritedTotalsAttoRep[index]
-			const rawLocal = rawAccounting.localTotalsAttoRep[index]
-			if (directPrincipals[index] > rawInherited) throw new Error(`Carry outcome ${index.toString()} directly claimed principal exceeds reconstructed raw inherited REP`)
-			const journalEffectiveInherited = truthAuctionRetention(journal, candidate.game, rawInherited)
-			const replayedTotal = BigInt(replayedOutcome.unresolvedTotalAttoRep)
-			if (journalEffectiveInherited + rawLocal !== replayedTotal) throw new Error(`Carry outcome ${index.toString()} raw accounting does not reproduce the journal total`)
-			if (BigInt(replayedGame.localUnresolvedTotalsAttoRep[index]) !== rawLocal) throw new Error(`Carry outcome ${index.toString()} raw local accounting differs from replay`)
-			const effectiveInherited = finalOutcome === BigInt(index) ? truthAuctionRetention(journal, candidate.game, rawInherited - directPrincipals[index]) : 0n
-			const effectiveTotal = effectiveInherited + rawLocal
-			if (onchain.balanceAttoRep.toString() !== replayedOutcome.resolutionBalanceAttoRep) throw new Error(`Carry outcome ${index.toString()} resolution balance differs from replay`)
-			if (onchain.snapshotLeafCount.toString() !== snapshotCommitment.leafCount) throw new Error(`Carry outcome ${index.toString()} snapshot leaf count differs from replay`)
-			exactHashes(onchain.snapshotPeaks, snapshotCommitment.peaks, `Carry outcome ${index.toString()} snapshot peaks`)
-			if (onchain.inheritedUnresolvedTotalAttoRep !== effectiveInherited) throw new Error(`Carry outcome ${index.toString()} inherited unresolved REP differs from replay`)
-			if (onchain.currentNullifierRoot.toLowerCase() !== currentNullifierRoot.toLowerCase()) throw new Error(`Carry outcome ${index.toString()} nullifier root differs from replay`)
-			const localNodeIds = replayedOutcome.currentSlots.filter(slot => sameAddress(slot.originGame, candidate.game)).map(slot => BigInt(slot.leaf.sourceNodeId))
-			const expectedLocalHead = localNodeIds.reduce((largest, current) => (current > largest ? current : largest), 0n)
-			if (onchain.localHeadNodeId !== expectedLocalHead) throw new Error(`Carry outcome ${index.toString()} local head node differs from replay`)
-			if (onchain.currentLeafCount.toString() !== currentCommitment.leafCount) throw new Error(`Carry outcome ${index.toString()} current leaf count differs from replay`)
-			exactHashes(onchain.currentPeaks, currentCommitment.peaks, `Carry outcome ${index.toString()} current peaks`)
-			if (onchain.localUnresolvedTotalAttoRep !== rawLocal) throw new Error(`Carry outcome ${index.toString()} local unresolved REP differs from replay`)
-			if (onchain.currentCarryRoot.toLowerCase() !== currentCommitment.root.toLowerCase()) throw new Error(`Carry outcome ${index.toString()} carry root differs from replay`)
-			if (onchain.currentCarryTotalAttoRep !== effectiveTotal) throw new Error(`Carry outcome ${index.toString()} carry total differs from replay`)
-			const forkSnapshotPeaks = hashArray(forkSnapshot.carryPeaks[index], `Fork carry snapshot outcome ${index.toString()} peaks`)
-			exactHashes(forkSnapshotPeaks, currentCommitment.peaks, `Fork carry snapshot outcome ${index.toString()} peaks`)
-			if (forkSnapshot.carryLeafCounts[index].toString() !== currentCommitment.leafCount || forkSnapshot.carryTotalsAttoRep[index] !== effectiveTotal || forkSnapshot.nullifierRoots[index].toLowerCase() !== currentNullifierRoot.toLowerCase()) {
-				throw new Error(`Fork carry snapshot outcome ${index.toString()} differs from replay`)
+		if (!validatedGames.has(gameKey)) {
+			const currentCarryRoots: [Hash, Hash, Hash] = [zeroHash, zeroHash, zeroHash]
+			for (const index of [0, 1, 2] as const) {
+				const replayedOutcome = replayedGame.state.outcomes[index]
+				const onchain = outcomeStates[index]
+				const snapshotCommitment = carryCommitment(replayedOutcome.snapshotSlots)
+				const currentCommitment = carryCommitment(replayedOutcome.currentSlots)
+				currentCarryRoots[index] = currentCommitment.root
+				const currentNullifierRoot = sparseNullifierRoot(replayedOutcome.nullifier)
+				const rawInherited = rawAccounting.inheritedTotalsAttoRep[index]
+				const rawLocal = rawAccounting.localTotalsAttoRep[index]
+				if (directPrincipals[index] > rawInherited) throw new Error(`Carry outcome ${index.toString()} directly claimed principal exceeds reconstructed raw inherited REP`)
+				if (BigInt(replayedGame.localUnresolvedTotalsAttoRep[index]) !== rawLocal) throw new Error(`Carry outcome ${index.toString()} raw local accounting differs from replay`)
+				const effectiveInherited = finalOutcome === BigInt(index) ? truthAuctionRetention(journal, candidate.game, rawInherited - directPrincipals[index]) : 0n
+				const effectiveTotal = effectiveInherited + rawLocal
+				if (onchain.balanceAttoRep.toString() !== replayedOutcome.resolutionBalanceAttoRep) throw new Error(`Carry outcome ${index.toString()} resolution balance differs from replay`)
+				if (onchain.snapshotLeafCount.toString() !== snapshotCommitment.leafCount) throw new Error(`Carry outcome ${index.toString()} snapshot leaf count differs from replay`)
+				exactHashes(onchain.snapshotPeaks, snapshotCommitment.peaks, `Carry outcome ${index.toString()} snapshot peaks`)
+				if (onchain.inheritedUnresolvedTotalAttoRep !== effectiveInherited) throw new Error(`Carry outcome ${index.toString()} inherited unresolved REP differs from replay`)
+				if (onchain.currentNullifierRoot.toLowerCase() !== currentNullifierRoot.toLowerCase()) throw new Error(`Carry outcome ${index.toString()} nullifier root differs from replay`)
+				const localNodeIds = replayedOutcome.currentSlots.filter(slot => sameAddress(slot.originGame, candidate.game)).map(slot => BigInt(slot.leaf.sourceNodeId))
+				const expectedLocalHead = localNodeIds.reduce((largest, current) => (current > largest ? current : largest), 0n)
+				if (onchain.localHeadNodeId !== expectedLocalHead) throw new Error(`Carry outcome ${index.toString()} local head node differs from replay`)
+				if (onchain.currentLeafCount.toString() !== currentCommitment.leafCount) throw new Error(`Carry outcome ${index.toString()} current leaf count differs from replay`)
+				exactHashes(onchain.currentPeaks, currentCommitment.peaks, `Carry outcome ${index.toString()} current peaks`)
+				if (onchain.localUnresolvedTotalAttoRep !== rawLocal) throw new Error(`Carry outcome ${index.toString()} local unresolved REP differs from replay`)
+				if (onchain.currentCarryRoot.toLowerCase() !== currentCommitment.root.toLowerCase()) throw new Error(`Carry outcome ${index.toString()} carry root differs from replay`)
+				if (onchain.currentCarryTotalAttoRep !== effectiveTotal) throw new Error(`Carry outcome ${index.toString()} carry total differs from replay`)
+				const forkSnapshotPeaks = hashArray(forkSnapshot.carryPeaks[index], `Fork carry snapshot outcome ${index.toString()} peaks`)
+				exactHashes(forkSnapshotPeaks, currentCommitment.peaks, `Fork carry snapshot outcome ${index.toString()} peaks`)
+				if (forkSnapshot.carryLeafCounts[index].toString() !== currentCommitment.leafCount || forkSnapshot.carryTotalsAttoRep[index] !== effectiveTotal || forkSnapshot.nullifierRoots[index].toLowerCase() !== currentNullifierRoot.toLowerCase()) {
+					throw new Error(`Fork carry snapshot outcome ${index.toString()} differs from replay`)
+				}
 			}
+			currentCarryRootsByGame.set(gameKey, currentCarryRoots)
+			validatedGames.add(gameKey)
 		}
 		const proof = {
 			amountAttoRep: candidate.proof.amountAttoRep,
@@ -628,26 +613,18 @@ async function verifiedWithdrawalCandidates(context: CarryProofScanContext, jour
 			parentDepositIndex: candidate.proof.parentDepositIndex,
 			sourceNodeId: candidate.proof.sourceNodeId,
 		}
-		const currentCarryRoot = carryCommitment(replayedGame.state.outcomes[candidate.outcome].currentSlots).root
+		const currentCarryRoot = currentCarryRootsByGame.get(gameKey)?.[candidate.outcome]
+		if (currentCarryRoot === undefined) throw new Error(`Carry proof candidate game ${candidate.game} is missing its verified current carry root`)
 		const resultingNullifierRoot = computeNullifierRootFromProof(candidate.parentDepositIndex, proof.nullifierSiblings, CONSUMED_NULLIFIER_LEAF)
 		const proofCallArgument = proofArgument(proof)
-		const [retainedDeposit, retainedCumulative, sourceStorageBasis, bindingCapital, nonDecisionThreshold, gameEnd, universeId, zoltar, gameWithdrawal, simulation] = await Promise.all([
+		const [retainedDeposit, retainedCumulative, sourceStorageBasis, gameWithdrawal, simulation] = await drainConcurrent([
 			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [BigInt(proof.amountAttoRep), BigInt(proof.parentDepositIndex)], blockNumber: context.anchorBlockNumber, functionName: 'applyInheritedClaimRetention' }),
 			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [BigInt(proof.cumulativeAmountAttoRep), BigInt(proof.parentDepositIndex)], blockNumber: context.anchorBlockNumber, functionName: 'applyInheritedClaimRetention' }),
 			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, args: [BigInt(proof.amountAttoRep), BigInt(proof.cumulativeAmountAttoRep), BigInt(proof.parentDepositIndex)], blockNumber: context.anchorBlockNumber, functionName: 'applyInheritedSourceStorageBasis' }),
-			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getBindingCapitalAttoRep' }),
-			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
-			context.client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber: context.anchorBlockNumber, functionName: 'getEscalationGameEndDate' }),
-			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'universeId' }),
-			context.client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber: context.anchorBlockNumber, functionName: 'zoltar' }),
 			context.client.simulateContract({ account: candidate.pool, abi: escalationGameAbi, address: candidate.game, args: [proofCallArgument, candidate.outcome], blockNumber: context.anchorBlockNumber, functionName: 'withdrawDeposit' }),
 			context.client.simulateContract({ account: context.wallet, abi: securityPoolAbi, address: candidate.pool, args: [candidate.outcome, [proofCallArgument]], blockNumber: context.anchorBlockNumber, functionName: 'withdrawForkedEscalationDeposits' }),
 		])
 		if (simulation.result !== undefined) throw new Error('Carry withdrawal simulation did not return the canonical empty result')
-		const [forkThreshold, forkTime] = await Promise.all([
-			context.client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber: context.anchorBlockNumber, functionName: 'getForkThresholdAttoRep' }),
-			context.client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber: context.anchorBlockNumber, functionName: 'getForkTime' }),
-		])
 		const actualForkThreshold = forkTime > gameEnd ? nonDecisionThreshold : forkThreshold
 		const economics = computeWinningEconomics({
 			actualForkThresholdAttoRep: actualForkThreshold,
@@ -673,6 +650,7 @@ async function verifiedWithdrawalCandidates(context: CarryProofScanContext, jour
 			amountAttoRep: candidate.amountAttoRep,
 			amountToWithdrawAttoRep: economics.amountToWithdrawAttoRep.toString(),
 			burnAmountAttoRep: economics.burnAmountAttoRep.toString(),
+			claimSourceGame: candidate.claimSourceGame,
 			depositor: candidate.depositor,
 			game: candidate.game,
 			outcome: candidate.outcome,
@@ -689,7 +667,12 @@ async function verifiedWithdrawalCandidates(context: CarryProofScanContext, jour
 			sourcePool: sourceRoute.pool,
 		})
 	}
-	return candidates
+	return {
+		candidateCount: replay.proofCandidateCount,
+		journalDigest: replay.journalDigest,
+		presence: replay.proofCandidatePresence,
+		withdrawals: candidates,
+	}
 }
 
 export function carryProofDeploymentProfileId(settings: OperatorSettings) {
@@ -751,26 +734,19 @@ export function carryProofScanDigest(journal: CarryProofJournal, withdrawals: re
 	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }], [carryProofJournalDigest(journal), carryProofWithdrawalsDigest(withdrawals)]))
 }
 
-function completedUpdateFields(journal: CarryProofJournal, withdrawals: readonly ForkedCarryWithdrawalSnapshot[]) {
+function completedUpdateFields(journal: CarryProofJournal, withdrawals: readonly ForkedCarryWithdrawalSnapshot[], verifiedJournalDigest?: Hash) {
+	const journalDigest = verifiedJournalDigest ?? carryProofJournalDigest(journal)
+	const withdrawalsDigest = carryProofWithdrawalsDigest(withdrawals)
 	return {
-		digest: carryProofScanDigest(journal, withdrawals),
-		journalDigest: carryProofJournalDigest(journal),
-		withdrawalsDigest: carryProofWithdrawalsDigest(withdrawals),
+		digest: keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }], [journalDigest, withdrawalsDigest])),
+		journalDigest,
+		withdrawalsDigest,
 	}
 }
 
-async function compactJournalAtCursor(context: CarryProofScanContext, journal: CarryProofJournal) {
+function compactJournalAtCursor(journal: CarryProofJournal) {
 	if (!shouldCompactCarryProofJournal(journal)) return journal
-	const replay = replayCarryProofJournal(journal)
-	const rawAccountingByGame: Record<string, CarryJournalRawAccounting> = {}
-	const cutoffBlock = BigInt(journal.cursor.blockNumber)
-	await Promise.all(
-		Object.values(replay.games).map(async game => {
-			if (game.sourceGame === undefined) return
-			rawAccountingByGame[game.game.toLowerCase()] = rawAccountingStrings(await rawCarryAccountingAtBlock(context, journal, game, cutoffBlock))
-		}),
-	)
-	return compactCarryProofJournal(journal, rawAccountingByGame)
+	return compactCarryProofJournal(journal)
 }
 
 export async function updateCarryProofJournal(context: CarryProofScanContext): Promise<CarryProofScanUpdate> {
@@ -803,55 +779,81 @@ export async function updateCarryProofJournal(context: CarryProofScanContext): P
 					await canonicalBlockHash(context.client, BigInt(checkpointCutoff.blockNumber), checkpointCutoff.blockHash)
 				}
 			} catch (error) {
-				if (error instanceof Error) reset = true
+				if (error instanceof CarryCanonicalHistoryMismatchError) reset = true
+				else if (error instanceof Error) throw error
 				else throw new Error('Carry proof journal canonical-history probe threw a non-Error value', { cause: error })
 			}
 		}
 		journal = reset ? createCarryProofJournal({ chainId: context.chainId, initialCursor: { blockHash: startHash, blockNumber: context.startBlock.toString() }, profileId: context.profileId, securityPoolForker: context.securityPoolForker, startBlock: context.startBlock.toString() }) : context.previous
 	}
 	const cursor = BigInt(journal.cursor.blockNumber)
-	const scanStartInclusive = reset || context.previous === undefined || (journal.checkpoint === undefined && journal.events.length === 0 && cursor === context.startBlock)
+	const scanStartInclusive = !journal.scanStarted
 	const fromBlock = scanStartInclusive ? context.startBlock : cursor + 1n
 	if (fromBlock > context.anchorBlockNumber) {
-		journal = await compactJournalAtCursor(context, journal)
-		const withdrawals = await verifiedWithdrawalCandidates(context, journal, routeByGame)
-		return { ...completedUpdateFields(journal, withdrawals), complete: true, fromBlock: fromBlock.toString(), journal, reset, toBlock: journal.cursor.blockNumber, withdrawals }
+		journal = compactJournalAtCursor(journal)
+		const verified = await verifiedWithdrawalCandidates(context, journal, routeByGame)
+		await canonicalBlockHash(context.client, context.anchorBlockNumber, context.expectedAnchorHash)
+		return {
+			...completedUpdateFields(journal, verified.withdrawals, verified.journalDigest),
+			complete: true,
+			fromBlock: fromBlock.toString(),
+			journal,
+			reset,
+			toBlock: journal.cursor.blockNumber,
+			withdrawalCandidateCount: verified.candidateCount,
+			withdrawalPresence: verified.presence,
+			withdrawals: verified.withdrawals,
+		}
 	}
 	const maximumToBlock = fromBlock + context.maxBlockSpan - 1n
-	const toBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
+	const requestedToBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
 	const addresses = [...routeByGame.values()].map(route => route.escalationGame)
 	addresses.push(context.securityPoolForker)
-	const logs = orderedCanonicalLogs(await context.client.getLogs({ address: addresses, fromBlock, toBlock }), fromBlock, toBlock)
-	const blockHashes = new Map<string, Hash>()
+	const boundedLogs = await boundedCarryLogPrefix(context.client, addresses, fromBlock, requestedToBlock)
+	const toBlock = boundedLogs.toBlock
+	const logs = orderedCanonicalLogs(boundedLogs.logs, fromBlock, toBlock)
+	const blockHashes = await authenticateCanonicalLogBlocks(context.client, logs)
 	const additions: CarryProofJournalEvent[] = []
-	for (const log of logs) {
-		if (log.blockHash == null || log.blockNumber == null) throw new Error('Carry log lost its canonical block identity')
-		const cacheKey = log.blockNumber.toString()
-		const knownHash = blockHashes.get(cacheKey) ?? (await canonicalBlockHash(context.client, log.blockNumber, log.blockHash))
-		if (knownHash.toLowerCase() !== log.blockHash.toLowerCase()) throw new Error(`Carry log block ${cacheKey} does not match its canonical hash`)
-		blockHashes.set(cacheKey, knownHash)
-		const emitter = getAddress(log.address)
-		let decoded: CarryProofJournalEvent | undefined
-		if (sameAddress(emitter, context.securityPoolForker)) decoded = decodeForkerEvent(log, context.securityPoolForker, routeByGame, knownPools)
-		else {
-			const route = routeByGame.get(emitter.toLowerCase())
-			if (route === undefined) throw new Error(`Carry proof scan returned unexpected emitter ${emitter}`)
-			decoded = decodeGameEvent(log, route, routeByGame, journal, additions)
+	const incrementalReplay = createCarryProofJournalIncrementalReplay(journal)
+	try {
+		for (const log of logs) {
+			if (log.blockHash == null || log.blockNumber == null) throw new Error('Carry log lost its canonical block identity')
+			const cacheKey = log.blockNumber.toString()
+			const knownHash = blockHashes.get(cacheKey)
+			if (knownHash === undefined) throw new Error(`Carry log block ${cacheKey} was not authenticated`)
+			const emitter = getAddress(log.address)
+			let decoded: CarryProofJournalEvent | undefined
+			if (sameAddress(emitter, context.securityPoolForker)) decoded = decodeForkerEvent(log, context.securityPoolForker, routeByGame, knownPools)
+			else {
+				const route = routeByGame.get(emitter.toLowerCase())
+				if (route === undefined) throw new Error(`Carry proof scan returned unexpected emitter ${emitter}`)
+				decoded = decodeGameEvent(log, route, routeByGame, incrementalReplay)
+			}
+			if (decoded !== undefined) {
+				incrementalReplay.append(decoded)
+				additions.push(decoded)
+			}
 		}
-		if (decoded !== undefined) additions.push(decoded)
+	} finally {
+		// The next append/compaction and proof generation passes build their own
+		// bounded replay. Release this page decoder's indexes first so their peaks
+		// cannot overlap through a retained closure.
+		incrementalReplay.release()
 	}
 	const cursorHash = toBlock === context.anchorBlockNumber ? context.expectedAnchorHash : await canonicalBlockHash(context.client, toBlock)
-	journal = appendCarryProofJournalEvents(journal, additions, { blockHash: cursorHash, blockNumber: toBlock.toString() })
+	journal = appendCarryProofJournalEventsWithCompaction(journal, additions, { blockHash: cursorHash, blockNumber: toBlock.toString() })
 	const complete = toBlock === context.anchorBlockNumber
-	if (complete) journal = await compactJournalAtCursor(context, journal)
-	const withdrawals = complete ? await verifiedWithdrawalCandidates(context, journal, routeByGame) : []
+	const verified = complete ? await verifiedWithdrawalCandidates(context, journal, routeByGame) : { candidateCount: 0, journalDigest: undefined, presence: [], withdrawals: [] }
+	await canonicalBlockHash(context.client, context.anchorBlockNumber, context.expectedAnchorHash)
 	return {
-		...completedUpdateFields(journal, withdrawals),
+		...completedUpdateFields(journal, verified.withdrawals, verified.journalDigest),
 		complete,
 		fromBlock: fromBlock.toString(),
 		journal,
 		reset,
 		toBlock: toBlock.toString(),
-		withdrawals,
+		withdrawalCandidateCount: verified.candidateCount,
+		withdrawalPresence: verified.presence,
+		withdrawals: verified.withdrawals,
 	}
 }

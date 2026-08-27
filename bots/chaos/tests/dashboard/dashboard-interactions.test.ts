@@ -25,6 +25,9 @@ const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
 const activityHash = `0x${'78'.repeat(32)}`
 const walletAddress = `0x${'ab'.repeat(20)}`
+const longCatalogLabel = 'Blocked report sibling with an intentionally extended operation label that must remain associated with every mobile status field'
+const longCatalogIdentifier = `open-oracle.${'long-operation-identifier-segment-'.repeat(8)}blocked-sibling`
+const longCatalogBlocker = `Canonical blocker ${'without-a-natural-break-'.repeat(12)}must-stay-inside-the-operation-card`
 const topologyValues = {
 	auctionAddress: `0x${'a1'.repeat(20)}`,
 	auctionPoolAddress: `0x${'a2'.repeat(20)}`,
@@ -251,6 +254,7 @@ browserTest(
 		let recoveredDashboardState = firstScenario.recoveredState
 		let failSecondStateRead = true
 		let failNextStateRead = false
+		const settingsMutations: unknown[] = []
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({
@@ -301,7 +305,7 @@ browserTest(
 			setObligation: () => {},
 			setPaused: () => {},
 			setReplacement: () => {},
-			setSettings: () => {},
+			setSettings: value => settingsMutations.push(value),
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
@@ -319,6 +323,32 @@ browserTest(
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
 					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(message)
+			}
+			const accessibilityIdentity = async (selector: string) => {
+				const documentResult = await cdp.command('DOM.getDocument', { depth: 0 })
+				const rootNode = typeof documentResult === 'object' && documentResult !== null ? Reflect.get(documentResult, 'root') : undefined
+				const rootNodeId = typeof rootNode === 'object' && rootNode !== null ? Reflect.get(rootNode, 'nodeId') : undefined
+				if (typeof rootNodeId !== 'number') throw new Error('Chromium did not return the dashboard document node')
+				const queryResult = await cdp.command('DOM.querySelector', { nodeId: rootNodeId, selector })
+				const nodeId = typeof queryResult === 'object' && queryResult !== null ? Reflect.get(queryResult, 'nodeId') : undefined
+				if (typeof nodeId !== 'number' || nodeId === 0) throw new Error(`Chromium did not find ${selector}`)
+				const accessibilityResult = await cdp.command('Accessibility.getPartialAXTree', { fetchRelatives: false, nodeId })
+				const nodes = typeof accessibilityResult === 'object' && accessibilityResult !== null ? Reflect.get(accessibilityResult, 'nodes') : undefined
+				if (!Array.isArray(nodes) || nodes.length !== 1) throw new Error(`Chromium did not return one accessibility node for ${selector}`)
+				const node = nodes[0]
+				const name = typeof node === 'object' && node !== null ? Reflect.get(node, 'name') : undefined
+				const role = typeof node === 'object' && node !== null ? Reflect.get(node, 'role') : undefined
+				return {
+					name: typeof name === 'object' && name !== null ? Reflect.get(name, 'value') : undefined,
+					role: typeof role === 'object' && role !== null ? Reflect.get(role, 'value') : undefined,
+				}
+			}
+			const waitForSettingsMutation = async (count: number, message: string) => {
+				for (let attempt = 0; attempt < 200; attempt += 1) {
+					if (settingsMutations.length === count) return
 					await Bun.sleep(25)
 				}
 				throw new Error(message)
@@ -674,9 +704,9 @@ browserTest(
 				await waitFor(`document.querySelector('[data-identifier-type="wallet address"] .identifier-feedback')?.textContent === 'Copied'`, `${viewport.label} copy retry did not succeed`)
 				expect(await cdp.evaluate('window.__identifierCopies')).toEqual([walletAddress, walletAddress])
 
+				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
+				await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
 				if (viewport.label === 'desktop') {
-					await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
-					await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
 					expect(
 						await cdp.evaluate(`({
 								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
@@ -703,6 +733,55 @@ browserTest(
 							filter.dispatchEvent(new Event('change', { bubbles: true }))
 						})()`)
 					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('Pool.initialize') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
+				} else {
+					const mobileCatalog = await cdp.evaluate(`(() => {
+						const shell = document.querySelector('[data-page-content="catalog"] .table-shell')
+						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.textContent?.includes('open-oracle.blocked-sibling'))
+						if (!(shell instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) return undefined
+						const operationLabel = row.querySelector('.operation-name strong')
+						const operationId = row.querySelector('.operation-name small.mono')
+						const blocker = row.querySelector('.blocker-list li')
+						if (operationLabel !== null) operationLabel.textContent = ${JSON.stringify(longCatalogLabel)}
+						if (operationId !== null) operationId.textContent = ${JSON.stringify(longCatalogIdentifier)}
+						if (blocker !== null) blocker.textContent = ${JSON.stringify(longCatalogBlocker)}
+						shell.scrollLeft = shell.scrollWidth
+						const cells = [...row.querySelectorAll(':scope > td')]
+						const rowBounds = row.getBoundingClientRect()
+						const shellBounds = shell.getBoundingClientRect()
+						return {
+							blocker: blocker?.textContent,
+							candidateCount: cells[4]?.textContent?.trim(),
+							cellLabels: cells.map(cell => getComputedStyle(cell, '::before').content.replaceAll('"', '')),
+							cellsContained: cells.every(cell => {
+								const bounds = cell.getBoundingClientRect()
+								return bounds.left >= rowBounds.left - 1 && bounds.right <= rowBounds.right + 1 && cell.scrollWidth <= cell.clientWidth
+							}),
+							documentOverflow: document.body.scrollWidth > document.documentElement.clientWidth,
+							eligibility: cells[5]?.querySelector('.badge')?.textContent,
+							identity: operationLabel?.textContent,
+							identifier: operationId?.textContent,
+							maximumHorizontalScroll: shell.scrollWidth - shell.clientWidth,
+							risk: cells[3]?.querySelector('.badge')?.textContent,
+							rowContained: rowBounds.left >= shellBounds.left - 1 && rowBounds.right <= shellBounds.right + 1 && row.scrollWidth <= row.clientWidth,
+							rowDisplay: getComputedStyle(row).display,
+							shellOverflow: shell.scrollWidth > shell.clientWidth,
+						}
+					})()`)
+					expect(mobileCatalog).toEqual({
+						blocker: longCatalogBlocker,
+						candidateCount: '0',
+						cellLabels: ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility'],
+						cellsContained: true,
+						documentOverflow: false,
+						eligibility: 'Blocked',
+						identity: longCatalogLabel,
+						identifier: longCatalogIdentifier,
+						maximumHorizontalScroll: 0,
+						risk: 'Low',
+						rowContained: true,
+						rowDisplay: 'grid',
+						shellOverflow: false,
+					})
 				}
 
 				await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
@@ -851,12 +930,16 @@ browserTest(
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
 				expect(
 					await cdp.evaluate(`({
+						executeDescription: document.querySelector('#execute')?.getAttribute('aria-describedby'),
+						executeHelp: document.querySelector('#execute-help')?.textContent,
 						lede: document.querySelector('.settings-intro .lede')?.textContent,
 						locked: document.querySelector('#settings-fields')?.disabled,
 						pauseNote: document.querySelector('#settings-pause-note')?.textContent,
 						pauseNoteVisible: document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false,
 					})`),
 				).toEqual({
+					executeDescription: 'execute-help',
+					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
 					locked: true,
 					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
@@ -912,6 +995,166 @@ browserTest(
 				await cdp.command('Network.setBlockedURLs', { urls: [] })
 				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
 				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} unresolved settings mutation did not recover after a complete refresh`)
+				await cdp.evaluate(`(() => {
+					const execute = document.querySelector('#execute')
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const form = document.querySelector('#settings-form')
+					if (!(execute instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					execute.checked = true
+					ethReserve.value = '0'
+					repReserve.value = '10'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'ETH reserve must be greater than zero for live execution.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not reject a zero ETH reserve locally`)
+				await cdp.evaluate(`(() => {
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const form = document.querySelector('#settings-form')
+					if (!(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					ethReserve.value = '0.05'
+					repReserve.value = '0.000000000000000000'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'REP reserve must be greater than zero for live execution.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not reject a zero REP reserve locally`)
+				await cdp.evaluate(`(() => {
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const form = document.querySelector('#settings-form')
+					if (!(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					ethReserve.value = '0.01'
+					repReserve.value = '10'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'ETH reserve must retain at least one maximum-gas-cost-sized safety floor.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not retain one full gas budget as a safety floor`)
+				const mutationCountBeforePrecisionCheck = settingsMutations.length
+				await cdp.evaluate(`(() => {
+					const execute = document.querySelector('#execute')
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const form = document.querySelector('#settings-form')
+					if (!(execute instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					execute.checked = false
+					ethReserve.value = '0.0000000000000000001'
+					repReserve.value = '0'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor(
+					"document.querySelector('#settings-save-status')?.textContent === 'ETH reserve must be a non-negative decimal amount with at most 18 places.' && document.querySelector('#settings-fields')?.disabled === false",
+					`${viewport.label} policy did not reject reserve precision beyond 18 decimal places locally`,
+				)
+				expect(settingsMutations).toHaveLength(mutationCountBeforePrecisionCheck)
+
+				const mutationCountBeforeEqualDelay = settingsMutations.length
+				await cdp.evaluate(`(() => {
+					const execute = document.querySelector('#execute')
+					const minDelay = document.querySelector('#min-delay')
+					const maxDelay = document.querySelector('#max-delay')
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const form = document.querySelector('#settings-form')
+					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					execute.checked = true
+					minDelay.value = '60'
+					maxDelay.value = '60'
+					ethReserve.value = '0.05'
+					repReserve.value = '10'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Minimum delay must be at least one second less than maximum delay.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not reject equal delay bounds locally`)
+				expect(settingsMutations).toHaveLength(mutationCountBeforeEqualDelay)
+
+				const mutationCountBeforeMaximumMinimumDelay = settingsMutations.length
+				expect(await cdp.evaluate("document.querySelector('#min-delay')?.getAttribute('max')")).toBe('3599')
+				await cdp.evaluate(`(() => {
+					const minDelay = document.querySelector('#min-delay')
+					const maxDelay = document.querySelector('#max-delay')
+					const form = document.querySelector('#settings-form')
+					if (!(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					minDelay.value = '3600'
+					maxDelay.value = '3600'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Minimum delay must be at least one second less than maximum delay.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} live policy did not reject a 3600-second minimum delay locally`)
+				expect(settingsMutations).toHaveLength(mutationCountBeforeMaximumMinimumDelay)
+
+				const dryRunMutationCount = settingsMutations.length + 1
+				await cdp.evaluate(`(() => {
+					const execute = document.querySelector('#execute')
+					const minDelay = document.querySelector('#min-delay')
+					const maxDelay = document.querySelector('#max-delay')
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const maximumGasCost = document.querySelector('#maximum-gas-cost')
+					const form = document.querySelector('#settings-form')
+					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					execute.checked = false
+					minDelay.value = '60'
+					maxDelay.value = '3600'
+					ethReserve.value = '0'
+					repReserve.value = '0.000000000000000000'
+					maximumGasCost.value = '0.02'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitForSettingsMutation(dryRunMutationCount, `${viewport.label} dry-run zero-reserve policy was not submitted`)
+				expect(settingsMutations.at(-1)).toEqual({
+					patch: {
+						runtime: { execute: false },
+						scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
+						strategy: {
+							allowHighRiskOperations: false,
+							allowIrreversibleOperations: false,
+							enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
+							maximumEthPerOperation: '0.05',
+							maximumGasCostEth: '0.02',
+							maximumRepPerOperation: '10',
+							minimumEthReserve: '0',
+							minimumRepReserve: '0.000000000000000000',
+							workflowValidForBlocks: 96,
+						},
+					},
+					revision: 'fixture-1',
+				})
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} dry-run zero-reserve policy did not reconcile`)
+
+				const exactBoundaryMutationCount = settingsMutations.length + 1
+				await cdp.evaluate(`(() => {
+					const execute = document.querySelector('#execute')
+					const minDelay = document.querySelector('#min-delay')
+					const maxDelay = document.querySelector('#max-delay')
+					const ethReserve = document.querySelector('#reserve-eth')
+					const repReserve = document.querySelector('#reserve-rep')
+					const maximumGasCost = document.querySelector('#maximum-gas-cost')
+					const form = document.querySelector('#settings-form')
+					if (!(execute instanceof HTMLInputElement) || !(minDelay instanceof HTMLInputElement) || !(maxDelay instanceof HTMLInputElement) || !(ethReserve instanceof HTMLInputElement) || !(repReserve instanceof HTMLInputElement) || !(maximumGasCost instanceof HTMLInputElement) || !(form instanceof HTMLFormElement)) return
+					execute.checked = true
+					minDelay.value = '60'
+					maxDelay.value = '3600'
+					maximumGasCost.value = '0.123456789012345678'
+					ethReserve.value = '0.123456789012345678'
+					repReserve.value = '0.000000000000000001'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitForSettingsMutation(exactBoundaryMutationCount, `${viewport.label} exact gas-cost safety-floor policy was not submitted`)
+				expect(settingsMutations.at(-1)).toEqual({
+					patch: {
+						runtime: { execute: true },
+						scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
+						strategy: {
+							allowHighRiskOperations: false,
+							allowIrreversibleOperations: false,
+							enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
+							maximumEthPerOperation: '0.05',
+							maximumGasCostEth: '0.123456789012345678',
+							maximumRepPerOperation: '10',
+							minimumEthReserve: '0.123456789012345678',
+							minimumRepReserve: '0.000000000000000001',
+							workflowValidForBlocks: 96,
+						},
+					},
+					revision: 'fixture-1',
+				})
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} exact gas-cost safety-floor policy did not reconcile`)
 
 				initialDashboardState = degradedWorkflowRenderingState
 				recoveredDashboardState = degradedWorkflowRenderingState
@@ -935,6 +1178,25 @@ browserTest(
 				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} paused resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} resume dialog did not open`)
+				expect(await accessibilityIdentity('#resume-dialog')).toEqual({ name: 'Resume chaos scheduling?', role: 'dialog' })
+				expect(
+					await cdp.evaluate(`(() => {
+						const actions = [...document.querySelectorAll('#resume-dialog .dialog-actions button')]
+						const visualOrder = [...actions].sort((left, right) => {
+							const leftBounds = left.getBoundingClientRect()
+							const rightBounds = right.getBoundingClientRect()
+							return Math.abs(leftBounds.top - rightBounds.top) > 1 ? leftBounds.top - rightBounds.top : leftBounds.left - rightBounds.left
+						})
+						return {
+							active: document.activeElement?.id,
+							domOrder: actions.map(action => action.id),
+							visualOrder: visualOrder.map(action => action.id),
+						}
+					})()`),
+				).toEqual({ active: 'cancel-resume', domOrder: ['cancel-resume', 'confirm-resume'], visualOrder: ['cancel-resume', 'confirm-resume'] })
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'rawKeyDown', windowsVirtualKeyCode: 9 })
+				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'keyUp', windowsVirtualKeyCode: 9 })
+				expect(await cdp.evaluate('document.activeElement?.id')).toBe('confirm-resume')
 				await expectVisibleIdentifiers([{ type: 'recovery signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32, '#resume-dialog .compact-identifier')
 				await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
 				initialDashboardState = workflowRenderingState

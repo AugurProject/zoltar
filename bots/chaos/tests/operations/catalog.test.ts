@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '../support/bot-shared.ts'
 import { coordinatorAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import { validForkOutcomeRoutes } from '../../src/operations/fork-outcomes.ts'
 import type { OperationEvidence, OperationPlan } from '../../src/operations/types.ts'
@@ -101,6 +102,15 @@ describe('chaos operation catalog', () => {
 		const expected = ['open-oracle.settle:1', 'open-oracle.settle:2', `statoblast.auction.withdraw-refund:${address(41)}`, `statoblast.auction.withdraw-refund:${address(42)}`].sort()
 		expect(identities(1)).toEqual(expected)
 		expect(identities(0xffff_fffe)).toEqual(expected)
+		const auctionPlanIds = (seed: number) =>
+			urgentOperationPlans(snapshot, { ...permissiveOptions, seed })
+				.filter(plan => plan.definitionId === 'statoblast.auction.withdraw-refund')
+				.map(plan => [String(plan.metadata['auction']), plan.id] as const)
+				.sort(([left], [right]) => left.localeCompare(right))
+		const firstAuctionIds = auctionPlanIds(1)
+		expect(firstAuctionIds).toHaveLength(2)
+		expect(new Set(firstAuctionIds.map(([, planId]) => planId)).size).toBe(2)
+		expect(auctionPlanIds(0xffff_fffe)).toEqual(firstAuctionIds)
 
 		const secondReport = urgentOperationPlans(snapshot, { ...permissiveOptions, seed: 1 }).find(plan => plan.definitionId === 'open-oracle.settle' && plan.metadata['reportId'] === '2')
 		if (secondReport === undefined) throw new Error('Expected the second report lifecycle instance')
@@ -459,6 +469,7 @@ describe('chaos operation catalog', () => {
 			amountAttoRep: 10n.toString(),
 			amountToWithdrawAttoRep: 12n.toString(),
 			burnAmountAttoRep: 3n.toString(),
+			claimSourceGame: address(83),
 			depositor: snapshot.wallet.address,
 			game: pool.escalationGame,
 			outcome: 0 as const,
@@ -489,7 +500,7 @@ describe('chaos operation catalog', () => {
 		expect(plans).toHaveLength(2)
 		const invalid = plans.find(plan => plan.metadata['outcome'] === 0)
 		expect(invalid?.lastValidBlockNumber).toBe('101')
-		expect(invalid?.metadata).toEqual({ game: pool.escalationGame, outcome: 0, parentDepositIndex: '7', pool: pool.address, sourceGame: address(83), sourceNodeId: '9' })
+		expect(invalid?.metadata).toEqual({ claimSourceGame: address(83), game: pool.escalationGame, outcome: 0, parentDepositIndex: '7', pool: pool.address, sourceGame: address(83), sourceNodeId: '9' })
 		expect(invalid?.steps).toHaveLength(1)
 		expect(invalid?.steps[0]?.data.startsWith('0xcd8e4401')).toBeTrue()
 		expect(invalid?.steps[0]?.preflightCalls).toHaveLength(1)
@@ -500,6 +511,66 @@ describe('chaos operation catalog', () => {
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '3', field: 'burnAmountAttoRep' }))
 		const presence = canonicalLifecyclePresence(snapshot, { ...permissiveOptions, maxEthSpendAttoEth: 0n.toString(), maxRepSpendAttoRep: 0n.toString() }).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 		expect(presence.map(entry => entry.metadata['parentDepositIndex'])).toEqual(['7', '8'])
+	})
+
+	test('retains every lightweight carry identity when the verified proof page is bounded', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Pool fixture missing')
+		const candidate = {
+			amountAttoRep: 10n.toString(),
+			amountToWithdrawAttoRep: 10n.toString(),
+			burnAmountAttoRep: 0n.toString(),
+			claimSourceGame: address(83),
+			depositor: snapshot.wallet.address,
+			game: pool.escalationGame,
+			outcome: 1 as const,
+			parentDepositIndex: '0',
+			pool: pool.address,
+			preflightExpectedResult: '0x' as const,
+			proof: {
+				amountAttoRep: 10n.toString(),
+				cumulativeAmountAttoRep: 10n.toString(),
+				depositor: snapshot.wallet.address,
+				leafIndex: '0',
+				merkleMountainRangePeakIndex: '0',
+				merkleMountainRangeSiblings: [],
+				nullifierSiblings: Array.from({ length: 64 }, () => hash(0)),
+				parentDepositIndex: '0',
+				sourceNodeId: '0',
+			},
+			resultingCarryRoot: hash(80),
+			resultingNullifierRoot: hash(81),
+			resultingUnresolvedTotalAttoRep: 0n.toString(),
+			snapshotId: hash(82),
+			sourceGame: address(83),
+			sourceNodeId: '0',
+			sourcePool: address(84),
+		}
+		const identityCount = CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES + 8
+		snapshot.forkedCarryWithdrawals = Array.from({ length: CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES }, (_, index) => ({
+			...candidate,
+			parentDepositIndex: index.toString(),
+			proof: { ...candidate.proof, parentDepositIndex: index.toString(), sourceNodeId: index.toString() },
+			sourceNodeId: index.toString(),
+		}))
+		snapshot.forkedCarryWithdrawalPresence = Array.from({ length: identityCount }, (_, index) => ({
+			claimSourceGame: candidate.claimSourceGame,
+			game: candidate.game,
+			outcome: candidate.outcome,
+			parentDepositIndex: index.toString(),
+			pool: candidate.pool,
+			sourceGame: candidate.sourceGame,
+			sourceNodeId: index.toString(),
+		}))
+
+		const plans = urgentOperationPlans(snapshot, permissiveOptions).filter(plan => plan.definitionId === 'statoblast.escalation.withdraw-forked')
+		const presence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
+
+		expect(plans).toHaveLength(CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES)
+		expect(presence).toHaveLength(identityCount)
+		expect(presence.at(-1)?.metadata).toMatchObject({ parentDepositIndex: (identityCount - 1).toString(), sourceNodeId: (identityCount - 1).toString() })
+		expect(plans.some(plan => plan.metadata['parentDepositIndex'] === (identityCount - 1).toString())).toBeFalse()
 	})
 
 	test('bounds escalation lifecycle batches and advances their durable identity', () => {

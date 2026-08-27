@@ -48,6 +48,16 @@ async function configuredExample(): Promise<Record<string, unknown>> {
 	}
 }
 
+async function liveConfiguredExample(): Promise<Record<string, unknown>> {
+	const value: unknown = JSON.parse(await readFile(configuredPlaceholderPath, 'utf8'))
+	const configured = record(value)
+	return {
+		...configured,
+		privateKey: `0x${'22'.repeat(32)}`,
+		runtime: { ...record(configured['runtime']), execute: true },
+	}
+}
+
 describe('chaos-bot settings', () => {
 	test('parses every committed configuration example through the production schema', async () => {
 		const paths = (await readdir(configDirectory)).filter(name => name.startsWith('operator.') && name.endsWith('.json')).map(name => resolve(configDirectory, name))
@@ -57,6 +67,8 @@ describe('chaos-bot settings', () => {
 			expect(settings.paused).toBeTrue()
 			expect(settings.runtime.execute).toBeFalse()
 			expect(settings.privateKey).toBeUndefined()
+			expect(settings.strategy.minimumEthReserveAttoEth).toBeGreaterThan(0n)
+			expect(settings.strategy.minimumRepReserveAttoRep).toBeGreaterThan(0n)
 		}
 		const configured = parseSettings(JSON.parse(await readFile(configuredPlaceholderPath, 'utf8')))
 		expect(configured.networkConfigured).toBeTrue()
@@ -271,6 +283,64 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('every ecosystem deployment address')
 	})
 
+	test('rejects a zero ETH reserve in live execution mode', async () => {
+		const live = await liveConfiguredExample()
+		expect(() => parseSettings({ ...live, strategy: { ...record(live['strategy']), minimumEthReserve: '0' } })).toThrow('Live execution requires strategy.minimumEthReserve to be greater than zero')
+	})
+
+	test('rejects a zero REP reserve in live execution mode', async () => {
+		const live = await liveConfiguredExample()
+		expect(() => parseSettings({ ...live, strategy: { ...record(live['strategy']), minimumRepReserve: '0.000000000000000000' } })).toThrow('Live execution requires strategy.minimumRepReserve to be greater than zero')
+	})
+
+	test('accepts zero ETH and REP reserves in dry-run mode', async () => {
+		const dryRun = await configuredExample()
+		const settings = parseSettings({
+			...dryRun,
+			strategy: {
+				...record(dryRun['strategy']),
+				minimumEthReserve: '0',
+				minimumRepReserve: '0.000000000000000000',
+			},
+		})
+		expect(settings.runtime.execute).toBeFalse()
+		expect(settings.strategy.minimumEthReserveAttoEth).toBe(0n)
+		expect(settings.strategy.minimumRepReserveAttoRep).toBe(0n)
+	})
+
+	test('rejects configured amounts with more than 18 decimal places', async () => {
+		const dryRun = await configuredExample()
+		for (const field of ['maximumGasCostEth', 'minimumEthReserve', 'minimumRepReserve']) {
+			expect(() =>
+				parseSettings({
+					...dryRun,
+					strategy: { ...record(dryRun['strategy']), [field]: '0.0000000000000000001' },
+				}),
+			).toThrow(`strategy.${field} must be a non-negative decimal with at most 18 places`)
+		}
+	})
+
+	test('requires one full configured gas budget as the live ETH safety floor', async () => {
+		const live = await liveConfiguredExample()
+		expect(() => parseSettings({ ...live, strategy: { ...record(live['strategy']), minimumEthReserve: '0.019999999999999999' } })).toThrow('minimumEthReserve to retain at least one strategy.maximumGasCostEth-sized safety floor')
+	})
+
+	test('accepts an exact 18-place gas-cost safety-floor boundary and one atomic REP reserve unit', async () => {
+		const live = await liveConfiguredExample()
+		const settings = parseSettings({
+			...live,
+			strategy: {
+				...record(live['strategy']),
+				maximumGasCostEth: '0.123456789012345678',
+				minimumEthReserve: '0.123456789012345678',
+				minimumRepReserve: '0.000000000000000001',
+			},
+		})
+		expect(settings.strategy.maximumGasCostAttoEth).toBe(123_456_789_012_345_678n)
+		expect(settings.strategy.minimumEthReserveAttoEth).toBe(settings.strategy.maximumGasCostAttoEth)
+		expect(settings.strategy.minimumRepReserveAttoRep).toBe(1n)
+	})
+
 	test('requires quorum 2 across three independent read origins for live execution', async () => {
 		const configured = await configuredExample()
 		const privateKey = `0x${'22'.repeat(32)}` as const
@@ -319,6 +389,7 @@ describe('chaos-bot settings', () => {
 		const example = await storedExample()
 		expect(() => parseSettings({ ...example, scheduler: { maximumDelaySeconds: 3_601, minimumDelaySeconds: 60 } })).toThrow('maximumDelaySeconds')
 		expect(() => parseSettings({ ...example, scheduler: { maximumDelaySeconds: 60, minimumDelaySeconds: 60 } })).toThrow('maximumDelaySeconds')
+		expect(() => parseSettings({ ...example, scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 3_600 } })).toThrow('minimumDelaySeconds')
 		expect(() => parseSettings({ ...example, scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 59 } })).toThrow('minimumDelaySeconds')
 	})
 

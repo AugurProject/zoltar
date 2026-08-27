@@ -72,7 +72,7 @@ export function limitDiscoveryConcurrency(client: ChaosReadClient, maximum = DIS
 			waiting.shift()?.()
 		}
 	}
-	const limitedMethods = new Set<PropertyKey>(['getBalance', 'getBlock', 'getChainId', 'readContract', 'simulateContract'])
+	const limitedMethods = new Set<PropertyKey>(['getBalance', 'getBlock', 'getBlockNumber', 'getChainId', 'getLogs', 'readContract', 'request', 'simulateContract'])
 	return new Proxy(client, {
 		get(target, property, receiver) {
 			const value = Reflect.get(target, property, receiver)
@@ -334,7 +334,7 @@ export async function advanceVaultRegistryCursor(parameters: { cachedVaults: rea
 	return { changed, complete: collected.complete, cursor, vaults }
 }
 
-async function drainConcurrent<T extends readonly unknown[] | []>(values: T) {
+export async function drainConcurrent<T extends readonly unknown[] | []>(values: T) {
 	const settled = await Promise.allSettled(values)
 	for (const result of settled) if (result.status === 'rejected') throw result.reason
 	return await Promise.all(values)

@@ -15,6 +15,7 @@ import {
 	discoverEcosystemSnapshot,
 	discoverShareInventory,
 	discoverStagedOperations,
+	drainConcurrent,
 	forkMigrationWindowIsOpen,
 	forkRepMigrationTarget,
 	limitDiscoveryConcurrency,
@@ -260,10 +261,12 @@ describe('anchored ecosystem discovery', () => {
 	test('bounds provider concurrency under maximum-limit fan-out', async () => {
 		let active = 0
 		let peak = 0
+		const invoked = new Set<PropertyKey>()
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
-				if (property !== 'getChainId') throw new Error(`Unexpected client method ${String(property)}`)
+				if (!new Set<PropertyKey>(['getBlockNumber', 'getChainId', 'getLogs', 'request']).has(property)) throw new Error(`Unexpected client method ${String(property)}`)
 				return async () => {
+					invoked.add(property)
 					active += 1
 					peak = Math.max(peak, active)
 					await new Promise(resolve => setTimeout(resolve, 1))
@@ -273,8 +276,18 @@ describe('anchored ecosystem discovery', () => {
 			},
 		})
 		const limited = limitDiscoveryConcurrency(client)
-		const settled = await Promise.allSettled(Array.from({ length: DISCOVERY_RPC_CONCURRENCY + DISCOVERY_RPC_QUEUE_LIMIT + 1 }, () => limited.getChainId()))
+		const settled = await Promise.allSettled(
+			Array.from({ length: DISCOVERY_RPC_CONCURRENCY + DISCOVERY_RPC_QUEUE_LIMIT + 1 }, (_, index) => {
+				if (index % 4 === 0) return limited.getBlockNumber()
+				if (index % 4 === 1) return limited.getChainId()
+				if (index % 4 === 2) return limited.getLogs({})
+				const request = Reflect.get(limited, 'request')
+				if (typeof request !== 'function') throw new Error('Limited test client lost its request method')
+				return Promise.resolve(request.call(limited, { method: 'eth_chainId' }))
+			}),
+		)
 		expect(peak).toBe(DISCOVERY_RPC_CONCURRENCY)
+		expect(invoked).toEqual(new Set(['getBlockNumber', 'getChainId', 'getLogs', 'request']))
 		expect(settled.filter(result => result.status === 'rejected')).toHaveLength(1)
 		expect(settled.find(result => result.status === 'rejected')).toMatchObject({ reason: expect.objectContaining({ message: `Discovery RPC queue exceeded its ${DISCOVERY_RPC_QUEUE_LIMIT.toString()}-request safety limit` }) })
 	})
@@ -325,6 +338,22 @@ describe('anchored ecosystem discovery', () => {
 		}
 		expect(undefinedRejectionObserved).toBeTrue()
 		expect(undefinedRejectionStarts).toBe(1)
+	})
+
+	test('drains all already-started RPC work before surfacing a concurrent failure', async () => {
+		let release: (() => void) | undefined
+		const gate = new Promise<void>(resolve => {
+			release = resolve
+		})
+		let rejected = false
+		const completion = drainConcurrent([Promise.reject(new Error('anchored read failed')), gate]).catch(error => {
+			rejected = true
+			throw error
+		})
+		await new Promise(resolve => setTimeout(resolve, 0))
+		expect(rejected).toBeFalse()
+		release?.()
+		await expect(completion).rejects.toThrow('anchored read failed')
 	})
 
 	test('rejects an aggregate pool-by-universe fan-out before issuing RPC requests', async () => {

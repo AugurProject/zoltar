@@ -47,6 +47,10 @@ export function mixSeed(seed: number, salt: string) {
 	return value >>> 0
 }
 
+export function canonicalizeOperationMetadata(metadata: OperationPlan['metadata']): OperationPlan['metadata'] {
+	return Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right)))
+}
+
 export function choose<T>(values: readonly T[], seed: number): T | undefined {
 	if (values.length === 0) return undefined
 	return values[seed % values.length]
@@ -139,14 +143,16 @@ export function planBase(parameters: {
 	lastValidBlockNumber?: string | undefined
 }): OperationPlanDraft {
 	const priority = parameters.priority ?? 'random'
+	const metadata = canonicalizeOperationMetadata(parameters.metadata ?? {})
+	const metadataDigest = keccak256(toHex(JSON.stringify(metadata)))
 	const plan: OperationPlanDraft = {
 		classification: priority === 'urgent' ? 'lifecycle-obligation' : 'selectable',
 		createdAtBlock: parameters.snapshot.anchor.blockNumber,
 		definitionId: parameters.definitionId,
 		ecosystem: parameters.ecosystem,
-		id: `${parameters.definitionId}:${parameters.snapshot.anchor.blockNumber}:${parameters.steps[0]?.id ?? 'empty'}`,
+		id: `${parameters.definitionId}:${parameters.snapshot.anchor.blockNumber}:${metadataDigest}`,
 		label: parameters.label,
-		metadata: parameters.metadata ?? {},
+		metadata,
 		obligation: priority === 'urgent',
 		postconditions: parameters.postconditions,
 		priority,

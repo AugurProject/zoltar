@@ -6,6 +6,7 @@ export const CARRY_NULLIFIER_DEPTH = 64
 
 const MAXIMUM_CARRY_LEAF_COUNT = 1n << BigInt(CARRY_MMR_MAXIMUM_PEAKS)
 const MAXIMUM_UINT256 = (1n << 256n) - 1n
+const MAXIMUM_UINT256_DECIMAL = MAXIMUM_UINT256.toString()
 const NULLIFIER_PATH_MASK = (1n << BigInt(CARRY_NULLIFIER_DEPTH)) - 1n
 const NULLIFIER_CONSUMED_LEAF = toHex(1n, { size: 32 })
 const HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/
@@ -224,8 +225,10 @@ export interface CarryProofAccumulator {
 
 function unsignedInteger(value: string, label: string) {
 	if (!UNSIGNED_INTEGER_PATTERN.test(value)) throw new Error(`${label} must be an unsigned decimal integer`)
+	if (value.length > MAXIMUM_UINT256_DECIMAL.length || (value.length === MAXIMUM_UINT256_DECIMAL.length && value > MAXIMUM_UINT256_DECIMAL)) {
+		throw new Error(`${label} exceeds uint256`)
+	}
 	const parsed = BigInt(value)
-	if (parsed > MAXIMUM_UINT256) throw new Error(`${label} exceeds uint256`)
 	return parsed
 }
 
@@ -1070,7 +1073,9 @@ function emptyIndexedMmr(): IndexedMerkleMountainRange {
 	return {
 		leafCount: 0,
 		nodes: new Map(),
-		peaks: Array.from({ length: CARRY_MMR_MAXIMUM_PEAKS }, () => undefined),
+		// Heights are populated lazily. Allocating all 64 entries for both MMRs
+		// across every outcome makes empty games disproportionately expensive.
+		peaks: [],
 	}
 }
 
@@ -1305,7 +1310,7 @@ export function carryProofAccumulatorCommitment(accumulator: CarryProofAccumulat
 	const index = source === 'current' ? accumulator.outcomes[outcome].currentMmr : accumulator.outcomes[outcome].snapshotMmr
 	return {
 		leafCount: index.leafCount.toString(),
-		peaks: index.peaks.map(peak => peak ?? zeroHash),
+		peaks: Array.from({ length: CARRY_MMR_MAXIMUM_PEAKS }, (_, height) => index.peaks[height] ?? zeroHash),
 		root: indexedMmrRoot(index, accumulator.instrumentation),
 	}
 }
@@ -1414,6 +1419,38 @@ export function applyCarryConsumptionToAccumulator(accumulator: CarryProofAccumu
 	outcomeState.unresolvedTotalAttoRep = consumption.resultingUnresolvedTotalAttoRep
 	accumulator.instrumentation.streamingMutationCount += 1
 	return kind
+}
+
+/**
+ * Returns the uniquely indexed leaf before a carry consumption mutates it.
+ * Keeping this lookup beside the accumulator index avoids quadratic journal
+ * replay when historical source-storage accounting is reconstructed.
+ */
+export function carryProofAccumulatorConsumptionSlot(accumulator: CarryProofAccumulator, consumption: Pick<CarryConsumption, 'amountAttoRep' | 'depositor' | 'outcome' | 'parentDepositIndex' | 'sourceNodeId'>) {
+	requireOutcome(consumption.outcome)
+	getAddress(consumption.depositor)
+	unsignedInteger(consumption.amountAttoRep, 'Carry consumption amountAttoRep')
+	unsignedInteger(consumption.parentDepositIndex, 'Carry consumption parentDepositIndex')
+	unsignedInteger(consumption.sourceNodeId, 'Carry consumption sourceNodeId')
+	const identity = `${consumption.outcome.toString()}:${consumption.parentDepositIndex}:${consumption.sourceNodeId}:${consumption.depositor.toLowerCase()}:${consumption.amountAttoRep}`
+	const slotIndex = accumulator.outcomes[consumption.outcome].currentSlotIndexByIdentity.get(identity)
+	if (slotIndex === undefined) throw new Error('Carry consumption matched 0 leaves instead of one')
+	const slot = accumulator.state.outcomes[consumption.outcome].currentSlots[slotIndex]
+	if (slot === undefined) throw new Error('Carry consumption slot is missing')
+	return cloneSlot(slot)
+}
+
+/** Computes the authenticated roots for a known local consumption without mutating the accumulator. */
+export function carryProofAccumulatorLocalConsumptionRoots(accumulator: CarryProofAccumulator, consumption: Pick<CarryConsumption, 'amountAttoRep' | 'depositor' | 'outcome' | 'parentDepositIndex' | 'sourceNodeId'>) {
+	const slot = carryProofAccumulatorConsumptionSlot(accumulator, consumption)
+	if (slot.originGame.toLowerCase() !== accumulator.game.toLowerCase() || slot.consumedLocally) throw new Error('Carry consumption is not an unconsumed local deposit')
+	const identity = `${consumption.outcome.toString()}:${consumption.parentDepositIndex}:${consumption.sourceNodeId}:${consumption.depositor.toLowerCase()}:${consumption.amountAttoRep}`
+	const slotIndex = accumulator.outcomes[consumption.outcome].currentSlotIndexByIdentity.get(identity)
+	if (slotIndex === undefined) throw new Error('Carry consumption matched 0 leaves instead of one')
+	return {
+		carryRoot: indexedMmrPathRoot(accumulator.outcomes[consumption.outcome].currentMmr, slotIndex, zeroHash, accumulator.instrumentation),
+		nullifierRoot: indexedNullifierRoot(accumulator.outcomes[consumption.outcome].nullifier),
+	}
 }
 
 export function setCarryProofAccumulatorAccounting(accumulator: CarryProofAccumulator, accounting: CarryAccounting) {

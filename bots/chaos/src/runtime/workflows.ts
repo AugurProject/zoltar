@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
+import { canonicalizeOperationMetadata } from '../operations/planning.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import type { DurableWorkflow, DurableWorkflowFailureKind, DurableWorkflowStep, PendingTransactionIntent, RuntimeState } from '../state/operator-state.ts'
 
@@ -23,7 +24,7 @@ function workflowStep(planStep: OperationPlan['steps'][number]): DurableWorkflow
 }
 
 function canonicalMetadata(metadata: OperationPlan['metadata']) {
-	return JSON.stringify(Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right))))
+	return JSON.stringify(canonicalizeOperationMetadata(metadata))
 }
 
 function stepRequiresCanonicalLifecycleConfirmation(step: Pick<DurableWorkflowStep, 'evidence'>) {
@@ -81,7 +82,7 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 		workflow.semanticDeadlineBlockNumber = plan.semanticDeadlineBlockNumber
 	}
 	workflow.label = plan.label
-	workflow.metadata = { ...plan.metadata }
+	workflow.metadata = canonicalizeOperationMetadata(plan.metadata)
 	workflow.obligation = plan.obligation
 	workflow.planId = plan.id
 	workflow.planningSeed = plan.planningSeed
@@ -110,7 +111,7 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 			: {
 					semanticDeadlineBlockNumber: workflow.semanticDeadlineBlockNumber,
 				}),
-		metadata: { ...workflow.metadata },
+		metadata: canonicalizeOperationMetadata(workflow.metadata),
 		obligation: workflow.obligation,
 		postconditions: [...workflow.postconditions],
 		priority: workflow.priority,
@@ -147,7 +148,7 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 			: {
 					semanticDeadlineBlockNumber: plan.semanticDeadlineBlockNumber,
 				}),
-		metadata: plan.metadata,
+		metadata: canonicalizeOperationMetadata(plan.metadata),
 		obligation: plan.obligation,
 		operationId: plan.definitionId,
 		planId: plan.id,
@@ -163,7 +164,12 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 
 export function retainWorkflow(state: Pick<RuntimeState, 'workflows'>, plan: OperationPlan) {
 	const existing = state.workflows.find(workflow => workflow.planId === plan.id && workflow.status !== 'abandoned' && workflow.status !== 'completed' && workflow.status !== 'failed' && workflow.status !== 'blocked')
-	if (existing !== undefined) return existing
+	if (existing !== undefined) {
+		if (!workflowMatchesContinuationPlan(existing, plan)) {
+			throw new Error(`Plan id ${plan.id} collides with a different operation identity in workflow ${existing.id}`)
+		}
+		return existing
+	}
 	const workflow = createDurableWorkflow(plan)
 	state.workflows.unshift(workflow)
 	return workflow

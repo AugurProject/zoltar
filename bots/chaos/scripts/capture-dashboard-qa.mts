@@ -12,11 +12,12 @@ type CdpMessage = {
 }
 
 type CaptureRequest = {
+	catalogDetail?: true | undefined
 	fullDocument?: true | undefined
 	height: number
-	horizontalScroll?: 'catalog-end' | undefined
 	name: string
 	recoveryRefreshFailure?: 'candidate' | undefined
+	resumeDialog?: true | undefined
 	route: string
 	stateRefreshFailure?: true | undefined
 	verticalScroll?: 'rpc-health' | 'topology' | undefined
@@ -37,13 +38,15 @@ const requestedCaptureSource = process.argv[2]
 if (requestedCaptureSource === undefined) {
 	const captures: CaptureRequest[] = [
 		{ height: 900, name: 'chaos-overview-desktop', route: 'overview', width: 1_440 },
+		{ height: 900, name: 'chaos-resume-desktop', resumeDialog: true, route: 'overview', width: 1_440 },
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop-topology', route: 'ecosystem', verticalScroll: 'topology', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
+		{ height: 844, name: 'chaos-resume-mobile', resumeDialog: true, route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
 		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
-		{ height: 844, horizontalScroll: 'catalog-end', name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
+		{ catalogDetail: true, height: 844, name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
 		{ height: 844, name: 'chaos-ecosystem-mobile-topology', route: 'ecosystem', verticalScroll: 'topology', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
@@ -61,28 +64,30 @@ if (requestedCaptureSource === undefined) {
 function parseCaptureRequest(value: string): CaptureRequest {
 	const parsed: unknown = JSON.parse(value)
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Capture request must be an object')
+	const catalogDetail = Reflect.get(parsed, 'catalogDetail')
 	const fullDocument = Reflect.get(parsed, 'fullDocument')
 	const height = Reflect.get(parsed, 'height')
-	const horizontalScroll = Reflect.get(parsed, 'horizontalScroll')
 	const name = Reflect.get(parsed, 'name')
 	const recoveryRefreshFailure = Reflect.get(parsed, 'recoveryRefreshFailure')
+	const resumeDialog = Reflect.get(parsed, 'resumeDialog')
 	const route = Reflect.get(parsed, 'route')
 	const stateRefreshFailure = Reflect.get(parsed, 'stateRefreshFailure')
 	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
 	const width = Reflect.get(parsed, 'width')
 	if (
+		(catalogDetail !== undefined && catalogDetail !== true) ||
 		(fullDocument !== undefined && fullDocument !== true) ||
 		typeof height !== 'number' ||
-		(horizontalScroll !== undefined && horizontalScroll !== 'catalog-end') ||
 		typeof name !== 'string' ||
 		(recoveryRefreshFailure !== undefined && recoveryRefreshFailure !== 'candidate') ||
+		(resumeDialog !== undefined && resumeDialog !== true) ||
 		typeof route !== 'string' ||
 		(stateRefreshFailure !== undefined && stateRefreshFailure !== true) ||
 		(verticalScroll !== undefined && verticalScroll !== 'rpc-health' && verticalScroll !== 'topology') ||
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
-	return { fullDocument, height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }
+	return { catalogDetail, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -188,7 +193,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ fullDocument, height, horizontalScroll, name, recoveryRefreshFailure, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ catalogDetail, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -285,6 +290,81 @@ try {
 			}
 			if (!failureReady) throw new Error('Dashboard fixture did not expose candidate recovery Retry after the forced state-refresh failure')
 		}
+		if (resumeDialog === true) {
+			await evaluate("document.querySelector('#pause-button')?.click()")
+			let paused = false
+			for (let poll = 0; poll < 60; poll += 1) {
+				paused = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#pause-button')?.textContent === 'Resume'")) === true
+				if (paused) break
+				await Bun.sleep(100)
+			}
+			if (!paused) throw new Error('Dashboard fixture did not pause before the resume-dialog capture')
+			await evaluate("document.querySelector('#pause-button')?.click()")
+			let dialogOpen = false
+			for (let poll = 0; poll < 60; poll += 1) {
+				dialogOpen = (await evaluate("document.querySelector('#resume-dialog')?.open === true")) === true
+				if (dialogOpen) break
+				await Bun.sleep(100)
+			}
+			if (!dialogOpen) throw new Error('Dashboard fixture did not open the resume confirmation')
+			const modalLayout = await evaluate(`(() => {
+				const dialog = document.querySelector('#resume-dialog')
+				const title = document.querySelector('#resume-dialog-title')
+				if (!(dialog instanceof HTMLDialogElement) || !(title instanceof HTMLHeadingElement)) return undefined
+				const bounds = dialog.getBoundingClientRect()
+				const actions = [...dialog.querySelectorAll('.dialog-actions button')]
+				const visualOrder = [...actions].sort((left, right) => {
+					const leftBounds = left.getBoundingClientRect()
+					const rightBounds = right.getBoundingClientRect()
+					return Math.abs(leftBounds.top - rightBounds.top) > 1 ? leftBounds.top - rightBounds.top : leftBounds.left - rightBounds.left
+				})
+				return {
+					active: document.activeElement?.id,
+					bottom: bounds.bottom,
+					buttonHeights: [...dialog.querySelectorAll('button')].map(button => button.getBoundingClientRect().height),
+					domOrder: actions.map(action => action.id),
+					labelledBy: dialog.getAttribute('aria-labelledby'),
+					left: bounds.left,
+					right: bounds.right,
+					scrollContained: dialog.scrollWidth <= dialog.clientWidth,
+					title: title.textContent?.trim(),
+					top: bounds.top,
+					visualOrder: visualOrder.map(action => action.id),
+				}
+			})()`)
+			const buttonHeights = typeof modalLayout === 'object' && modalLayout !== null ? Reflect.get(modalLayout, 'buttonHeights') : undefined
+			const modalBottom = typeof modalLayout === 'object' && modalLayout !== null ? Reflect.get(modalLayout, 'bottom') : undefined
+			const modalLeft = typeof modalLayout === 'object' && modalLayout !== null ? Reflect.get(modalLayout, 'left') : undefined
+			const modalRight = typeof modalLayout === 'object' && modalLayout !== null ? Reflect.get(modalLayout, 'right') : undefined
+			const modalTop = typeof modalLayout === 'object' && modalLayout !== null ? Reflect.get(modalLayout, 'top') : undefined
+			if (
+				typeof modalLayout !== 'object' ||
+				modalLayout === null ||
+				Array.isArray(modalLayout) ||
+				Reflect.get(modalLayout, 'active') !== 'cancel-resume' ||
+				typeof modalBottom !== 'number' ||
+				modalBottom > height + 1 ||
+				Reflect.get(modalLayout, 'labelledBy') !== 'resume-dialog-title' ||
+				typeof modalLeft !== 'number' ||
+				modalLeft < -1 ||
+				typeof modalRight !== 'number' ||
+				modalRight > width + 1 ||
+				Reflect.get(modalLayout, 'scrollContained') !== true ||
+				Reflect.get(modalLayout, 'title') !== 'Resume chaos scheduling?' ||
+				typeof modalTop !== 'number' ||
+				modalTop < -1 ||
+				JSON.stringify(Reflect.get(modalLayout, 'domOrder')) !== JSON.stringify(['cancel-resume', 'confirm-resume']) ||
+				JSON.stringify(Reflect.get(modalLayout, 'visualOrder')) !== JSON.stringify(['cancel-resume', 'confirm-resume']) ||
+				!Array.isArray(buttonHeights) ||
+				buttonHeights.some(buttonHeight => typeof buttonHeight !== 'number' || buttonHeight < (width === 390 ? 44 : 32))
+			) {
+				throw new Error(`Resume confirmation did not fit its labelled modal viewport: ${JSON.stringify(modalLayout)}`)
+			}
+			await command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'rawKeyDown', windowsVirtualKeyCode: 9 })
+			await command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', nativeVirtualKeyCode: 9, type: 'keyUp', windowsVirtualKeyCode: 9 })
+			if ((await evaluate("document.activeElement?.id === 'confirm-resume'")) !== true) throw new Error('Resume confirmation Tab order did not follow its visual action order')
+			await evaluate("document.querySelector('#cancel-resume')?.focus()")
+		}
 		const layout = await evaluate(`new Promise(resolve => {
 			window.scrollTo(0, 0)
 			if (document.scrollingElement !== null) document.scrollingElement.scrollLeft = 0
@@ -373,26 +453,49 @@ try {
 		if (!Array.isArray(disabledButtonContrast) || disabledButtonContrast.some(result => typeof result !== 'object' || result === null || typeof Reflect.get(result, 'contrast') !== 'number' || Number(Reflect.get(result, 'contrast')) < 4.5)) {
 			throw new Error(`Dashboard route /${route} exposed an illegible disabled button: ${JSON.stringify(disabledButtonContrast)}`)
 		}
-		if (horizontalScroll === 'catalog-end') {
-			const scroll = await evaluate(`new Promise(resolve => {
+		if (catalogDetail === true) {
+			const detail = await evaluate(`new Promise(resolve => {
 				const shell = document.querySelector('.table-shell')
-				if (!(shell instanceof HTMLElement)) {
+				const row = document.querySelector('#catalog-rows tr:first-child')
+				if (!(shell instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) {
 					resolve(undefined)
 					return
 				}
-				shell.scrollLeft = shell.scrollWidth
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve({
-					clientWidth: shell.clientWidth,
-					scrollLeft: shell.scrollLeft,
-					scrollWidth: shell.scrollWidth,
-				})))
+				row.scrollIntoView({ block: 'start' })
+				requestAnimationFrame(() => requestAnimationFrame(() => {
+					const rowBounds = row.getBoundingClientRect()
+					resolve({
+						attributes: [...row.querySelectorAll(':scope > td')].map(cell => ({
+							label: cell.dataset['label'],
+							text: cell.textContent?.trim(),
+						})),
+						cellsContained: [...row.querySelectorAll(':scope > td')].every(cell => cell.scrollWidth <= cell.clientWidth),
+						identity: row.querySelector('.operation-name strong')?.textContent?.trim(),
+						maximumHorizontalScroll: shell.scrollWidth - shell.clientWidth,
+						rowDisplay: getComputedStyle(row).display,
+						rowOverflow: row.scrollWidth > row.clientWidth,
+						rowViewportContained: rowBounds.top >= -1 && rowBounds.bottom <= innerHeight + 1,
+					})
+				}))
 			})`)
-			if (typeof scroll !== 'object' || scroll === null) throw new Error('Catalog table was not available for horizontal-scroll capture')
-			const clientWidth = Reflect.get(scroll, 'clientWidth')
-			const scrollLeft = Reflect.get(scroll, 'scrollLeft')
-			const scrollWidth = Reflect.get(scroll, 'scrollWidth')
-			if (typeof clientWidth !== 'number' || typeof scrollLeft !== 'number' || typeof scrollWidth !== 'number' || scrollWidth <= clientWidth || scrollLeft < scrollWidth - clientWidth - 1) {
-				throw new Error(`Catalog table did not reach its horizontal end: ${JSON.stringify(scroll)}`)
+			const attributes = typeof detail === 'object' && detail !== null && !Array.isArray(detail) ? Reflect.get(detail, 'attributes') : undefined
+			const expectedLabels = ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility']
+			if (
+				typeof detail !== 'object' ||
+				detail === null ||
+				Array.isArray(detail) ||
+				!Array.isArray(attributes) ||
+				JSON.stringify(attributes.map(attribute => (typeof attribute === 'object' && attribute !== null ? Reflect.get(attribute, 'label') : undefined))) !== JSON.stringify(expectedLabels) ||
+				attributes.some(attribute => typeof attribute !== 'object' || attribute === null || typeof Reflect.get(attribute, 'text') !== 'string' || String(Reflect.get(attribute, 'text')).length === 0) ||
+				Reflect.get(detail, 'cellsContained') !== true ||
+				typeof Reflect.get(detail, 'identity') !== 'string' ||
+				String(Reflect.get(detail, 'identity')).length === 0 ||
+				Reflect.get(detail, 'maximumHorizontalScroll') !== 0 ||
+				Reflect.get(detail, 'rowDisplay') !== 'grid' ||
+				Reflect.get(detail, 'rowOverflow') !== false ||
+				Reflect.get(detail, 'rowViewportContained') !== true
+			) {
+				throw new Error(`Mobile catalog detail did not retain a complete non-overflowing operation card: ${JSON.stringify(detail)}`)
 			}
 		}
 		if (verticalScroll === 'rpc-health') {
@@ -522,7 +625,23 @@ try {
 			}
 		}
 		const paintTargets: PaintTarget[] = []
-		if (verticalScroll === 'rpc-health') {
+		if (resumeDialog === true) {
+			paintTargets.push(
+				{ label: 'resume confirmation', minimumDistinctColors: 12, selector: '#resume-dialog .dialog-body' },
+				{ label: 'resume confirmation title', minimumDistinctColors: 8, selector: '#resume-dialog-title' },
+				{ label: 'resume preflight', minimumDistinctColors: 12, selector: '#resume-preflight' },
+				{ label: 'keep-paused action', minimumDistinctColors: 8, selector: '#cancel-resume' },
+				{ label: 'resume action', minimumDistinctColors: 8, selector: '#confirm-resume' },
+			)
+		} else if (catalogDetail === true) {
+			paintTargets.push(
+				{ label: 'complete catalog operation card', minimumDistinctColors: 12, selector: '#catalog-rows tr:first-child' },
+				{ label: 'catalog operation identity', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child .operation-name' },
+				{ label: 'catalog operation risk', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child td:nth-child(4)' },
+				{ label: 'catalog operation candidates', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child td:nth-child(5)' },
+				{ label: 'catalog operation eligibility and blockers', minimumDistinctColors: 12, selector: '#catalog-rows tr:first-child td:nth-child(6)' },
+			)
+		} else if (verticalScroll === 'rpc-health') {
 			paintTargets.push({ label: 'RPC health panel', minimumDistinctColors: 12, selector: '.rpc-health-panel' }, { label: 'RPC health Retry', minimumDistinctColors: 8, selector: '#rpc-health-retry-button' })
 		} else if (verticalScroll === 'topology') {
 			paintTargets.push(
@@ -656,6 +775,21 @@ try {
 				return response.ok
 			})()`)
 			if (restored !== true) throw new Error('Dashboard fixture did not restore its running state after recovery-failure capture')
+		}
+		if (resumeDialog === true) {
+			const restored = await evaluate(`(async () => {
+				document.querySelector('#cancel-resume')?.click()
+				const configurationResponse = await fetch('/api/configuration')
+				if (!configurationResponse.ok) return false
+				const configuration = await configurationResponse.json()
+				const response = await fetch('/api/paused', {
+					body: JSON.stringify({ paused: false, revision: configuration.revision }),
+					headers: { 'content-type': 'application/json' },
+					method: 'PUT',
+				})
+				return response.ok
+			})()`)
+			if (restored !== true) throw new Error('Dashboard fixture did not restore its running state after the resume-dialog capture')
 		}
 	}
 

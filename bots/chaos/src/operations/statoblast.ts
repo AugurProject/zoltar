@@ -1768,8 +1768,9 @@ function carriedDepositEvidence(candidate: NonNullable<EcosystemSnapshot['forked
 	]
 }
 
-function forkedCarryMetadata(candidate: NonNullable<EcosystemSnapshot['forkedCarryWithdrawals']>[number]) {
+function forkedCarryMetadata(candidate: Pick<NonNullable<EcosystemSnapshot['forkedCarryWithdrawals']>[number], 'claimSourceGame' | 'game' | 'outcome' | 'parentDepositIndex' | 'pool' | 'sourceGame' | 'sourceNodeId'>) {
 	return {
+		claimSourceGame: candidate.claimSourceGame,
 		game: candidate.game,
 		outcome: candidate.outcome,
 		parentDepositIndex: candidate.parentDepositIndex,
@@ -1825,7 +1826,7 @@ const withdrawForkedCarry: OperationDefinition = {
 		return (snapshot.forkedCarryWithdrawals ?? []).map(candidate => buildForkedCarryWithdrawalPlan(snapshot, candidate))
 	},
 	enumerateLifecyclePresence(snapshot) {
-		return (snapshot.forkedCarryWithdrawals ?? []).map(forkedCarryMetadata)
+		return (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).map(forkedCarryMetadata)
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPool',

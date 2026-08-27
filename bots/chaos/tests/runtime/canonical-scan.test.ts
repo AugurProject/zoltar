@@ -262,7 +262,9 @@ describe('canonical scan policy', () => {
 		})
 		const pool = createChaosReadPool(configured)
 		const observations = chaosReadClients(configured, pool)
+		const repeated = chaosReadClients(configured, pool)
 		expect(observations.map(observation => observation.endpoint)).toEqual(['https://read.example'])
+		expect(repeated[0]?.client).toBe(observations[0]?.client)
 		expect(JSON.stringify(observations.map(observation => observation.endpoint))).not.toContain('hunter2')
 	})
 

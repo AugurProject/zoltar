@@ -372,6 +372,11 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	}
 	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
+	if (settings.runtime.execute && settings.strategy.minimumEthReserveAttoEth === 0n) throw new Error('Live execution requires strategy.minimumEthReserve to be greater than zero')
+	if (settings.runtime.execute && settings.strategy.minimumRepReserveAttoRep === 0n) throw new Error('Live execution requires strategy.minimumRepReserve to be greater than zero')
+	if (settings.runtime.execute && settings.strategy.minimumEthReserveAttoEth < settings.strategy.maximumGasCostAttoEth) {
+		throw new Error('Live execution requires strategy.minimumEthReserve to retain at least one strategy.maximumGasCostEth-sized safety floor')
+	}
 	if (settings.runtime.execute && hasZeroDeploymentAddress(settings.deployment)) throw new Error('Live execution requires every ecosystem deployment address')
 	if (settings.runtime.execute && (settings.connectivity === undefined || settings.connectivity.rpcQuorum !== 2 || settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(2))) {
 		throw new Error('Live execution requires RPC quorum 2 with three independent read origins')
