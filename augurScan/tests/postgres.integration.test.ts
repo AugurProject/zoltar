@@ -197,6 +197,40 @@ const indexedBlock = (
 	}
 }
 
+const expectBehaviorChangingSchemaObjectsRejected = async (database: ScannerDatabase): Promise<void> => {
+	const cases = [
+		{
+			create:
+				'CREATE TRIGGER augurscan_unexpected_trigger BEFORE UPDATE ON public.actions FOR EACH ROW EXECUTE FUNCTION pg_catalog.suppress_redundant_updates_trigger()',
+			remove: 'DROP TRIGGER augurscan_unexpected_trigger ON public.actions',
+		},
+		{
+			create: 'CREATE RULE augurscan_unexpected_rule AS ON DELETE TO public.actions DO INSTEAD NOTHING',
+			remove: 'DROP RULE augurscan_unexpected_rule ON public.actions',
+		},
+		{
+			create: 'CREATE POLICY augurscan_unexpected_policy ON public.actions USING (true)',
+			remove: 'DROP POLICY augurscan_unexpected_policy ON public.actions',
+		},
+		{
+			create: 'ALTER TABLE public.actions ENABLE ROW LEVEL SECURITY',
+			remove: 'ALTER TABLE public.actions DISABLE ROW LEVEL SECURITY',
+		},
+		{
+			create: 'ALTER TABLE public.actions FORCE ROW LEVEL SECURITY',
+			remove: 'ALTER TABLE public.actions NO FORCE ROW LEVEL SECURITY',
+		},
+	] as const
+	for (const item of cases) {
+		await database.sql.unsafe(item.create)
+		try {
+			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
+		} finally {
+			await database.sql.unsafe(item.remove)
+		}
+	}
+}
+
 describe('database checkpoint fencing', () => {
 	test('keeps reserved advisory-lock sessions alive between RPC operations', () => {
 		expect(scannerDatabaseOptions(10, 5)).toEqual({
@@ -353,6 +387,8 @@ postgresTest('rejects incomplete, altered, and extended layouts despite a curren
 			await database.sql.unsafe('DROP TABLE public.augurscan_layout_intruder')
 		}
 
+		await expectBehaviorChangingSchemaObjectsRejected(database)
+
 		await initializeSchema(database.sql)
 	} finally {
 		await database.close()
@@ -390,6 +426,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identitie
 		} finally {
 			await database.sql.unsafe('DROP TABLE public.augurscan_v1_layout_intruder')
 		}
+		await expectBehaviorChangingSchemaObjectsRejected(database)
 		await database.sql`
 			INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block)
 			VALUES (${migrationChainId}, ${`migration-${migrationChainId}`}, 'Migration fixture', 'https://example.invalid', 0)

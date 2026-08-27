@@ -26,7 +26,7 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 	expect(() => schemaInitializationAction('99', ['augurscan_schema'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 })
 
-test('fingerprints every supported table, column, constraint, index, and sequence', async () => {
+test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
 	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
 	const previous = expectedSchemaLayout(schema, '1')
@@ -43,6 +43,10 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	expect(schemaLayoutsMatch(current, { ...current, columns: current.columns.slice(1) })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, constraints: [...current.constraints, 'unknown.constraint|CHECK (false)'].sort() })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['operator:##'] })).toBe(false)
+	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['trigger:actions.unexpected_trigger'] })).toBe(false)
+	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['rule:actions.unexpected_rule'] })).toBe(false)
+	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['policy:actions.unexpected_policy'] })).toBe(false)
+	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['table-security:actions:row=true:force=false'] })).toBe(false)
 })
 
 test('keeps the supported migration additive and backfills retained evidence', async () => {

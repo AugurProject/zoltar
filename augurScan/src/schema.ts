@@ -160,6 +160,30 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 				SELECT 'relation', class.relname
 				FROM pg_catalog.pg_class class JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 				WHERE namespace.nspname = 'public' AND class.relkind NOT IN ('r', 'i', 'S')
+				UNION ALL
+				SELECT 'trigger', class.relname || '.' || trigger.tgname
+				FROM pg_catalog.pg_trigger trigger
+				JOIN pg_catalog.pg_class class ON class.oid = trigger.tgrelid
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public' AND NOT trigger.tgisinternal
+				UNION ALL
+				SELECT 'rule', class.relname || '.' || rewrite.rulename
+				FROM pg_catalog.pg_rewrite rewrite
+				JOIN pg_catalog.pg_class class ON class.oid = rewrite.ev_class
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public' AND rewrite.rulename <> '_RETURN'
+				UNION ALL
+				SELECT 'policy', class.relname || '.' || policy.polname
+				FROM pg_catalog.pg_policy policy
+				JOIN pg_catalog.pg_class class ON class.oid = policy.polrelid
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public'
+				UNION ALL
+				SELECT 'table-security', class.relname || ':row=' || class.relrowsecurity::text || ':force=' || class.relforcerowsecurity::text
+				FROM pg_catalog.pg_class class
+				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
+				WHERE namespace.nspname = 'public' AND class.relkind = 'r'
+					AND (class.relrowsecurity OR class.relforcerowsecurity)
 			) objects
 			ORDER BY signature
 		`,

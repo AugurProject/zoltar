@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { cursorFor, handleApi, parseCursor } from '../src/api.ts'
+import { cursorFor, handleApi, nextHistoricalExportOffset, parseCursor } from '../src/api.ts'
 
 const databases: SQL[] = []
 
@@ -115,7 +115,7 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 		'state/universes/1/0?fromBlock=2&toBlock=1',
 		'export?chainId=1&dataset=unknown',
 		'export?chainId=1&fromBlock=2&toBlock=1',
-		'export?chainId=1&offset=10000001',
+		'export?chainId=1&offset=9223372036854775808',
 		'reorgs?chainId=1&offset=100001',
 		'actions?chainId=1e2',
 		'address-transactions?chainId=1e2&address=0x1111111111111111111111111111111111111111',
@@ -128,6 +128,19 @@ test('rejects non-decimal integer query parameters before querying', async () =>
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
+})
+
+test('keeps every advertised PostgreSQL-bigint export offset retrievable beyond the former ceiling', async () => {
+	expect(nextHistoricalExportOffset('10000000', 50_000, true)).toBe('10050000')
+	expect(nextHistoricalExportOffset('10050000', 50_000, true)).toBe('10100000')
+	expect(nextHistoricalExportOffset('10100000', 50_000, false)).toBeUndefined()
+	expect(nextHistoricalExportOffset('9223372036854775806', 1, true)).toBe('9223372036854775807')
+	expect(() => nextHistoricalExportOffset('9223372036854775807', 1, true)).toThrow('export offset exceeds the PostgreSQL bigint range')
+
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const response = await handleApi(new Request('http://localhost/api/v1/export?chainId=1&offset=10050000'), database)
+	expect(response?.status).toBe(500)
 })
 
 test('validates operations catalogs and timeline identities before querying', async () => {

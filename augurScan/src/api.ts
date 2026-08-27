@@ -113,15 +113,24 @@ type AddressTransactionCursor = readonly [
 	transaction: number,
 ]
 
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
+
 const isPostgresBigint = (value: unknown): value is string => {
 	if (typeof value !== 'string' || !/^(0|[1-9]\d{0,18})$/.test(value)) return false
-	return BigInt(value) <= 9_223_372_036_854_775_807n
+	return BigInt(value) <= POSTGRES_BIGINT_MAX
 }
 
 const postgresBigint = (value: string | null, name: string): string | undefined => {
 	if (value === null || value === '') return undefined
 	if (!isPostgresBigint(value)) throw new ApiRequestError(`${name} must be a non-negative PostgreSQL bigint`)
 	return value
+}
+
+export const nextHistoricalExportOffset = (offset: string, returned: number, truncated: boolean): string | undefined => {
+	if (!truncated) return undefined
+	const nextOffset = BigInt(offset) + BigInt(returned)
+	if (nextOffset > POSTGRES_BIGINT_MAX) throw new ApiRequestError('export offset exceeds the PostgreSQL bigint range; narrow the block range')
+	return nextOffset.toString()
 }
 
 const parseAddressTransactionCursor = (value: string | null): AddressTransactionCursor | undefined => {
@@ -311,7 +320,7 @@ const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 	if (BigInt(fromBlock) > BigInt(toBlock)) throw new ApiRequestError('fromBlock must not exceed toBlock')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 5_000
 	const limit = Math.min(Math.max(requestedLimit, 1), 50_000)
-	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 10_000_000) ?? 0
+	const offset = postgresBigint(url.searchParams.get('offset'), 'offset') ?? '0'
 	const canonical = canonicalHistoryFilter(url)
 	const rows =
 		dataset === 'logs'
@@ -351,6 +360,7 @@ const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 				`
 	const truncated = rows.length > limit
 	const exported = rows.slice(0, limit)
+	const nextOffset = nextHistoricalExportOffset(offset, exported.length, truncated)
 	const body = `${exported.map((row: Record<string, unknown>) => JSON.stringify(normalize(row))).join('\n')}${exported.length === 0 ? '' : '\n'}`
 	return new Response(body, {
 		headers: {
@@ -359,7 +369,7 @@ const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 			'content-disposition': `attachment; filename="augurscan-${dataset}-${chainId}-${fromBlock}-${toBlock}.ndjson"`,
 			'x-augurscan-returned': String(exported.length),
 			'x-augurscan-truncated': String(truncated),
-			...(truncated ? { 'x-augurscan-next-offset': String(offset + limit) } : {}),
+			...(nextOffset === undefined ? {} : { 'x-augurscan-next-offset': nextOffset }),
 		},
 	})
 }
