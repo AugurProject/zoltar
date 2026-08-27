@@ -3,6 +3,9 @@
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"paths": {
+			"@zoltar/bot-shared/*": ["../shared/src/*"]
+		},
 		"allowImportingTsExtensions": true,
 		"resolveJsonModule": true,
 		"strict": true,
