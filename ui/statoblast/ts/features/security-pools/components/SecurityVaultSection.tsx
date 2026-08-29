@@ -174,10 +174,9 @@ export function SecurityVaultSection({
 		if (poolState?.lifecycleState === 'ended') return securityPoolCopy.vaultActionsEndedDetail
 		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
 		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail
-		if (poolState?.ordinaryEscalationGameStarted) return securityPoolCopy.vaultDepositEscalationStartedDetail
+		if (poolState?.vaultAdmissionClosed) return securityPoolCopy.vaultDepositAdmissionClosedDetail
 		return undefined
 	})()
-	const poolCollateralActionsEnabled = depositRepToVaultEnabled
 	const effectiveRepExitMode = redeemRepFromVaultEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultEnabled : queueWithdrawRepEnabled
 	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? securityPoolCopy.redeemRepFromVault : securityPoolCopy.withdrawRep
@@ -240,16 +239,7 @@ export function SecurityVaultSection({
 			<label className='field'>
 				<span>{commonCopy.manualExecutionTimeout}</span>
 				<div className='field-inline'>
-					<FormInput
-						className='field-inline-input'
-						inputMode='numeric'
-						min='1'
-						pattern='[0-9]*'
-						step='1'
-						value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes}
-						onInput={event => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes: event.currentTarget.value })}
-						disabled={!poolCollateralActionsEnabled}
-					/>
+					<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} onInput={event => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
 					<span className='field-inline-action'>{commonCopy.minutes}</span>
 				</div>
 			</label>
@@ -391,7 +381,7 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>{securityPoolCopy.repBackingLabel}</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!depositRepToVaultEnabled} />
 								<button
 									className='quiet field-inline-action'
 									type='button'
@@ -399,7 +389,7 @@ export function SecurityVaultSection({
 										if (walletRepBalanceAttoRep === undefined) return
 										onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(walletRepBalanceAttoRep) })
 									}}
-									disabled={walletRepBalanceAttoRep === undefined || !poolCollateralActionsEnabled}
+									disabled={walletRepBalanceAttoRep === undefined || !depositRepToVaultEnabled}
 								>
 									{commonCopy.max}
 								</button>
@@ -411,7 +401,7 @@ export function SecurityVaultSection({
 								aria-describedby={embeddedTargetHealthFactorDescriptionId}
 								value={normalizedSecurityVaultForm.targetHealthFactor}
 								onInput={event => onSecurityVaultFormChange({ targetHealthFactor: event.currentTarget.value })}
-								disabled={!poolCollateralActionsEnabled}
+								disabled={!depositRepToVaultEnabled}
 								invalid={targetHealthFactorGuardMessage !== undefined}
 							/>
 							<small className='field-help' id={embeddedTargetHealthFactorDescriptionId}>
@@ -435,7 +425,7 @@ export function SecurityVaultSection({
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
 							tokenSymbol='REP'
 							tokenUnits={18}
-							disabled={!approveRepEnabled || !canUseLoadedVaultActions}
+							disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
@@ -512,7 +502,7 @@ export function SecurityVaultSection({
 							<label className='field'>
 								<span>{securityPoolCopy.repWithdrawAmount}</span>
 								<div className='field-inline'>
-									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
 									<button
 										className='quiet field-inline-action'
 										type='button'
@@ -520,7 +510,7 @@ export function SecurityVaultSection({
 											if (maximumWithdrawableAttoRep === undefined) return
 											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
 										}}
-										disabled={maximumWithdrawableAttoRep === undefined || !poolCollateralActionsEnabled}
+										disabled={maximumWithdrawableAttoRep === undefined || !queueWithdrawRepEnabled}
 									>
 										{commonCopy.max}
 									</button>
@@ -588,7 +578,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>{securityPoolCopy.repBackingLabel}</span>
 					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!depositRepToVaultEnabled} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -596,7 +586,7 @@ export function SecurityVaultSection({
 								if (walletRepBalanceAttoRep === undefined) return
 								onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(walletRepBalanceAttoRep) })
 							}}
-							disabled={walletRepBalanceAttoRep === undefined || !poolCollateralActionsEnabled}
+							disabled={walletRepBalanceAttoRep === undefined || !depositRepToVaultEnabled}
 						>
 							{commonCopy.max}
 						</button>
@@ -608,7 +598,7 @@ export function SecurityVaultSection({
 						aria-describedby={modalTargetHealthFactorDescriptionId}
 						value={normalizedSecurityVaultForm.targetHealthFactor}
 						onInput={event => onSecurityVaultFormChange({ targetHealthFactor: event.currentTarget.value })}
-						disabled={!poolCollateralActionsEnabled}
+						disabled={!depositRepToVaultEnabled}
 						invalid={targetHealthFactorGuardMessage !== undefined}
 					/>
 					<small className='field-help' id={modalTargetHealthFactorDescriptionId}>
@@ -628,7 +618,7 @@ export function SecurityVaultSection({
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
 					tokenSymbol='REP'
 					tokenUnits={18}
-					disabled={!approveRepEnabled || !canUseLoadedVaultActions}
+					disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -681,7 +671,7 @@ export function SecurityVaultSection({
 					<label className='field'>
 						<span>{securityPoolCopy.repWithdrawAmount}</span>
 						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
 							<button
 								className='quiet field-inline-action'
 								type='button'
@@ -689,7 +679,7 @@ export function SecurityVaultSection({
 									if (maximumWithdrawableAttoRep === undefined) return
 									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(maximumWithdrawableAttoRep) })
 								}}
-								disabled={maximumWithdrawableAttoRep === undefined || !poolCollateralActionsEnabled}
+								disabled={maximumWithdrawableAttoRep === undefined || !queueWithdrawRepEnabled}
 							>
 								{commonCopy.max}
 							</button>

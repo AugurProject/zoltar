@@ -1,35 +1,155 @@
 import { describe, expect, test } from 'bun:test'
 import { createVaultControlsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { createMarketDetails } from './builders.js'
+import { render } from 'preact'
 
 installTestRouting()
 describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const testDom = useSecurityPoolWorkflowSectionTestDom()
 	const { setCleanup } = testDom
 	const fixture = createVaultControlsFixture()
-	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
+	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, expectTransactionButtonEnabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } =
+		fixture
 
-	test('blocks vault deposits from a direct vault view when an ordinary escalation already started', async () => {
+	test('blocks origin vault deposits after the question ends before ordinary escalation starts', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ ordinaryEscalationGameStarted: true, securityPoolAddress: selectedPoolAddress })],
-					securityVault: createSecurityVaultProps({
-						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-					}),
-					selectedPoolView: 'vaults',
-				})}
-				showHeader={false}
-			/>,
+			<ChainTimestampContext.Provider value={3n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
+						securityVault: createSecurityVaultProps({
+							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+						}),
+						selectedPoolView: 'vaults',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		setCleanup(renderedComponent.cleanup)
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
 		const disabledReason = document.getElementById(depositButton.getAttribute('aria-describedby') ?? '')
-		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.')
+		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
+	})
+
+	test('keeps origin vault deposits available at the exact question end timestamp', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={2n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
+						securityVault: createSecurityVaultProps({
+							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+						}),
+						selectedPoolView: 'vaults',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expect(within(document.body).queryByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeNull()
+	})
+
+	test('disables an open deposit approval flow when origin vault admission closes', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderWorkflow = (chainTimestamp: bigint) => (
+			<ChainTimestampContext.Provider value={chainTimestamp}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
+						securityVault: createSecurityVaultProps({
+							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+							securityVaultForm: {
+								depositAmount: '1',
+								repWithdrawAmount: '1',
+								targetHealthFactor: '1',
+								securityPoolAddress: selectedPoolAddress,
+								selectedVaultOwner: zeroAddress,
+							},
+							securityVaultRepApproval: {
+								error: undefined,
+								loading: false,
+								value: 0n,
+							},
+							walletRepBalanceAttoRep: 10n * 10n ** 18n,
+						}),
+						selectedPoolView: 'vaults',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>
+		)
+		const renderedComponent = await renderIntoDocument(renderWorkflow(2n))
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
+		})
+		expectTransactionButtonEnabled(document.body, 'Approve 1 REP')
+
+		await act(() => {
+			render(renderWorkflow(3n), renderedComponent.container)
+		})
+
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const depositQueries = within(depositDialog)
+		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
+		const approvalAmountInput = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('input')
+		const approvalMaxButton = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('button')
+		expect(depositAmountInput?.disabled).toBe(true)
+		expect(approvalAmountInput?.disabled).toBe(true)
+		expect(approvalMaxButton?.disabled).toBe(true)
+		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
+
+		await act(() => {
+			fireEvent.click(depositQueries.getByRole('button', { name: 'Cancel' }))
+		})
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
+		})
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
+	})
+
+	test('keeps continuation-child vault deposits available after the question ends', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={3n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [
+							createSelectedPool({
+								hasForkContinuationEscalationGame: true,
+								marketDetails: createMarketDetails({ endTime: 2n }),
+								securityPoolAddress: selectedPoolAddress,
+							}),
+						],
+						securityVault: createSecurityVaultProps({
+							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+						}),
+						selectedPoolView: 'vaults',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expect(within(document.body).queryByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeNull()
 	})
 
 	test('auto-loads the selected vault without presenting manual refresh guidance', async () => {

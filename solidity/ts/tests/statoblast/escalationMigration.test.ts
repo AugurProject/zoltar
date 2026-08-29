@@ -179,11 +179,11 @@ describe('Statoblast: escalation migration', () => {
 
 	test('external fork escalation claims expose Own fork required and preserve unresolved deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 
@@ -215,11 +215,11 @@ describe('Statoblast: escalation migration', () => {
 
 	test('forked escalation claim exposes Child not migrating after the selected child activates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -253,13 +253,13 @@ describe('Statoblast: escalation migration', () => {
 
 	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
@@ -284,12 +284,12 @@ describe('Statoblast: escalation migration', () => {
 
 	test('resolved escalation withdrawal rejects mixed-vault batches and rolls back every deposit and vault mutation', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingVault, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
 		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
 		await depositToEscalationGame(losingVault, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
@@ -379,8 +379,6 @@ describe('Statoblast: escalation migration', () => {
 
 	test('optional vault migration clears aggregate parent totals without copying them into child vault state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const depositCount = 65
 		const totalUnresolvedDeposit = BigInt(depositCount) * reportBond
 		const minimumRemainingVaultRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 100_000n
@@ -390,6 +388,8 @@ describe('Statoblast: escalation migration', () => {
 		if (vaultRepBeforeTopUp < requiredVaultRep) {
 			await approveAndDepositRepToVault(client, requiredVaultRep - vaultRepBeforeTopUp, questionId)
 		}
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		for (let index = 0; index < depositCount; index += 1) {
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		}
@@ -427,9 +427,6 @@ describe('Statoblast: escalation migration', () => {
 
 	test('own-fork unresolved migration rejects after the child branch is already priced', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -438,6 +435,8 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -462,11 +461,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('own-fork unresolved migration expires without moving the vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -474,6 +469,10 @@ describe('Statoblast: escalation migration', () => {
 		if (vaultRepBeforeTopUp < 3n * forkThresholdAttoRep) {
 			await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep - vaultRepBeforeTopUp, questionId)
 		}
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -551,9 +550,6 @@ describe('Statoblast: escalation migration', () => {
 
 	test('migrateVaultWithUnresolvedEscalation clears parent escrow as dust when the child allocation rounds to zero', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -562,6 +558,8 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -640,10 +638,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('an unrelated fork carries dispute-staked REP 1:1 and burns the winner haircut only when the child settles', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(losingClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
 		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
 
@@ -710,11 +708,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, 2n * reportBond)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
@@ -758,12 +755,12 @@ describe('Statoblast: escalation migration', () => {
 
 	test('late children retain the canonical fork snapshot after an own-fork parent claim', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
-		await refreshCurrentPrice()
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
@@ -855,10 +852,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('selected branches share parent game totals while materializing only the selecting vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const otherClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(otherClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await depositToEscalationGame(otherClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
 		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -902,13 +899,13 @@ describe('Statoblast: escalation migration', () => {
 
 	test('claimForkedEscalationDeposits requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const winningDeposit = reportBond
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(relayerClient, repDeposit, questionId)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -920,10 +917,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('claimForkedEscalationDeposits requires an actual universe fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const nonDecisionThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * nonDecisionThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, nonDecisionThresholdAttoRep)
@@ -940,9 +937,6 @@ describe('Statoblast: escalation migration', () => {
 
 	test('an underfunded child remains incomplete instead of scaling per-vault escalation claims', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -951,6 +945,8 @@ describe('Statoblast: escalation migration', () => {
 		if (repAmountNeeded > 0n) {
 			await approveAndDepositRepToVault(client, repAmountNeeded, questionId)
 		}
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -1042,10 +1038,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('external-fork continuation resumes without migrating another vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
 		await mockWindow.advanceTime(4n * DAY)
@@ -1135,14 +1131,14 @@ describe('Statoblast: escalation migration', () => {
 
 	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
-		await refreshCurrentPrice()
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const winningVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, winningVault.repBackingUnits)
 		if (winningVaultRep < forkThresholdAttoRep) await approveAndDepositRepToVault(client, forkThresholdAttoRep - winningVaultRep, questionId)
 		await approveAndDepositRepToVault(losingClient, forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		const ownForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
@@ -1222,8 +1218,6 @@ describe('Statoblast: escalation migration', () => {
 
 	test("multiple migrated winners settle in reverse order without using another vault owner's logical entitlement", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
-		await refreshCurrentPrice()
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
@@ -1234,6 +1228,8 @@ describe('Statoblast: escalation migration', () => {
 		if (firstWinnerRep < firstWinningPrincipal) await approveAndDepositRepToVault(client, firstWinningPrincipal - firstWinnerRep, questionId)
 		await approveAndDepositRepToVault(secondWinner, secondWinningPrincipal, questionId)
 		await approveAndDepositRepToVault(losingClient, forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningPrincipal)
 		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningPrincipal)
 		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
@@ -1304,14 +1300,14 @@ describe('Statoblast: escalation migration', () => {
 
 	test('a directly claimed parent deposit is invalid in every current and late child while its same-outcome remainder stays claimable', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
-		await refreshCurrentPrice()
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstYesDeposit = forkThresholdAttoRep / 3n
 		const secondYesDeposit = forkThresholdAttoRep - firstYesDeposit
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
@@ -1428,11 +1424,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('forked continuation deposits can migrate again after a second unrelated fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const recursiveDeposit = 2n * reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, recursiveDeposit)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, recursiveDeposit)
@@ -1503,14 +1498,13 @@ describe('Statoblast: escalation migration', () => {
 
 	test('an unrelated continuation with an inherited threshold tie can trigger its own fork without a synthetic deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await depositRepToVault(attackerClient, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 
@@ -1583,11 +1577,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('own-fork unresolved preparation on a continuation child includes inherited carried escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const recursiveDeposit = 2n * reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, recursiveDeposit)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, recursiveDeposit)
@@ -1651,11 +1644,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test('many unresolved continuation deposits survive multiple unrelated forks recursively', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		const recursiveDepositCount = 6n
 		const depositIndexes: bigint[] = []
 		for (let index = 0n; index < recursiveDepositCount; index += 1n) {
@@ -1733,10 +1725,10 @@ describe('Statoblast: escalation migration', () => {
 
 	test("third parties can permissionlessly settle another vault owner's resolved escalation deposits", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-		await refreshCurrentPrice()
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 

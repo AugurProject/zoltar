@@ -89,10 +89,10 @@ describe('security regression coverage', () => {
 
 	const prepareOwnForkToYes = async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -211,12 +211,12 @@ describe('security regression coverage', () => {
 
 	test('vault migration backs migrated child accounting even without prior branch REP migration', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attacker.account.address, 0n)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -345,13 +345,13 @@ describe('security regression coverage', () => {
 
 	test('stale liquidation is consumed without executing after target state changes', async () => {
 		const mockWindow = getAnvilWindowEthereum()
+		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRepToVault(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const targetCapacityOwnershipAttoRep = repDeposit / 4n
 		const forcedLiquidationPrice = 10n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, targetCapacityOwnershipAttoRep)
 
-		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRepToVault(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
 		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
@@ -371,7 +371,7 @@ describe('security regression coverage', () => {
 		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
-		await depositRepToVault(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDepositAttoRep)
 		const expectedTargetCapacityOwnershipAttoRep = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep
 		const expectedLiquidatorCapacityOwnershipAttoRep = (await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)).capacityOwnershipAttoRep
 		const expectedTotalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)

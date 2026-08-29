@@ -84,6 +84,7 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 		depositRepToVaultToSecurityPool: async () => {
 			throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 		},
+		isSecurityPoolVaultAdmissionClosed: mock(async () => false),
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalanceAttoRep: 1n,
 			currentWethBalanceAttoEth: 1n,
@@ -222,6 +223,42 @@ describe('useSecurityVaultOperations', () => {
 		await approvePromise
 
 		expect(approveErc20).toHaveBeenCalledWith(expect.anything(), REP_TOKEN_ADDRESS, SECURITY_POOL_ADDRESS, 10n ** 18n, 'approveRep')
+	})
+
+	test('approveRep revalidates vault admission before broadcasting', async () => {
+		const approveErc20 = mock(async () => ({
+			action: 'approveRep' as const,
+			hash: '0x01' as const,
+		}))
+		const isSecurityPoolVaultAdmissionClosed = mock(async () => true)
+		const dependencies = createSecurityVaultOperationsDependencies({
+			approveErc20,
+			isSecurityPoolVaultAdmissionClosed,
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '1',
+				selectedVaultOwner: WALLET_ADDRESS,
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).approveRep()
+		})
+
+		expect(isSecurityPoolVaultAdmissionClosed).toHaveBeenCalledWith(SECURITY_POOL_ADDRESS)
+		expect(approveErc20).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('unavailable after this question ends')
+		})
 	})
 
 	test('withdrawRep snapshots the submitted amount and staged timeout before async preflight completes', async () => {
@@ -457,6 +494,43 @@ describe('useSecurityVaultOperations', () => {
 		})
 
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
+	})
+
+	test('depositRepToVault revalidates origin admission before broadcasting', async () => {
+		const depositRepToVaultToSecurityPool = mock(async () => ({
+			action: 'depositRepToVault' as const,
+			hash: '0x06' as const,
+		}))
+		const isSecurityPoolVaultAdmissionClosed = mock(async () => true)
+		const dependencies = createSecurityVaultOperationsDependencies({
+			depositRepToVaultToSecurityPool,
+			isSecurityPoolVaultAdmissionClosed,
+			loadErc20Balance: mock(async () => 10n * 10n ** 18n),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({
+				...current,
+				depositAmount: '1',
+				selectedVaultOwner: WALLET_ADDRESS,
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).depositRepToVault()
+		})
+
+		expect(isSecurityPoolVaultAdmissionClosed).toHaveBeenCalledWith(SECURITY_POOL_ADDRESS)
+		expect(depositRepToVaultToSecurityPool).not.toHaveBeenCalled()
+		await waitFor(() => {
+			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('unavailable after this question ends')
+		})
 	})
 
 	test('depositRepToVault ignores a stale preflight balance refresh after the selected vault changes', async () => {

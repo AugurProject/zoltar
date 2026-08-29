@@ -58,7 +58,7 @@ import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
-import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
+import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultOwner, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -197,9 +197,13 @@ export function SecurityPoolWorkflowSection({
 				})
 	const selectedPoolStateModel = evaluateSecurityPoolState({
 		lifecycleState: selectedPoolLifecycleState,
-		ordinaryEscalationGameStarted: selectedPool?.ordinaryEscalationGameStarted ?? (currentReportingDetails?.status === 'active' && currentReportingDetails.contributionFunding === 'wallet'),
 		reportingStage: selectedPoolReportingStage,
 		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
+		vaultAdmissionClosed: deriveVaultAdmissionClosed({
+			currentTimestamp,
+			hasForkContinuationEscalationGame: effectiveSelectedPool?.hasForkContinuationEscalationGame,
+			questionEndTime: marketDetails?.endTime,
+		}),
 	})
 	const triggerZoltarForkReason = (() => {
 		if (selectedPoolReportingStage === 'forkTriggered' && selectedPoolHasActualForkActivity) {

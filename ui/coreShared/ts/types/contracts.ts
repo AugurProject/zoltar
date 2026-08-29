@@ -336,6 +336,7 @@ export type ListedSecurityPool = {
 	}
 	feeEligibleCapacityOwnershipAttoRep: bigint
 	hasForkActivity: boolean
+	hasForkContinuationEscalationGame: boolean
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean

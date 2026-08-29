@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
+import { deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
 import { ALL_SECURITY_POOL_ACTIONS } from '../../../features/security-pools/lib/securityPoolState/matrix.js'
 import type { SecurityPoolActionId, SecurityPoolStateModel } from '../../../features/security-pools/lib/securityPoolState.js'
 
@@ -74,19 +74,40 @@ describe('security pool state engine', () => {
 		expectActionBlocked(model, 'executeStagedOperation')
 	})
 
-	test('blocks new vault backing after an ordinary game starts but preserves continuation-child deposits', () => {
-		const ordinaryGame = evaluateSecurityPoolState({
+	test('closes ordinary vault admission after the question end boundary while preserving genuine continuation deposits', () => {
+		const ordinaryAtEnd = deriveVaultAdmissionClosed({
+			currentTimestamp: 100n,
+			hasForkContinuationEscalationGame: false,
+			questionEndTime: 100n,
+		})
+		const ordinaryAfterEnd = deriveVaultAdmissionClosed({
+			currentTimestamp: 101n,
+			hasForkContinuationEscalationGame: false,
+			questionEndTime: 100n,
+		})
+		const continuationAfterEnd = deriveVaultAdmissionClosed({
+			currentTimestamp: 101n,
+			hasForkContinuationEscalationGame: true,
+			questionEndTime: 100n,
+		})
+		const exactBoundary = evaluateSecurityPoolState({
 			lifecycleState: 'operational',
-			ordinaryEscalationGameStarted: true,
 			universeHasForked: false,
-		} as Parameters<typeof evaluateSecurityPoolState>[0] & { ordinaryEscalationGameStarted: boolean })
+			vaultAdmissionClosed: ordinaryAtEnd,
+		})
+		const afterBoundary = evaluateSecurityPoolState({
+			lifecycleState: 'operational',
+			universeHasForked: false,
+			vaultAdmissionClosed: ordinaryAfterEnd,
+		})
 		const continuation = evaluateSecurityPoolState({
 			lifecycleState: 'operational',
-			ordinaryEscalationGameStarted: false,
 			universeHasForked: false,
-		} as Parameters<typeof evaluateSecurityPoolState>[0] & { ordinaryEscalationGameStarted: boolean })
+			vaultAdmissionClosed: continuationAfterEnd,
+		})
 
-		expectActionBlocked(ordinaryGame, 'depositRepToVault')
+		expectActionEnabled(exactBoundary, 'depositRepToVault')
+		expectActionBlocked(afterBoundary, 'depositRepToVault')
 		expectActionEnabled(continuation, 'depositRepToVault')
 	})
 

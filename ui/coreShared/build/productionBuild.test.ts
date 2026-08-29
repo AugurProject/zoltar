@@ -857,7 +857,6 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
 			await driver.waitForBodyText('Open pool')
-			await driver.clickButton('+1 year')
 			const reportingPoolOpened = await driver.evaluate(
 				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
@@ -878,6 +877,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+			await driver.clickButton('+1 year')
 			await driver.clickButton('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
 			await driver.clickButton('Request new price')
