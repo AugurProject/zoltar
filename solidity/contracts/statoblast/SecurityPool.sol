@@ -158,14 +158,14 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 	}
 
-	// Only parent pools with a deployed escalation game should freeze their collateralized
-	// operations once that game has resolved. Child pools inherit finalized outcomes from
-	// fork routing but must stay operational after migration/truth-auction settlement.
+	// A child with an inherited fixed outcome stays operational for settlement and redemption,
+	// but its finalized question must still freeze collateralized operations.
 	function isEscalationResolved() public view returns (bool) {
-		if (address(escalationGame) == address(0x0)) return false;
 		return
-			ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
-			BinaryOutcomes.BinaryOutcome.None;
+			hasInheritedForkOutcome ||
+			(address(escalationGame) != address(0x0) &&
+				ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
+					BinaryOutcomes.BinaryOutcome.None);
 	}
 
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
@@ -314,7 +314,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
-		require(!isEscalationResolved(), 'Resolved');
+		if (isEscalationResolved()) revert();
 		updateVaultFees(vault);
 		if (address(escalationGame) != address(0x0)) {
 			require(escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Escrow');
@@ -496,7 +496,7 @@ contract SecurityPool is SecurityPoolStorage {
 	{
 		// Pool execution uses the live backing rate so the queue-time pool totals in
 		// request.snapshot remain reconstruction evidence rather than execution inputs.
-		require(!isEscalationResolved(), 'Resolved');
+		if (isEscalationResolved()) revert();
 		updateVaultFees(request.targetVault);
 		updateVaultFees(request.receiverVault);
 
@@ -527,7 +527,7 @@ contract SecurityPool is SecurityPoolStorage {
 		// Child pools mint complete sets only after migration and truth-auction
 		// accounting have restored `SystemState.Operational`.
 		require(!awaitingForkContinuation, 'Fork await');
-		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
+		if (msg.value == 0 || isEscalationResolved()) revert();
 		_requireValidPrice();
 		updateSettlementCollateral();
 		uint256 completeSetsToMintAttoShares = attoEthToAttoShares(msg.value);
@@ -623,7 +623,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
-		require(!hasInheritedForkOutcome, 'Resolved');
+		if (hasInheritedForkOutcome) revert();
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
@@ -695,7 +695,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function activateForkMode() external onlyForker {
-		require(!hasInheritedForkOutcome, 'Resolved');
+		if (hasInheritedForkOutcome) revert();
 		systemState = SystemState.PoolForked;
 		updateSettlementCollateral();
 		uint256 repTransferredAttoRep = repToken.balanceOf(address(this));
