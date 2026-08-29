@@ -180,6 +180,36 @@ function getObjectEntry(value: unknown, key: string, context: string) {
 	return Reflect.get(value, key)
 }
 
+function createRawLog(overrides: Readonly<Record<string, unknown>> = {}) {
+	return {
+		address: TOKEN_ADDRESS,
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		data: '0x',
+		logIndex: '0x0',
+		removed: false,
+		topics: [],
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+		...overrides,
+	}
+}
+
+function createRawReceipt(logs: readonly unknown[]) {
+	return {
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		cumulativeGasUsed: '0x5208',
+		from: OWNER_ADDRESS,
+		gasUsed: '0x5208',
+		logs,
+		status: '0x1',
+		to: RECIPIENT_ADDRESS,
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+	}
+}
+
 function getDecodedEntry(value: unknown, index: number, key: string, context: string) {
 	if (Array.isArray(value)) return value[index]
 	if (typeof value !== 'object' || value === null) throw new Error(`${context} must be an object or array`)
@@ -894,6 +924,34 @@ describe('shared ethereum compatibility layer', () => {
 		expect(receipt.effectiveGasPrice).toBe(3n)
 		expect(receiptPolls).toBe(2)
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
+	})
+
+	test('public client rejects logs without the required topics array', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => [log], [])) })
+
+		await expect(client.getLogs({})).rejects.toThrow('without topics')
+	})
+
+	test('public client preserves an omitted removed flag and rejects invalid flag values', async () => {
+		const logWithoutRemoved = createRawLog()
+		Reflect.deleteProperty(logWithoutRemoved, 'removed')
+		let result: unknown = [logWithoutRemoved]
+		const client = createPublicClient({ transport: custom(createProvider(() => result, [])) })
+
+		expect((await client.getLogs({}))[0]?.removed).toBeUndefined()
+
+		result = [createRawLog({ removed: '0x0' })]
+		await expect(client.getLogs({})).rejects.toThrow('invalid removed flag')
+	})
+
+	test('transaction receipt normalization rejects embedded logs without topics', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => createRawReceipt([log]), [])) })
+
+		await expect(client.getTransactionReceipt({ hash: TX_HASH })).rejects.toThrow('without topics')
 	})
 
 	test('waitForTransactionReceipt resolves same-nonce replacements and reports the replacement reason', async () => {
