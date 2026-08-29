@@ -1086,6 +1086,50 @@ describe('shared ethereum compatibility layer', () => {
 		).rejects.toThrow('RPC returned an invalid hash')
 	})
 
+	test('public client rejects incomplete rpc transactions instead of inventing required values', async () => {
+		const completeTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: '0x7',
+			to: RECIPIENT_ADDRESS,
+			value: '0x5',
+		}
+		const requiredFields = {
+			gas: 'gas',
+			input: 'input data',
+			nonce: 'nonce',
+			to: 'to',
+			value: 'value',
+		} as const
+
+		for (const [field, label] of Object.entries(requiredFields)) {
+			const transaction = Object.fromEntries(Object.entries(completeTransaction).filter(([key]) => key !== field))
+			const client = createPublicClient({
+				transport: custom(createProvider(() => transaction, [])),
+			})
+			await expect(client.getTransaction({ hash: TX_HASH })).rejects.toThrow(`RPC returned a transaction without ${label}`)
+		}
+		for (const field of ['gas', 'input', 'nonce', 'value'] as const) {
+			const client = createPublicClient({
+				transport: custom(createProvider(() => ({ ...completeTransaction, [field]: null }), [])),
+			})
+			await expect(client.getTransaction({ hash: TX_HASH })).rejects.toThrow(`RPC returned a transaction without ${requiredFields[field]}`)
+		}
+
+		const dataOnlyTransaction = Object.fromEntries(Object.entries(completeTransaction).filter(([key]) => key !== 'input'))
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ ...dataOnlyTransaction, data: '0x5678' }), [])),
+		})
+		expect((await client.getTransaction({ hash: TX_HASH })).input).toBe('0x5678')
+
+		const contractCreationClient = createPublicClient({
+			transport: custom(createProvider(() => ({ ...completeTransaction, to: null }), [])),
+		})
+		expect((await contractCreationClient.getTransaction({ hash: TX_HASH })).to).toBeNull()
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),

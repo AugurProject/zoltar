@@ -1290,6 +1290,23 @@ function normalizeReceipt(value: unknown): TransactionReceipt {
 	}
 }
 
+function normalizeRequiredTransactionQuantity(transaction: Record<string, unknown>, field: 'gas' | 'nonce' | 'value') {
+	const value = transaction[field]
+	if (value === undefined || value === null) throw new Error(`RPC returned a transaction without ${field}`)
+	return normalizeRpcBigInt(value)
+}
+
+function normalizeTransactionInput(transaction: Record<string, unknown>) {
+	const value = transaction['input'] ?? transaction['data']
+	if (value === undefined || value === null) throw new Error('RPC returned a transaction without input data')
+	return normalizeRpcHex(value)
+}
+
+function normalizeTransactionRecipient(transaction: Record<string, unknown>) {
+	if (transaction['to'] === undefined) throw new Error('RPC returned a transaction without to')
+	return normalizeNullableAddress(transaction['to']) ?? null
+}
+
 function normalizeTransaction(value: unknown): BlockTransaction {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction')
 	const transaction = value as Record<string, unknown>
@@ -1297,17 +1314,17 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 		blockHash: transaction['blockHash'] === undefined || transaction['blockHash'] === null ? undefined : normalizeHash(transaction['blockHash']),
 		blockNumber: transaction['blockNumber'] === undefined || transaction['blockNumber'] === null ? undefined : normalizeRpcBigInt(transaction['blockNumber']),
 		from: normalizeAddress(transaction['from']),
-		gas: normalizeRpcBigInt(transaction['gas']),
+		gas: normalizeRequiredTransactionQuantity(transaction, 'gas'),
 		gasPrice: transaction['gasPrice'] === undefined || transaction['gasPrice'] === null ? undefined : normalizeRpcBigInt(transaction['gasPrice']),
 		hash: normalizeHash(transaction['hash']),
-		input: normalizeRpcHex(transaction['input'] ?? transaction['data'] ?? '0x'),
+		input: normalizeTransactionInput(transaction),
 		maxFeePerGas: transaction['maxFeePerGas'] === undefined || transaction['maxFeePerGas'] === null ? undefined : normalizeRpcBigInt(transaction['maxFeePerGas']),
 		maxPriorityFeePerGas: transaction['maxPriorityFeePerGas'] === undefined || transaction['maxPriorityFeePerGas'] === null ? undefined : normalizeRpcBigInt(transaction['maxPriorityFeePerGas']),
-		nonce: normalizeRpcBigInt(transaction['nonce']),
-		to: normalizeNullableAddress(transaction['to']) ?? null,
+		nonce: normalizeRequiredTransactionQuantity(transaction, 'nonce'),
+		to: normalizeTransactionRecipient(transaction),
 		transactionIndex: transaction['transactionIndex'] === undefined || transaction['transactionIndex'] === null ? undefined : normalizeRpcBigInt(transaction['transactionIndex']),
 		type: normalizeTransactionType(transaction['type']),
-		value: normalizeRpcBigInt(transaction['value']),
+		value: normalizeRequiredTransactionQuantity(transaction, 'value'),
 	}
 }
 
