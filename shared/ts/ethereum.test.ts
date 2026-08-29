@@ -414,6 +414,58 @@ describe('shared ethereum compatibility layer', () => {
 		expect(concatHex(['0x12', '0x34', '0xab'])).toBe('0x1234ab')
 	})
 
+	test('event argument types match the named-object decoder shape', async () => {
+		const topics = encodeEventTopics({
+			abi: TRANSFER_EVENT_ABI,
+			args: [OWNER_ADDRESS, RECIPIENT_ADDRESS, null],
+			eventName: 'Transfer',
+		}).filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters([{ name: 'value', type: 'uint256' }], [25n])
+		const decodedEvent = decodeEventLog({
+			abi: TRANSFER_EVENT_ABI,
+			data,
+			topics,
+		})
+		type DecodedArgsAreArray = typeof decodedEvent.args extends readonly unknown[] ? true : false
+		const decodedArgsAreArray: DecodedArgsAreArray = false
+		expect(decodedArgsAreArray).toBe(false)
+		expect(Array.isArray(decodedEvent.args)).toBe(false)
+		expect(decodedEvent.args.from).toBe(getAddress(OWNER_ADDRESS))
+		expect(decodedEvent.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
+		expect(decodedEvent.args.value).toBe(25n)
+
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data,
+							logIndex: '0x0',
+							removed: false,
+							topics,
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+		const [log] = await client.getLogs({ event: TRANSFER_EVENT_ABI[0] })
+		if (log?.args === undefined) throw new Error('decoded event log args missing')
+		type LogArgsAreArray = typeof log.args extends readonly unknown[] ? true : false
+		const logArgsAreArray: LogArgsAreArray = false
+		expect(logArgsAreArray).toBe(false)
+		expect(Array.isArray(log.args)).toBe(false)
+		expect(log.args.from).toBe(getAddress(OWNER_ADDRESS))
+		expect(log.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
+		expect(log.args.value).toBe(25n)
+	})
+
 	test('ABI formatting preserves mutability and named tuple components', () => {
 		expect(
 			formatAbiItem({
