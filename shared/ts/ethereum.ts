@@ -665,6 +665,11 @@ function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	return BigInt(value)
 }
 
+function normalizeRequiredRpcBigInt(value: unknown, label: string) {
+	if (value === undefined || value === null) throw new Error(`RPC returned a missing required ${label}`)
+	return normalizeRpcBigInt(value)
+}
+
 function normalizeInputValues(values: readonly unknown[] | undefined) {
 	return values === undefined ? [] : [...values]
 }
@@ -1462,7 +1467,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 
 	return {
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [
@@ -1481,20 +1486,23 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}),
 					],
 				}),
+				'gas estimate',
 			),
 		estimateGas: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [buildRpcTransactionRequest(parameters)],
 				}),
+				'gas estimate',
 			),
 		getBalance: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_getBalance',
 					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
+				'balance',
 			),
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
@@ -1505,17 +1513,18 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			})
 			return normalizeBlock(block, includeTransactions)
 		},
-		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
+		getBlockNumber: async () => normalizeRequiredRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' }), 'block number'),
+		getChainId: async () => bigintToSafeNumber(normalizeRequiredRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' }), 'chain ID'), 'Chain ID'),
 		getCode,
 		getBytecode: getCode,
-		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
+		getGasPrice: async () => normalizeRequiredRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' }), 'gas price'),
 		getTransactionCount: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_getTransactionCount',
 					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
+				'transaction count',
 			),
 		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
