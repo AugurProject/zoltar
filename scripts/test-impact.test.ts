@@ -68,8 +68,16 @@ describe('test impact recommendations', () => {
 		const integrationTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'
 		expect(getTestImpactRecommendations([{ path: integrationTest, status: 'deleted' }])).toEqual([])
 		expect(getTestImpactRecommendations([{ path: 'ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts', previousPath: integrationTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual([
-			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
+			'bun run ensure-contract-artifacts && bun run check:shared-dependencies && RUN_MAINNET_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
 		])
+		const forkTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'
+		const renamedForkTest = 'bots/liquidator/tests/uniswapQuoter.fork.test.ts'
+		expect(
+			getTestImpactRecommendations([
+				{ path: 'ui/zoltar/ts/protocol/uniswapQuoter.ts', status: 'modified' },
+				{ path: renamedForkTest, previousPath: forkTest, status: 'renamed' },
+			]).map(recommendation => recommendation.command),
+		).toEqual(['bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test tests/uniswapQuoter.fork.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
 	})
 
 	test('merges overlapping commands for the same runner so every selected test runs once', () => {
@@ -119,6 +127,66 @@ describe('test impact recommendations', () => {
 			expect(await getImportGraphTestRecommendations(['bots/shared/src/value.ts'], repositoryRoot)).toEqual([
 				{
 					command: 'cd bots/open-oracle-arbitrager && bun test tests/consumer.test.ts',
+					reason: 'imports changed production source directly or transitively',
+				},
+			])
+		} finally {
+			await rm(repositoryRoot, { recursive: true })
+		}
+	})
+
+	test('traces package import-map wildcard and exact aliases to bot tests', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'test-impact-package-imports-'))
+		try {
+			const packageRoot = join(repositoryRoot, 'bots', 'open-oracle-arbitrager')
+			await mkdir(join(packageRoot, 'src', 'core'), { recursive: true })
+			await mkdir(join(packageRoot, 'src', 'infrastructure'), { recursive: true })
+			await mkdir(join(packageRoot, 'tests', 'core'), { recursive: true })
+			await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ imports: { '#core/*': './src/core/*.ts', '#ethereum': './src/infrastructure/ethereum.ts' } }))
+			await writeFile(join(packageRoot, 'src', 'core', 'strategy.ts'), 'export const strategy = 1\n')
+			await writeFile(join(packageRoot, 'src', 'infrastructure', 'ethereum.ts'), 'export const ethereum = 1\n')
+			await writeFile(join(packageRoot, 'tests', 'core', 'strategy.test.ts'), "import { strategy } from '#core/strategy'\nimport { ethereum } from '#ethereum'\nvoid strategy\nvoid ethereum\n")
+			const expected = [
+				{
+					command: 'cd bots/open-oracle-arbitrager && bun test tests/core/strategy.test.ts',
+					reason: 'imports changed production source directly or transitively',
+				},
+			]
+
+			expect(await getImportGraphTestRecommendations(['bots/open-oracle-arbitrager/src/core/strategy.ts'], repositoryRoot)).toEqual(expected)
+			expect(await getImportGraphTestRecommendations(['bots/open-oracle-arbitrager/src/infrastructure/ethereum.ts'], repositoryRoot)).toEqual(expected)
+			await writeFile(join(packageRoot, 'src', 'core', 'strategy-renamed.ts'), 'export const strategy = 1\n')
+			await writeFile(join(packageRoot, 'tests', 'core', 'strategy.test.ts'), "import { strategy } from '#core/strategy-renamed'\nvoid strategy\n")
+			expect(
+				await getImportGraphTestRecommendations([{ path: 'bots/open-oracle-arbitrager/src/core/strategy-renamed.ts', previousPath: 'bots/open-oracle-arbitrager/src/core/strategy.ts', status: 'renamed' }], repositoryRoot, {
+					baselinePackageImports: new Map([['bots/open-oracle-arbitrager', new Map([['#core/*', './src/core/*.ts']])]]),
+					baselineSources: new Map([
+						['bots/open-oracle-arbitrager/src/core/strategy.ts', 'export const strategy = 1\n'],
+						['bots/open-oracle-arbitrager/tests/core/strategy.test.ts', "import { strategy } from '#core/strategy'\nvoid strategy\n"],
+					]),
+				}),
+			).toEqual(expected)
+		} finally {
+			await rm(repositoryRoot, { recursive: true })
+		}
+	})
+
+	test('uses baseline package import maps for deleted bot sources', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'test-impact-deleted-package-import-'))
+		try {
+			const packageRoot = join(repositoryRoot, 'bots', 'open-oracle-arbitrager')
+			await mkdir(join(packageRoot, 'tests', 'core'), { recursive: true })
+			await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ imports: { '#core/*': './src/core/*.ts' } }))
+			await writeFile(join(packageRoot, 'tests', 'core', 'strategy.test.ts'), 'void 0\n')
+			const baselineSources = new Map([
+				['bots/open-oracle-arbitrager/src/core/strategy.ts', 'export const strategy = 1\n'],
+				['bots/open-oracle-arbitrager/tests/core/strategy.test.ts', "import { strategy } from '#core/strategy'\nvoid strategy\n"],
+			])
+			const baselinePackageImports = new Map([['bots/open-oracle-arbitrager', new Map([['#core/*', './src/core/*.ts']])]])
+
+			expect(await getImportGraphTestRecommendations([{ path: 'bots/open-oracle-arbitrager/src/core/strategy.ts', status: 'deleted' }], repositoryRoot, { baselinePackageImports, baselineSources })).toEqual([
+				{
+					command: 'cd bots/open-oracle-arbitrager && bun test tests/core/strategy.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])

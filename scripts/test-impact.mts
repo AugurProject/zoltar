@@ -11,6 +11,7 @@ export type TestImpactRecommendation = {
 
 type TestImpactRule = TestImpactRecommendation & {
 	matches: (filePath: string) => boolean
+	ownedTestEnvironment?: string
 	ownedTestPaths?: readonly string[]
 }
 
@@ -67,12 +68,14 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:integration:mainnet-fork',
 		reason: 'deterministic historical Uniswap routing changed; requires MAINNET_ARCHIVE_RPC_URL',
 		matches: filePath => filePath === 'ui/zoltar/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
+		ownedTestEnvironment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1',
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'],
 	},
 	{
 		command: 'bun run test:integration:mainnet',
 		reason: 'mutable Uniswap mainnet smoke coverage changed',
 		matches: filePath => filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts',
+		ownedTestEnvironment: 'RUN_MAINNET_INTEGRATION_TESTS=1',
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'],
 	},
 ]
@@ -87,6 +90,15 @@ function directTestCommand(filePath: string) {
 	return `bun test ${filePath}`
 }
 
+function specializedTestCommand(filePath: string, environment: string) {
+	const directCommand = directTestCommand(filePath)
+	if (directCommand === undefined) return undefined
+	const prerequisites = 'bun run ensure-contract-artifacts && bun run check:shared-dependencies'
+	const packageCommand = /^(cd [^ ]+ && )(.+)$/.exec(directCommand)
+	if (packageCommand?.[1] !== undefined && packageCommand[2] !== undefined) return `${prerequisites} && ${packageCommand[1]}${environment} ${packageCommand[2]}`
+	return `${prerequisites} && ${environment} ${directCommand}`
+}
+
 const IMPORT_GRAPH_IGNORED_DIRECTORIES = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
 const IMPORT_GRAPH_SOURCE_PATTERN = /\.(?:cts|mts|ts|tsx)$/
 const PACKAGE_ALIASES = new Map([
@@ -96,6 +108,16 @@ const PACKAGE_ALIASES = new Map([
 	['@zoltar/ui-statoblast/', 'ui/statoblast/ts/'],
 	['@zoltar/ui-zoltar/', 'ui/zoltar/ts/'],
 ])
+
+type PackageImportMap = ReadonlyMap<string, ReadonlyMap<string, string>>
+
+function parsePackageImports(source: string) {
+	const packageJson: unknown = JSON.parse(source)
+	if (typeof packageJson !== 'object' || packageJson === null) return new Map<string, string>()
+	const importsValue = Reflect.get(packageJson, 'imports')
+	if (typeof importsValue !== 'object' || importsValue === null || Array.isArray(importsValue)) return new Map<string, string>()
+	return new Map(Object.entries(importsValue).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+}
 
 async function collectImportGraphSources(repositoryRoot: string, directoryPath = repositoryRoot): Promise<string[]> {
 	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
@@ -115,6 +137,30 @@ async function readCurrentSources(repositoryRoot: string) {
 	return sources
 }
 
+async function readCurrentPackageImports(repositoryRoot: string, sourceFiles: Iterable<string>) {
+	const packageRoots = new Set(
+		[...sourceFiles]
+			.map(filePath => path.posix.dirname(filePath))
+			.flatMap(directory => {
+				const ancestors: string[] = []
+				for (let current = directory; current !== '.'; current = path.posix.dirname(current)) ancestors.push(current)
+				return ancestors
+			}),
+	)
+	const packageImports = new Map<string, ReadonlyMap<string, string>>()
+	await Promise.all(
+		[...packageRoots].map(async packageRoot => {
+			try {
+				const imports = parsePackageImports(await fs.readFile(path.join(repositoryRoot, packageRoot, 'package.json'), 'utf8'))
+				if (imports.size > 0) packageImports.set(packageRoot, imports)
+			} catch (error) {
+				if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'ENOENT') throw error
+			}
+		}),
+	)
+	return packageImports
+}
+
 function readBaselineSources(reference = 'origin/main') {
 	const sources = new Map<string, string>()
 	const filePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { encoding: 'utf8' })
@@ -122,6 +168,18 @@ function readBaselineSources(reference = 'origin/main') {
 		.filter(filePath => IMPORT_GRAPH_SOURCE_PATTERN.test(filePath))
 	for (const filePath of filePaths) sources.set(filePath, execFileSync('git', ['show', `${reference}:${filePath}`], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }))
 	return sources
+}
+
+function readBaselinePackageImports(reference = 'origin/main') {
+	const packageImports = new Map<string, ReadonlyMap<string, string>>()
+	const packagePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { encoding: 'utf8' })
+		.split('\0')
+		.filter(filePath => path.posix.basename(filePath) === 'package.json')
+	for (const packagePath of packagePaths) {
+		const imports = parsePackageImports(execFileSync('git', ['show', `${reference}:${packagePath}`], { encoding: 'utf8' }))
+		if (imports.size > 0) packageImports.set(path.posix.dirname(packagePath), imports)
+	}
+	return packageImports
 }
 
 function extractImportSpecifiers(source: string) {
@@ -133,9 +191,28 @@ function extractImportSpecifiers(source: string) {
 	return [...specifiers]
 }
 
-function resolveImportSpecifier(importer: string, specifier: string, sourceFiles: ReadonlySet<string>) {
+function resolvePackageImport(importer: string, specifier: string, packageImports: PackageImportMap) {
+	const matchingRoot = [...packageImports.keys()].filter(packageRoot => importer.startsWith(`${packageRoot}/`)).sort((left, right) => right.length - left.length)[0]
+	if (matchingRoot === undefined) return undefined
+	for (const [alias, target] of packageImports.get(matchingRoot) ?? []) {
+		const wildcardIndex = alias.indexOf('*')
+		if (wildcardIndex === -1) {
+			if (specifier === alias) return path.posix.join(matchingRoot, target)
+			continue
+		}
+		const prefix = alias.slice(0, wildcardIndex)
+		const suffix = alias.slice(wildcardIndex + 1)
+		if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) continue
+		const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length)
+		return path.posix.join(matchingRoot, target.replace('*', wildcard))
+	}
+	return undefined
+}
+
+function resolveImportSpecifier(importer: string, specifier: string, sourceFiles: ReadonlySet<string>, packageImports: PackageImportMap) {
 	let unresolvedPath: string | undefined
 	if (specifier.startsWith('.')) unresolvedPath = path.posix.normalize(path.posix.join(path.posix.dirname(importer), specifier))
+	else if (specifier.startsWith('#')) unresolvedPath = resolvePackageImport(importer, specifier, packageImports)
 	else {
 		for (const [alias, aliasRoot] of PACKAGE_ALIASES) {
 			if (specifier.startsWith(alias)) unresolvedPath = `${aliasRoot}${specifier.slice(alias.length)}`
@@ -180,12 +257,12 @@ function groupedTestCommands(testFiles: readonly string[]) {
 		.sort((left, right) => left.localeCompare(right))
 }
 
-function findAffectedTests(changedFiles: readonly string[], sources: ReadonlyMap<string, string>) {
+function findAffectedTests(changedFiles: readonly string[], sources: ReadonlyMap<string, string>, packageImports: PackageImportMap) {
 	const sourceFileSet = new Set(sources.keys())
 	const reverseImports = new Map<string, Set<string>>()
 	for (const [importer, source] of sources) {
 		for (const specifier of extractImportSpecifiers(source)) {
-			const dependency = resolveImportSpecifier(importer, specifier, sourceFileSet)
+			const dependency = resolveImportSpecifier(importer, specifier, sourceFileSet, packageImports)
 			if (dependency === undefined) continue
 			const importers = reverseImports.get(dependency) ?? new Set<string>()
 			importers.add(importer)
@@ -211,6 +288,7 @@ function findAffectedTests(changedFiles: readonly string[], sources: ReadonlyMap
 }
 
 type ImportGraphOptions = {
+	baselinePackageImports?: PackageImportMap
 	baselineSources?: ReadonlyMap<string, string>
 }
 
@@ -219,9 +297,11 @@ const normalizeChanges = (changes: readonly (string | ChangedFileEntry)[]): Chan
 export async function getImportGraphTestRecommendations(changes: readonly (string | ChangedFileEntry)[], repositoryRoot = process.cwd(), options: ImportGraphOptions = {}) {
 	const normalizedChanges = normalizeChanges(changes)
 	const currentSources = await readCurrentSources(repositoryRoot)
+	const currentPackageImports = await readCurrentPackageImports(repositoryRoot, currentSources.keys())
 	const affectedTests = findAffectedTests(
 		normalizedChanges.filter(change => change.status !== 'deleted').map(change => change.path),
 		currentSources,
+		currentPackageImports,
 	)
 	const baselineRoots = normalizedChanges.flatMap(change => {
 		if (change.status === 'deleted') return [change.path]
@@ -230,7 +310,8 @@ export async function getImportGraphTestRecommendations(changes: readonly (strin
 	})
 	if (baselineRoots.length > 0) {
 		const baselineSources = options.baselineSources ?? readBaselineSources()
-		for (const testFile of findAffectedTests(baselineRoots, baselineSources)) {
+		const baselinePackageImports = options.baselinePackageImports ?? readBaselinePackageImports()
+		for (const testFile of findAffectedTests(baselineRoots, baselineSources, baselinePackageImports)) {
 			if (currentSources.has(testFile)) affectedTests.add(testFile)
 		}
 	}
@@ -251,7 +332,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 			for (const testPath of changedOwnedPaths) {
 				const currentPath = changedTestPaths.get(testPath)
 				if (currentPath === undefined) continue
-				const command = directTestCommand(currentPath)
+				const command = rule.ownedTestEnvironment === undefined ? directTestCommand(currentPath) : specializedTestCommand(currentPath, rule.ownedTestEnvironment)
 				if (command !== undefined) recommendations.set(command, { command, reason: `renamed test: ${testPath} -> ${currentPath}` })
 			}
 			return
@@ -260,7 +341,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 	}
 	for (const change of normalizedChanges) {
 		const changedTestWasDeleted = change.status === 'deleted' && isTestSourceFile(change.path)
-		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path))
+		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path) || (change.status === 'renamed' && change.previousPath !== undefined && rule.ownedTestPaths?.includes(change.previousPath) === true))
 		if (matchingRules.length === 0) {
 			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path)
 			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${change.path}` })

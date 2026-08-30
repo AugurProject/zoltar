@@ -61,41 +61,9 @@ const parseNameStatus = (output: string): ChangedFileEntry[] => {
 
 export function getChangedFileEntries(runGitFn: (args: string[]) => string = runGit) {
 	const changesByPath = new Map<string, ChangedFileEntry>()
-	const applyChange = (change: ChangedFileEntry) => {
-		const existing = changesByPath.get(change.path)
-		if (change.status === 'modified') {
-			if (existing === undefined) changesByPath.set(change.path, change)
-			return
-		}
-		if (change.status === 'added') {
-			if (existing?.status === 'deleted') changesByPath.set(change.path, { path: change.path, status: 'modified' })
-			else if (existing === undefined) changesByPath.set(change.path, change)
-			return
-		}
-		if (change.status === 'deleted') {
-			if (existing?.status === 'added') changesByPath.delete(change.path)
-			else if (existing?.status === 'renamed') {
-				changesByPath.delete(change.path)
-				if (existing.previousPath !== undefined) changesByPath.set(existing.previousPath, { path: existing.previousPath, status: 'deleted' })
-			} else changesByPath.set(change.path, change)
-			return
-		}
-		if (change.previousPath === undefined) throw new Error(`Rename is missing its previous path: ${change.path}`)
-		const renamedExisting = changesByPath.get(change.previousPath)
-		changesByPath.delete(change.previousPath)
-		if (renamedExisting?.status === 'added') changesByPath.set(change.path, { path: change.path, status: 'added' })
-		else changesByPath.set(change.path, { path: change.path, previousPath: renamedExisting?.previousPath ?? change.previousPath, status: 'renamed' })
-	}
-	const diffArguments = [
-		['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, 'origin/main...HEAD'],
-		['diff', '--cached', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`],
-		['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`],
-	]
-	for (const args of diffArguments) {
-		for (const change of parseNameStatus(runGitFn(args))) applyChange(change)
-	}
+	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, 'origin/main...']))) changesByPath.set(change.path, change)
 	for (const filePath of runGitFn(['ls-files', '-z', '--others', '--exclude-standard']).split('\0')) {
-		if (filePath !== '') applyChange({ path: filePath, status: 'added' })
+		if (filePath !== '') changesByPath.set(filePath, { path: filePath, status: 'added' })
 	}
 	return [...changesByPath.values()].sort((left, right) => left.path.localeCompare(right.path))
 }
