@@ -1,6 +1,6 @@
-import type { OperationClassification } from '../operations/types.ts'
+import type { OperationAbiEntryKind, OperationClassification } from '../operations/types.ts'
 
-export type ContractAbiEntryKind = 'fallback' | 'function' | 'receive'
+export type ContractAbiEntryKind = OperationAbiEntryKind
 
 /** A selector intentionally routed through one catalog operation that subsumes its effects. */
 export interface ContractMethodSemanticAlias {

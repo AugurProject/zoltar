@@ -15,6 +15,7 @@ export function operationHasCanonicalContinuationBuilder(definitionId: string) {
 
 function publicDefinition(definition: OperationDefinition): EvaluatedOperation['definition'] {
 	return {
+		abiEntryKind: definition.abiEntryKind ?? 'function',
 		classification: definition.classification,
 		contract: definition.contract,
 		description: definition.description,

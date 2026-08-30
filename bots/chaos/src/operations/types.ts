@@ -4,6 +4,7 @@ import type { CanonicalUintString } from '../core/units.ts'
 export type ChaosEcosystem = 'zoltar' | 'statoblast' | 'open-oracle' | 'trading'
 export type OperationRisk = 'low' | 'medium' | 'high' | 'irreversible'
 export type OperationClassification = 'selectable' | 'prerequisite' | 'lifecycle-obligation' | 'role-restricted' | 'excluded-dangerous'
+export type OperationAbiEntryKind = 'fallback' | 'function' | 'receive'
 
 export interface SnapshotAnchor {
 	baseFeePerGas: CanonicalUintString
@@ -538,6 +539,8 @@ export interface OperationDefinition {
 	ecosystem: ChaosEcosystem
 	contract: string
 	method: string
+	/** Defaults to `function`; coverage-only rows retain receive and fallback identity explicitly. */
+	abiEntryKind?: OperationAbiEntryKind
 	risk: OperationRisk
 	classification: OperationClassification
 	/** False only for a coverage row that cannot be planned as its own operation. */

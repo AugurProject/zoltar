@@ -455,6 +455,7 @@ export function unavailableOperationCatalog(reason: string): EvaluatedOperation[
 	return completeOperationCoverage(
 		CHAOS_OPERATION_CATALOG.map(definition => ({
 			definition: {
+				abiEntryKind: definition.abiEntryKind ?? 'function',
 				classification: definition.classification,
 				contract: definition.contract,
 				description: definition.description,
@@ -497,25 +498,22 @@ export function completeOperationCoverage(evaluations: readonly EvaluatedOperati
 	const completed = [...evaluations]
 	for (const entry of MUTATING_CONTRACT_SURFACE) {
 		const coverageId = surfaceCoverageId(entry)
-		const represented = completed.some(evaluation => {
-			if (entry.semanticAliasOf !== undefined) return evaluation.definition.id === coverageId
-			return entry.operationId === undefined ? evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method : evaluation.definition.id === entry.operationId
-		})
+		const represented = completed.some(evaluation => evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method && (evaluation.definition.abiEntryKind ?? 'function') === entry.abiEntryKind)
 		if (represented) continue
-		const id = entry.semanticAliasOf === undefined ? (entry.operationId ?? coverageId) : coverageId
-		const semanticTarget = entry.semanticAliasOf === undefined ? undefined : CHAOS_OPERATION_CATALOG.find(definition => definition.id === entry.operationId)
+		const operationTarget = entry.operationId === undefined ? undefined : CHAOS_OPERATION_CATALOG.find(definition => definition.id === entry.operationId)
 		completed.push({
 			definition: {
+				abiEntryKind: entry.abiEntryKind,
 				classification: entry.classification,
 				contract: entry.contract,
 				description: entry.reason ?? `${entry.contract}.${entry.method} is classified as ${entry.classification.replace('-', ' ')}.`,
 				discoveryInputs: [],
 				ecosystem: surfaceEcosystem(entry.contract),
-				id,
+				id: coverageId,
 				independentlyExecutable: false,
 				label: `${entry.contract}.${entry.method}`,
 				method: entry.method,
-				risk: semanticTarget?.risk ?? (entry.classification === 'prerequisite' ? 'medium' : 'high'),
+				risk: operationTarget?.risk ?? (entry.classification === 'prerequisite' ? 'medium' : 'high'),
 			},
 			eligibility: {
 				blockers: [surfaceBlocker(entry)],

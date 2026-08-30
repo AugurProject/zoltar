@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, zeroHash } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
-import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../../src/contracts/surface.ts'
+import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import {
 	applyExecutionPolicy,
@@ -426,6 +426,15 @@ describe('canonical scan policy', () => {
 		expect(catalog.every(operation => !operation.eligibility.eligible)).toBeTrue()
 		const blocked = blockExecutableEvaluations(catalog, 'Canonical discovery is unavailable')
 		expect(blocked.filter(operation => operation.definition.classification === 'selectable').every(operation => operation.eligibility.blockers.includes('Canonical discovery is unavailable'))).toBeTrue()
+	})
+
+	test('keeps every exact canonical mutating ABI entry in complete coverage', () => {
+		const coverage = unavailableOperationCatalog('Configure an operator signer')
+		for (const entry of MUTATING_CONTRACT_SURFACE) {
+			const exact = coverage.filter(operation => operation.definition.contract === entry.contract && operation.definition.method === entry.method && (operation.definition.abiEntryKind ?? 'function') === entry.abiEntryKind)
+			expect(exact.length, `${entry.contract}.${entry.abiEntryKind}.${entry.method}`).toBeGreaterThan(0)
+		}
+		expect(new Set(coverage.map(operation => operation.definition.id)).size).toBe(coverage.length)
 	})
 
 	test('keeps a semantic selector alias visible beside its one executable catalog route', () => {
