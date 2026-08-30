@@ -5,7 +5,7 @@ import { h, type ComponentChildren } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
-import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { createSecurityPoolPageFromLoadedPools, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -116,11 +116,6 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		mock.restore()
 	})
 
-	void test('detects no-data registry reads as all-pools fallback candidates', () => {
-		expect(shouldFallbackToAllSecurityPoolsPage(new Error('Contract function returned no data for 0x1234.'))).toBe(true)
-		expect(shouldFallbackToAllSecurityPoolsPage(new Error('RPC timeout'))).toBe(false)
-	})
-
 	void test('builds a paginated fallback page from loaded pools', () => {
 		const pools = [createListedSecurityPool('0x01'), createListedSecurityPool('0x02'), createListedSecurityPool('0x03')]
 		const page = createSecurityPoolPageFromLoadedPools(pools, 1, 2)
@@ -131,24 +126,16 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(page.pools.map(pool => pool.questionId)).toEqual(['0x03'])
 	})
 
-	void test('recovers registry page no-data reads by rereading current registry context', async () => {
-		const initialPools = [createListedSecurityPool('0x01', '0x0000000000000000000000000000000000000001')]
-		const currentPools = [createListedSecurityPool('0x02', '0x0000000000000000000000000000000000000002'), createListedSecurityPool('0x03', '0x0000000000000000000000000000000000000003'), createListedSecurityPool('0x04', '0x0000000000000000000000000000000000000004')]
-		let allPoolsLoadCount = 0
-		const loadAllSecurityPools = mock(async () => {
-			allPoolsLoadCount += 1
-			return allPoolsLoadCount === 1 ? initialPools : currentPools
-		})
-		const loadSecurityPoolPage = mock(async () => {
-			throw new Error('Contract function returned no data for registry page')
-		})
+	void test('loads only the checked pool lineage for workflow details', async () => {
+		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const selectedPools = [createListedSecurityPool('0x01', selectedAddress)]
+		const loadSecurityPoolLineage = mock(async () => selectedPools)
 
 		const dependencies = createSecurityPoolsOverviewDependencies({
 			createWalletWriteClient: mock(() => {
 				throw new Error('createWalletWriteClient should not be called in this test')
 			}),
-			loadAllSecurityPools,
-			loadSecurityPoolPage,
+			loadSecurityPoolLineage,
 			queueSecurityPoolLiquidation: mock(async () => {
 				throw new Error('queueSecurityPoolLiquidation should not be called in this test')
 			}),
@@ -164,22 +151,11 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireHookState(hookState).loadSecurityPools()
+			await requireHookState(hookState).loadSecurityPools(selectedAddress)
 		})
 
-		expect(allPoolsLoadCount).toBe(1)
+		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress)
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
-
-		await act(async () => {
-			await requireHookState(hookState).loadBrowseSecurityPoolPage(1, 2, 'current-request')
-		})
-
-		expect(allPoolsLoadCount).toBe(2)
-		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
-		expect(requireHookState(hookState).securityPoolBrowseCount).toBe(3n)
-		expect(requireHookState(hookState).securityPoolPage?.requestKey).toBe('current-request')
-		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x04'])
 	})
 
 	void test('waits for active backend readiness before loading the registry page', async () => {
@@ -202,8 +178,8 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			createWalletWriteClient: mock(() => {
 				throw new Error('createWalletWriteClient should not be called in this test')
 			}),
-			loadAllSecurityPools: mock(async () => {
-				throw new Error('loadAllSecurityPools should not be called in this test')
+			loadSecurityPoolLineage: mock(async () => {
+				throw new Error('loadSecurityPoolLineage should not be called in this test')
 			}),
 			loadSecurityPoolPage,
 			queueSecurityPoolLiquidation: mock(async () => {
@@ -236,8 +212,9 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
 		const firstLoad = createDeferred<ListedSecurityPool[]>()
-		const loadAllSecurityPools = mock(async () => (loadAllSecurityPools.mock.calls.length === 1 ? await firstLoad.promise : [createListedSecurityPool('0x02')]))
-		const dependencies = createSecurityPoolsOverviewDependencies({ loadAllSecurityPools })
+		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const loadSecurityPoolLineage = mock(async () => (loadSecurityPoolLineage.mock.calls.length === 1 ? await firstLoad.promise : [createListedSecurityPool('0x02')]))
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadSecurityPoolLineage })
 		let hookState: UseSecurityPoolsOverviewState | undefined
 		const Harness = createHarness(dependencies, state => {
 			hookState = state
@@ -245,7 +222,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const staleLoadPromise = requireHookState(hookState).loadSecurityPools()
+		const staleLoadPromise = requireHookState(hookState).loadSecurityPools(selectedAddress)
 		await act(() => {
 			render(h(Harness, { environmentRefreshKey: 1 }), renderedComponent.container)
 		})
@@ -255,7 +232,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(requireHookState(hookState).hasLoadedSecurityPools).toBe(false)
 		expect(requireHookState(hookState).securityPoolsLoadedEnvironmentRefreshKey).toBe(0)
 		await act(async () => {
-			await requireHookState(hookState).loadSecurityPools()
+			await requireHookState(hookState).loadSecurityPools(selectedAddress)
 		})
 		expect(requireHookState(hookState).hasLoadedSecurityPools).toBe(true)
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x02'])

@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { loadAllSecurityPools, loadSecurityPoolPage } from '../../protocol/securityPools.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '../../protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '../../protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -26,6 +27,57 @@ const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCap
 })
 
 describe('securityPools protocol client', () => {
+	test('loads selected child deployments in bounded canonical log ranges', async () => {
+		const headHash = `0x${'11'.repeat(32)}` as const
+		const requestedRanges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const requestedEvents: unknown[] = []
+		const deploySecurityPoolEvent = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find(entry => entry.type === 'event' && entry.name === 'DeploySecurityPool')
+		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from generated ABI')
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ hash: headHash, number: 20_000n, timestamp: 0n }),
+			getLogs: async (request?: object) => {
+				const fromBlock = request === undefined ? undefined : Reflect.get(request, 'fromBlock')
+				const toBlock = request === undefined ? undefined : Reflect.get(request, 'toBlock')
+				if (typeof fromBlock !== 'bigint' || typeof toBlock !== 'bigint') throw new Error('Expected a bounded deployment log range')
+				requestedRanges.push({ fromBlock, toBlock })
+				requestedEvents.push(request === undefined ? undefined : Reflect.get(request, 'event'))
+				if (toBlock - fromBlock + 1n > 10_000n) throw new Error('block range is too large')
+				return []
+			},
+			multicall: async () => [],
+			readContract: async request => {
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		expect(await loadSecurityPoolChildren(client, securityPoolAddress)).toEqual([])
+		expect(requestedRanges).toEqual([
+			{ fromBlock: 0n, toBlock: 9_999n },
+			{ fromBlock: 10_000n, toBlock: 19_999n },
+			{ fromBlock: 20_000n, toBlock: 20_000n },
+		])
+		expect(requestedEvents).toEqual([deploySecurityPoolEvent, deploySecurityPoolEvent, deploySecurityPoolEvent])
+	})
+
+	test('rejects selected child deployments when their discovery anchor is replaced', async () => {
+		const originalHash = `0x${'11'.repeat(32)}` as const
+		const replacementHash = `0x${'22'.repeat(32)}` as const
+		let blockReads = 0
+		const client = createMockLoaderClient({
+			getBlock: async () => {
+				blockReads += 1
+				return { hash: blockReads === 1 ? originalHash : replacementHash, number: 100n, timestamp: 0n }
+			},
+			getLogs: async () => [],
+			multicall: async () => [],
+			readContract: async request => {
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('deployments changed during discovery')
+	})
+
 	test('loadSecurityPoolPage preserves exact offsets above the safe multiplication range', async () => {
 		const pageIndex = Number.MAX_SAFE_INTEGER
 		const pageSize = 3

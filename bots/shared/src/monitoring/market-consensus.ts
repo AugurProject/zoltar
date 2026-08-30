@@ -54,6 +54,7 @@ export type MarketConsensusObservation = {
 	marketId?: string
 	observationId: string
 	observedAt: number
+	pairSnapshotId?: string | undefined
 	priceRepPerEth: bigint
 	sourceId: string
 }

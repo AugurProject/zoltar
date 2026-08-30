@@ -95,7 +95,6 @@ export type OperatorSettings = {
 		execute: boolean
 		historicalLogRecovery: boolean
 		logLookbackBlocks: number
-		maxVaultsPerPool: number
 		once: boolean
 		pollMilliseconds: number
 		stateFile: string
@@ -315,7 +314,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 			execute: boolean(runtime['execute'], 'runtime.execute'),
 			historicalLogRecovery: runtime['historicalLogRecovery'] === undefined ? false : boolean(runtime['historicalLogRecovery'], 'runtime.historicalLogRecovery'),
 			logLookbackBlocks: integer(runtime['logLookbackBlocks'] ?? 256, 'runtime.logLookbackBlocks', 1, 256),
-			maxVaultsPerPool: integer(runtime['maxVaultsPerPool'], 'runtime.maxVaultsPerPool', 1, 100_000),
 			once: boolean(runtime['once'], 'runtime.once'),
 			pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 3_600_000),
 			stateFile: resolve(string(runtime['stateFile'], 'runtime.stateFile')),

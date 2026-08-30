@@ -1035,6 +1035,41 @@ function normalizeEventTopicArgs(eventAbi: AbiParameter, args: readonly unknown[
 	)
 }
 
+function eventTopicWildcardPlaceholder(input: AbiParameter): unknown {
+	const arrayMatch = /^(.*)\[(\d*)\]$/u.exec(input.type)
+	if (arrayMatch !== null) {
+		const itemType = arrayMatch[1]
+		const lengthText = arrayMatch[2]
+		if (itemType === undefined || lengthText === undefined || lengthText === '') return []
+		const length = Number(lengthText)
+		if (!Number.isSafeInteger(length) || length < 0) throw new Error(`Invalid ABI array length ${lengthText}`)
+		return Array.from({ length }, () => eventTopicWildcardPlaceholder({ ...input, type: itemType }))
+	}
+	if (input.type.startsWith('tuple')) {
+		const components = input.components ?? []
+		const named = components.every(component => component.name !== undefined && component.name !== '')
+		if (!named) return components.map(eventTopicWildcardPlaceholder)
+		return Object.fromEntries(
+			components.map(component => {
+				const name = component.name
+				if (name === undefined || name === '') throw new Error('ABI tuple component name is missing')
+				return [name, eventTopicWildcardPlaceholder(component)]
+			}),
+		)
+	}
+	if (input.type === 'address') return zeroAddress
+	if (input.type === 'bool') return false
+	if (input.type === 'string') return ''
+	if (input.type === 'bytes') return new Uint8Array()
+	if (isStaticBytesAbiType(input.type)) {
+		const size = Number(input.type.slice('bytes'.length))
+		if (!Number.isSafeInteger(size) || size < 1 || size > 32) throw new Error(`Invalid ABI byte width ${input.type}`)
+		return new Uint8Array(size)
+	}
+	if (isIntegerAbiType(input.type)) return 0n
+	throw new Error(`Cannot construct a wildcard placeholder for indexed ABI type ${input.type}`)
+}
+
 function createDecodeError(name: string, message: string) {
 	const error = new Error(message)
 	error.name = name
@@ -2082,6 +2117,29 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 	const decoder = getEventDecoder(eventAbi)
 	const inputs = eventAbi.inputs ?? []
 	const normalizedArgs = normalizeEventTopicArgs(eventAbi, parameters.args)
+	const encodeNormalizedTopics = (values: ReturnType<typeof normalizeEventTopicArgs>) => {
+		const withPlaceholders = Array.isArray(values)
+			? inputs.map((input, index) => (input.indexed === true && values[index] === null ? eventTopicWildcardPlaceholder(input) : values[index]))
+			: Object.fromEntries(
+					inputs.map(input => {
+						const name = input.name
+						if (name === undefined) throw new Error('ABI event input name is missing')
+						const value = Reflect.get(values, name)
+						return [name, input.indexed === true && value === null ? eventTopicWildcardPlaceholder(input) : value]
+					}),
+				)
+		const topics = decoder.topics(withPlaceholders) as Array<string | null>
+		let topicIndex = eventAbi.anonymous === true ? 0 : 1
+		for (const [inputIndex, input] of inputs.entries()) {
+			if (input.indexed !== true) continue
+			let value: unknown
+			if (Array.isArray(values)) value = values[inputIndex]
+			else if (input.name !== undefined) value = Reflect.get(values, input.name)
+			if (value === null) topics[topicIndex] = null
+			topicIndex += 1
+		}
+		return topics.map(topic => (topic === null ? null : ensure0x(topic)))
+	}
 	const usesFullInputArray = Array.isArray(parameters.args) && parameters.args.length === inputs.length
 	let indexedInputIndex = 0
 	const alternatives = inputs.flatMap((input, inputIndex) => {
@@ -2094,7 +2152,7 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 		else if (parameters.args !== undefined && input.name !== undefined) value = Reflect.get(parameters.args, input.name)
 		return Array.isArray(value) ? [{ input, inputIndex, selectionIndex: Array.isArray(parameters.args) ? argumentIndex : inputIndex, values: value }] : []
 	})
-	if (alternatives.length === 0) return decoder.topics(normalizedArgs).map((topic: string | null) => (topic === null ? null : ensure0x(topic)))
+	if (alternatives.length === 0) return encodeNormalizedTopics(normalizedArgs)
 	const withAlternatives = (selected: ReadonlyMap<number, unknown>) =>
 		normalizeEventTopicArgs(
 			eventAbi,
@@ -2103,11 +2161,11 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 				: Object.fromEntries(inputs.map((input, inputIndex) => [input.name as string, selected.get(inputIndex) ?? (parameters.args === undefined ? undefined : Reflect.get(parameters.args, input.name as string))])),
 		)
 	const defaults = new Map(alternatives.map(({ selectionIndex, values }) => [selectionIndex, values[0]]))
-	const topics: Array<Hex | readonly Hex[] | null> = decoder.topics(withAlternatives(defaults)).map((topic: string | null) => (topic === null ? null : ensure0x(topic)))
+	const topics: Array<Hex | readonly Hex[] | null> = encodeNormalizedTopics(withAlternatives(defaults))
 	for (const { input, inputIndex, selectionIndex, values } of alternatives) {
 		const topicIndex = inputs.slice(0, inputIndex + 1).filter(candidate => candidate.indexed === true).length
 		topics[topicIndex] = values.map(value => {
-			const topic = decoder.topics(withAlternatives(new Map([...defaults, [selectionIndex, value]])))[topicIndex]
+			const topic = encodeNormalizedTopics(withAlternatives(new Map([...defaults, [selectionIndex, value]])))[topicIndex]
 			if (topic === undefined || topic === null) throw new Error(`Event topic ${topicIndex.toString()} could not be encoded for ${input.name ?? 'indexed input'}`)
 			return ensure0x(topic)
 		})

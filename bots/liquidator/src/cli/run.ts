@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, readContractAtBlock } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -10,7 +10,7 @@ import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
-import { scanPools } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex, scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
 import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
@@ -22,7 +22,7 @@ import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { observeConstantProductMarkets } from '@zoltar/bot-shared/monitoring/constant-product-markets'
+import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
 import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
@@ -84,6 +84,15 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					transport: readPool.transport,
 				})
 	const state = initialRuntimeState(settings.paused, wallet?.account.address, settings.network.chainId)
+	let poolMonitorIndexes = new Map<string, ReturnType<typeof createPoolMonitorIndex>>()
+	const poolMonitorIndexFor = (endpoint: string) => {
+		const key = `${settings.network.chainId.toString()}:${settings.deployment.securityPoolFactory.toLowerCase()}:${endpoint}`
+		const existing = poolMonitorIndexes.get(key)
+		if (existing !== undefined) return existing
+		const created = createPoolMonitorIndex()
+		poolMonitorIndexes.set(key, created)
+		return created
+	}
 	const durable = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)
@@ -118,16 +127,32 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		])
 		wakeProfileSwitchWait = undefined
 	}
-	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: `0x${string}`; number: bigint; timestamp: bigint }) =>
-		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => {
-			const [token0, token1, reserves] = await Promise.all([
-				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token0' }, block.number),
-				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'token1' }, block.number),
-				readContractAtBlock(client, { abi: constantProductPairAbi, address: pair, functionName: 'getReserves' }, block.number),
-			])
-			if (!Array.isArray(reserves) || typeof reserves[0] !== 'bigint' || typeof reserves[1] !== 'bigint' || typeof token0 !== 'string' || typeof token1 !== 'string') throw new Error('Constant-product pair returned malformed state')
-			return { blockHash: block.hash, blockNumber: block.number, blockTimestamp: block.timestamp, chainId: settings.network.chainId, reserve0: reserves[0], reserve1: reserves[1], token0: getAddress(token0), token1: getAddress(token1) }
+	const readConfiguredDexPair = async (pair: Address, block: Readonly<{ hash: Hash; number: bigint }>) =>
+		readConstantProductPairWithQuorum({
+			block,
+			chainId: settings.network.chainId,
+			endpoints: [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls],
+			pair,
+			readBlock: async (endpoint, blockNumber) => {
+				const pairClient = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
+				const endpointBlock = await pairClient.getBlock({ blockNumber })
+				return { hash: endpointBlock.hash, number: endpointBlock.number, timestamp: endpointBlock.timestamp }
+			},
+			readPairAtBlock: async (endpoint, quorumPair, blockHash) => {
+				const pairClient = createPublicClient({ chain, transport: readPool.transportFor(endpoint) })
+				const [token0, token1, reserves] = await Promise.all([
+					pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'token0' }),
+					pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'token1' }),
+					pairClient.readContract({ abi: constantProductPairAbi, address: quorumPair, blockHash, functionName: 'getReserves' }),
+				])
+				return { reserve0: reserves[0], reserve1: reserves[1], token0, token1 }
+			},
+			requirement: settings.connectivity.rpcQuorum,
 		})
+	const observeConfiguredDex = async (configuration: ReturnType<typeof marketConfigurations>[number], block: { hash: Hash; number: bigint; timestamp: bigint }) =>
+		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => readConfiguredDexPair(getAddress(pair), block))
+	const requireCurrentDexEvidence = async (configuration: ReturnType<typeof marketConfigurations>[number], estimate: Parameters<typeof requireCurrentConstantProductMarketEvidence>[3]) =>
+		requireCurrentConstantProductMarketEvidence(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, estimate, readConfiguredDexPair)
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
@@ -325,6 +350,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							apply: applied => {
 								chain = chainFor(applied)
 								readPool = createRpcEndpointPool([applied.connectivity.readRpcUrl, ...applied.connectivity.quorumRpcUrls])
+								poolMonitorIndexes = new Map()
 								client = createPrimaryClient()
 								wallet = activePrivateKey === undefined ? undefined : createWalletClient({ account: privateKeyToAccount(activePrivateKey), chain, transport: readPool.transport })
 								clearMarketEvidenceForConfigurationChange(state)
@@ -497,7 +523,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					const settled = await Promise.allSettled(
 						endpoints.map(async endpoint => {
 							const endpointClient = createPublicClient({ chain: currentChain, transport: readPool.transportFor(endpoint) })
-							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet) }
+							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint)) }
 						}),
 					)
 					const available = availableExecutionObservations(
@@ -518,7 +544,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					client = selected.client
 					primary = selected.scan
 				} else {
-					primary = await scanPools(client, settings, state.wallet)
+					primary = await scanPools(client, settings, state.wallet, poolMonitorIndexFor(settings.connectivity.readRpcUrl))
 				}
 				const scannedBlock = await client.getBlock()
 				if (scannedBlock.hash === undefined || scannedBlock.number === undefined) throw new Error('Latest block is missing canonical identity')
@@ -555,11 +581,19 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
 					if (centralizedMarket !== undefined) state.centralizedMarketsByAsset.set(asset.toLowerCase(), centralizedMarket)
 					newMarketObservations.push(...centralizedMarketConsensusObservations(centralizedMarket))
-					const dexMarkets = await observeConfiguredDex(configuration, { hash: scannedBlockHash, number: scannedBlockNumber, timestamp: scannedBlock.timestamp })
+					let dexMarkets: Awaited<ReturnType<typeof observeConfiguredDex>>
+					try {
+						dexMarkets = await observeConfiguredDex(configuration, { hash: scannedBlockHash, number: scannedBlockNumber, timestamp: scannedBlock.timestamp })
+					} catch (error) {
+						state.marketObservations = discardDexMarketObservations(state.marketObservations)
+						state.marketConsensus = undefined
+						state.marketConsensusByAsset.clear()
+						throw error
+					}
 					newMarketObservations.push(...dexMarkets.observations)
 				}
 				try {
-					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => (await client.getBlock({ blockNumber })).hash)
+					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => await canonicalBlockHash(settings, blockNumber, readPool))
 				} catch (error) {
 					state.marketObservations = discardDexMarketObservations(state.marketObservations)
 					state.marketConsensus = undefined
@@ -633,7 +667,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 					}
 					for (const pool of state.pools) {
-						if (await maintainVault(wallet, settings, state, readPool, pool, () => canonicalMarketPriceAllowsExecution(pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool)))) {
+						if (await maintainVault(wallet, settings, state, readPool, pool, () => canonicalMarketPriceAllowsExecution(pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool), requireCurrentDexEvidence))) {
 							await saveDurableState(settings.runtime.stateFile, state)
 							return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 						}
@@ -642,7 +676,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					if (selected !== undefined) {
 						const currentCandidate = evaluateCandidate(selected.candidate.pool, selected.candidate.target, selected.pool.botVault, settings.strategy)
 						if (currentCandidate === undefined) return shouldStopAfterSuccessfulCycle(settings.runtime.once)
-						await executeLiquidation(wallet, settings, state, readPool, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool)))
+						await executeLiquidation(wallet, settings, state, readPool, selected.pool, currentCandidate, () => canonicalMarketPriceAllowsExecution(selected.pool, settings, state, blockNumber => canonicalBlockHash(settings, blockNumber, readPool), requireCurrentDexEvidence))
 					}
 				} else if (!state.paused) {
 					const selected = selectedCandidate(state.pools, settings, pool => marketPriceAllowsExecution(pool, settings, state))

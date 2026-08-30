@@ -1,17 +1,8 @@
-export type LogRange = { fromBlock: bigint; toBlock: bigint }
+import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, logRangeLimitError, LogScanError, type LogRange } from '@zoltar/shared/logScan'
+
+export { logRangeLimitError, LogScanError, type LogRange }
 
 export const DEFAULT_LATEST_LOG_BLOCKS = 256n
-
-export class LogScanError extends Error {
-	readonly logRange: LogRange
-
-	constructor(logRange: LogRange, options: { cause?: unknown }) {
-		const causeMessage = options.cause instanceof Error ? options.cause.message : typeof options.cause === 'string' ? options.cause : undefined
-		super(`Log scan failed for blocks ${logRange.fromBlock.toString()} through ${logRange.toBlock.toString()}${causeMessage === undefined ? '' : `: ${causeMessage}`}`, options)
-		this.name = 'LogScanError'
-		this.logRange = logRange
-	}
-}
 
 function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
 	const seen = new Set<unknown>()
@@ -22,19 +13,6 @@ function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
 		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
-}
-
-export function logRangeLimitError(error: unknown) {
-	return walkErrorCauses(error, current => {
-		if (!('message' in current) || typeof current.message !== 'string') return false
-		const message = current.message.toLowerCase()
-		if (message.includes('fromblock exceeds toblock')) return false
-		if (message.includes('http 413') || message.includes('range is too large')) return true
-		if (message.includes('response exceeds') || message.includes('response too large')) return true
-		const mentionsRangeCap = message.includes('range') || message.includes('blocks') || message.includes('results') || message.includes('response size')
-		const mentionsExceeding = message.includes('limit') || message.includes('too many') || message.includes('exceed') || message.includes('too large') || message.includes('maximum') || message.includes('up to') || message.includes('more than')
-		return mentionsRangeCap && mentionsExceeding
-	})
 }
 
 export function historyUnavailableError(error: unknown) {
@@ -67,28 +45,7 @@ export function newestFirstScanRanges(fromBlock: bigint, toBlock: bigint, maximu
 }
 
 export async function fetchLogsWithAdaptiveRanges<Log>(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, maximumRange: bigint, fetchRange: (logRange: LogRange) => Promise<readonly Log[]>): Promise<Log[]> {
-	if (maximumRange < 1n) throw new Error('maximumRange must be positive')
-	const logs: Log[] = []
-	let fromBlock = cursor.nextBlock
-	let requestedBlocks = maximumRange
-	while (fromBlock <= head) {
-		const remaining = head - fromBlock + 1n
-		const attemptedBlocks = requestedBlocks < remaining ? requestedBlocks : remaining
-		const toBlock = fromBlock + attemptedBlocks - 1n
-		const logRange = { fromBlock, toBlock }
-		try {
-			logs.push(...(await fetchRange(logRange)))
-			fromBlock = toBlock + 1n
-			requestedBlocks = maximumRange
-		} catch (error) {
-			if (attemptedBlocks > 1n && logRangeLimitError(error)) {
-				requestedBlocks = (attemptedBlocks + 1n) / 2n
-				continue
-			}
-			throw new LogScanError(logRange, { cause: error })
-		}
-	}
-	return logs
+	return await fetchLogsWithAdaptiveRangesFromBlocks(cursor.nextBlock, head, maximumRange, fetchRange)
 }
 
 export type SyncCursor = {

@@ -16,8 +16,8 @@ import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 const FEES = STANDARD_UNISWAP_FEES
 const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')
 
-export function candidateRiskMismatch(candidate: ExecutionCandidate, positions: readonly PositionRecord[], limits: RiskLimits, now = new Date()) {
-	return positionRiskLimitMismatch({ capitalAtRiskAttoWeth: candidate.capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: candidate.projectedGasCostAttoWeth }, limits, now)
+export function candidateRiskMismatch(candidate: ExecutionCandidate, positions: readonly PositionRecord[], limits: RiskLimits, now = new Date(), archivedDailyGasSpentAttoWeth = 0n) {
+	return positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth, capitalAtRiskAttoWeth: candidate.capitalAtRiskAttoWeth, positions, projectedGasCostAttoWeth: candidate.projectedGasCostAttoWeth }, limits, now)
 }
 
 function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
