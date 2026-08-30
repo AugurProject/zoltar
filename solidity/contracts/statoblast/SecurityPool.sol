@@ -421,8 +421,17 @@ contract SecurityPool is SecurityPoolStorage {
 		require(attoRepAmount >= minimumVaultRepDepositAttoRep || (allowZeroBalance && attoRepAmount == 0), errorMessage);
 	}
 
-	function _requireCapacityNotExceeded(uint256 settlementCollateralAttoEthValue) private view {
-		require(getCurrentMintingCapacityAttoEth() >= settlementCollateralAttoEthValue, 'Over capacity');
+	function _requireCapacityNotExceeded(uint256 settlementCollateralAttoEthValue) private {
+		address delegate = liquidationDelegate;
+		bytes4 selector = SecurityPoolLiquidationDelegate.setValidatedSettlementCollateral.selector;
+		assembly ('memory-safe') {
+			mstore(0, selector)
+			mstore(4, settlementCollateralAttoEthValue)
+			if iszero(delegatecall(gas(), delegate, 0, 0x24, 0, 0)) {
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
+			}
+		}
 	}
 
 	function _requireValidPrice() private view {
@@ -540,7 +549,6 @@ contract SecurityPool is SecurityPoolStorage {
 		_requireCapacityNotExceeded(nextSettlementCollateralAttoEth);
 		SecurityPoolUtils.requireUnassignedPositionHealthy(ISecurityPool(payable(address(this))), securityPoolForker, nextSettlementCollateralAttoEth);
 		shareTokenSupplyAttoShares += completeSetsToMintAttoShares;
-		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
 		emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
@@ -827,7 +835,6 @@ contract SecurityPool is SecurityPoolStorage {
 		feeEligibleCapacityOwnershipAttoRep = newFeeEligibleCapacityOwnershipAttoRep;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		_requireCapacityNotExceeded(newSettlementCollateralAttoEth);
-		settlementCollateralAttoEth = newSettlementCollateralAttoEth;
 		lastUpdatedFeeAccumulator = block.timestamp;
 		_clearFeeIndexRemainder();
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));
