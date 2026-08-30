@@ -1269,6 +1269,29 @@ function normalizeLog(value: unknown): TransactionLog {
 	}
 }
 
+function getLogAddressFilter(address: Address | readonly Address[] | undefined) {
+	if (address === undefined) return undefined
+	if (typeof address === 'string') return new Set([getAddress(address).toLowerCase()])
+	if (address.length === 0) return undefined
+	return new Set(address.map(item => getAddress(item).toLowerCase()))
+}
+
+function logMatchesTopicFilter(logTopics: readonly Hex[], topicFilter: readonly LogTopicFilter[]) {
+	if (topicFilter.length > logTopics.length) return false
+	for (const [index, filter] of topicFilter.entries()) {
+		if (filter === null) continue
+		const alternatives = typeof filter === 'string' ? [filter] : filter
+		if (alternatives.length === 0) continue
+		const logTopic = logTopics[index]
+		if (logTopic === undefined || !alternatives.some(topic => topic.toLowerCase() === logTopic.toLowerCase())) return false
+	}
+	return true
+}
+
+function snapshotLogTopicFilter(topicFilter: readonly LogTopicFilter[]) {
+	return topicFilter.map(filter => (typeof filter === 'string' || filter === null ? filter : [...filter]))
+}
+
 function normalizeReceipt(value: unknown): TransactionReceipt {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction receipt')
 	const receipt = value as Record<string, unknown>
@@ -1520,6 +1543,10 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
 			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
+			const address = typeof parameters.address === 'string' || parameters.address === undefined ? parameters.address : [...parameters.address]
+			const addressFilter = getLogAddressFilter(address)
+			const fromBlock = parameters.fromBlock
+			const toBlock = parameters.toBlock
 			const topics =
 				parameters.topics ??
 				(event === undefined
@@ -1529,19 +1556,25 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							...(parameters.args === undefined ? {} : { args: parameters.args }),
 							eventName: event.name ?? 'event',
 						}))
+			const requestedTopics = topics === undefined ? undefined : snapshotLogTopicFilter(topics)
+			const requestTopics = requestedTopics === undefined ? undefined : snapshotLogTopicFilter(requestedTopics)
 			const rawLogs = await requestTransport<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
 					{
-						...(parameters.address === undefined ? {} : { address: parameters.address }),
-						...(parameters.fromBlock === undefined ? {} : { fromBlock: hexQuantity(parameters.fromBlock) }),
-						...(parameters.toBlock === undefined ? {} : { toBlock: hexQuantity(parameters.toBlock) }),
-						...(topics === undefined ? {} : { topics }),
+						...(address === undefined ? {} : { address }),
+						...(fromBlock === undefined ? {} : { fromBlock: hexQuantity(fromBlock) }),
+						...(toBlock === undefined ? {} : { toBlock: hexQuantity(toBlock) }),
+						...(requestTopics === undefined ? {} : { topics: requestTopics }),
 					},
 				],
 			})
 			return rawLogs.map(rawLog => {
 				const normalizedLog = normalizeLog(rawLog)
+				if (addressFilter !== undefined && !addressFilter.has(normalizedLog.address.toLowerCase())) throw new Error('RPC returned a log outside the requested filter')
+				if (fromBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber < fromBlock)) throw new Error('RPC returned a log outside the requested filter')
+				if (toBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber > toBlock)) throw new Error('RPC returned a log outside the requested filter')
+				if (requestedTopics !== undefined && !logMatchesTopicFilter(normalizedLog.topics, requestedTopics)) throw new Error('RPC returned a log outside the requested filter')
 				if (event === undefined) return normalizedLog
 				const decodedLog = decodeEventLog({
 					abi: [event],

@@ -47,6 +47,9 @@ const MULTICALL_ADDRESS = '0x00000000000000000000000000000000000000DD'
 const RECEIPT_HASH = `0x${'11'.repeat(32)}` satisfies Hash
 const BLOCK_HASH = `0x${'22'.repeat(32)}` satisfies Hash
 const TX_HASH = `0x${'33'.repeat(32)}` satisfies Hash
+const LOG_TOPIC_A = `0x${'44'.repeat(32)}` satisfies Hex
+const LOG_TOPIC_B = `0x${'55'.repeat(32)}` satisfies Hex
+const LOG_TOPIC_C = `0x${'66'.repeat(32)}` satisfies Hex
 
 test('converts bigint values only inside the safe integer range', () => {
 	expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
@@ -463,6 +466,216 @@ describe('shared ethereum compatibility layer', () => {
 		const parameters = getArrayEntry(calls[0]?.params, 0, 'eth_getLogs params')
 		const topics = getObjectEntry(parameters, 'topics', 'eth_getLogs filter')
 		expect(topics).toEqual([encodeEventTopics({ abi: [event], eventName: 'Swap' })[0], [id1, id2], null])
+	})
+
+	for (const mismatch of [
+		{ label: 'address', parameters: { address: TOKEN_ADDRESS }, response: { address: RECIPIENT_ADDRESS } },
+		{ label: 'lower block bound', parameters: { fromBlock: 2n }, response: { blockNumber: '0x1' } },
+		{ label: 'upper block bound', parameters: { toBlock: 0n }, response: { blockNumber: '0x1' } },
+		{ label: 'required block metadata', parameters: { fromBlock: 1n }, response: { blockNumber: null } },
+		{ label: 'single topic', parameters: { topics: [LOG_TOPIC_A] }, response: { topics: [LOG_TOPIC_B] } },
+		{ label: 'alternative topics', parameters: { topics: [[LOG_TOPIC_A, LOG_TOPIC_B]] }, response: { topics: [LOG_TOPIC_C] } },
+		{ label: 'wildcard topic positions', parameters: { topics: [null, null] }, response: { topics: [LOG_TOPIC_A] } },
+		{ label: 'empty wildcard topic positions', parameters: { topics: [[], []] }, response: { topics: [LOG_TOPIC_A] } },
+	] as const) {
+		test(`getLogs rejects a provider result outside the requested ${mismatch.label} filter`, async () => {
+			const client = createPublicClient({
+				transport: custom(
+					createProvider(
+						() => [
+							{
+								address: TOKEN_ADDRESS,
+								blockHash: BLOCK_HASH,
+								blockNumber: '0x1',
+								data: '0x',
+								logIndex: '0x0',
+								removed: false,
+								topics: [LOG_TOPIC_A],
+								transactionHash: TX_HASH,
+								transactionIndex: '0x0',
+								...mismatch.response,
+							},
+						],
+						[],
+					),
+				),
+			})
+
+			await expect(client.getLogs(mismatch.parameters)).rejects.toThrow('RPC returned a log outside the requested filter')
+		})
+	}
+
+	test('getLogs validates results against an immutable snapshot of nested topic alternatives', async () => {
+		const requestedTopics = [[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A]
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ params }) => {
+					const filter = getArrayEntry(params, 0, 'eth_getLogs params')
+					const topics = getObjectEntry(filter, 'topics', 'eth_getLogs filter')
+					if (!Array.isArray(topics)) throw new Error('Expected mutable RPC topics')
+					expect(topics).toEqual([[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A])
+					const alternatives = topics[0]
+					if (!Array.isArray(alternatives)) throw new Error('Expected mutable RPC topic alternatives')
+					alternatives.splice(0, alternatives.length, LOG_TOPIC_B)
+					topics.splice(1, 1, LOG_TOPIC_B)
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_B, LOG_TOPIC_B],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+
+		await expect(client.getLogs({ topics: requestedTopics })).rejects.toThrow('RPC returned a log outside the requested filter')
+		expect(requestedTopics).toEqual([[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A])
+	})
+
+	test('getLogs validates results against an immutable snapshot of block bounds', async () => {
+		const parameters = { fromBlock: 2n }
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ params }) => {
+					const filter = getArrayEntry(params, 0, 'eth_getLogs params')
+					expect(getObjectEntry(filter, 'fromBlock', 'eth_getLogs filter')).toBe('0x2')
+					parameters.fromBlock = 0n
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+
+		await expect(client.getLogs(parameters)).rejects.toThrow('RPC returned a log outside the requested filter')
+	})
+
+	test('getLogs accepts results matching address arrays, block boundaries, wildcards, and alternative topics', async () => {
+		const mixedCaseTopic = `0x${'AB'.repeat(32)}` satisfies Hex
+		const normalizedTopic = `0x${'ab'.repeat(32)}` satisfies Hex
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_C, mixedCaseTopic, LOG_TOPIC_C],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({
+			address: [RECIPIENT_ADDRESS, TOKEN_ADDRESS],
+			fromBlock: 1n,
+			toBlock: 1n,
+			topics: [null, [LOG_TOPIC_A, mixedCaseTopic]],
+		})
+		expect(logs[0]?.topics).toEqual([LOG_TOPIC_C, normalizedTopic, LOG_TOPIC_C])
+	})
+
+	test('getLogs allows missing block metadata when no block range was requested', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: null,
+							blockNumber: null,
+							data: '0x',
+							logIndex: null,
+							removed: false,
+							topics: [],
+							transactionHash: null,
+							transactionIndex: null,
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ address: TOKEN_ADDRESS, topics: [] })
+		expect(logs[0]?.blockNumber).toBeUndefined()
+	})
+
+	test('getLogs treats an empty address array as a wildcard', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: RECIPIENT_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ address: [] })
+		expect(logs[0]?.address.toLowerCase()).toBe(RECIPIENT_ADDRESS.toLowerCase())
+	})
+
+	test('getLogs treats an empty positional topic alternative as a wildcard', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_A],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ topics: [[]] })
+		expect(logs[0]?.topics).toEqual([LOG_TOPIC_A])
 	})
 
 	test('overloaded function selection resolves by signature and argument count', () => {
