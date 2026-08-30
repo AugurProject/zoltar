@@ -61,7 +61,9 @@ const parseNameStatus = (output: string): ChangedFileEntry[] => {
 
 export function getChangedFileEntries(runGitFn: (args: string[]) => string = runGit) {
 	const changesByPath = new Map<string, ChangedFileEntry>()
-	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, 'origin/main...']))) changesByPath.set(change.path, change)
+	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
+	if (mergeBase === '') throw new Error('Git could not resolve the merge base of origin/main and HEAD')
+	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, mergeBase]))) changesByPath.set(change.path, change)
 	for (const filePath of runGitFn(['ls-files', '-z', '--others', '--exclude-standard']).split('\0')) {
 		if (filePath !== '') changesByPath.set(filePath, { path: filePath, status: 'added' })
 	}
