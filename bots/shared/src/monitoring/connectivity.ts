@@ -158,16 +158,18 @@ export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
 
 export async function sendRawTransactionToRpc(url: string, serializedTransaction: Hex, timeoutMilliseconds = 10_000) {
 	try {
+		const expectedHash = keccak256(serializedTransaction)
 		let result: unknown
 		try {
 			result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
 		} catch (error) {
 			const message = error instanceof Error ? error.message.toLowerCase() : ''
-			if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
+			if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return expectedHash
 			throw error
 		}
 		if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
-		return result as Hex
+		if (result.toLowerCase() !== expectedHash) throw new Error(`RPC returned transaction hash ${result}, which does not match submitted transaction ${expectedHash}`)
+		return expectedHash
 	} catch (error) {
 		throw endpointMethodFailure(error, url, 'eth_sendRawTransaction')
 	}

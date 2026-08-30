@@ -1572,28 +1572,27 @@ describe('shared ethereum compatibility layer', () => {
 		const localProvider = createProvider(({ method, params }) => {
 			if (method !== 'eth_sendRawTransaction') throw new Error(`Unexpected rpc method: ${method}`)
 			capturedRawTransaction = requireHex(getArrayEntry(params, 0, 'raw send params'), 'serialized transaction')
-			return RECEIPT_HASH
+			return keccak256(capturedRawTransaction)
 		}, localCalls)
 		const localClient = createWalletClient({
 			account: privateKeyToAccount(PRIVATE_KEY),
 			chain: mainnet,
 			transport: custom(localProvider),
 		})
-		expect(
-			await localClient.sendTransaction({
-				data: encodeFunctionData({
-					abi: TRANSFER_ABI,
-					functionName: 'transfer',
-					args: [RECIPIENT_ADDRESS, 9n],
-				}),
-				gas: 100_000n,
-				maxFeePerGas: 20n,
-				maxPriorityFeePerGas: 3n,
-				nonce: 0n,
-				to: TOKEN_ADDRESS,
+		const localHash = await localClient.sendTransaction({
+			data: encodeFunctionData({
+				abi: TRANSFER_ABI,
+				functionName: 'transfer',
+				args: [RECIPIENT_ADDRESS, 9n],
 			}),
-		).toBe(RECEIPT_HASH)
+			gas: 100_000n,
+			maxFeePerGas: 20n,
+			maxPriorityFeePerGas: 3n,
+			nonce: 0n,
+			to: TOKEN_ADDRESS,
+		})
 		if (capturedRawTransaction === undefined) throw new Error('raw transaction was not captured')
+		expect(localHash).toBe(keccak256(capturedRawTransaction))
 
 		const parsedRawTransaction = parseTransaction(capturedRawTransaction)
 		expect(parsedRawTransaction.to).toBe(getAddress(TOKEN_ADDRESS))
@@ -1607,6 +1606,20 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('wallet client rejects a broadcast hash for a different raw transaction', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_sendRawTransaction') throw new Error(`Unexpected rpc method: ${method}`)
+			return RECEIPT_HASH
+		}, [])
+		const client = createWalletClient({
+			account: OWNER_ADDRESS,
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		await expect(client.sendRawTransaction({ serializedTransaction: '0x1234' })).rejects.toThrow('does not match submitted transaction')
 	})
 
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
