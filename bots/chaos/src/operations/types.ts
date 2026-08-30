@@ -6,6 +6,7 @@ export type OperationRisk = 'low' | 'medium' | 'high' | 'irreversible'
 export type OperationClassification = 'selectable' | 'prerequisite' | 'lifecycle-obligation' | 'role-restricted' | 'excluded-dangerous'
 
 export interface SnapshotAnchor {
+	baseFeePerGas: CanonicalUintString
 	blockNumber: string
 	blockHash: Hash
 	timestamp: string
@@ -91,8 +92,23 @@ export interface VaultSnapshot {
 	disputeStakedAttoRep: CanonicalUintString
 }
 
+/** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
+export interface OracleRequestFundingSnapshot {
+	escalationHaltMultiplierBps: CanonicalUintString
+	feePercentage: CanonicalUintString
+	gasConsumedOpenOracleReportPrice: CanonicalUintString
+	gasUnitsForOneDispute: CanonicalUintString
+	initialReportPriorityFeeAttoEthPerGas: CanonicalUintString
+	openOracleSecurityMultiplierBps: CanonicalUintString
+	protocolFee: CanonicalUintString
+	settlementCallbackGasLimit: CanonicalUintString
+	targetPriceErrorForDispute: CanonicalUintString
+}
+
 export interface PoolSnapshot {
 	address: Address
+	/** Exact authenticated size of the canonical pool vault registry. */
+	canonicalVaultCount: CanonicalUintString
 	parent: Address
 	universeId: string
 	questionId: string
@@ -100,6 +116,12 @@ export interface PoolSnapshot {
 	shareToken: Address
 	coordinator: Address
 	escalationGame: Address
+	/** Canonical operational-resolution state used to classify inherited carry work. */
+	escalationResolved: boolean
+	/** Whether the escalation game has committed the carry snapshot required for inherited claims. */
+	forkCarrySnapshotInitialized: boolean
+	/** Canonical final escalation outcome, or the contract's unresolved sentinel. */
+	escalationFinalQuestionResolution: number
 	truthAuction: Address
 	systemState: number
 	awaitingForkContinuation: boolean
@@ -132,6 +154,7 @@ export interface PoolSnapshot {
 	stagedOperationCounter: string
 	totalPoolHeldAttoRep: CanonicalUintString
 	minimumToken1ReportAttoEth: CanonicalUintString
+	oracleRequestFunding: OracleRequestFundingSnapshot
 	pendingReportId: string
 	pendingReportSettled: boolean
 	forkActivationTime: string
@@ -162,6 +185,8 @@ export interface PoolSnapshot {
 	/** True only when every canonical vault was included in this anchored snapshot. */
 	vaultDiscoveryComplete: boolean
 	vaults: VaultSnapshot[]
+	/** Whether the complete authenticated vault registry contains the configured wallet. */
+	walletVaultRegistered: boolean
 }
 
 export interface StagedOperationSnapshot {
@@ -269,6 +294,11 @@ export interface AuctionBidSnapshot {
 	refunded: boolean
 }
 
+export interface AuctionRefundSnapshot {
+	generation: Hash
+	pendingAttoEth: CanonicalUintString
+}
+
 export interface AuctionSnapshot {
 	address: Address
 	pool: Address
@@ -278,7 +308,10 @@ export interface AuctionSnapshot {
 	minimumBidAttoEth: CanonicalUintString
 	hasClearingPrice: boolean
 	clearingTick: string
+	underfunded: boolean
+	underfundedWinningAttoEth: CanonicalUintString
 	pendingEthRefund: string
+	pendingEthRefundGeneration?: Hash
 	bids: AuctionBidSnapshot[]
 }
 
@@ -401,6 +434,7 @@ export type OperationWalletAssetDebit =
 	| { kind: 'erc20'; asset: Address; amount: string; category: 'rep' | 'weth' | 'lp-token' | 'other' }
 	| { kind: 'erc1155'; asset: Address; tokenId: string; amount: string; category: 'outcome-share' }
 	| { kind: 'open-oracle-credit'; openOracle: Address; asset: 'ETH' | Address; amount: string; category: 'rep' | 'weth' | 'other' }
+	| { kind: 'security-pool-vault-rep'; pool: Address; vault: Address; amount: string; category: 'rep' }
 
 /**
  * An exact read-only call that must succeed at the same canonical block as the
@@ -429,6 +463,13 @@ export interface OperationStep {
 	walletAssetDebits: OperationWalletAssetDebit[]
 }
 
+export interface OperationTerminalSubmission {
+	kind: 'private-next-block'
+	maximumFeePerGas: CanonicalUintString
+}
+
+export type OperationContinuationDisposition = 'cleanup-only'
+
 export interface OperationPlan {
 	id: string
 	definitionId: string
@@ -447,20 +488,48 @@ export interface OperationPlan {
 	/** Seed that must be reused when rebuilding a durable workflow after restart. */
 	planningSeed: number
 	steps: OperationStep[]
+	/** Explicitly identifies a continuation plan that only unwinds confirmed preparation. */
+	continuationDisposition?: OperationContinuationDisposition
+	/** Maximum additional revoke transactions needed after a terminal step failure. */
+	maximumCleanupTransactionCount?: number
+	/** A fresh signing constraint that applies only to the terminal step. */
+	terminalSubmission?: OperationTerminalSubmission
 	postconditions: string[]
 	metadata: Record<string, string | number | boolean>
 }
 
 export type OperationPlanDraft = Omit<OperationPlan, 'planningSeed'>
 
+/** Configured immutable-topology envelopes that novel plans must preserve. */
+export interface ImmutableTopologyPlanningCapacity {
+	maxPools: number
+	maxQuestions: number
+	maxStagedOperationsPerPool: number
+	maxUniverses: number
+	maxVaultsPerPool: number
+	maximumAggregateItems: number
+}
+
 export interface PlanningOptions {
 	seed: number
 	allowHighRisk?: boolean
 	allowIrreversibleOperations?: boolean
+	/** Required before a plan may create a question, universe, or pool. */
+	immutableTopologyCapacity?: ImmutableTopologyPlanningCapacity
+	maximumBlockIntervalSeconds: number
 	maxEthSpendAttoEth?: CanonicalUintString
+	maximumGasCostAttoEth?: CanonicalUintString
 	maxRepSpendAttoRep?: CanonicalUintString
 	minimumEthReserveAttoEth?: CanonicalUintString
 	minimumRepReserveAttoRep?: CanonicalUintString
+	submissionMode?: 'private' | 'public'
+	workflowValidForBlocks?: number
+}
+
+export interface OperationContinuationContext {
+	confirmedStepIds: readonly string[]
+	continuationDisposition?: OperationContinuationDisposition
+	previousPlan: OperationPlan
 }
 
 export interface OperationDefinition {
@@ -471,10 +540,14 @@ export interface OperationDefinition {
 	method: string
 	risk: OperationRisk
 	classification: OperationClassification
+	/** False only for a coverage row that cannot be planned as its own operation. */
+	independentlyExecutable?: boolean
 	description: string
 	discoveryInputs: string[]
 	evaluate(snapshot: EcosystemSnapshot, options: PlanningOptions): EligibilityResult
 	buildPlan(snapshot: EcosystemSnapshot, options: PlanningOptions): OperationPlanDraft | undefined
+	/** Rebuilds or safely cleans up a partially confirmed selectable workflow. */
+	buildContinuationPlan?(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext): OperationPlanDraft | undefined
 	/**
 	 * Builds every currently eligible durable instance in one deterministic pass.
 	 * Required for lifecycle definitions; random selection happens only after the
@@ -486,10 +559,17 @@ export interface OperationDefinition {
 	 * eligibility. Required for lifecycle definitions by the catalog invariant.
 	 */
 	enumerateLifecyclePresence?(snapshot: EcosystemSnapshot, options: PlanningOptions): Array<Record<string, string | number | boolean>>
+	/**
+	 * Enumerates every raw identity whose protocol phase is currently due and
+	 * must obstruct unrelated novelty. This is independent of local execution
+	 * policy and, unlike executable plan construction, must not be paginated.
+	 * Required for lifecycle definitions by the catalog invariant.
+	 */
+	enumerateLifecycleObstructingPresence?(snapshot: EcosystemSnapshot, options: PlanningOptions): Array<Record<string, string | number | boolean>>
 }
 
 export interface EvaluatedOperation {
-	definition: Omit<OperationDefinition, 'evaluate' | 'buildPlan' | 'buildLifecyclePlans' | 'enumerateLifecyclePresence'>
+	definition: Omit<OperationDefinition, 'evaluate' | 'buildPlan' | 'buildContinuationPlan' | 'buildLifecyclePlans' | 'enumerateLifecycleObstructingPresence' | 'enumerateLifecyclePresence'>
 	eligibility: EligibilityResult
 	plan?: OperationPlan
 }
@@ -498,4 +578,6 @@ export interface CanonicalLifecyclePresence {
 	definitionId: string
 	ecosystem: ChaosEcosystem
 	metadata: Record<string, string | number | boolean>
+	/** True only while this exact raw identity is canonically due. */
+	blocksNovelty: boolean
 }

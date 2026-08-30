@@ -5,10 +5,27 @@ import example from '../../config/operator.example.json'
 import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
+import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
-import { abandonRetryableSelectableFailure, backfillWaitMilliseconds, executionProfileId, recordEndpointPreflightChecks, runChaosOperator, runtimeTopologySummary, scheduleAfterRecoveredTransaction } from '../../src/runtime/operator.ts'
+import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import {
+	abandonRetryableSelectableFailure,
+	backfillWaitMilliseconds,
+	blockNovelEvaluations,
+	evaluatePolicySafeContinuation,
+	executionProfileId,
+	operatorWaitMilliseconds,
+	recordEndpointPreflightChecks,
+	rediscoverableExecutionFailure,
+	repairDurableSelectableFailures,
+	runChaosOperator,
+	runtimeTopologySummary,
+	scheduleAfterRecoveredTransaction,
+} from '../../src/runtime/operator.ts'
+import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
-import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
+import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
@@ -153,7 +170,7 @@ function runtimeWithPartialLifecycleHistory(profileId: string, signerAddress: Re
 				plan,
 			},
 		],
-		[{ definitionId: plan.definitionId, ecosystem: plan.ecosystem, metadata: plan.metadata }],
+		[{ blocksNovelty: true, definitionId: plan.definitionId, ecosystem: plan.ecosystem, metadata: plan.metadata }],
 		true,
 		100n,
 		2_000_000_000n,
@@ -178,6 +195,47 @@ function runtimeWithPartialLifecycleHistory(profileId: string, signerAddress: Re
 }
 
 describe('chaos operator runtime', () => {
+	test('blocks every novel selectable plan while preserving urgent lifecycle execution', () => {
+		const urgentPlan = lifecyclePlan()
+		const selectablePlan: OperationPlan = {
+			...urgentPlan,
+			classification: 'selectable',
+			definitionId: 'open-oracle.deposit',
+			id: 'open-oracle.deposit:100:test',
+			obligation: false,
+			priority: 'random',
+		}
+		const evaluated = (plan: OperationPlan) => ({
+			definition: {
+				classification: plan.classification,
+				contract: 'OpenOracle',
+				description: 'test operation',
+				discoveryInputs: [],
+				ecosystem: plan.ecosystem,
+				id: plan.definitionId,
+				label: plan.label,
+				method: 'test',
+				risk: plan.risk,
+			},
+			eligibility: { blockers: [], eligible: true },
+			plan,
+		})
+
+		const blocked = blockNovelEvaluations([evaluated(selectablePlan), evaluated(urgentPlan)], {
+			count: 1,
+			digest: `0x${'45'.repeat(32)}`,
+			firstDefinitionId: 'statoblast.escalation.resume',
+			firstEcosystem: 'statoblast',
+			observedAtBlock: '100',
+			presenceComplete: true,
+			reason: 'unplanned-due-identity',
+		})
+
+		expect(randomOperationPlans(blocked)).toEqual([])
+		expect(urgentOperationPlans(blocked)).toEqual([urgentPlan])
+		expect(blocked[0]?.eligibility.blockers[0]).toContain('random novelty remains blocked')
+	})
+
 	test('bounds sustained backfill cadence by the configured lifecycle poll interval', () => {
 		expect(backfillWaitMilliseconds(1_000, 0)).toBe(1_000)
 		expect(backfillWaitMilliseconds(12_000, 0)).toBe(5_000)
@@ -189,6 +247,26 @@ describe('chaos operator runtime', () => {
 		expect(() => backfillWaitMilliseconds(12_000, -1)).toThrow('non-negative')
 	})
 
+	test('wakes at the persisted scheduler deadline without shortening paused polling', () => {
+		const now = Date.parse('2026-08-30T00:00:00.000Z')
+		const state = initialRuntimeState(false, address(1), 31_337)
+		state.scheduler = {
+			lastDelaySeconds: 3_600,
+			lastRunAt: new Date(now - 3_570_000).toISOString(),
+			nextRunAt: new Date(now + 30_000).toISOString(),
+			selectedOperationId: undefined,
+			status: 'scheduled',
+		}
+
+		expect(operatorWaitMilliseconds(60_000, state, now)).toBe(30_000)
+		expect(operatorWaitMilliseconds(10_000, state, now)).toBe(10_000)
+		state.scheduler.nextRunAt = new Date(now).toISOString()
+		expect(operatorWaitMilliseconds(60_000, state, now)).toBe(1)
+		state.paused = true
+		expect(operatorWaitMilliseconds(60_000, state, now)).toBe(60_000)
+		expect(() => operatorWaitMilliseconds(0, state, now)).toThrow('positive integer')
+	})
+
 	test('publishes only a sanitized completeness-aware canonical topology summary', () => {
 		const snapshot = snapshotFixture()
 		const firstPool = snapshot.pools[0]
@@ -196,7 +274,7 @@ describe('chaos operator runtime', () => {
 		const firstVault = firstPool.vaults[0]
 		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
 		const summary = runtimeTopologySummary({
-			anchor: { blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
+			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
 			canonicalLifecyclePresenceComplete: true,
 			carryProofJournalComplete: true,
 			indexComplete: false,
@@ -231,7 +309,7 @@ describe('chaos operator runtime', () => {
 		const registeredVaults = [walletVault.address, address(91), address(92)]
 
 		const summary = runtimeTopologySummary({
-			anchor: { blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
+			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
 			canonicalLifecyclePresenceComplete: true,
 			carryProofJournalComplete: true,
 			indexComplete: true,
@@ -327,6 +405,7 @@ describe('chaos operator runtime', () => {
 		const durable = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
 		durable.protocolIndex = {
 			auctionBids: {},
+			auctionRefunds: {},
 			chainId: settings.network.chainId,
 			childRepSplits: [],
 			cursor: { blockHash: zeroHash, blockNumber: settings.runtime.protocolStartBlock.toString() },
@@ -334,7 +413,7 @@ describe('chaos operator runtime', () => {
 			migrationRepSplits: [],
 			openOracle: settings.deployment.openOracle,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			securityPoolForker: settings.deployment.securityPoolForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,
@@ -383,6 +462,39 @@ describe('chaos operator runtime', () => {
 		expect(state.scheduler.lastRunAt).not.toBe('2026-08-25T00:00:00.000Z')
 		const durable = await loadDurableState(stateFile, settings.network.chainId)
 		expect(durable.scheduler).toEqual(state.scheduler)
+	})
+
+	test('closes a recovered schedule after resume marked the original run due', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-operator-resumed-recovery-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const signer = privateKeyToAccount(FIRST_PRIVATE_KEY).address
+		const state = initialRuntimeState(false, signer, settings.network.chainId, initialDurableState(settings.network.chainId, false, executionProfileId(settings), signer))
+		state.scheduler = {
+			lastDelaySeconds: 60,
+			lastRunAt: '2026-08-25T00:00:00.000Z',
+			nextRunAt: '2026-08-25T00:01:00.000Z',
+			selectedOperationId: 'trading.swap',
+			status: 'due',
+		}
+		const before = Date.now()
+
+		const completed = await scheduleAfterRecoveredTransaction(
+			{
+				path: join(directory, 'operator.json'),
+				rememberSigner: true,
+				revision: 'revision',
+				settings,
+			},
+			state,
+			'trading.swap',
+		)
+
+		expect(completed).toBeTrue()
+		expect(Date.parse(state.scheduler.nextRunAt ?? '')).toBeGreaterThanOrEqual(before + settings.scheduler.minimumDelaySeconds * 1_000)
+		expect(state.scheduler.lastDelaySeconds).not.toBe(60)
+		expect((await loadDurableState(stateFile, settings.network.chainId)).scheduler).toEqual(state.scheduler)
 	})
 
 	test('closes an interrupted paused transaction run during production startup', async () => {
@@ -579,5 +691,185 @@ describe('chaos operator runtime', () => {
 		})
 		expect(state.safetyPaused).toBeFalse()
 		expect(state.activities[0]?.message).toContain('fresh canonical discovery')
+	})
+
+	test('retains confirmed preparation steps for canonical cleanup after a terminal revert', () => {
+		const preparedPlan: OperationPlan = {
+			classification: 'selectable',
+			createdAtBlock: '10',
+			definitionId: 'statoblast.oracle.request-price',
+			ecosystem: 'statoblast',
+			id: 'statoblast.oracle.request-price:10:prepared',
+			label: 'Request oracle price',
+			metadata: { coordinator: address(2), pool: address(3) },
+			obligation: false,
+			planningSeed: 1,
+			postconditions: [],
+			priority: 'random',
+			risk: 'medium',
+			steps: [
+				{
+					data: '0x1234',
+					evidence: [{ kind: 'receipt-success' }],
+					gasLimit: '100000',
+					id: 'approve-weth',
+					label: 'Approve WETH',
+					preflightCalls: [],
+					to: address(4),
+					walletAssetDebits: [],
+				},
+				{
+					data: '0x5678',
+					evidence: [{ kind: 'receipt-success' }],
+					gasLimit: '100000',
+					id: 'request-price',
+					label: 'Request price',
+					preflightCalls: [],
+					to: address(2),
+					walletAssetDebits: [],
+				},
+			],
+		}
+		const workflow = createDurableWorkflow(preparedPlan)
+		markWorkflowStepConfirmed(workflow, 'approve-weth', zeroHash)
+		markWorkflowFailed(workflow, 'request-price', 'transaction reverted', 'receipt-reverted')
+		const configured = parseSettings(example)
+		const state = initialRuntimeState(false, undefined, configured.network.chainId, initialDurableState(configured.network.chainId, false))
+		state.workflows = [workflow]
+
+		expect(abandonRetryableSelectableFailure(state, preparedPlan)).toBeTrue()
+		expect(workflow.status).toBe('waiting-continuation')
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(workflow.steps[0]?.status).toBe('confirmed')
+		expect(workflow.steps[1]).toMatchObject({ failureKind: 'receipt-reverted', status: 'blocked' })
+		expect(state.activities[0]?.message).toContain('cleanup')
+	})
+
+	test('persists a policy-safe cleanup fallback when the action continuation cannot fund its aggregate envelope', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-cleanup-fallback-')
+		temporaryDirectories.push(directory)
+		const stateFile = join(directory, 'state.json')
+		const settings = restartSettings(stateFile, 1, FIRST_PRIVATE_KEY)
+		const snapshot = snapshotFixture()
+		const original = eligibleOperationPlans(snapshot, planningOptions(settings, 17)).find(plan => plan.definitionId === 'open-oracle.deposit')
+		if (original === undefined) throw new Error('Cleanup fallback fixture requires an OpenOracle deposit')
+		const approval = original.steps.find(step => step.id.startsWith('approve-'))
+		if (approval === undefined) throw new Error('Cleanup fallback fixture requires an approval step')
+		const amount = original.metadata['amount']
+		const tokenAddress = original.metadata['token']
+		if (typeof amount !== 'string' || typeof tokenAddress !== 'string') throw new Error('Cleanup fallback fixture has invalid deposit metadata')
+		const token = snapshot.wallet.tokens.find(candidate => candidate.address.toLowerCase() === tokenAddress.toLowerCase())
+		if (token === undefined) throw new Error('Cleanup fallback fixture is missing token inventory')
+		token.allowances[snapshot.deployments.openOracle] = amount
+		snapshot.wallet.ethBalanceAttoEth = (settings.strategy.minimumEthReserveAttoEth + settings.strategy.maximumGasCostAttoEth + settings.strategy.maximumGasCostAttoEth / 2n).toString()
+		const markedPlan = { ...original, continuationDisposition: 'cleanup-only' as const }
+		expect(() => createDurableWorkflow(markedPlan)).toThrow('without confirmed preparation')
+		const directRestartEvaluation = reevaluateOperationContinuation(snapshot, markedPlan, planningOptions(settings, original.planningSeed), { confirmedStepIds: [approval.id] })
+		expect(directRestartEvaluation.plan?.continuationDisposition).toBe('cleanup-only')
+		expect(directRestartEvaluation.plan?.steps[0]?.id).toStartWith('revoke-')
+
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, approval.id, zeroHash)
+		const state = initialRuntimeState(true, snapshot.wallet.address, settings.network.chainId, initialDurableState(settings.network.chainId, true, executionProfileId(settings), snapshot.wallet.address))
+		state.workflows = [workflow]
+
+		const selection = evaluatePolicySafeContinuation(snapshot, workflow, settings, snapshot.anchor.blockNumber)
+
+		expect(selection.continuationDisposition).toBe('cleanup-only')
+		expect(selection.evaluation.eligibility).toEqual({ blockers: [], eligible: true })
+		expect(selection.evaluation.plan?.continuationDisposition).toBe('cleanup-only')
+		expect(selection.evaluation.plan?.steps).toHaveLength(1)
+		expect(selection.evaluation.plan?.steps[0]?.id).toStartWith('revoke-')
+		workflow.continuationDisposition = selection.continuationDisposition
+		await saveDurableState(stateFile, state)
+		expect((await loadDurableState(stateFile, settings.network.chainId)).workflows[0]?.continuationDisposition).toBe('cleanup-only')
+	})
+
+	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {
+		const settings = parseSettings(example)
+		const snapshot = snapshotFixture()
+		const original = eligibleOperationPlans(snapshot, planningOptions(settings, 29)).find(plan => plan.definitionId === 'open-oracle.deposit')
+		if (original === undefined) throw new Error('Rediscovery fixture requires an OpenOracle deposit')
+		const approval = original.steps.find(step => step.id.startsWith('approve-'))
+		if (approval === undefined) throw new Error('Rediscovery fixture requires an approval step')
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, approval.id, zeroHash)
+		const state = initialRuntimeState(false, snapshot.wallet.address, settings.network.chainId, initialDurableState(settings.network.chainId, false))
+		state.workflows = [workflow]
+
+		expect(rediscoverableExecutionFailure(state, original, new OperationRediscoveryRequired('fresh balance no longer funds the action'))).toBeTrue()
+		expect(workflow.status).toBe('waiting-continuation')
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+	})
+
+	test('repairs a durable finalized failure independently of scheduled scheduler state', () => {
+		const preparedPlan: OperationPlan = {
+			...lifecyclePlan(),
+			classification: 'selectable',
+			definitionId: 'statoblast.oracle.request-price',
+			ecosystem: 'statoblast',
+			id: 'statoblast.oracle.request-price:100:restart-repair',
+			obligation: false,
+			priority: 'random',
+		}
+		const workflow = createDurableWorkflow(preparedPlan)
+		markWorkflowStepConfirmed(workflow, 'approve', zeroHash)
+		markWorkflowFailed(workflow, 'settle', 'verified nonce cancellation', 'nonce-cancelled')
+		const configured = parseSettings(example)
+		const state = initialRuntimeState(false, undefined, configured.network.chainId, initialDurableState(configured.network.chainId, false))
+		state.scheduler = {
+			lastDelaySeconds: 60,
+			lastRunAt: new Date(0).toISOString(),
+			nextRunAt: new Date(Date.now() + 60_000).toISOString(),
+			selectedOperationId: preparedPlan.definitionId,
+			status: 'scheduled',
+		}
+		const priorAttempt = createDurableWorkflow(preparedPlan)
+		markWorkflowFailed(priorAttempt, 'approve', 'earlier finalized revert', 'receipt-reverted')
+		priorAttempt.status = 'abandoned'
+		state.workflows = [priorAttempt, workflow]
+
+		const repair = repairDurableSelectableFailures(state)
+
+		expect(repair.repairedWorkflowIds).toEqual([workflow.id])
+		expect(repair.requiresSafetyStop).toBeFalse()
+		expect(workflow.status).toBe('waiting-continuation')
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(workflow.steps[1]).toMatchObject({ failureKind: 'nonce-cancelled', status: 'blocked' })
+		expect(state.scheduler.status).toBe('scheduled')
+		expect(repairDurableSelectableFailures(state).repairedWorkflowIds).toEqual([])
+	})
+
+	test('latches a restart-safe safety stop for a durable semantic failure', () => {
+		const preparedPlan: OperationPlan = {
+			...lifecyclePlan(),
+			classification: 'selectable',
+			definitionId: 'statoblast.oracle.request-price',
+			ecosystem: 'statoblast',
+			id: 'statoblast.oracle.request-price:100:semantic-repair',
+			obligation: false,
+			priority: 'random',
+		}
+		const workflow = createDurableWorkflow(preparedPlan)
+		markWorkflowStepConfirmed(workflow, 'approve', zeroHash)
+		markWorkflowFailed(workflow, 'settle', 'allowance evidence mismatch', 'semantic-failure')
+		const configured = parseSettings(example)
+		const state = initialRuntimeState(false, undefined, configured.network.chainId, initialDurableState(configured.network.chainId, false))
+		state.scheduler.status = 'running'
+		state.scheduler.selectedOperationId = preparedPlan.definitionId
+		state.scheduler.nextRunAt = new Date(0).toISOString()
+		state.workflows = [workflow]
+
+		const repair = repairDurableSelectableFailures(state)
+
+		expect(repair.requiresSafetyStop).toBeTrue()
+		expect(repair.repairedWorkflowIds).toEqual([])
+		expect(state.safetyPaused).toBeTrue()
+		expect(state.paused).toBeTrue()
+		expect(state.scheduler).toMatchObject({ status: 'paused' })
+		expect(workflow.status).toBe('failed')
+		const activityCount = state.activities.length
+		expect(repairDurableSelectableFailures(state).requiresSafetyStop).toBeTrue()
+		expect(state.activities).toHaveLength(activityCount)
 	})
 })

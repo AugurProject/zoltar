@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import * as ts from 'typescript'
 import * as contractAbis from '../../src/contracts/abi.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE, classifiedMethod, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
@@ -185,6 +186,41 @@ function artifactAbiEntryIdentity(value: unknown, label: string): { abiEntryKind
 	return { abiEntryKind: 'function', method: item['name'] }
 }
 
+function operationStepSelectors(sourcePath: string) {
+	const source = ts.createSourceFile(sourcePath, readFileSync(sourcePath, 'utf8'), ts.ScriptTarget.Latest, true)
+	const selectors = new Set<string>()
+	const visit = (node: ts.Node) => {
+		if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'encodeStep') {
+			const options = node.arguments[0]
+			if (options !== undefined && ts.isObjectLiteralExpression(options)) {
+				const property = options.properties.find(candidate => ts.isPropertyAssignment(candidate) && candidate.name.getText(source) === 'functionName')
+				if (property !== undefined && ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)) selectors.add(property.initializer.text)
+			}
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(source)
+	return selectors
+}
+
+function solidityFunctionBody(source: string, method: string) {
+	const escapedMethod = method.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+	const match = new RegExp(`\\bfunction\\s+${escapedMethod}\\s*\\(`).exec(source)
+	if (match === null) throw new Error(`Solidity function ${method} is missing`)
+	const openingBrace = source.indexOf('{', match.index)
+	const declarationEnd = source.indexOf(';', match.index)
+	if (openingBrace < 0 || (declarationEnd >= 0 && declarationEnd < openingBrace)) throw new Error(`Solidity function ${method} has no implementation body`)
+	let depth = 0
+	for (let index = openingBrace; index < source.length; index += 1) {
+		const character = source[index]
+		if (character === '{') depth += 1
+		if (character !== '}') continue
+		depth -= 1
+		if (depth === 0) return source.slice(openingBrace + 1, index)
+	}
+	throw new Error(`Solidity function ${method} has an unterminated implementation body`)
+}
+
 describe('contract operation classification', () => {
 	test('declares the cumulative REP migration events and own-fork target getter exactly', () => {
 		expect(zoltarAbi.find(item => item.type === 'event' && item.name === 'MigrationRepSplit')).toMatchObject({
@@ -268,6 +304,17 @@ describe('contract operation classification', () => {
 		expect(deposit).toMatchObject({ classification: 'selectable', operationId: 'open-oracle.deposit' })
 		expect(deposit?.reason).toContain('Native deposits are intentionally excluded')
 		expect(deposit?.reason).toContain('WETH and REP')
+	})
+
+	test('models claimAuctionProceeds as an explicit alias of the executable settlement route', () => {
+		const claim = classifiedMethod('SecurityPoolForker', 'claimAuctionProceeds')
+		expect(claim).toMatchObject({ classification: 'lifecycle-obligation', operationId: 'statoblast.auction.settle-bids' })
+		expect(record(claim, 'claimAuctionProceeds classification')['semanticAliasOf']).toEqual({
+			contract: 'SecurityPoolForker',
+			method: 'settleAuctionBids',
+			relation: 'target-subsumes-source',
+			sharedImplementation: '_claimAuctionProceeds',
+		})
 	})
 
 	test('pins the canonical deployed mutating code-family manifest', () => {
@@ -358,6 +405,53 @@ describe('contract operation classification', () => {
 		const catalogIds = new Set(CHAOS_OPERATION_CATALOG.map(definition => definition.id))
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
 			if (entry.operationId !== undefined) expect(catalogIds, `${entry.contract}.${entry.method} -> ${entry.operationId}`).toContain(entry.operationId)
+		}
+	})
+
+	test('routes every prerequisite selector through workflow steps and validates semantic aliases', () => {
+		const stepSelectors = new Set<string>()
+		for (const file of ['open-oracle.ts', 'statoblast.ts', 'trading.ts', 'zoltar.ts']) {
+			for (const selector of operationStepSelectors(path.resolve(import.meta.dir, '../../src/operations', file))) stepSelectors.add(selector)
+		}
+		for (const entry of MUTATING_CONTRACT_SURFACE.filter(candidate => candidate.classification === 'prerequisite')) {
+			const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === entry.operationId)
+			expect(definition?.classification, `${entry.contract}.${entry.method} prerequisite catalog metadata`).toBe('prerequisite')
+			expect(definition?.method, `${entry.contract}.${entry.method} prerequisite selector metadata`).toBe(entry.method)
+			expect(stepSelectors, `${entry.contract}.${entry.method} executable workflow step`).toContain(entry.method)
+		}
+
+		const aliases = MUTATING_CONTRACT_SURFACE.filter(entry => entry.semanticAliasOf !== undefined)
+		expect(aliases.length).toBeGreaterThan(0)
+		for (const entry of aliases) {
+			const alias = entry.semanticAliasOf
+			if (alias === undefined) continue
+			const target = classifiedMethod(alias.contract, alias.method)
+			expect(target, `${entry.contract}.${entry.method} semantic alias target`).toBeDefined()
+			if (target === undefined) continue
+			expect(alias.relation, `${entry.contract}.${entry.method} semantic alias relation`).toBe('target-subsumes-source')
+			expect(target.semanticAliasOf, `${entry.contract}.${entry.method} semantic alias chain`).toBeUndefined()
+			expect(target.classification, `${entry.contract}.${entry.method} semantic classification`).toBe(entry.classification)
+			expect(target.operationId, `${entry.contract}.${entry.method} semantic operation`).toBe(entry.operationId)
+			const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === target.operationId)
+			expect(definition, `${entry.contract}.${entry.method} executable semantic operation`).toMatchObject({
+				classification: target.classification,
+				contract: alias.contract,
+				method: alias.method,
+			})
+			if (definition === undefined) continue
+			expect(['selectable', 'lifecycle-obligation'], `${entry.contract}.${entry.method} executable semantic classification`).toContain(definition.classification)
+			expect(
+				CHAOS_OPERATION_CATALOG.some(candidate => candidate.contract === entry.contract && candidate.method === entry.method),
+				`${entry.contract}.${entry.method} duplicate catalog route`,
+			).toBeFalse()
+
+			const manifest = CANONICAL_MUTATING_CONTRACT_MANIFEST.find(candidate => candidate.contract === entry.contract)
+			expect(manifest, `${entry.contract}.${entry.method} canonical source`).toBeDefined()
+			if (manifest === undefined) continue
+			const source = readFileSync(path.resolve(import.meta.dir, '../../../../solidity', manifest.artifactSource), 'utf8')
+			const sharedCall = new RegExp(`\\b${alias.sharedImplementation}\\s*\\(`)
+			expect(solidityFunctionBody(source, entry.method), `${entry.contract}.${entry.method} shared implementation`).toMatch(sharedCall)
+			expect(solidityFunctionBody(source, alias.method), `${alias.contract}.${alias.method} shared implementation`).toMatch(sharedCall)
 		}
 	})
 

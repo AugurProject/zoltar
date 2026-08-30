@@ -270,7 +270,7 @@ try {
 			await evaluate("document.querySelector('#pause-button')?.click()")
 			let pauseReady = false
 			for (let poll = 0; poll < 60; poll += 1) {
-				pauseReady = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#refresh-button')?.textContent === 'Refresh'")) === true
+				pauseReady = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#refresh-button')?.textContent === 'Refresh' && document.querySelector('#pause-status')?.textContent === ''")) === true
 				if (pauseReady) break
 				await Bun.sleep(100)
 			}
@@ -294,7 +294,7 @@ try {
 			await evaluate("document.querySelector('#pause-button')?.click()")
 			let paused = false
 			for (let poll = 0; poll < 60; poll += 1) {
-				paused = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#pause-button')?.textContent === 'Resume'")) === true
+				paused = (await evaluate("document.querySelector('#mode-badge')?.textContent === 'Paused' && document.querySelector('#pause-button')?.textContent === 'Resume' && document.querySelector('#pause-status')?.textContent === ''")) === true
 				if (paused) break
 				await Bun.sleep(100)
 			}
@@ -419,6 +419,14 @@ try {
 				Number(Reflect.get(catalogLayout, 'eligibilityRight')) > Number(Reflect.get(catalogLayout, 'shellRight')) + 1
 			) {
 				throw new Error(`Desktop catalog did not expose all six columns without hidden horizontal content: ${JSON.stringify(catalogLayout)}`)
+			}
+		}
+		if (route === 'activity' && width === 390) {
+			const danglingRecoveryPrefixes = await evaluate(`[
+				...document.querySelectorAll('#pending-transactions .identifier-line > span:first-child'),
+			].map(prefix => prefix.textContent?.trim()).filter(prefix => prefix?.endsWith('·'))`)
+			if (!Array.isArray(danglingRecoveryPrefixes) || danglingRecoveryPrefixes.length !== 0) {
+				throw new Error(`Mobile recovery metadata retained a dangling separator: ${JSON.stringify(danglingRecoveryPrefixes)}`)
 			}
 		}
 		const disabledButtonContrast = await evaluate(`(() => {

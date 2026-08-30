@@ -1,18 +1,19 @@
-import { zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
-import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
-import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
+import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
+import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
+import { assertOracleRequestFundingEnvelope, isOracleRequestFundingError, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from './oracle-request-funding.ts'
 import { canCreateCompleteSet, sharesToProjectedEth } from './pool-economics.ts'
+import { timestampDeadlineHasRequiredSafety } from './timing.ts'
+import { topologyMutationCapacityBlocker, vaultRegistrationCapacityBlocker } from './topology-capacity.ts'
 
 const BINARY_OUTCOME_NONE = 3
 const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
-const MINING_SAFETY_SECONDS = 120n
 const LIFECYCLE_BATCH_LIMIT = 16
-const ORACLE_REQUEST_BUFFER_MULTIPLIER = 2n
 const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
 const STAGED_WITHDRAWAL_VALIDITY_SECONDS = 5n * 60n
-const MAX_UINT128 = (1n << 128n) - 1n
 const CARRY_DEPOSIT_CONSUMED_SIGNATURE = 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
 const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, uint8 outcome, uint256 attoRepAmount, uint8 reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot)'
 const CLAIM_DEPOSIT_SIGNATURE = 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'
@@ -28,10 +29,14 @@ const compareBigInts = (left: bigint, right: bigint) => {
 	if (left > right) return 1
 	return 0
 }
+
 const compareDecimalStrings = (left: string, right: string) => compareBigInts(BigInt(left), BigInt(right))
 const compareAuctionBids = (left: EcosystemSnapshot['auctions'][number]['bids'][number], right: EcosystemSnapshot['auctions'][number]['bids'][number]) => {
 	const tickOrder = compareDecimalStrings(left.tick, right.tick)
 	return tickOrder === 0 ? compareDecimalStrings(left.index, right.index) : tickOrder
+}
+function lifecycleBatches<T>(values: readonly T[]) {
+	return Array.from({ length: Math.ceil(values.length / LIFECYCLE_BATCH_LIMIT) }, (_, index) => values.slice(index * LIFECYCLE_BATCH_LIMIT, (index + 1) * LIFECYCLE_BATCH_LIMIT))
 }
 const walletShares = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 const forkOutcomesForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => {
@@ -42,9 +47,35 @@ const forkOutcomesForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) =>
 		universe.knownChildOutcomes,
 	)
 }
+const childPoolForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.pools.find(child => child.parent.toLowerCase() === pool.address.toLowerCase() && child.forkOutcomeIndex === outcome)
+const childUniverseForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.universes.find(universe => universe.parentUniverseId === pool.universeId && universe.forkingOutcomeIndex === outcome)
+
+function childRouteTopologyCapacityBlocker(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string, options: PlanningOptions, label: string) {
+	if (childPoolForOutcome(snapshot, pool, outcome) !== undefined) return undefined
+	return topologyMutationCapacityBlocker(snapshot, options, {
+		additionalPools: 1,
+		additionalUniverses: childUniverseForOutcome(snapshot, pool, outcome) === undefined ? 1 : 0,
+		label,
+	})
+}
+
+function childUniverseTopologyCapacityBlocker(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string, options: PlanningOptions, label: string) {
+	if (childUniverseForOutcome(snapshot, pool, outcome) !== undefined) return undefined
+	return topologyMutationCapacityBlocker(snapshot, options, {
+		additionalPools: 0,
+		additionalUniverses: 1,
+		label,
+	})
+}
 const operationalPools = (snapshot: EcosystemSnapshot) => snapshot.pools.filter(pool => pool.systemState === 0 && !pool.awaitingForkContinuation && pool.questionOutcome === BINARY_OUTCOME_NONE && snapshot.universes.find(universe => universe.id === pool.universeId)?.forkTime === '0')
 const walletVault = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => pool.vaults.find(vault => vault.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
 const canDeployOriginPool = (universe: EcosystemSnapshot['universes'][number]) => universe.forkTime === '0' && amount(universe.nonDecisionThresholdAttoRep) > amount(universe.initialEscalationDepositAttoRep)
+
+function safeOraclePriceDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prerequisiteCount = 0) {
+	if (!pool.oraclePriceValid) return undefined
+	const deadline = amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
+	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options, prerequisiteCount) ? deadline : undefined
+}
 
 function decodedVaultMigrationEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, field: 'outcomeIndex' | 'resultingParentRepBackingUnits', expected: string, child?: PoolSnapshot): OperationEvidence {
 	return {
@@ -71,11 +102,6 @@ function decodedChildRepSplitEvidence(snapshot: EcosystemSnapshot, pool: PoolSna
 		signature: CHILD_REP_SPLIT_SIGNATURE,
 		topic0: eventTopic(CHILD_REP_SPLIT_SIGNATURE),
 	}
-}
-
-function lifecycleDefinitionMetadata(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	if (definition.buildLifecyclePlans === undefined) throw new Error(`Lifecycle definition ${definition.id} is missing its plan enumerator`)
-	return definition.buildLifecyclePlans(snapshot, options).map(plan => plan.metadata)
 }
 
 function feeCheckpointDue(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
@@ -149,62 +175,139 @@ function repSpend(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: Plan
 function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, required: bigint) {
 	const token = tokenInventory(snapshot, pool.repToken)
 	if (allowance(token, pool.address) >= required) return []
-	return [encodeStep({ abi: erc20Abi, args: [pool.address, required], evidence: [erc20AllowanceEvidence(pool.repToken, snapshot.wallet.address, pool.address, required)], functionName: 'approve', id: 'approve-rep', label: 'Approve REP for security pool', to: pool.repToken })]
+	return [poolApprovalStep(snapshot, pool.repToken, pool.address, required)]
 }
 
-function approveCoordinatorToken(snapshot: EcosystemSnapshot, pool: PoolSnapshot, tokenAddress: `0x${string}`, required: bigint) {
-	const token = tokenInventory(snapshot, tokenAddress)
-	if (allowance(token, pool.coordinator) >= required) return []
-	return [encodeStep({ abi: erc20Abi, args: [pool.coordinator, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, pool.coordinator, required)], functionName: 'approve', id: `approve-${tokenAddress}`, label: 'Approve oracle request token', to: tokenAddress })]
+function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
+	return encodeStep({ abi: erc20Abi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
 }
 
-function canPayExactEth(snapshot: EcosystemSnapshot, options: PlanningOptions, value: bigint, additionalEthPrincipal = 0n) {
-	const reserve = optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)
-	const maximum = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
-	return value + additionalEthPrincipal <= maximum && amount(snapshot.wallet.ethBalanceAttoEth) >= reserve + value
+function requiredVaultMetadataString(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	if (typeof value !== 'string' || value.length === 0) throw new Error(`Vault continuation metadata ${key} is missing`)
+	return value
 }
 
-function oracleRequestAmounts(pool: PoolSnapshot) {
-	const currentMinimumWeth = amount(pool.minimumToken1ReportAttoEth) > 0n ? amount(pool.minimumToken1ReportAttoEth) : 1n
-	const initialWethAttoEth = currentMinimumWeth * ORACLE_REQUEST_BUFFER_MULTIPLIER
-	const price = amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN
-	const initialRepAttoRep = (initialWethAttoEth * price + ONE_TOKEN - 1n) / ONE_TOKEN
-	return { initialRepAttoRep, initialWethAttoEth, price }
+function requiredVaultMetadataAmount(metadata: OperationPlan['metadata'], key: string) {
+	const value = requiredVaultMetadataString(metadata, key)
+	if (!/^(?:0|[1-9][0-9]*)$/.test(value)) throw new Error(`Vault continuation metadata ${key} is not canonical`)
+	return BigInt(value)
 }
 
-function bufferedOracleRequestCost(pool: PoolSnapshot) {
-	return amount(pool.requestPriceCostAttoEth) * ORACLE_REQUEST_BUFFER_MULTIPLIER
+function exactPreviousPoolApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
+	const previous = context.previousPlan.steps.find(step => step.id === 'approve-rep')
+	if (previous === undefined) return undefined
+	const expected = poolApprovalStep(snapshot, token, pool, required)
+	return previous.to.toLowerCase() === expected.to.toLowerCase() && previous.data === expected.data ? previous : undefined
 }
 
-function oracleRequestFunding(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
-	const amounts = oracleRequestAmounts(pool)
+function poolApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
+	const previous = exactPreviousPoolApproval(snapshot, context, token, pool, required)
+	if (context.previousPlan.steps.some(step => step.id === 'approve-rep') && previous === undefined) return false
+	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), pool) === required
+	if (previous === undefined) return allowance(tokenInventory(snapshot, token), pool) >= required
+	return true
+}
+
+function poolCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
+	const previous = exactPreviousPoolApproval(snapshot, context, token, pool, required)
+	if (previous === undefined || !context.confirmedStepIds.includes(previous.id)) return undefined
+	return planBase({
+		continuationDisposition: 'cleanup-only',
+		definitionId: context.previousPlan.definitionId,
+		ecosystem: 'statoblast',
+		label: 'Clean up vault deposit approval',
+		metadata: context.previousPlan.metadata,
+		postconditions: ['The confirmed workflow-created REP allowance for the pool is zero'],
+		risk: 'medium',
+		snapshot,
+		steps: [poolApprovalStep(snapshot, token, pool, 0n, 'revoke-rep', 'Revoke workflow-created REP approval for pool')],
+	})
+}
+
+function approveCoordinatorToken(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, tokenAddress: `0x${string}`, required: bigint, id: string, label: string) {
+	return encodeStep({ abi: erc20Abi, args: [coordinator, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, coordinator, required)], functionName: 'approve', id, label, to: tokenAddress })
+}
+
+function oracleRequestStagingParameters(pool: PoolSnapshot) {
+	const minimumWeth = amount(pool.minimumToken1ReportAttoEth)
+	return {
+		initialWethAttoEth: minimumWeth > 0n ? minimumWeth : 1n,
+		price: amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN,
+	}
+}
+
+type PreparedOracleRequest = {
+	envelope: OracleRequestFundingBounds
+	price: bigint
+	settlementCollateralCeilingAttoEth: bigint
+}
+
+function maximumWorkflowGasBudget(options: PlanningOptions, transactionCount: number) {
+	if (!Number.isSafeInteger(transactionCount) || transactionCount < 0) throw new Error('Oracle workflow transaction count is invalid')
+	return amount(options.maximumGasCostAttoEth ?? '0') * BigInt(transactionCount)
+}
+
+function amountAfterReserve(balance: bigint, reserve: bigint) {
+	return balance > reserve ? balance - reserve : 0n
+}
+
+function oracleRequestInventoryIsFunded(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prepared: PreparedOracleRequest, transactionCount: number) {
 	const weth = tokenInventory(snapshot, snapshot.deployments.weth)
 	const rep = tokenInventory(snapshot, pool.repToken)
-	const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
-	const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
+	if (weth === undefined || rep === undefined) return false
+	const initialWethAttoEth = amount(prepared.envelope.maximumInitialAttoWeth)
+	const initialRepAttoRep = amount(prepared.envelope.maximumInitialAttoRep)
+	const bountyAttoEth = amount(prepared.envelope.maximumRequestPriceCostAttoEth)
+	const minimumEthReserve = optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)
 	const minimumRepReserve = optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN)
-	return {
-		...amounts,
-		funded:
-			weth !== undefined &&
-			rep !== undefined &&
-			amounts.initialWethAttoEth <= MAX_UINT128 &&
-			amounts.initialRepAttoRep <= MAX_UINT128 &&
-			amounts.initialWethAttoEth <= maximumWeth &&
-			amounts.initialRepAttoRep <= maximumRep &&
-			amount(weth.balance) >= amounts.initialWethAttoEth + 1n &&
-			amount(rep.balance) >= amounts.initialRepAttoRep + minimumRepReserve,
+	return amount(weth.balance) >= initialWethAttoEth && amount(rep.balance) >= initialRepAttoRep + minimumRepReserve && amount(snapshot.wallet.ethBalanceAttoEth) >= minimumEthReserve + bountyAttoEth + maximumWorkflowGasBudget(options, transactionCount)
+}
+
+function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions): PreparedOracleRequest | undefined {
+	try {
+		const weth = tokenInventory(snapshot, snapshot.deployments.weth)
+		const rep = tokenInventory(snapshot, pool.repToken)
+		if (weth === undefined || rep === undefined) return undefined
+		const maximumEthPrincipal = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
+		const maximumRepPrincipal = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
+		const nativeInventory = amountAfterReserve(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n) + maximumWorkflowGasBudget(options, 5))
+		const repInventory = amountAfterReserve(amount(rep.balance), optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN))
+		const price = amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN
+		const envelopeParameters = {
+			coordinator: pool.oracleRequestFunding,
+			maximumEthPrincipalAttoEth: maximumEthPrincipal.toString(),
+			maximumNativePrincipalAttoEth: (nativeInventory < maximumEthPrincipal ? nativeInventory : maximumEthPrincipal).toString(),
+			maximumRepPrincipalAttoRep: (repInventory < maximumRepPrincipal ? repInventory : maximumRepPrincipal).toString(),
+			maximumWethPrincipalAttoEth: (amount(weth.balance) < maximumEthPrincipal ? amount(weth.balance) : maximumEthPrincipal).toString(),
+			proposedRepPerEthPrice: price.toString(),
+			settlementCollateralCeilingAttoEth: pool.settlementCollateralAttoEth,
+		}
+		const currentEnvelope = oracleRequestFundingEnvelope(envelopeParameters)
+		const settlementCollateralCeilingAttoEth = amount(oracleRequestSettlementCollateralCeiling({ coordinator: pool.oracleRequestFunding, envelope: currentEnvelope }))
+		const envelope = oracleRequestFundingEnvelope({ ...envelopeParameters, settlementCollateralCeilingAttoEth: settlementCollateralCeilingAttoEth.toString() })
+		if (maximumFeePerGas(amount(snapshot.anchor.baseFeePerGas)) > amount(envelope.maximumBaseFeePerGas)) return undefined
+		const prepared = { envelope, price, settlementCollateralCeilingAttoEth }
+		// Two exact approvals, one terminal request, and two possible cleanup approvals.
+		return oracleRequestInventoryIsFunded(snapshot, pool, options, prepared, 5) ? prepared : undefined
+	} catch (error) {
+		if (!isOracleRequestFundingError(error)) throw error
+		// One malformed or unaffordable pool must not abort the ecosystem catalog.
+		return undefined
 	}
 }
 
-function oracleRequestApprovalSteps(snapshot: EcosystemSnapshot, pool: PoolSnapshot, funding: ReturnType<typeof oracleRequestAmounts>, options: PlanningOptions) {
-	const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
-	const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
-	const steps = allowance(tokenInventory(snapshot, snapshot.deployments.weth), pool.coordinator) >= funding.initialWethAttoEth ? [] : approveCoordinatorToken(snapshot, pool, snapshot.deployments.weth, maximumWeth)
-	if (allowance(tokenInventory(snapshot, pool.repToken), pool.coordinator) < funding.initialRepAttoRep) {
-		steps.push(...approveCoordinatorToken(snapshot, pool, pool.repToken, maximumRep))
+function exactTokenTransferToCoordinatorEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, coordinator: `0x${string}`, expected: bigint): OperationEvidence {
+	return {
+		abi: 'event Transfer(address indexed from, address indexed to, uint256 value)',
+		emitter: token,
+		equals: expected.toString(),
+		field: 'value',
+		indexed: { from: snapshot.wallet.address, to: coordinator },
+		kind: 'decoded-event-field',
+		signature: 'Transfer(address,address,uint256)',
+		topic0: eventTopic('Transfer(address,address,uint256)'),
 	}
-	return steps
 }
 
 function decodedStagedSuccess(coordinator: `0x${string}`): OperationEvidence {
@@ -236,8 +339,13 @@ function stagedDownstreamPreflight(pool: PoolSnapshot, staged: EcosystemSnapshot
 	return undefined
 }
 
+function poolDeploymentCapacityBlocker(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 1, additionalUniverses: 0, label: 'Pool deployment' })
+}
+
 const deployPool: OperationDefinition = {
 	buildPlan(snapshot, options) {
+		if (poolDeploymentCapacityBlocker(snapshot, options) !== undefined) return undefined
 		const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
 		const binaryQuestions = snapshot.questions.filter(question => question.kind === 'binary')
 		const candidates = snapshot.universes.flatMap(universe => binaryQuestions.map(question => ({ question, universe }))).filter(candidate => canDeployOriginPool(candidate.universe) && !deployed.has(`${candidate.universe.id}:${candidate.question.id}`))
@@ -271,10 +379,10 @@ const deployPool: OperationDefinition = {
 	description: 'Deploys a canonical pool for an unrepresented binary question and active universe.',
 	discoveryInputs: ['binary questions', 'unforked universes', 'factory deployments', 'non-decision threshold and theoretical REP supply'],
 	ecosystem: 'statoblast',
-	evaluate(snapshot) {
+	evaluate(snapshot, options) {
 		const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
 		const found = snapshot.universes.some(universe => canDeployOriginPool(universe) && snapshot.questions.some(question => question.kind === 'binary' && !deployed.has(`${universe.id}:${question.id}`)))
-		return eligible(found ? undefined : 'No undeployed binary question/universe combination')
+		return eligible(poolDeploymentCapacityBlocker(snapshot, options), found ? undefined : 'No undeployed binary question/universe combination')
 	},
 	id: 'statoblast.pool.deploy',
 	label: 'Deploy security pool',
@@ -316,10 +424,29 @@ function checkpointDefinition(kind: 'collateral' | 'retention'): OperationDefini
 	}
 }
 
+function walletVaultRegistrationCapacityBlocker(pool: PoolSnapshot, options: PlanningOptions, label: string) {
+	return vaultRegistrationCapacityBlocker({ canonicalVaultCount: pool.canonicalVaultCount, registered: pool.walletVaultRegistered }, options, label)
+}
+
+function walletChildRouteCapacityBlocker(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string, options: PlanningOptions, label: string) {
+	const topologyBlocker = childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, `${label} topology`)
+	if (topologyBlocker !== undefined) return topologyBlocker
+	const child = childPoolForOutcome(snapshot, pool, outcome)
+	return child === undefined ? undefined : walletVaultRegistrationCapacityBlocker(child, options, `${label} vault registration`)
+}
+
+function walletVaultMigrationRouteCapacityBlocker(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string, options: PlanningOptions, label: string) {
+	const sourceBlocker = walletVaultRegistrationCapacityBlocker(pool, options, `${label} source-vault registration`)
+	return sourceBlocker ?? walletChildRouteCapacityBlocker(snapshot, pool, outcome, options, `${label} target-child`)
+}
+
+function vaultDepositCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return operationalPools(snapshot).filter(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep) && walletVaultRegistrationCapacityBlocker(pool, options, 'Wallet vault deposit registration') === undefined)
+}
+
 const depositVault: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidates = operationalPools(snapshot).filter(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep))
-		const pool = choose(candidates, mixSeed(options.seed, depositVault.id))
+		const pool = choose(vaultDepositCandidates(snapshot, options), mixSeed(options.seed, depositVault.id))
 		if (pool === undefined) return undefined
 		const spend = repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep))
 		const steps = approvePool(snapshot, pool, spend)
@@ -335,7 +462,62 @@ const depositVault: OperationDefinition = {
 				walletAssetDebits: [erc20WalletDebit(pool.repToken, spend, 'rep')],
 			}),
 		)
-		return planBase({ definitionId: depositVault.id, ecosystem: 'statoblast', label: depositVault.label, metadata: { amountAttoRep: spend.toString(), pool: pool.address }, postconditions: ['Wallet vault REP backing units increase'], risk: 'medium', snapshot, steps })
+		return planBase({
+			definitionId: depositVault.id,
+			ecosystem: 'statoblast',
+			label: depositVault.label,
+			maximumCleanupTransactionCount: steps.length > 1 ? 1 : undefined,
+			metadata: { amountAttoRep: spend.toString(), pool: pool.address, repToken: pool.repToken },
+			postconditions: ['Wallet vault REP backing units increase'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const spend = requiredVaultMetadataAmount(context.previousPlan.metadata, 'amountAttoRep')
+		const poolAddress = getAddress(requiredVaultMetadataString(context.previousPlan.metadata, 'pool'))
+		const repToken = getAddress(requiredVaultMetadataString(context.previousPlan.metadata, 'repToken'))
+		const cleanup = () => poolCleanupPlan(snapshot, context, repToken, poolAddress, spend)
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const pool = operationalPools(snapshot).find(candidate => candidate.address.toLowerCase() === poolAddress.toLowerCase())
+		const inventory = tokenInventory(snapshot, repToken)
+		const safe =
+			pool !== undefined &&
+			pool.repToken.toLowerCase() === repToken.toLowerCase() &&
+			walletVaultRegistrationCapacityBlocker(pool, options, 'Wallet vault deposit registration') === undefined &&
+			spend > 0n &&
+			spend >= amount(pool.minimumSafeWalletVaultDepositAttoRep) &&
+			spend <= optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) &&
+			inventory !== undefined &&
+			amount(inventory.balance) >= spend + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
+			poolApprovalPrepared(snapshot, context, repToken, poolAddress, spend)
+		if (!safe) return cleanup()
+		const previousApproval = exactPreviousPoolApproval(snapshot, context, repToken, poolAddress, spend)
+		const steps = previousApproval !== undefined && !context.confirmedStepIds.includes(previousApproval.id) ? [poolApprovalStep(snapshot, repToken, poolAddress, spend)] : []
+		steps.push(
+			encodeStep({
+				abi: securityPoolAbi,
+				args: [spend, 15_000n],
+				evidence: [eventEvidence(poolAddress, 'RepDepositedToVault(address,uint256,uint256,uint256)')],
+				functionName: 'depositRepToVault',
+				id: 'deposit-rep',
+				label: 'Deposit REP into own vault',
+				to: poolAddress,
+				walletAssetDebits: [erc20WalletDebit(repToken, spend, 'rep')],
+			}),
+		)
+		return planBase({
+			definitionId: depositVault.id,
+			ecosystem: 'statoblast',
+			label: depositVault.label,
+			maximumCleanupTransactionCount: previousApproval === undefined ? undefined : 1,
+			metadata: context.previousPlan.metadata,
+			postconditions: ['Wallet vault REP backing units increase'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
 	},
 	classification: 'selectable',
 	contract: 'SecurityPool',
@@ -343,7 +525,10 @@ const depositVault: OperationDefinition = {
 	discoveryInputs: ['pool lifecycle', 'post-transfer backing round-trip minimum', 'REP balance and allowance'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
-		return eligible(operationalPools(snapshot).some(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep)) ? undefined : 'No operational pool has an affordable round-trip-safe REP deposit')
+		const affordable = operationalPools(snapshot).filter(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep))
+		const firstAffordable = affordable[0]
+		const capacityBlocker = firstAffordable === undefined || affordable.some(pool => walletVaultRegistrationCapacityBlocker(pool, options, 'Wallet vault deposit registration') === undefined) ? undefined : walletVaultRegistrationCapacityBlocker(firstAffordable, options, 'Wallet vault deposit registration')
+		return eligible(capacityBlocker, affordable.length > 0 ? undefined : 'No operational pool has an affordable round-trip-safe REP deposit')
 	},
 	id: 'statoblast.vault.deposit-rep',
 	label: 'Deposit REP to vault',
@@ -433,7 +618,7 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 	return {
 		buildPlan(snapshot, options) {
 			const candidates = snapshot.pools.filter(pool => {
-				if (kind === 'create') return operationalPools(snapshot).includes(pool) && pool.oraclePriceValid && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
+				if (kind === 'create') return operationalPools(snapshot).includes(pool) && safeOraclePriceDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 				if (shares === undefined) return false
 				if (kind === 'redeem') {
@@ -455,6 +640,8 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 			const args = kind === 'redeem' ? [spend] : undefined
 			const shares = walletShares(snapshot, pool)
 			if (kind !== 'create' && shares === undefined) return undefined
+			const oracleDeadline = kind === 'create' ? safeOraclePriceDeadline(snapshot, pool, options) : undefined
+			if (kind === 'create' && oracleDeadline === undefined) return undefined
 			let walletAssetDebits: OperationWalletAssetDebit[] = []
 			if (kind === 'redeem') walletAssetDebits = [0, 1, 2].map(outcome => erc1155WalletDebit(pool.shareToken, shareTokenId(pool.universeId, outcome), spend))
 			if (kind === 'winning' && shares !== undefined) {
@@ -463,6 +650,7 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 				walletAssetDebits = [erc1155WalletDebit(pool.shareToken, shareTokenId(pool.universeId, pool.questionOutcome), amount(winningBalance))]
 			}
 			return planBase({
+				...(oracleDeadline === undefined ? {} : { deadlineTimestamp: oracleDeadline.toString() }),
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: actionLabel,
@@ -481,7 +669,10 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 		evaluate(snapshot, options) {
 			if (kind === 'create') {
 				const spend = ethSpend(snapshot, options, id)
-				return eligible(operationalPools(snapshot).some(pool => pool.oraclePriceValid && canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has safe minting capacity for the spend', spend === 0n ? 'No spendable ETH above reserve' : undefined)
+				return eligible(
+					operationalPools(snapshot).some(pool => safeOraclePriceDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has a safely fresh price and minting capacity for the spend',
+					spend === 0n ? 'No spendable ETH above reserve' : undefined,
+				)
 			}
 			const possible = snapshot.pools.some(pool => {
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
@@ -506,6 +697,7 @@ const escalationDeposit: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		const candidate = choose(
 			operationalPools(snapshot).flatMap(pool => {
+				if (amount(pool.totalCapacityOwnershipAttoRep) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return []
 				const configuredMaximum = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
 				const outcomes = [0, 1, 2].filter(outcome => amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0') > 0n && amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0') <= configuredMaximum)
 				return outcomes.length > 0 ? [{ outcomes, pool }] : []
@@ -517,7 +709,10 @@ const escalationDeposit: OperationDefinition = {
 		if (outcome === undefined) return undefined
 		const maximum = amount(candidate.pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0')
 		if (maximum === 0n) return undefined
+		const oracleDeadline = amount(candidate.pool.totalCapacityOwnershipAttoRep) > 0n ? safeOraclePriceDeadline(snapshot, candidate.pool, options) : undefined
+		if (amount(candidate.pool.totalCapacityOwnershipAttoRep) > 0n && oracleDeadline === undefined) return undefined
 		return planBase({
+			...(oracleDeadline === undefined ? {} : { deadlineTimestamp: oracleDeadline.toString() }),
 			definitionId: escalationDeposit.id,
 			ecosystem: 'statoblast',
 			label: escalationDeposit.label,
@@ -534,6 +729,7 @@ const escalationDeposit: OperationDefinition = {
 					id: 'escalation-deposit',
 					label: 'Deposit into escalation game',
 					to: candidate.pool.address,
+					walletAssetDebits: [securityPoolVaultRepDebit(candidate.pool.address, snapshot.wallet.address, maximum)],
 				}),
 			],
 		})
@@ -545,13 +741,14 @@ const escalationDeposit: OperationDefinition = {
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
 		const found = operationalPools(snapshot).some(pool => {
+			if (amount(pool.totalCapacityOwnershipAttoRep) > 0n && safeOraclePriceDeadline(snapshot, pool, options) === undefined) return false
 			const configuredMaximum = optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)
 			return [0, 1, 2].some(outcome => {
 				const maximum = amount(pool.safeEscalationDepositMaximumsAttoRep[outcome] ?? '0')
 				return maximum > 0n && maximum <= configuredMaximum
 			})
 		})
-		return eligible(options.allowHighRisk === true ? undefined : 'High-risk operations are disabled', found ? undefined : 'No active escalation game has an affordable protocol-valid deposit preview')
+		return eligible(options.allowHighRisk === true ? undefined : 'High-risk operations are disabled', found ? undefined : 'No active escalation game has an affordable protocol-valid deposit preview with a safely fresh price when capacity is nonzero')
 	},
 	id: 'statoblast.escalation.deposit',
 	label: 'Deposit to escalation game',
@@ -578,7 +775,7 @@ const queueWithdrawal: OperationDefinition = {
 				const vault = walletVault(snapshot, candidate)
 				if (vault === undefined || amount(vault.repBackingAttoRep) === 0n || amount(vault.disputeStakedAttoRep) !== 0n) return false
 				const requested = amount(vault.repBackingAttoRep) < configuredMaximum ? amount(vault.repBackingAttoRep) : configuredMaximum
-				return candidate.oraclePriceValid && amount(candidate.settlementCollateralAttoEth) <= amount(candidate.totalBadDebtAttoEth) && previewWithdrawalAmount(candidate, vault, requested) > 0n
+				return safeOraclePriceDeadline(snapshot, candidate, options) !== undefined && amount(candidate.settlementCollateralAttoEth) <= amount(candidate.totalBadDebtAttoEth) && previewWithdrawalAmount(candidate, vault, requested) > 0n
 			}),
 			mixSeed(options.seed, queueWithdrawal.id),
 		)
@@ -587,7 +784,9 @@ const queueWithdrawal: OperationDefinition = {
 		if (vault === undefined) return undefined
 		const requested = amount(vault.repBackingAttoRep) < configuredMaximum ? amount(vault.repBackingAttoRep) : configuredMaximum
 		if (requested === 0n || previewWithdrawalAmount(pool, vault, requested) === 0n) return undefined
-		const funding = oracleRequestAmounts(pool)
+		const oracleDeadline = safeOraclePriceDeadline(snapshot, pool, options)
+		if (oracleDeadline === undefined) return undefined
+		const funding = oracleRequestStagingParameters(pool)
 		const steps = []
 		const evidence = [eventEvidence(pool.coordinator, 'StagedOperationQueued(uint256,uint8,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bool)'), decodedStagedSuccess(pool.coordinator)]
 		steps.push(
@@ -613,7 +812,7 @@ const queueWithdrawal: OperationDefinition = {
 			}),
 		)
 		return planBase({
-			deadlineTimestamp: (amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS).toString(),
+			deadlineTimestamp: oracleDeadline.toString(),
 			definitionId: queueWithdrawal.id,
 			ecosystem: 'statoblast',
 			label: queueWithdrawal.label,
@@ -639,9 +838,13 @@ const queueWithdrawal: OperationDefinition = {
 			const vault = walletVault(snapshot, pool)
 			if (vault === undefined) return false
 			const requested = amount(vault.repBackingAttoRep) < configuredMaximum ? amount(vault.repBackingAttoRep) : configuredMaximum
-			return pool.oraclePriceValid && amount(pool.settlementCollateralAttoEth) <= amount(pool.totalBadDebtAttoEth) && previewWithdrawalAmount(pool, vault, requested) > 0n
+			return safeOraclePriceDeadline(snapshot, pool, options) !== undefined && amount(pool.settlementCollateralAttoEth) <= amount(pool.totalBadDebtAttoEth) && previewWithdrawalAmount(pool, vault, requested) > 0n
 		})
-		return eligible(pools.length === 0 ? 'No unescrowed wallet vault has withdrawable REP' : undefined, configuredMaximum === 0n ? 'Configured REP operation cap is zero' : undefined, pools.length > 0 && !ready ? 'No eligible pool has a fresh price, zero open interest, and a nonzero rounded withdrawal' : undefined)
+		return eligible(
+			pools.length === 0 ? 'No unescrowed wallet vault has withdrawable REP' : undefined,
+			configuredMaximum === 0n ? 'Configured REP operation cap is zero' : undefined,
+			pools.length > 0 && !ready ? 'No eligible pool has a safely fresh price, zero open interest, and a nonzero rounded withdrawal' : undefined,
+		)
 	},
 	id: 'statoblast.staged.queue',
 	label: 'Queue REP withdrawal',
@@ -649,43 +852,220 @@ const queueWithdrawal: OperationDefinition = {
 	risk: 'medium',
 }
 
+const ORACLE_REQUEST_DEFINITION_ID = 'statoblast.oracle.request-price'
+const ORACLE_REQUEST_ENVELOPE_VERSION = 1
+
+function oracleRequestMetadata(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest): OperationPlan['metadata'] {
+	return {
+		coordinator: pool.coordinator,
+		maximumBaseFeePerGas: prepared.envelope.maximumBaseFeePerGas,
+		maximumEscalationHaltAttoEth: prepared.envelope.maximumEscalationHaltAttoEth,
+		maximumInitialAttoRep: prepared.envelope.maximumInitialAttoRep,
+		maximumInitialAttoWeth: prepared.envelope.maximumInitialAttoWeth,
+		maximumRequestPriceCostAttoEth: prepared.envelope.maximumRequestPriceCostAttoEth,
+		oracleRequestEnvelopeVersion: ORACLE_REQUEST_ENVELOPE_VERSION,
+		pool: pool.address,
+		preparedAtBlock: snapshot.anchor.blockNumber,
+		proposedRepPerEthPrice: prepared.price.toString(),
+		repToken: pool.repToken,
+		settlementCollateralCeilingAttoEth: prepared.settlementCollateralCeilingAttoEth.toString(),
+		weth: snapshot.deployments.weth,
+	}
+}
+
+function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, weth: `0x${string}`, repToken: `0x${string}`, prepared: PreparedOracleRequest, forceExactApprovals: boolean) {
+	const initialWethAttoEth = amount(prepared.envelope.maximumInitialAttoWeth)
+	const initialRepAttoRep = amount(prepared.envelope.maximumInitialAttoRep)
+	const requestCostAttoEth = amount(prepared.envelope.maximumRequestPriceCostAttoEth)
+	const steps = []
+	if (forceExactApprovals || allowance(tokenInventory(snapshot, weth), coordinator) !== initialWethAttoEth) {
+		steps.push(approveCoordinatorToken(snapshot, coordinator, weth, initialWethAttoEth, 'approve-oracle-weth', 'Approve exact WETH oracle funding'))
+	}
+	if (forceExactApprovals || allowance(tokenInventory(snapshot, repToken), coordinator) !== initialRepAttoRep) {
+		steps.push(approveCoordinatorToken(snapshot, coordinator, repToken, initialRepAttoRep, 'approve-oracle-rep', 'Approve exact REP oracle funding'))
+	}
+	steps.push(
+		encodeStep({
+			abi: coordinatorAbi,
+			args: [prepared.price, initialWethAttoEth],
+			evidence: [
+				eventEvidence(coordinator, 'PriceRequested(uint256,uint256)'),
+				exactTokenTransferToCoordinatorEvidence(snapshot, weth, coordinator, initialWethAttoEth),
+				exactTokenTransferToCoordinatorEvidence(snapshot, repToken, coordinator, initialRepAttoRep),
+				erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n),
+				erc20AllowanceEvidence(repToken, snapshot.wallet.address, coordinator, 0n),
+			],
+			functionName: 'requestPrice',
+			id: 'request-price',
+			label: 'Request REP/ETH price',
+			to: coordinator,
+			value: requestCostAttoEth,
+			walletAssetDebits: [erc20WalletDebit(weth, initialWethAttoEth, 'weth'), erc20WalletDebit(repToken, initialRepAttoRep, 'rep')],
+		}),
+	)
+	return steps
+}
+
+function buildPreparedOracleRequestPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest, metadata: OperationPlan['metadata'], forceExactApprovals: boolean, confirmedCleanupCount = 0) {
+	const steps = oracleRequestSteps(snapshot, pool.coordinator, snapshot.deployments.weth, pool.repToken, prepared, forceExactApprovals)
+	const plannedApprovalCount = steps.filter(step => step.id === 'approve-oracle-weth' || step.id === 'approve-oracle-rep').length
+	const maximumCleanupTransactionCount = confirmedCleanupCount + plannedApprovalCount
+	return planBase({
+		definitionId: ORACLE_REQUEST_DEFINITION_ID,
+		ecosystem: 'statoblast',
+		label: 'Request oracle price',
+		maximumCleanupTransactionCount: maximumCleanupTransactionCount === 0 ? undefined : maximumCleanupTransactionCount,
+		metadata,
+		postconditions: ['Coordinator pendingReportId becomes nonzero, both exact token allowances are consumed, and the report becomes a settlement obligation'],
+		risk: 'medium',
+		snapshot,
+		steps,
+		terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: prepared.envelope.maximumBaseFeePerGas },
+	})
+}
+
+function requiredOracleMetadataString(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	if (typeof value !== 'string' || value.length === 0) throw new Error(`Oracle request metadata ${key} is missing`)
+	return value
+}
+
+function requiredOracleMetadataUint(metadata: OperationPlan['metadata'], key: string) {
+	const value = requiredOracleMetadataString(metadata, key)
+	if (!/^(?:0|[1-9][0-9]*)$/.test(value)) throw new Error(`Oracle request metadata ${key} is not canonical`)
+	return value
+}
+
+function persistedOracleRequest(plan: OperationPlan) {
+	if (plan.metadata['oracleRequestEnvelopeVersion'] !== ORACLE_REQUEST_ENVELOPE_VERSION) {
+		throw new Error('Oracle request workflow has an unsupported funding envelope version')
+	}
+	const envelope: OracleRequestFundingBounds = {
+		maximumBaseFeePerGas: requiredOracleMetadataUint(plan.metadata, 'maximumBaseFeePerGas'),
+		maximumEscalationHaltAttoEth: requiredOracleMetadataUint(plan.metadata, 'maximumEscalationHaltAttoEth'),
+		maximumInitialAttoRep: requiredOracleMetadataUint(plan.metadata, 'maximumInitialAttoRep'),
+		maximumInitialAttoWeth: requiredOracleMetadataUint(plan.metadata, 'maximumInitialAttoWeth'),
+		maximumRequestPriceCostAttoEth: requiredOracleMetadataUint(plan.metadata, 'maximumRequestPriceCostAttoEth'),
+	}
+	return {
+		coordinator: getAddress(requiredOracleMetadataString(plan.metadata, 'coordinator')),
+		envelope,
+		pool: getAddress(requiredOracleMetadataString(plan.metadata, 'pool')),
+		preparedAtBlock: amount(requiredOracleMetadataUint(plan.metadata, 'preparedAtBlock')),
+		prepared: {
+			envelope,
+			price: amount(requiredOracleMetadataUint(plan.metadata, 'proposedRepPerEthPrice')),
+			settlementCollateralCeilingAttoEth: amount(requiredOracleMetadataUint(plan.metadata, 'settlementCollateralCeilingAttoEth')),
+		},
+		repToken: getAddress(requiredOracleMetadataString(plan.metadata, 'repToken')),
+		settlementCollateralCeilingAttoEth: amount(requiredOracleMetadataUint(plan.metadata, 'settlementCollateralCeilingAttoEth')),
+		weth: getAddress(requiredOracleMetadataString(plan.metadata, 'weth')),
+	}
+}
+
+function exactPreviousOracleApproval(snapshot: EcosystemSnapshot, previousPlan: OperationPlan, id: string, coordinator: `0x${string}`, token: `0x${string}`, required: bigint) {
+	const previous = previousPlan.steps.find(step => step.id === id)
+	if (previous === undefined) return undefined
+	const expected = approveCoordinatorToken(snapshot, coordinator, token, required, id, previous.label)
+	return previous.to.toLowerCase() === expected.to.toLowerCase() && previous.data === expected.data ? previous : undefined
+}
+
+function oracleApprovalRequirements(persisted: ReturnType<typeof persistedOracleRequest>) {
+	return [
+		{ id: 'approve-oracle-weth', required: amount(persisted.envelope.maximumInitialAttoWeth), token: persisted.weth },
+		{ id: 'approve-oracle-rep', required: amount(persisted.envelope.maximumInitialAttoRep), token: persisted.repToken },
+	]
+}
+
+function confirmedOracleApprovalRequirements(snapshot: EcosystemSnapshot, context: OperationContinuationContext, persisted: ReturnType<typeof persistedOracleRequest>) {
+	return oracleApprovalRequirements(persisted).filter(requirement => context.confirmedStepIds.includes(requirement.id) && exactPreviousOracleApproval(snapshot, context.previousPlan, requirement.id, persisted.coordinator, requirement.token, requirement.required) !== undefined)
+}
+
+function oracleRequestContinuationIsSafe(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, context: OperationContinuationContext, persisted: ReturnType<typeof persistedOracleRequest>) {
+	try {
+		const workflowValidForBlocks = options.workflowValidForBlocks ?? 96
+		if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks <= 0) return false
+		if (options.submissionMode === 'public') return false
+		const currentBlock = amount(snapshot.anchor.blockNumber)
+		if (currentBlock < persisted.preparedAtBlock || currentBlock - persisted.preparedAtBlock > BigInt(workflowValidForBlocks)) return false
+		if (!operationalPools(snapshot).some(candidate => candidate.address.toLowerCase() === pool.address.toLowerCase())) return false
+		if (pool.oraclePriceValid || pool.pendingReportId !== '0') return false
+		if (pool.coordinator.toLowerCase() !== persisted.coordinator.toLowerCase() || pool.repToken.toLowerCase() !== persisted.repToken.toLowerCase()) return false
+		if (snapshot.deployments.weth.toLowerCase() !== persisted.weth.toLowerCase()) return false
+		const currentPrice = amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN
+		if (currentPrice !== persisted.prepared.price) return false
+		const currentCollateral = amount(pool.settlementCollateralAttoEth)
+		if (currentCollateral > persisted.settlementCollateralCeilingAttoEth) return false
+		const persistedWeth = amount(persisted.envelope.maximumInitialAttoWeth)
+		const persistedRep = amount(persisted.envelope.maximumInitialAttoRep)
+		const persistedBounty = amount(persisted.envelope.maximumRequestPriceCostAttoEth)
+		if (persistedWeth + persistedBounty > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)) return false
+		if (persistedRep > optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)) return false
+		assertOracleRequestFundingEnvelope({
+			coordinator: pool.oracleRequestFunding,
+			envelope: persisted.envelope,
+			proposedRepPerEthPrice: persisted.prepared.price.toString(),
+			settlementCollateralAttoEth: currentCollateral.toString(),
+			subject: `Coordinator ${pool.coordinator}`,
+		})
+		if (maximumFeePerGas(amount(snapshot.anchor.baseFeePerGas)) > amount(persisted.envelope.maximumBaseFeePerGas)) return false
+		if (context.previousPlan.terminalSubmission?.kind !== 'private-next-block' || context.previousPlan.terminalSubmission.maximumFeePerGas !== persisted.envelope.maximumBaseFeePerGas) return false
+		for (const requirement of oracleApprovalRequirements(persisted)) {
+			const previous = exactPreviousOracleApproval(snapshot, context.previousPlan, requirement.id, persisted.coordinator, requirement.token, requirement.required)
+			if (context.previousPlan.steps.some(step => step.id === requirement.id) && previous === undefined) return false
+			if (context.confirmedStepIds.includes(requirement.id)) {
+				if (previous === undefined || allowance(tokenInventory(snapshot, requirement.token), persisted.coordinator) !== requirement.required) return false
+			}
+		}
+		const wethAllowancePrepared = allowance(tokenInventory(snapshot, persisted.weth), persisted.coordinator) === amount(persisted.envelope.maximumInitialAttoWeth)
+		const repAllowancePrepared = allowance(tokenInventory(snapshot, persisted.repToken), persisted.coordinator) === amount(persisted.envelope.maximumInitialAttoRep)
+		const remainingApprovalCount = Number(!wethAllowancePrepared) + Number(!repAllowancePrepared)
+		return oracleRequestInventoryIsFunded(snapshot, pool, options, persisted.prepared, remainingApprovalCount + 3)
+	} catch (error) {
+		if (!isOracleRequestFundingError(error)) throw error
+		return false
+	}
+}
+
+function buildOracleRequestCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinuationContext, persisted: ReturnType<typeof persistedOracleRequest>) {
+	const confirmed = confirmedOracleApprovalRequirements(snapshot, context, persisted)
+	if (confirmed.length === 0) return undefined
+	return planBase({
+		continuationDisposition: 'cleanup-only',
+		definitionId: ORACLE_REQUEST_DEFINITION_ID,
+		ecosystem: 'statoblast',
+		label: 'Clean up prepared oracle request',
+		metadata: context.previousPlan.metadata,
+		postconditions: ['Every confirmed workflow-created oracle funding allowance is zero'],
+		risk: 'medium',
+		snapshot,
+		steps: confirmed.map(requirement => approveCoordinatorToken(snapshot, persisted.coordinator, requirement.token, 0n, `revoke-${requirement.id.slice('approve-'.length)}`, `Revoke ${requirement.id === 'approve-oracle-weth' ? 'WETH' : 'REP'} oracle funding`)),
+	})
+}
+
 const requestOraclePrice: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const pool = choose(
-			operationalPools(snapshot).filter(candidate => {
-				const funding = oracleRequestFunding(snapshot, candidate, options)
-				return !candidate.oraclePriceValid && candidate.pendingReportId === '0' && funding.funded && canPayExactEth(snapshot, options, bufferedOracleRequestCost(candidate), funding.initialWethAttoEth)
+		const candidate = choose(
+			operationalPools(snapshot).flatMap(pool => {
+				if (pool.oraclePriceValid || pool.pendingReportId !== '0') return []
+				const prepared = oracleRequestPreparation(snapshot, pool, options)
+				return prepared === undefined ? [] : [{ pool, prepared }]
 			}),
 			mixSeed(options.seed, requestOraclePrice.id),
 		)
-		if (pool === undefined) return undefined
-		const funding = oracleRequestFunding(snapshot, pool, options)
-		if (!funding.funded) return undefined
-		const steps = oracleRequestApprovalSteps(snapshot, pool, funding, options)
-		steps.push(
-			encodeStep({
-				abi: coordinatorAbi,
-				args: [funding.price, funding.initialWethAttoEth],
-				evidence: [eventEvidence(pool.coordinator, 'PriceRequested(uint256,uint256)')],
-				functionName: 'requestPrice',
-				id: 'request-price',
-				label: 'Request REP/ETH price',
-				to: pool.coordinator,
-				value: bufferedOracleRequestCost(pool),
-				walletAssetDebits: [erc20WalletDebit(snapshot.deployments.weth, funding.initialWethAttoEth, 'weth'), erc20WalletDebit(pool.repToken, funding.initialRepAttoRep, 'rep')],
-			}),
-		)
-		return planBase({
-			definitionId: requestOraclePrice.id,
-			ecosystem: 'statoblast',
-			label: requestOraclePrice.label,
-			lastValidBlockNumber: (amount(snapshot.anchor.blockNumber) + 1n).toString(),
-			metadata: { coordinator: pool.coordinator, proposedRepPerEthPrice: funding.price.toString() },
-			postconditions: ['Coordinator pendingReportId becomes nonzero and the indexed report becomes a settlement obligation'],
-			risk: 'medium',
-			snapshot,
-			steps,
-		})
+		if (candidate === undefined) return undefined
+		return buildPreparedOracleRequestPlan(snapshot, candidate.pool, candidate.prepared, oracleRequestMetadata(snapshot, candidate.pool, candidate.prepared), true)
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const persisted = persistedOracleRequest(context.previousPlan)
+		if (context.continuationDisposition === 'cleanup-only') {
+			return buildOracleRequestCleanupPlan(snapshot, context, persisted)
+		}
+		const pool = snapshot.pools.find(candidate => candidate.address.toLowerCase() === persisted.pool.toLowerCase() && candidate.coordinator.toLowerCase() === persisted.coordinator.toLowerCase())
+		if (pool === undefined || !oracleRequestContinuationIsSafe(snapshot, pool, options, context, persisted)) {
+			return buildOracleRequestCleanupPlan(snapshot, context, persisted)
+		}
+		return buildPreparedOracleRequestPlan(snapshot, pool, persisted.prepared, context.previousPlan.metadata, false, confirmedOracleApprovalRequirements(snapshot, context, persisted).length)
 	},
 	classification: 'selectable',
 	contract: 'OpenOraclePriceCoordinator',
@@ -694,19 +1074,10 @@ const requestOraclePrice: OperationDefinition = {
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
 		const candidates = operationalPools(snapshot).filter(candidate => !candidate.oraclePriceValid && candidate.pendingReportId === '0')
-		return eligible(
-			candidates.length === 0 ? 'No operational pool needs a new oracle price' : undefined,
-			candidates.length > 0 && !candidates.some(pool => oracleRequestFunding(snapshot, pool, options).funded) ? 'No stale pool has enough policy-bounded WETH and REP for an initial report' : undefined,
-			candidates.length > 0 &&
-				!candidates.some(pool => {
-					const funding = oracleRequestFunding(snapshot, pool, options)
-					return funding.funded && canPayExactEth(snapshot, options, bufferedOracleRequestCost(pool), funding.initialWethAttoEth)
-				})
-				? 'No stale pool has an affordable cumulative WETH report and two-block ETH bounty buffer'
-				: undefined,
-		)
+		const prepared = candidates.some(pool => oracleRequestPreparation(snapshot, pool, options) !== undefined)
+		return eligible(candidates.length === 0 ? 'No operational pool needs a new oracle price' : undefined, candidates.length > 0 && !prepared ? 'No stale pool has a durable policy-bounded funding envelope, token inventory, ETH gas reserve, and safe private inclusion fee ceiling' : undefined)
 	},
-	id: 'statoblast.oracle.request-price',
+	id: ORACLE_REQUEST_DEFINITION_ID,
 	label: 'Request oracle price',
 	method: 'requestPrice',
 	risk: 'medium',
@@ -748,8 +1119,11 @@ const recoverSettledReport: OperationDefinition = {
 				}),
 			)
 	},
-	enumerateLifecyclePresence(snapshot, options) {
-		return lifecycleDefinitionMetadata(recoverSettledReport, snapshot, options)
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return snapshot.pools.filter(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
+	},
+	enumerateLifecyclePresence(snapshot) {
+		return snapshot.pools.filter(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'OpenOraclePriceCoordinator',
@@ -813,6 +1187,9 @@ const resumeEscalation: OperationDefinition = {
 				}),
 			)
 	},
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return snapshot.pools.filter(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkCarryFundingComplete && pool.escalationForkResumedAt === '0').map(pool => ({ pool: pool.address }))
+	},
 	enumerateLifecyclePresence(snapshot) {
 		return snapshot.pools.filter(pool => pool.awaitingForkContinuation && pool.systemState === 0 && pool.escalationGame !== zeroAddress && pool.escalationForkResumedAt === '0').map(pool => ({ pool: pool.address }))
 	},
@@ -828,28 +1205,35 @@ const resumeEscalation: OperationDefinition = {
 	risk: 'low',
 }
 
-function claimForkedEscalationCandidates(snapshot: EcosystemSnapshot, requireMiningMargin = true) {
+function claimForkedEscalationCandidates(snapshot: EcosystemSnapshot, options?: PlanningOptions, enforceTopologyCapacity = options !== undefined) {
 	const now = amount(snapshot.anchor.timestamp)
-	return snapshot.pools.flatMap(pool => {
+	const candidates = snapshot.pools.flatMap(pool => {
 		const deadline = amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-		const latestArrival = requireMiningMargin ? now + MINING_SAFETY_SECONDS : now
-		if (pool.systemState !== 1 || !pool.forkOwnQuestion || !pool.forkUnresolvedEscalation || !pool.escalationCanTriggerOwnFork || amount(pool.forkActivationTime) === 0n || latestArrival > deadline) return []
-		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase())
-		return [...new Set(deposits.map(deposit => deposit.outcome))].map(outcome => ({ deadline, deposits: deposits.filter(deposit => deposit.outcome === outcome), outcome, pool }))
+		const deadlineAvailable = options === undefined ? now <= deadline : timestampDeadlineHasRequiredSafety(now, deadline, options)
+		if (pool.systemState !== 1 || !pool.forkOwnQuestion || !pool.forkUnresolvedEscalation || !pool.escalationCanTriggerOwnFork || amount(pool.forkActivationTime) === 0n || !deadlineAvailable) return []
+		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase()).sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
+		return [...new Set(deposits.map(deposit => deposit.outcome))].flatMap(outcome => lifecycleBatches(deposits.filter(deposit => deposit.outcome === outcome)).map(batch => ({ deadline, deposits: batch, outcome, pool })))
 	})
+	return enforceTopologyCapacity && options !== undefined ? candidates.filter(candidate => childRouteTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome.toString(), options, 'Forked escalation claim child route') === undefined) : candidates
+}
+
+function claimForkedDepositIndexes(candidate: ReturnType<typeof claimForkedEscalationCandidates>[number]) {
+	return [...candidate.deposits].sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex)).map(deposit => BigInt(deposit.depositIndex))
+}
+
+function claimForkedMetadata(candidate: ReturnType<typeof claimForkedEscalationCandidates>[number]) {
+	const depositIndexes = claimForkedDepositIndexes(candidate)
+	return { depositCount: depositIndexes.length, depositIndexes: depositIndexes.map(index => index.toString()).join(','), outcome: candidate.outcome, pool: candidate.pool.address }
 }
 
 function buildClaimForkedEscalationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof claimForkedEscalationCandidates>[number]) {
-	const depositIndexes = [...candidate.deposits]
-		.sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
-		.slice(0, LIFECYCLE_BATCH_LIMIT)
-		.map(deposit => BigInt(deposit.depositIndex))
+	const depositIndexes = claimForkedDepositIndexes(candidate)
 	return planBase({
 		deadlineTimestamp: candidate.deadline.toString(),
 		definitionId: claimForkedEscalation.id,
 		ecosystem: 'statoblast',
 		label: claimForkedEscalation.label,
-		metadata: { depositCount: depositIndexes.length, depositIndexes: depositIndexes.map(index => index.toString()).join(','), outcome: candidate.outcome, pool: candidate.pool.address },
+		metadata: claimForkedMetadata(candidate),
 		postconditions: ['Selected fork-time deposits are claimed into the wallet and marked terminal by the canonical index'],
 		priority: 'urgent',
 		risk: 'low',
@@ -870,28 +1254,29 @@ function buildClaimForkedEscalationPlan(snapshot: EcosystemSnapshot, candidate: 
 
 const claimForkedEscalation: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(claimForkedEscalationCandidates(snapshot), mixSeed(options.seed, claimForkedEscalation.id))
+		const candidate = choose(claimForkedEscalationCandidates(snapshot, options), mixSeed(options.seed, claimForkedEscalation.id))
 		return candidate === undefined ? undefined : buildClaimForkedEscalationPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot) {
-		return claimForkedEscalationCandidates(snapshot).map(candidate => buildClaimForkedEscalationPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot, options) {
+		return claimForkedEscalationCandidates(snapshot, options).map(candidate => buildClaimForkedEscalationPlan(snapshot, candidate))
+	},
+	enumerateLifecycleObstructingPresence(snapshot, options) {
+		return claimForkedEscalationCandidates(snapshot, options, false).map(claimForkedMetadata)
 	},
 	enumerateLifecyclePresence(snapshot) {
-		return claimForkedEscalationCandidates(snapshot, false).map(candidate => buildClaimForkedEscalationPlan(snapshot, candidate).metadata)
+		return claimForkedEscalationCandidates(snapshot).map(claimForkedMetadata)
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPoolForker',
 	description: 'Claims canonically indexed wallet deposits during an own-question fork migration window.',
 	discoveryInputs: ['canonical escalation deposit index', 'fork ownership/unresolved state', 'fork activation deadline'],
 	ecosystem: 'statoblast',
-	evaluate(snapshot) {
-		const now = amount(snapshot.anchor.timestamp)
-		const found = snapshot.escalationDeposits.some(deposit => {
-			if (deposit.claimed || deposit.vault.toLowerCase() !== snapshot.wallet.address.toLowerCase()) return false
-			const pool = snapshot.pools.find(candidate => candidate.address.toLowerCase() === deposit.pool.toLowerCase())
-			return pool !== undefined && pool.systemState === 1 && pool.forkOwnQuestion && pool.forkUnresolvedEscalation && pool.escalationCanTriggerOwnFork && amount(pool.forkActivationTime) > 0n && now + MINING_SAFETY_SECONDS <= amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-		})
-		return eligible(found ? undefined : 'No indexed own-fork escalation deposit is claimable before its migration deadline')
+	evaluate(snapshot, options) {
+		const obstructing = claimForkedEscalationCandidates(snapshot, options, false)
+		const actionable = claimForkedEscalationCandidates(snapshot, options)
+		const first = obstructing[0]
+		const capacityBlocker = first === undefined || actionable.length > 0 ? undefined : childRouteTopologyCapacityBlocker(snapshot, first.pool, first.outcome.toString(), options, 'Forked escalation claim child route')
+		return eligible(capacityBlocker, obstructing.length > 0 ? undefined : 'No indexed own-fork escalation deposit is claimable before its migration deadline')
 	},
 	id: 'statoblast.escalation.claim-forked',
 	label: 'Claim forked escalation deposits',
@@ -899,18 +1284,22 @@ const claimForkedEscalation: OperationDefinition = {
 	risk: 'low',
 }
 
-function unresolvedMigrationCandidates(snapshot: EcosystemSnapshot) {
+function unresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 	const now = amount(snapshot.anchor.timestamp)
 	return snapshot.pools.flatMap(pool => {
 		const deadline = amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
 		const validOutcomes = new Set(forkOutcomesForPool(snapshot, pool))
-		if (pool.systemState !== 1 || !pool.forkUnresolvedEscalation || validOutcomes.size === 0 || amount(pool.forkActivationTime) === 0n || now + MINING_SAFETY_SECONDS > deadline) return []
+		if (pool.systemState !== 1 || !pool.forkUnresolvedEscalation || validOutcomes.size === 0 || amount(pool.forkActivationTime) === 0n || !timestampDeadlineHasRequiredSafety(now, deadline, options)) return []
 		return pool.unresolvedEscalationMigrationReadyOutcomes.flatMap(outcome => {
 			const outcomeIndex = BigInt(outcome)
 			const notMaterialized = outcomeIndex > 2n || pool.walletEscalationMaterializedOutcomes[Number(outcomeIndex)] === false
 			return validOutcomes.has(outcome) && notMaterialized ? [{ deadline, outcome, pool }] : []
 		})
 	})
+}
+
+function actionableUnresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return unresolvedMigrationCandidates(snapshot, options).filter(candidate => walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Unresolved vault migration child route') === undefined)
 }
 
 function unresolvedMigrationPresenceCandidates(snapshot: EcosystemSnapshot) {
@@ -953,11 +1342,14 @@ function buildUnresolvedMigrationPlan(snapshot: EcosystemSnapshot, candidate: Re
 
 const migrateVaultWithUnresolvedEscalation: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(unresolvedMigrationCandidates(snapshot), mixSeed(options.seed, migrateVaultWithUnresolvedEscalation.id))
+		const candidate = choose(actionableUnresolvedMigrationCandidates(snapshot, options), mixSeed(options.seed, migrateVaultWithUnresolvedEscalation.id))
 		return candidate === undefined ? undefined : buildUnresolvedMigrationPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot) {
-		return unresolvedMigrationCandidates(snapshot).map(candidate => buildUnresolvedMigrationPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot, options) {
+		return actionableUnresolvedMigrationCandidates(snapshot, options).map(candidate => buildUnresolvedMigrationPlan(snapshot, candidate))
+	},
+	enumerateLifecycleObstructingPresence(snapshot, options) {
+		return unresolvedMigrationCandidates(snapshot, options).map(candidate => ({ childOutcomeIndex: candidate.outcome, pool: candidate.pool.address }))
 	},
 	enumerateLifecyclePresence(snapshot) {
 		return unresolvedMigrationPresenceCandidates(snapshot).map(candidate => ({ childOutcomeIndex: candidate.outcome, pool: candidate.pool.address }))
@@ -968,11 +1360,11 @@ const migrateVaultWithUnresolvedEscalation: OperationDefinition = {
 	discoveryInputs: ['fork activation deadline', 'unresolved fork state', 'wallet entitlement materialization bitmap'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
-		const now = amount(snapshot.anchor.timestamp)
-		const found = snapshot.pools.some(
-			pool => pool.systemState === 1 && pool.forkUnresolvedEscalation && forkOutcomesForPool(snapshot, pool).length > 0 && amount(pool.forkActivationTime) > 0n && now + MINING_SAFETY_SECONDS <= amount(pool.forkActivationTime) + MIGRATION_TIME_SECONDS && pool.unresolvedEscalationMigrationReadyOutcomes.length > 0,
-		)
-		return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', found ? undefined : 'No unresolved wallet escalation entitlement remains inside its migration window')
+		const obstructing = unresolvedMigrationCandidates(snapshot, options)
+		const actionable = actionableUnresolvedMigrationCandidates(snapshot, options)
+		const first = obstructing[0]
+		const capacityBlocker = first === undefined || actionable.length > 0 ? undefined : walletVaultMigrationRouteCapacityBlocker(snapshot, first.pool, first.outcome, options, 'Unresolved vault migration child route')
+		return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', capacityBlocker, obstructing.length > 0 ? undefined : 'No unresolved wallet escalation entitlement remains inside its migration window')
 	},
 	id: 'statoblast.fork.migrate-vault-unresolved',
 	label: 'Migrate vault with unresolved escalation',
@@ -989,12 +1381,12 @@ function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 		const oracleDeadline = amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
 		return operationDeadline < oracleDeadline ? operationDeadline : oracleDeadline
 	}
-	const candidates = (snapshot: EcosystemSnapshot) => {
+	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.stagedOperations.filter(operation => {
 			const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 			if (pool === undefined) return false
-			return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= executionDeadline(pool, operation) : now > stagedDeadline(pool, operation)
+			return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) => {
@@ -1054,14 +1446,17 @@ function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 	}
 	return {
 		buildPlan(snapshot, options) {
-			const staged = choose(candidates(snapshot), mixSeed(options.seed, id))
+			const staged = choose(candidates(snapshot, options), mixSeed(options.seed, id))
 			return staged === undefined ? undefined : build(snapshot, staged)
 		},
-		buildLifecyclePlans(snapshot) {
-			return candidates(snapshot).flatMap(staged => {
+		buildLifecyclePlans(snapshot, options) {
+			return candidates(snapshot, options).flatMap(staged => {
 				const plan = build(snapshot, staged)
 				return plan === undefined ? [] : [plan]
 			})
+		},
+		enumerateLifecycleObstructingPresence(snapshot, options) {
+			return candidates(snapshot, options).map(metadata)
 		},
 		enumerateLifecyclePresence(snapshot) {
 			return snapshot.stagedOperations.filter(operation => mode === 'expire' || operation.operation === 1).map(metadata)
@@ -1071,12 +1466,12 @@ function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 		description: `${mode === 'execute' ? 'Executes a fresh oracle-gated workflow and requires semantic success' : 'Consumes an expired workflow so it cannot block recovery'}.`,
 		discoveryInputs: ['active staged operations', 'oracle validity', 'settlement time', 'anchor timestamp', 'anchored direct mutation simulation'],
 		ecosystem: 'statoblast',
-		evaluate(snapshot) {
+		evaluate(snapshot, options) {
 			const now = amount(snapshot.anchor.timestamp)
 			const found = snapshot.stagedOperations.some(operation => {
 				const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 				if (pool === undefined) return false
-				return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && now + MINING_SAFETY_SECONDS <= executionDeadline(pool, operation) : now > stagedDeadline(pool, operation)
+				return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
 			})
 			return eligible(found ? undefined : `No staged operation is ready to ${mode}`)
 		},
@@ -1112,9 +1507,8 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 	const [method, id] = details[kind]
 	type ForkCandidate = { deadline: bigint | undefined; outcome: string; pool: PoolSnapshot }
 	type VaultMigrationCandidate = { deadline: bigint; pool: PoolSnapshot; routes: string[] }
-	const childForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.pools.find(child => child.parent.toLowerCase() === pool.address.toLowerCase() && child.forkOutcomeIndex === outcome)
 	const isOpenChildRoute = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => {
-		const child = childForOutcome(snapshot, pool, outcome)
+		const child = childPoolForOutcome(snapshot, pool, outcome)
 		return child === undefined || child.systemState === 2
 	}
 	const migrateRepPresenceCandidates = (snapshot: EcosystemSnapshot): ForkCandidate[] =>
@@ -1148,17 +1542,26 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 			return [{ deadline, pool }]
 		})
 	}
-	const vaultMigrationCandidates = (snapshot: EcosystemSnapshot): VaultMigrationCandidate[] => {
+	const vaultMigrationCandidates = (snapshot: EcosystemSnapshot, options: PlanningOptions, enforceCapacity = true): VaultMigrationCandidate[] => {
 		const now = amount(snapshot.anchor.timestamp)
 		return vaultMigrationPresenceCandidates(snapshot).flatMap(candidate => {
-			if (now + MINING_SAFETY_SECONDS > candidate.deadline) return []
-			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(outcome => isOpenChildRoute(snapshot, candidate.pool, outcome))
+			if (!timestampDeadlineHasRequiredSafety(now, candidate.deadline, options)) return []
+			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(outcome => isOpenChildRoute(snapshot, candidate.pool, outcome) && (!enforceCapacity || walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, outcome, options, 'Vault migration child route') === undefined))
 			return routes.length === 0 ? [] : [{ ...candidate, routes }]
 		})
 	}
-	const candidates = (snapshot: EcosystemSnapshot): ForkCandidate[] => {
+	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions, enforceCapacity = true): ForkCandidate[] => {
 		const now = amount(snapshot.anchor.timestamp)
-		if (kind === 'migrate-rep') return migrateRepPresenceCandidates(snapshot).filter(candidate => candidate.pool.systemState === 1 && candidate.deadline !== undefined && now + MINING_SAFETY_SECONDS <= candidate.deadline && isOpenChildRoute(snapshot, candidate.pool, candidate.outcome))
+		if (kind === 'migrate-rep') {
+			return migrateRepPresenceCandidates(snapshot).filter(
+				candidate =>
+					candidate.pool.systemState === 1 &&
+					candidate.deadline !== undefined &&
+					timestampDeadlineHasRequiredSafety(now, candidate.deadline, options) &&
+					isOpenChildRoute(snapshot, candidate.pool, candidate.outcome) &&
+					(!enforceCapacity || childUniverseTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Pool-held REP migration child universe') === undefined),
+			)
+		}
 		if (kind === 'migrate-vault') return []
 		return snapshot.pools.flatMap<ForkCandidate>(pool => {
 			const universe = snapshot.universes.find(value => value.id === pool.universeId)
@@ -1184,9 +1587,14 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 					: []
 			}
 			if (kind === 'create-child' && forkOutcomes.length === 0) return []
-			if (pool.systemState !== 1 || amount(pool.forkActivationTime) === 0n || now + MINING_SAFETY_SECONDS > deadline) return []
-			return missingChildOutcomes.map(outcome => ({ deadline, outcome, pool }))
+			if (pool.systemState !== 1 || amount(pool.forkActivationTime) === 0n || !timestampDeadlineHasRequiredSafety(now, deadline, options)) return []
+			return missingChildOutcomes.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline, outcome, pool }] : []))
 		})
+	}
+	const candidateMetadata = (candidate: ForkCandidate): Record<string, string | number | boolean> => {
+		const metadata: Record<string, string | number | boolean> = kind === 'migrate-vault' ? { pool: candidate.pool.address } : { outcome: candidate.outcome, pool: candidate.pool.address }
+		if (kind === 'migrate-rep') metadata['targetAttoRep'] = candidate.pool.forkRepMigrationTargetAttoRep
+		return metadata
 	}
 	const build = (snapshot: EcosystemSnapshot, candidate: ForkCandidate) => {
 		const outcome = candidate.outcome
@@ -1197,12 +1605,10 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 		if (kind === 'initiate') evidence = [eventEvidence(candidate.pool.address, 'PoolForkModeActivated(uint256,uint256,uint8)')]
 		else if (kind === 'create-child') evidence = [eventEvidence(snapshot.deployments.securityPoolForker, 'ChildPoolLinked(address,uint256,address,address)')]
 		else if (kind === 'migrate-vault') {
-			const child = childForOutcome(snapshot, candidate.pool, outcome)
+			const child = childPoolForOutcome(snapshot, candidate.pool, outcome)
 			evidence = [decodedVaultMigrationEvidence(snapshot, candidate.pool, 'outcomeIndex', outcome, child), decodedVaultMigrationEvidence(snapshot, candidate.pool, 'resultingParentRepBackingUnits', '0', child)]
 		} else if (kind === 'own-question') evidence = [eventEvidence(snapshot.deployments.zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')]
 		else evidence = [decodedChildRepSplitEvidence(snapshot, candidate.pool, outcome)]
-		const metadata: Record<string, string | number | boolean> = kind === 'migrate-vault' ? { pool: candidate.pool.address } : { outcome, pool: candidate.pool.address }
-		if (kind === 'migrate-rep') metadata['targetAttoRep'] = candidate.pool.forkRepMigrationTargetAttoRep
 		let postconditions = ['Fork workflow advances without violating canonical parent/child accounting']
 		if (kind === 'migrate-vault') postconditions = [`The wallet source vault reaches zero backing on the canonical outcome ${outcome} child route`]
 		if (kind === 'migrate-rep') postconditions = ['The next canonical scan confirms the indexed child REP split reached its immutable fork target, including when another keeper won the race']
@@ -1210,7 +1616,7 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 			definitionId: id,
 			ecosystem: 'statoblast',
 			label: kind === 'migrate-vault' ? `Fork workflow: migrate-vault through outcome ${outcome}` : `Fork workflow: ${kind}`,
-			metadata,
+			metadata: candidateMetadata(candidate),
 			postconditions,
 			priority: candidate.deadline === undefined ? 'random' : 'urgent',
 			risk: 'irreversible',
@@ -1236,35 +1642,45 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 	return {
 		buildPlan(snapshot, options) {
 			if (kind === 'migrate-vault') {
-				const candidate = choose(vaultMigrationCandidates(snapshot), mixSeed(options.seed, id))
+				const candidate = choose(vaultMigrationCandidates(snapshot, options), mixSeed(options.seed, id))
 				if (candidate === undefined) return undefined
 				const route = choose(candidate.routes, mixSeed(options.seed, `${id}:${candidate.pool.address.toLowerCase()}`))
 				return route === undefined ? undefined : build(snapshot, { deadline: candidate.deadline, outcome: route, pool: candidate.pool })
 			}
-			const candidate = choose(candidates(snapshot), mixSeed(options.seed, id))
+			const candidate = choose(candidates(snapshot, options), mixSeed(options.seed, id))
 			return candidate === undefined ? undefined : build(snapshot, candidate)
 		},
 		buildLifecyclePlans(snapshot, options) {
 			if (kind === 'migrate-vault') {
-				return vaultMigrationCandidates(snapshot).flatMap(candidate => {
+				return vaultMigrationCandidates(snapshot, options).flatMap(candidate => {
 					const route = choose(candidate.routes, mixSeed(options.seed, `${id}:${candidate.pool.address.toLowerCase()}`))
 					if (route === undefined) return []
 					const plan = build(snapshot, { deadline: candidate.deadline, outcome: route, pool: candidate.pool })
 					return plan === undefined ? [] : [plan]
 				})
 			}
-			return candidates(snapshot).flatMap(candidate => {
+			return candidates(snapshot, options).flatMap(candidate => {
 				const plan = build(snapshot, candidate)
 				return plan === undefined ? [] : [plan]
 			})
 		},
-		enumerateLifecyclePresence(snapshot) {
+		enumerateLifecycleObstructingPresence(snapshot, options) {
+			if (kind === 'migrate-vault') {
+				return vaultMigrationCandidates(snapshot, options, false).flatMap(candidate => {
+					const route = choose(candidate.routes, mixSeed(options.seed, `${id}:${candidate.pool.address.toLowerCase()}`))
+					if (route === undefined) return []
+					return [candidateMetadata({ deadline: candidate.deadline, outcome: route, pool: candidate.pool })]
+				})
+			}
+			return candidates(snapshot, options, false).map(candidateMetadata)
+		},
+		enumerateLifecyclePresence(snapshot, options) {
 			if (kind === 'migrate-rep') {
 				return migrateRepPresenceCandidates(snapshot).map(candidate => ({ outcome: candidate.outcome, pool: candidate.pool.address, targetAttoRep: candidate.pool.forkRepMigrationTargetAttoRep }))
 			}
 			if (kind === 'migrate-vault') return vaultMigrationPresenceCandidates(snapshot).map(candidate => ({ pool: candidate.pool.address }))
 			if (kind === 'create-child') return createChildPresenceCandidates(snapshot).map(candidate => ({ outcome: candidate.outcome, pool: candidate.pool.address }))
-			return candidates(snapshot).flatMap(candidate => {
+			return candidates(snapshot, options).flatMap(candidate => {
 				const plan = build(snapshot, candidate)
 				return plan === undefined ? [] : [plan.metadata]
 			})
@@ -1275,8 +1691,23 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 		discoveryInputs,
 		ecosystem: 'statoblast',
 		evaluate(snapshot, options) {
-			const found = kind === 'migrate-vault' ? vaultMigrationCandidates(snapshot).length > 0 : candidates(snapshot).length > 0
-			return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', found ? undefined : 'No pool is in the exact required fork phase')
+			if (kind === 'migrate-vault') {
+				const obstructing = vaultMigrationCandidates(snapshot, options, false)
+				const actionable = vaultMigrationCandidates(snapshot, options)
+				const first = obstructing[0]
+				const route = first?.routes[0]
+				const capacityBlocker = first === undefined || route === undefined || actionable.length > 0 ? undefined : walletVaultMigrationRouteCapacityBlocker(snapshot, first.pool, route, options, 'Vault migration child route')
+				return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', capacityBlocker, obstructing.length > 0 ? undefined : 'No pool is in the exact required fork phase')
+			}
+			const obstructing = candidates(snapshot, options, false)
+			const actionable = candidates(snapshot, options)
+			const first = obstructing[0]
+			let capacityBlocker: string | undefined
+			if (first !== undefined && actionable.length === 0) {
+				if (kind === 'create-child') capacityBlocker = childRouteTopologyCapacityBlocker(snapshot, first.pool, first.outcome, options, 'Child pool creation route')
+				if (kind === 'migrate-rep') capacityBlocker = childUniverseTopologyCapacityBlocker(snapshot, first.pool, first.outcome, options, 'Pool-held REP migration child universe')
+			}
+			return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', capacityBlocker, obstructing.length > 0 ? undefined : 'No pool is in the exact required fork phase')
 		},
 		id,
 		label: `Fork ${kind}`,
@@ -1291,14 +1722,23 @@ function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition
 	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.auctions.filter(candidate =>
-			kind === 'bid' ? !candidate.finalized && amount(candidate.startTime) > 0n && now + MINING_SAFETY_SECONDS < amount(candidate.endTime) && ethSpend(snapshot, options, id, amount(candidate.minimumBidAttoEth)) >= amount(candidate.minimumBidAttoEth) : amount(candidate.pendingEthRefund) > 0n,
+			kind === 'bid'
+				? !candidate.finalized && amount(candidate.startTime) > 0n && timestampDeadlineHasRequiredSafety(now, amount(candidate.endTime), options) && ethSpend(snapshot, options, id, amount(candidate.minimumBidAttoEth)) >= amount(candidate.minimumBidAttoEth)
+				: amount(candidate.pendingEthRefund) > 0n && candidate.pendingEthRefundGeneration !== undefined,
 		)
 	}
 	const build = (snapshot: EcosystemSnapshot, options: PlanningOptions, auction: EcosystemSnapshot['auctions'][number]) => {
 		const bid = kind === 'bid' ? ethSpend(snapshot, options, id, amount(auction.minimumBidAttoEth)) : 0n
 		const tick = (mixSeed(options.seed, 'auction-tick') % 20_001) - 10_000
 		const signature = kind === 'bid' ? 'BidSubmitted(address,int256,uint256,uint256,uint256)' : 'PendingEthRefundWithdrawn(address,uint256)'
-		const metadata = kind === 'bid' ? { auction: auction.address, bidAttoEth: bid.toString(), pendingRefundBefore: auction.pendingEthRefund, tick } : { auction: auction.address, pendingRefundBefore: auction.pendingEthRefund }
+		let metadata: Record<string, string | number | boolean>
+		if (kind === 'bid') {
+			metadata = { auction: auction.address, bidAttoEth: bid.toString(), pendingRefundBefore: auction.pendingEthRefund, tick }
+		} else {
+			const refundGeneration = auction.pendingEthRefundGeneration
+			if (refundGeneration === undefined) throw new Error(`Auction ${auction.address} pending refund has no authenticated generation`)
+			metadata = { auction: auction.address, refundGeneration }
+		}
 		return planBase({
 			deadlineTimestamp: kind === 'bid' ? auction.endTime : undefined,
 			definitionId: id,
@@ -1320,8 +1760,22 @@ function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition
 		buildLifecyclePlans(snapshot, options) {
 			return kind === 'withdraw-refund' ? candidates(snapshot, options).map(auction => build(snapshot, options, auction)) : []
 		},
+		enumerateLifecycleObstructingPresence(snapshot, options) {
+			return kind === 'withdraw-refund'
+				? candidates(snapshot, options).map(auction => {
+						const refundGeneration = auction.pendingEthRefundGeneration
+						if (refundGeneration === undefined) throw new Error(`Auction ${auction.address} pending refund has no authenticated generation`)
+						return { auction: auction.address, refundGeneration }
+					})
+				: []
+		},
 		enumerateLifecyclePresence(snapshot) {
-			return kind === 'withdraw-refund' ? snapshot.auctions.filter(auction => amount(auction.pendingEthRefund) > 0n).map(auction => ({ auction: auction.address, pendingRefundBefore: auction.pendingEthRefund })) : []
+			return kind === 'withdraw-refund'
+				? snapshot.auctions.flatMap(auction => {
+						const refundGeneration = auction.pendingEthRefundGeneration
+						return amount(auction.pendingEthRefund) > 0n && refundGeneration !== undefined ? [{ auction: auction.address, refundGeneration }] : []
+					})
+				: []
 		},
 		classification: kind === 'bid' ? 'selectable' : 'lifecycle-obligation',
 		contract: 'UniformPriceDualCapBatchAuction',
@@ -1331,7 +1785,9 @@ function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition
 		evaluate(snapshot, options) {
 			const now = amount(snapshot.anchor.timestamp)
 			const found = snapshot.auctions.some(auction =>
-				kind === 'bid' ? !auction.finalized && amount(auction.startTime) > 0n && now + MINING_SAFETY_SECONDS < amount(auction.endTime) && ethSpend(snapshot, options, id, amount(auction.minimumBidAttoEth)) >= amount(auction.minimumBidAttoEth) : amount(auction.pendingEthRefund) > 0n,
+				kind === 'bid'
+					? !auction.finalized && amount(auction.startTime) > 0n && timestampDeadlineHasRequiredSafety(now, amount(auction.endTime), options) && ethSpend(snapshot, options, id, amount(auction.minimumBidAttoEth)) >= amount(auction.minimumBidAttoEth)
+					: amount(auction.pendingEthRefund) > 0n && auction.pendingEthRefundGeneration !== undefined,
 			)
 			return eligible(kind === 'bid' && options.allowHighRisk !== true ? 'High-risk operations are disabled' : undefined, found ? undefined : `No auction is eligible to ${kind}`)
 		},
@@ -1382,8 +1838,11 @@ const startTruthAuction: OperationDefinition = {
 	buildLifecyclePlans(snapshot) {
 		return truthAuctionStartCandidates(snapshot).map(pool => buildTruthAuctionStartPlan(snapshot, pool))
 	},
-	enumerateLifecyclePresence(snapshot, options) {
-		return lifecycleDefinitionMetadata(startTruthAuction, snapshot, options)
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return truthAuctionStartCandidates(snapshot).map(pool => ({ pool: pool.address }))
+	},
+	enumerateLifecyclePresence(snapshot) {
+		return truthAuctionStartCandidates(snapshot).map(pool => ({ pool: pool.address }))
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPoolForker',
@@ -1444,8 +1903,11 @@ const finalizeTruthAuctionRoute: OperationDefinition = {
 	buildLifecyclePlans(snapshot) {
 		return truthAuctionFinalizeCandidates(snapshot).map(candidate => buildTruthAuctionFinalizePlan(snapshot, candidate))
 	},
-	enumerateLifecyclePresence(snapshot, options) {
-		return lifecycleDefinitionMetadata(finalizeTruthAuctionRoute, snapshot, options)
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return truthAuctionFinalizeCandidates(snapshot).map(candidate => ({ auction: candidate.auction.address, pool: candidate.pool.address }))
+	},
+	enumerateLifecyclePresence(snapshot) {
+		return truthAuctionFinalizeCandidates(snapshot).map(candidate => ({ auction: candidate.auction.address, pool: candidate.pool.address }))
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPoolForker',
@@ -1466,15 +1928,35 @@ const finalizeTruthAuctionRoute: OperationDefinition = {
 	risk: 'low',
 }
 
-function finalizedAuctionBidCandidates(snapshot: EcosystemSnapshot) {
+function finalizedAuctionBidCanCreditVault(auction: EcosystemSnapshot['auctions'][number], bid: EcosystemSnapshot['auctions'][number]['bids'][number]) {
+	if (BigInt(bid.tick) < BigInt(auction.clearingTick)) return false
+	return !auction.underfunded || amount(auction.underfundedWinningAttoEth) > 0n
+}
+
+function finalizedAuctionBidCandidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 	return snapshot.auctions.flatMap(auction => {
 		const pool = snapshot.pools.find(value => value.address.toLowerCase() === auction.pool.toLowerCase())
-		const bids = auction.bids
-			.filter(bid => !bid.refunded)
-			.sort(compareAuctionBids)
-			.slice(0, LIFECYCLE_BATCH_LIMIT)
-		return auction.finalized && pool !== undefined && bids.length > 0 ? [{ auction, bids, pool }] : []
+		if (!auction.finalized || pool === undefined) return []
+		const bids = auction.bids.filter(bid => !bid.refunded).sort(compareAuctionBids)
+		const batches = [...lifecycleBatches(bids.filter(bid => !finalizedAuctionBidCanCreditVault(auction, bid))), ...lifecycleBatches(bids.filter(bid => finalizedAuctionBidCanCreditVault(auction, bid)))]
+		return batches.flatMap(batch => {
+			const canCreditVault = batch.some(bid => finalizedAuctionBidCanCreditVault(auction, bid))
+			if (options !== undefined && canCreditVault && walletVaultRegistrationCapacityBlocker(pool, options, 'Winning auction settlement vault registration') !== undefined) return []
+			return [{ auction, bids: batch, pool }]
+		})
 	})
+}
+
+function finalizedAuctionBidMetadata(candidate: ReturnType<typeof finalizedAuctionBidCandidates>[number]) {
+	return {
+		auction: candidate.auction.address,
+		bidCount: candidate.bids.length,
+		bidKeys: candidate.bids
+			.map(bid => `${bid.tick}:${bid.index}`)
+			.sort()
+			.join(','),
+		pool: candidate.pool.address,
+	}
 }
 
 function buildSettleAuctionBidsPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof finalizedAuctionBidCandidates>[number]) {
@@ -1483,15 +1965,7 @@ function buildSettleAuctionBidsPlan(snapshot: EcosystemSnapshot, candidate: Retu
 		definitionId: settleAuctionBids.id,
 		ecosystem: 'statoblast',
 		label: settleAuctionBids.label,
-		metadata: {
-			auction: candidate.auction.address,
-			bidCount: tickIndices.length,
-			bidKeys: candidate.bids
-				.map(bid => `${bid.tick}:${bid.index}`)
-				.sort()
-				.join(','),
-			pool: candidate.pool.address,
-		},
+		metadata: finalizedAuctionBidMetadata(candidate),
 		postconditions: ['Every selected wallet bid emits BidSettled and is pruned from the durable index'],
 		priority: 'urgent',
 		risk: 'low',
@@ -1512,23 +1986,29 @@ function buildSettleAuctionBidsPlan(snapshot: EcosystemSnapshot, candidate: Retu
 
 const settleAuctionBids: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(finalizedAuctionBidCandidates(snapshot), mixSeed(options.seed, settleAuctionBids.id))
+		const candidate = choose(finalizedAuctionBidCandidates(snapshot, options), mixSeed(options.seed, settleAuctionBids.id))
 		return candidate === undefined ? undefined : buildSettleAuctionBidsPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot) {
-		return finalizedAuctionBidCandidates(snapshot).map(candidate => buildSettleAuctionBidsPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot, options) {
+		return finalizedAuctionBidCandidates(snapshot, options).map(candidate => buildSettleAuctionBidsPlan(snapshot, candidate))
 	},
-	enumerateLifecyclePresence(snapshot, options) {
-		return lifecycleDefinitionMetadata(settleAuctionBids, snapshot, options)
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return finalizedAuctionBidCandidates(snapshot).map(finalizedAuctionBidMetadata)
+	},
+	enumerateLifecyclePresence(snapshot) {
+		return finalizedAuctionBidCandidates(snapshot).map(finalizedAuctionBidMetadata)
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPoolForker',
 	description: 'Settles all canonically indexed wallet bids after the forker-owned auction finalizes.',
 	discoveryInputs: ['canonical wallet bid index', 'auction finalization state', 'pool/auction route'],
 	ecosystem: 'statoblast',
-	evaluate(snapshot) {
-		const found = snapshot.auctions.some(auction => auction.finalized && auction.bids.some(bid => !bid.refunded) && snapshot.pools.some(pool => pool.address.toLowerCase() === auction.pool.toLowerCase()))
-		return eligible(found ? undefined : 'No finalized indexed wallet bid remains unsettled')
+	evaluate(snapshot, options) {
+		const obstructing = finalizedAuctionBidCandidates(snapshot)
+		const actionable = finalizedAuctionBidCandidates(snapshot, options)
+		const firstWinning = obstructing.find(candidate => candidate.bids.some(bid => finalizedAuctionBidCanCreditVault(candidate.auction, bid)))
+		const capacityBlocker = firstWinning === undefined || actionable.length > 0 ? undefined : walletVaultRegistrationCapacityBlocker(firstWinning.pool, options, 'Winning auction settlement vault registration')
+		return eligible(capacityBlocker, obstructing.length > 0 ? undefined : 'No finalized indexed wallet bid remains unsettled')
 	},
 	id: 'statoblast.auction.settle-bids',
 	label: 'Settle auction bids',
@@ -1536,40 +2016,32 @@ const settleAuctionBids: OperationDefinition = {
 	risk: 'low',
 }
 
-const claimAuctionProceeds: OperationDefinition = {
-	buildPlan: () => undefined,
-	classification: 'prerequisite',
-	contract: 'SecurityPoolForker',
-	description: 'Alias of settleAuctionBids for the same finalized bids; the canonical lifecycle planner uses one route to avoid duplicate durable obligations.',
-	discoveryInputs: ['canonical wallet bid index', 'auction finalization state', 'pool/auction route'],
-	ecosystem: 'statoblast',
-	evaluate: () => disabled('The canonical settleAuctionBids lifecycle route consumes the identical finalized bid set'),
-	id: 'statoblast.auction.claim',
-	label: 'Claim auction proceeds',
-	method: 'claimAuctionProceeds',
-	risk: 'low',
-}
-
 function escalationWithdrawalCandidates(snapshot: EcosystemSnapshot) {
 	return snapshot.pools.flatMap(pool => {
 		if (pool.systemState !== 0 || pool.questionOutcome === BINARY_OUTCOME_NONE || !escalationWithdrawalSafe(snapshot, pool)) return []
-		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase())
-		return [...new Set(deposits.map(deposit => deposit.outcome))].map(outcome => ({ deposits: deposits.filter(deposit => deposit.outcome === outcome), outcome, pool }))
+		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase()).sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
+		return [...new Set(deposits.map(deposit => deposit.outcome))].flatMap(outcome => lifecycleBatches(deposits.filter(deposit => deposit.outcome === outcome)).map(batch => ({ deposits: batch, outcome, pool })))
 	})
 }
 
+function escalationWithdrawalIndexes(candidate: ReturnType<typeof escalationWithdrawalCandidates>[number]) {
+	return [...candidate.deposits].sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex)).map(deposit => BigInt(deposit.depositIndex))
+}
+
+function escalationWithdrawalMetadata(candidate: ReturnType<typeof escalationWithdrawalCandidates>[number]) {
+	const indexes = escalationWithdrawalIndexes(candidate)
+	return { depositCount: indexes.length, depositIndexes: indexes.map(index => index.toString()).join(','), outcome: candidate.outcome, pool: candidate.pool.address }
+}
+
 function buildEscalationWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof escalationWithdrawalCandidates>[number]) {
-	const indexes = [...candidate.deposits]
-		.sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
-		.slice(0, LIFECYCLE_BATCH_LIMIT)
-		.map(deposit => BigInt(deposit.depositIndex))
+	const indexes = escalationWithdrawalIndexes(candidate)
 	const winning = candidate.outcome === candidate.pool.questionOutcome
 	const signature = winning ? 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)' : 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
 	return planBase({
 		definitionId: withdrawEscalation.id,
 		ecosystem: 'statoblast',
 		label: withdrawEscalation.label,
-		metadata: { depositCount: indexes.length, depositIndexes: indexes.map(index => index.toString()).join(','), outcome: candidate.outcome, pool: candidate.pool.address },
+		metadata: escalationWithdrawalMetadata(candidate),
 		postconditions: [winning ? 'Every selected winning deposit emits ClaimDeposit and is marked terminal by the canonical index' : 'Every selected losing deposit emits CarryDepositConsumed and is marked terminal by the canonical index'],
 		priority: 'urgent',
 		risk: 'low',
@@ -1586,8 +2058,11 @@ const withdrawEscalation: OperationDefinition = {
 	buildLifecyclePlans(snapshot) {
 		return escalationWithdrawalCandidates(snapshot).map(candidate => buildEscalationWithdrawalPlan(snapshot, candidate))
 	},
-	enumerateLifecyclePresence(snapshot, options) {
-		return lifecycleDefinitionMetadata(withdrawEscalation, snapshot, options)
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return escalationWithdrawalCandidates(snapshot).map(escalationWithdrawalMetadata)
+	},
+	enumerateLifecyclePresence(snapshot) {
+		return escalationWithdrawalCandidates(snapshot).map(escalationWithdrawalMetadata)
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPool',
@@ -1648,6 +2123,9 @@ const refundLosingAuctionBids: OperationDefinition = {
 	},
 	buildLifecyclePlans(snapshot) {
 		return refundableAuctionCandidates(snapshot).map(candidate => buildAuctionRefundPlan(snapshot, candidate))
+	},
+	enumerateLifecycleObstructingPresence(snapshot) {
+		return refundableAuctionCandidates(snapshot).map(candidate => ({ auction: candidate.auction.address, bidIndex: candidate.bid.index, tick: candidate.bid.tick }))
 	},
 	enumerateLifecyclePresence(snapshot) {
 		return snapshot.auctions.flatMap(auction =>
@@ -1817,13 +2295,32 @@ function buildForkedCarryWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: 
 	})
 }
 
+function actionableForkedCarryWithdrawals(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return (snapshot.forkedCarryWithdrawals ?? []).filter(candidate => {
+		if (candidate.depositor.toLowerCase() !== snapshot.wallet.address.toLowerCase()) return false
+		const pool = snapshot.pools.find(value => value.address.toLowerCase() === candidate.pool.toLowerCase())
+		return pool !== undefined && walletVaultRegistrationCapacityBlocker(pool, options, 'Forked carry withdrawal vault registration') === undefined
+	})
+}
+
 const withdrawForkedCarry: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(snapshot.forkedCarryWithdrawals ?? [], mixSeed(options.seed, withdrawForkedCarry.id))
+		const candidate = choose(actionableForkedCarryWithdrawals(snapshot, options), mixSeed(options.seed, withdrawForkedCarry.id))
 		return candidate === undefined ? undefined : buildForkedCarryWithdrawalPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot) {
-		return (snapshot.forkedCarryWithdrawals ?? []).map(candidate => buildForkedCarryWithdrawalPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot, options) {
+		return actionableForkedCarryWithdrawals(snapshot, options).map(candidate => buildForkedCarryWithdrawalPlan(snapshot, candidate))
+	},
+	enumerateLifecycleObstructingPresence(snapshot) {
+		if (snapshot.forkedCarryWithdrawalPresence === undefined) {
+			return (snapshot.forkedCarryWithdrawals ?? []).map(forkedCarryMetadata)
+		}
+		return snapshot.forkedCarryWithdrawalPresence
+			.filter(candidate => {
+				const pool = snapshot.pools.find(value => value.address.toLowerCase() === candidate.pool.toLowerCase())
+				return pool !== undefined && pool.escalationGame.toLowerCase() === candidate.game.toLowerCase() && pool.systemState === 0 && pool.escalationResolved && pool.forkCarrySnapshotInitialized && pool.escalationFinalQuestionResolution === candidate.outcome && pool.questionOutcome === candidate.outcome
+			})
+			.map(forkedCarryMetadata)
 	},
 	enumerateLifecyclePresence(snapshot) {
 		return (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).map(forkedCarryMetadata)
@@ -1833,7 +2330,14 @@ const withdrawForkedCarry: OperationDefinition = {
 	description: 'Withdraws one canonically replayed, anchor-verified inherited escalation deposit per private next-block transaction.',
 	discoveryInputs: ['durable carry journal', 'historical MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
 	ecosystem: 'statoblast',
-	evaluate: snapshot => eligible((snapshot.forkedCarryWithdrawals?.length ?? 0) > 0 ? undefined : 'No verified wallet-owned inherited escalation deposit is withdrawable'),
+	evaluate(snapshot, options) {
+		const verified = snapshot.forkedCarryWithdrawals ?? []
+		const actionable = actionableForkedCarryWithdrawals(snapshot, options)
+		const first = verified.find(candidate => candidate.depositor.toLowerCase() === snapshot.wallet.address.toLowerCase())
+		const pool = first === undefined ? undefined : snapshot.pools.find(value => value.address.toLowerCase() === first.pool.toLowerCase())
+		const capacityBlocker = pool === undefined || actionable.length > 0 ? undefined : walletVaultRegistrationCapacityBlocker(pool, options, 'Forked carry withdrawal vault registration')
+		return eligible(capacityBlocker, verified.length > 0 ? undefined : 'No verified wallet-owned inherited escalation deposit is withdrawable', first !== undefined ? undefined : 'Verified inherited escalation deposit is not owned by the configured wallet')
+	},
 	id: 'statoblast.escalation.withdraw-forked',
 	label: 'Withdraw forked escalation deposits',
 	method: 'withdrawForkedEscalationDeposits',
@@ -1870,7 +2374,6 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	startTruthAuction,
 	finalizeTruthAuctionRoute,
 	settleAuctionBids,
-	claimAuctionProceeds,
 	auctionDefinition('bid'),
 	auctionDefinition('withdraw-refund'),
 	withdrawEscalation,

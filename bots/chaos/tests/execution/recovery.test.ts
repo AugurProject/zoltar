@@ -1,10 +1,11 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, getAddress, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
+import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
+import { securityPoolAbi } from '../../src/contracts/abi.ts'
 import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, recoverPendingTransactions, transactionIsStrictNonceCancellation } from '../../src/execution/recovery.ts'
-import type { ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { TransactionAwaitingRecovery, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { createDurableWorkflow, markWorkflowStepSigned, markWorkflowStepSubmitted } from '../../src/runtime/workflows.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, loadRuntimeState, saveDurableState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
@@ -40,6 +41,7 @@ type RecoveryRpcOptions = {
 	gasEstimate?: RecoveryGasEstimateOutcome | undefined
 	head?: bigint | undefined
 	repBalances?: { credit: bigint; wallet: bigint } | undefined
+	vaultBacking?: { amountAttoRep: bigint; vault: `0x${string}` } | undefined
 }
 
 function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${string}`, options: RecoveryRpcOptions = {}) {
@@ -49,6 +51,8 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 	let currentHead = options.head ?? 99n
 	let currentNonce = 3n
 	let ethCallHook: (() => void) | undefined
+	const vaultCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [options.vaultBacking.vault], functionName: 'securityVaults' })
+	const backingCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [10n], functionName: 'backingUnitsToAttoRep' })
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
@@ -73,6 +77,15 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 				case 'eth_getTransactionReceipt':
 					return Response.json({ id, jsonrpc: '2.0', result: null })
 				case 'eth_call':
+					if (options.vaultBacking !== undefined && 'params' in body && Array.isArray(body.params)) {
+						const transaction = rpcRequest(body.params[0])
+						const to = 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : undefined
+						const data = 'data' in transaction && typeof transaction.data === 'string' ? transaction.data.toLowerCase() : undefined
+						if (to === target.toLowerCase() && data === vaultCall) {
+							return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [10n, 0n, 0n, 0n]) })
+						}
+						if (to === target.toLowerCase() && data === backingCall) return Response.json({ id, jsonrpc: '2.0', result: toHex(options.vaultBacking.amountAttoRep, { size: 32 }) })
+					}
 					if (options.repBalances !== undefined && 'params' in body && Array.isArray(body.params)) {
 						const transaction = rpcRequest(body.params[0])
 						const to = 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : undefined
@@ -243,7 +256,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			zoltar: zeroAddress,
 		},
 		discovery: { maxPools: 1, maxQuestions: 1, maxStagedOperationsPerPool: 1, maxUniverses: 1, maxVaultsPerPool: 1 },
-		network: { chainId: 1, explorerUrl: '', name: 'mainnet' },
+		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,
 		privateKey: undefined,
@@ -277,20 +290,29 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 
 type FinalizedRecoveryRpcState = {
 	account: `0x${string}`
+	cancellationHash?: `0x${string}` | undefined
 	originalHash: `0x${string}`
 	receiptHash: `0x${string}`
+	receiptStatus: '0x0' | '0x1'
 	replacementHash?: `0x${string}` | undefined
+	signerCode: `0x${string}`
+	transactionType: '0x2' | '0x4'
 }
 
 function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
+	const requestedCodeBlocks: string[] = []
+	const requestedMethods: string[] = []
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
 			const body = rpcRequest(await request.json())
 			if (!('method' in body) || typeof body.method !== 'string') return new Response('Expected a JSON-RPC method', { status: 400 })
+			requestedMethods.push(body.method)
 			const id = 'id' in body ? body.id : 1
 			const params = 'params' in body && Array.isArray(body.params) ? body.params : []
 			const requestedHash = params[0]
+			const isReplacement = typeof requestedHash === 'string' && requestedHash.toLowerCase() === state.replacementHash?.toLowerCase()
+			const isCancellation = typeof requestedHash === 'string' && requestedHash.toLowerCase() === state.cancellationHash?.toLowerCase()
 			switch (body.method) {
 				case 'eth_chainId':
 					return Response.json({ id, jsonrpc: '2.0', result: '0x1' })
@@ -301,20 +323,20 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 						id,
 						jsonrpc: '2.0',
 						result:
-							typeof requestedHash === 'string' && requestedHash.toLowerCase() === state.replacementHash?.toLowerCase()
+							isReplacement || isCancellation
 								? {
 										blockHash: recoveryReceiptBlockHash,
 										blockNumber: toHex(100n),
 										from: state.account,
 										gas: toHex(100_000n),
-										hash: state.replacementHash,
-										input: '0x1234',
+										hash: requestedHash,
+										input: isCancellation ? '0x' : '0x1234',
 										maxFeePerGas: '0x3',
 										maxPriorityFeePerGas: '0x1',
 										nonce: '0x3',
-										to: target,
+										to: isCancellation ? state.account : target,
 										transactionIndex: '0x0',
-										type: '0x2',
+										type: state.transactionType,
 										value: '0x0',
 									}
 								: null,
@@ -335,14 +357,18 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 										gasUsed: '0x5208',
 										logs: [],
 										logsBloom: `0x${'00'.repeat(256)}`,
-										status: '0x1',
-										to: target,
+										status: state.receiptStatus,
+										to: state.cancellationHash?.toLowerCase() === state.receiptHash.toLowerCase() ? state.account : target,
 										transactionHash: state.receiptHash,
 										transactionIndex: '0x0',
-										type: '0x2',
+										type: state.transactionType,
 									}
 								: null,
 					})
+				case 'eth_getCode':
+					if (params[0]?.toString().toLowerCase() !== state.account.toLowerCase() || typeof params[1] !== 'string') return new Response('Unexpected signer code request', { status: 400 })
+					requestedCodeBlocks.push(params[1])
+					return Response.json({ id, jsonrpc: '2.0', result: state.signerCode })
 				case 'eth_getBlockByNumber': {
 					if (typeof params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
 					const blockNumber = BigInt(params[0])
@@ -381,10 +407,22 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 	})
 	servers.push(server)
 	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
-	return `http://127.0.0.1:${server.port.toString()}`
+	return {
+		requestedCodeBlocks,
+		requestedMethods,
+		url: `http://127.0.0.1:${server.port.toString()}`,
+	}
 }
 
-async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
+type FinalizedRecoveryMode = 'cancellation' | 'original' | 'replacement'
+type FinalizedRecoveryOutcome = 'revert' | 'semantic-failure' | 'success'
+
+type FinalizedRecoveryOptions = {
+	signerCode?: `0x${string}` | undefined
+	transactionType?: '0x2' | '0x4' | undefined
+}
+
+async function finalizedRecoveryEnvironment(mode: FinalizedRecoveryMode, outcome: FinalizedRecoveryOutcome = 'success', options: FinalizedRecoveryOptions = {}) {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-finalized-recovery-')
 	directories.push(directory)
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
@@ -400,21 +438,28 @@ async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
 	})
 	const originalHash = keccak256(serializedTransaction)
 	const replacementHash = `0x${'99'.repeat(32)}` as const
+	const cancellationHash = `0x${'88'.repeat(32)}` as const
+	const receiptHashByMode = { cancellation: cancellationHash, original: originalHash, replacement: replacementHash }
 	const rpcState: FinalizedRecoveryRpcState = {
 		account: account.address,
+		...(mode === 'cancellation' ? { cancellationHash } : {}),
 		originalHash,
-		receiptHash: mode === 'original' ? originalHash : replacementHash,
+		receiptHash: receiptHashByMode[mode],
+		receiptStatus: outcome === 'revert' ? '0x0' : '0x1',
 		...(mode === 'replacement' ? { replacementHash } : {}),
+		signerCode: options.signerCode ?? '0x',
+		transactionType: options.transactionType ?? '0x2',
 	}
-	const firstUrl = finalizedRecoveryRpcServer(rpcState)
-	const secondUrl = finalizedRecoveryRpcServer(rpcState)
+	const first = finalizedRecoveryRpcServer(rpcState)
+	const second = finalizedRecoveryRpcServer(rpcState)
 	const stateFile = join(directory, 'state.json')
-	const settings = recoverySettings(firstUrl, [secondUrl], stateFile)
+	const settings = recoverySettings(first.url, [second.url], stateFile)
 	const plan = canonicalLifecycleRecoveryPlan()
 	const workflow = createDurableWorkflow(plan)
 	const step = plan.steps[0]
 	if (step === undefined) throw new Error('Recovery test plan is missing its step')
 	const intent: PendingTransactionIntent = {
+		...(mode === 'cancellation' ? { cancellationHash } : {}),
 		data: '0x1234',
 		hash: originalHash,
 		id: `intent:${originalHash.slice(2)}`,
@@ -424,7 +469,12 @@ async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
 		nonce: 3n,
 		operationId: plan.definitionId,
 		...(mode === 'replacement' ? { replacementHash } : {}),
-		semanticExpectation: { balanceBaselines: [], evidence: step.evidence, postconditions: plan.postconditions, storageBaselines: [] },
+		semanticExpectation: {
+			balanceBaselines: [],
+			evidence: outcome === 'semantic-failure' ? [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }] : step.evidence,
+			postconditions: plan.postconditions,
+			storageBaselines: [],
+		},
 		sender: account.address,
 		serializedTransaction,
 		signedAt: new Date().toISOString(),
@@ -443,7 +493,7 @@ async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
 	state.workflows.push(workflow)
 	await saveDurableState(stateFile, state)
 	const recoveredState = await loadRuntimeState(stateFile, false, account.address, 1)
-	const pool = createRpcEndpointPool([firstUrl, secondUrl])
+	const pool = createRpcEndpointPool([first.url, second.url])
 	return {
 		environment: {
 			chain: mainnet,
@@ -453,8 +503,38 @@ async function finalizedRecoveryEnvironment(mode: 'original' | 'replacement') {
 			settings,
 			state: recoveredState,
 		} satisfies ExecutionEnvironment,
+		requestedCodeBlocks: [first.requestedCodeBlocks, second.requestedCodeBlocks],
+		requestedMethods: [first.requestedMethods, second.requestedMethods],
 		state: recoveredState,
 		stateFile,
+	}
+}
+
+type RecoveryDispositionCollections = Pick<ExecutionEnvironment['state'], 'activities' | 'pendingTransactions' | 'workflows'>
+
+function recoveryDispositionCollections(state: RecoveryDispositionCollections) {
+	return structuredClone({
+		activities: state.activities,
+		pendingTransactions: state.pendingTransactions,
+		workflows: state.workflows,
+	})
+}
+
+function failRecoveryDispositionPersistence(environment: ExecutionEnvironment) {
+	const submittedJournal = recoveryDispositionCollections(environment.state)
+	let persistenceCalls = 0
+	let failed = false
+	environment.persistState = async state => {
+		persistenceCalls += 1
+		await saveDurableState(environment.settings.runtime.stateFile, state)
+		if (!failed && state.pendingTransactions.length === 0) {
+			failed = true
+			throw new Error('injected recovery disposition persistence failure')
+		}
+	}
+	return {
+		persistenceCalls: () => persistenceCalls,
+		submittedJournal,
 	}
 }
 
@@ -472,6 +552,8 @@ type RecoveryEnvironmentOptions = {
 	thirdGasEstimate?: RecoveryGasEstimateOutcome | undefined
 	transactionValue?: bigint | undefined
 	unavailableThirdAttester?: boolean | undefined
+	vaultBackingAttoRep?: bigint | undefined
+	vaultRepDebit?: bigint | undefined
 }
 
 async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {}) {
@@ -489,7 +571,12 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 		value: options.transactionValue ?? 0n,
 	})
 	const hash = keccak256(serializedTransaction)
-	const commonRpcOptions = { baseFeePerGas: options.baseFeePerGas, ethBalanceAttoEth: options.ethBalanceAttoEth, repBalances: options.repBalances }
+	const commonRpcOptions = {
+		baseFeePerGas: options.baseFeePerGas,
+		ethBalanceAttoEth: options.ethBalanceAttoEth,
+		repBalances: options.repBalances,
+		vaultBacking: options.vaultBackingAttoRep === undefined ? undefined : { amountAttoRep: options.vaultBackingAttoRep, vault: account.address },
+	}
 	const first = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, commonRpcOptions)
 	const second = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, { ...commonRpcOptions, ethBalanceAttoEthUnavailable: options.secondEthBalanceAttoEthUnavailable })
 	const needsThird = options.unavailableThirdAttester === true || options.thirdGasEstimate !== undefined || options.catchUpThirdDuringReplay === true || options.secondEthBalanceAttoEthUnavailable === true
@@ -521,6 +608,11 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 		if (step === undefined) throw new Error('Recovery test plan is missing its step')
 		step.walletAssetDebits = [{ amount: '40', asset: target, category: 'rep', kind: 'open-oracle-credit', openOracle }]
 		settings.strategy.minimumRepReserveAttoRep = 70n
+	}
+	if (options.vaultRepDebit !== undefined) {
+		const step = plan.steps[0]
+		if (step === undefined) throw new Error('Recovery test plan is missing its step')
+		step.walletAssetDebits = [{ amount: options.vaultRepDebit.toString(), category: 'rep', kind: 'security-pool-vault-rep', pool: target, vault: account.address }]
 	}
 	const workflow = createDurableWorkflow(plan)
 	const intent: PendingTransactionIntent = {
@@ -590,6 +682,29 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 }
 
 describe('pending chaos transaction recovery decisions', () => {
+	describe('atomic recovery disposition persistence', () => {
+		test.each([
+			{ mode: 'original', outcome: 'success', scenario: 'successful original receipt' },
+			{ mode: 'original', outcome: 'revert', scenario: 'reverted original receipt' },
+			{ mode: 'original', outcome: 'semantic-failure', scenario: 'semantically invalid original receipt' },
+			{ mode: 'replacement', outcome: 'success', scenario: 'successful exact replacement' },
+			{ mode: 'replacement', outcome: 'revert', scenario: 'reverted exact replacement' },
+			{ mode: 'cancellation', outcome: 'success', scenario: 'verified nonce cancellation' },
+		] satisfies readonly { mode: FinalizedRecoveryMode; outcome: FinalizedRecoveryOutcome; scenario: string }[])('retains the submitted journal when $scenario disposition persistence fails', async ({ mode, outcome }) => {
+			const fixture = await finalizedRecoveryEnvironment(mode, outcome)
+			const failure = failRecoveryDispositionPersistence(fixture.environment)
+
+			await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+
+			expect(failure.persistenceCalls()).toBe(2)
+			expect(recoveryDispositionCollections(fixture.state)).toEqual(failure.submittedJournal)
+			const durable = await loadDurableState(fixture.stateFile, 1)
+			expect(recoveryDispositionCollections(durable)).toEqual(failure.submittedJournal)
+			expect(fixture.state.pendingTransactions).toHaveLength(1)
+			expect(fixture.state.workflows[0]?.status).toBe('waiting-transaction')
+		})
+	})
+
 	test('restores a persisted successful empty-log receipt as waiting for canonical confirmation', async () => {
 		const fixture = await finalizedRecoveryEnvironment('original')
 
@@ -614,6 +729,40 @@ describe('pending chaos transaction recovery decisions', () => {
 		const durable = await loadDurableState(fixture.stateFile, 1)
 		expect(durable.pendingTransactions).toHaveLength(0)
 		expect(durable.workflows[0]?.status).toBe('waiting-obligation')
+	})
+
+	test.each([
+		{ mode: 'replacement', subject: 'Replacement transaction' },
+		{ mode: 'cancellation', subject: 'Nonce cancellation' },
+	] satisfies readonly { mode: 'cancellation' | 'replacement'; subject: string }[])('rejects an otherwise exact EIP-7702 $mode without changing recovery state', async ({ mode, subject }) => {
+		const fixture = await finalizedRecoveryEnvironment(mode, 'success', { transactionType: '0x4' })
+		const before = recoveryDispositionCollections(fixture.state)
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toThrow(`${subject} must use a bot-compatible EIP-1559 transaction`)
+
+		expect(recoveryDispositionCollections(fixture.state)).toEqual(before)
+		expect(recoveryDispositionCollections(await loadDurableState(fixture.stateFile, 1))).toEqual(before)
+	})
+
+	test('rejects a type-2 nonce cancellation when the signer has code at the finalized receipt block', async () => {
+		const fixture = await finalizedRecoveryEnvironment('cancellation', 'success', { signerCode: `0xef0100${'22'.repeat(20)}` })
+		const before = recoveryDispositionCollections(fixture.state)
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toThrow('Nonce cancellation signer has code at its finalized receipt block')
+
+		expect(recoveryDispositionCollections(fixture.state)).toEqual(before)
+		expect(recoveryDispositionCollections(await loadDurableState(fixture.stateFile, 1))).toEqual(before)
+	})
+
+	test('accepts a type-2 nonce cancellation only with quorum-proven empty signer code at the receipt block', async () => {
+		const fixture = await finalizedRecoveryEnvironment('cancellation')
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).resolves.toBe(true)
+
+		expect(fixture.state.pendingTransactions).toHaveLength(0)
+		expect(fixture.state.workflows[0]?.status).toBe('failed')
+		for (const requestedMethods of fixture.requestedMethods) expect(requestedMethods).toContain('eth_getCode')
+		for (const requestedBlocks of fixture.requestedCodeBlocks) expect(requestedBlocks).toEqual([toHex(100n)])
 	})
 
 	test('resubmits when exact-attester ETH funding equals the signed maximum cost plus reserve', async () => {
@@ -693,6 +842,7 @@ describe('pending chaos transaction recovery decisions', () => {
 	test.each([
 		{ options: { maximumEthPerOperationAttoEth: 4n, transactionValue: 5n }, policy: 'strategy.maximumEthPerOperation' },
 		{ options: { maximumRepPerOperationAttoRep: 39n, repBalances: { credit: 1_000n, wallet: 1_000n } }, policy: 'strategy.maximumRepPerOperation' },
+		{ options: { maximumRepPerOperationAttoRep: 39n, vaultRepDebit: 40n }, policy: 'strategy.maximumRepPerOperation' },
 	])('retains identical bytes when the current principal cap tightens below $policy', async ({ options, policy }) => {
 		const fixture = await forkedRecoveryEnvironment(options)
 
@@ -724,6 +874,16 @@ describe('pending chaos transaction recovery decisions', () => {
 			expect(methods).not.toContain('eth_estimateGas')
 			expect(methods).not.toContain('eth_sendRawTransaction')
 		}
+		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
+		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')
+	})
+
+	test('revalidates SecurityPool vault REP backing before identical-byte resubmission', async () => {
+		const fixture = await forkedRecoveryEnvironment({ vaultBackingAttoRep: 39n, vaultRepDebit: 40n })
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('no longer has the declared SecurityPool vault REP backing')
+
+		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')
 	})
@@ -858,6 +1018,19 @@ describe('pending chaos transaction recovery decisions', () => {
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 	})
 
+	test('enters manual reconciliation before consulting stale transaction visibility after a nonce mismatch', async () => {
+		const fixture = await forkedRecoveryEnvironment()
+		fixture.setNonces(4n)
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('Signer nonce 3 was consumed without a quorum receipt')
+
+		for (const methods of fixture.requestedMethods) {
+			expect(methods).not.toContain('eth_getTransactionByHash')
+			expect(methods).not.toContain('eth_sendRawTransaction')
+		}
+		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toContain('was consumed without a quorum receipt')
+	})
+
 	test('rechecks the pending nonce after recovery simulation before journaling a broadcast', async () => {
 		const fixture = await forkedRecoveryEnvironment()
 		fixture.consumeNonceDuringReplay()
@@ -951,6 +1124,12 @@ describe('pending chaos transaction recovery decisions', () => {
 		expect(pendingIntentRecoveryAction({ maxBlockNumber: 100n, mode: 'public', nonce: 7n }, 7n, [101n, 102n], 12n, true, 2)).toBe('wait-known-pending')
 	})
 
+	test('requires manual reconciliation when nonce state contradicts cached exact-hash visibility', () => {
+		const intent = { maxBlockNumber: 100n, mode: 'public' as const, nonce: 7n }
+		expect(pendingIntentRecoveryAction(intent, 8n, [101n, 102n], 12n, true, 2)).toBe('manual-reconciliation')
+		expect(pendingIntentRecoveryAction(intent, 6n, [101n, 102n], 12n, true, 2)).toBe('manual-reconciliation')
+	})
+
 	test('never changes a pending transaction between private and public submission', () => {
 		expect(() => assertRecoverySubmissionMode('private', 'public')).toThrow('requires submission.mode to remain private')
 		expect(() => assertRecoverySubmissionMode('public', 'private')).toThrow('requires submission.mode to remain public')
@@ -964,6 +1143,7 @@ describe('pending chaos transaction recovery decisions', () => {
 			input: '0x',
 			nonce: 7n,
 			to: sender,
+			type: 'eip1559',
 			value: 0n,
 		}
 		expect(
@@ -974,5 +1154,6 @@ describe('pending chaos transaction recovery decisions', () => {
 		).toBeTrue()
 		expect(transactionIsStrictNonceCancellation({ ...cancellation, input: '0x00' }, { nonce: 7n, sender })).toBeFalse()
 		expect(transactionIsStrictNonceCancellation({ ...cancellation, to: '0x0000000000000000000000000000000000000002' }, { nonce: 7n, sender })).toBeFalse()
+		expect(transactionIsStrictNonceCancellation({ ...cancellation, type: 'eip7702' }, { nonce: 7n, sender })).toBeFalse()
 	})
 })

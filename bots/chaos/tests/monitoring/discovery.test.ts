@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, type Address } from '../support/bot-shared.ts'
+import { encodeAbiParameters, type Abi, type Address } from '../support/bot-shared.ts'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
@@ -25,7 +25,8 @@ import {
 	trustedIndexedReportsForDiscovery,
 	type ChaosReadClient,
 } from '../../src/monitoring/discovery.ts'
-import type { OracleGameSnapshot } from '../../src/operations/types.ts'
+import { canonicalLifecyclePresence, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
@@ -56,6 +57,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
 	forkerZoltar?: Address
 	historicalBlockErrors?: readonly string[]
@@ -89,12 +91,12 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			requestedBlock = parameters.blockNumber
 			const number = parameters.blockNumber ?? anchorBlockNumber
 			if (graph.historicalBlockErrors?.includes(number.toString()) === true) throw new Error(`Historical block ${number.toString()} unavailable`)
-			return { hash: graph.historicalBlockHashes?.[number.toString()] ?? (number === anchorBlockNumber ? blockHash : hash(Number(number))), number, timestamp: 1_000n }
+			return { baseFeePerGas: graph.baseFeePerGas === undefined ? 1n : graph.baseFeePerGas, hash: graph.historicalBlockHashes?.[number.toString()] ?? (number === anchorBlockNumber ? blockHash : hash(Number(number))), number, timestamp: 1_000n }
 		},
 		async getChainId() {
 			return 31337
 		},
-		async readContract(parameters: { address?: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
 			pinnedReads.push(parameters.blockNumber)
 			contractReads.push({ ...(parameters.args === undefined ? {} : { args: parameters.args }), functionName: parameters.functionName })
 			if ((parameters.functionName === 'balanceOf' || parameters.functionName === 'allowance') && parameters.address !== undefined && poisonToken !== undefined && parameters.address.toLowerCase() === poisonToken.toLowerCase()) {
@@ -183,6 +185,174 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 	return { client, contractReads, pinnedReads, requested: () => requestedBlock }
 }
 
+interface RefundBackfillOverrides {
+	auctionFinalized?: boolean
+	computedClearing?: readonly [boolean, bigint, bigint, bigint]
+	storedClearingTick?: bigint
+	underfunded?: boolean
+	underfundedWinningAttoEth?: bigint
+	vaults?: readonly Address[]
+}
+
+function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
+	const pool = address(20)
+	const coordinator = address(21)
+	const shareToken = address(22)
+	const truthAuction = address(23)
+	const vaults = overrides.vaults ?? (walletVaultRegistered ? [address(1)] : [])
+	const base = fakeClient(10n, hash(10), {
+		poolDeployments: [
+			{
+				parent: address(0),
+				priceOracleManagerAndOperatorQueuer: coordinator,
+				questionId: 101n,
+				securityPool: pool,
+				shareToken,
+				truthAuction,
+				universeId: 0n,
+			},
+		],
+		questionIds: [101n],
+	})
+	const implementation = {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+			switch (parameters.functionName) {
+				case 'getVaultCount':
+					return BigInt(vaults.length)
+				case 'getVaults':
+					return vaults
+				case 'repToken':
+				case 'reputationToken':
+					return address(10)
+				case 'shareToken':
+					return shareToken
+				case 'universeId':
+					return 0n
+				case 'questionId':
+					return 101n
+				case 'escalationGame':
+					return address(0)
+				case 'truthAuction':
+					return truthAuction
+				case 'systemState':
+					return 0n
+				case 'awaitingForkContinuation':
+					return false
+				case 'getPoolAccountingSnapshot':
+					return {
+						currentRetentionRate: 10n ** 18n,
+						feeEligibleCapacityOwnershipAttoRep: 0n,
+						feeIndex: 0n,
+						feeIndexRemainder: 0n,
+						lastUpdatedFeeAccumulator: 0n,
+						settlementCollateralAttoEth: 0n,
+						totalCapacityOwnershipAttoRep: 0n,
+						totalClaimableVaultFeesAttoEth: 0n,
+						totalFeesOwedRemainder: 0n,
+						unallocatedAccruedFeesAttoEth: 0n,
+						uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+					}
+				case 'shareTokenSupplyAttoShares':
+				case 'totalRepBackingUnits':
+				case 'totalBadDebtAttoEth':
+				case 'minimumVaultRepDepositAttoRep':
+				case 'initialEscalationGameDepositAttoRep':
+				case 'lastSettlementTimestamp':
+				case 'stagedOperationCounter':
+				case 'pendingReportId':
+				case 'getTotalPoolHeldAttoRep':
+				case 'getQuestionOutcome':
+				case 'getForkActivationTime':
+				case 'getCurrentMintingCapacityAttoEth':
+				case 'getVaultOpenInterestAttoEth':
+				case 'vaultBadDebtAttoEth':
+				case 'backingUnitsToAttoRep':
+				case 'getActiveStagedOperationCount':
+					return 0n
+				case 'isPriceValid':
+					return true
+				case 'getRequestPriceCostAttoEth':
+					return 109n
+				case 'settlementTime':
+					return 100n
+				case 'lastPrice':
+					return 10n ** 18n
+				case 'minimumToken1ReportAttoEth':
+					return 20_002n
+				case 'gasConsumedOpenOracleReportPrice':
+				case 'getSettlementCallbackGasLimit':
+				case 'gasUnitsForOneDispute':
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 1n
+				case 'targetPriceErrorForDispute':
+					return 1_000n
+				case 'openOracleSecurityMultiplierBps':
+				case 'escalationHaltMultiplierBps':
+				case 'statoblastSecurityMultiplierBps':
+					return 10_000n
+				case 'protocolFee':
+				case 'feePercentage':
+					return 0n
+				case 'forkData':
+					return [0n, address(0), 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+				case 'getOwnForkMigrationStatus':
+					return [false, 0n, 0n, 0n, 0n] as const
+				case 'getEscalationMigrationEntitlementStatus':
+					return [false, 0n, [false, false, false]] as const
+				case 'getUnassignedPosition':
+					return [0n, 0n, 0n] as const
+				case 'securityPoolFactory':
+					return address(4)
+				case 'securityPoolForker':
+					return address(5)
+				case 'questionData':
+					return address(3)
+				case 'priceOracleManagerAndOperatorQueuer':
+					return coordinator
+				case 'securityPool':
+					return pool
+				case 'openOracle':
+					return address(6)
+				case 'weth':
+					return address(7)
+				case 'securityVaults':
+					return [0n, 0n, 0n, 0n] as const
+				case 'getPendingSettlementOperationIds':
+					return []
+				case 'getPair':
+					return address(0)
+				case 'isApprovedForAll':
+					return false
+				case 'auctionStarted':
+					return 1n
+				case 'minBidSizeAttoEth':
+					return 1n
+				case 'finalized':
+					return overrides.auctionFinalized ?? false
+				case 'clearingTick':
+					return overrides.storedClearingTick ?? 0n
+				case 'underfunded':
+					return overrides.underfunded ?? false
+				case 'underfundedWinningAttoEth':
+					return overrides.underfundedWinningAttoEth ?? 0n
+				case 'pendingEthRefundsAttoEth':
+					return pendingRefundAttoEth
+				case 'computeClearing':
+					return overrides.computedClearing ?? ([false, 0n, 0n, 0n] as const)
+				default:
+					return await Reflect.apply(base.client.readContract, base.client, [parameters])
+			}
+		},
+	}
+	const client = new Proxy({} as ChaosReadClient, {
+		get(_target, property) {
+			const override = implementation[property as keyof typeof implementation]
+			return override ?? Reflect.get(base.client, property)
+		},
+	})
+	return { client, pool, truthAuction }
+}
+
 interface PoolBindingOverrides {
 	coordinatorOpenOracle?: Address
 	coordinatorRepToken?: Address
@@ -215,6 +385,84 @@ function poolBindingClient(pool: Address, coordinator: Address, overrides: PoolB
 }
 
 describe('anchored ecosystem discovery', () => {
+	test('authenticates the canonical vault count and wallet registry membership', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const registered = refundBackfillClient(0n, true)
+		const registeredSnapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: registered.client, deployments, wallet: address(1) })
+		expect(registeredSnapshot.pools[0]).toMatchObject({ canonicalVaultCount: '1', walletVaultRegistered: true })
+
+		const absent = refundBackfillClient(0n)
+		const absentSnapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: absent.client, deployments, wallet: address(1) })
+		expect(absentSnapshot.pools[0]).toMatchObject({ canonicalVaultCount: '0', walletVaultRegistered: false })
+	})
+
+	test('allows positive auction refunds while the authenticated episode index is absent or lagging', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const missing = refundBackfillClient(8n)
+		const withoutIndex = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missing.client, deployments, wallet: address(1) })
+		expect(withoutIndex.auctions).toContainEqual(expect.objectContaining({ address: missing.truthAuction, pendingEthRefund: '8' }))
+		expect(withoutIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
+
+		const lagging = refundBackfillClient(8n)
+		const withLaggingIndex = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: lagging.client,
+			deployments,
+			indexedAuctionRefunds: { [lagging.truthAuction.toLowerCase()]: { generation: hash(700), pendingAttoEth: 5n.toString() } },
+			wallet: address(1),
+		})
+		expect(withLaggingIndex.auctions).toContainEqual(expect.objectContaining({ address: lagging.truthAuction, pendingEthRefund: '8' }))
+		expect(withLaggingIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
+	})
+
+	test('uses finalized auction settlement state to classify losing bids without consuming a vault slot', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const planningOptions: PlanningOptions = {
+			allowHighRisk: true,
+			allowIrreversibleOperations: true,
+			immutableTopologyCapacity: {
+				maxPools: 2,
+				maxQuestions: 2,
+				maxStagedOperationsPerPool: 2,
+				maxUniverses: 2,
+				maxVaultsPerPool: 1,
+				maximumAggregateItems: 4,
+			},
+			maximumBlockIntervalSeconds: 15,
+			seed: 1,
+		}
+		const discoverFinalized = async (storedClearingTick: bigint, underfundedWinningAttoEth: bigint, bidTick: bigint) => {
+			const fixture = refundBackfillClient(0n, false, {
+				auctionFinalized: true,
+				computedClearing: [false, 0n, 1n, 0n],
+				storedClearingTick,
+				underfunded: true,
+				underfundedWinningAttoEth,
+				vaults: [address(99)],
+			})
+			const snapshot = await discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fixture.client,
+				deployments,
+				indexedAuctionBids: { [fixture.truthAuction.toLowerCase()]: [{ amountAttoEth: 1n.toString(), index: '0', refunded: false, tick: bidTick.toString() }] },
+				limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 1 },
+				wallet: address(1),
+			})
+			expect(snapshot.pools[0]).toMatchObject({ canonicalVaultCount: '1', walletVaultRegistered: false })
+			return snapshot
+		}
+
+		const belowReserve = await discoverFinalized(5n, 1n, 4n)
+		expect(belowReserve.auctions[0]).toMatchObject({ clearingTick: '5', finalized: true, underfunded: true, underfundedWinningAttoEth: 1n.toString() })
+		expect(urgentOperationPlans(belowReserve, planningOptions).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidKeys: '4:0' }) })])
+		expect(canonicalLifecyclePresence(belowReserve, planningOptions).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidKeys: '4:0' }) })])
+
+		const noQualifyingWinner = await discoverFinalized(524_288n, 0n, 524_288n)
+		expect(noQualifyingWinner.auctions[0]).toMatchObject({ clearingTick: '524288', finalized: true, underfunded: true, underfundedWinningAttoEth: 0n.toString() })
+		expect(urgentOperationPlans(noQualifyingWinner, planningOptions).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidKeys: '524288:0' }) })])
+		expect(canonicalLifecyclePresence(noQualifyingWinner, planningOptions).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidKeys: '524288:0' }) })])
+	})
+
 	test('never queries or schedules an indexed report backed by an untrusted token', async () => {
 		const hostileToken = address(99)
 		const fake = fakeClient(10n, hash(1), {}, hostileToken)
@@ -1136,12 +1384,13 @@ describe('anchored ecosystem discovery', () => {
 				zoltar: address(2),
 			},
 			expectedAnchorHash: expectedHash,
+			expectedAnchorBaseFeePerGas: 1n,
 			wallet: address(1),
 		})
 		expect(fake.requested()).toBe(anchor)
 		expect(fake.pinnedReads.length).toBeGreaterThan(10)
 		expect(fake.pinnedReads.every(block => block === anchor)).toBe(true)
-		expect(snapshot.anchor).toEqual({ blockHash: expectedHash, blockNumber: anchor.toString(), timestamp: '1000' })
+		expect(snapshot.anchor).toEqual({ baseFeePerGas: '1', blockHash: expectedHash, blockNumber: anchor.toString(), timestamp: '1000' })
 		expect(snapshot.wallet.tokens.every(token => token.openOracleInternalAllowanceToSelf === 0n.toString())).toBe(true)
 		expect(fake.contractReads.filter(read => read.functionName === 'internalAllowance')).toHaveLength(snapshot.wallet.tokens.length)
 	})
@@ -1154,6 +1403,20 @@ describe('anchored ecosystem discovery', () => {
 				client: fake.client,
 				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				expectedAnchorHash: hash(2),
+				wallet: address(1),
+			}),
+		).rejects.toThrow('does not match quorum anchor')
+	})
+
+	test('requires the provider block to match the quorum EIP-1559 base fee', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fakeClient(10n, hash(1), { baseFeePerGas: null }).client, deployments, wallet: address(1) })).rejects.toThrow('no EIP-1559 base fee')
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fakeClient(10n, hash(1), { baseFeePerGas: 2n }).client,
+				deployments,
+				expectedAnchorBaseFeePerGas: 1n,
 				wallet: address(1),
 			}),
 		).rejects.toThrow('does not match quorum anchor')

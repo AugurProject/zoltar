@@ -1,11 +1,23 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, encodeAbiParameters, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
+import { ConnectivityDegradedError, createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '../support/bot-shared.ts'
+import { securityPoolAbi } from '../../src/contracts/abi.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import {
+	OperationRediscoveryRequired,
+	TransactionAwaitingRecovery,
+	assertFreshWalletAssetDebits,
+	assertRequestedTransactionHash,
+	assertStepPreflightCalls,
+	executeOperationPlan,
+	finalizedReceiptWithQuorum,
+	operationStepSubmissionLastValidBlock,
+	sameCanonicalExecutionAnchor,
+	type ExecutionEnvironment,
+} from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 
 const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = []
 const directories: string[] = []
@@ -53,7 +65,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			maxUniverses: 1,
 			maxVaultsPerPool: 1,
 		},
-		network: { chainId: 1, explorerUrl: '', name: 'mainnet' },
+		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,
 		privateKey: undefined,
@@ -176,6 +188,32 @@ function combinedRepBalanceRpcServer(balances: { credit: () => bigint; wallet: (
 				jsonrpc: '2.0',
 				result: toHex(balance, { size: 32 }),
 			})
+		},
+	})
+	servers.push(server)
+	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
+	return `http://127.0.0.1:${server.port.toString()}`
+}
+
+function vaultBackingRpcServer(backingAttoRep: () => bigint) {
+	const vaultCall = encodeFunctionData({ abi: securityPoolAbi, args: [sender], functionName: 'securityVaults' })
+	const backingCall = encodeFunctionData({ abi: securityPoolAbi, args: [10n], functionName: 'backingUnitsToAttoRep' })
+	const server = Bun.serve({
+		port: 0,
+		async fetch(request) {
+			const body = rpcRequest(await request.json())
+			if (!('params' in body) || !Array.isArray(body.params)) return new Response('Expected eth_call parameters', { status: 400 })
+			const transaction = rpcRequest(body.params[0])
+			const data = 'data' in transaction ? transaction.data : undefined
+			if (data === vaultCall) {
+				return Response.json({
+					id: 'id' in body ? body.id : 1,
+					jsonrpc: '2.0',
+					result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [10n, 0n, 0n, 0n]),
+				})
+			}
+			if (data === backingCall) return Response.json({ id: 'id' in body ? body.id : 1, jsonrpc: '2.0', result: toHex(backingAttoRep(), { size: 32 }) })
+			return new Response(`Unexpected SecurityPool call ${String(data)}`, { status: 400 })
 		},
 	})
 	servers.push(server)
@@ -494,6 +532,19 @@ describe('transaction downstream preflights', () => {
 		await expect(assertFreshWalletAssetDebits(currentEnvironment, creditStep, anchor)).rejects.toThrow('combined wallet and OpenOracle REP reserve')
 	})
 
+	test('fresh-checks SecurityPool vault REP backing at the canonical anchor', async () => {
+		let backing = 10n
+		const firstUrl = vaultBackingRpcServer(() => backing)
+		const secondUrl = vaultBackingRpcServer(() => backing)
+		const currentStep = step()
+		currentStep.walletAssetDebits = [{ amount: '10', category: 'rep', kind: 'security-pool-vault-rep', pool: caller, vault: sender }]
+		const anchor = { attestingRpcUrls: new Set([firstUrl, secondUrl]), number: 123n }
+
+		await expect(assertFreshWalletAssetDebits(environment(firstUrl, secondUrl), currentStep, anchor)).resolves.toBeUndefined()
+		backing = 9n
+		await expect(assertFreshWalletAssetDebits(environment(firstUrl, secondUrl), currentStep, anchor)).rejects.toThrow('no longer has the declared SecurityPool vault REP backing')
+	})
+
 	test('does not substitute a nonattester when a canonical REP-balance reader is unavailable', async () => {
 		const firstRequests: unknown[] = []
 		const unavailableRequests: unknown[] = []
@@ -556,6 +607,91 @@ function executablePlan(): OperationPlan {
 	}
 }
 
+function terminalSubmissionPlan(): OperationPlan {
+	const base = executablePlan()
+	const action = base.steps[0]
+	if (action === undefined) throw new Error('Execution test plan is missing its step')
+	return {
+		...base,
+		lastValidBlockNumber: '120',
+		steps: [
+			{ ...action, data: '0xabcd', id: 'approve', label: 'Approve request funding' },
+			{ ...action, id: 'request', label: 'Request price' },
+		],
+		terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '2000000002' },
+	}
+}
+
+describe('terminal submission constraints', () => {
+	test('treats changed fee or timestamp fields as a changed signing anchor', () => {
+		const anchor = {
+			attestingRpcUrls: new Set(['https://one.example', 'https://two.example']),
+			baseFeePerGas: 1n,
+			hash: `0x${'11'.repeat(32)}` as const,
+			number: 99n,
+			timestamp: 1n,
+		}
+		expect(sameCanonicalExecutionAnchor(anchor, { ...anchor })).toBeTrue()
+		expect(sameCanonicalExecutionAnchor(anchor, { ...anchor, baseFeePerGas: 2n })).toBeFalse()
+		expect(sameCanonicalExecutionAnchor(anchor, { ...anchor, timestamp: 2n })).toBeFalse()
+	})
+
+	test('leaves an approval on the normal plan horizon and clamps only the terminal step to the next block', () => {
+		const plan = terminalSubmissionPlan()
+		const approval = plan.steps[0]
+		const request = plan.steps[1]
+		if (approval === undefined || request === undefined) throw new Error('Terminal submission test plan is incomplete')
+
+		expect(
+			operationStepSubmissionLastValidBlock({
+				baseFeePerGas: 10n ** 18n,
+				currentBlock: 99n,
+				currentTimestamp: 1n,
+				maximumBlockIntervalSeconds: 15,
+				mode: 'private',
+				plan,
+				step: approval,
+			}),
+		).toBe(120n)
+		expect(
+			operationStepSubmissionLastValidBlock({
+				baseFeePerGas: 1n,
+				currentBlock: 99n,
+				currentTimestamp: 1n,
+				maximumBlockIntervalSeconds: 15,
+				mode: 'private',
+				plan,
+				step: request,
+			}),
+		).toBe(100n)
+	})
+
+	test('requires the terminal signing fee to fit its persisted ceiling', () => {
+		const plan = terminalSubmissionPlan()
+		const request = plan.steps[1]
+		if (request === undefined) throw new Error('Terminal submission test plan is incomplete')
+		expect(() =>
+			operationStepSubmissionLastValidBlock({
+				baseFeePerGas: 2n,
+				currentBlock: 99n,
+				currentTimestamp: 1n,
+				maximumBlockIntervalSeconds: 15,
+				mode: 'private',
+				plan,
+				step: request,
+			}),
+		).toThrow('exceeds its persisted maximum fee ceiling')
+	})
+
+	test('rejects a public terminal-submission plan before the approval can call an RPC', async () => {
+		const first = executionRpcServer()
+		const second = executionRpcServer()
+		await expect(executeOperationPlan(environment(first.url, second.url), terminalSubmissionPlan())).rejects.toThrow('requires private submission')
+		expect(first.requestedMethods).toEqual([])
+		expect(second.requestedMethods).toEqual([])
+	})
+})
+
 function canonicalLifecyclePlan(): OperationPlan {
 	const base = executablePlan()
 	const step = base.steps[0]
@@ -593,7 +729,7 @@ function canonicalLifecyclePlan(): OperationPlan {
 	}
 }
 
-function executionRpcServer(options: { ethCall?: 'success' | 'unavailable'; head?: bigint } = {}) {
+function executionRpcServer(options: { balance?: bigint; ethCall?: 'success' | 'unavailable'; head?: bigint } = {}) {
 	const requestedMethods: string[] = []
 	let currentHead = options.head ?? 99n
 	let currentNonce = 3n
@@ -618,7 +754,7 @@ function executionRpcServer(options: { ethCall?: 'success' | 'unavailable'; head
 					return Response.json({
 						id,
 						jsonrpc: '2.0',
-						result: toHex(10n ** 20n),
+						result: toHex(options.balance ?? 10n ** 20n),
 					})
 				case 'eth_getTransactionCount':
 					return Response.json({
@@ -698,9 +834,68 @@ function executionRpcServer(options: { ethCall?: 'success' | 'unavailable'; head
 	}
 }
 
+describe('workflow-wide ETH funding', () => {
+	test('rejects cumulative principal and maximum gas before the first workflow step', async () => {
+		const directory = await mkdtemp('/tmp/zoltar-chaos-workflow-funding-')
+		directories.push(directory)
+		const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
+		const maximumGasCostAttoEth = 10n ** 18n
+		const minimumEthReserveAttoEth = 100n
+		const value = 7n
+		const balance = minimumEthReserveAttoEth + value + 3n * maximumGasCostAttoEth - 1n
+		const first = executionRpcServer({ balance })
+		const second = executionRpcServer({ balance })
+		const configured = settings(first.url, [second.url])
+		configured.runtime.stateFile = join(directory, 'state.json')
+		configured.strategy.maximumEthPerOperationAttoEth = value
+		configured.strategy.maximumGasCostAttoEth = maximumGasCostAttoEth
+		configured.strategy.minimumEthReserveAttoEth = minimumEthReserveAttoEth
+		let firstStepAttempts = 0
+		const plan = executablePlan()
+		plan.maximumCleanupTransactionCount = 1
+		const preparation = plan.steps[0]
+		if (preparation === undefined) throw new Error('Execution test plan is missing its preparation step')
+		plan.steps = [
+			{ ...preparation, id: 'approve', label: 'Approve workflow' },
+			{
+				...preparation,
+				id: 'action',
+				label: 'Execute payable action',
+				value: value.toString(),
+				walletAssetDebits: [{ amount: value.toString(), asset: 'ETH', kind: 'native' }],
+			},
+		]
+		const state = initialRuntimeState(false, account.address, 1, initialDurableState(1, false, 'profile:workflow-funding', account.address))
+		const pool = createRpcEndpointPool([first.url, second.url])
+		const currentEnvironment: ExecutionEnvironment = {
+			beforeSign: async () => {
+				firstStepAttempts += 1
+				throw new Error('The first workflow step was reached')
+			},
+			chain: mainnet,
+			clock: () => 1_000,
+			pool,
+			sender: account.address,
+			settings: configured,
+			state,
+			wallet: createWalletClient({ account, chain: mainnet, transport: pool.transport }),
+		}
+
+		await expect(executeOperationPlan(currentEnvironment, plan)).rejects.toThrow('cannot fund all remaining workflow steps')
+
+		expect(firstStepAttempts).toBe(0)
+		for (const methods of [first.requestedMethods, second.requestedMethods]) {
+			expect(methods).not.toContain('eth_call')
+			expect(methods).not.toContain('eth_estimateGas')
+			expect(methods).not.toContain('eth_sendRawTransaction')
+		}
+	})
+})
+
 type FinalizedExecutionReceiptState = {
 	head: bigint
 	logs: Array<{ address: typeof target; data: `0x${string}`; topics: `0x${string}`[] }>
+	status?: '0x0' | '0x1' | undefined
 	transactionHash?: `0x${string}` | undefined
 }
 
@@ -757,7 +952,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 											transactionIndex: '0x0',
 										})),
 										logsBloom: `0x${'00'.repeat(256)}`,
-										status: '0x1',
+										status: state.status ?? '0x1',
 										to: target,
 										transactionHash: state.transactionHash,
 										transactionIndex: '0x0',
@@ -805,11 +1000,11 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 	return `http://127.0.0.1:${server.port.toString()}`
 }
 
-async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['logs']) {
+async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['logs'], status: FinalizedExecutionReceiptState['status'] = '0x1') {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-finalized-execution-')
 	directories.push(directory)
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
-	const receiptState: FinalizedExecutionReceiptState = { head: 99n, logs }
+	const receiptState: FinalizedExecutionReceiptState = { head: 99n, logs, status }
 	const firstUrl = finalizedExecutionRpcServer(receiptState)
 	const secondUrl = finalizedExecutionRpcServer(receiptState)
 	const configured = settings(firstUrl, [secondUrl])
@@ -831,6 +1026,79 @@ async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['l
 		stateFile: configured.runtime.stateFile,
 	}
 }
+
+function failFinalReceiptPersistence(environment: ExecutionEnvironment) {
+	let persistenceCalls = 0
+	let submittedJournal:
+		| {
+				activities: typeof environment.state.activities
+				pendingTransactions: typeof environment.state.pendingTransactions
+				workflows: typeof environment.state.workflows
+		  }
+		| undefined
+	let failed = false
+	environment.persistState = async state => {
+		persistenceCalls += 1
+		if (state.pendingTransactions.some(intent => intent.status === 'submitted')) {
+			submittedJournal = {
+				activities: structuredClone(state.activities),
+				pendingTransactions: structuredClone(state.pendingTransactions),
+				workflows: structuredClone(state.workflows),
+			}
+		} else if (submittedJournal !== undefined && !failed) {
+			failed = true
+			throw new Error('injected post-receipt persistence failure')
+		}
+		await saveDurableState(environment.settings.runtime.stateFile, state)
+	}
+	return {
+		persistenceCalls: () => persistenceCalls,
+		submittedJournal: () => {
+			if (submittedJournal === undefined) throw new Error('Submitted receipt journal was not captured')
+			return submittedJournal
+		},
+	}
+}
+
+describe('atomic receipt disposition persistence', () => {
+	test('retains the submitted intent when successful-receipt persistence fails', async () => {
+		const { environment, state, stateFile } = await finalizedExecutionFixture([])
+		const failure = failFinalReceiptPersistence(environment)
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+
+		expect(failure.persistenceCalls()).toBe(6)
+		expect({ activities: state.activities, pendingTransactions: state.pendingTransactions, workflows: state.workflows }).toEqual(failure.submittedJournal())
+		const durable = await loadDurableState(stateFile, 1)
+		expect({ activities: durable.activities, pendingTransactions: durable.pendingTransactions, workflows: durable.workflows }).toEqual(failure.submittedJournal())
+	})
+
+	test('retains the submitted intent when reverted-receipt persistence fails', async () => {
+		const { environment, state, stateFile } = await finalizedExecutionFixture([], '0x0')
+		const failure = failFinalReceiptPersistence(environment)
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+
+		expect({ activities: state.activities, pendingTransactions: state.pendingTransactions, workflows: state.workflows }).toEqual(failure.submittedJournal())
+		const durable = await loadDurableState(stateFile, 1)
+		expect({ activities: durable.activities, pendingTransactions: durable.pendingTransactions, workflows: durable.workflows }).toEqual(failure.submittedJournal())
+	})
+
+	test('retains the submitted intent when semantic-failure persistence fails', async () => {
+		const { environment, state, stateFile } = await finalizedExecutionFixture([])
+		const failure = failFinalReceiptPersistence(environment)
+		const plan = executablePlan()
+		const action = plan.steps[0]
+		if (action === undefined) throw new Error('Execution test plan has no action')
+		action.evidence = [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }]
+
+		await expect(executeOperationPlan(environment, plan)).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+
+		expect({ activities: state.activities, pendingTransactions: state.pendingTransactions, workflows: state.workflows }).toEqual(failure.submittedJournal())
+		const durable = await loadDurableState(stateFile, 1)
+		expect({ activities: durable.activities, pendingTransactions: durable.pendingTransactions, workflows: durable.workflows }).toEqual(failure.submittedJournal())
+	})
+})
 
 describe('canonical lifecycle receipt disposition', () => {
 	test('keeps a successful empty-log execution waiting for canonical confirmation', async () => {

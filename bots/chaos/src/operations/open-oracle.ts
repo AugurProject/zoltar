@@ -1,12 +1,10 @@
-import { encodeAbiParameters, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, openOracleAbi, wethAbi } from '../contracts/abi.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../monitoring/protocol-index.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
-import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, OperationStep, OperationWalletAssetDebit, OracleGameSnapshot, PlanningOptions } from './types.ts'
+import { requiredTimestampSafetySeconds, requiredWorkflowSafetyBlocks } from './timing.ts'
+import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationStep, OperationWalletAssetDebit, OracleGameSnapshot, PlanningOptions } from './types.ts'
 
-const EXECUTOR_FINALITY_BLOCKS = 12n
-const TRANSACTION_VALIDITY_BLOCKS = 25n
-const CONSERVATIVE_BLOCK_SECONDS = 15n
 const MAX_UINT128 = (1n << 128n) - 1n
 const OPEN_ORACLE_CREDIT_STEP_GAS_LIMIT = 500_000n
 const OPEN_ORACLE_INTERNAL_APPROVAL_STEP_GAS_LIMIT = 200_000n
@@ -15,14 +13,12 @@ const MINIMUM_CUSTOM_PUSH_OR_CREDIT_GAS_LIMIT = 30_000n
 const MAXIMUM_CUSTOM_PUSH_OR_CREDIT_GAS_LIMIT = 100_000n
 const minAmount = (left: bigint, right: bigint) => (left < right ? left : right)
 
-function reportWindow(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, prerequisiteCount = 0) {
+function reportWindow(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, options: PlanningOptions, prerequisiteCount = 0) {
 	const timestampClock = (report.flags & 1) !== 0
 	const current = amount(timestampClock ? snapshot.anchor.timestamp : snapshot.anchor.blockNumber)
 	const opened = amount(report.reportTimestamp) + amount(report.disputeDelay)
 	const closes = amount(report.reportTimestamp) + amount(report.settlementTime)
-	const prerequisiteLifecycleBlocks = BigInt(prerequisiteCount) * (TRANSACTION_VALIDITY_BLOCKS + EXECUTOR_FINALITY_BLOCKS)
-	const safetyBlocks = TRANSACTION_VALIDITY_BLOCKS + prerequisiteLifecycleBlocks
-	return { closes, current, opened, safetyMargin: timestampClock ? safetyBlocks * CONSERVATIVE_BLOCK_SECONDS : safetyBlocks, timestampClock }
+	return { closes, current, opened, safetyMargin: timestampClock ? requiredTimestampSafetySeconds(options, prerequisiteCount) : requiredWorkflowSafetyBlocks(prerequisiteCount), timestampClock }
 }
 
 function tokenDebit(snapshot: EcosystemSnapshot, token: `0x${string}`, debitAmount: bigint): OperationWalletAssetDebit[] {
@@ -98,9 +94,93 @@ function approveToken(snapshot: EcosystemSnapshot, tokenAddress: `0x${string}`, 
 	if (required === 0n || tokenAddress === zeroAddress) return []
 	const inventory = tokenInventory(snapshot, tokenAddress)
 	if (allowance(inventory, snapshot.deployments.openOracle) >= required) return []
-	return [
-		encodeStep({ abi: erc20Abi, args: [snapshot.deployments.openOracle, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, snapshot.deployments.openOracle, required)], functionName: 'approve', id: `approve-${tokenAddress}`, label: 'Approve token for OpenOracle', to: tokenAddress }),
-	]
+	return [openOracleApprovalStep(snapshot, tokenAddress, snapshot.deployments.openOracle, required)]
+}
+
+type OpenOracleApprovalRequirement = {
+	id: string
+	required: bigint
+	spender: `0x${string}`
+	token: `0x${string}`
+}
+
+function openOracleApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, spender: `0x${string}`, required: bigint, id = `approve-${token}`, label = 'Approve token for OpenOracle') {
+	return encodeStep({ abi: erc20Abi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
+}
+
+function requiredMetadataString(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	if (typeof value !== 'string' || value.length === 0) throw new Error(`OpenOracle continuation metadata ${key} is missing`)
+	return value
+}
+
+function requiredMetadataAmount(metadata: OperationPlan['metadata'], key: string) {
+	const value = requiredMetadataString(metadata, key)
+	if (!/^(?:0|[1-9][0-9]*)$/.test(value)) throw new Error(`OpenOracle continuation metadata ${key} is not canonical`)
+	return BigInt(value)
+}
+
+function requiredMetadataAddress(metadata: OperationPlan['metadata'], key: string) {
+	return getAddress(requiredMetadataString(metadata, key))
+}
+
+function requiredMetadataBoolean(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	if (typeof value !== 'boolean') throw new Error(`OpenOracle continuation metadata ${key} is missing`)
+	return value
+}
+
+function exactPreviousApproval(previousPlan: OperationPlan, snapshot: EcosystemSnapshot, requirement: OpenOracleApprovalRequirement) {
+	const previous = previousPlan.steps.find(step => step.id === requirement.id)
+	if (previous === undefined) return undefined
+	const expected = openOracleApprovalStep(snapshot, requirement.token, requirement.spender, requirement.required, requirement.id)
+	return previous.to.toLowerCase() === expected.to.toLowerCase() && previous.data === expected.data ? previous : undefined
+}
+
+function preparedApprovalState(snapshot: EcosystemSnapshot, context: OperationContinuationContext, requirements: readonly OpenOracleApprovalRequirement[]) {
+	for (const requirement of requirements) {
+		const previous = exactPreviousApproval(context.previousPlan, snapshot, requirement)
+		if (context.previousPlan.steps.some(step => step.id === requirement.id) && previous === undefined) return false
+		if (previous !== undefined && context.confirmedStepIds.includes(requirement.id)) {
+			if (allowance(tokenInventory(snapshot, requirement.token), requirement.spender) !== requirement.required) return false
+		} else if (previous === undefined && allowance(tokenInventory(snapshot, requirement.token), requirement.spender) < requirement.required) {
+			return false
+		}
+	}
+	return true
+}
+
+function remainingApprovalSteps(snapshot: EcosystemSnapshot, context: OperationContinuationContext, requirements: readonly OpenOracleApprovalRequirement[]) {
+	return requirements.flatMap(requirement => {
+		const previous = exactPreviousApproval(context.previousPlan, snapshot, requirement)
+		if (previous === undefined || context.confirmedStepIds.includes(requirement.id)) return []
+		return [openOracleApprovalStep(snapshot, requirement.token, requirement.spender, requirement.required, requirement.id)]
+	})
+}
+
+function cleanupApprovalRequirements(snapshot: EcosystemSnapshot, context: OperationContinuationContext, requirements: readonly OpenOracleApprovalRequirement[]) {
+	return requirements.filter(requirement => context.confirmedStepIds.includes(requirement.id) && exactPreviousApproval(context.previousPlan, snapshot, requirement) !== undefined)
+}
+
+function openOracleCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinuationContext, requirements: readonly OpenOracleApprovalRequirement[], label: string, risk: OperationPlan['risk']) {
+	const cleanup = cleanupApprovalRequirements(snapshot, context, requirements)
+	if (cleanup.length === 0) return undefined
+	return planBase({
+		continuationDisposition: 'cleanup-only',
+		definitionId: context.previousPlan.definitionId,
+		ecosystem: 'open-oracle',
+		label,
+		metadata: context.previousPlan.metadata,
+		postconditions: ['Every confirmed workflow-created OpenOracle token allowance is zero'],
+		risk,
+		snapshot,
+		steps: cleanup.map(requirement => openOracleApprovalStep(snapshot, requirement.token, requirement.spender, 0n, `revoke-${requirement.id}`, 'Revoke workflow-created OpenOracle approval')),
+	})
+}
+
+function maximumCleanupCount(previousPlan: OperationPlan, snapshot: EcosystemSnapshot, requirements: readonly OpenOracleApprovalRequirement[]) {
+	const count = requirements.filter(requirement => exactPreviousApproval(previousPlan, snapshot, requirement) !== undefined).length
+	return count === 0 ? undefined : count
 }
 
 function contributionFunding(snapshot: EcosystemSnapshot, tokenAddress: `0x${string}`, required: bigint, options: PlanningOptions) {
@@ -168,16 +248,16 @@ function disputeQuote(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, o
 	}
 }
 
-function disputeWindow(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, quote: NonNullable<ReturnType<typeof disputeQuote>>) {
+function disputeWindow(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, quote: NonNullable<ReturnType<typeof disputeQuote>>, options: PlanningOptions) {
 	const prerequisites = approveToken(snapshot, report.token1, quote.external1).length + approveToken(snapshot, report.token2, quote.external2).length
-	return reportWindow(snapshot, report, prerequisites)
+	return reportWindow(snapshot, report, options, prerequisites)
 }
 
 function disputableReport(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, options: PlanningOptions) {
 	if (report.settlementTimestamp !== '0') return false
 	const quote = disputeQuote(snapshot, report, options)
 	if (quote === undefined || !quote.affordable) return false
-	const window = disputeWindow(snapshot, report, quote)
+	const window = disputeWindow(snapshot, report, quote, options)
 	return window.current >= window.opened && window.current + window.safetyMargin < window.closes
 }
 
@@ -286,7 +366,56 @@ const deposit: OperationDefinition = {
 				walletAssetDebits: tokenDebit(snapshot, token.address, spend),
 			}),
 		)
-		return planBase({ definitionId: deposit.id, ecosystem: 'open-oracle', label: deposit.label, metadata: { amount: spend.toString(), token: token.address }, postconditions: ['OpenOracle internal credit increases by the deposited amount'], risk: 'medium', snapshot, steps })
+		return planBase({
+			definitionId: deposit.id,
+			ecosystem: 'open-oracle',
+			label: deposit.label,
+			maximumCleanupTransactionCount: steps.length > 1 ? steps.length - 1 : undefined,
+			metadata: { amount: spend.toString(), openOracle: snapshot.deployments.openOracle, token: token.address },
+			postconditions: ['OpenOracle internal credit increases by the deposited amount'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const spend = requiredMetadataAmount(context.previousPlan.metadata, 'amount')
+		const token = requiredMetadataAddress(context.previousPlan.metadata, 'token')
+		const openOracle = requiredMetadataAddress(context.previousPlan.metadata, 'openOracle')
+		const requirement = { id: `approve-${token}`, required: spend, spender: openOracle, token }
+		const requirements = [requirement]
+		const cleanup = () => openOracleCleanupPlan(snapshot, context, requirements, 'Clean up OpenOracle deposit approval', 'medium')
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const inventory = tokenInventory(snapshot, token)
+		const knownRep = snapshot.universes.some(universe => universe.repToken.toLowerCase() === token.toLowerCase())
+		const canonicalToken = token.toLowerCase() === snapshot.deployments.weth.toLowerCase() || knownRep
+		const reserve = knownRep ? optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) : 1n
+		const maximum = knownRep ? optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) : optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
+		if (snapshot.deployments.openOracle.toLowerCase() !== openOracle.toLowerCase() || !canonicalToken || spend === 0n || spend > MAX_UINT128 || spend > maximum || inventory === undefined || amount(inventory.balance) < reserve + spend || !preparedApprovalState(snapshot, context, requirements)) return cleanup()
+		const steps = remainingApprovalSteps(snapshot, context, requirements)
+		steps.push(
+			encodeStep({
+				abi: openOracleAbi,
+				args: [token, spend, snapshot.wallet.address],
+				evidence: [tokenHolderEvidence(snapshot, token, amount(inventory.openOracleCredit) === 0n ? spend + 1n : amount(inventory.openOracleCredit) + spend)],
+				functionName: 'deposit',
+				id: 'deposit',
+				label: 'Deposit into OpenOracle internal balance',
+				to: openOracle,
+				walletAssetDebits: tokenDebit(snapshot, token, spend),
+			}),
+		)
+		return planBase({
+			definitionId: deposit.id,
+			ecosystem: 'open-oracle',
+			label: deposit.label,
+			maximumCleanupTransactionCount: maximumCleanupCount(context.previousPlan, snapshot, requirements),
+			metadata: context.previousPlan.metadata,
+			postconditions: ['OpenOracle internal credit increases by the deposited amount'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
 	},
 	classification: 'selectable',
 	contract: 'OpenOracle',
@@ -499,7 +628,88 @@ const report: OperationDefinition = {
 			definitionId: report.id,
 			ecosystem: 'open-oracle',
 			label: report.label,
-			metadata: { amount1: amount1.toString(), amount2: amount2.toString(), token1: snapshot.deployments.weth, token2: rep },
+			maximumCleanupTransactionCount: steps.length > 1 ? steps.length - 1 : undefined,
+			metadata: { amount1: amount1.toString(), amount2: amount2.toString(), openOracle: snapshot.deployments.openOracle, token1: snapshot.deployments.weth, token2: rep },
+			postconditions: ['ReportSubmitted identifies a new indexed report that becomes a settlement obligation'],
+			risk: 'high',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const amount1 = requiredMetadataAmount(context.previousPlan.metadata, 'amount1')
+		const amount2 = requiredMetadataAmount(context.previousPlan.metadata, 'amount2')
+		const openOracle = requiredMetadataAddress(context.previousPlan.metadata, 'openOracle')
+		const token1 = requiredMetadataAddress(context.previousPlan.metadata, 'token1')
+		const token2 = requiredMetadataAddress(context.previousPlan.metadata, 'token2')
+		const requirements = [
+			{ id: `approve-${token1}`, required: amount1, spender: openOracle, token: token1 },
+			{ id: `approve-${token2}`, required: amount2, spender: openOracle, token: token2 },
+		]
+		const cleanup = () => openOracleCleanupPlan(snapshot, context, requirements, 'Clean up OpenOracle report approvals', 'high')
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const rootRep = snapshot.universes[0]?.repToken
+		const token1Inventory = tokenInventory(snapshot, token1)
+		const token2Inventory = tokenInventory(snapshot, token2)
+		const safe =
+			options.allowHighRisk === true &&
+			!hasActiveSignerReport(snapshot) &&
+			snapshot.deployments.openOracle.toLowerCase() === openOracle.toLowerCase() &&
+			snapshot.deployments.weth.toLowerCase() === token1.toLowerCase() &&
+			rootRep?.toLowerCase() === token2.toLowerCase() &&
+			amount1 > 0n &&
+			amount1 <= MAX_UINT128 / 100n &&
+			amount2 > 0n &&
+			amount2 <= MAX_UINT128 &&
+			amount1 <= optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) &&
+			amount2 <= optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) &&
+			token1Inventory !== undefined &&
+			amount(token1Inventory.balance) >= amount1 + 1n &&
+			token2Inventory !== undefined &&
+			amount(token2Inventory.balance) >= amount2 + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
+			preparedApprovalState(snapshot, context, requirements)
+		if (!safe) return cleanup()
+		const params = {
+			callbackContract: zeroAddress,
+			callbackGasLimit: 0,
+			currentAmount1: amount1,
+			currentAmount2: amount2,
+			currentReporter: snapshot.wallet.address,
+			disputeDelay: 60,
+			escalationHalt: amount1 * 100n,
+			feePercentage: 0,
+			flags: 7,
+			lastReportOppoTime: 0,
+			multiplier: 140,
+			numReports: 0,
+			protocolFee: 0,
+			protocolFeeRecipient: zeroAddress,
+			reportTimestamp: 0,
+			settlementTime: 900,
+			settlementTimestamp: 0,
+			settlerReward: 0,
+			token1,
+			token2,
+		}
+		const steps = remainingApprovalSteps(snapshot, context, requirements)
+		steps.push(
+			encodeStep({
+				abi: openOracleAbi,
+				args: [params, false, false, zeroTiming],
+				evidence: [eventEvidence(openOracle, 'ReportSubmitted(uint256,bytes)')],
+				functionName: 'report',
+				id: 'report',
+				label: 'Submit OpenOracle report',
+				to: openOracle,
+				walletAssetDebits: [...tokenDebit(snapshot, token1, amount1), ...tokenDebit(snapshot, token2, amount2)],
+			}),
+		)
+		return planBase({
+			definitionId: report.id,
+			ecosystem: 'open-oracle',
+			label: report.label,
+			maximumCleanupTransactionCount: maximumCleanupCount(context.previousPlan, snapshot, requirements),
+			metadata: context.previousPlan.metadata,
 			postconditions: ['ReportSubmitted identifies a new indexed report that becomes a settlement obligation'],
 			risk: 'high',
 			snapshot,
@@ -535,7 +745,7 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 			if (!trustedReport(candidate)) return false
 			if (candidate.settlementTimestamp !== '0') return false
 			if (mode === 'dispute') return disputableReport(snapshot, candidate, options)
-			const window = reportWindow(snapshot, candidate)
+			const window = reportWindow(snapshot, candidate, options)
 			return window.current >= window.closes
 		})
 	}
@@ -567,20 +777,100 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 				walletAssetDebits: quote === undefined ? [] : [...creditDebit(snapshot, selected.token1, quote.internal1), ...creditDebit(snapshot, selected.token2, quote.internal2), ...tokenDebit(snapshot, selected.token1, quote.maximumWalletDebit1), ...tokenDebit(snapshot, selected.token2, quote.maximumWalletDebit2)],
 			}),
 		)
-		const window = mode === 'dispute' && quote !== undefined ? disputeWindow(snapshot, selected, quote) : reportWindow(snapshot, selected)
+		const window = mode === 'dispute' && quote !== undefined ? disputeWindow(snapshot, selected, quote, options) : reportWindow(snapshot, selected, options)
 		return planBase({
 			deadlineTimestamp: mode === 'dispute' && window.timestampClock ? window.closes.toString() : undefined,
 			definitionId: id,
 			ecosystem: 'open-oracle',
 			label: `${mode} OpenOracle report`,
 			lastValidBlockNumber: mode === 'dispute' && !window.timestampClock ? (window.closes - 1n).toString() : undefined,
+			maximumCleanupTransactionCount: mode === 'dispute' && steps.length > 1 ? steps.length - 1 : undefined,
 			semanticDeadlineBlockNumber: mode === 'dispute' && !window.timestampClock ? (window.closes - 1n).toString() : undefined,
-			metadata: { deadlineBlock: mode === 'dispute' && !window.timestampClock ? (window.closes - 1n).toString() : '0', reportId: selected.reportId, selfDispute: quote?.selfDispute ?? false, stateHash: selected.stateHash },
+			metadata: {
+				deadlineBlock: mode === 'dispute' && !window.timestampClock ? (window.closes - 1n).toString() : '0',
+				...(quote === undefined
+					? {}
+					: {
+							external1: quote.external1.toString(),
+							external2: quote.external2.toString(),
+							internal1: quote.internal1.toString(),
+							internal2: quote.internal2.toString(),
+							newAmount1: quote.new1.toString(),
+							newAmount2: quote.new2.toString(),
+							openOracle: selected.openOracle,
+							token1: selected.token1,
+							token2: selected.token2,
+						}),
+				reportId: selected.reportId,
+				selfDispute: quote?.selfDispute ?? false,
+				stateHash: selected.stateHash,
+			},
 			postconditions: [mode === 'settle' ? 'The report state has a nonzero settlement timestamp and ReportSettled is emitted' : 'The indexed report preimage advances to the disputed state'],
 			priority: mode === 'settle' ? 'urgent' : 'random',
 			risk: mode === 'settle' ? 'low' : 'high',
 			snapshot,
 			steps,
+		})
+	}
+	const disputeContinuationMethods =
+		mode === 'dispute'
+			? {
+					buildContinuationPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext) {
+						const openOracle = requiredMetadataAddress(context.previousPlan.metadata, 'openOracle')
+						const token1 = requiredMetadataAddress(context.previousPlan.metadata, 'token1')
+						const token2 = requiredMetadataAddress(context.previousPlan.metadata, 'token2')
+						const external1 = requiredMetadataAmount(context.previousPlan.metadata, 'external1')
+						const external2 = requiredMetadataAmount(context.previousPlan.metadata, 'external2')
+						const requirements = [...(external1 === 0n || token1 === zeroAddress ? [] : [{ id: `approve-${token1}`, required: external1, spender: openOracle, token: token1 }]), ...(external2 === 0n || token2 === zeroAddress ? [] : [{ id: `approve-${token2}`, required: external2, spender: openOracle, token: token2 }])]
+						const cleanup = () => openOracleCleanupPlan(snapshot, context, requirements, 'Clean up OpenOracle dispute approvals', 'high')
+						if (context.continuationDisposition === 'cleanup-only') return cleanup()
+						const reportId = requiredMetadataString(context.previousPlan.metadata, 'reportId')
+						const stateHash = requiredMetadataString(context.previousPlan.metadata, 'stateHash')
+						const selected = snapshot.reports.find(candidate => candidate.reportId === reportId)
+						const quote = selected === undefined ? undefined : disputeQuote(snapshot, selected, options)
+						const quoteMatches =
+							quote !== undefined &&
+							quote.affordable &&
+							quote.external1 === external1 &&
+							quote.external2 === external2 &&
+							quote.internal1 === requiredMetadataAmount(context.previousPlan.metadata, 'internal1') &&
+							quote.internal2 === requiredMetadataAmount(context.previousPlan.metadata, 'internal2') &&
+							quote.new1 === requiredMetadataAmount(context.previousPlan.metadata, 'newAmount1') &&
+							quote.new2 === requiredMetadataAmount(context.previousPlan.metadata, 'newAmount2') &&
+							quote.selfDispute === requiredMetadataBoolean(context.previousPlan.metadata, 'selfDispute')
+						if (
+							options.allowHighRisk !== true ||
+							selected === undefined ||
+							selected.stateHash !== stateHash ||
+							selected.openOracle.toLowerCase() !== openOracle.toLowerCase() ||
+							selected.token1.toLowerCase() !== token1.toLowerCase() ||
+							selected.token2.toLowerCase() !== token2.toLowerCase() ||
+							snapshot.deployments.openOracle.toLowerCase() !== openOracle.toLowerCase() ||
+							!disputableReport(snapshot, selected, options) ||
+							!quoteMatches ||
+							!preparedApprovalState(snapshot, context, requirements)
+						)
+							return cleanup()
+						const rebuilt = build(snapshot, options, selected)
+						if (rebuilt === undefined) return cleanup()
+						const freshApprovals = rebuilt.steps.filter(step => step.id.startsWith('approve-'))
+						const cleanupCount = cleanupApprovalRequirements(snapshot, context, requirements).length + freshApprovals.length
+						return {
+							...rebuilt,
+							...(cleanupCount === 0 ? {} : { maximumCleanupTransactionCount: cleanupCount }),
+							metadata: context.previousPlan.metadata,
+						}
+					},
+				}
+			: {}
+	const settlementPresence = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
+		const trustedReport = trustedReportPredicate(snapshot)
+		return snapshot.reports.flatMap(selected => {
+			if (!trustedReport(selected)) return []
+			if (selected.settlementTimestamp !== '0') return []
+			const window = reportWindow(snapshot, selected, options)
+			if (window.current < window.closes) return []
+			return [{ deadlineBlock: '0', reportId: selected.reportId, selfDispute: false, stateHash: selected.stateHash }]
 		})
 	}
 	const lifecycleMethods =
@@ -592,15 +882,11 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 							return plan === undefined ? [] : [plan]
 						})
 					},
-					enumerateLifecyclePresence(snapshot: EcosystemSnapshot) {
-						const trustedReport = trustedReportPredicate(snapshot)
-						return snapshot.reports.flatMap(selected => {
-							if (!trustedReport(selected)) return []
-							if (selected.settlementTimestamp !== '0') return []
-							const window = reportWindow(snapshot, selected)
-							if (window.current < window.closes) return []
-							return [{ deadlineBlock: '0', reportId: selected.reportId, selfDispute: false, stateHash: selected.stateHash }]
-						})
+					enumerateLifecycleObstructingPresence(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+						return settlementPresence(snapshot, options)
+					},
+					enumerateLifecyclePresence(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+						return settlementPresence(snapshot, options)
 					},
 				}
 			: {}
@@ -620,7 +906,8 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 				if (!trustedReport(candidate)) return false
 				if (candidate.settlementTimestamp !== '0') return false
 				if (mode === 'dispute') return disputableReport(snapshot, candidate, options)
-				return reportWindow(snapshot, candidate).current >= reportWindow(snapshot, candidate).closes
+				const window = reportWindow(snapshot, candidate, options)
+				return window.current >= window.closes
 			})
 			return eligible(mode === 'dispute' && options.allowHighRisk !== true ? 'High-risk operations are disabled' : undefined, found ? undefined : `No report is ready to ${mode}`)
 		},
@@ -628,6 +915,7 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 		label: `${mode} report`,
 		method: mode,
 		risk: mode === 'settle' ? 'low' : 'high',
+		...disputeContinuationMethods,
 		...lifecycleMethods,
 	}
 }

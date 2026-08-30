@@ -478,6 +478,53 @@ describe('chaos dashboard server', () => {
 		})
 	})
 
+	test('projects inventory availability, the safety latch, and selectable recovery workflow identity', () => {
+		const state = publicChaosState({
+			inventory: { eth: '1', rep: [], weth: '2' },
+			inventoryAvailable: false,
+			safetyPaused: true,
+			workflows: [
+				{
+					classification: 'selectable',
+					id: 'workflow:partial',
+					label: 'Partial random workflow',
+					status: 'waiting-continuation',
+					steps: [],
+				},
+			],
+		})
+
+		expect(state).toMatchObject({
+			currentWorkflow: {
+				classification: 'selectable',
+				id: 'workflow:partial',
+				status: 'waiting-continuation',
+			},
+			inventoryAvailable: false,
+			safetyPaused: true,
+		})
+	})
+
+	test('keeps deferred lifecycle obligations in the public recovery projection', () => {
+		const state = publicChaosState({
+			obligations: [
+				{ blockers: ['Tracked canonical lifecycle identity is not currently actionable'], ecosystem: 'statoblast', id: 'deferred', label: 'Future auction settlement', status: 'deferred', updatedAt: '2026-08-24T00:00:00.000Z' },
+				{ id: 'completed', label: 'Completed settlement', status: 'completed' },
+			],
+		})
+
+		expect(Reflect.get(state, 'obligations')).toEqual([
+			{
+				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+				ecosystem: 'statoblast',
+				id: 'deferred',
+				label: 'Future auction settlement',
+				status: 'deferred',
+				updatedAt: '2026-08-24T00:00:00.000Z',
+			},
+		])
+	})
+
 	test('groups lifecycle candidates and preserves every operation classification', () => {
 		const definition = { classification: 'lifecycle-obligation', description: 'Settle a mature report', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }
 		const state = publicChaosState({

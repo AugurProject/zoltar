@@ -8,6 +8,7 @@ import { address, snapshotFixture } from './fixture.ts'
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
+	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: 1_000n.toString(),
 	maxRepSpendAttoRep: 1_000n.toString(),
 	minimumEthReserveAttoEth: 0n.toString(),
@@ -65,7 +66,11 @@ describe('safe liquidation operations', () => {
 		expect(excluded?.definition.classification).toBe('excluded-dangerous')
 		expect(excluded?.eligibility.blockers.join(' ')).toContain('cannot bind')
 		expect(canonicalLifecyclePresence(liquidation.snapshot, options).filter(candidate => candidate.metadata['operationId'] === liquidation.staged.id)).toEqual([
-			{ definitionId: 'statoblast.staged.expire', ecosystem: 'statoblast', metadata: { coordinator: liquidation.staged.coordinator, operationId: liquidation.staged.id, operationType: 0 } },
+			{ blocksNovelty: false, definitionId: 'statoblast.staged.expire', ecosystem: 'statoblast', metadata: { coordinator: liquidation.staged.coordinator, operationId: liquidation.staged.id, operationType: 0 } },
+		])
+		liquidation.snapshot.anchor.timestamp = (BigInt(liquidation.staged.queuedAt) + BigInt(liquidation.pool.oracleSettlementTime) + BigInt(liquidation.staged.validForSeconds) + 1n).toString()
+		expect(canonicalLifecyclePresence(liquidation.snapshot, options).filter(candidate => candidate.metadata['operationId'] === liquidation.staged.id)).toEqual([
+			{ blocksNovelty: true, definitionId: 'statoblast.staged.expire', ecosystem: 'statoblast', metadata: { coordinator: liquidation.staged.coordinator, operationId: liquidation.staged.id, operationType: 0 } },
 		])
 
 		const withdrawal = stagedFixture(1)
@@ -78,7 +83,7 @@ describe('safe liquidation operations', () => {
 
 		const pool = withdrawal.snapshot.pools[0]
 		if (pool === undefined) throw new Error('Withdrawal pool missing')
-		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 181n).toString()
+		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 240n).toString()
 		pool.oraclePriceValid = true
 		expect(urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
 	})
@@ -88,6 +93,14 @@ describe('safe liquidation operations', () => {
 		const first = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
 		if (first === undefined) throw new Error('Initial staged execution plan missing')
 		expect(first.metadata).toEqual({ coordinator: staged.coordinator, operationId: '42', operationType: 1 })
+		expect(
+			canonicalLifecyclePresence(snapshot, options)
+				.filter(candidate => candidate.metadata['operationId'] === '42')
+				.map(candidate => [candidate.definitionId, candidate.blocksNovelty]),
+		).toEqual([
+			['statoblast.staged.execute', true],
+			['statoblast.staged.expire', false],
+		])
 		snapshot.anchor = { ...snapshot.anchor, blockNumber: '101' }
 		const second = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
 		expect(second?.metadata).toEqual(first.metadata)
@@ -99,8 +112,18 @@ describe('safe liquidation operations', () => {
 		expect(urgentOperationPlans(snapshot, options).some(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBe(false)
 		const presence = canonicalLifecyclePresence(snapshot, options).filter(candidate => candidate.metadata['operationId'] === '42')
 		expect(presence).toEqual([
-			{ definitionId: 'statoblast.staged.execute', ecosystem: 'statoblast', metadata: first.metadata },
-			{ definitionId: 'statoblast.staged.expire', ecosystem: 'statoblast', metadata: first.metadata },
+			{ blocksNovelty: false, definitionId: 'statoblast.staged.execute', ecosystem: 'statoblast', metadata: first.metadata },
+			{ blocksNovelty: false, definitionId: 'statoblast.staged.expire', ecosystem: 'statoblast', metadata: first.metadata },
+		])
+
+		snapshot.anchor.timestamp = (BigInt(staged.queuedAt) + BigInt(pool.oracleSettlementTime) + BigInt(staged.validForSeconds) + 1n).toString()
+		expect(
+			canonicalLifecyclePresence(snapshot, options)
+				.filter(candidate => candidate.metadata['operationId'] === '42')
+				.map(candidate => [candidate.definitionId, candidate.blocksNovelty]),
+		).toEqual([
+			['statoblast.staged.execute', false],
+			['statoblast.staged.expire', true],
 		])
 	})
 })

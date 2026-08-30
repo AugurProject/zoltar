@@ -8,6 +8,15 @@ const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
+	immutableTopologyCapacity: {
+		maxPools: 100,
+		maxQuestions: 100,
+		maxStagedOperationsPerPool: 100,
+		maxUniverses: 100,
+		maxVaultsPerPool: 100,
+		maximumAggregateItems: 10_000,
+	},
+	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: (10n ** 15n).toString(),
 	maxRepSpendAttoRep: (10n ** 15n).toString(),
 	minimumEthReserveAttoEth: 0n.toString(),
@@ -18,6 +27,8 @@ const options = {
 const continuationOptions = {
 	allowHighRisk: options.allowHighRisk,
 	allowIrreversibleOperations: options.allowIrreversibleOperations,
+	immutableTopologyCapacity: options.immutableTopologyCapacity,
+	maximumBlockIntervalSeconds: options.maximumBlockIntervalSeconds,
 	maxEthSpendAttoEth: options.maxEthSpendAttoEth,
 	maxRepSpendAttoRep: options.maxRepSpendAttoRep,
 	minimumEthReserveAttoEth: options.minimumEthReserveAttoEth,
@@ -41,17 +52,39 @@ function forkedSnapshot() {
 }
 
 describe('raw lifecycle identity audit', () => {
-	test('keeps auction refund withdrawals seed-independent with only canonical balance identity', () => {
+	test('keeps auction refund withdrawals seed-independent within one authenticated generation', () => {
 		const snapshot = snapshotFixture()
-		snapshot.auctions = [{ address: address(40), bids: [], clearingTick: '0', endTime: '1', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '123', pool: snapshot.pools[0]?.address ?? address(11), startTime: '1' }]
+		const refundGeneration = hash(400)
+		const auction = {
+			address: address(40),
+			bids: [],
+			clearingTick: '0',
+			endTime: '1',
+			finalized: false,
+			hasClearingPrice: false,
+			minimumBidAttoEth: 1n.toString(),
+			pendingEthRefund: '123',
+			pendingEthRefundGeneration: refundGeneration,
+			pool: snapshot.pools[0]?.address ?? address(11),
+			startTime: '1',
+			underfunded: false,
+			underfundedWinningAttoEth: 0n.toString(),
+		}
+		snapshot.auctions = [auction]
 		const metadata = (seed: number) => urgentOperationPlans(snapshot, { ...options, seed }).find(plan => plan.definitionId === 'statoblast.auction.withdraw-refund')?.metadata
-		expect(metadata(1)).toEqual({ auction: address(40), pendingRefundBefore: '123' })
+		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration })
 		expect(metadata(0xffff_fffe)).toEqual(metadata(1))
 		expect(canonicalLifecyclePresence(snapshot, { ...options, allowHighRisk: false })).toContainEqual({
+			blocksNovelty: true,
 			definitionId: 'statoblast.auction.withdraw-refund',
 			ecosystem: 'statoblast',
-			metadata: { auction: address(40), pendingRefundBefore: '123' },
+			metadata: { auction: address(40), refundGeneration },
 		})
+		auction.pendingEthRefund = '456'
+		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration })
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ blocksNovelty: true, definitionId: 'statoblast.auction.withdraw-refund', ecosystem: 'statoblast', metadata: { auction: address(40), refundGeneration } })
+		auction.pendingEthRefundGeneration = hash(401)
+		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration: hash(401) })
 	})
 
 	test('builds one pool-level vault migration with exact route and terminal source-vault evidence', () => {
@@ -83,7 +116,7 @@ describe('raw lifecycle identity audit', () => {
 
 		pool.vaultDiscoveryComplete = false
 		expect(urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')).toBeDefined()
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ blocksNovelty: true, definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
 		vault.repBackingUnits = '0'
 		expect(urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')).toBeUndefined()
 	})
@@ -144,7 +177,7 @@ describe('raw lifecycle identity audit', () => {
 		if (knownChild === undefined) throw new Error('Known open child missing')
 		knownChild.systemState = 0
 		expect(urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ blocksNovelty: false, definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
 
 		snapshot.pools.splice(1, 1)
 		const createdStep = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')?.steps[0]
@@ -155,11 +188,11 @@ describe('raw lifecycle identity audit', () => {
 		expect(terminalEvidence.indexed).toEqual({ parentPool: pool.address, vault: snapshot.wallet.address })
 
 		const deadline = BigInt(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-		snapshot.anchor.timestamp = (deadline - 120n).toString()
+		snapshot.anchor.timestamp = (deadline - 61n).toString()
 		expect(urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')).toBeDefined()
-		snapshot.anchor.timestamp = (deadline - 119n).toString()
+		snapshot.anchor.timestamp = (deadline - 60n).toString()
 		expect(urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
+		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ blocksNovelty: false, definitionId: 'statoblast.fork.migrate-vault', ecosystem: 'statoblast', metadata: { pool: pool.address } })
 	})
 
 	test('retains migrate-REP and create-child identities through non-actionable child/deadline margins', () => {
@@ -173,6 +206,7 @@ describe('raw lifecycle identity audit', () => {
 		snapshot.pools.push(closedChild)
 		expect(urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
 		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			blocksNovelty: false,
 			definitionId: 'statoblast.fork.migrate-rep',
 			ecosystem: 'statoblast',
 			metadata: { outcome: '0', pool: pool.address, targetAttoRep: pool.forkRepMigrationTargetAttoRep },
@@ -181,9 +215,9 @@ describe('raw lifecycle identity audit', () => {
 		snapshot.pools.pop()
 		pool.forkRepMigrationTargetAttoRep = '0'
 		const deadline = BigInt(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-		snapshot.anchor.timestamp = (deadline - 100n).toString()
+		snapshot.anchor.timestamp = (deadline - 60n).toString()
 		expect(urgentOperationPlans(snapshot, options).some(plan => plan.definitionId === 'statoblast.fork.create-child')).toBe(false)
-		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.create-child')).toHaveLength(3)
+		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.create-child')).toEqual(expect.arrayContaining([expect.objectContaining({ blocksNovelty: false }), expect.objectContaining({ blocksNovelty: false }), expect.objectContaining({ blocksNovelty: false })]))
 		snapshot.anchor.timestamp = deadline.toString()
 		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.create-child')).toHaveLength(3)
 		snapshot.anchor.timestamp = (deadline + 1n).toString()
@@ -198,9 +232,10 @@ describe('raw lifecycle identity audit', () => {
 		resumePool.escalationForkCarryFundingComplete = false
 		resumePool.escalationForkResumedAt = '0'
 		expect(urgentOperationPlans(resume, options).find(plan => plan.definitionId === 'statoblast.escalation.resume')).toBeUndefined()
-		expect(canonicalLifecyclePresence(resume, options)).toContainEqual({ definitionId: 'statoblast.escalation.resume', ecosystem: 'statoblast', metadata: { pool: resumePool.address } })
+		expect(canonicalLifecyclePresence(resume, options)).toContainEqual({ blocksNovelty: false, definitionId: 'statoblast.escalation.resume', ecosystem: 'statoblast', metadata: { pool: resumePool.address } })
 		resumePool.escalationForkCarryFundingComplete = true
 		expect(urgentOperationPlans(resume, options).find(plan => plan.definitionId === 'statoblast.escalation.resume')).toBeDefined()
+		expect(canonicalLifecyclePresence(resume, options).find(item => item.definitionId === 'statoblast.escalation.resume')).toMatchObject({ blocksNovelty: true })
 
 		const { pool, snapshot } = forkedSnapshot()
 		pool.forkOwnQuestion = true
@@ -208,14 +243,19 @@ describe('raw lifecycle identity audit', () => {
 		pool.escalationCanTriggerOwnFork = true
 		snapshot.escalationDeposits = [{ amountAttoRep: 100n.toString(), claimed: false, depositIndex: '7', escalationGame: pool.escalationGame, outcome: 1, parentDepositIndex: '7', pool: pool.address, vault: snapshot.wallet.address }]
 		const deadline = BigInt(pool.forkActivationTime) + MIGRATION_TIME_SECONDS
-		snapshot.anchor.timestamp = (deadline - 100n).toString()
+		expect(canonicalLifecyclePresence(snapshot, options).find(item => item.definitionId === 'statoblast.escalation.claim-forked')).toMatchObject({ blocksNovelty: true })
+		snapshot.anchor.timestamp = (deadline - 60n).toString()
 		expect(urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.escalation.claim-forked')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.escalation.claim-forked')).toHaveLength(1)
+		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.escalation.claim-forked')).toEqual([expect.objectContaining({ blocksNovelty: false })])
 
 		pool.unresolvedEscalationMigrationReadyOutcomes = []
 		pool.walletEscalationMaterializedOutcomes = [false, false, false]
 		expect(urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.fork.migrate-vault-unresolved')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.migrate-vault-unresolved')).toHaveLength(3)
+		expect(
+			canonicalLifecyclePresence(snapshot, options)
+				.filter(item => item.definitionId === 'statoblast.fork.migrate-vault-unresolved')
+				.every(item => !item.blocksNovelty),
+		).toBeTrue()
 		pool.walletEscalationMaterializedOutcomes[1] = true
 		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.migrate-vault-unresolved')).toHaveLength(2)
 
@@ -286,15 +326,17 @@ describe('raw lifecycle identity audit', () => {
 			pendingEthRefund: '0',
 			pool: snapshot.pools[0]?.address ?? address(11),
 			startTime: '1999999000',
+			underfunded: false,
+			underfundedWinningAttoEth: 0n.toString(),
 		}
 		snapshot.auctions = [auction]
-		const identities = () =>
+		const presences = () =>
 			canonicalLifecyclePresence(snapshot, options)
 				.filter(item => item.definitionId === 'statoblast.auction.refund')
-				.map(item => item.metadata)
-		expect(identities()).toEqual([
-			{ auction: auction.address, bidIndex: '0', tick: '0' },
-			{ auction: auction.address, bidIndex: '1', tick: '10' },
+				.map(item => ({ blocksNovelty: item.blocksNovelty, metadata: item.metadata }))
+		expect(presences()).toEqual([
+			{ blocksNovelty: true, metadata: { auction: auction.address, bidIndex: '0', tick: '0' } },
+			{ blocksNovelty: false, metadata: { auction: auction.address, bidIndex: '1', tick: '10' } },
 		])
 		expect(
 			urgentOperationPlans(snapshot, options)
@@ -303,14 +345,15 @@ describe('raw lifecycle identity audit', () => {
 		).toEqual([{ auction: auction.address, bidIndex: '0', tick: '0' }])
 		auction.hasClearingPrice = false
 		expect(urgentOperationPlans(snapshot, options).filter(plan => plan.definitionId === 'statoblast.auction.refund')).toHaveLength(0)
-		expect(identities()).toHaveLength(2)
+		expect(presences().map(item => item.blocksNovelty)).toEqual([false, false])
 		auction.hasClearingPrice = true
 		auction.clearingTick = '20'
 		expect(
 			urgentOperationPlans(snapshot, options)
 				.filter(plan => plan.definitionId === 'statoblast.auction.refund')
 				.map(plan => plan.metadata),
-		).toEqual(identities())
+		).toEqual(presences().map(item => item.metadata))
+		expect(presences().map(item => item.blocksNovelty)).toEqual([true, true])
 	})
 
 	test('treats repeatable residual sweeping as simulation-gated selectable work without tombstones', () => {

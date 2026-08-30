@@ -14,7 +14,7 @@ import {
 	signerCandidateSettings,
 } from '../../src/runtime/dashboard-controller.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { initialDurableState, initialRuntimeState } from '../../src/state/operator-state.ts'
+import { bindRuntimeStateToSigner, initialDurableState, initialRuntimeState, type RuntimeState } from '../../src/state/operator-state.ts'
 import { createDurableWorkflow, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 
@@ -69,6 +69,62 @@ function settingsUpdate(current: OperatorSettings, revision: string, execute: bo
 
 function runtimeState(current: OperatorSettings) {
 	return initialRuntimeState(current.paused, undefined, current.network.chainId, initialDurableState(current.network.chainId, current.paused))
+}
+
+const canonicalRepToken = '0x0000000000000000000000000000000000000002'
+
+function completeSignerScan(state: RuntimeState, current: OperatorSettings, balances: { eth?: bigint | undefined; rep?: bigint | undefined } = {}) {
+	if (current.privateKey === undefined) throw new Error('A signer-scoped test scan requires a private key')
+	const wallet = privateKeyToAccount(current.privateKey).address
+	bindRuntimeStateToSigner(state, wallet)
+	state.inventory = {
+		eth: (balances.eth ?? current.strategy.minimumEthReserveAttoEth + current.strategy.maximumGasCostAttoEth).toString(),
+		rep: [
+			{
+				balance: (balances.rep ?? current.strategy.minimumRepReserveAttoRep).toString(),
+				symbol: 'REP',
+				token: canonicalRepToken,
+				universeId: 'root',
+			},
+		],
+		weth: '0',
+	}
+	state.lastScanAt = '2026-08-29T00:00:00.000Z'
+	state.lastScannedBlock = 42n
+	state.topology = {
+		anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },
+		auctions: [],
+		complete: true,
+		pairs: [],
+		pools: [],
+		reports: [],
+		universes: [{ forkQuestionId: zeroHash, forkTime: '0', id: 'root', knownChildOutcomeCount: 0, repToken: canonicalRepToken }],
+	}
+}
+
+function noopController(current: OperatorSettings, state: RuntimeState) {
+	const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: true, revision: 'revision', settings: current }
+	let revision = 0
+	return {
+		configuration,
+		controller: createChaosDashboardController({
+			configuration,
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			saveConfiguration: async () => {
+				revision += 1
+				return `revision:${revision.toString()}`
+			},
+			saveState: async () => undefined,
+			state,
+		}),
+	}
 }
 
 async function captureFailure(operation: () => unknown | Promise<unknown>): Promise<unknown> {
@@ -138,6 +194,118 @@ describe('chaos dashboard configuration boundary', () => {
 					prerequisites: ['report'],
 				},
 			],
+		})
+	})
+
+	test('distinguishes unavailable pre-scan inventory and a durable safety pause', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		state.safetyPaused = true
+		state.paused = true
+		state.error = undefined
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			state,
+		})
+
+		expect(await controller.getState()).toMatchObject({
+			alerts: [{ message: expect.stringContaining('Safety pause'), severity: 'error' }],
+			inventoryAvailable: false,
+			safetyPaused: true,
+		})
+
+		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: true })
+	})
+
+	test('keeps a deferred lifecycle obligation in the dashboard state', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		state.obligations = [
+			{
+				attemptCount: 0,
+				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+				createdAt: '2026-08-29T00:00:00.000Z',
+				ecosystem: 'statoblast',
+				id: 'obligation:future-auction',
+				label: 'Future auction settlement',
+				metadata: { auction: '0x0000000000000000000000000000000000000001' },
+				operationId: 'statoblast.auction.settle',
+				status: 'deferred',
+				updatedAt: '2026-08-29T00:00:00.000Z',
+				workflowId: 'workflow:future-auction',
+			},
+		]
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			state,
+		})
+
+		expect(await controller.getState()).toMatchObject({
+			obligations: [
+				{
+					blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+					id: 'obligation:future-auction',
+					status: 'deferred',
+				},
+			],
+		})
+	})
+
+	test('surfaces a durable unplanned lifecycle presence blocker before the next scan', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		state.error = undefined
+		state.lifecyclePresenceBlocker = {
+			count: 3,
+			digest: `0x${'45'.repeat(32)}`,
+			firstDefinitionId: 'statoblast.escalation.resume',
+			firstEcosystem: 'statoblast',
+			observedAtBlock: '88',
+			presenceComplete: true,
+			reason: 'unplanned-due-identity',
+		}
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			state,
+		})
+
+		expect(await controller.getState()).toMatchObject({
+			alerts: [
+				{
+					message: expect.stringContaining('Complete canonical lifecycle discovery at block 88 contained 3 unplanned due identities, beginning with statoblast.escalation.resume (statoblast)'),
+					severity: 'error',
+				},
+			],
+		})
+
+		state.lifecyclePresenceBlocker.presenceComplete = false
+		expect(await controller.getState()).toMatchObject({
+			alerts: [{ message: expect.stringContaining('Incomplete canonical lifecycle discovery at block 88 exposed at least 3 unplanned due identities'), severity: 'error' }],
 		})
 	})
 
@@ -222,6 +390,7 @@ describe('chaos dashboard configuration boundary', () => {
 		const state = runtimeState(current)
 		state.protocolIndex = {
 			auctionBids: {},
+			auctionRefunds: {},
 			chainId: current.network.chainId,
 			childRepSplits: [],
 			cursor: { blockHash: zeroHash, blockNumber: current.runtime.protocolStartBlock.toString() },
@@ -229,12 +398,29 @@ describe('chaos dashboard configuration boundary', () => {
 			migrationRepSplits: [],
 			openOracle: current.deployment.openOracle,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			securityPoolForker: current.deployment.securityPoolForker,
 			startBlock: current.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,
 			zoltar: current.deployment.zoltar,
 		}
+		state.inventory = {
+			eth: '1000000000000000000',
+			rep: [{ balance: '1000000000000000000', symbol: 'REP', token: canonicalRepToken, universeId: 'root' }],
+			weth: '1000000000000000000',
+		}
+		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		state.lastScannedBlock = 42n
+		state.topology = {
+			anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },
+			auctions: [],
+			complete: true,
+			pairs: [],
+			pools: [],
+			reports: [],
+			universes: [{ forkQuestionId: zeroHash, forkTime: '0', id: 'root', knownChildOutcomeCount: 0, repToken: canonicalRepToken }],
+		}
+		state.warnings = ['Keyless scan warning']
 		const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current }
 		const controller = createChaosDashboardController({
 			configuration,
@@ -255,7 +441,85 @@ describe('chaos dashboard configuration boundary', () => {
 
 		expect(state.signerAddress).toBe(privateKeyToAccount(firstPrivateKey).address)
 		expect(state.protocolIndex).toBeUndefined()
+		expect(state.inventory).toEqual({ eth: '0', rep: [], weth: '0' })
+		expect(state.lastScanAt).toBeUndefined()
+		expect(state.lastScannedBlock).toBeUndefined()
+		expect(state.topology).toBeUndefined()
+		expect(state.warnings).toEqual([])
 		expect(state.activities[0]?.message).toContain('wallet-scoped protocol index invalidated')
+	})
+
+	test('requires a complete current-signer scan before live resume', async () => {
+		const current = configuredSettings(true, true)
+		const state = runtimeState(current)
+		if (current.privateKey === undefined) throw new Error('Expected a configured signer')
+		bindRuntimeStateToSigner(state, privateKeyToAccount(current.privateKey).address)
+		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		state.lastScannedBlock = 42n
+		state.topology = {
+			anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },
+			auctions: [],
+			complete: false,
+			pairs: [],
+			pools: [],
+			reports: [],
+			universes: [],
+		}
+		const { controller } = noopController(current, state)
+
+		await expect(controller.setPaused({ paused: false, revision: 'revision' })).rejects.toThrow('fresh, complete canonical scan for the configured signer')
+		expect(state.paused).toBeTrue()
+		expect(state.activities).toEqual([])
+	})
+
+	test('allows dry-run resume before the first canonical scan', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		const { configuration, controller } = noopController(current, state)
+
+		await controller.setPaused({ paused: false, revision: 'revision' })
+
+		expect(configuration.settings.paused).toBeFalse()
+		expect(state.paused).toBeFalse()
+		expect(state.status).toBe('dry-run')
+	})
+
+	test('rejects live enable when the scanned signer has no ETH', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		completeSignerScan(state, current, { eth: 0n })
+		const { controller } = noopController(current, state)
+
+		await expect(controller.setSettings(settingsUpdate(current, 'revision', true))).rejects.toThrow('minimumEthReserve plus one strategy.maximumGasCostEth')
+		expect(state.paused).toBeTrue()
+		expect(state.activities).toEqual([])
+	})
+
+	test('rejects live enable when the scanned signer has no canonical REP', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		completeSignerScan(state, current, { rep: 0n })
+		const { controller } = noopController(current, state)
+
+		await expect(controller.setSettings(settingsUpdate(current, 'revision', true))).rejects.toThrow('canonical REP inventory balance')
+		expect(state.paused).toBeTrue()
+		expect(state.activities).toEqual([])
+	})
+
+	test('enables and resumes live execution from an exactly funded current-signer scan', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		completeSignerScan(state, current)
+		const { configuration, controller } = noopController(current, state)
+
+		await controller.setSettings(settingsUpdate(current, 'revision', true))
+		expect(configuration.settings.runtime.execute).toBeTrue()
+		expect(configuration.revision).toBe('revision:1')
+		await controller.setPaused({ paused: false, revision: 'revision:1' })
+
+		expect(configuration.settings.paused).toBeFalse()
+		expect(state.paused).toBeFalse()
+		expect(state.status).toBe('running')
 	})
 
 	test('requires CAS-shaped pause and signer updates', () => {
@@ -587,6 +851,7 @@ describe('chaos dashboard configuration boundary', () => {
 	test('does not begin a resume when the pre-configuration safety checkpoint cannot persist', async () => {
 		const current = configuredSettings(true, true)
 		const state = runtimeState(current)
+		completeSignerScan(state, current)
 		const configuration = {
 			path: '/tmp/unused-chaos-config.json',
 			rememberSigner: true,
@@ -634,6 +899,7 @@ describe('chaos dashboard configuration boundary', () => {
 	test('latches a durable pause when a live-enable configuration save is indeterminate', async () => {
 		const current = configuredSettings(true, false)
 		const state = runtimeState(current)
+		completeSignerScan(state, current)
 		const configuration = {
 			path: '/tmp/unused-chaos-config.json',
 			rememberSigner: true,
@@ -813,6 +1079,7 @@ describe('chaos dashboard configuration boundary', () => {
 	test('keeps a committed live resume durably safety-paused when the final state commit fails', async () => {
 		const current = configuredSettings(true, true)
 		const state = runtimeState(current)
+		completeSignerScan(state, current)
 		const configuration = {
 			path: '/tmp/unused-chaos-config.json',
 			rememberSigner: true,
@@ -874,6 +1141,7 @@ describe('chaos dashboard configuration boundary', () => {
 	test('compensates through the owner file when both final and safety-checkpoint state writes fail', async () => {
 		const current = configuredSettings(true, true)
 		const state = runtimeState(current)
+		completeSignerScan(state, current)
 		const configuration = {
 			path: '/tmp/unused-chaos-config.json',
 			rememberSigner: true,

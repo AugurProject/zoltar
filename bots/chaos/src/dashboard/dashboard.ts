@@ -14,6 +14,7 @@ type OperationEvaluation = {
 	eligible?: boolean | undefined
 	enabled?: boolean | undefined
 	id?: string | undefined
+	independentlyExecutable?: boolean | undefined
 	label?: string | undefined
 	prerequisites: string[]
 	risk?: string | undefined
@@ -40,6 +41,7 @@ type WorkflowStep = {
 }
 
 type Workflow = {
+	classification?: string | undefined
 	completedAt?: string | undefined
 	ecosystem?: string | undefined
 	id?: string | undefined
@@ -101,6 +103,7 @@ type Snapshot = {
 	currentWorkflow?: Workflow | undefined
 	execute?: boolean | undefined
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
+	inventoryAvailable?: boolean | undefined
 	lastScanAt?: string | undefined
 	lastScannedBlock?: string | number | undefined
 	network?: string | undefined
@@ -109,6 +112,7 @@ type Snapshot = {
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
 	rpcHealth: RpcHealth
+	safetyPaused?: boolean | undefined
 	scheduler: {
 		due?: boolean | undefined
 		lastDelaySeconds?: string | number | undefined
@@ -342,7 +346,7 @@ const candidateRecoveryContext: RecoveryContextRefresh = {
 }
 
 const workflowRecoveryContext: RecoveryContextRefresh = {
-	available: value => value.paused === true && value.currentWorkflow?.status === 'waiting-continuation' && value.currentWorkflow.id !== undefined && value.currentWorkflow.updatedAt !== undefined,
+	available: value => value.paused === true && value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' && value.currentWorkflow.id !== undefined && value.currentWorkflow.updatedAt !== undefined,
 	fields: workflowFields,
 	loadedMessage: 'Partial workflow loaded. Review it, then submit again.',
 	missingMessage: 'No partial workflow awaiting continuation is available. Workflow controls remain disabled.',
@@ -416,6 +420,7 @@ function parseWorkflow(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
 	return {
+		classification: stringValue(source['classification']),
 		completedAt: stringValue(source['completedAt']),
 		ecosystem: stringValue(source['ecosystem']),
 		id: stringValue(source['id']),
@@ -515,6 +520,7 @@ function parseSnapshot(value: unknown): Snapshot {
 			})),
 			weth: scalarValue(inventory['weth']),
 		},
+		inventoryAvailable: booleanValue(source['inventoryAvailable']),
 		lastScanAt: stringValue(source['lastScanAt']),
 		lastScannedBlock: scalarValue(source['lastScannedBlock']),
 		network: stringValue(source['network']),
@@ -537,6 +543,7 @@ function parseSnapshot(value: unknown): Snapshot {
 			eligible: booleanValue(entry['eligible']),
 			enabled: booleanValue(entry['enabled']),
 			id: stringValue(entry['id']),
+			independentlyExecutable: booleanValue(entry['independentlyExecutable']),
 			label: stringValue(entry['label']),
 			prerequisites: strings(entry['prerequisites']),
 			risk: stringValue(entry['risk']),
@@ -562,6 +569,7 @@ function parseSnapshot(value: unknown): Snapshot {
 			requiredReadQuorum: nonnegativeIntegerValue(rpcHealth['requiredReadQuorum']),
 			status: rpcHealthStatusValue(rpcHealth['status']),
 		},
+		safetyPaused: booleanValue(source['safetyPaused']),
 		scheduler: {
 			due: booleanValue(scheduler['due']),
 			lastDelaySeconds: scalarValue(scheduler['lastDelaySeconds']),
@@ -731,7 +739,7 @@ function ecosystemLabel(value: string | undefined) {
 }
 
 function operationIsIndependentlyExecutable(value: OperationEvaluation) {
-	return value.classification === 'selectable' || value.classification === 'lifecycle-obligation'
+	return value.independentlyExecutable ?? (value.classification === 'selectable' || value.classification === 'lifecycle-obligation')
 }
 
 function classificationLabel(value: string | undefined) {
@@ -803,6 +811,7 @@ function statusTone(status: string | undefined): 'error' | 'info' | 'neutral' | 
 	if (normalized === 'failed' || normalized === 'error' || normalized === 'blocked') return 'error'
 	if (normalized === 'pending' || normalized === 'submitted' || normalized === 'recovering' || normalized === 'due') return 'warning'
 	if (normalized === 'dry-run' || normalized === 'simulated') return 'info'
+	if (normalized === 'deferred') return 'neutral'
 	return 'neutral'
 }
 
@@ -810,6 +819,11 @@ function statusLabel(status: string | undefined) {
 	const normalized = status?.trim().replaceAll('_', ' ').replaceAll('-', ' ')
 	if (normalized === undefined || normalized.length === 0) return 'Waiting'
 	return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1).toLowerCase()}`
+}
+
+function obligationDetail(obligation: Obligation) {
+	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
+	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
 }
 
 function applyMutationControlLatches() {
@@ -859,15 +873,29 @@ function latchConfigurationCommitIndeterminate(status?: HTMLElement, message = c
 	applyMutationControlLatches()
 }
 
+function recoveryItemCount(value: Snapshot) {
+	const selectableContinuation = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? 1 : 0
+	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
+}
+
+function activeSchedulerWorkLabel(value: Snapshot) {
+	if (value.pendingTransactions.length !== 0 || value.currentWorkflow?.status === 'waiting-transaction') return 'Transaction recovery pending'
+	if (value.currentWorkflow?.status === 'waiting-continuation') return 'Workflow continuation pending'
+	if (value.currentWorkflow?.status === 'waiting-obligation') return 'Lifecycle confirmation pending'
+	if (value.currentWorkflow?.status === 'running') return 'Operation in progress'
+	return undefined
+}
+
 function renderHeader(value: Snapshot) {
-	if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
+	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
+	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
 	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
 	else setBadge(modeBadge, 'Dry run', 'info')
 	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
 	const chainId = value.chainId ?? configuration?.chainId
 	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
 	setBadge(signerBadge, value.signerReady === true ? 'Signer ready' : 'Signer missing', value.signerReady === true ? 'success' : 'warning')
-	const recoveryItems = value.pendingTransactions.length + value.obligations.length
+	const recoveryItems = recoveryItemCount(value)
 	setBadge(recoveryBadge, recoveryItems === 0 ? 'Recovery clear' : `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, recoveryItems === 0 ? 'success' : 'warning')
 	let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
 	if (pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
@@ -888,10 +916,18 @@ function renderOverview(value: Snapshot) {
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
 	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No signer') : compactIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
-	balanceEth.textContent = formatAtomic18(value.inventory.eth)
-	balanceWeth.textContent = formatAtomic18(value.inventory.weth)
-	balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
-	renderRepBalances(value.inventory.rep)
+	if (value.inventoryAvailable === true) {
+		balanceEth.textContent = formatAtomic18(value.inventory.eth)
+		balanceWeth.textContent = formatAtomic18(value.inventory.weth)
+		balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
+		renderRepBalances(value.inventory.rep)
+	} else {
+		balanceEth.textContent = '—'
+		balanceWeth.textContent = '—'
+		balanceRepTotal.textContent = '—'
+		repBalances.className = 'token-list empty-state'
+		repBalances.textContent = 'Inventory unavailable until the first canonical scan.'
+	}
 	renderRpcHealth(value)
 	renderWorkflow(value.currentWorkflow)
 	renderCoverage(value.operationEvaluations)
@@ -1208,7 +1244,7 @@ function renderRecovery(value: Snapshot) {
 	pendingCount.textContent = value.pendingTransactions.length.toString()
 	obligationCount.textContent = value.obligations.length.toString()
 	obligationFields.disabled = value.paused !== true || value.obligations.length === 0
-	workflowFields.disabled = value.paused !== true || value.currentWorkflow?.status !== 'waiting-continuation'
+	workflowFields.disabled = value.paused !== true || value.currentWorkflow?.classification !== 'selectable' || value.currentWorkflow.status !== 'waiting-continuation'
 	const selectedObligation = obligationIdInput.value
 	obligationIdInput.replaceChildren(
 		...value.obligations.map(obligation => {
@@ -1235,12 +1271,12 @@ function renderRecovery(value: Snapshot) {
 				const row = node('div', 'stack-row')
 				const copy = node('div')
 				copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-				copy.append(identifierLine(`Nonce ${String(transaction.nonce ?? '—')} ·`, transaction.hash, 'pending transaction hash'))
+				copy.append(identifierLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
 				if (transaction.replacementHash !== undefined) {
-					copy.append(identifierLine('Replacement queued ·', transaction.replacementHash, 'replacement transaction hash'))
+					copy.append(identifierLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
 				}
 				if (transaction.cancellationHash !== undefined) {
-					copy.append(identifierLine('Cancellation queued ·', transaction.cancellationHash, 'cancellation transaction hash'))
+					copy.append(identifierLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
 				}
 				if (transaction.recoveryBlocker !== undefined) {
 					copy.append(node('small', 'warning-text', transaction.recoveryBlocker))
@@ -1262,7 +1298,7 @@ function renderRecovery(value: Snapshot) {
 				const row = node('div', 'stack-row')
 				const copy = node('div')
 				copy.append(node('strong', undefined, obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'))
-				copy.append(node('small', undefined, `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`))
+				copy.append(node('small', undefined, obligationDetail(obligation)))
 				const status = node('span')
 				setBadge(status, statusLabel(obligation.status ?? 'pending'), statusTone(obligation.status ?? 'pending'))
 				row.append(copy, status)
@@ -1324,6 +1360,13 @@ function renderCountdown() {
 		countdown.textContent = 'Paused'
 		countdownProgress.style.width = '0%'
 		setBadge(schedulerState, 'Scheduling stopped', 'warning')
+		return
+	}
+	const activeWork = activeSchedulerWorkLabel(value)
+	if (activeWork !== undefined) {
+		countdown.textContent = 'On hold'
+		countdownProgress.style.width = '100%'
+		setBadge(schedulerState, activeWork, 'warning')
 		return
 	}
 	if (value.scheduler.nextRunAt === undefined) {
@@ -1523,6 +1566,7 @@ async function mutatePaused(paused: boolean) {
 		await put('/api/paused', { paused, revision: configuration?.revision })
 		pauseStatus.textContent = paused ? 'Pause saved.' : 'Resume saved.'
 		await refresh()
+		pauseStatus.textContent = ''
 	} catch (error) {
 		const reconciliation = await reconcileUnknownMutation(error, pauseStatus, 'configuration and state', 'pause')
 		if (!reconciliation.handled) pauseStatus.textContent = error instanceof Error ? error.message : 'Pause control failed.'
@@ -1543,7 +1587,8 @@ function openResumeDialog() {
 		['Mode', value.execute === true ? 'Live execution' : 'Dry run'],
 		['Signer', signerDetail],
 		['Eligible operations', `${eligible.toString()} of ${executable.length.toString()}`],
-		['Recovery items', (value.pendingTransactions.length + value.obligations.length).toString()],
+		['Recovery items', recoveryItemCount(value).toString()],
+		['Safety latch', value.safetyPaused === true ? 'Active' : 'Clear'],
 	]
 	resumePreflight.replaceChildren(
 		...rows.map(([label, detail]) => {
@@ -1874,7 +1919,7 @@ settingsForm.addEventListener('submit', event => {
 			const maxDelaySeconds = parseDelay(maxDelayInput, 'Maximum delay')
 			if (minDelaySeconds >= maxDelaySeconds) throw new Error('Minimum delay must be at least one second less than maximum delay.')
 			const workflowValidForBlocks = Number(workflowValidBlocksInput.value)
-			if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks < 64 || workflowValidForBlocks > 1_000_000) throw new Error('Workflow validity must be a whole number from 64 through 1000000 blocks.')
+			if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks < 75 || workflowValidForBlocks > 1_000_000) throw new Error('Workflow validity must be a whole number from 75 through 1000000 blocks.')
 			const enabledEcosystems = [...document.querySelectorAll('[data-ecosystem-toggle]')].flatMap(toggle => {
 				if (!(toggle instanceof HTMLInputElement) || !toggle.checked || toggle.dataset['ecosystemToggle'] === undefined) return []
 				return [toggle.dataset['ecosystemToggle']]

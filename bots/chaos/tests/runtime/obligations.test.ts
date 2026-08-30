@@ -1,12 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
-import { abandonLifecycleObligation, beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, retryLifecycleObligation, synchronizeLifecycleObligations as synchronizeLifecycleObligationsAtAnchor, waitForCanonicalLifecycleConfirmation } from '../../src/runtime/obligations.ts'
+import {
+	abandonLifecycleObligation,
+	beginLifecycleObligation,
+	completeLifecycleObligation,
+	failLifecycleObligation,
+	lifecyclePresenceBlockerMessage,
+	MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS,
+	obligationForPlan,
+	retryLifecycleObligation,
+	synchronizeLifecycleObligations as synchronizeLifecycleObligationsAtAnchor,
+	waitForCanonicalLifecycleConfirmation,
+} from '../../src/runtime/obligations.ts'
 import { markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
-import type { DurableObligation, DurableObligationTombstone, DurableWorkflow } from '../../src/state/operator-state.ts'
+import { compactDurableState, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow } from '../../src/state/operator-state.ts'
 
 function obligationState() {
 	return {
 		lastScannedBlock: 10n,
+		lifecyclePresenceBlocker: undefined,
 		obligationTombstones: [] as DurableObligationTombstone[],
 		obligations: [] as DurableObligation[],
 		pendingTransactions: [],
@@ -83,9 +95,24 @@ function carryPlan(parentDepositIndex: string, block = '10'): OperationPlan {
 	}
 }
 
-function presence(value: OperationPlan) {
+function refundPlan(refundGeneration: string, block = '10'): OperationPlan {
+	return {
+		...plan(block),
+		definitionId: 'statoblast.auction.withdraw-refund',
+		ecosystem: 'statoblast',
+		id: `withdraw-refund:${refundGeneration}:${block}`,
+		label: 'Withdraw deferred auction refund',
+		metadata: {
+			auction: '0x0000000000000000000000000000000000000005',
+			refundGeneration,
+		},
+	}
+}
+
+function presence(value: OperationPlan, blocksNovelty = true) {
 	return [
 		{
+			blocksNovelty,
 			definitionId: value.definitionId,
 			ecosystem: value.ecosystem,
 			metadata: value.metadata,
@@ -94,6 +121,184 @@ function presence(value: OperationPlan) {
 }
 
 describe('durable lifecycle obligations', () => {
+	test('durably blocks novelty for a fresh canonical identity without fabricating executable work', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [], [...presence(value), ...presence(value)], true, 10n, 0n)
+
+		expect(state.lifecyclePresenceBlocker).toEqual(
+			expect.objectContaining({
+				count: 1,
+				firstDefinitionId: value.definitionId,
+				firstEcosystem: value.ecosystem,
+				observedAtBlock: '10',
+				presenceComplete: true,
+			}),
+		)
+		expect(state.obligations).toHaveLength(0)
+		expect(state.workflows).toHaveLength(0)
+	})
+
+	test('tracks a future lifecycle identity without blocking unrelated novelty before it is actionable', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [], presence(value, false), true, 10n)
+
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+		expect(state.obligations).toHaveLength(0)
+		expect(state.workflows).toHaveLength(0)
+	})
+
+	test('defers an existing obligation while its raw identity is temporarily nonactionable and promotes it when actionability returns', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+		expect(state.obligations[0]?.status).toBe('pending')
+
+		synchronizeLifecycleObligations(state, [], presence(value, false), true, 11n)
+		expect(state.obligations[0]?.status).toBe('deferred')
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('12'))], presence(value), true, 12n)
+		expect(state.obligations[0]?.status).toBe('pending')
+		expect(state.obligations).toHaveLength(1)
+		expect(state.workflows).toHaveLength(1)
+	})
+
+	test('retains an aggregate presence blocker through incomplete absence and clears it on complete absence', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [], presence(value), false, 10n, 0n)
+		const blocker = state.lifecyclePresenceBlocker
+		expect(blocker).toEqual(expect.objectContaining({ count: 1, presenceComplete: false }))
+
+		synchronizeLifecycleObligations(state, [], [], false, 11n, 0n)
+		expect(state.lifecyclePresenceBlocker).toEqual(blocker)
+
+		synchronizeLifecycleObligations(state, [], [], true, 12n, 0n)
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+	})
+
+	test('replaces a raw presence blocker with one real obligation when the identity becomes actionable', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [], presence(value), true, 10n, 0n)
+		expect(state.lifecyclePresenceBlocker).toBeDefined()
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('11'))], presence(value), true, 11n, 0n)
+
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+		expect(state.obligations).toHaveLength(1)
+		expect(state.workflows).toHaveLength(1)
+	})
+
+	test('creates actionable work before retaining the blocker for other raw identities', () => {
+		const actionable = plan('10')
+		const blocked = carryPlan('41')
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(state, [evaluation(actionable)], [...presence(actionable), ...presence(blocked)], true, 10n, 0n)
+
+		expect(obligationForPlan(state, actionable)).toBeDefined()
+		expect(state.lifecyclePresenceBlocker).toEqual(expect.objectContaining({ count: 1, firstDefinitionId: blocked.definitionId }))
+		expect(state.workflows).toHaveLength(1)
+	})
+
+	test('keeps later due batches blocked when the first batch has a terminal tombstone', () => {
+		const first = plan('10')
+		const later = { ...plan('10'), metadata: { reportId: '8' } }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n)
+		const obligation = obligationForPlan(state, first)
+		const workflow = state.workflows[0]
+		if (obligation === undefined || workflow === undefined) throw new Error('Missing first lifecycle batch fixture')
+		workflow.status = 'completed'
+		workflow.completedAt = new Date().toISOString()
+		expect(completeLifecycleObligation(state, obligation)).toBeTrue()
+		state.obligations = []
+		state.workflows = []
+
+		synchronizeLifecycleObligations(state, [], [...presence(first), ...presence(later)], true, 11n)
+
+		expect(state.lifecyclePresenceBlocker).toMatchObject({ count: 1, reason: 'unplanned-due-identity' })
+		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('11')
+	})
+
+	test('bounds a maximum-size actionable backlog before durable state materialization', () => {
+		const values = Array.from({ length: 10_000 }, (_, index) => ({
+			...plan('10'),
+			id: `settle:${index.toString()}`,
+			metadata: { reportId: index.toString() },
+		}))
+		const state = obligationState()
+
+		synchronizeLifecycleObligations(
+			state,
+			values.map(evaluation),
+			values.flatMap(value => presence(value)),
+			true,
+			10n,
+		)
+
+		expect(state.obligations).toHaveLength(MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS)
+		expect(state.workflows).toHaveLength(MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS)
+		expect(state.lifecyclePresenceBlocker).toMatchObject({
+			count: values.length - MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS,
+			reason: 'unplanned-due-identity',
+		})
+	})
+
+	test('reserves a durable tombstone slot before materializing lifecycle work', () => {
+		const value = plan('10')
+		const state = obligationState()
+		state.obligationTombstones = Array.from({ length: MAXIMUM_OBLIGATION_TOMBSTONE_COUNT }, (_, index) => ({
+			id: `historical:${index.toString()}`,
+			resolution: 'abandoned',
+			resolutionReason: 'Previously reconciled lifecycle identity',
+			resolvedAt: '2026-08-30T00:00:00.000Z',
+			resolvedAtBlock: '1',
+		}))
+
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+		expect(state.obligations).toHaveLength(0)
+		expect(state.workflows).toHaveLength(0)
+		expect(state.lifecyclePresenceBlocker).toMatchObject({ count: 1, reason: 'unplanned-due-identity' })
+
+		state.obligationTombstones.pop()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 11n)
+		const obligation = obligationForPlan(state, value)
+		const workflow = state.workflows[0]
+		if (obligation === undefined || workflow === undefined) throw new Error('Missing tombstone-capacity lifecycle fixture')
+		workflow.status = 'completed'
+		workflow.completedAt = new Date().toISOString()
+		expect(completeLifecycleObligation(state, obligation)).toBeTrue()
+		expect(state.obligationTombstones).toHaveLength(MAXIMUM_OBLIGATION_TOMBSTONE_COUNT)
+		expect(() => compactDurableState({ ...state, activities: [] })).not.toThrow()
+	})
+
+	test('fails closed when an actionable identity is absent from canonical presence', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		expect(() => synchronizeLifecycleObligations(state, [evaluation(value)], [], true, 10n, 0n)).toThrow('missing from canonical presence')
+		expect(state.obligations).toHaveLength(0)
+		expect(state.workflows).toHaveLength(0)
+	})
+
+	test('fails closed when an actionable plan is mislabeled as non-obstructing presence', () => {
+		const value = plan('10')
+		const state = obligationState()
+
+		expect(() => synchronizeLifecycleObligations(state, [evaluation(value)], presence(value, false), true, 10n, 0n)).toThrow('missing from obstructing canonical presence')
+		expect(state.obligations).toHaveLength(0)
+		expect(state.workflows).toHaveLength(0)
+	})
+
 	test('refreshes an anchored plan without duplicating the protocol obligation', () => {
 		const state = obligationState()
 		const first = plan('10')
@@ -290,9 +495,13 @@ describe('durable lifecycle obligations', () => {
 
 		step.failureKind = 'receipt-reverted'
 		retryLifecycleObligation(state, obligation)
-		expect(obligation).toMatchObject({ status: 'pending' })
+		expect(obligation).toMatchObject({ lastError: 'on-chain failure', status: 'pending' })
 		expect(workflow).toMatchObject({ status: 'blocked' })
-		expect(step).toMatchObject({ status: 'blocked' })
+		expect(step).toMatchObject({
+			failure: 'Explicit operator retry requested after a finalized revert or verified nonce cancellation',
+			status: 'blocked',
+		})
+		expect(step.failureKind).toBeUndefined()
 		expect(step.transactionHash).toBeUndefined()
 	})
 
@@ -350,7 +559,7 @@ describe('durable lifecycle obligations', () => {
 		expect(state.obligations[0]?.status).toBe('pending')
 	})
 
-	test('supersedes an expired execute identity while retaining its successor', () => {
+	test('defers an expired execute identity while retaining its successor', () => {
 		const execute = {
 			...plan('10'),
 			deadlineTimestamp: '1000',
@@ -367,11 +576,29 @@ describe('durable lifecycle obligations', () => {
 		const state = obligationState()
 		synchronizeLifecycleObligations(state, [evaluation(execute)], presence(execute), true, 10n, 900n)
 
-		synchronizeLifecycleObligations(state, [evaluation(expire)], [...presence(execute), ...presence(expire)], true, 11n, 1_001n)
+		synchronizeLifecycleObligations(state, [evaluation(expire)], [...presence(execute, false), ...presence(expire)], true, 11n, 1_001n)
 
-		expect(state.obligations.find(candidate => candidate.operationId === execute.definitionId)).toMatchObject({ status: 'abandoned' })
+		expect(state.obligations.find(candidate => candidate.operationId === execute.definitionId)).toMatchObject({ status: 'deferred' })
 		expect(state.obligations.find(candidate => candidate.operationId === expire.definitionId)).toMatchObject({ status: 'pending' })
-		expect(state.obligationTombstones).toEqual([expect.objectContaining({ resolution: 'abandoned', resolutionReason: expect.stringContaining('deadline passed') })])
+		expect(state.obligationTombstones).toHaveLength(0)
+	})
+
+	test('refreshes a deadline after the same raw identity becomes actionable again', () => {
+		const first = { ...plan('10'), deadlineTimestamp: '1000' }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n, 900n)
+
+		synchronizeLifecycleObligations(state, [], presence(first, false), true, 11n, 1_001n)
+		expect(state.obligations[0]?.status).toBe('deferred')
+		expect(state.obligationTombstones).toHaveLength(0)
+
+		const refreshed = { ...plan('12'), deadlineTimestamp: '2000' }
+		synchronizeLifecycleObligations(state, [evaluation(refreshed)], presence(refreshed), true, 12n, 1_100n)
+
+		expect(state.obligations).toHaveLength(1)
+		expect(state.workflows).toHaveLength(1)
+		expect(state.workflows[0]?.deadlineTimestamp).toBe('2000')
+		expect(state.obligations[0]?.status).toBe('pending')
 	})
 
 	test('does not automatically supersede semantically uncertain on-chain work', () => {
@@ -432,7 +659,26 @@ describe('durable lifecycle obligations', () => {
 		expect(state.workflows).toHaveLength(0)
 	})
 
-	test('retires terminal tombstones only after canonical absence beyond reorg retention', () => {
+	test('allows a later deferred-refund episode after the prior generation is tombstoned', () => {
+		const first = refundPlan(`0x${'11'.repeat(32)}`)
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n)
+		const firstObligation = obligationForPlan(state, first)
+		const firstWorkflow = state.workflows[0]
+		if (firstObligation === undefined || firstWorkflow === undefined) throw new Error('Missing first refund episode fixture')
+		firstWorkflow.status = 'completed'
+		firstWorkflow.completedAt = new Date().toISOString()
+		expect(completeLifecycleObligation(state, firstObligation)).toBeTrue()
+
+		const later = refundPlan(`0x${'22'.repeat(32)}`, '12')
+		synchronizeLifecycleObligations(state, [evaluation(later)], presence(later), true, 12n)
+
+		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: firstObligation.id, resolution: 'completed' }))
+		expect(state.obligations).toHaveLength(2)
+		expect(obligationForPlan(state, later)).toMatchObject({ metadata: later.metadata, status: 'pending' })
+	})
+
+	test('starts terminal tombstone retention at the first complete canonical absence', () => {
 		const value = plan('10')
 		const state = obligationState()
 		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
@@ -442,11 +688,65 @@ describe('durable lifecycle obligations', () => {
 		synchronizeLifecycleObligations(state, [evaluation(plan('20'))], presence(plan('20')), true, 20n)
 		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('20')
 		synchronizeLifecycleObligations(state, [], [], true, 84n)
+		expect(state.obligationTombstones[0]?.observedAbsentAtBlock).toBe('84')
 		expect(state.obligationTombstones).toHaveLength(1)
-		synchronizeLifecycleObligations(state, [], [], true, 85n)
+		synchronizeLifecycleObligations(state, [], [], true, 148n)
+		expect(state.obligationTombstones).toHaveLength(1)
+		synchronizeLifecycleObligations(state, [], [], true, 149n)
 		expect(state.obligationTombstones).toHaveLength(0)
 		expect(state.obligations).toHaveLength(0)
 		expect(state.workflows).toHaveLength(0)
+	})
+
+	test('retains a long-lived completed tombstone through first absence and restarts retention after a return', () => {
+		const value = plan('2')
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 2n)
+		const workflow = state.workflows[0]
+		if (workflow === undefined) throw new Error('Missing completed lifecycle fixture')
+		workflow.status = 'completed'
+		workflow.completedAt = new Date().toISOString()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 2n)
+
+		synchronizeLifecycleObligations(state, [], [], true, 100n)
+		expect(state.obligationTombstones[0]).toMatchObject({ observedAbsentAtBlock: '100', resolution: 'completed' })
+		expect(state.obligationTombstones).toHaveLength(1)
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('101'))], presence(value), true, 101n)
+		expect(state.lifecyclePresenceBlocker).toMatchObject({ count: 1, reason: 'completed-identity-returned' })
+		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('101')
+
+		synchronizeLifecycleObligations(state, [], [], true, 200n)
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+		expect(state.obligationTombstones[0]?.observedAbsentAtBlock).toBe('200')
+		synchronizeLifecycleObligations(state, [], [], true, 264n)
+		expect(state.obligationTombstones).toHaveLength(1)
+		synchronizeLifecycleObligations(state, [], [], true, 265n)
+		expect(state.obligationTombstones).toHaveLength(0)
+	})
+
+	test('blocks novelty when a completed identity returns after confirmed canonical absence', () => {
+		const value = plan('10')
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+		const obligation = obligationForPlan(state, value)
+		const workflow = state.workflows[0]
+		if (obligation === undefined || workflow === undefined) throw new Error('Missing completed lifecycle fixture')
+		workflow.status = 'completed'
+		workflow.completedAt = new Date().toISOString()
+
+		synchronizeLifecycleObligations(state, [], [], true, 11n)
+		expect(state.obligationTombstones[0]).toMatchObject({ observedAbsentAtBlock: '11', resolution: 'completed' })
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('12'))], presence(value), true, 12n)
+
+		expect(state.obligations).toHaveLength(1)
+		expect(state.workflows).toHaveLength(1)
+		const blocker = state.lifecyclePresenceBlocker
+		if (blocker === undefined) throw new Error('Missing completed-identity reorganization blocker')
+		expect(blocker).toMatchObject({ count: 1, reason: 'completed-identity-returned' })
+		expect(lifecyclePresenceBlockerMessage(blocker)).toContain('canonical reorganization is reconciled manually')
+		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('12')
 	})
 
 	test('retains an active tombstone while execution policy makes its plan unavailable', () => {
@@ -457,11 +757,13 @@ describe('durable lifecycle obligations', () => {
 		if (obligation === undefined) throw new Error('Missing test obligation')
 		abandonLifecycleObligation(state, obligation, 'Operator deliberately resolved this protocol item elsewhere')
 
-		synchronizeLifecycleObligations(state, [], presence(value), true, 100n)
-		synchronizeLifecycleObligations(state, [], presence(value), true, 200n)
+		synchronizeLifecycleObligations(state, [], presence(value, false), true, 100n)
+		synchronizeLifecycleObligations(state, [], presence(value, false), true, 200n)
 		synchronizeLifecycleObligations(state, [evaluation(plan('200'))], presence(plan('200')), true, 200n)
 
 		expect(state.obligationTombstones).toHaveLength(1)
+		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('200')
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
 		expect(state.obligations).toHaveLength(1)
 		expect(state.obligations[0]?.status).toBe('abandoned')
 	})

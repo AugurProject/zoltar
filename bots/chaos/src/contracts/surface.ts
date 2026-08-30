@@ -2,6 +2,14 @@ import type { OperationClassification } from '../operations/types.ts'
 
 export type ContractAbiEntryKind = 'fallback' | 'function' | 'receive'
 
+/** A selector intentionally routed through one catalog operation that subsumes its effects. */
+export interface ContractMethodSemanticAlias {
+	contract: string
+	method: string
+	relation: 'target-subsumes-source'
+	sharedImplementation: string
+}
+
 export interface ContractMethodClassification {
 	abiEntryKind: ContractAbiEntryKind
 	contract: string
@@ -9,6 +17,7 @@ export interface ContractMethodClassification {
 	classification: OperationClassification
 	operationId?: string
 	reason?: string
+	semanticAliasOf?: ContractMethodSemanticAlias
 	signatures?: readonly string[]
 }
 
@@ -64,6 +73,11 @@ const entry = (contract: string, method: string, classification: OperationClassi
 	const base = { abiEntryKind, classification, contract, method }
 	return { ...base, ...(operationId === undefined ? {} : { operationId }), ...(reason === undefined ? {} : { reason }), ...(signatures === undefined ? {} : { signatures }) }
 }
+
+const semanticAlias = (contract: string, method: string, classification: OperationClassification, operationId: string, targetMethod: string, sharedImplementation: string, reason: string): ContractMethodClassification => ({
+	...entry(contract, method, classification, operationId, reason),
+	semanticAliasOf: { contract, method: targetMethod, relation: 'target-subsumes-source', sharedImplementation },
+})
 
 // This is deliberately explicit. New protocol methods should fail the artifact coverage
 // test until their chaos behavior (or exclusion reason) is reviewed.
@@ -159,7 +173,15 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolForker', 'startTruthAuction', 'lifecycle-obligation', 'statoblast.auction.start'),
 	entry('SecurityPoolForker', 'finalizeTruthAuction', 'lifecycle-obligation', 'statoblast.auction.finalize-route'),
 	entry('SecurityPoolForker', 'forkZoltarWithOwnEscalationGame', 'selectable', 'statoblast.fork.own-question'),
-	entry('SecurityPoolForker', 'claimAuctionProceeds', 'prerequisite', 'statoblast.auction.claim', 'Alias of settleAuctionBids over the same finalized bid set; using both creates duplicate durable obligations.'),
+	semanticAlias(
+		'SecurityPoolForker',
+		'claimAuctionProceeds',
+		'lifecycle-obligation',
+		'statoblast.auction.settle-bids',
+		'settleAuctionBids',
+		'_claimAuctionProceeds',
+		'Semantic alias of SecurityPoolForker.settleAuctionBids: both selectors execute the same finalized claim implementation, and the canonical route subsumes this claim-only batch without creating duplicate durable obligations.',
+	),
 	entry('SecurityPoolForker', 'settleAuctionBids', 'lifecycle-obligation', 'statoblast.auction.settle-bids'),
 	entry('SecurityPoolForker', 'initializeChildForkedEscalationGameIfNeeded', 'role-restricted', undefined, 'The contract explicitly accepts only a self-call from SecurityPoolForker.'),
 	entry('SecurityPoolForker', 'receive', 'role-restricted', undefined, 'Only a trusted canonical truth auction may send ETH directly.', undefined, 'receive'),

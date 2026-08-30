@@ -1,14 +1,15 @@
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
-import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { assertSubmissionWindowOpen, maximumFeePerGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import { erc1155Abi, erc20Abi, openOracleAbi } from '../contracts/abi.ts'
+import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '../contracts/abi.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
+import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import {
@@ -25,14 +26,15 @@ import {
 	restoreWorkflowIntentSubmissionJournal,
 	retainWorkflow,
 	startWorkflow,
+	assertTerminalSubmissionBoundary,
 } from '../runtime/workflows.ts'
 import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type BalanceEvidenceObservation, type ReceiptEvidenceDisposition, type StorageEvidenceObservation } from './receipt-validation.ts'
-import { assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
+import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
-export const CHAOS_FINALITY_BLOCKS = 12n
+export const CHAOS_FINALITY_BLOCKS = EXECUTOR_FINALITY_BLOCKS
 
 export class TransactionAwaitingRecovery extends Error {
 	readonly hash: Hex
@@ -59,6 +61,7 @@ export type ExecutionEnvironment = {
 	executionCancelled?: (() => boolean) | undefined
 	finalityBlocks?: bigint | undefined
 	pool: RpcPool
+	persistState?: ((state: RuntimeState) => Promise<void>) | undefined
 	sender: Address
 	settings: OperatorSettings
 	state: RuntimeState
@@ -90,7 +93,26 @@ export function sameCanonicalAttesters(left: ReadonlySet<string>, right: Readonl
 }
 
 export function sameCanonicalExecutionAnchor(left: CanonicalExecutionAnchor, right: CanonicalExecutionAnchor) {
-	return left.number === right.number && left.hash.toLowerCase() === right.hash.toLowerCase() && sameCanonicalAttesters(left.attestingRpcUrls, right.attestingRpcUrls)
+	return left.number === right.number && left.hash.toLowerCase() === right.hash.toLowerCase() && left.baseFeePerGas === right.baseFeePerGas && left.timestamp === right.timestamp && sameCanonicalAttesters(left.attestingRpcUrls, right.attestingRpcUrls)
+}
+
+export function operationStepSubmissionLastValidBlock(parameters: { baseFeePerGas: bigint; currentBlock: bigint; currentTimestamp: bigint; maximumBlockIntervalSeconds: number; mode: 'private' | 'public'; plan: OperationPlan; step: OperationStep }) {
+	assertTerminalSubmissionBoundary(parameters.plan)
+	if (!parameters.plan.steps.some(step => step.id === parameters.step.id)) {
+		throw new Error(`${parameters.plan.id} does not contain submission step ${parameters.step.id}`)
+	}
+	const planHorizon = operationSubmissionLastValidBlock(parameters.plan, parameters.currentBlock, parameters.currentTimestamp, parameters.mode, parameters.maximumBlockIntervalSeconds)
+	const terminalSubmission = parameters.plan.terminalSubmission
+	const terminalStep = parameters.plan.steps.at(-1)
+	if (terminalSubmission === undefined || terminalStep?.id !== parameters.step.id) return planHorizon
+	if (parameters.mode !== 'private') throw new Error(`${parameters.plan.id} terminal step requires private submission`)
+	const persistedMaximumFeePerGas = unsignedQuantity(terminalSubmission.maximumFeePerGas, `${parameters.plan.id} terminal maximum fee per gas`)
+	const signingFeePerGas = maximumFeePerGas(parameters.baseFeePerGas)
+	if (signingFeePerGas > persistedMaximumFeePerGas) {
+		throw new Error(`${parameters.plan.id} terminal signing fee per gas exceeds its persisted maximum fee ceiling`)
+	}
+	const nextBlockOnly = parameters.currentBlock + 1n
+	return planHorizon === undefined || nextBlockOnly < planHorizon ? nextBlockOnly : planHorizon
 }
 
 export function assertRequestedTransactionHash(returnedHash: Hex, requestedHash: Hex, label: string) {
@@ -294,6 +316,7 @@ async function agreedTokenBalance(environment: ExecutionEnvironment, token: Addr
 export async function assertFreshWalletAssetDebits(environment: ExecutionEnvironment, step: Pick<OperationStep, 'label' | 'walletAssetDebits'>, anchor: CanonicalCallAnchor) {
 	const erc20Debits = new Map<string, { address: Address; amount: bigint; categories: Set<string> }>()
 	const erc1155Debits = new Map<string, { address: Address; amount: bigint; tokenId: bigint }>()
+	const securityPoolVaultDebits = new Map<string, { amount: bigint; pool: Address; vault: Address }>()
 	const openOracleDebits = new Map<
 		string,
 		{
@@ -321,6 +344,13 @@ export async function assertFreshWalletAssetDebits(environment: ExecutionEnviron
 				existing.amount += amount
 				existing.categories.add(debit.category)
 			}
+			continue
+		}
+		if (debit.kind === 'security-pool-vault-rep') {
+			const key = `${debit.pool.toLowerCase()}:${debit.vault.toLowerCase()}`
+			const existing = securityPoolVaultDebits.get(key)
+			if (existing === undefined) securityPoolVaultDebits.set(key, { amount, pool: debit.pool, vault: debit.vault })
+			else existing.amount += amount
 			continue
 		}
 		if (debit.kind === 'erc20') {
@@ -358,6 +388,12 @@ export async function assertFreshWalletAssetDebits(environment: ExecutionEnviron
 		}
 		if (debit.categories.has('rep') && debit.asset === zeroAddress) {
 			throw new Error(`${step.label} cannot classify native OpenOracle credit as REP`)
+		}
+	}
+	for (const debit of securityPoolVaultDebits.values()) {
+		const backing = await exactAttestedSecurityPoolVaultRep(environment, debit.pool, debit.vault, anchor)
+		if (backing < debit.amount) {
+			throw new OperationRediscoveryRequired(`${step.label} no longer has the declared SecurityPool vault REP backing for ${debit.pool}/${debit.vault}`)
 		}
 	}
 	const repCreditAssets = new Set([...openOracleDebits.values()].flatMap(debit => (debit.categories.has('rep') ? [debit.asset.toLowerCase()] : [])))
@@ -637,6 +673,30 @@ async function exactAttestedOpenOracleCredit(environment: ExecutionEnvironment, 
 	return quorumValue(label, observations, requiredConnectivity(environment.settings).rpcQuorum)
 }
 
+async function exactAttestedSecurityPoolVaultRep(environment: ExecutionEnvironment, pool: Address, vault: Address, anchor: CanonicalCallAnchor) {
+	const label = `SecurityPool ${pool} vault REP backing for ${vault}`
+	const observations = await everyCanonicalAttester(environment, label, anchor.attestingRpcUrls, async ({ client, endpoint }) => {
+		const [repBackingUnits] = await client.readContract({
+			abi: securityPoolAbi,
+			address: pool,
+			args: [vault],
+			blockNumber: anchor.number,
+			functionName: 'securityVaults',
+		})
+		return {
+			endpoint,
+			value: await client.readContract({
+				abi: securityPoolAbi,
+				address: pool,
+				args: [repBackingUnits],
+				blockNumber: anchor.number,
+				functionName: 'backingUnitsToAttoRep',
+			}),
+		}
+	})
+	return quorumValue(label, observations, requiredConnectivity(environment.settings).rpcQuorum)
+}
+
 async function exactAttestedErc1155Balance(environment: ExecutionEnvironment, token: Address, address: Address, tokenId: bigint, anchor: CanonicalCallAnchor) {
 	const label = `ERC-1155 ${token} balance ${tokenId.toString()} for ${address}`
 	const observations = await everyCanonicalAttester(environment, label, anchor.attestingRpcUrls, async ({ client, endpoint }) => ({
@@ -830,7 +890,52 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 }
 
 async function persist(environment: ExecutionEnvironment) {
+	if (environment.persistState !== undefined) {
+		await environment.persistState(environment.state)
+		return
+	}
 	await saveDurableState(environment.settings.runtime.stateFile, environment.state)
+}
+
+function receiptDispositionJournal(environment: ExecutionEnvironment, workflow: ReturnType<typeof recoverableWorkflowForIntent>) {
+	if (!environment.state.workflows.some(candidate => candidate.id === workflow.id)) {
+		throw new Error(`Workflow ${workflow.id} is unavailable for receipt disposition`)
+	}
+	return {
+		activities: structuredClone(environment.state.activities),
+		pendingTransactions: structuredClone(environment.state.pendingTransactions),
+		workflows: structuredClone(environment.state.workflows),
+	}
+}
+
+function restoreReceiptDispositionJournal(environment: ExecutionEnvironment, journal: ReturnType<typeof receiptDispositionJournal>) {
+	environment.state.activities = journal.activities
+	environment.state.pendingTransactions = journal.pendingTransactions
+	environment.state.workflows = journal.workflows
+}
+
+async function commitReceiptDisposition(environment: ExecutionEnvironment, intent: PendingTransactionIntent, workflow: ReturnType<typeof recoverableWorkflowForIntent>, apply: () => void) {
+	const journal = receiptDispositionJournal(environment, workflow)
+	try {
+		apply()
+	} catch (error) {
+		restoreReceiptDispositionJournal(environment, journal)
+		throw error
+	}
+	try {
+		await persist(environment)
+	} catch (error) {
+		restoreReceiptDispositionJournal(environment, journal)
+		let restorationError: unknown
+		try {
+			await persist(environment)
+		} catch (restoreError) {
+			restorationError = restoreError
+		}
+		const dispositionFailure = error instanceof Error ? error.message : String(error)
+		const restorationFailure = restorationError === undefined ? '' : `; restoring the submitted journal also failed: ${restorationError instanceof Error ? restorationError.message : String(restorationError)}`
+		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `receipt disposition was not durably committed: ${dispositionFailure}${restorationFailure}`)
+	}
 }
 
 async function assertSignedIntentBroadcastReadiness(environment: ExecutionEnvironment, intent: PendingTransactionIntent, signingAnchor: CanonicalExecutionAnchor) {
@@ -888,6 +993,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	assertExecutionActive(environment)
 	const wallet = requiredExecutionWallet(environment)
 	const account = wallet.account
+	const workflow = recoverableWorkflowForIntent(environment.state, workflowId)
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
 		throw new Error('Execution signer cannot sign and authenticate transactions')
 	}
@@ -895,7 +1001,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	assertExecutionActive(environment)
 	const block = await agreedLatestBlock(environment, `${step.label} signing block`)
 	try {
-		assertOperationPlanFresh(plan, block.number, environment.settings.strategy.workflowValidForBlocks)
+		assertOperationPlanFresh(plan, block.number, environment.settings.strategy.workflowValidForBlocks, new Set(workflow.steps.filter(candidate => candidate.status === 'confirmed').map(candidate => candidate.id)))
 	} catch (error) {
 		if (error instanceof Error && error.message.includes('expired before execution')) {
 			throw new OperationRediscoveryRequired(error.message, error)
@@ -934,13 +1040,21 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	assertExecutionActive(environment)
 	let lastValidBlockNumber: bigint | undefined
 	try {
-		lastValidBlockNumber = operationSubmissionLastValidBlock(plan, block.number, block.timestamp, environment.settings.submission.mode)
+		lastValidBlockNumber = operationStepSubmissionLastValidBlock({
+			baseFeePerGas: signingAnchor.baseFeePerGas,
+			currentBlock: signingAnchor.number,
+			currentTimestamp: signingAnchor.timestamp,
+			maximumBlockIntervalSeconds: environment.settings.network.maximumBlockIntervalSeconds,
+			mode: environment.settings.submission.mode,
+			plan,
+			step,
+		})
 	} catch (error) {
 		throw new OperationRediscoveryRequired(error instanceof Error ? error.message : String(error), error)
 	}
 	const signed = await prepareSignedTransaction({
-		baseFeePerGas: block.baseFeePerGas,
-		blockNumber: block.number,
+		baseFeePerGas: signingAnchor.baseFeePerGas,
+		blockNumber: signingAnchor.number,
 		chainId: environment.settings.network.chainId,
 		data: step.data,
 		from: account.address,
@@ -952,7 +1066,6 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		value: unsignedQuantity(step.value, `${step.label} value`),
 	})
 	const intent = createIntent(environment, plan, workflowId, step, signed, durableBalanceBaselines(step.evidence, beforeBalances), durableStorageBaselines(step.evidence, beforeStorage))
-	const workflow = recoverableWorkflowForIntent(environment.state, workflowId)
 	environment.state.pendingTransactions.push(intent)
 	markWorkflowStepSigned(workflow, step.id, intent.id, intent.hash)
 	recordActivity(environment.state, {
@@ -1036,17 +1149,18 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	try {
 		receipt = requireSuccessfulReceipt(step.label, finalized.receipt)
 	} catch (error) {
-		environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
-		markWorkflowFailed(workflow, step.id, error, 'receipt-reverted')
-		recordActivity(environment.state, {
-			ecosystem: plan.ecosystem,
-			hash: intent.hash,
-			message: `Confirmed transaction reverted: ${step.label}`,
-			operationId: plan.definitionId,
-			status: 'failed',
-			type: 'transaction',
+		await commitReceiptDisposition(environment, intent, workflow, () => {
+			environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
+			markWorkflowFailed(workflow, step.id, error, 'receipt-reverted')
+			recordActivity(environment.state, {
+				ecosystem: plan.ecosystem,
+				hash: intent.hash,
+				message: `Confirmed transaction reverted: ${step.label}`,
+				operationId: plan.definitionId,
+				status: 'failed',
+				type: 'transaction',
+			})
 		})
-		await persist(environment)
 		throw error
 	}
 	let afterBalances: Awaited<ReturnType<typeof captureBalanceEvidence>>
@@ -1066,34 +1180,63 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 			storage: storageObservations(step.evidence, beforeStorage, afterStorage),
 		})
 	} catch (error) {
-		environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
-		markWorkflowFailed(workflow, step.id, error, 'semantic-failure')
-		recordActivity(environment.state, {
-			ecosystem: plan.ecosystem,
-			hash: intent.hash,
-			message: `Confirmed transaction failed semantic validation: ${step.label}`,
-			operationId: plan.definitionId,
-			status: 'failed',
-			type: 'transaction',
+		await commitReceiptDisposition(environment, intent, workflow, () => {
+			environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
+			markWorkflowFailed(workflow, step.id, error, 'semantic-failure')
+			recordActivity(environment.state, {
+				ecosystem: plan.ecosystem,
+				hash: intent.hash,
+				message: `Confirmed transaction failed semantic validation: ${step.label}`,
+				operationId: plan.definitionId,
+				status: 'failed',
+				type: 'transaction',
+			})
 		})
-		await persist(environment)
 		throw error
 	}
-	environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
-	if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
-	else markWorkflowStepConfirmed(workflow, step.id, receipt.transactionHash)
-	recordActivity(environment.state, {
-		ecosystem: plan.ecosystem,
-		hash: receipt.transactionHash,
-		message: evidenceDisposition === 'waiting-canonical' ? `${step.label}; waiting for canonical lifecycle confirmation` : step.label,
-		operationId: plan.definitionId,
-		status: evidenceDisposition === 'waiting-canonical' ? 'pending' : 'confirmed',
-		type: 'transaction',
+	await commitReceiptDisposition(environment, intent, workflow, () => {
+		environment.state.pendingTransactions = environment.state.pendingTransactions.filter(candidate => candidate.id !== intent.id)
+		if (evidenceDisposition === 'waiting-canonical') markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
+		else markWorkflowStepConfirmed(workflow, step.id, receipt.transactionHash)
+		recordActivity(environment.state, {
+			ecosystem: plan.ecosystem,
+			hash: receipt.transactionHash,
+			message: evidenceDisposition === 'waiting-canonical' ? `${step.label}; waiting for canonical lifecycle confirmation` : step.label,
+			operationId: plan.definitionId,
+			status: evidenceDisposition === 'waiting-canonical' ? 'pending' : 'confirmed',
+			type: 'transaction',
+		})
 	})
-	await persist(environment)
+}
+
+async function assertRemainingWorkflowEthFunding(environment: ExecutionEnvironment, plan: OperationPlan, workflowId: string) {
+	assertExecutionActive(environment)
+	const wallet = requiredExecutionWallet(environment)
+	const workflow = recoverableWorkflowForIntent(environment.state, workflowId)
+	const remainingSteps = plan.steps.filter(step => requireWorkflowStep(workflow, step.id).status !== 'confirmed')
+	if (remainingSteps.length === 0) return
+	const anchor = await agreedLatestBlock(environment, `${plan.label} workflow funding block`)
+	const ethBalanceAttoEth = await exactAttestedEthBalance(environment, wallet.account.address, anchor)
+	try {
+		assertOperationEthFunding(
+			{
+				id: plan.id,
+				...(plan.maximumCleanupTransactionCount === undefined ? {} : { maximumCleanupTransactionCount: plan.maximumCleanupTransactionCount }),
+				steps: remainingSteps,
+			},
+			ethBalanceAttoEth,
+			environment.settings.strategy,
+		)
+	} catch (error) {
+		throw new OperationRediscoveryRequired(error instanceof Error ? error.message : String(error), error)
+	}
 }
 
 export async function executeOperationPlan(environment: ExecutionEnvironment, plan: OperationPlan) {
+	assertTerminalSubmissionBoundary(plan)
+	if (plan.terminalSubmission !== undefined && environment.settings.submission.mode !== 'private') {
+		throw new Error(`${plan.id} requires private submission before its terminal next-block constraint can be executed`)
+	}
 	if (environment.state.pendingTransactions.length !== 0) {
 		throw new Error('Pending transaction recovery must complete before a new operation')
 	}
@@ -1109,6 +1252,7 @@ export async function executeOperationPlan(environment: ExecutionEnvironment, pl
 	})
 	await persist(environment)
 	try {
+		await assertRemainingWorkflowEthFunding(environment, plan, workflow.id)
 		for (const step of plan.steps) {
 			if (requireWorkflowStep(workflow, step.id).status === 'confirmed') continue
 			await executeStep(environment, plan, workflow.id, step)

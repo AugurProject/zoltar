@@ -27,6 +27,7 @@
 		"chainId": 4242424242,
 		"explorerUrl": "https://explorer.custom-chain.example.invalid",
 		"kind": "custom",
+		"maximumBlockIntervalSeconds": 30,
 		"name": "Zoltar Custom Chain Placeholder"
 	},
 	"networkConfigured": true,

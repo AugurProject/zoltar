@@ -112,9 +112,9 @@ const scenarios: RecoveryScenario[] = [
 		fieldsId: 'workflow-fields',
 		formId: 'workflow-form',
 		label: 'partial workflow',
-		recoveredState: state({ workflows: [{ id: 'workflow-1', status: 'waiting-continuation', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
+		recoveredState: state({ workflows: [{ classification: 'selectable', id: 'workflow-1', status: 'waiting-continuation', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
 		retryId: 'workflow-retry',
-		staleState: state({ workflows: [{ id: 'workflow-1', status: 'waiting-continuation' }] }),
+		staleState: state({ workflows: [{ classification: 'selectable', id: 'workflow-1', status: 'waiting-continuation' }] }),
 		statusId: 'workflow-status',
 	},
 	{
@@ -142,6 +142,7 @@ const workflowRenderingState = state({
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
 		{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.blocked-sibling', label: 'Blocked report sibling', risk: 'low' }, eligibility: { blockers: ['No safe fixture candidate exists'], eligible: false } },
 		{ definition: { classification: 'role-restricted', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['Factory only'], eligible: false } },
+		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
 	inventory: {
@@ -149,7 +150,10 @@ const workflowRenderingState = state({
 		rep: [{ balance: '123456789012345678901', symbol: 'REP', token: '0x9999999999999999999999999999999999999998', universeId: '0' }],
 		weth: '42',
 	},
-	obligations: [{ id: 'obligation-rendering', label: 'Rendered obligation', status: 'executing', updatedAt: '2026-08-24T00:01:00.000Z' }],
+	obligations: [
+		{ id: 'obligation-rendering', label: 'Rendered obligation', status: 'executing', updatedAt: '2026-08-24T00:01:00.000Z' },
+		{ ecosystem: 'open-oracle', id: 'obligation-deferred', label: 'Deferred obligation', status: 'deferred', updatedAt: '2026-08-24T00:01:00.000Z' },
+	],
 	paused: false,
 	pendingTransactions: [
 		{
@@ -162,7 +166,7 @@ const workflowRenderingState = state({
 		},
 	],
 	rpcEndpointHealth: readRpcHealth,
-	scheduler: { status: 'waiting-transaction' },
+	scheduler: { lastDelaySeconds: 60, nextRunAt: '2020-08-24T00:01:00.000Z', selectedOperationId: 'open-oracle.settle', status: 'running' },
 	topology: {
 		anchor: { blockNumber: '4242', timestamp: '1000' },
 		auctions: [{ address: topologyValues.auctionAddress, bids: [], finalized: false, pool: topologyValues.auctionPoolAddress }],
@@ -173,6 +177,26 @@ const workflowRenderingState = state({
 		universes: [{ id: '0', knownChildOutcomes: [], repToken: topologyValues.repToken }],
 	},
 	wallet: walletAddress,
+})
+
+const partialRecoveryDashboardState = state({
+	inventory: { eth: '1000000000000000000', rep: [], weth: '2000000000000000000' },
+	inventoryAvailable: false,
+	paused: true,
+	safetyPaused: true,
+	workflows: [
+		{
+			classification: 'selectable',
+			id: 'workflow-partial-dashboard',
+			label: 'Partial dashboard workflow',
+			status: 'waiting-continuation',
+			steps: [
+				{ label: 'Confirmed preparation', status: 'confirmed' },
+				{ label: 'Canonical cleanup', status: 'blocked' },
+			],
+			updatedAt: '2026-08-24T00:00:00.000Z',
+		},
+	],
 })
 
 const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
@@ -499,6 +523,24 @@ browserTest(
 				expect(await cdp.evaluate(`document.querySelector('#${scenario.fieldsId}')?.disabled`)).toBe(false)
 			}
 
+			initialDashboardState = partialRecoveryDashboardState
+			recoveredDashboardState = partialRecoveryDashboardState
+			failSecondStateRead = false
+			stateRequests = 0
+			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
+			expect(
+				await cdp.evaluate(`({
+					eth: document.querySelector('#balance-eth')?.textContent,
+					recovery: document.querySelector('#recovery-badge')?.textContent,
+					rep: document.querySelector('#rep-balances')?.textContent,
+					weth: document.querySelector('#balance-weth')?.textContent,
+				})`),
+			).toEqual({ eth: '—', recovery: '1 recovery item', rep: 'Inventory unavailable until the first canonical scan.', weth: '—' })
+			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
+			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
+			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
+
 			initialDashboardState = workflowRenderingState
 			recoveredDashboardState = workflowRenderingState
 			failSecondStateRead = false
@@ -512,6 +554,7 @@ browserTest(
 				await cdp.command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height: viewport.height, mobile: false, width: viewport.width })
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 				await waitFor(`document.querySelectorAll('#current-workflow .step-list li').length === ${workflowSteps.length.toString()}`, `${viewport.label} workflow steps did not render`)
+				expect(await cdp.evaluate("document.querySelector('#scheduler-state')?.textContent")).toBe('Transaction recovery pending')
 				const health = await cdp.evaluate(`({
 					chain: document.querySelector('#rpc-chain-readiness')?.textContent,
 					configured: document.querySelector('#rpc-configured-total')?.textContent,
@@ -635,7 +678,7 @@ browserTest(
 						expect(Reflect.get(rendered, 'copyName')).toBe(`Copy workflow transaction hash: ${expected.transactionHash}`)
 					}
 				}
-				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Waiting transaction', workflow: 'Waiting transaction' })
+				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Transaction recovery pending', workflow: 'Waiting transaction' })
 				await expectVisibleIdentifiers([{ type: 'wallet address', value: walletAddress }, ...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ type: 'workflow transaction hash', value: step.transactionHash }]))], viewport.width === 390 ? 44 : 32)
 				if (viewport.width === 390) {
 					const contextualActionHeights = await cdp.evaluate(`[...document.querySelectorAll('.text-link')].flatMap(link => {
@@ -706,13 +749,20 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
 				await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
+				expect(
+					await cdp.evaluate(`(() => {
+						const alias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('claimAuctionProceeds'))
+						const statoblast = [...document.querySelectorAll('#coverage-summary .coverage-card')].find(card => card.textContent?.includes('Statoblast'))
+						return { coverage: statoblast?.querySelector('strong')?.textContent, eligibility: alias?.querySelector('td:nth-child(6) .badge')?.textContent }
+					})()`),
+				).toEqual({ coverage: '0/0', eligibility: 'Not independently selectable' })
 				if (viewport.label === 'desktop') {
 					expect(
 						await cdp.evaluate(`({
 								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
 								rows: document.querySelectorAll('#catalog-rows tr').length,
 							})`),
-					).toEqual({ candidate: '2', rows: 4 })
+					).toEqual({ candidate: '2', rows: 5 })
 					expect(
 						await cdp.evaluate(`(() => {
 							const shell = document.querySelector('.table-shell')
@@ -879,6 +929,12 @@ browserTest(
 						pending: document.querySelector('#pending-transactions .badge')?.textContent,
 					})`),
 				).toEqual({ activity: 'Dry run', obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
+				expect(
+					await cdp.evaluate(`(() => {
+						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
+						return { detail: row?.querySelector('small')?.textContent, status: row?.querySelector('.badge')?.textContent, tone: row?.querySelector('.badge')?.className }
+					})()`),
+				).toEqual({ detail: 'Open Oracle · tracked, not currently actionable', status: 'Deferred', tone: 'badge neutral' })
 				const recoveryTextarea = await cdp.evaluate(`(() => {
 					const fields = document.querySelector('#candidate-fields')
 					const input = document.querySelector('#candidate-confirmation')

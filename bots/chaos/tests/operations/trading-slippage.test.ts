@@ -7,6 +7,7 @@ import { snapshotFixture } from './fixture.ts'
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
+	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: (10n ** 15n).toString(),
 	maxRepSpendAttoRep: (10n ** 15n).toString(),
 	minimumEthReserveAttoEth: (10n ** 16n).toString(),

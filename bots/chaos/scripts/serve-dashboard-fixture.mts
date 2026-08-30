@@ -3,7 +3,12 @@ import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
 
 const now = Date.now()
 const dashboardPassword = 'dashboard visual fixture password'
-let paused = false
+const scenario = process.argv[2] ?? 'baseline'
+if (scenario !== 'baseline' && scenario !== 'safety-recovery') {
+	throw new Error('Dashboard fixture scenario must be baseline or safety-recovery')
+}
+const safetyRecovery = scenario === 'safety-recovery'
+let paused = safetyRecovery
 let revisionNumber = 7
 let hasSigner = true
 
@@ -47,11 +52,14 @@ function settings() {
 
 function state() {
 	return {
-		activities: [
-			{ at: new Date(now - 45_000).toISOString(), ecosystem: 'trading', hash: `0x${'12'.repeat(32)}`, message: 'Entered YES position', operationId: 'trading.position.enter', status: 'confirmed', summary: 'Receipt and share-balance postcondition confirmed.', type: 'operation' },
-			{ at: new Date(now - 380_000).toISOString(), ecosystem: 'open-oracle', message: 'Report workflow planned', operationId: 'open-oracle.report', status: 'dry-run', summary: 'Anchored plan generated; no transaction was signed.', type: 'operation' },
-			{ at: new Date(now - 740_000).toISOString(), message: 'Random delay scheduled', status: 'info', summary: 'Next delay differs from the previous delay.', type: 'scheduler' },
-		],
+		activities: safetyRecovery
+			? [{ at: new Date(now - 12_000).toISOString(), ecosystem: 'statoblast', message: 'Safety pause latched after a semantic evidence mismatch', operationId: 'statoblast.oracle.request-price', status: 'failed', summary: 'Review the partial workflow before explicitly resuming.', type: 'recovery' }]
+			: [
+					{ at: new Date(now - 45_000).toISOString(), ecosystem: 'trading', hash: `0x${'12'.repeat(32)}`, message: 'Entered YES position', operationId: 'trading.position.enter', status: 'confirmed', summary: 'Receipt and share-balance postcondition confirmed.', type: 'operation' },
+					{ at: new Date(now - 380_000).toISOString(), ecosystem: 'open-oracle', message: 'Report workflow planned', operationId: 'open-oracle.report', status: 'dry-run', summary: 'Anchored plan generated; no transaction was signed.', type: 'operation' },
+					{ at: new Date(now - 740_000).toISOString(), message: 'Random delay scheduled', status: 'info', summary: 'Next delay differs from the previous delay.', type: 'scheduler' },
+				],
+		alerts: safetyRecovery ? [{ message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution', severity: 'error' }] : [],
 		chainId: 11_155_111,
 		error: undefined,
 		evaluations: evaluations(),
@@ -63,24 +71,27 @@ function state() {
 			],
 			weth: '375000000000000000',
 		},
-		lastScanAt: new Date(now - 8_000).toISOString(),
+		inventoryAvailable: !safetyRecovery,
+		lastScanAt: safetyRecovery ? undefined : new Date(now - 8_000).toISOString(),
 		lastScannedBlock: 8_842_011n,
-		obligations: [{ blockers: [], dueAt: new Date(now + 42_000).toISOString(), ecosystem: 'open-oracle', id: 'obligation-1', label: 'Settle report 8124', operationId: 'open-oracle.settle', status: 'pending', updatedAt: new Date(now - 8_000).toISOString() }],
+		obligations: safetyRecovery ? [] : [{ blockers: [], dueAt: new Date(now + 42_000).toISOString(), ecosystem: 'open-oracle', id: 'obligation-1', label: 'Settle report 8124', operationId: 'open-oracle.settle', status: 'pending', updatedAt: new Date(now - 8_000).toISOString() }],
 		paused,
-		pendingTransactions: [
-			{
-				data: `0x${'ab'.repeat(256)}`,
-				hash: `0x${'34'.repeat(32)}`,
-				label: 'Enter YES position',
-				nonce: 19n,
-				operationId: 'trading.position.enter',
-				recoveryBlocker: 'Automatic resubmission window closed; verify a receipt, exact replacement, or nonce cancellation',
-				serializedTransaction: `0x${'cd'.repeat(512)}`,
-				status: 'submitted',
-				submissionBlock: 8_842_010n,
-				submittedAt: new Date(now - 12_000).toISOString(),
-			},
-		],
+		pendingTransactions: safetyRecovery
+			? []
+			: [
+					{
+						data: `0x${'ab'.repeat(256)}`,
+						hash: `0x${'34'.repeat(32)}`,
+						label: 'Enter YES position',
+						nonce: 19n,
+						operationId: 'trading.position.enter',
+						recoveryBlocker: 'Automatic resubmission window closed; verify a receipt, exact replacement, or nonce cancellation',
+						serializedTransaction: `0x${'cd'.repeat(512)}`,
+						status: 'submitted',
+						submissionBlock: 8_842_010n,
+						submittedAt: new Date(now - 12_000).toISOString(),
+					},
+				],
 		rpcEndpointHealth: [
 			{ chainId: 11_155_111, checkedAt: new Date(now - 7_000).toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://rpc.invalid' },
 			{ chainId: 11_155_111, checkedAt: new Date(now - 7_100).toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://quorum-one.invalid' },
@@ -90,6 +101,7 @@ function state() {
 			{ lastSuccessAt: new Date(now - 6_100).toISOString(), status: 'healthy', target: 'https://quorum-one.invalid' },
 			{ error: 'api_key=dashboard-secret', lastFailureAt: new Date(now - 5_900).toISOString(), status: 'degraded', target: 'https://quorum-two.invalid' },
 		],
+		safetyPaused: safetyRecovery,
 		scheduler: {
 			lastDelaySeconds: 2_113,
 			lastRunAt: new Date(now - 575_000).toISOString(),
@@ -111,21 +123,39 @@ function state() {
 			],
 		},
 		wallet: hasSigner ? '0x9999999999999999999999999999999999999999' : undefined,
-		workflows: [
-			{
-				createdAt: new Date(now - 20_000).toISOString(),
-				ecosystem: 'trading',
-				id: 'workflow-92',
-				label: 'Enter YES position',
-				operationId: 'trading.position.enter',
-				status: 'waiting-transaction',
-				steps: [
-					{ data: `0x${'ab'.repeat(256)}`, label: 'Approve router', status: 'confirmed', transactionHash: `0x${'56'.repeat(32)}` },
-					{ data: `0x${'ef'.repeat(256)}`, label: 'Enter YES', status: 'submitted', transactionHash: `0x${'34'.repeat(32)}` },
+		workflows: safetyRecovery
+			? [
+					{
+						classification: 'selectable',
+						createdAt: new Date(now - 60_000).toISOString(),
+						ecosystem: 'statoblast',
+						id: 'workflow-safety-recovery',
+						label: 'Request oracle price',
+						operationId: 'statoblast.oracle.request-price',
+						status: 'waiting-continuation',
+						steps: [
+							{ label: 'Approve WETH', status: 'confirmed', transactionHash: `0x${'56'.repeat(32)}` },
+							{ label: 'Revoke WETH approval', status: 'blocked' },
+						],
+						updatedAt: new Date(now - 12_000).toISOString(),
+					},
+				]
+			: [
+					{
+						classification: 'selectable',
+						createdAt: new Date(now - 20_000).toISOString(),
+						ecosystem: 'trading',
+						id: 'workflow-92',
+						label: 'Enter YES position',
+						operationId: 'trading.position.enter',
+						status: 'waiting-transaction',
+						steps: [
+							{ data: `0x${'ab'.repeat(256)}`, label: 'Approve router', status: 'confirmed', transactionHash: `0x${'56'.repeat(32)}` },
+							{ data: `0x${'ef'.repeat(256)}`, label: 'Enter YES', status: 'submitted', transactionHash: `0x${'34'.repeat(32)}` },
+						],
+						updatedAt: new Date(now - 12_000).toISOString(),
+					},
 				],
-				updatedAt: new Date(now - 12_000).toISOString(),
-			},
-		],
 	}
 }
 
@@ -156,4 +186,4 @@ const server = startDashboardServer(4193, {
 	setWorkflow: () => {},
 })
 
-console.log(`Chaos dashboard fixture listening at ${server.url.href}`)
+console.log(`Chaos dashboard ${scenario} fixture listening at ${server.url.href}`)

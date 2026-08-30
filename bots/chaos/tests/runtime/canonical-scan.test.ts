@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { getAddress, zeroHash } from '../support/bot-shared.ts'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../../src/contracts/surface.ts'
+import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import {
 	applyExecutionPolicy,
 	blockExecutableEvaluations,
@@ -23,7 +24,8 @@ import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../.
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
-import { snapshotFixture } from '../operations/fixture.ts'
+import { hash, snapshotFixture } from '../operations/fixture.ts'
+import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000001')
 const weth = getAddress('0x0000000000000000000000000000000000000002')
@@ -85,8 +87,8 @@ function settings() {
 
 function snapshot(): EcosystemSnapshot {
 	return {
-		anchor: { blockHash: zeroHash, blockNumber: '10', timestamp: '20' },
-		auctions: [{ address: auction, bids: [], clearingTick: '0', endTime: '30', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '0', pool: wallet, startTime: '1' }],
+		anchor: { baseFeePerGas: '1', blockHash: zeroHash, blockNumber: '10', timestamp: '20' },
+		auctions: [{ address: auction, bids: [], clearingTick: '0', endTime: '30', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '0', pool: wallet, startTime: '1', underfunded: false, underfundedWinningAttoEth: 0n.toString() }],
 		chainId: 11155111,
 		deployments: { openOracle: oracle, questionData: wallet, securityPoolFactory: wallet, securityPoolForker: wallet, tradingFactory: wallet, tradingRouter: wallet, weth, zoltar: wallet },
 		escalationDeposits: [],
@@ -172,6 +174,7 @@ describe('canonical scan policy', () => {
 		const base = snapshot()
 		const index: ChaosProtocolIndex = {
 			auctionBids: { [auction.toLowerCase()]: [{ amountAttoEth: 4n.toString(), index: '2', refunded: false, tick: '-1' }] },
+			auctionRefunds: {},
 			chainId: 11155111,
 			childRepSplits: [],
 			cursor: { blockHash: zeroHash, blockNumber: '10' },
@@ -179,7 +182,7 @@ describe('canonical scan policy', () => {
 			migrationRepSplits: [],
 			openOracle: oracle,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			securityPoolForker: wallet,
 			startBlock: '0',
 			wallet,
@@ -194,12 +197,49 @@ describe('canonical scan policy', () => {
 		})
 	})
 
+	test('keeps partial refund backfill non-executable and requires complete index storage continuity', () => {
+		const partial = snapshot()
+		const partialAuction = partial.auctions[0]
+		if (partialAuction === undefined) throw new Error('Auction fixture missing')
+		partialAuction.pendingEthRefund = '8'
+		const options = planningOptions(settings(), 1)
+		expect(canonicalLifecyclePresence(partial, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeFalse()
+
+		const generation = hash(600)
+		const completeIndex: ChaosProtocolIndex = {
+			auctionBids: {},
+			auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 8n.toString() } },
+			chainId: partial.chainId,
+			childRepSplits: [],
+			cursor: { blockHash: partial.anchor.blockHash, blockNumber: partial.anchor.blockNumber },
+			escalationDeposits: [],
+			migrationRepSplits: [],
+			openOracle: partial.deployments.openOracle,
+			reports: [],
+			schemaVersion: 3,
+			securityPoolForker: partial.deployments.securityPoolForker,
+			startBlock: '0',
+			wallet: partial.wallet.address,
+			zoltar: partial.deployments.zoltar,
+		}
+		const complete = snapshotWithProtocolIndex(partial, completeIndex)
+		expect(complete.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
+		expect(canonicalLifecyclePresence(complete, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
+
+		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without an authenticated EthRefundDeferred episode')
+		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 7n.toString() } } })).toThrow('does not match its authenticated event episode')
+
+		const withdrawn = snapshot()
+		expect(() => snapshotWithProtocolIndex(withdrawn, completeIndex)).toThrow('authenticated active refund episode but zero anchored pending storage')
+	})
+
 	test('projects deterministic wallet and pool-held REP migration progress into the anchored snapshot', () => {
 		const base = snapshotFixture()
 		const pool = base.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		const index: ChaosProtocolIndex = {
 			auctionBids: {},
+			auctionRefunds: {},
 			chainId: base.chainId,
 			childRepSplits: [
 				{ childPoolRepSplitAttoRep: 30n.toString(), outcomeIndex: '1', pool: pool.address },
@@ -213,7 +253,7 @@ describe('canonical scan policy', () => {
 			],
 			openOracle: base.deployments.openOracle,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			securityPoolForker: base.deployments.securityPoolForker,
 			startBlock: '0',
 			wallet: base.wallet.address,
@@ -230,22 +270,134 @@ describe('canonical scan policy', () => {
 			eligibility: { blockers: [], eligible: true },
 			plan: { classification: 'selectable', createdAtBlock: '1', definitionId: 'trade', ecosystem: 'trading', id: 'plan', label: 'Trade', metadata: {}, obligation: false, planningSeed: 1, postconditions: [], priority: 'random', risk: 'low', steps: [] },
 		}
-		const result = applyExecutionPolicy([executable], settings(), false, '5', '10')
+		const result = applyExecutionPolicy([executable], settings(), false, '5', '10', 10n ** 18n)
 		expect(result[0]?.eligibility.eligible).toBeFalse()
 		expect(result[0]?.plan).toBeUndefined()
 		expect(result[0]?.eligibility.blockers).toContain('The trading ecosystem is disabled by policy')
 		expect(result[0]?.eligibility.blockers.join(' ')).toContain('backfilling through block 5 of 10')
 	})
 
+	test('rechecks live ETH and canonical REP inventory after every scan without blocking lifecycle work', () => {
+		const selectable: EvaluatedOperation = {
+			definition: { classification: 'selectable', contract: 'Trading', description: 'trade', discoveryInputs: [], ecosystem: 'trading', id: 'trade', label: 'Trade', method: 'swap', risk: 'low' },
+			eligibility: { blockers: [], eligible: true },
+			plan: { classification: 'selectable', createdAtBlock: '1', definitionId: 'trade', ecosystem: 'trading', id: 'trade:1', label: 'Trade', metadata: {}, obligation: false, planningSeed: 1, postconditions: [], priority: 'random', risk: 'low', steps: [] },
+		}
+		const lifecycle: EvaluatedOperation = {
+			definition: { classification: 'lifecycle-obligation', contract: 'OpenOracle', description: 'settle', discoveryInputs: [], ecosystem: 'open-oracle', id: 'settle', label: 'Settle', method: 'settle', risk: 'low' },
+			eligibility: { blockers: [], eligible: true },
+			plan: { classification: 'lifecycle-obligation', createdAtBlock: '1', definitionId: 'settle', ecosystem: 'open-oracle', id: 'settle:1', label: 'Settle', metadata: {}, obligation: true, planningSeed: 1, postconditions: [], priority: 'urgent', risk: 'low', steps: [] },
+		}
+		const strategy = { maximumGasCostAttoEth: 2n, minimumEthReserveAttoEth: 5n, minimumRepReserveAttoRep: 9n }
+		const universes = [{ id: '0', repToken: rep }]
+		const fundedRep = { balance: '9', symbol: 'REP', token: rep, universeId: '0' }
+		const funded = { eth: '7', rep: [fundedRep] }
+
+		expect(liveInventoryReadinessBlockers(funded, universes, strategy)).toEqual([])
+		expect(applyLiveNoveltyInventoryReadiness([selectable, lifecycle], funded, universes, strategy)).toEqual([selectable, lifecycle])
+
+		for (const inventory of [
+			{ ...funded, eth: '6' },
+			{ ...funded, rep: [{ ...fundedRep, balance: '8' }] },
+			{ ...funded, rep: [{ ...fundedRep, token: weth }] },
+		]) {
+			const result = applyLiveNoveltyInventoryReadiness([selectable, lifecycle], inventory, universes, strategy)
+			expect(result[0]?.eligibility.eligible).toBeFalse()
+			expect(result[0]?.plan).toBeUndefined()
+			expect(result[1]).toEqual(lifecycle)
+		}
+	})
+
+	test('blocks an entire terminal private next-block plan under public submission policy', () => {
+		const executable: EvaluatedOperation = {
+			definition: { classification: 'selectable', contract: 'SecurityPoolCoordinator', description: 'request', discoveryInputs: [], ecosystem: 'zoltar', id: 'request', label: 'Request', method: 'requestPrice', risk: 'low' },
+			eligibility: { blockers: [], eligible: true },
+			plan: {
+				classification: 'selectable',
+				createdAtBlock: '1',
+				definitionId: 'request',
+				ecosystem: 'zoltar',
+				id: 'plan',
+				label: 'Request',
+				metadata: {},
+				obligation: false,
+				planningSeed: 1,
+				postconditions: [],
+				priority: 'random',
+				risk: 'low',
+				steps: [],
+				terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '2000000002' },
+			},
+		}
+
+		const result = applyExecutionPolicy([executable], settings(), true, '10', '10', 10n ** 18n)
+
+		expect(result[0]?.eligibility.eligible).toBeFalse()
+		expect(result[0]?.plan).toBeUndefined()
+		expect(result[0]?.eligibility.blockers.join(' ')).toContain('private submission')
+	})
+
+	test('blocks a multi-step plan whose cumulative gas and cleanup reserve exceed anchored ETH inventory', () => {
+		const step = {
+			data: '0x' as const,
+			evidence: [],
+			gasLimit: '100000',
+			id: 'first',
+			label: 'First step',
+			preflightCalls: [],
+			to: wallet,
+			walletAssetDebits: [],
+		}
+		const executable: EvaluatedOperation = {
+			definition: { classification: 'selectable', contract: 'Zoltar', description: 'multi-step', discoveryInputs: [], ecosystem: 'zoltar', id: 'multi-step', label: 'Multi-step', method: 'multiStep', risk: 'low' },
+			eligibility: { blockers: [], eligible: true },
+			plan: {
+				classification: 'selectable',
+				createdAtBlock: '10',
+				definitionId: 'multi-step',
+				ecosystem: 'zoltar',
+				id: 'multi-step:10',
+				label: 'Multi-step',
+				maximumCleanupTransactionCount: 1,
+				metadata: {},
+				obligation: false,
+				planningSeed: 1,
+				postconditions: [],
+				priority: 'random',
+				risk: 'low',
+				steps: [step, { ...step, id: 'second', label: 'Second step' }],
+			},
+		}
+		const anchoredBalance = 10n ** 17n
+
+		const result = applyExecutionPolicy([executable], settings(), true, '10', '10', anchoredBalance)
+
+		expect(result[0]?.eligibility.eligible).toBeFalse()
+		expect(result[0]?.plan).toBeUndefined()
+		expect(result[0]?.eligibility.blockers.join(' ')).toContain('cannot fund all remaining workflow steps')
+	})
+
 	test('maps every configured risk and reserve limit into planning', () => {
 		expect(planningOptions(settings(), 42)).toEqual({
 			allowHighRisk: true,
 			allowIrreversibleOperations: false,
+			immutableTopologyCapacity: {
+				maxPools: 100,
+				maxQuestions: 100,
+				maxStagedOperationsPerPool: 100,
+				maxUniverses: 100,
+				maxVaultsPerPool: 100,
+				maximumAggregateItems: 10_000,
+			},
+			maximumBlockIntervalSeconds: 60,
 			maxEthSpendAttoEth: (5n * 10n ** 16n).toString(),
+			maximumGasCostAttoEth: (2n * 10n ** 16n).toString(),
 			maxRepSpendAttoRep: (10n ** 19n).toString(),
 			minimumEthReserveAttoEth: (5n * 10n ** 16n).toString(),
 			minimumRepReserveAttoRep: (10n ** 19n).toString(),
 			seed: 42,
+			submissionMode: 'public',
+			workflowValidForBlocks: 96,
 		})
 	})
 
@@ -274,6 +426,29 @@ describe('canonical scan policy', () => {
 		expect(catalog.every(operation => !operation.eligibility.eligible)).toBeTrue()
 		const blocked = blockExecutableEvaluations(catalog, 'Canonical discovery is unavailable')
 		expect(blocked.filter(operation => operation.definition.classification === 'selectable').every(operation => operation.eligibility.blockers.includes('Canonical discovery is unavailable'))).toBeTrue()
+	})
+
+	test('keeps a semantic selector alias visible beside its one executable catalog route', () => {
+		const coverage = unavailableOperationCatalog('Configure an operator signer')
+		const executable = coverage.filter(operation => operation.definition.id === 'statoblast.auction.settle-bids')
+		const aliases = coverage.filter(operation => operation.definition.contract === 'SecurityPoolForker' && operation.definition.method === 'claimAuctionProceeds')
+		expect(executable).toHaveLength(1)
+		expect(aliases).toHaveLength(1)
+		expect(aliases[0]?.definition).toMatchObject({
+			classification: 'lifecycle-obligation',
+			description: expect.stringContaining('Semantic alias'),
+			id: 'surface.security-pool-forker.claim-auction-proceeds',
+			independentlyExecutable: false,
+			label: 'SecurityPoolForker.claimAuctionProceeds',
+			risk: 'low',
+		})
+		expect(aliases[0]?.eligibility).toEqual({
+			blockers: [expect.stringContaining('SecurityPoolForker.settleAuctionBids')],
+			eligible: false,
+		})
+		expect(aliases[0]?.plan).toBeUndefined()
+		expect(aliases[0]?.definition.id).not.toBe(executable[0]?.definition.id)
+		expect(completeOperationCoverage(coverage).filter(operation => operation.definition.method === 'claimAuctionProceeds')).toHaveLength(1)
 	})
 
 	test('fails closed when any bounded discovery collection is truncated', () => {

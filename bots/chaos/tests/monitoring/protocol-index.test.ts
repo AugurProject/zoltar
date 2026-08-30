@@ -65,6 +65,8 @@ function packedReport(
 const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'))
 const childRepSplitTopic = keccak256(toHex('ChildRepSplit(address,uint256,uint256,uint256)'))
 const reportSubmittedTopic = keccak256(toHex('ReportSubmitted(uint256,bytes)'))
+const ethRefundDeferredTopic = keccak256(toHex('EthRefundDeferred(address,uint256,uint256)'))
+const pendingEthRefundWithdrawnTopic = keccak256(toHex('PendingEthRefundWithdrawn(address,uint256)'))
 
 function indexedAddress(value: Address) {
 	return toHex(BigInt(value), { size: 32 })
@@ -109,12 +111,26 @@ function childRepSplitLog(parameters: { blockNumber: bigint; cumulative: bigint;
 	})
 }
 
-function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = []) {
+function refundLog(parameters: { amount: bigint; auction?: Address; blockNumber: bigint; logIndex: number; pending?: bigint; withdrawn?: boolean }) {
+	return canonicalLog({
+		address: parameters.auction ?? address(20),
+		blockNumber: parameters.blockNumber,
+		data: parameters.withdrawn === true ? encodeAbiParameters([{ type: 'uint256' }], [parameters.amount]) : encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [parameters.amount, parameters.pending ?? parameters.amount]),
+		logIndex: parameters.logIndex,
+		topics: [parameters.withdrawn === true ? pendingEthRefundWithdrawnTopic : ethRefundDeferredTopic, indexedAddress(address(1))],
+	})
+}
+
+function refundGeneration(log: ReturnType<typeof refundLog>) {
+	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, BigInt(log.logIndex)]))
+}
+
+function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber))) {
 	const implementation = {
 		async getBlock(parameters: { blockNumber?: bigint }) {
 			const number = parameters.blockNumber
 			if (number === undefined) throw new Error('Block number required')
-			return { hash: hash(Number(number)), number, timestamp: 1_000n }
+			return { hash: canonicalBlockHash(number), number, timestamp: 1_000n }
 		},
 		async getLogs(parameters: { address?: Address | Address[] }) {
 			let requested: Address[] = []
@@ -140,6 +156,143 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
+	test('keeps one refund generation across accumulation and advances it after withdrawal', async () => {
+		const firstDeferred = refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0 })
+		const accumulated = refundLog({ amount: 3n, blockNumber: 11n, logIndex: 0, pending: 8n })
+		const initial = await updateProtocolIndex({
+			anchorBlockNumber: 11n,
+			auctionAddresses: [address(20)],
+			chainId: 31337,
+			client: eventIndexClient([accumulated, firstDeferred]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		expect(initial.index).toMatchObject({
+			auctionRefunds: {
+				[address(20).toLowerCase()]: { generation: refundGeneration(firstDeferred), pendingAttoEth: 8n.toString() },
+			},
+		})
+
+		const withdrawn = await updateProtocolIndex({
+			anchorBlockNumber: 12n,
+			auctionAddresses: [address(20)],
+			chainId: 31337,
+			client: eventIndexClient([refundLog({ amount: 8n, blockNumber: 12n, logIndex: 0, withdrawn: true })]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			previous: initial.index,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		expect(withdrawn.index).toMatchObject({ auctionRefunds: {} })
+
+		const laterDeferred = refundLog({ amount: 8n, blockNumber: 13n, logIndex: 0 })
+		const later = await updateProtocolIndex({
+			anchorBlockNumber: 13n,
+			auctionAddresses: [address(20)],
+			chainId: 31337,
+			client: eventIndexClient([laterDeferred]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			previous: withdrawn.index,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		expect(later.index).toMatchObject({
+			auctionRefunds: {
+				[address(20).toLowerCase()]: { generation: refundGeneration(laterDeferred), pendingAttoEth: 8n.toString() },
+			},
+		})
+		expect(refundGeneration(laterDeferred)).not.toBe(refundGeneration(firstDeferred))
+	})
+
+	test('rejects discontinuous deferred-refund episode histories', async () => {
+		const cases: Array<{ expected: string; logs: ReturnType<typeof refundLog>[] }> = [
+			{
+				expected: 'did not start from zero',
+				logs: [refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0, pending: 8n })],
+			},
+			{
+				expected: 'continuity failed',
+				logs: [refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0 }), refundLog({ amount: 3n, blockNumber: 10n, logIndex: 1, pending: 9n })],
+			},
+			{
+				expected: 'has no authenticated active refund episode',
+				logs: [refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0, withdrawn: true })],
+			},
+			{
+				expected: 'amount does not match',
+				logs: [refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0 }), refundLog({ amount: 4n, blockNumber: 10n, logIndex: 1, withdrawn: true })],
+			},
+		]
+		for (const candidate of cases) {
+			await expect(
+				updateProtocolIndex({
+					anchorBlockNumber: 10n,
+					auctionAddresses: [address(20)],
+					chainId: 31337,
+					client: eventIndexClient(candidate.logs),
+					escalationGames: [],
+					...indexDeployments,
+					...indexTrust,
+					startBlock: 10n,
+					wallet: address(1),
+				}),
+			).rejects.toThrow(candidate.expected)
+		}
+	})
+
+	test('rejects a persisted refund generation across a reorg and derives the replacement generation', async () => {
+		const originalLog = refundLog({ amount: 8n, blockNumber: 10n, logIndex: 0 })
+		const original = await updateProtocolIndex({
+			anchorBlockNumber: 10n,
+			auctionAddresses: [address(20)],
+			chainId: 31337,
+			client: eventIndexClient([originalLog]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		const replacementBlockHash = hash(999)
+		const replacementLog = { ...originalLog, blockHash: replacementBlockHash }
+		const replacementClient = eventIndexClient([replacementLog], [], blockNumber => (blockNumber === 10n ? replacementBlockHash : hash(Number(blockNumber))))
+		await expect(
+			updateProtocolIndex({
+				anchorBlockNumber: 10n,
+				auctionAddresses: [address(20)],
+				chainId: 31337,
+				client: replacementClient,
+				escalationGames: [],
+				...indexDeployments,
+				...indexTrust,
+				previous: original.index,
+				startBlock: 10n,
+				wallet: address(1),
+			}),
+		).rejects.toBeInstanceOf(ChaosProtocolIndexReorgError)
+
+		const replacement = await updateProtocolIndex({
+			anchorBlockNumber: 10n,
+			auctionAddresses: [address(20)],
+			chainId: 31337,
+			client: replacementClient,
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		expect(replacement.index.auctionRefunds[address(20).toLowerCase()]?.generation).toBe(refundGeneration(replacementLog))
+		expect(refundGeneration(replacementLog)).not.toBe(refundGeneration(originalLog))
+	})
+
 	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', () => {
 		const report = decodePackedOracleReport(42n, address(6), packedReport())
 		expect(report).toMatchObject({
@@ -281,6 +434,7 @@ describe('durable protocol index', () => {
 	test('keeps the durable shape JSON-safe', () => {
 		const index: ChaosProtocolIndex = {
 			auctionBids: { [address(20)]: [{ amountAttoEth: 10n.toString(), index: '0', refunded: false, tick: '-1' }] },
+			auctionRefunds: {},
 			chainId: 1,
 			childRepSplits: [],
 			cursor: { blockHash: hash(10), blockNumber: '10' },
@@ -288,7 +442,7 @@ describe('durable protocol index', () => {
 			migrationRepSplits: [],
 			...indexDeployments,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			startBlock: '1',
 			wallet: address(1),
 		}
@@ -381,6 +535,7 @@ describe('durable protocol index', () => {
 		const routeCount = 10_001
 		const previous: ChaosProtocolIndex = {
 			auctionBids: {},
+			auctionRefunds: {},
 			chainId: 31337,
 			childRepSplits: Array.from({ length: routeCount }, (_, index) => ({ childPoolRepSplitAttoRep: 1n.toString(), outcomeIndex: (index + 1).toString(), pool: address(22) })),
 			cursor: { blockHash: hash(10), blockNumber: '10' },
@@ -396,7 +551,7 @@ describe('durable protocol index', () => {
 			}),
 			...indexDeployments,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			startBlock: '1',
 			wallet: address(1),
 		}
@@ -419,6 +574,7 @@ describe('durable protocol index', () => {
 	test('prunes terminal bids and escalation deposits even when the cursor is already current', async () => {
 		const terminalIndex: ChaosProtocolIndex = {
 			auctionBids: { [address(20)]: [{ amountAttoEth: 10n.toString(), index: '0', refunded: true, tick: '-1' }] },
+			auctionRefunds: {},
 			chainId: 31337,
 			childRepSplits: [],
 			cursor: { blockHash: hash(10), blockNumber: '10' },
@@ -426,7 +582,7 @@ describe('durable protocol index', () => {
 			migrationRepSplits: [],
 			...indexDeployments,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			startBlock: '1',
 			wallet: address(1),
 		}
@@ -454,6 +610,7 @@ describe('durable protocol index', () => {
 		const pool = address(22)
 		const previous: ChaosProtocolIndex = {
 			auctionBids: {},
+			auctionRefunds: {},
 			chainId: 31337,
 			childRepSplits: [],
 			cursor: { blockHash: hash(9), blockNumber: '9' },
@@ -464,7 +621,7 @@ describe('durable protocol index', () => {
 			migrationRepSplits: [],
 			...indexDeployments,
 			reports: [],
-			schemaVersion: 2,
+			schemaVersion: 3,
 			startBlock: '1',
 			wallet: address(1),
 		}

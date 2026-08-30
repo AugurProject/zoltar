@@ -377,6 +377,7 @@ function publicEvaluation(value: unknown) {
 		eligible: booleanField(eligibility, 'eligible'),
 		enabled: booleanField(source, 'enabled'),
 		id: stringField(definition, 'id'),
+		independentlyExecutable: booleanField(definition, 'independentlyExecutable') ?? booleanField(source, 'independentlyExecutable'),
 		label: stringField(definition, 'label'),
 		prerequisites: publicStrings(source['prerequisites']),
 		risk: stringField(definition, 'risk'),
@@ -425,6 +426,7 @@ function publicWorkflow(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
 	return compact({
+		classification: operationClassificationField(source, 'classification'),
 		completedAt: stringField(source, 'completedAt'),
 		ecosystem: stringField(source, 'ecosystem'),
 		id: stringField(source, 'id'),
@@ -522,13 +524,14 @@ export function publicChaosState(value: unknown, configurationValue?: unknown) {
 		currentWorkflow,
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
+		inventoryAvailable: booleanField(source, 'inventoryAvailable') ?? source['inventory'] !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
 		lastScannedBlock: scalar(source, 'lastScannedBlock') ?? scalar(source, 'block'),
 		network: stringField(source, 'network'),
 		obligations: Array.isArray(source['obligations'])
 			? source['obligations'].flatMap(entry => {
 					const obligation = publicObligation(entry)
-					if (obligation === undefined || (obligation['status'] !== 'blocked' && obligation['status'] !== 'executing' && obligation['status'] !== 'failed' && obligation['status'] !== 'pending')) {
+					if (obligation === undefined || (obligation['status'] !== 'blocked' && obligation['status'] !== 'deferred' && obligation['status'] !== 'executing' && obligation['status'] !== 'failed' && obligation['status'] !== 'pending')) {
 						return []
 					}
 					return [obligation]
@@ -543,6 +546,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown) {
 				})
 			: [],
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
+		safetyPaused: booleanField(source, 'safetyPaused'),
 		scheduler: publicScheduler(source['scheduler']),
 		signerReady: booleanField(source, 'signerReady') ?? booleanField(source, 'operatorCapable') ?? (stringField(source, 'wallet') === undefined ? undefined : true),
 		status: stringField(source, 'status'),

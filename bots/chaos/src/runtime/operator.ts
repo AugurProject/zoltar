@@ -6,7 +6,7 @@ import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { chaosDashboardLifecycle } from '../core/process-locks.ts'
 import type { ChaosProcessLocks, ChaosShutdownController } from '../core/process-locks.ts'
 import { randomInteger } from '../core/random.ts'
-import { createChaosScheduler } from '../core/scheduler.ts'
+import { createChaosScheduler, schedulerWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
 import { executeOperationPlan, OperationRediscoveryRequired, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
@@ -14,14 +14,14 @@ import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts
 import type { CarryProofJournal } from '../monitoring/carry-proof-journal.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { reevaluateOperationContinuation } from '../operations/catalog.ts'
-import type { OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
+import { operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
+import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
+import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
-import { blockInterruptedWorkflows, durableWorkflowPlan, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
 type LoadedConfiguration = {
 	path: string
@@ -49,6 +49,14 @@ export function backfillWaitMilliseconds(lifecyclePollMilliseconds: number, cons
 	const initialCadence = Math.min(lifecyclePollMilliseconds, 5_000)
 	const completedWindows = Math.min(Math.floor(consecutiveBackfillCycles / 16), 4)
 	return Math.min(lifecyclePollMilliseconds, initialCadence * 2 ** completedWindows)
+}
+
+export function operatorWaitMilliseconds(baseMilliseconds: number, state: Pick<RuntimeState, 'paused' | 'scheduler'>, nowMilliseconds = Date.now()) {
+	if (!Number.isSafeInteger(baseMilliseconds) || baseMilliseconds < 1) throw new Error('Operator wait must be a positive integer')
+	if (state.paused || (state.scheduler.status !== 'scheduled' && state.scheduler.status !== 'due')) return baseMilliseconds
+	const schedulerWait = schedulerWaitMilliseconds(state.scheduler, nowMilliseconds)
+	if (schedulerWait === undefined) return baseMilliseconds
+	return Math.min(baseMilliseconds, Math.max(1, schedulerWait))
 }
 
 export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
@@ -92,6 +100,20 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 	}
 }
 
+export function blockNovelEvaluations(evaluations: readonly EvaluatedOperation[], blocker: DurableLifecyclePresenceBlocker) {
+	const reason = lifecyclePresenceBlockerMessage(blocker)
+	return evaluations.map(evaluation => {
+		if (evaluation.definition.classification !== 'selectable') return evaluation
+		return {
+			definition: evaluation.definition,
+			eligibility: {
+				blockers: [...evaluation.eligibility.blockers, reason],
+				eligible: false,
+			},
+		}
+	})
+}
+
 function registeredVaultCount(topologyCache: CanonicalImmutableTopologyCache, pool: Address) {
 	const cursor = topologyCache.discoveryCursors.vaultsByPool[pool.toLowerCase()]
 	if (cursor === undefined) throw new Error(`Canonical topology cache omitted the vault registry cursor for pool ${pool}`)
@@ -112,7 +134,18 @@ function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefin
 
 function isPristineBootstrapState(state: RuntimeState) {
 	const schedulerIsPristine = (state.scheduler.status === 'idle' || state.scheduler.status === 'paused') && state.scheduler.lastDelaySeconds === undefined && state.scheduler.lastRunAt === undefined && state.scheduler.nextRunAt === undefined && state.scheduler.selectedOperationId === undefined
-	return state.signerAddress === undefined && state.activities.length === 0 && state.obligationTombstones.length === 0 && state.obligations.length === 0 && state.pendingTransactions.length === 0 && state.protocolIndex === undefined && !state.safetyPaused && schedulerIsPristine && state.workflows.length === 0
+	return (
+		state.signerAddress === undefined &&
+		state.activities.length === 0 &&
+		state.lifecyclePresenceBlocker === undefined &&
+		state.obligationTombstones.length === 0 &&
+		state.obligations.length === 0 &&
+		state.pendingTransactions.length === 0 &&
+		state.protocolIndex === undefined &&
+		!state.safetyPaused &&
+		schedulerIsPristine &&
+		state.workflows.length === 0
+	)
 }
 
 function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, paused: boolean, wallet: Address | undefined, stateFile: string) {
@@ -151,7 +184,7 @@ function schedulerFor(configuration: ConfigurationState, state: RuntimeState) {
 }
 
 export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
-	if (state.scheduler.selectedOperationId !== operationId || (state.scheduler.status !== 'running' && state.scheduler.status !== 'paused')) return false
+	if (state.scheduler.selectedOperationId !== operationId) return false
 	const scheduler = schedulerFor(configuration, state)
 	await scheduler.complete(operationId)
 	if (configuration.settings.paused || state.paused) await scheduler.pause()
@@ -266,31 +299,119 @@ function workflowForPlan(state: RuntimeState, plan: Pick<OperationPlan, 'definit
 	return state.workflows.find(workflow => workflow.planId === plan.id && workflow.operationId === plan.definitionId)
 }
 
-function rediscoverableExecutionFailure(state: RuntimeState, plan: OperationPlan, error: unknown) {
+export function rediscoverableExecutionFailure(state: RuntimeState, plan: OperationPlan, error: unknown) {
 	if (!(error instanceof OperationRediscoveryRequired)) return false
 	const workflow = workflowForPlan(state, plan)
 	if (workflow === undefined || workflowFailureHasTransaction(workflow)) return false
 	markWorkflowForRediscovery(workflow, error)
+	if (workflow.classification === 'selectable' && workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
+		workflow.continuationDisposition = 'cleanup-only'
+	}
 	return true
 }
 
-export function abandonRetryableSelectableFailure(state: RuntimeState, plan: Pick<OperationPlan, 'definitionId' | 'ecosystem' | 'id' | 'label'>) {
-	const workflow = workflowForPlan(state, plan)
-	if (workflow === undefined || workflow.classification !== 'selectable' || !retryableOnChainWorkflowFailure(workflow)) {
+export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, workflow: DurableWorkflow, settings: OperatorSettings, anchorBlock: string): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
+	const evaluate = (continuationDisposition: OperationContinuationDisposition | undefined) => {
+		const evaluation = reevaluateOperationContinuation(snapshot, durableWorkflowPlan(workflow), planningOptions(settings, workflow.planningSeed), {
+			confirmedStepIds: workflow.steps.filter(step => step.status === 'confirmed').map(step => step.id),
+			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
+		})
+		const result = applyExecutionPolicy([evaluation], settings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth))[0]
+		if (result === undefined) throw new Error('Canonical continuation evaluation returned no result')
+		return result
+	}
+
+	const continuation = evaluate(workflow.continuationDisposition)
+	if (continuation.eligibility.eligible && continuation.plan !== undefined) {
+		const continuationDisposition = continuation.plan.continuationDisposition ?? workflow.continuationDisposition
+		return {
+			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
+			evaluation: continuation,
+		}
+	}
+	if (workflow.classification !== 'selectable' || workflow.continuationDisposition !== undefined || !workflow.steps.some(step => step.status === 'confirmed') || !operationHasCanonicalContinuationBuilder(workflow.operationId)) {
+		return { evaluation: continuation }
+	}
+
+	const cleanup = evaluate('cleanup-only')
+	if (cleanup.eligibility.eligible && cleanup.plan !== undefined) {
+		if (cleanup.plan.continuationDisposition !== 'cleanup-only') throw new Error(`Cleanup-only continuation ${workflow.operationId} returned an unmarked plan`)
+		return { continuationDisposition: 'cleanup-only', evaluation: cleanup }
+	}
+	const blockers = [...continuation.eligibility.blockers.map(blocker => `Action continuation: ${blocker}`), ...cleanup.eligibility.blockers.map(blocker => `Cleanup-only continuation: ${blocker}`)]
+	return {
+		evaluation: {
+			definition: continuation.definition,
+			eligibility: {
+				blockers: blockers.length === 0 ? ['Neither the action continuation nor its cleanup is executable under current policy'] : blockers,
+				eligible: false,
+			},
+		},
+	}
+}
+
+function repairRetryableSelectableWorkflow(state: RuntimeState, workflow: DurableWorkflow) {
+	if (workflow.classification !== 'selectable' || workflow.status !== 'failed' || !retryableOnChainWorkflowFailure(workflow)) {
 		return false
+	}
+	if (workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
+		markRetryableWorkflowForRediscovery(workflow, 'A finalized on-chain failure left confirmed preparation on chain; canonical cleanup is required')
+		recordActivity(state, {
+			ecosystem: workflow.ecosystem,
+			message: `Finalized selectable transaction failure retained for canonical cleanup: ${workflow.label}`,
+			operationId: workflow.operationId,
+			status: 'skipped',
+			type: 'recovery',
+		})
+		return true
 	}
 	const timestamp = new Date().toISOString()
 	workflow.completedAt ??= timestamp
 	workflow.status = 'abandoned'
 	workflow.updatedAt = timestamp
 	recordActivity(state, {
-		ecosystem: plan.ecosystem,
-		message: `Finalized selectable revert retained as a completed attempt for fresh canonical discovery: ${plan.label}`,
-		operationId: plan.definitionId,
+		ecosystem: workflow.ecosystem,
+		message: `Finalized selectable transaction failure retained as a completed attempt for fresh canonical discovery: ${workflow.label}`,
+		operationId: workflow.operationId,
 		status: 'skipped',
 		type: 'recovery',
 	})
 	return true
+}
+
+export function abandonRetryableSelectableFailure(state: RuntimeState, plan: Pick<OperationPlan, 'definitionId' | 'ecosystem' | 'id' | 'label'>) {
+	const workflow = workflowForPlan(state, plan)
+	return workflow === undefined ? false : repairRetryableSelectableWorkflow(state, workflow)
+}
+
+export function repairDurableSelectableFailures(state: RuntimeState) {
+	const repairedWorkflowIds: string[] = []
+	const semanticFailures = state.workflows.filter(workflow => workflow.classification === 'selectable' && workflow.status === 'failed' && workflow.steps.some(step => step.status === 'failed' && step.failureKind === 'semantic-failure'))
+	for (const workflow of state.workflows) {
+		if (workflow.classification !== 'selectable' || workflow.status !== 'failed' || !retryableOnChainWorkflowFailure(workflow)) continue
+		if (repairRetryableSelectableWorkflow(state, workflow)) {
+			repairedWorkflowIds.push(workflow.id)
+		}
+	}
+	if (semanticFailures.length !== 0) {
+		const newlyStopped = !state.safetyPaused
+		state.safetyPaused = true
+		state.paused = true
+		state.scheduler.status = 'paused'
+		state.status = 'paused'
+		const firstFailure = semanticFailures[0]
+		state.error = `Durable semantic transaction failure requires explicit operator review before novelty${firstFailure === undefined ? '' : `: ${firstFailure.label}`}`
+		if (newlyStopped) {
+			recordActivity(state, {
+				ecosystem: firstFailure?.ecosystem,
+				message: 'Durable semantic transaction failure restored the safety pause before novel execution',
+				operationId: firstFailure?.operationId,
+				status: 'failed',
+				type: 'recovery',
+			})
+		}
+	}
+	return { repairedWorkflowIds, requiresSafetyStop: semanticFailures.length !== 0 }
 }
 
 function recordDryRun(state: RuntimeState, plan: OperationPlan) {
@@ -500,11 +621,12 @@ async function reconcilePendingWork(configuration: ConfigurationState, state: Ru
 		return true
 	}
 	blockInterruptedWorkflows(state)
+	const failureRepair = repairDurableSelectableFailures(state)
 	const workflow = state.workflows.find(candidate => candidate.id === workflowId)
 	if (workflow === undefined) throw new Error(`Recovered workflow ${workflowId} is unavailable`)
 	const obligation = state.obligations.find(candidate => candidate.workflowId === workflowId)
 	let retryableLifecycleFailure = false
-	let retryableSelectableFailure = false
+	const retryableSelectableFailure = failureRepair.repairedWorkflowIds.includes(workflow.id)
 	if (workflowNeedsContinuation(workflow)) {
 		if (obligation !== undefined) {
 			failLifecycleObligation(obligation, 'Recovered one workflow step; canonical continuation is required before novelty', true)
@@ -518,13 +640,7 @@ async function reconcilePendingWork(configuration: ConfigurationState, state: Ru
 		} else if (!completeLifecycleObligation(state, obligation) && workflow.status === 'blocked') {
 			failLifecycleObligation(obligation, 'Recovered a prerequisite; canonical rediscovery is required for the remaining lifecycle steps', true)
 		}
-	} else if ((state.scheduler.status === 'running' || state.scheduler.status === 'paused') && state.scheduler.selectedOperationId === operationId) {
-		retryableSelectableFailure = abandonRetryableSelectableFailure(state, {
-			definitionId: workflow.operationId,
-			ecosystem: workflow.ecosystem,
-			id: workflow.planId,
-			label: workflow.label,
-		})
+	} else {
 		await scheduleAfterRecoveredTransaction(configuration, state, operationId)
 	}
 	await persistState(configuration, state)
@@ -616,11 +732,17 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		})
 	}
 	blockInterruptedWorkflows(state)
+	const startupFailureRepair = repairDurableSelectableFailures(state)
 	const configuration: ConfigurationState = {
 		path: loaded.path,
 		rememberSigner: loaded.settings.privateKey !== undefined,
 		revision: loaded.revision,
 		settings: loaded.settings,
+	}
+	if (startupFailureRepair.requiresSafetyStop) {
+		await safetyPause(configuration, state)
+	} else if (startupFailureRepair.repairedWorkflowIds.length !== 0) {
+		await persistState(configuration, state)
 	}
 	if (interruptedSchedulerRunNeedsClosure(state)) {
 		const scheduler = schedulerFor(configuration, state)
@@ -749,6 +871,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.warnings = [...scan.snapshot.warnings]
 				state.rpcEndpointHealth = resourceHealth(resources)
 				synchronizeLifecycleObligations(state, state.evaluations, scan.canonicalLifecyclePresence, scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber, scan.anchor.timestamp)
+				if (state.lifecyclePresenceBlocker !== undefined) {
+					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
+					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
+				}
 				await persistState(configuration, state)
 				if (!scan.indexComplete || !scan.carryProofJournalComplete) {
 					backfillIncomplete = true
@@ -760,9 +886,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				}
 				const continuationWorkflow = continuationWorkflows[0]
 				if (continuationWorkflow !== undefined) {
-					const continuationEvaluation = applyExecutionPolicy([reevaluateOperationContinuation(scan.snapshot, durableWorkflowPlan(continuationWorkflow), planningOptions(settings, continuationWorkflow.planningSeed))], settings, true, scan.anchor.blockNumber.toString(), scan.anchor.blockNumber.toString())[0]
-					if (continuationEvaluation === undefined) {
-						throw new Error('Canonical continuation evaluation returned no result')
+					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString())
+					const continuationEvaluation = continuationSelection.evaluation
+					if (continuationSelection.continuationDisposition !== undefined && continuationWorkflow.continuationDisposition !== continuationSelection.continuationDisposition) {
+						continuationWorkflow.continuationDisposition = continuationSelection.continuationDisposition
+						await persistState(configuration, state)
 					}
 					const freshPlan = continuationEvaluation.eligibility.eligible ? continuationEvaluation.plan : undefined
 					if (freshPlan === undefined) {
@@ -833,6 +961,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					await persistState(configuration, state)
 					return settings.runtime.once
 				}
+				if (state.lifecyclePresenceBlocker !== undefined) {
+					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
+					await persistState(configuration, state)
+					return settings.runtime.once
+				}
 				await scheduler.resume()
 				await scheduler.ensureScheduled()
 				await scheduler.markDue()
@@ -871,7 +1004,8 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			}
 		},
 		async consecutiveFailures => {
-			const milliseconds = backfillIncomplete ? backfillWaitMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveBackfillCycles) : retryDelayMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveFailures)
+			let milliseconds = backfillIncomplete ? backfillWaitMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveBackfillCycles) : retryDelayMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveFailures)
+			if (!backfillIncomplete && consecutiveFailures === 0) milliseconds = operatorWaitMilliseconds(milliseconds, state)
 			if (backfillIncomplete) consecutiveBackfillCycles += 1
 			else consecutiveBackfillCycles = 0
 			await shutdown.wait(milliseconds)

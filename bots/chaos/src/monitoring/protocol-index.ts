@@ -2,7 +2,7 @@ import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak
 import { openOracleAbi } from '../contracts/abi.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
-import type { AuctionBidSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
 
@@ -12,7 +12,7 @@ export interface ProtocolIndexCursor {
 }
 
 export interface ChaosProtocolIndex {
-	schemaVersion: 2
+	schemaVersion: 3
 	chainId: number
 	openOracle: Address
 	zoltar: Address
@@ -22,6 +22,7 @@ export interface ChaosProtocolIndex {
 	cursor: ProtocolIndexCursor
 	reports: OracleGameSnapshot[]
 	auctionBids: Record<string, AuctionBidSnapshot[]>
+	auctionRefunds: Record<string, AuctionRefundSnapshot>
 	escalationDeposits: EscalationDepositSnapshot[]
 	migrationRepSplits: MigrationRepSplitProgressSnapshot[]
 	childRepSplits: ChildRepSplitProgressSnapshot[]
@@ -84,6 +85,8 @@ const REPORT_DISPUTED = eventTopic('ReportDisputed(uint256,bytes)')
 const REPORT_SETTLED = eventTopic('ReportSettled(uint256)')
 const BID_SUBMITTED = eventTopic('BidSubmitted(address,int256,uint256,uint256,uint256)')
 const BID_SETTLED = eventTopic('BidSettled(address,int256,uint256,uint256,uint256,uint256,uint256,uint8)')
+const ETH_REFUND_DEFERRED = eventTopic('EthRefundDeferred(address,uint256,uint256)')
+const PENDING_ETH_REFUND_WITHDRAWN = eventTopic('PendingEthRefundWithdrawn(address,uint256)')
 const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)')
 const DEPOSIT_ON_OUTCOME = eventTopic('DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)')
 const CLAIM_DEPOSIT = eventTopic('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)')
@@ -331,7 +334,7 @@ export function decodePackedOracleReport(reportId: bigint, openOracle: Address, 
 }
 
 function validatePrevious(context: UpdateProtocolIndexContext, previous: ChaosProtocolIndex) {
-	if (previous.schemaVersion !== 2) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
+	if (previous.schemaVersion !== 3) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
 	if (previous.chainId !== context.chainId) throw new Error('Protocol index chain does not match discovery chain')
 	if (previous.openOracle.toLowerCase() !== context.openOracle.toLowerCase()) throw new Error('Protocol index OpenOracle deployment changed')
 	if (previous.zoltar.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('Protocol index Zoltar deployment changed')
@@ -356,6 +359,15 @@ function activeAuctionBids(source: Readonly<Record<string, readonly AuctionBidSn
 		if (active.length > 0) copy[address] = active
 	}
 	return copy
+}
+
+function activeAuctionRefunds(source: Readonly<Record<string, Readonly<AuctionRefundSnapshot>>>) {
+	return Object.fromEntries(Object.entries(source).map(([address, refund]) => [address, { ...refund }]))
+}
+
+function refundEpisodeGeneration(log: CanonicalLogPosition) {
+	if (log.blockHash == null || log.transactionHash == null || log.logIndex == null) throw new Error('Auction refund log has no canonical generation position')
+	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, canonicalLogOrdinal(log.logIndex, 'Auction refund log index')]))
 }
 
 function activeEscalationDeposits(source: readonly EscalationDepositSnapshot[]) {
@@ -441,6 +453,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	let fromBlock = context.startBlock
 	const reports = new Map<string, OracleGameSnapshot>()
 	let auctionBids: Record<string, AuctionBidSnapshot[]> = {}
+	let auctionRefunds: Record<string, AuctionRefundSnapshot> = {}
 	let escalationDeposits: EscalationDepositSnapshot[] = []
 	let migrationRepSplits = new Map<string, MigrationRepSplitProgressSnapshot>()
 	let childRepSplits = new Map<string, ChildRepSplitProgressSnapshot>()
@@ -456,6 +469,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		}
 		requireTrustedReportBounds(context, reports, trustedReport)
 		auctionBids = activeAuctionBids(context.previous.auctionBids)
+		auctionRefunds = activeAuctionRefunds(context.previous.auctionRefunds)
 		escalationDeposits = activeEscalationDeposits(context.previous.escalationDeposits)
 		migrationRepSplits = indexedMigrationProgress(context.previous.migrationRepSplits)
 		childRepSplits = indexedChildProgress(context.previous.childRepSplits)
@@ -469,6 +483,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 			index: {
 				...context.previous,
 				auctionBids,
+				auctionRefunds,
 				childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
 				escalationDeposits,
 				migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
@@ -551,15 +566,48 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		}
 	}
 	if (context.auctionAddresses.length > 0) {
-		const auctionLogs = await context.client.getLogs({ address: [...context.auctionAddresses], fromBlock, toBlock })
+		const auctionAddressKeys = new Set(context.auctionAddresses.map(address => address.toLowerCase()))
+		const auctionLogs = orderedCanonicalLogs(await context.client.getLogs({ address: [...context.auctionAddresses], fromBlock, toBlock }), fromBlock, toBlock, 'Auction event index')
 		for (const log of auctionLogs) {
+			const key = log.address.toLowerCase()
+			if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
 			const topic0 = log.topics[0]
+			if (topic0 === ETH_REFUND_DEFERRED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
+				if (log.topics.length !== 2) throw new Error('Auction refund event has an invalid indexed-field count')
+				const bidder = strictTopicAddress(log.topics[1], 'Auction refund bidder')
+				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
+				const data = hexToBytes(log.data)
+				if (topic0 === ETH_REFUND_DEFERRED) {
+					if (data.length !== 64) throw new Error('EthRefundDeferred has an invalid data length')
+					const amountAttoEth = readUnsigned(data, 0, 32)
+					const pendingAttoEth = readUnsigned(data, 32, 32)
+					if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundDeferred has a zero refund amount')
+					const existing = auctionRefunds[key]
+					if (existing === undefined) {
+						if (pendingAttoEth !== amountAttoEth) {
+							throw new Error(`EthRefundDeferred for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
+						}
+						auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
+					} else {
+						const expectedPendingAttoEth = BigInt(existing.pendingAttoEth) + amountAttoEth
+						if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundDeferred continuity failed for auction ${log.address}`)
+						auctionRefunds[key] = { ...existing, pendingAttoEth: pendingAttoEth.toString() }
+					}
+				} else {
+					if (data.length !== 32) throw new Error('PendingEthRefundWithdrawn has an invalid data length')
+					const amountAttoEth = readUnsigned(data, 0, 32)
+					const existing = auctionRefunds[key]
+					if (existing === undefined) throw new Error(`PendingEthRefundWithdrawn for auction ${log.address} has no authenticated active refund episode`)
+					if (amountAttoEth === 0n || amountAttoEth !== BigInt(existing.pendingAttoEth)) throw new Error(`PendingEthRefundWithdrawn amount does not match the active refund episode for auction ${log.address}`)
+					delete auctionRefunds[key]
+				}
+				continue
+			}
 			if (topic0 !== BID_SUBMITTED && topic0 !== BID_SETTLED) continue
 			const bidder = topicAddress(log.topics[1], 'Auction bidder')
 			if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
 			const tick = signed256(topicUnsigned(log.topics[2], 'Auction tick')).toString()
 			const index = topicUnsigned(log.topics[3], 'Auction bid index').toString()
-			const key = log.address.toLowerCase()
 			const bids = auctionBids[key] ?? []
 			const existing = bids.find(bid => bid.tick === tick && bid.index === index)
 			if (topic0 === BID_SUBMITTED) {
@@ -627,6 +675,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	const cursorHash = toBlock === context.anchorBlockNumber ? anchorHash : await requireCanonicalBlock(context.client, toBlock)
 	const index: ChaosProtocolIndex = {
 		auctionBids: activeAuctionBids(auctionBids),
+		auctionRefunds: activeAuctionRefunds(auctionRefunds),
 		chainId: context.chainId,
 		childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
 		cursor: { blockHash: cursorHash, blockNumber: toBlock.toString() },
@@ -634,7 +683,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 		openOracle: context.openOracle,
 		reports: [...reports.values()].sort((left, right) => (BigInt(left.reportId) < BigInt(right.reportId) ? -1 : 1)),
-		schemaVersion: 2,
+		schemaVersion: 3,
 		securityPoolForker: context.securityPoolForker,
 		startBlock: context.startBlock.toString(),
 		wallet: context.wallet,
@@ -646,6 +695,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
+		indexedAuctionRefunds: index.auctionRefunds,
 		indexedChildRepSplits: index.childRepSplits,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,

@@ -1,9 +1,11 @@
-import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '../support/bot-shared.ts'
 import {
+	DURABLE_STATE_VERSION,
+	MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT,
 	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
 	compactDurableState,
 	initialDurableState,
@@ -41,6 +43,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 		auctionBids: {
 			[emitter.toLowerCase()]: [{ amountAttoEth: 25n.toString(), index: '2', refunded: false, tick: '-7' }],
 		},
+		auctionRefunds: {},
 		chainId: 1,
 		childRepSplits: [{ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: emitter }],
 		cursor: { blockHash: topic0, blockNumber: '50' },
@@ -95,7 +98,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 				token2: getAddress('0x0000000000000000000000000000000000000027'),
 			},
 		],
-		schemaVersion: 2,
+		schemaVersion: 3,
 		securityPoolForker: getAddress('0x0000000000000000000000000000000000000030'),
 		startBlock: '10',
 		wallet: getAddress('0x0000000000000000000000000000000000000022'),
@@ -156,6 +159,7 @@ function workflow(): DurableWorkflow {
 				walletAssetDebits: [
 					{ amount: '7', asset: 'ETH', kind: 'native' },
 					{ amount: '3', asset: emitter, category: 'rep', kind: 'open-oracle-credit', openOracle: emitter },
+					{ amount: '2', category: 'rep', kind: 'security-pool-vault-rep', pool: emitter, vault: privateKeyToAccount(`0x${'11'.repeat(32)}`).address },
 				],
 			},
 		],
@@ -258,6 +262,44 @@ describe('chaos-bot durable state', () => {
 		expect(runtime.error).toBe('Operator cycle stopped safely: invariant failed')
 	})
 
+	test('strictly round-trips the bounded lifecycle presence blocker across restart', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		state.lifecyclePresenceBlocker = {
+			count: 7,
+			digest: `0x${'45'.repeat(32)}`,
+			firstDefinitionId: 'statoblast.escalation.resume',
+			firstEcosystem: 'statoblast',
+			observedAtBlock: '88',
+			presenceComplete: true,
+			reason: 'unplanned-due-identity',
+		}
+		state.obligationTombstones = [
+			{
+				id: 'obligation:completed-reorg-sentinel',
+				observedAbsentAtBlock: '89',
+				resolution: 'completed',
+				resolvedAt: createdAt,
+				resolvedAtBlock: '88',
+			},
+		]
+
+		await saveDurableState(path, state)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
+		expect(restored.obligationTombstones).toEqual(state.obligationTombstones)
+
+		const validBlocker = state.lifecyclePresenceBlocker
+		state.lifecyclePresenceBlocker = { ...validBlocker, count: MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT + 1 }
+		await expect(saveDurableState(path, state)).rejects.toThrow('identity safety limit')
+		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(validBlocker)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		stored['version'] = DURABLE_STATE_VERSION - 1
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('version is unsupported')
+	})
+
 	test('preserves an interrupted scheduler marker until startup schedules a fresh wait', () => {
 		const durable = initialDurableState(1, false)
 		durable.scheduler = {
@@ -324,8 +366,41 @@ describe('chaos-bot durable state', () => {
 		expect(restored.workflows[0]?.steps[0]?.walletAssetDebits).toEqual([
 			{ amount: '7', asset: 'ETH', kind: 'native' },
 			{ amount: '3', asset: emitter, category: 'rep', kind: 'open-oracle-credit', openOracle: emitter },
+			{ amount: '2', category: 'rep', kind: 'security-pool-vault-rep', pool: emitter, vault: privateKeyToAccount(`0x${'11'.repeat(32)}`).address },
 		])
 		expect((await stat(path)).mode & 0o777).toBe(0o600)
+	})
+
+	test('strictly round-trips a canonical terminal submission fee ceiling', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const durableWorkflow = state.workflows[0]
+		const pendingTransaction = state.pendingTransactions[0]
+		if (durableWorkflow === undefined || pendingTransaction === undefined) throw new Error('Expected a populated workflow')
+		durableWorkflow.terminalSubmission = {
+			kind: 'private-next-block',
+			maximumFeePerGas: '2000000002',
+		}
+		pendingTransaction.mode = 'private'
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).workflows[0]?.terminalSubmission).toEqual(durableWorkflow.terminalSubmission)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { pendingTransactions: Array<Record<string, unknown>>; workflows: Array<Record<string, unknown>> }
+		const storedWorkflow = stored.workflows[0]
+		const storedTransaction = stored.pendingTransactions[0]
+		if (storedWorkflow === undefined || storedTransaction === undefined) throw new Error('Expected a persisted workflow')
+		storedTransaction['mode'] = 'public'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('terminal private-submission workflow')
+
+		storedTransaction['mode'] = 'private'
+		storedWorkflow['terminalSubmission'] = { kind: 'private-next-block', maximumFeePerGas: '01' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('maximumFeePerGas')
+
+		storedWorkflow['terminalSubmission'] = { kind: 'private-next-block', maximumFeePerGas: (1n << 256n).toString() }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('exceeds uint256')
 	})
 
 	test('round-trips a finalized lifecycle receipt waiting for canonical confirmation', async () => {
@@ -389,6 +464,44 @@ describe('chaos-bot durable state', () => {
 		await expect(loadDurableState(path, 1)).rejects.toThrow('uses canonical lifecycle confirmation outside a lifecycle obligation')
 	})
 
+	test('strictly round-trips a deferred lifecycle obligation', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const durableWorkflow = state.workflows[0]
+		if (durableWorkflow === undefined) throw new Error('Expected a populated workflow')
+		durableWorkflow.classification = 'lifecycle-obligation'
+		durableWorkflow.obligation = true
+		state.obligations = [
+			{
+				attemptCount: 0,
+				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+				createdAt,
+				ecosystem: durableWorkflow.ecosystem,
+				id: 'obligation:deferred',
+				label: durableWorkflow.label,
+				metadata: durableWorkflow.metadata,
+				operationId: durableWorkflow.operationId,
+				status: 'deferred',
+				updatedAt: createdAt,
+				workflowId: durableWorkflow.id,
+			},
+		]
+
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).obligations[0]).toMatchObject({
+			blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+			status: 'deferred',
+			workflowId: durableWorkflow.id,
+		})
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { obligations: Array<Record<string, unknown>> }
+		const storedObligation = stored.obligations[0]
+		if (storedObligation === undefined) throw new Error('Expected a persisted obligation')
+		storedObligation['status'] = 'waiting'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('obligations[0].status is invalid')
+	})
+
 	test('round-trips a classified finalized workflow failure', async () => {
 		const path = await statePath()
 		const state = await populatedState()
@@ -402,6 +515,59 @@ describe('chaos-bot durable state', () => {
 		step.status = 'failed'
 		await saveDurableState(path, state)
 		expect((await loadDurableState(path, 1)).workflows[0]?.steps[0]?.failureKind).toBe('receipt-reverted')
+	})
+
+	test('strictly round-trips a cleanup-only continuation disposition', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		state.pendingTransactions = []
+		const durableWorkflow = state.workflows[0]
+		if (durableWorkflow === undefined) throw new Error('Expected a populated workflow')
+		const durableStep = durableWorkflow.steps[0]
+		if (durableStep === undefined) throw new Error('Expected a populated workflow step')
+		const confirmedPreparation = {
+			...durableStep,
+			confirmedAt: createdAt,
+			id: 'confirmed-preparation',
+			status: 'confirmed' as const,
+		}
+		delete confirmedPreparation.transactionIntentId
+		durableWorkflow.continuationDisposition = 'cleanup-only'
+		durableWorkflow.status = 'waiting-continuation'
+		durableStep.failure = 'Finalized receipt reverted before cleanup'
+		durableStep.failureKind = 'receipt-reverted'
+		durableStep.status = 'blocked'
+		durableWorkflow.steps = [confirmedPreparation, durableStep]
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).workflows[0]?.continuationDisposition).toBe('cleanup-only')
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { workflows: Array<Record<string, unknown>> }
+		const storedWorkflow = stored.workflows[0]
+		if (storedWorkflow === undefined) throw new Error('Expected a persisted workflow')
+		storedWorkflow['continuationDisposition'] = 'retry-action'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('continuationDisposition')
+	})
+
+	test('strictly round-trips the maximum cleanup transaction reservation', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const durableWorkflow = state.workflows[0]
+		if (durableWorkflow === undefined) throw new Error('Expected a populated workflow')
+		durableWorkflow.maximumCleanupTransactionCount = 2
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).workflows[0]?.maximumCleanupTransactionCount).toBe(2)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { workflows: Array<Record<string, unknown>> }
+		const storedWorkflow = stored.workflows[0]
+		if (storedWorkflow === undefined) throw new Error('Expected a persisted workflow')
+		storedWorkflow['maximumCleanupTransactionCount'] = -1
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('maximumCleanupTransactionCount')
+
+		storedWorkflow['maximumCleanupTransactionCount'] = 1.5
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('maximumCleanupTransactionCount')
 	})
 
 	test('loads workflows written before durable downstream preflights were added', async () => {
@@ -639,6 +805,7 @@ describe('chaos-bot durable state', () => {
 		})
 		let renameCount = 0
 		const filesystem: StateFilesystem = {
+			link,
 			mkdir,
 			open,
 			readFile,

@@ -2,23 +2,27 @@ import { createPublicClient, createRpcEndpointPool, defineChain, zeroAddress, ty
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import type { OperatorSettings } from '../config/settings.ts'
+import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS, type OperatorSettings } from '../config/settings.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../contracts/surface.ts'
 import { discoverEcosystemSnapshot, drainConcurrent, limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
 import { carryProofJournalDigest, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
+import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
 import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import type { WalletBalanceState } from '../state/operator-state.ts'
+import { assertOperationEthFunding } from '../execution/safety.ts'
+import { applyLiveNoveltyInventoryReadiness } from './live-readiness.ts'
 
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 const readClientsByPool = new WeakMap<RpcPool, Map<string, ChaosReadClient>>()
 
 export type CanonicalAnchor = {
+	baseFeePerGas: bigint
 	blockHash: `0x${string}`
 	blockNumber: bigint
 	timestamp: bigint
@@ -132,9 +136,11 @@ export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool,
 			if (block.hash == null || block.number === undefined) {
 				throw new Error(`RPC ${endpoint} returned a canonical anchor without an identity`)
 			}
+			if (block.baseFeePerGas == null) throw new Error(`RPC ${endpoint} returned a canonical anchor without an EIP-1559 base fee`)
 			return {
 				endpoint,
 				value: {
+					baseFeePerGas: block.baseFeePerGas,
 					blockHash: block.hash,
 					blockNumber: block.number,
 					timestamp: block.timestamp,
@@ -211,6 +217,7 @@ async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wal
 				anchorBlockNumber: anchor.blockNumber,
 				client,
 				deployments: settings.deployment,
+				expectedAnchorBaseFeePerGas: anchor.baseFeePerGas,
 				expectedAnchorHash: anchor.blockHash,
 				limits: settings.discovery,
 				...indexed,
@@ -312,6 +319,20 @@ async function updateCarryWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 	)
 }
 
+function authenticatedRefundGenerationAtCompleteIndex(auction: EcosystemSnapshot['auctions'][number], index: ChaosProtocolIndex) {
+	const pendingAttoEth = BigInt(auction.pendingEthRefund)
+	const indexed = index.auctionRefunds[auction.address.toLowerCase()]
+	if (pendingAttoEth === 0n) {
+		if (indexed !== undefined) throw new Error(`Auction ${auction.address} has an authenticated active refund episode but zero anchored pending storage`)
+		return undefined
+	}
+	if (indexed === undefined) {
+		throw new Error(`Auction ${auction.address} has positive pending ETH refund storage without an authenticated EthRefundDeferred episode; protocolStartBlock may be after the episode start or the indexed history is incomplete`)
+	}
+	if (BigInt(indexed.pendingAttoEth) !== pendingAttoEth) throw new Error(`Auction ${auction.address} pending ETH refund storage does not match its authenticated event episode`)
+	return indexed.generation
+}
+
 export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: ChaosProtocolIndex): EcosystemSnapshot {
 	const childRepSplitsByPool = new Map<string, Record<string, string>>()
 	for (const progress of index.childRepSplits) {
@@ -328,10 +349,15 @@ export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: Ch
 	}
 	return {
 		...snapshot,
-		auctions: snapshot.auctions.map(auction => ({
-			...auction,
-			bids: [...(index.auctionBids[auction.address.toLowerCase()] ?? [])],
-		})),
+		auctions: snapshot.auctions.map(auction => {
+			const refundGeneration = authenticatedRefundGenerationAtCompleteIndex(auction, index)
+			const { pendingEthRefundGeneration: _partialGeneration, ...topologyAuction } = auction
+			return {
+				...topologyAuction,
+				bids: [...(index.auctionBids[auction.address.toLowerCase()] ?? [])],
+				...(refundGeneration === undefined ? {} : { pendingEthRefundGeneration: refundGeneration }),
+			}
+		}),
 		escalationDeposits: index.escalationDeposits.map(deposit => ({ ...deposit })),
 		pools: snapshot.pools.map(pool => ({
 			...pool,
@@ -356,26 +382,45 @@ export function planningOptions(settings: OperatorSettings, seed: number): Plann
 	return {
 		allowHighRisk: settings.strategy.allowHighRiskOperations,
 		allowIrreversibleOperations: settings.strategy.allowIrreversibleOperations,
+		immutableTopologyCapacity: {
+			...settings.discovery,
+			maximumAggregateItems: MAXIMUM_DISCOVERY_AGGREGATE_ITEMS,
+		},
+		maximumBlockIntervalSeconds: settings.network.maximumBlockIntervalSeconds,
 		maxEthSpendAttoEth: settings.strategy.maximumEthPerOperationAttoEth.toString(),
+		maximumGasCostAttoEth: settings.strategy.maximumGasCostAttoEth.toString(),
 		maxRepSpendAttoRep: settings.strategy.maximumRepPerOperationAttoRep.toString(),
 		minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth.toString(),
 		minimumRepReserveAttoRep: settings.strategy.minimumRepReserveAttoRep.toString(),
 		seed,
+		submissionMode: settings.submission.mode,
+		workflowValidForBlocks: Number(settings.strategy.workflowValidForBlocks),
 	}
 }
 
-export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[], settings: OperatorSettings, indexComplete: boolean, indexedThroughBlock: string, anchorBlock: string) {
+export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[], settings: OperatorSettings, indexComplete: boolean, indexedThroughBlock: string, anchorBlock: string, ethBalanceAttoEth: bigint) {
 	const enabled = new Set(settings.strategy.enabledEcosystems)
 	return evaluations.map(evaluation => {
 		const blockers = [...evaluation.eligibility.blockers]
 		if (!enabled.has(evaluation.definition.ecosystem)) {
 			blockers.push(`The ${evaluation.definition.ecosystem} ecosystem is disabled by policy`)
 		}
-		if (settings.submission.mode === 'public' && (evaluation.plan?.deadlineTimestamp !== undefined || evaluation.plan?.lastValidBlockNumber !== undefined)) {
+		if (settings.submission.mode === 'public' && evaluation.plan?.terminalSubmission !== undefined) {
+			blockers.push('Terminal next-block operations require private submission so their persisted fee and inclusion ceilings are enforceable')
+		} else if (settings.submission.mode === 'public' && (evaluation.plan?.deadlineTimestamp !== undefined || evaluation.plan?.lastValidBlockNumber !== undefined)) {
 			blockers.push('Deadline-bound operations require private submission so the inclusion horizon is enforceable')
 		}
 		if (!indexComplete && (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation')) {
 			blockers.push(`Canonical protocol index is backfilling through block ${indexedThroughBlock} of ${anchorBlock}`)
+		}
+		if (evaluation.plan !== undefined) {
+			try {
+				assertOperationEthFunding(evaluation.plan, ethBalanceAttoEth, settings.strategy)
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				if (message !== `${evaluation.plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve`) throw error
+				blockers.push(message)
+			}
 		}
 		if (blockers.length === evaluation.eligibility.blockers.length) return evaluation
 		return {
@@ -444,12 +489,21 @@ function surfaceBlocker(entry: (typeof MUTATING_CONTRACT_SURFACE)[number]) {
 	return 'This classified protocol method has no independently executable chaos plan'
 }
 
+function surfaceCoverageId(entry: (typeof MUTATING_CONTRACT_SURFACE)[number]) {
+	return `surface.${entry.contract.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}.${entry.method.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`
+}
+
 export function completeOperationCoverage(evaluations: readonly EvaluatedOperation[]): EvaluatedOperation[] {
 	const completed = [...evaluations]
 	for (const entry of MUTATING_CONTRACT_SURFACE) {
-		const represented = completed.some(evaluation => (entry.operationId === undefined ? evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method : evaluation.definition.id === entry.operationId))
+		const coverageId = surfaceCoverageId(entry)
+		const represented = completed.some(evaluation => {
+			if (entry.semanticAliasOf !== undefined) return evaluation.definition.id === coverageId
+			return entry.operationId === undefined ? evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method : evaluation.definition.id === entry.operationId
+		})
 		if (represented) continue
-		const id = entry.operationId ?? `surface.${entry.contract.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}.${entry.method.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`
+		const id = entry.semanticAliasOf === undefined ? (entry.operationId ?? coverageId) : coverageId
+		const semanticTarget = entry.semanticAliasOf === undefined ? undefined : CHAOS_OPERATION_CATALOG.find(definition => definition.id === entry.operationId)
 		completed.push({
 			definition: {
 				classification: entry.classification,
@@ -458,9 +512,10 @@ export function completeOperationCoverage(evaluations: readonly EvaluatedOperati
 				discoveryInputs: [],
 				ecosystem: surfaceEcosystem(entry.contract),
 				id,
+				independentlyExecutable: false,
 				label: `${entry.contract}.${entry.method}`,
 				method: entry.method,
-				risk: entry.classification === 'prerequisite' ? 'medium' : 'high',
+				risk: semanticTarget?.risk ?? (entry.classification === 'prerequisite' ? 'medium' : 'high'),
 			},
 			eligibility: {
 				blockers: [surfaceBlocker(entry)],
@@ -535,7 +590,8 @@ export async function performCanonicalScan(
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
-	const [updated, carryUpdated] = discoveryComplete ? await drainConcurrent([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]
+	const [updatedCandidate, carryUpdated] = discoveryComplete ? await drainConcurrent([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]
+	const updated = updatedCandidate === undefined ? undefined : { ...updatedCandidate, index: snapshotProtocolIndex(updatedCandidate.index, settings.network.chainId) }
 	const carryJournal = carryUpdated?.journal ?? compatibleCarryJournal
 	await saveCarryProofJournal(settings.runtime.stateFile, carryJournal, {
 		allowCanonicalReset: carryUpdated?.reset === true,
@@ -565,7 +621,9 @@ export async function performCanonicalScan(
 	const allIndexesComplete = updated?.complete === true && carryUpdated?.complete === true
 	const evaluated = completeOperationCoverage(evaluateOperationCatalog(snapshot, planningOptions(settings, seed)))
 	const lifecyclePresence = canonicalLifecyclePresence(snapshot, planningOptions(settings, seed))
-	let evaluations = applyExecutionPolicy(evaluated, settings, allIndexesComplete, updated?.complete === true ? carryIndexedThroughBlock : indexedThroughBlock, anchor.blockNumber.toString())
+	const inventory = walletInventory(snapshot)
+	let evaluations = applyExecutionPolicy(evaluated, settings, allIndexesComplete, updated?.complete === true ? carryIndexedThroughBlock : indexedThroughBlock, anchor.blockNumber.toString(), BigInt(snapshot.wallet.ethBalanceAttoEth))
+	if (settings.runtime.execute) evaluations = applyLiveNoveltyInventoryReadiness(evaluations, inventory, snapshot.universes, settings.strategy)
 	if (!discoveryCoverageIsComplete(topology.warnings)) {
 		evaluations = blockExecutableEvaluations(evaluations, 'Canonical discovery reached a configured scan limit; raise the discovery limit and complete a full scan before execution')
 	}
@@ -578,7 +636,7 @@ export async function performCanonicalScan(
 		evaluations,
 		index: updated?.index ?? compatibleIndex,
 		indexComplete: updated?.complete === true,
-		inventory: walletInventory(snapshot),
+		inventory,
 		snapshot,
 		topologyCache: discovery.topologyCache,
 	}

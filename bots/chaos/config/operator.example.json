@@ -21,6 +21,7 @@
 	"network": {
 		"chainId": 11155111,
 		"explorerUrl": "https://sepolia.etherscan.io",
+		"maximumBlockIntervalSeconds": 60,
 		"name": "sepolia"
 	},
 	"networkConfigured": false,

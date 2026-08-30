@@ -114,6 +114,17 @@ export function paddedTransactionGas(gasEstimate: bigint) {
 	return gasEstimate + gasEstimate / 5n + 10_000n
 }
 
+const MAX_UINT256 = (1n << 256n) - 1n
+const MAX_PRIORITY_FEE_PER_GAS = 2n * 10n ** 9n
+export const DEFAULT_TRANSACTION_VALIDITY_BLOCKS = 25n
+
+export function maximumFeePerGas(baseFeePerGas: bigint) {
+	if (baseFeePerGas < 0n || baseFeePerGas > MAX_UINT256) throw new Error('baseFeePerGas must be an unsigned uint256')
+	const maximum = baseFeePerGas * 2n + MAX_PRIORITY_FEE_PER_GAS
+	if (maximum > MAX_UINT256) throw new Error('maximum fee per gas exceeds uint256')
+	return maximum
+}
+
 export async function prepareSignedTransaction(parameters: {
 	baseFeePerGas: bigint
 	blockNumber: bigint
@@ -128,9 +139,9 @@ export async function prepareSignedTransaction(parameters: {
 	value?: bigint | undefined
 }): Promise<SignedTransaction> {
 	assertSubmissionWindowOpen(parameters.lastValidBlockNumber, parameters.blockNumber)
-	const maxPriorityFeePerGas = 2n * 10n ** 9n
+	const maxPriorityFeePerGas = MAX_PRIORITY_FEE_PER_GAS
 	const gas = paddedTransactionGas(parameters.gasEstimate)
-	const maxFeePerGas = parameters.baseFeePerGas * 2n + maxPriorityFeePerGas
+	const maxFeePerGas = maximumFeePerGas(parameters.baseFeePerGas)
 	const serializedTransaction = await parameters.signTransaction({
 		chainId: parameters.chainId,
 		data: parameters.data,
@@ -142,7 +153,7 @@ export async function prepareSignedTransaction(parameters: {
 		...(parameters.value === undefined ? {} : { value: parameters.value }),
 	})
 	const hash = keccak256(serializedTransaction)
-	const defaultMaxBlockNumber = parameters.blockNumber + 25n
+	const defaultMaxBlockNumber = parameters.blockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
 	return {
 		hash,
 		lastValidBlockNumber: parameters.lastValidBlockNumber,

@@ -65,7 +65,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 			maxUniverses: 100,
 			maxVaultsPerPool: 100,
 		},
-		network: { chainId: 1, explorerUrl: '', name: 'mainnet' },
+		network: { chainId: 1, explorerUrl: '', maximumBlockIntervalSeconds: 15, name: 'mainnet' },
 		networkConfigured: true,
 		paused: false,
 		privateKey: CHAOS_TEST_PRIVATE_KEY,

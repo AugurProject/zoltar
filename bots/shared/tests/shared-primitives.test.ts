@@ -8,7 +8,7 @@ import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.t
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
-import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
+import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
 import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
@@ -1085,6 +1085,12 @@ describe('shared bot primitives', () => {
 		expect(signed.transaction.value).toBe(42n)
 		expect(parseTransaction(signed.serializedTransaction).value).toBe(42n)
 		expect(signed.transaction.gas).toBe(paddedTransactionGas(100_000n))
+	})
+
+	test('derives a checked EIP-1559 fee ceiling shared by planning and signing', () => {
+		expect(maximumFeePerGas(10n)).toBe(2_000_000_020n)
+		expect(() => maximumFeePerGas(-1n)).toThrow('baseFeePerGas must be an unsigned uint256')
+		expect(() => maximumFeePerGas((1n << 256n) - 1n)).toThrow('maximum fee per gas exceeds uint256')
 	})
 
 	test('does not accept an oversized private-relay response', async () => {

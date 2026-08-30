@@ -1,8 +1,7 @@
-import { paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
+import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { StrategySettings } from '../config/settings.ts'
+import { assertWorkflowPrerequisiteLimit, requiredTimestampSubmissionSafetySeconds } from '../operations/timing.ts'
 import type { OperationPlan, OperationStep } from '../operations/types.ts'
-
-export const MINIMUM_DEADLINE_SAFETY_SECONDS = 60n
 
 export function unsignedQuantity(value: string | undefined, label: string, fallback = 0n) {
 	if (value === undefined) return fallback
@@ -10,17 +9,14 @@ export function unsignedQuantity(value: string | undefined, label: string, fallb
 	return BigInt(value)
 }
 
-export function maximumFeePerGas(baseFeePerGas: bigint) {
-	if (baseFeePerGas < 0n) throw new Error('Block base fee cannot be negative')
-	return baseFeePerGas * 2n + 2n * 10n ** 9n
-}
+export { maximumFeePerGas }
 
 export function transactionGasCeiling(gasEstimate: bigint, baseFeePerGas: bigint) {
 	if (gasEstimate <= 0n) throw new Error('Gas estimate must be positive')
 	return paddedTransactionGas(gasEstimate) * maximumFeePerGas(baseFeePerGas)
 }
 
-export function assertOperationPlanFresh(plan: Pick<OperationPlan, 'createdAtBlock' | 'id' | 'steps'>, currentBlock: bigint, validForBlocks: bigint) {
+export function assertOperationPlanFresh(plan: Pick<OperationPlan, 'createdAtBlock' | 'id' | 'steps'>, currentBlock: bigint, validForBlocks: bigint, confirmedStepIds: ReadonlySet<string> = new Set()) {
 	const createdAtBlock = unsignedQuantity(plan.createdAtBlock, `${plan.id} creation block`)
 	if (validForBlocks <= 0n) throw new Error('Workflow validity must be positive')
 	if (createdAtBlock > currentBlock) throw new Error(`${plan.id} was planned at a future block`)
@@ -28,9 +24,15 @@ export function assertOperationPlanFresh(plan: Pick<OperationPlan, 'createdAtBlo
 	if (plan.steps.length === 0) throw new Error(`${plan.id} has no executable steps`)
 	const stepIds = new Set(plan.steps.map(step => step.id))
 	if (stepIds.size !== plan.steps.length) throw new Error(`${plan.id} contains duplicate step identifiers`)
+	for (const confirmedStepId of confirmedStepIds) {
+		if (!stepIds.has(confirmedStepId)) throw new Error(`${plan.id} does not contain confirmed step ${confirmedStepId}`)
+	}
+	const remainingSteps = plan.steps.filter(step => !confirmedStepIds.has(step.id))
+	if (remainingSteps.length === 0) throw new Error(`${plan.id} has no remaining executable steps`)
+	assertWorkflowPrerequisiteLimit({ id: plan.id, steps: remainingSteps })
 }
 
-export function operationSubmissionLastValidBlock(plan: Pick<OperationPlan, 'deadlineTimestamp' | 'id' | 'lastValidBlockNumber'>, currentBlock: bigint, currentTimestamp: bigint, mode: 'private' | 'public') {
+export function operationSubmissionLastValidBlock(plan: Pick<OperationPlan, 'deadlineTimestamp' | 'id' | 'lastValidBlockNumber'>, currentBlock: bigint, currentTimestamp: bigint, mode: 'private' | 'public', maximumBlockIntervalSeconds: number) {
 	const lastValidBlockNumber = plan.lastValidBlockNumber === undefined ? undefined : unsignedQuantity(plan.lastValidBlockNumber, `${plan.id} last valid block`)
 	const deadlineTimestamp = plan.deadlineTimestamp === undefined ? undefined : unsignedQuantity(plan.deadlineTimestamp, `${plan.id} deadline timestamp`)
 	if (mode === 'public' && (lastValidBlockNumber !== undefined || deadlineTimestamp !== undefined)) {
@@ -39,7 +41,7 @@ export function operationSubmissionLastValidBlock(plan: Pick<OperationPlan, 'dea
 	if (lastValidBlockNumber !== undefined && currentBlock >= lastValidBlockNumber) {
 		throw new Error(`${plan.id} block deadline expired before signing`)
 	}
-	if (deadlineTimestamp !== undefined && currentTimestamp + MINIMUM_DEADLINE_SAFETY_SECONDS >= deadlineTimestamp) {
+	if (deadlineTimestamp !== undefined && currentTimestamp + requiredTimestampSubmissionSafetySeconds(maximumBlockIntervalSeconds) >= deadlineTimestamp) {
 		throw new Error(`${plan.id} timestamp deadline is too close for safe signing`)
 	}
 	if (deadlineTimestamp === undefined) return lastValidBlockNumber
@@ -60,6 +62,8 @@ export function assertOperationPrincipalCaps(plan: Pick<OperationPlan, 'id' | 's
 			if (debit.kind === 'native') {
 				declaredNativeDebit += debitAmount
 				nativeDebit += debitAmount
+			} else if (debit.kind === 'security-pool-vault-rep') {
+				repDebit += debitAmount
 			} else if (debit.kind === 'erc20' || debit.kind === 'open-oracle-credit') {
 				if (debit.category === 'rep') repDebit += debitAmount
 				else if (debit.category === 'weth' || (debit.kind === 'open-oracle-credit' && debit.asset === 'ETH')) nativeDebit += debitAmount
@@ -77,6 +81,25 @@ export function assertOperationPrincipalCaps(plan: Pick<OperationPlan, 'id' | 's
 		throw new Error(`${plan.id} exceeds strategy.maximumRepPerOperation across its workflow`)
 	}
 	return { nativeDebit, repDebit }
+}
+
+export function cleanupTransactionCount(plan: Pick<OperationPlan, 'id' | 'maximumCleanupTransactionCount'>) {
+	const count = plan.maximumCleanupTransactionCount ?? 0
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`${plan.id} cleanup transaction count must be a non-negative safe integer`)
+	return count
+}
+
+export function assertOperationEthFunding(plan: Pick<OperationPlan, 'id' | 'maximumCleanupTransactionCount' | 'steps'>, ethBalanceAttoEth: bigint, strategy: Pick<StrategySettings, 'maximumGasCostAttoEth' | 'minimumEthReserveAttoEth'>) {
+	let transactionValue = 0n
+	for (const step of plan.steps) {
+		transactionValue += unsignedQuantity(step.value, `${step.label} value`)
+	}
+	const maximumGasCost = strategy.maximumGasCostAttoEth * BigInt(plan.steps.length + cleanupTransactionCount(plan))
+	const requiredBalance = strategy.minimumEthReserveAttoEth + transactionValue + maximumGasCost
+	if (ethBalanceAttoEth < requiredBalance) {
+		throw new Error(`${plan.id} cannot fund all remaining workflow steps while retaining the wallet ETH reserve`)
+	}
+	return { maximumGasCost, requiredBalance, transactionValue }
 }
 
 export function assertStepSafety(parameters: { baseFeePerGas: bigint; ethBalanceAttoEth: bigint; gasEstimate: bigint; step: OperationStep; strategy: Pick<StrategySettings, 'maximumEthPerOperationAttoEth' | 'maximumGasCostAttoEth' | 'minimumEthReserveAttoEth'> }) {

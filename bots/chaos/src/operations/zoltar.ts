@@ -1,8 +1,31 @@
-import { encodeAbiParameters, keccak256 } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, questionDataAbi, zoltarAbi } from '../contracts/abi.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
-import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
+import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
+import { configuredImmutableTopologyCapacity, INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER, topologyMutationCapacityBlocker } from './topology-capacity.ts'
+
+const QUESTION_DISCOVERY_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
+const MAXIMUM_UINT256_DECIMAL = ((1n << 256n) - 1n).toString()
+const utf8Encoder = new TextEncoder()
+
+function questionCreationCapacityBlocker(snapshot: EcosystemSnapshot, options: PlanningOptions, plannedQuestion: QuestionSnapshot) {
+	const capacity = configuredImmutableTopologyCapacity(options)
+	if (capacity === undefined) return INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER
+	const resultingQuestions = snapshot.questions.length + 1
+	if (resultingQuestions > capacity.maxQuestions) return `Question creation would exceed the configured ${capacity.maxQuestions.toString()}-question discovery resident limit`
+	const resultingResidentItems = [...snapshot.questions, plannedQuestion].reduce((total, question) => total + 1 + question.outcomeLabels.length, 0)
+	if (resultingResidentItems > capacity.maximumAggregateItems) return `Question creation would exceed the configured ${capacity.maximumAggregateItems.toString()}-item discovery aggregate limit`
+	const resultingResidentBytes = [...snapshot.questions, plannedQuestion].reduce((total, question) => total + utf8Encoder.encode(JSON.stringify(question)).byteLength, 0)
+	if (resultingResidentBytes > QUESTION_DISCOVERY_RESIDENT_UTF8_BYTES) {
+		return `Question creation would exceed the ${QUESTION_DISCOVERY_RESIDENT_UTF8_BYTES.toString()}-byte question discovery resident limit`
+	}
+	return undefined
+}
+
+function childDeploymentCapacityBlocker(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 0, additionalUniverses: 1, label: 'Child deployment' })
+}
 
 function irreversibleEnabled(options: PlanningOptions) {
 	return options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled'
@@ -17,17 +40,67 @@ function repSpend(snapshot: EcosystemSnapshot, universe: UniverseSnapshot, optio
 function approveRepStep(snapshot: EcosystemSnapshot, universe: UniverseSnapshot, required: bigint) {
 	const inventory = tokenInventory(snapshot, universe.repToken)
 	if (allowance(inventory, snapshot.deployments.zoltar) >= required) return []
-	return [
-		encodeStep({
-			abi: erc20Abi,
-			args: [snapshot.deployments.zoltar, required],
-			evidence: [erc20AllowanceEvidence(universe.repToken, snapshot.wallet.address, snapshot.deployments.zoltar, required)],
-			functionName: 'approve',
-			id: 'approve-rep',
-			label: 'Approve REP for Zoltar',
-			to: universe.repToken,
-		}),
-	]
+	return [zoltarApprovalStep(snapshot, universe.repToken, snapshot.deployments.zoltar, required)]
+}
+
+function zoltarApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, spender: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for Zoltar') {
+	return encodeStep({ abi: erc20Abi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
+}
+
+function requiredZoltarMetadataString(metadata: OperationPlan['metadata'], key: string) {
+	const value = metadata[key]
+	if (typeof value !== 'string' || value.length === 0) throw new Error(`Zoltar continuation metadata ${key} is missing`)
+	return value
+}
+
+function requiredZoltarMetadataAmount(metadata: OperationPlan['metadata'], key: string) {
+	const value = requiredZoltarMetadataString(metadata, key)
+	if (!/^(?:0|[1-9][0-9]*)$/.test(value)) throw new Error(`Zoltar continuation metadata ${key} is not canonical`)
+	return BigInt(value)
+}
+
+function requiredZoltarMetadataAddress(metadata: OperationPlan['metadata'], key: string) {
+	return getAddress(requiredZoltarMetadataString(metadata, key))
+}
+
+function exactPreviousRepApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	const previous = context.previousPlan.steps.find(step => step.id === 'approve-rep')
+	if (previous === undefined) return undefined
+	const expected = zoltarApprovalStep(snapshot, token, spender, required)
+	return previous.to.toLowerCase() === expected.to.toLowerCase() && previous.data === expected.data ? previous : undefined
+}
+
+function zoltarApprovalPrepared(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
+	if (context.previousPlan.steps.some(step => step.id === 'approve-rep') && previous === undefined) return false
+	if (previous !== undefined && context.confirmedStepIds.includes(previous.id)) return allowance(tokenInventory(snapshot, token), spender) === required
+	if (previous === undefined) return allowance(tokenInventory(snapshot, token), spender) >= required
+	return true
+}
+
+function zoltarRemainingApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
+	return previous !== undefined && !context.confirmedStepIds.includes(previous.id) ? [zoltarApprovalStep(snapshot, token, spender, required)] : []
+}
+
+function zoltarCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint, label: string) {
+	const previous = exactPreviousRepApproval(snapshot, context, token, spender, required)
+	if (previous === undefined || !context.confirmedStepIds.includes(previous.id)) return undefined
+	return planBase({
+		continuationDisposition: 'cleanup-only',
+		definitionId: context.previousPlan.definitionId,
+		ecosystem: 'zoltar',
+		label,
+		metadata: context.previousPlan.metadata,
+		postconditions: ['The confirmed workflow-created REP allowance is zero'],
+		risk: 'irreversible',
+		snapshot,
+		steps: [zoltarApprovalStep(snapshot, token, spender, 0n, 'revoke-rep', 'Revoke workflow-created REP approval')],
+	})
+}
+
+function zoltarContinuationCleanupCount(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, spender: `0x${string}`, required: bigint) {
+	return exactPreviousRepApproval(snapshot, context, token, spender, required) === undefined ? undefined : 1
 }
 
 function endedQuestion(snapshot: EcosystemSnapshot): QuestionSnapshot | undefined {
@@ -97,38 +170,89 @@ function migrationSplitCandidates(snapshot: EcosystemSnapshot, options: Planning
 	})
 }
 
+type MigrationSplitCandidate = ReturnType<typeof migrationSplitCandidates>[number]
+
+function migrationSplitCapacityBlocker(snapshot: EcosystemSnapshot, options: PlanningOptions, route: MigrationSplitCandidate) {
+	const childExists = snapshot.universes.some(universe => universe.id === route.childUniverseId)
+	return topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 0, additionalUniverses: childExists ? 0 : 1, label: 'Migration split' })
+}
+
+function capacitySafeMigrationSplitCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return migrationSplitCandidates(snapshot, options).filter(route => migrationSplitCapacityBlocker(snapshot, options, route) === undefined)
+}
+
+function questionCreationDraft(kind: 'binary' | 'categorical' | 'scalar', snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	const createdAt = amount(snapshot.anchor.timestamp)
+	const nonce = `${snapshot.anchor.blockNumber}-${mixSeed(options.seed, kind)}`
+	let labels: string[] = []
+	if (kind === 'binary') labels = ['Yes', 'No']
+	else if (kind === 'categorical') {
+		labels = ['Alpha', 'Beta', 'Gamma'].sort((left, right) => {
+			const leftHash = keccak256(encodeAbiParameters([{ type: 'string' }], [left]))
+			const rightHash = keccak256(encodeAbiParameters([{ type: 'string' }], [right]))
+			if (leftHash > rightHash) return -1
+			if (leftHash === rightHash) return 0
+			return 1
+		})
+	}
+	const question = {
+		answerUnit: kind === 'scalar' ? 'points' : '',
+		description: `Chaos bot protocol exercise ${nonce}`,
+		displayValueMax: kind === 'scalar' ? 100n : 0n,
+		displayValueMin: 0n,
+		endTime: createdAt + 86_400n,
+		numTicks: kind === 'scalar' ? 100n : 0n,
+		startTime: createdAt,
+		title: `Chaos ${kind} ${nonce}`,
+	}
+	const id = BigInt(
+		keccak256(
+			encodeAbiParameters(
+				[
+					{
+						components: [
+							{ name: 'title', type: 'string' },
+							{ name: 'description', type: 'string' },
+							{ name: 'startTime', type: 'uint48' },
+							{ name: 'endTime', type: 'uint48' },
+							{ name: 'numTicks', type: 'uint120' },
+							{ name: 'displayValueMin', type: 'int256' },
+							{ name: 'displayValueMax', type: 'int256' },
+							{ name: 'answerUnit', type: 'string' },
+						],
+						type: 'tuple',
+					},
+					{ type: 'string[]' },
+				],
+				[question, labels],
+			),
+		),
+	).toString()
+	const discoverySnapshot: QuestionSnapshot = {
+		// Inclusion time is not known at planning, so its widest possible
+		// canonical encoding makes the persisted-byte check fail closed.
+		createdAt: MAXIMUM_UINT256_DECIMAL,
+		endTime: question.endTime.toString(),
+		id,
+		kind,
+		numTicks: question.numTicks.toString(),
+		outcomeLabels: [...labels],
+		startTime: question.startTime.toString(),
+	}
+	return { discoverySnapshot, labels, question }
+}
+
 function questionDefinition(kind: 'binary' | 'categorical' | 'scalar'): OperationDefinition {
 	const id = `zoltar.question.create-${kind}`
 	return {
 		buildPlan(snapshot, options) {
-			const createdAt = amount(snapshot.anchor.timestamp)
-			const nonce = `${snapshot.anchor.blockNumber}-${mixSeed(options.seed, kind)}`
-			let labels: string[] = []
-			if (kind === 'binary') labels = ['Yes', 'No']
-			else if (kind === 'categorical') {
-				labels = ['Alpha', 'Beta', 'Gamma'].sort((left, right) => {
-					const leftHash = keccak256(encodeAbiParameters([{ type: 'string' }], [left]))
-					const rightHash = keccak256(encodeAbiParameters([{ type: 'string' }], [right]))
-					if (leftHash > rightHash) return -1
-					if (leftHash === rightHash) return 0
-					return 1
-				})
-			}
-			const question = {
-				answerUnit: kind === 'scalar' ? 'points' : '',
-				description: `Chaos bot protocol exercise ${nonce}`,
-				displayValueMax: kind === 'scalar' ? 100n : 0n,
-				displayValueMin: 0n,
-				endTime: createdAt + 86_400n,
-				numTicks: kind === 'scalar' ? 100n : 0n,
-				startTime: createdAt,
-				title: `Chaos ${kind} ${nonce}`,
-			}
+			const { discoverySnapshot, labels, question } = questionCreationDraft(kind, snapshot, options)
+			if (questionCreationCapacityBlocker(snapshot, options, discoverySnapshot) !== undefined) return undefined
 			return planBase({
 				definitionId: id,
 				ecosystem: 'zoltar',
 				label: `Create ${kind} question`,
-				metadata: { kind },
+				metadata: { kind, questionId: discoverySnapshot.id },
 				postconditions: ['QuestionCreated is emitted and the question timestamp becomes nonzero'],
 				risk: 'low',
 				snapshot,
@@ -150,7 +274,7 @@ function questionDefinition(kind: 'binary' | 'categorical' | 'scalar'): Operatio
 		description: `Creates a unique, well-formed ${kind} protocol question.`,
 		discoveryInputs: ['anchor.timestamp', 'questionData'],
 		ecosystem: 'zoltar',
-		evaluate: () => eligible(),
+		evaluate: (snapshot, options) => eligible(questionCreationCapacityBlocker(snapshot, options, questionCreationDraft(kind, snapshot, options).discoverySnapshot)),
 		id,
 		label: `Create ${kind} question`,
 		method: 'createQuestion',
@@ -190,7 +314,59 @@ const forkUniverse: OperationDefinition = {
 			definitionId: forkUniverse.id,
 			ecosystem: 'zoltar',
 			label: forkUniverse.label,
-			metadata: { questionId: question.id, universeId: universe.id },
+			maximumCleanupTransactionCount: steps.length > 1 ? 1 : undefined,
+			metadata: { amountAttoRep: threshold.toString(), questionId: question.id, repToken: universe.repToken, universeId: universe.id, zoltar: snapshot.deployments.zoltar },
+			postconditions: ['The universe fork time is nonzero and the wallet receives migration credit'],
+			risk: 'irreversible',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const threshold = requiredZoltarMetadataAmount(context.previousPlan.metadata, 'amountAttoRep')
+		const questionId = requiredZoltarMetadataString(context.previousPlan.metadata, 'questionId')
+		const repToken = requiredZoltarMetadataAddress(context.previousPlan.metadata, 'repToken')
+		const universeId = requiredZoltarMetadataString(context.previousPlan.metadata, 'universeId')
+		const zoltar = requiredZoltarMetadataAddress(context.previousPlan.metadata, 'zoltar')
+		const cleanup = () => zoltarCleanupPlan(snapshot, context, repToken, zoltar, threshold, 'Clean up universe fork approval')
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const universe = snapshot.universes.find(candidate => candidate.id === universeId)
+		const question = snapshot.questions.find(candidate => candidate.id === questionId)
+		const inventory = tokenInventory(snapshot, repToken)
+		const safe =
+			irreversibleEnabled(options) === undefined &&
+			snapshot.deployments.zoltar.toLowerCase() === zoltar.toLowerCase() &&
+			universe !== undefined &&
+			universe.repToken.toLowerCase() === repToken.toLowerCase() &&
+			universe.forkTime === '0' &&
+			amount(universe.forkThresholdAttoRep) === threshold &&
+			question !== undefined &&
+			amount(question.endTime) <= amount(snapshot.anchor.timestamp) &&
+			threshold > 0n &&
+			threshold <= optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) &&
+			inventory !== undefined &&
+			amount(inventory.balance) >= threshold + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
+			zoltarApprovalPrepared(snapshot, context, repToken, zoltar, threshold)
+		if (!safe) return cleanup()
+		const steps = zoltarRemainingApproval(snapshot, context, repToken, zoltar, threshold)
+		steps.push(
+			encodeStep({
+				abi: zoltarAbi,
+				args: [BigInt(universeId), BigInt(questionId)],
+				evidence: [eventEvidence(zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')],
+				functionName: 'forkUniverse',
+				id: 'fork-universe',
+				label: 'Fork universe with ended question',
+				to: zoltar,
+				walletAssetDebits: [erc20WalletDebit(repToken, threshold, 'rep')],
+			}),
+		)
+		return planBase({
+			definitionId: forkUniverse.id,
+			ecosystem: 'zoltar',
+			label: forkUniverse.label,
+			maximumCleanupTransactionCount: zoltarContinuationCleanupCount(snapshot, context, repToken, zoltar, threshold),
+			metadata: context.previousPlan.metadata,
 			postconditions: ['The universe fork time is nonzero and the wallet receives migration credit'],
 			risk: 'irreversible',
 			snapshot,
@@ -221,6 +397,7 @@ const forkUniverse: OperationDefinition = {
 
 const deployChild: OperationDefinition = {
 	buildPlan(snapshot, options) {
+		if (childDeploymentCapacityBlocker(snapshot, options) !== undefined) return undefined
 		const candidates = snapshot.universes.flatMap(universe => {
 			if (universe.forkTime === '0') return []
 			const outcomes = forkOutcomes(snapshot, universe)
@@ -256,7 +433,7 @@ const deployChild: OperationDefinition = {
 	ecosystem: 'zoltar',
 	evaluate(snapshot, options) {
 		const missing = snapshot.universes.some(universe => universe.forkTime !== '0' && forkOutcomes(snapshot, universe)?.some(outcome => !universe.knownChildOutcomes.includes(outcome)) === true)
-		return eligible(options.allowHighRisk === true ? undefined : 'High-risk operations are disabled', missing ? undefined : 'No discovered fork has a missing well-formed child outcome')
+		return eligible(options.allowHighRisk === true ? undefined : 'High-risk operations are disabled', childDeploymentCapacityBlocker(snapshot, options), missing ? undefined : 'No discovered fork has a missing well-formed child outcome')
 	},
 	id: 'zoltar.child.deploy',
 	label: 'Deploy child universe',
@@ -268,7 +445,7 @@ function migrationDefinition(mode: 'add' | 'split' | 'burn'): OperationDefinitio
 	if (mode === 'split') {
 		return {
 			buildPlan(snapshot, options) {
-				const route = choose(migrationSplitCandidates(snapshot, options), mixSeed(options.seed, 'zoltar.migration.split'))
+				const route = choose(capacitySafeMigrationSplitCandidates(snapshot, options), mixSeed(options.seed, 'zoltar.migration.split'))
 				if (route === undefined) return undefined
 				return planBase({
 					definitionId: 'zoltar.migration.split',
@@ -309,7 +486,12 @@ function migrationDefinition(mode: 'add' | 'split' | 'burn'): OperationDefinitio
 			description: 'Mints a bounded positive portion of wallet migration credit into one canonically indexed child route.',
 			discoveryInputs: ['forked universes', 'authenticated fork outcomes', 'wallet migration credit', 'canonical cumulative MigrationRepSplit index'],
 			ecosystem: 'zoltar',
-			evaluate: (snapshot, options) => eligible(irreversibleEnabled(options), migrationSplitCandidates(snapshot, options).length > 0 ? undefined : 'No child route has bounded unsplit wallet migration credit'),
+			evaluate(snapshot, options) {
+				const routes = migrationSplitCandidates(snapshot, options)
+				const availableRoutes = routes.filter(route => migrationSplitCapacityBlocker(snapshot, options, route) === undefined)
+				const capacityBlocker = availableRoutes.length === 0 ? routes.map(route => migrationSplitCapacityBlocker(snapshot, options, route)).find(blocker => blocker !== undefined) : undefined
+				return eligible(irreversibleEnabled(options), capacityBlocker, routes.length > 0 ? undefined : 'No child route has bounded unsplit wallet migration credit')
+			},
 			id: 'zoltar.migration.split',
 			label: 'Split migration REP',
 			method: 'splitMigrationRep',
@@ -346,7 +528,55 @@ function migrationDefinition(mode: 'add' | 'split' | 'burn'): OperationDefinitio
 				definitionId: id,
 				ecosystem: 'zoltar',
 				label: mode === 'add' ? 'Add REP to migration balance' : 'Burn REP',
-				metadata: { amountAttoRep: spend.toString(), universeId: universe.id },
+				maximumCleanupTransactionCount: steps.length > 1 ? 1 : undefined,
+				metadata: { amountAttoRep: spend.toString(), repToken: universe.repToken, universeId: universe.id, zoltar: snapshot.deployments.zoltar },
+				postconditions: [mode === 'add' ? 'Migration credit increases by the spent amount' : 'Universe theoretical REP supply decreases'],
+				risk: 'irreversible',
+				snapshot,
+				steps,
+			})
+		},
+		buildContinuationPlan(snapshot, options, context) {
+			const spend = requiredZoltarMetadataAmount(context.previousPlan.metadata, 'amountAttoRep')
+			const repToken = requiredZoltarMetadataAddress(context.previousPlan.metadata, 'repToken')
+			const universeId = requiredZoltarMetadataString(context.previousPlan.metadata, 'universeId')
+			const zoltar = requiredZoltarMetadataAddress(context.previousPlan.metadata, 'zoltar')
+			const cleanup = () => zoltarCleanupPlan(snapshot, context, repToken, zoltar, spend, `Clean up ${mode} REP approval`)
+			if (context.continuationDisposition === 'cleanup-only') return cleanup()
+			const universe = snapshot.universes.find(candidate => candidate.id === universeId)
+			const inventory = tokenInventory(snapshot, repToken)
+			const safe =
+				irreversibleEnabled(options) === undefined &&
+				snapshot.deployments.zoltar.toLowerCase() === zoltar.toLowerCase() &&
+				universe !== undefined &&
+				universe.repToken.toLowerCase() === repToken.toLowerCase() &&
+				(mode === 'burn' || universe.forkTime !== '0') &&
+				spend > 0n &&
+				spend <= optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) &&
+				inventory !== undefined &&
+				amount(inventory.balance) >= spend + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
+				zoltarApprovalPrepared(snapshot, context, repToken, zoltar, spend)
+			if (!safe) return cleanup()
+			const signature = mode === 'add' ? 'MigrationRepAdded(address,uint248,uint256,uint256,uint256)' : 'RepBurned(address,uint248,uint256,uint256)'
+			const steps = zoltarRemainingApproval(snapshot, context, repToken, zoltar, spend)
+			steps.push(
+				encodeStep({
+					abi: zoltarAbi,
+					args: [BigInt(universeId), spend],
+					evidence: [eventEvidence(zoltar, signature)],
+					functionName: method,
+					id: method,
+					label: method,
+					to: zoltar,
+					walletAssetDebits: [erc20WalletDebit(repToken, spend, 'rep')],
+				}),
+			)
+			return planBase({
+				definitionId: id,
+				ecosystem: 'zoltar',
+				label: mode === 'add' ? 'Add REP to migration balance' : 'Burn REP',
+				maximumCleanupTransactionCount: zoltarContinuationCleanupCount(snapshot, context, repToken, zoltar, spend),
+				metadata: context.previousPlan.metadata,
 				postconditions: [mode === 'add' ? 'Migration credit increases by the spent amount' : 'Universe theoretical REP supply decreases'],
 				risk: 'irreversible',
 				snapshot,

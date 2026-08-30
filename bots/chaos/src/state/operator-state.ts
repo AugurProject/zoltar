@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
+import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { ChaosEcosystem, EvaluatedOperation, OperationEvidence, OperationPreflightCall, OperationRisk, OperationWalletAssetDebit } from '#operations/types'
+import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import {
 	loadPersistedProtocolIndex,
 	parseProtocolIndex as parseStoredProtocolIndex,
@@ -17,8 +17,9 @@ import {
 	type ProtocolIndexReference,
 } from './protocol-index-store.ts'
 
-export const DURABLE_STATE_VERSION = 2
+export const DURABLE_STATE_VERSION = 3
 export const MAXIMUM_ACTIVITY_COUNT = 500
+export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
 export const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
 export const MAXIMUM_OBLIGATION_TOMBSTONE_COUNT = 10_000
 export const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
@@ -46,6 +47,16 @@ export type SchedulerState = {
 
 export type DurableMetadata = Record<string, boolean | number | string>
 
+export type DurableLifecyclePresenceBlocker = {
+	count: number
+	digest: Hex
+	firstDefinitionId: string
+	firstEcosystem: ChaosEcosystem
+	observedAtBlock: string
+	presenceComplete: boolean
+	reason: 'completed-identity-returned' | 'unplanned-due-identity'
+}
+
 export type DurableWorkflowFailureKind = 'nonce-cancelled' | 'receipt-reverted' | 'semantic-failure'
 
 export type DurableWorkflowStep = {
@@ -70,6 +81,7 @@ export type DurableWorkflowStep = {
 export type DurableWorkflow = {
 	classification: 'lifecycle-obligation' | 'selectable'
 	completedAt?: string | undefined
+	continuationDisposition?: OperationContinuationDisposition | undefined
 	createdAtBlock: string
 	createdAt: string
 	deadlineTimestamp?: string | undefined
@@ -77,6 +89,7 @@ export type DurableWorkflow = {
 	id: string
 	label: string
 	lastValidBlockNumber?: string | undefined
+	maximumCleanupTransactionCount?: number | undefined
 	semanticDeadlineBlockNumber?: string | undefined
 	metadata: DurableMetadata
 	operationId: string
@@ -89,6 +102,7 @@ export type DurableWorkflow = {
 	startedAt?: string | undefined
 	status: 'abandoned' | 'blocked' | 'completed' | 'failed' | 'planned' | 'running' | 'waiting-continuation' | 'waiting-obligation' | 'waiting-transaction'
 	steps: DurableWorkflowStep[]
+	terminalSubmission?: OperationTerminalSubmission | undefined
 	updatedAt: string
 }
 
@@ -109,7 +123,7 @@ export type DurableObligation = {
 	operationId: string
 	resolvedAt?: string | undefined
 	resolutionReason?: string | undefined
-	status: 'abandoned' | 'blocked' | 'completed' | 'executing' | 'failed' | 'pending'
+	status: 'abandoned' | 'blocked' | 'completed' | 'deferred' | 'executing' | 'failed' | 'pending'
 	updatedAt: string
 	workflowId: string
 }
@@ -117,6 +131,7 @@ export type DurableObligation = {
 export type DurableObligationTombstone = {
 	id: string
 	lastSeenBlock?: string | undefined
+	observedAbsentAtBlock?: string | undefined
 	resolution: 'abandoned' | 'completed'
 	resolvedAt: string
 	resolvedAtBlock: string
@@ -167,6 +182,7 @@ export type PendingTransactionIntent = {
 export type DurableState = {
 	activities: Activity[]
 	chainId: number
+	lifecyclePresenceBlocker: DurableLifecyclePresenceBlocker | undefined
 	obligationTombstones: DurableObligationTombstone[]
 	obligations: DurableObligation[]
 	pendingTransactions: PendingTransactionIntent[]
@@ -175,7 +191,7 @@ export type DurableState = {
 	safetyPaused: boolean
 	scheduler: SchedulerState
 	signerAddress: Address | undefined
-	version: 2
+	version: 3
 	workflows: DurableWorkflow[]
 }
 
@@ -223,6 +239,7 @@ export type RuntimeState = DurableState & {
 export type StateFilesystem = ProtocolIndexFilesystem
 
 const stateFilesystem: StateFilesystem = {
+	link,
 	mkdir,
 	open,
 	readFile,
@@ -248,6 +265,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 	return {
 		activities: [],
 		chainId,
+		lifecyclePresenceBlocker: undefined,
 		obligationTombstones: [],
 		obligations: [],
 		pendingTransactions: [],
@@ -278,6 +296,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		inventory: { eth: '0', rep: [], weth: '0' },
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
+		lifecyclePresenceBlocker: durableState.lifecyclePresenceBlocker === undefined ? undefined : { ...durableState.lifecyclePresenceBlocker },
 		obligationTombstones: [...durableState.obligationTombstones],
 		obligations: [...durableState.obligations],
 		paused: effectivePaused,
@@ -299,6 +318,14 @@ export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) 
 		throw new Error(`Durable runtime is scoped to signer ${state.signerAddress}, not ${address}`)
 	}
 	const firstBinding = state.signerAddress === undefined
+	if (firstBinding) {
+		state.evaluations = []
+		state.inventory = { eth: '0', rep: [], weth: '0' }
+		state.lastScanAt = undefined
+		state.lastScannedBlock = undefined
+		state.topology = undefined
+		state.warnings = []
+	}
 	state.signerAddress = address
 	state.wallet = address
 	const indexInvalidated = state.protocolIndex !== undefined && state.protocolIndex.wallet.toLowerCase() !== address.toLowerCase()
@@ -349,6 +376,24 @@ function identifier(value: unknown, label: string) {
 function unsignedIntegerString(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
 	return value
+}
+
+const MAXIMUM_UINT256 = (1n << 256n) - 1n
+
+function uint256String(value: unknown, label: string) {
+	const parsed = unsignedIntegerString(value, label)
+	if (BigInt(parsed) > MAXIMUM_UINT256) throw new Error(`${label} exceeds uint256`)
+	return parsed
+}
+
+function parseTerminalSubmission(value: unknown, label: string): OperationTerminalSubmission {
+	const submission = requiredRecord(value, label)
+	assertExactKeys(submission, ['kind', 'maximumFeePerGas'], [], label)
+	if (submission['kind'] !== 'private-next-block') throw new Error(`${label}.kind is invalid`)
+	return {
+		kind: submission['kind'],
+		maximumFeePerGas: uint256String(submission['maximumFeePerGas'], `${label}.maximumFeePerGas`),
+	}
 }
 
 function positiveIntegerString(value: unknown, label: string) {
@@ -404,6 +449,28 @@ function parseMetadata(value: unknown, label: string): DurableMetadata {
 		else throw new Error(`${label}.${key} must be a string, boolean, or safe integer`)
 	}
 	return parsed
+}
+
+function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresenceBlocker {
+	const label = 'chaos-bot state.lifecyclePresenceBlocker'
+	const blocker = requiredRecord(value, label)
+	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], [], label)
+	const count = blocker['count']
+	if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1 || count > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
+		throw new Error(`${label}.count must be a positive integer within the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
+	}
+	if (typeof blocker['presenceComplete'] !== 'boolean') throw new Error(`${label}.presenceComplete must be a boolean`)
+	const reason = blocker['reason']
+	if (reason !== 'completed-identity-returned' && reason !== 'unplanned-due-identity') throw new Error(`${label}.reason is invalid`)
+	return {
+		count,
+		digest: hash(blocker['digest'], `${label}.digest`),
+		firstDefinitionId: identifier(blocker['firstDefinitionId'], `${label}.firstDefinitionId`),
+		firstEcosystem: ecosystem(blocker['firstEcosystem'], `${label}.firstEcosystem`),
+		observedAtBlock: unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`),
+		presenceComplete: blocker['presenceComplete'],
+		reason,
+	}
 }
 
 function parseEvidence(value: unknown, label: string): OperationEvidence {
@@ -535,6 +602,17 @@ function parseWalletAssetDebits(value: unknown, label: string): OperationWalletA
 				openOracle: getAddress(nonemptyString(debit['openOracle'], `${debitLabel}.openOracle`)),
 			}
 		}
+		if (debit['kind'] === 'security-pool-vault-rep') {
+			assertExactKeys(debit, ['amount', 'category', 'kind', 'pool', 'vault'], [], debitLabel)
+			if (debit['category'] !== 'rep') throw new Error(`${debitLabel}.category must be rep`)
+			return {
+				amount: positiveIntegerString(debit['amount'], `${debitLabel}.amount`),
+				category: 'rep' as const,
+				kind: 'security-pool-vault-rep' as const,
+				pool: getAddress(nonemptyString(debit['pool'], `${debitLabel}.pool`)),
+				vault: getAddress(nonemptyString(debit['vault'], `${debitLabel}.vault`)),
+			}
+		}
 		if (debit['kind'] === 'erc1155') {
 			assertExactKeys(debit, ['amount', 'asset', 'category', 'kind', 'tokenId'], [], debitLabel)
 			if (debit['category'] !== 'outcome-share') {
@@ -657,17 +735,25 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	assertExactKeys(
 		workflow,
 		['classification', 'createdAt', 'createdAtBlock', 'ecosystem', 'id', 'label', 'metadata', 'obligation', 'operationId', 'planId', 'planningSeed', 'postconditions', 'priority', 'risk', 'status', 'steps', 'updatedAt'],
-		['completedAt', 'deadlineTimestamp', 'lastValidBlockNumber', 'semanticDeadlineBlockNumber', 'startedAt'],
+		['completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
 		label,
 	)
 	const status = workflow['status']
 	if (status !== 'abandoned' && status !== 'blocked' && status !== 'completed' && status !== 'failed' && status !== 'planned' && status !== 'running' && status !== 'waiting-continuation' && status !== 'waiting-obligation' && status !== 'waiting-transaction') throw new Error(`${label}.status is invalid`)
 	if (!Array.isArray(workflow['steps']) || workflow['steps'].length === 0) throw new Error(`${label}.steps must be a non-empty array`)
 	const completedAt = optionalTimestamp(workflow['completedAt'], `${label}.completedAt`)
+	const continuationDisposition = workflow['continuationDisposition']
+	if (continuationDisposition !== undefined && continuationDisposition !== 'cleanup-only') {
+		throw new Error(`${label}.continuationDisposition is invalid`)
+	}
 	const startedAt = optionalTimestamp(workflow['startedAt'], `${label}.startedAt`)
+	const terminalSubmission = workflow['terminalSubmission'] === undefined ? undefined : parseTerminalSubmission(workflow['terminalSubmission'], `${label}.terminalSubmission`)
 	const classification = workflow['classification']
 	if (classification !== 'lifecycle-obligation' && classification !== 'selectable') {
 		throw new Error(`${label}.classification is invalid`)
+	}
+	if (continuationDisposition !== undefined && classification !== 'selectable') {
+		throw new Error(`${label}.continuationDisposition is only valid for selectable workflows`)
 	}
 	const priority = workflow['priority']
 	if (priority !== 'random' && priority !== 'urgent') {
@@ -684,8 +770,15 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	if (typeof planningSeed !== 'number' || !Number.isSafeInteger(planningSeed) || planningSeed < 0 || planningSeed > 0xffff_ffff) {
 		throw new Error(`${label}.planningSeed must be an unsigned 32-bit integer`)
 	}
+	const maximumCleanupTransactionCount = workflow['maximumCleanupTransactionCount']
+	if (maximumCleanupTransactionCount !== undefined && (typeof maximumCleanupTransactionCount !== 'number' || !Number.isSafeInteger(maximumCleanupTransactionCount) || maximumCleanupTransactionCount < 0)) {
+		throw new Error(`${label}.maximumCleanupTransactionCount must be a non-negative safe integer`)
+	}
 	const steps = workflow['steps'].map((step, stepIndex) => parseWorkflowStep(step, index, stepIndex))
 	if (new Set(steps.map(step => step.id)).size !== steps.length) throw new Error(`${label}.steps contains duplicate IDs`)
+	if (continuationDisposition === 'cleanup-only' && !steps.some(step => step.status === 'confirmed')) {
+		throw new Error(`${label}.continuationDisposition requires confirmed on-chain preparation`)
+	}
 	const terminalStep = steps.at(-1)
 	const terminalConfirmation = terminalStep?.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true) === true
 	const earlierConfirmation = steps.slice(0, -1).some(step => step.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true))
@@ -701,6 +794,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	return {
 		classification,
 		...(completedAt === undefined ? {} : { completedAt }),
+		...(continuationDisposition === undefined ? {} : { continuationDisposition }),
 		createdAtBlock: unsignedIntegerString(workflow['createdAtBlock'], `${label}.createdAtBlock`),
 		createdAt: timestamp(workflow['createdAt'], `${label}.createdAt`),
 		...(workflow['deadlineTimestamp'] === undefined
@@ -716,6 +810,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 			: {
 					lastValidBlockNumber: unsignedIntegerString(workflow['lastValidBlockNumber'], `${label}.lastValidBlockNumber`),
 				}),
+		...(maximumCleanupTransactionCount === undefined ? {} : { maximumCleanupTransactionCount }),
 		...(workflow['semanticDeadlineBlockNumber'] === undefined
 			? {}
 			: {
@@ -732,6 +827,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 		...(startedAt === undefined ? {} : { startedAt }),
 		status,
 		steps,
+		...(terminalSubmission === undefined ? {} : { terminalSubmission }),
 		updatedAt: timestamp(workflow['updatedAt'], `${label}.updatedAt`),
 	}
 }
@@ -743,7 +839,7 @@ function parseObligation(value: unknown, index: number): DurableObligation {
 	const attemptCount = obligation['attemptCount']
 	if (typeof attemptCount !== 'number' || !Number.isSafeInteger(attemptCount) || attemptCount < 0) throw new Error(`${label}.attemptCount is invalid`)
 	const status = obligation['status']
-	if (status !== 'abandoned' && status !== 'blocked' && status !== 'completed' && status !== 'executing' && status !== 'failed' && status !== 'pending') throw new Error(`${label}.status is invalid`)
+	if (status !== 'abandoned' && status !== 'blocked' && status !== 'completed' && status !== 'deferred' && status !== 'executing' && status !== 'failed' && status !== 'pending') throw new Error(`${label}.status is invalid`)
 	const completedAt = optionalTimestamp(obligation['completedAt'], `${label}.completedAt`)
 	const dueAt = optionalTimestamp(obligation['dueAt'], `${label}.dueAt`)
 	const expiresAt = optionalTimestamp(obligation['expiresAt'], `${label}.expiresAt`)
@@ -784,7 +880,7 @@ function parseObligation(value: unknown, index: number): DurableObligation {
 function parseObligationTombstone(value: unknown, index: number): DurableObligationTombstone {
 	const label = `obligationTombstones[${index.toString()}]`
 	const tombstone = requiredRecord(value, label)
-	assertExactKeys(tombstone, ['id', 'resolution', 'resolvedAt', 'resolvedAtBlock'], ['lastSeenBlock', 'resolutionReason'], label)
+	assertExactKeys(tombstone, ['id', 'resolution', 'resolvedAt', 'resolvedAtBlock'], ['lastSeenBlock', 'observedAbsentAtBlock', 'resolutionReason'], label)
 	const resolution = tombstone['resolution']
 	if (resolution !== 'abandoned' && resolution !== 'completed') {
 		throw new Error(`${label}.resolution is invalid`)
@@ -798,12 +894,17 @@ function parseObligationTombstone(value: unknown, index: number): DurableObligat
 	}
 	const resolvedAtBlock = unsignedIntegerString(tombstone['resolvedAtBlock'], `${label}.resolvedAtBlock`)
 	const lastSeenBlock = tombstone['lastSeenBlock'] === undefined ? undefined : unsignedIntegerString(tombstone['lastSeenBlock'], `${label}.lastSeenBlock`)
+	const observedAbsentAtBlock = tombstone['observedAbsentAtBlock'] === undefined ? undefined : unsignedIntegerString(tombstone['observedAbsentAtBlock'], `${label}.observedAbsentAtBlock`)
 	if (lastSeenBlock !== undefined && BigInt(lastSeenBlock) < BigInt(resolvedAtBlock)) {
 		throw new Error(`${label}.lastSeenBlock precedes its resolution block`)
+	}
+	if (observedAbsentAtBlock !== undefined && BigInt(observedAbsentAtBlock) < BigInt(resolvedAtBlock)) {
+		throw new Error(`${label}.observedAbsentAtBlock precedes its resolution block`)
 	}
 	return {
 		id: identifier(tombstone['id'], `${label}.id`),
 		...(lastSeenBlock === undefined ? {} : { lastSeenBlock }),
+		...(observedAbsentAtBlock === undefined ? {} : { observedAbsentAtBlock }),
 		resolution,
 		resolvedAt: timestamp(tombstone['resolvedAt'], `${label}.resolvedAt`),
 		resolvedAtBlock,
@@ -992,7 +1093,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		throw error
 	}
 	const state = requiredRecord(value, 'chaos-bot state')
-	assertExactKeys(state, ['activities', 'chainId', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
+	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
 	if (state['version'] !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	if (typeof state['safetyPaused'] !== 'boolean') {
@@ -1001,6 +1102,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	if (!Array.isArray(state['activities']) || !Array.isArray(state['obligationTombstones']) || !Array.isArray(state['obligations']) || !Array.isArray(state['pendingTransactions']) || !Array.isArray(state['workflows'])) throw new Error('Chaos-bot state collections must be arrays')
 	if (state['activities'].length > MAXIMUM_ACTIVITY_COUNT) throw new Error(`Chaos-bot state contains more than ${MAXIMUM_ACTIVITY_COUNT.toString()} activities`)
 	if (state['obligationTombstones'].length > MAXIMUM_OBLIGATION_TOMBSTONE_COUNT) throw new Error(`Chaos-bot state contains more than ${MAXIMUM_OBLIGATION_TOMBSTONE_COUNT.toString()} obligation tombstones`)
+	const lifecyclePresenceBlocker = state['lifecyclePresenceBlocker'] === null ? undefined : parseLifecyclePresenceBlocker(state['lifecyclePresenceBlocker'])
 	const workflows = state['workflows'].map(parseWorkflow)
 	const workflowById = new Map(workflows.map(workflow => [workflow.id, workflow]))
 	if (workflowById.size !== workflows.length) throw new Error('Chaos-bot state contains duplicate workflow IDs')
@@ -1031,6 +1133,9 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		}
 		const workflow = workflowById.get(intent.workflowId)
 		if (workflow === undefined) throw new Error(`Transaction intent ${intent.id} references unknown workflow ${intent.workflowId}`)
+		if (workflow.terminalSubmission !== undefined && intent.mode !== 'private') {
+			throw new Error(`Transaction intent ${intent.id} belongs to a terminal private-submission workflow but is not private`)
+		}
 		const step = workflow.steps.find(candidate => candidate.id === intent.stepId)
 		if (workflow.operationId !== intent.operationId || step === undefined) throw new Error(`Transaction intent ${intent.id} does not match its workflow operation and step`)
 		if (step.transactionIntentId !== intent.id || step.transactionHash?.toLowerCase() !== intent.hash.toLowerCase()) throw new Error(`Transaction intent ${intent.id} does not match its workflow step journal`)
@@ -1045,7 +1150,8 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 					throw new Error(`Workflow step ${workflow.id}/${step.id} has an unresolved signed transaction without a pending intent`)
 				}
 			}
-			if ((step.status === 'planned' || step.status === 'blocked') && (step.transactionHash !== undefined || step.transactionIntentId !== undefined)) {
+			const retainsFinalizedFailure = step.status === 'blocked' && workflow.continuationDisposition === 'cleanup-only' && (step.failureKind === 'receipt-reverted' || step.failureKind === 'nonce-cancelled') && step.transactionHash !== undefined
+			if ((step.status === 'planned' || (step.status === 'blocked' && !retainsFinalizedFailure)) && (step.transactionHash !== undefined || step.transactionIntentId !== undefined)) {
 				throw new Error(`Workflow step ${workflow.id}/${step.id} cannot discard a recorded transaction while ${step.status}`)
 			}
 		}
@@ -1057,6 +1163,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	return {
 		activities: state['activities'].map(parseActivity),
 		chainId: expectedChainId,
+		lifecyclePresenceBlocker,
 		obligationTombstones,
 		obligations,
 		pendingTransactions,
@@ -1085,12 +1192,13 @@ function serializedScheduler(scheduler: SchedulerState) {
 }
 
 export function serializedDurableState(
-	state: Pick<DurableState, 'activities' | 'chainId' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
 		activities: state.activities,
 		chainId: state.chainId,
+		lifecyclePresenceBlocker: state.lifecyclePresenceBlocker ?? null,
 		obligationTombstones: state.obligationTombstones,
 		obligations: state.obligations,
 		pendingTransactions: state.pendingTransactions.map(intent => ({
@@ -1161,7 +1269,7 @@ export function compactDurableState(state: Pick<DurableState, 'activities' | 'ob
 	return state
 }
 
-type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
+type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
 
 function snapshotDurableState(state: PersistableDurableState) {
 	compactDurableState(state)
@@ -1170,6 +1278,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 	const snapshot: PersistableDurableState = {
 		activities: [...state.activities],
 		chainId: state.chainId,
+		lifecyclePresenceBlocker: state.lifecyclePresenceBlocker === undefined ? undefined : { ...state.lifecyclePresenceBlocker },
 		obligationTombstones: [...state.obligationTombstones],
 		obligations: [...state.obligations],
 		pendingTransactions: [...state.pendingTransactions],

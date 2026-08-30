@@ -5,6 +5,7 @@ import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
 	AuctionBidSnapshot,
+	AuctionRefundSnapshot,
 	AuctionSnapshot,
 	ChildRepSplitProgressSnapshot,
 	EcosystemDeployments,
@@ -22,6 +23,7 @@ import type {
 	VaultSnapshot,
 } from '../operations/types.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
+import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from './protocol-index.ts'
 import {
 	cloneImmutableTopologyData,
@@ -99,10 +101,12 @@ export interface EcosystemDiscoveryContext {
 	deployments: EcosystemDeployments
 	wallet: Address
 	anchorBlockNumber: bigint
+	expectedAnchorBaseFeePerGas?: bigint
 	expectedAnchorHash?: Hash
 	limits?: Partial<DiscoveryLimits>
 	indexedReports?: readonly OracleGameSnapshot[]
 	indexedAuctionBids?: Readonly<Record<string, readonly AuctionBidSnapshot[]>>
+	indexedAuctionRefunds?: Readonly<Record<string, Readonly<AuctionRefundSnapshot>>>
 	indexedChildRepSplits?: readonly ChildRepSplitProgressSnapshot[]
 	indexedEscalationDeposits?: readonly EscalationDepositSnapshot[]
 	indexedMigrationRepSplits?: readonly MigrationRepSplitProgressSnapshot[]
@@ -958,7 +962,18 @@ function cachePoolDeployment(deployment: { parent: Address; priceOracleManagerAn
 	}
 }
 
-async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bigint, anchorTimestamp: bigint, limits: DiscoveryLimits, warnings: string[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], topology: ImmutableTopologyData, mutation: TopologyMutationState) {
+async function discoverPools(
+	context: EcosystemDiscoveryContext,
+	blockNumber: bigint,
+	anchorTimestamp: bigint,
+	anchorBaseFeePerGas: bigint,
+	limits: DiscoveryLimits,
+	warnings: string[],
+	universes: readonly UniverseSnapshot[],
+	questions: readonly QuestionSnapshot[],
+	topology: ImmutableTopologyData,
+	mutation: TopologyMutationState,
+) {
 	const { client, deployments, wallet } = context
 	const universeById = new Map(universes.map(universe => [universe.id, universe]))
 	const questionById = new Map(questions.map(question => [question.id, question]))
@@ -1054,6 +1069,15 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			lastSettlementTimestamp,
 			stagedOperationCounter,
 			minimumReport,
+			gasConsumedOpenOracleReportPrice,
+			settlementCallbackGasLimit,
+			gasUnitsForOneDispute,
+			initialReportPriorityFeeAttoEthPerGas,
+			targetPriceErrorForDispute,
+			openOracleSecurityMultiplierBps,
+			protocolFee,
+			feePercentage,
+			escalationHaltMultiplierBps,
 			pendingReportId,
 			totalPoolHeldAttoRep,
 			vaultCount,
@@ -1094,6 +1118,15 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
 			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
 			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
+			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
 			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getVaultCount' }),
@@ -1122,6 +1155,25 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 				pool: address,
 			}),
 		])
+		const oracleRequestFunding = {
+			escalationHaltMultiplierBps: escalationHaltMultiplierBps.toString(),
+			feePercentage: feePercentage.toString(),
+			gasConsumedOpenOracleReportPrice: gasConsumedOpenOracleReportPrice.toString(),
+			gasUnitsForOneDispute: gasUnitsForOneDispute.toString(),
+			initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas.toString(),
+			openOracleSecurityMultiplierBps: openOracleSecurityMultiplierBps.toString(),
+			protocolFee: protocolFee.toString(),
+			settlementCallbackGasLimit: settlementCallbackGasLimit.toString(),
+			targetPriceErrorForDispute: targetPriceErrorForDispute.toString(),
+		}
+		assertAnchoredOracleRequestFunding({
+			baseFeePerGas: anchorBaseFeePerGas.toString(),
+			coordinator: oracleRequestFunding,
+			minimumToken1ReportAttoEth: minimumReport.toString(),
+			requestPriceCostAttoEth: requestCost.toString(),
+			settlementCollateralAttoEth: accounting.settlementCollateralAttoEth.toString(),
+			subject: `Coordinator ${coordinator}`,
+		})
 		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex] = forkDataResult
 		const [statusOwnFork, statusAuctionableAttoRepAtFork, vaultRepAtForkAttoRep] = ownForkMigrationStatusResult
 		const [, , materializedByOutcome] = entitlementStatusResult
@@ -1155,9 +1207,23 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			universeRepToken: universe.repToken,
 		})
 		const escalationAddress = getAddress(escalationGame)
-		const [escalationCanTriggerOwnFork, escalationForkContinuation, escalationForkCarryFundingComplete, escalationForkResumedAt, escalationGameEndTime, escalationHasReachedNonDecision, escalationNonDecisionState, escalationStartBondAttoRep, escalationNonDecisionThresholdAttoRep, escalationOutcomeBalancesAttoRep] =
+		const [
+			escalationCanTriggerOwnFork,
+			escalationForkContinuation,
+			escalationForkCarryFundingComplete,
+			escalationForkResumedAt,
+			escalationGameEndTime,
+			escalationHasReachedNonDecision,
+			escalationNonDecisionState,
+			escalationStartBondAttoRep,
+			escalationNonDecisionThresholdAttoRep,
+			escalationOutcomeBalancesAttoRep,
+			escalationResolved,
+			forkCarrySnapshotInitialized,
+			escalationFinalQuestionResolution,
+		] =
 			escalationAddress === zeroAddress
-				? [false, false, false, 0n, 0n, false, 0n, 0n, 0n, [0n, 0n, 0n] as const]
+				? [false, false, false, 0n, 0n, false, 0n, 0n, 0n, [0n, 0n, 0n] as const, false, false, 3n]
 				: await drainConcurrent([
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'canTriggerOwnFork' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkContinuation' }),
@@ -1169,6 +1235,9 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'startBondAttoRep' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getOutcomeBalancesAttoRep' }),
+						client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'isEscalationResolved' }),
+						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkCarrySnapshotInitialized' }),
+						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getFinalQuestionResolution' }),
 					])
 		const [poolRepBalanceAttoRep, escalationRepBalanceAttoRep, unassignedRepBackingAttoRep] = await drainConcurrent([
 			client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
@@ -1222,6 +1291,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 		}
 		const vaults = await mapWithConcurrency([...uniqueVaults.values()], DISCOVERY_RPC_CONCURRENCY, async vault => await discoverVault(client, address, escalationAddress, vault, blockNumber))
 		const vaultDiscoveryComplete = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && (inspectEveryVault || vaultRegistry.vaults.every(vault => sameAddress(vault, wallet)))
+		const walletVaultRegistered = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && vaultRegistry.vaults.some(vault => sameAddress(vault, wallet))
 		const walletVault = vaults.find(vault => sameAddress(vault.address, wallet))
 		if (walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
 		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault.repBackingUnits), totalRepBackingUnits, poolRepBalanceAttoRep)
@@ -1245,6 +1315,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 		const pool: PoolSnapshot = {
 			address,
 			awaitingForkContinuation,
+			canonicalVaultCount: vaultCount.toString(),
 			coordinator,
 			currentMintingCapacityAttoEth: currentMintingCapacity.toString(),
 			escalationCanTriggerOwnFork,
@@ -1259,6 +1330,9 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			escalationOutcomeBalancesAttoRep: [escalationOutcomeBalancesAttoRep[0].toString(), escalationOutcomeBalancesAttoRep[1].toString(), escalationOutcomeBalancesAttoRep[2].toString()],
 			safeEscalationDepositMaximumsAttoRep,
 			escalationGame: escalationAddress,
+			escalationResolved,
+			forkCarrySnapshotInitialized,
+			escalationFinalQuestionResolution: bigintToSafeNumber(escalationFinalQuestionResolution),
 			forkActivationTime: forkActivationTime.toString(),
 			feeIndex: accounting.feeIndex.toString(),
 			forkOutcomeIndex: forkData.outcomeIndex.toString(),
@@ -1274,6 +1348,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			minimumSafeWalletVaultDepositAttoRep: minimumSafeWalletVaultDepositAttoRep.toString(),
 			minimumVaultRepDepositAttoRep: minimumDeposit.toString(),
 			oraclePriceValid: priceValid,
+			oracleRequestFunding,
 			oracleSettlementTime: settlementTime.toString(),
 			parent: getAddress(deployment.parent),
 			parentForkActivationTime: parentForkActivationTime.toString(),
@@ -1306,6 +1381,7 @@ async function discoverPools(context: EcosystemDiscoveryContext, blockNumber: bi
 			vaultDiscoveryComplete,
 			vaults,
 			walletEscalationMaterializedOutcomes: [...materializedByOutcome],
+			walletVaultRegistered,
 		}
 		pools.push(pool)
 		staged.push(...(await discoverStagedOperations(client, pool, blockNumber, limits.maxStagedOperationsPerPool, warnings)))
@@ -1521,31 +1597,43 @@ async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: re
 	}))
 }
 
+function authenticatedAuctionRefundGeneration(context: EcosystemDiscoveryContext, auction: Address, pendingAttoEth: bigint) {
+	const indexed = context.indexedAuctionRefunds?.[auction.toLowerCase()]
+	return pendingAttoEth > 0n && indexed !== undefined && BigInt(indexed.pendingAttoEth) === pendingAttoEth ? indexed.generation : undefined
+}
+
 async function discoverAuctions(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], blockNumber: bigint): Promise<AuctionSnapshot[]> {
 	const auctions: AuctionSnapshot[] = []
 	for (const pool of pools) {
 		if (pool.truthAuction === zeroAddress) continue
 		const started = await context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
-		const [minimumBid, finalized, pendingRefund, clearing] =
+		const [minimumBid, finalized, pendingRefund, clearing, storedClearingTick, underfunded, underfundedWinningAttoEth] =
 			started === 0n
-				? [0n, false, 0n, [false, 0n] as const]
+				? [0n, false, 0n, [false, 0n, 0n, 0n] as const, 0n, false, 0n]
 				: await drainConcurrent([
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
+						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
+						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
+						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
 					])
+		const pendingEthRefundGeneration = authenticatedAuctionRefundGeneration(context, pool.truthAuction, pendingRefund)
 		auctions.push({
 			address: pool.truthAuction,
 			bids: [...(context.indexedAuctionBids?.[pool.truthAuction.toLowerCase()] ?? [])],
 			endTime: (started + 7n * 24n * 60n * 60n).toString(),
 			finalized,
-			hasClearingPrice: clearing[0],
-			clearingTick: clearing[1].toString(),
+			hasClearingPrice: finalized ? !underfunded || underfundedWinningAttoEth > 0n : clearing[0],
+			clearingTick: (finalized ? storedClearingTick : clearing[1]).toString(),
 			minimumBidAttoEth: minimumBid.toString(),
 			pendingEthRefund: pendingRefund.toString(),
+			...(pendingEthRefundGeneration === undefined ? {} : { pendingEthRefundGeneration }),
 			pool: pool.address,
 			startTime: started.toString(),
+			underfunded,
+			underfundedWinningAttoEth: underfundedWinningAttoEth.toString(),
 		})
 	}
 	return auctions
@@ -1579,9 +1667,13 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const block = await context.client.getBlock({ blockNumber: context.anchorBlockNumber })
 	if (block.hash === null || block.hash === undefined) throw new Error('Canonical discovery anchor has no block hash')
 	if (block.number === undefined) throw new Error('Canonical discovery anchor has no block number')
+	if (block.baseFeePerGas === null || block.baseFeePerGas === undefined) throw new Error('Canonical discovery anchor has no EIP-1559 base fee')
 	if (block.number !== context.anchorBlockNumber) throw new Error(`RPC returned block ${block.number.toString()} for requested anchor ${context.anchorBlockNumber.toString()}`)
 	if (context.expectedAnchorHash !== undefined && block.hash.toLowerCase() !== context.expectedAnchorHash.toLowerCase()) {
 		throw new Error(`RPC anchor hash ${block.hash} does not match quorum anchor ${context.expectedAnchorHash}`)
+	}
+	if (context.expectedAnchorBaseFeePerGas !== undefined && block.baseFeePerGas !== context.expectedAnchorBaseFeePerGas) {
+		throw new Error(`RPC anchor base fee ${block.baseFeePerGas.toString()} does not match quorum anchor ${context.expectedAnchorBaseFeePerGas.toString()}`)
 	}
 	const blockNumber = block.number
 	const resolvedTopology = await immutableTopologyForAnchor(context, { hash: block.hash, number: blockNumber })
@@ -1596,7 +1688,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		discoverQuestions(context, blockNumber, limits, topology, topologyMutation, warnings),
 		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
-	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, limits, warnings, universes, questions, topology, topologyMutation)
+	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = await discoverPairs(context, pools, blockNumber, topology, topologyMutation)
 	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
@@ -1608,7 +1700,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		verifyIndexedReports(context, blockNumber),
 	])
 	const snapshot: EcosystemSnapshot = {
-		anchor: { blockHash: block.hash, blockNumber: blockNumber.toString(), timestamp: block.timestamp.toString() },
+		anchor: { baseFeePerGas: block.baseFeePerGas.toString(), blockHash: block.hash, blockNumber: blockNumber.toString(), timestamp: block.timestamp.toString() },
 		auctions,
 		chainId,
 		deployments: context.deployments,

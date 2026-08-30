@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, maximumFeePerGas, operationSubmissionLastValidBlock, unsignedQuantity } from '../../src/execution/safety.ts'
+import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, maximumFeePerGas, operationSubmissionLastValidBlock, unsignedQuantity } from '../../src/execution/safety.ts'
 import type { OperationStep } from '../../src/operations/types.ts'
 
 const step: OperationStep = {
@@ -27,12 +27,28 @@ describe('chaos execution safety gates', () => {
 		expect(() => assertOperationPlanFresh(plan, 16n, 5n)).toThrow('expired before execution')
 	})
 
+	test('counts only the remaining continuation segment against the prerequisite horizon', () => {
+		const plan = {
+			createdAtBlock: '10',
+			id: 'two-approval-cleanup',
+			steps: [
+				{ ...step, id: 'approve-weth' },
+				{ ...step, id: 'approve-rep' },
+				{ ...step, id: 'revoke-weth' },
+				{ ...step, id: 'revoke-rep' },
+			],
+		}
+
+		expect(() => assertOperationPlanFresh(plan, 15n, 75n, new Set(['approve-weth', 'approve-rep']))).not.toThrow()
+	})
+
 	test('enforces block and timestamp deadlines through private next-block submission', () => {
-		expect(operationSubmissionLastValidBlock({ id: 'block-clock', lastValidBlockNumber: '102' }, 100n, 1_000n, 'private')).toBe(102n)
-		expect(() => operationSubmissionLastValidBlock({ id: 'expired', lastValidBlockNumber: '100' }, 100n, 1_000n, 'private')).toThrow('block deadline expired')
-		expect(operationSubmissionLastValidBlock({ deadlineTimestamp: '1200', id: 'timestamp-clock' }, 100n, 1_000n, 'private')).toBe(101n)
-		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '1060', id: 'near-expiry' }, 100n, 1_000n, 'private')).toThrow('timestamp deadline is too close')
-		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '2000', id: 'public-deadline' }, 100n, 1_000n, 'public')).toThrow('requires private submission')
+		expect(operationSubmissionLastValidBlock({ id: 'block-clock', lastValidBlockNumber: '102' }, 100n, 1_000n, 'private', 15)).toBe(102n)
+		expect(() => operationSubmissionLastValidBlock({ id: 'expired', lastValidBlockNumber: '100' }, 100n, 1_000n, 'private', 15)).toThrow('block deadline expired')
+		expect(operationSubmissionLastValidBlock({ deadlineTimestamp: '1200', id: 'timestamp-clock' }, 100n, 1_000n, 'private', 15)).toBe(101n)
+		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '1060', id: 'near-expiry' }, 100n, 1_000n, 'private', 15)).toThrow('timestamp deadline is too close')
+		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '1080', id: 'slow-chain-near-expiry' }, 100n, 1_000n, 'private', 90)).toThrow('timestamp deadline is too close')
+		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '2000', id: 'public-deadline' }, 100n, 1_000n, 'public', 15)).toThrow('requires private submission')
 	})
 
 	test('accounts for padded EIP-1559 gas and the post-operation ETH reserve', () => {
@@ -55,6 +71,36 @@ describe('chaos execution safety gates', () => {
 				strategy,
 			}),
 		).toThrow('breach the wallet ETH reserve')
+	})
+
+	test('reserves every remaining step maximum gas cost before a workflow starts', () => {
+		const { value: _value, ...approval } = step
+		const plan = {
+			id: 'approval-and-action',
+			steps: [
+				{ ...approval, id: 'approval', walletAssetDebits: [] },
+				{ ...step, id: 'action' },
+			],
+		}
+		const fundingStrategy = { maximumGasCostAttoEth: 50n, minimumEthReserveAttoEth: 100n }
+		expect(assertOperationEthFunding(plan, 210n, fundingStrategy)).toEqual({ maximumGasCost: 100n, requiredBalance: 210n, transactionValue: 10n })
+		expect(() => assertOperationEthFunding(plan, 209n, fundingStrategy)).toThrow('cannot fund all remaining workflow steps')
+	})
+
+	test('adds worst-case post-failure cleanup transactions to the workflow gas reserve', () => {
+		const { value: _value, ...approval } = step
+		const plan = {
+			id: 'approval-action-and-cleanup',
+			maximumCleanupTransactionCount: 1,
+			steps: [
+				{ ...approval, id: 'approval', walletAssetDebits: [] },
+				{ ...step, id: 'action' },
+			],
+		}
+		const fundingStrategy = { maximumGasCostAttoEth: 50n, minimumEthReserveAttoEth: 100n }
+		expect(assertOperationEthFunding(plan, 260n, fundingStrategy)).toEqual({ maximumGasCost: 150n, requiredBalance: 260n, transactionValue: 10n })
+		expect(() => assertOperationEthFunding(plan, 259n, fundingStrategy)).toThrow('cannot fund all remaining workflow steps')
+		expect(() => assertOperationEthFunding({ ...plan, maximumCleanupTransactionCount: -1 }, 1_000n, fundingStrategy)).toThrow('cleanup transaction count')
 	})
 
 	test('rejects unsafe plan caps and malformed quantities', () => {
@@ -115,6 +161,12 @@ describe('chaos execution safety gates', () => {
 			walletAssetDebits: cappedStep.walletAssetDebits.map(debit => ({ ...debit, category: 'rep' as const })),
 		}
 		expect(() => assertOperationPrincipalCaps({ id: 'rep-credit', steps: [repStep] }, { maximumEthPerOperationAttoEth: 100n, maximumRepPerOperationAttoRep: 10n })).toThrow('maximumRepPerOperation')
+
+		const vaultRepStep = {
+			...stepWithoutValue,
+			walletAssetDebits: [{ amount: '11', category: 'rep' as const, kind: 'security-pool-vault-rep' as const, pool: oracle, vault: token }],
+		}
+		expect(() => assertOperationPrincipalCaps({ id: 'vault-rep', steps: [vaultRepStep] }, { maximumEthPerOperationAttoEth: 100n, maximumRepPerOperationAttoRep: 10n })).toThrow('maximumRepPerOperation')
 	})
 
 	test('applies cumulative principal caps independently to each workflow', () => {

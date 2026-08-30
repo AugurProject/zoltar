@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '../support/bot-shared.ts'
-import { coordinatorAbi } from '../../src/contracts/abi.ts'
+import { coordinatorAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
@@ -11,6 +11,15 @@ import { address, hash, snapshotFixture } from './fixture.ts'
 const permissiveOptions = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
+	immutableTopologyCapacity: {
+		maxPools: 100,
+		maxQuestions: 100,
+		maxStagedOperationsPerPool: 100,
+		maxUniverses: 100,
+		maxVaultsPerPool: 100,
+		maximumAggregateItems: 10_000,
+	},
+	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: (10n ** 15n).toString(),
 	maxRepSpendAttoRep: (10n ** 15n).toString(),
 	minimumEthReserveAttoEth: (10n ** 16n).toString(),
@@ -29,6 +38,7 @@ describe('chaos operation catalog', () => {
 			expect(definition.description.length).toBeGreaterThan(20)
 			if (definition.classification === 'lifecycle-obligation') {
 				expect(definition.buildLifecyclePlans, definition.id).toBeFunction()
+				expect(definition.enumerateLifecycleObstructingPresence, definition.id).toBeFunction()
 				expect(definition.enumerateLifecyclePresence, definition.id).toBeFunction()
 			}
 		}
@@ -93,7 +103,21 @@ describe('chaos operation catalog', () => {
 			token2: snapshot.pools[0]?.repToken ?? address(12),
 		}
 		snapshot.reports = [report, { ...report, reportId: '2', stateHash: hash(42) }]
-		snapshot.auctions = [41, 42].map(index => ({ address: address(index), bids: [], clearingTick: '0', endTime: '1', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '1000', pool: snapshot.pools[0]?.address ?? address(11), startTime: '1' }))
+		snapshot.auctions = [41, 42].map(index => ({
+			address: address(index),
+			bids: [],
+			clearingTick: '0',
+			endTime: '1',
+			finalized: false,
+			hasClearingPrice: false,
+			minimumBidAttoEth: 1n.toString(),
+			pendingEthRefund: '1000',
+			pendingEthRefundGeneration: hash(index),
+			pool: snapshot.pools[0]?.address ?? address(11),
+			startTime: '1',
+			underfunded: false,
+			underfundedWinningAttoEth: 0n.toString(),
+		}))
 		const identities = (seed: number) =>
 			urgentOperationPlans(snapshot, { ...permissiveOptions, seed })
 				.filter(plan => plan.definitionId === 'open-oracle.settle' || plan.definitionId === 'statoblast.auction.withdraw-refund')
@@ -211,7 +235,7 @@ describe('chaos operation catalog', () => {
 		snapshot.reports = [candidate]
 		expect(canonicalLifecyclePresence(snapshot, permissiveOptions).some(presence => presence.definitionId.startsWith('open-oracle.'))).toBe(false)
 		candidate.game.callbackGasLimit = 8_000_000
-		expect(canonicalLifecyclePresence(snapshot, permissiveOptions)).toContainEqual({ definitionId: 'open-oracle.settle', ecosystem: 'open-oracle', metadata: { deadlineBlock: '0', reportId: '42', selfDispute: false, stateHash: hash(42) } })
+		expect(canonicalLifecyclePresence(snapshot, permissiveOptions)).toContainEqual({ blocksNovelty: true, definitionId: 'open-oracle.settle', ecosystem: 'open-oracle', metadata: { deadlineBlock: '0', reportId: '42', selfDispute: false, stateHash: hash(42) } })
 		candidate.token2 = address(99)
 		expect(canonicalLifecyclePresence(snapshot, permissiveOptions).some(presence => presence.definitionId.startsWith('open-oracle.'))).toBe(false)
 	})
@@ -252,6 +276,8 @@ describe('chaos operation catalog', () => {
 		const rebuilt = reevaluateOperationContinuation(snapshot, plan, {
 			allowHighRisk: permissiveOptions.allowHighRisk,
 			allowIrreversibleOperations: permissiveOptions.allowIrreversibleOperations,
+			immutableTopologyCapacity: permissiveOptions.immutableTopologyCapacity,
+			maximumBlockIntervalSeconds: permissiveOptions.maximumBlockIntervalSeconds,
 			maxEthSpendAttoEth: permissiveOptions.maxEthSpendAttoEth,
 			maxRepSpendAttoRep: permissiveOptions.maxRepSpendAttoRep,
 			minimumEthReserveAttoEth: permissiveOptions.minimumEthReserveAttoEth,
@@ -283,22 +309,138 @@ describe('chaos operation catalog', () => {
 		snapshot.questions = snapshot.questions.filter(question => question.id !== firstQuestion.id)
 		rep.allowances[snapshot.deployments.zoltar] = universe.forkThresholdAttoRep
 		const continuationBlock = Number(BigInt(snapshot.anchor.blockNumber) + 100n)
-		snapshot.anchor = { blockHash: hash(continuationBlock), blockNumber: continuationBlock.toString(), timestamp: (BigInt(snapshot.anchor.timestamp) + 1n).toString() }
-		const rebuilt = reevaluateOperationContinuation(snapshot, plan, {
-			allowHighRisk: options.allowHighRisk,
-			allowIrreversibleOperations: options.allowIrreversibleOperations,
-			maxEthSpendAttoEth: options.maxEthSpendAttoEth,
-			maxRepSpendAttoRep: options.maxRepSpendAttoRep,
-			minimumEthReserveAttoEth: options.minimumEthReserveAttoEth,
-			minimumRepReserveAttoRep: options.minimumRepReserveAttoRep,
-		})
+		snapshot.anchor = { ...snapshot.anchor, blockHash: hash(continuationBlock), blockNumber: continuationBlock.toString(), timestamp: (BigInt(snapshot.anchor.timestamp) + 1n).toString() }
+		const rebuilt = reevaluateOperationContinuation(
+			snapshot,
+			plan,
+			{
+				allowHighRisk: options.allowHighRisk,
+				allowIrreversibleOperations: options.allowIrreversibleOperations,
+				maximumBlockIntervalSeconds: options.maximumBlockIntervalSeconds,
+				maxEthSpendAttoEth: options.maxEthSpendAttoEth,
+				maxRepSpendAttoRep: options.maxRepSpendAttoRep,
+				minimumEthReserveAttoEth: options.minimumEthReserveAttoEth,
+				minimumRepReserveAttoRep: options.minimumRepReserveAttoRep,
+			},
+			{ confirmedStepIds: ['approve-rep'] },
+		)
 		expect(rebuilt.plan?.metadata).toEqual(plan.metadata)
 		expect(rebuilt.plan?.steps).toHaveLength(1)
 		expect(rebuilt.plan?.createdAtBlock).toBe(continuationBlock.toString())
 	})
 
+	test('continues the exact OpenOracle dispute report after an approval and candidate reordering', () => {
+		const snapshot = snapshotFixture()
+		const firstPool = snapshot.pools[0]
+		if (firstPool === undefined) throw new Error('OpenOracle dispute fixture is missing its first pool')
+		firstPool.pendingReportId = '41'
+		const secondCoordinator = address(91)
+		snapshot.pools.push({ ...firstPool, address: address(90), coordinator: secondCoordinator, pendingReportId: '42' })
+		const report = {
+			currentAmount1: '1000',
+			currentAmount2: '1000',
+			currentReporter: address(31),
+			disputeDelay: '60',
+			escalationHalt: '100000',
+			flags: 7,
+			game: { callbackContract: firstPool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: firstPool.coordinator },
+			multiplier: 140,
+			openOracle: snapshot.deployments.openOracle,
+			reportId: '41',
+			reportTimestamp: '1999999500',
+			settlementTime: '2500',
+			settlementTimestamp: '0',
+			stateHash: hash(41),
+			token1: snapshot.deployments.weth,
+			token2: firstPool.repToken,
+		}
+		snapshot.reports = [report]
+		const options = { ...permissiveOptions, seed: 1 }
+		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'open-oracle.dispute')
+		if (original === undefined) throw new Error('Expected an OpenOracle dispute plan')
+		const confirmedApproval = original.steps[0]
+		if (confirmedApproval === undefined || !confirmedApproval.id.startsWith('approve-')) throw new Error('Expected a dispute approval prerequisite')
+		const allowanceEvidence = confirmedApproval.evidence.find(evidence => evidence.kind === 'storage-postcondition' && evidence.functionName === 'allowance')
+		if (allowanceEvidence?.kind !== 'storage-postcondition' || typeof allowanceEvidence.expected !== 'string') throw new Error('Expected approval allowance evidence')
+		const approvedToken = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === confirmedApproval.to.toLowerCase())
+		if (approvedToken === undefined) throw new Error('Expected approved token inventory')
+		approvedToken.allowances[snapshot.deployments.openOracle] = allowanceEvidence.expected
+
+		const competingReport = {
+			...report,
+			game: { ...report.game, callbackContract: secondCoordinator },
+			helper: { ...report.helper, creator: secondCoordinator },
+			reportId: '42',
+			stateHash: hash(42),
+		}
+		snapshot.reports = [competingReport, report]
+		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
+		expect(rebuilt.plan?.metadata).toMatchObject({ reportId: '41', stateHash: hash(41) })
+		expect(rebuilt.plan?.steps.some(step => step.id === confirmedApproval.id)).toBe(false)
+
+		report.stateHash = hash(43)
+		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
+	})
+
+	test('continues the exact trading swap direction after approval and opposite inventory appears', () => {
+		const snapshot = snapshotFixture()
+		const pair = snapshot.pairs[0]
+		const question = snapshot.questions[0]
+		const shares = snapshot.wallet.shares[0]
+		if (pair === undefined || question === undefined || shares === undefined) throw new Error('Trading swap fixture is incomplete')
+		question.endTime = (BigInt(snapshot.anchor.timestamp) + 3_600n).toString()
+		shares.no = '0'
+		const options = { ...permissiveOptions, seed: 2 }
+		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'trading.swap.exact-input')
+		if (original === undefined) throw new Error('Expected an exact-input swap plan')
+		expect(original.metadata).toMatchObject({ direction: 'YES-to-NO', pair: pair.address })
+		const confirmedApproval = original.steps[0]
+		if (confirmedApproval === undefined || !confirmedApproval.id.startsWith('approve-shares-')) throw new Error('Expected a share approval prerequisite')
+		shares.isApprovedForAll[pair.address] = true
+		shares.no = shares.yes
+
+		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
+		expect(rebuilt.plan?.metadata).toMatchObject({ direction: 'YES-to-NO', pair: pair.address })
+		expect(rebuilt.plan?.steps.some(step => step.id === confirmedApproval.id)).toBe(false)
+
+		shares.yes = '0'
+		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
+	})
+
+	test('continues the exact position-exit route after approval and opposite inventory appears', () => {
+		const snapshot = snapshotFixture()
+		const pair = snapshot.pairs[0]
+		const pool = snapshot.pools[0]
+		const question = snapshot.questions[0]
+		const shares = snapshot.wallet.shares[0]
+		if (pair === undefined || pool === undefined || question === undefined || shares === undefined) throw new Error('Position-exit fixture is incomplete')
+		pool.shareTokenSupplyAttoShares = (10n ** 18n).toString()
+		question.endTime = (BigInt(snapshot.anchor.timestamp) + 3_600n).toString()
+		shares.no = '0'
+		const options = { ...permissiveOptions, seed: 1 }
+		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'trading.position.exit')
+		if (original === undefined) throw new Error('Expected a position-exit plan')
+		const originalAction = original.steps.at(-1)
+		const confirmedApproval = original.steps[0]
+		if (originalAction === undefined || confirmedApproval === undefined || !confirmedApproval.id.startsWith('approve-shares-')) throw new Error('Expected a position-exit approval and action')
+		expect(decodeFunctionData({ abi: tradingRouterAbi, data: originalAction.data }).args[1]).toBe(1n)
+		shares.isApprovedForAll[snapshot.deployments.tradingRouter] = true
+		shares.no = shares.yes
+
+		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
+		const rebuiltAction = rebuilt.plan?.steps.at(-1)
+		if (rebuiltAction === undefined) throw new Error('Expected an exact position-exit continuation')
+		expect(decodeFunctionData({ abi: tradingRouterAbi, data: rebuiltAction.data }).args[1]).toBe(1n)
+		expect(rebuilt.plan?.metadata).toMatchObject({ longOutcome: 1, pair: pair.address })
+		expect(rebuilt.plan?.steps.some(step => step.id === confirmedApproval.id)).toBe(false)
+
+		shares.yes = '0'
+		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
+	})
+
 	test('gates high-risk and irreversible definitions independently', () => {
-		const evaluated = evaluateOperationCatalog(snapshotFixture(), { seed: 1 })
+		const evaluated = evaluateOperationCatalog(snapshotFixture(), { maximumBlockIntervalSeconds: 15, seed: 1 })
 		expect(evaluated.find(operation => operation.definition.id === 'open-oracle.report')?.eligibility.blockers).toContain('High-risk operations are disabled')
 		expect(evaluated.find(operation => operation.definition.id === 'zoltar.universe.fork')?.eligibility.blockers).toContain('Irreversible operations are disabled')
 	})
@@ -461,6 +603,27 @@ describe('chaos operation catalog', () => {
 		expect(winning?.steps[0]?.evidence[0]).toMatchObject({ signature: 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)' })
 	})
 
+	test('declares escalation deposits as vault-backed REP principal', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Fixture pool missing')
+		const deposit = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.deposit')
+		const outcome = deposit?.metadata['outcome']
+		if (deposit === undefined || typeof outcome !== 'number') throw new Error('Escalation deposit fixture is unavailable')
+		const maximum = pool.safeEscalationDepositMaximumsAttoRep[outcome]
+		if (maximum === undefined) throw new Error('Escalation deposit maximum is unavailable')
+
+		expect(deposit.steps[0]?.walletAssetDebits).toEqual([
+			{
+				amount: maximum,
+				category: 'rep',
+				kind: 'security-pool-vault-rep',
+				pool: pool.address,
+				vault: snapshot.wallet.address,
+			},
+		])
+	})
+
 	test('builds one private next-block carry proof per lifecycle plan with exact Invalid-outcome evidence', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
@@ -517,6 +680,10 @@ describe('chaos operation catalog', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
+		pool.escalationFinalQuestionResolution = 1
+		pool.escalationResolved = true
+		pool.forkCarrySnapshotInitialized = true
+		pool.questionOutcome = 1
 		const candidate = {
 			amountAttoRep: 10n.toString(),
 			amountToWithdrawAttoRep: 10n.toString(),
@@ -569,11 +736,26 @@ describe('chaos operation catalog', () => {
 
 		expect(plans).toHaveLength(CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES)
 		expect(presence).toHaveLength(identityCount)
-		expect(presence.at(-1)?.metadata).toMatchObject({ parentDepositIndex: (identityCount - 1).toString(), sourceNodeId: (identityCount - 1).toString() })
+		expect(presence.at(-1)).toMatchObject({ blocksNovelty: true, metadata: { parentDepositIndex: (identityCount - 1).toString(), sourceNodeId: (identityCount - 1).toString() } })
 		expect(plans.some(plan => plan.metadata['parentDepositIndex'] === (identityCount - 1).toString())).toBeFalse()
+
+		snapshot.forkedCarryWithdrawals = []
+		pool.escalationResolved = false
+		expect(
+			canonicalLifecyclePresence(snapshot, permissiveOptions)
+				.filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
+				.every(entry => !entry.blocksNovelty),
+		).toBeTrue()
+		pool.escalationResolved = true
+		pool.escalationFinalQuestionResolution = 0
+		expect(
+			canonicalLifecyclePresence(snapshot, permissiveOptions)
+				.filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
+				.every(entry => !entry.blocksNovelty),
+		).toBeTrue()
 	})
 
-	test('bounds escalation lifecycle batches and advances their durable identity', () => {
+	test('enumerates every bounded escalation withdrawal and fork-claim batch', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Fixture pool missing')
@@ -588,12 +770,25 @@ describe('chaos operation catalog', () => {
 			pool: pool.address,
 			vault: snapshot.wallet.address,
 		}))
-		const first = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
-		expect(first?.metadata['depositCount']).toBe(16)
-		expect(first?.metadata['depositIndexes']).toBe(Array.from({ length: 16 }, (_, index) => index.toString()).join(','))
+		const expectedFirstIndexes = Array.from({ length: 16 }, (_, index) => index.toString()).join(',')
+		const withdrawalPlans = urgentOperationPlans(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
+		const withdrawalPresence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
+		expect(withdrawalPlans.map(candidate => candidate.metadata)).toEqual([expect.objectContaining({ depositCount: 16, depositIndexes: expectedFirstIndexes }), expect.objectContaining({ depositCount: 4, depositIndexes: '16,17,18,19' })])
+		expect(withdrawalPresence.map(candidate => candidate.metadata)).toEqual(withdrawalPlans.map(candidate => candidate.metadata))
 		for (const deposit of snapshot.escalationDeposits.slice(0, 16)) deposit.claimed = true
 		const second = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
 		expect(second?.metadata).toMatchObject({ depositCount: 4, depositIndexes: '16,17,18,19' })
+
+		for (const deposit of snapshot.escalationDeposits) deposit.claimed = false
+		pool.escalationCanTriggerOwnFork = true
+		pool.forkActivationTime = (BigInt(snapshot.anchor.timestamp) - 1n).toString()
+		pool.forkOwnQuestion = true
+		pool.forkUnresolvedEscalation = true
+		pool.systemState = 1
+		const claimPlans = urgentOperationPlans(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.claim-forked')
+		const claimPresence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.claim-forked')
+		expect(claimPlans.map(candidate => candidate.metadata)).toEqual([expect.objectContaining({ depositCount: 16, depositIndexes: expectedFirstIndexes }), expect.objectContaining({ depositCount: 4, depositIndexes: '16,17,18,19' })])
+		expect(claimPresence.map(candidate => candidate.metadata)).toEqual(claimPlans.map(candidate => candidate.metadata))
 	})
 
 	test('bounds settlement batches and gives every losing auction refund an immutable singleton identity', () => {
@@ -614,10 +809,23 @@ describe('chaos operation catalog', () => {
 				pendingEthRefund: '0',
 				pool: pool.address,
 				startTime: '1999990000',
+				underfunded: false,
+				underfundedWinningAttoEth: 0n.toString(),
 			},
 		]
 		let plans = urgentOperationPlans(snapshot, permissiveOptions)
-		expect(plans.find(candidate => candidate.definitionId === 'statoblast.auction.settle-bids')?.metadata['bidCount']).toBe(16)
+		const settlementPlans = plans.filter(candidate => candidate.definitionId === 'statoblast.auction.settle-bids')
+		const settlementPresence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.auction.settle-bids')
+		expect(settlementPlans.map(candidate => candidate.metadata)).toEqual([
+			expect.objectContaining({
+				bidCount: 16,
+				bidKeys: Array.from({ length: 16 }, (_, index) => `${index.toString()}:${index.toString()}`)
+					.sort()
+					.join(','),
+			}),
+			expect.objectContaining({ bidCount: 4, bidKeys: '16:16,17:17,18:18,19:19' }),
+		])
+		expect(settlementPresence.map(candidate => candidate.metadata)).toEqual(settlementPlans.map(candidate => candidate.metadata))
 		expect(plans.find(candidate => candidate.definitionId === 'statoblast.auction.claim')).toBeUndefined()
 		const auction = snapshot.auctions[0]
 		if (auction === undefined) throw new Error('Auction fixture missing')
@@ -658,6 +866,10 @@ describe('chaos operation catalog', () => {
 		expect(first?.metadata).toMatchObject({ fromId: '0', targetOutcome: '0' })
 		expect(first?.deadlineTimestamp).toBe('2004837400')
 		expect(first?.steps[0]?.walletAssetDebits).toEqual([{ amount: shares.invalid, asset: shares.shareToken, category: 'outcome-share', kind: 'erc1155', tokenId: '0' }])
+
+		pool.forkActivationTime = (BigInt(snapshot.anchor.timestamp) - 8n * 7n * 24n * 60n * 60n + 60n).toString()
+		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeUndefined()
+		pool.forkActivationTime = '1999999000'
 
 		shares.migrationProgressByRoute['0:0'] = shares.invalid
 		const repeated = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
@@ -767,6 +979,7 @@ describe('chaos operation catalog', () => {
 		const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === 'open-oracle.dispute')
 		expect(definition?.classification).toBe('selectable')
 		expect(definition?.buildLifecyclePlans).toBeUndefined()
+		expect(definition?.enumerateLifecycleObstructingPresence).toBeUndefined()
 		expect(definition?.enumerateLifecyclePresence).toBeUndefined()
 		const plan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
 		expect(plan?.metadata).toMatchObject({ reportId: '42', selfDispute: false, stateHash: hash(42) })
@@ -830,29 +1043,37 @@ describe('chaos operation catalog', () => {
 		expect(blockClockPlan?.lastValidBlockNumber).toBe('214')
 		expect(blockClockPlan?.metadata).toMatchObject({ deadlineBlock: '214', reportId: '42' })
 
-		indexed.settlementTime = '90'
+		indexed.settlementTime = '31'
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')).toBeUndefined()
 		for (const token of snapshot.wallet.tokens) token.allowances[snapshot.deployments.openOracle] = '1000000000000000000000000'
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')).toBeDefined()
 	})
 
-	test('buffers oracle requests and constrains them to private next-block inclusion', () => {
+	test('persists an exact oracle funding envelope and constrains only its terminal request', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		pool.oraclePriceValid = false
-		const plan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
-		if (plan === undefined) throw new Error('Buffered request-price plan missing')
+		const requestOptions = { ...permissiveOptions, maxEthSpendAttoEth: (5n * 10n ** 16n).toString(), maxRepSpendAttoRep: (5n * 10n ** 16n).toString() }
+		const plan = eligibleOperationPlans(snapshot, requestOptions).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+		if (plan === undefined) throw new Error('Prepared request-price plan missing')
 		const request = plan.steps.at(-1)
 		if (request === undefined) throw new Error('Request-price step missing')
 		const decoded = decodeFunctionData({ abi: coordinatorAbi, data: request.data })
-		expect(plan.lastValidBlockNumber).toBe('101')
-		expect(request.value).toBe('2000')
+		const maximumWeth = plan.metadata['maximumInitialAttoWeth']
+		const maximumRep = plan.metadata['maximumInitialAttoRep']
+		const maximumBounty = plan.metadata['maximumRequestPriceCostAttoEth']
+		const maximumBaseFee = plan.metadata['maximumBaseFeePerGas']
+		if (typeof maximumWeth !== 'string' || typeof maximumRep !== 'string' || typeof maximumBounty !== 'string' || typeof maximumBaseFee !== 'string') throw new Error('Oracle funding envelope metadata missing')
+		expect(plan.lastValidBlockNumber).toBeUndefined()
+		expect(plan.terminalSubmission).toEqual({ kind: 'private-next-block', maximumFeePerGas: maximumBaseFee })
+		expect(request.value).toBe(maximumBounty)
 		expect(decoded.functionName).toBe('requestPrice')
-		expect(decoded.args[1]).toBe(2000n)
-		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'weth')?.amount).toBe('2000')
-		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'rep')?.amount).toBe('2000')
-		expect(eligibleOperationPlans(snapshot, { ...permissiveOptions, maxEthSpendAttoEth: 3_000n.toString() }).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')).toBeUndefined()
+		expect(decoded.args[1]).toBe(BigInt(maximumWeth))
+		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'weth')?.amount).toBe(maximumWeth)
+		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'rep')?.amount).toBe(maximumRep)
+		expect(BigInt(maximumWeth) + BigInt(maximumBounty)).toBeLessThanOrEqual(BigInt(requestOptions.maxEthSpendAttoEth))
+		expect(BigInt(maximumRep)).toBeLessThanOrEqual(BigInt(requestOptions.maxRepSpendAttoRep))
 	})
 
 	test('excludes already-initialized dust and reserve-synchronized pairs', () => {
@@ -918,7 +1139,7 @@ describe('chaos operation catalog', () => {
 			expect(BigInt(plan?.deadlineTimestamp ?? '0')).toBeLessThan(BigInt(question.endTime))
 		}
 
-		question.endTime = (BigInt(snapshot.anchor.timestamp) + 900n).toString()
+		question.endTime = (BigInt(snapshot.anchor.timestamp) + 200n).toString()
 		plans = eligibleOperationPlans(snapshot, permissiveOptions)
 		expect(plans.find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeUndefined()
 		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeUndefined()
@@ -928,6 +1149,55 @@ describe('chaos operation catalog', () => {
 		plans = eligibleOperationPlans(snapshot, permissiveOptions)
 		expect(plans.find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeDefined()
 		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeDefined()
+
+		question.endTime = (BigInt(snapshot.anchor.timestamp) + 61n).toString()
+		plans = eligibleOperationPlans(snapshot, permissiveOptions)
+		expect(plans.find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeUndefined()
+		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeUndefined()
+	})
+
+	test('uses a custom 30-second maximum block interval before planning trading approvals', () => {
+		const snapshot = snapshotFixture()
+		const question = snapshot.questions[0]
+		const shares = snapshot.wallet.shares[0]
+		const pair = snapshot.pairs[0]
+		if (question === undefined || shares === undefined || pair === undefined) throw new Error('Trading fixture missing')
+		question.endTime = (BigInt(snapshot.anchor.timestamp) + 300n).toString()
+		const customCadenceOptions = { ...permissiveOptions, maximumBlockIntervalSeconds: 30 }
+		expect(eligibleOperationPlans(snapshot, customCadenceOptions).find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeUndefined()
+
+		shares.isApprovedForAll[pair.address] = true
+		expect(eligibleOperationPlans(snapshot, customCadenceOptions).find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeDefined()
+	})
+
+	test('uses a custom 30-second maximum block interval for timestamp-clock OpenOracle disputes', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Pool fixture missing')
+		pool.pendingReportId = '42'
+		snapshot.reports.push({
+			currentAmount1: '1000',
+			currentAmount2: '1000',
+			currentReporter: pool.coordinator,
+			disputeAfterTimestamp: '1999999940',
+			disputeBeforeTimestamp: '2000002000',
+			disputeDelay: '60',
+			escalationHalt: '100000',
+			flags: 7,
+			game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+			helper: { blockNumber: '99', blockTimestamp: '1999999880', creator: pool.coordinator },
+			multiplier: 140,
+			openOracle: snapshot.deployments.openOracle,
+			reportId: '42',
+			reportTimestamp: '1999999880',
+			settlementTime: '720',
+			settlementTimestamp: '0',
+			stateHash: hash(42),
+			token1: snapshot.deployments.weth,
+			token2: pool.repToken,
+		})
+		const plan = eligibleOperationPlans(snapshot, { ...permissiveOptions, maximumBlockIntervalSeconds: 30 }).find(candidate => candidate.definitionId === 'open-oracle.dispute')
+		expect(plan).toBeUndefined()
 	})
 
 	test('marks deadline-bound pool fork continuation as urgent lifecycle work', () => {

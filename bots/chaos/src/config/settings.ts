@@ -8,10 +8,13 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
-export const MINIMUM_WORKFLOW_VALIDITY_BLOCKS = 64
+export { MINIMUM_WORKFLOW_VALIDITY_BLOCKS }
+export const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
+export const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
 
 export const CHAOS_ECOSYSTEMS = ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const
 export type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
@@ -70,6 +73,7 @@ export type PresetNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind?: undefined
+	maximumBlockIntervalSeconds: number
 	name: NetworkName
 }
 
@@ -77,6 +81,7 @@ export type CustomNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind: 'custom'
+	maximumBlockIntervalSeconds: number
 	name: string
 }
 
@@ -179,6 +184,10 @@ function customNetworkChainId(value: unknown, label = 'network.chainId') {
 	return chainId
 }
 
+function maximumBlockIntervalSeconds(value: unknown, label = 'network.maximumBlockIntervalSeconds') {
+	return integer(value, label, 1, MAXIMUM_BLOCK_INTERVAL_SECONDS)
+}
+
 function filePath(value: unknown, label: string) {
 	return resolve(nonemptyString(value, label))
 }
@@ -208,17 +217,23 @@ export function formatDecimalAmount(value: bigint) {
 function parseNetwork(value: unknown): OperatorSettings['network'] {
 	const network = requiredRecord(value, 'network')
 	if ('kind' in network) {
-		assertExactKeys(network, ['chainId', 'explorerUrl', 'kind', 'name'], 'custom network')
+		assertExactKeys(network, ['chainId', 'explorerUrl', 'kind', 'maximumBlockIntervalSeconds', 'name'], 'custom network')
 		if (network['kind'] !== 'custom') throw new Error('network.kind must be custom when provided')
 		const chainId = customNetworkChainId(network['chainId'])
 		return {
 			chainId,
 			explorerUrl: nonemptyString(network['explorerUrl'], 'network.explorerUrl'),
 			kind: 'custom',
+			maximumBlockIntervalSeconds: maximumBlockIntervalSeconds(network['maximumBlockIntervalSeconds']),
 			name: customNetworkName(network['name']),
 		}
 	}
-	assertExactKeys(network, ['chainId', 'explorerUrl', 'name'], 'network')
+	const presetKeys = new Set(['chainId', 'explorerUrl', 'maximumBlockIntervalSeconds', 'name'])
+	const unsupported = Object.keys(network).find(key => !presetKeys.has(key))
+	if (unsupported !== undefined) throw new Error(`network contains unsupported field ${unsupported}`)
+	for (const required of ['chainId', 'explorerUrl', 'name'] as const) {
+		if (!(required in network)) throw new Error(`network is missing ${required}`)
+	}
 	const name = network['name']
 	if (name !== 'mainnet' && name !== 'sepolia') throw new Error('network.name must be mainnet or sepolia, or network.kind must explicitly be custom')
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
@@ -227,6 +242,7 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 	return {
 		chainId,
 		explorerUrl: nonemptyString(network['explorerUrl'], 'network.explorerUrl'),
+		maximumBlockIntervalSeconds: network['maximumBlockIntervalSeconds'] === undefined ? PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS : maximumBlockIntervalSeconds(network['maximumBlockIntervalSeconds']),
 		name,
 	}
 }
@@ -610,6 +626,7 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 			network: {
 				chainId,
 				explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
+				maximumBlockIntervalSeconds: PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS,
 				name: network,
 			},
 			networkConfigured: false,

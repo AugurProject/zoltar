@@ -7,7 +7,9 @@ import {
 	completeWorkflowFromCanonicalConfirmation,
 	durableWorkflowPlan,
 	markWorkflowForRediscovery,
+	markWorkflowFailed,
 	markWorkflowIntentBroadcastAttempt,
+	markRetryableWorkflowForRediscovery,
 	markWorkflowStepConfirmed,
 	markWorkflowStepSigned,
 	markWorkflowStepWaitingCanonical,
@@ -152,6 +154,41 @@ describe('durable chaos workflows', () => {
 		expect(workflow.steps[0]?.status).toBe('confirmed')
 	})
 
+	test('round-trips and refreshes a terminal private next-block submission constraint', () => {
+		const constrained: OperationPlan = {
+			...twoStepPlan(),
+			terminalSubmission: {
+				kind: 'private-next-block',
+				maximumFeePerGas: '2000000002',
+			},
+		}
+		const workflow = createDurableWorkflow(constrained)
+		const duplicateStep = constrained.steps[0]
+		if (duplicateStep === undefined) throw new Error('Terminal submission test plan is incomplete')
+		expect(durableWorkflowPlan(workflow).terminalSubmission).toEqual(constrained.terminalSubmission)
+		expect(() =>
+			createDurableWorkflow({
+				...constrained,
+				terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '01' },
+			}),
+		).toThrow('canonical uint256')
+		expect(() => createDurableWorkflow({ ...constrained, steps: [] })).toThrow('requires a terminal step')
+		expect(() => createDurableWorkflow({ ...constrained, steps: [duplicateStep, duplicateStep] })).toThrow('unique step identifiers')
+
+		refreshWorkflowContinuation(workflow, {
+			...constrained,
+			createdAtBlock: '2',
+			id: 'plan:2',
+			terminalSubmission: {
+				kind: 'private-next-block',
+				maximumFeePerGas: '3000000000',
+			},
+		})
+
+		expect(workflow.terminalSubmission).toEqual({ kind: 'private-next-block', maximumFeePerGas: '3000000000' })
+		expect(durableWorkflowPlan(workflow).terminalSubmission).toEqual(workflow.terminalSubmission)
+	})
+
 	test('reserves canonical confirmation for a lifecycle obligation terminal step', () => {
 		const terminalPlan = canonicalConfirmationPlan()
 		expect(() => createDurableWorkflow({ ...terminalPlan, classification: 'selectable', obligation: false })).toThrow('outside a lifecycle obligation')
@@ -237,8 +274,10 @@ describe('durable chaos workflows', () => {
 	})
 
 	test('preserves a confirmed prefix and resumes only an exact canonical continuation', () => {
-		const original = twoStepPlan()
+		const original = { ...twoStepPlan(), maximumCleanupTransactionCount: 1 }
 		const workflow = createDurableWorkflow(original)
+		expect(workflow.maximumCleanupTransactionCount).toBe(1)
+		expect(durableWorkflowPlan(workflow).maximumCleanupTransactionCount).toBe(1)
 		const confirmedHash = `0x${'33'.repeat(32)}` as const
 		markWorkflowStepConfirmed(workflow, 'approve', confirmedHash)
 		workflow.status = 'running'
@@ -261,7 +300,73 @@ describe('durable chaos workflows', () => {
 		])
 		const restored = durableWorkflowPlan(workflow)
 		expect(restored.createdAtBlock).toBe('2')
+		expect(restored.maximumCleanupTransactionCount).toBe(1)
 		expect(restored.steps.map(step => step.id)).toEqual(['approve', 'act'])
+	})
+
+	test('makes an unsigned terminal preflight failure cleanup-only after preparation confirms', () => {
+		const original: OperationPlan = {
+			...twoStepPlan(),
+			terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '10000000000' },
+		}
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, 'approve', `0x${'32'.repeat(32)}`)
+
+		markWorkflowForRediscovery(workflow, 'terminal gas estimate exceeds the configured ceiling')
+
+		expect(workflow.status).toBe('waiting-continuation')
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(workflow.steps[1]).toMatchObject({ failure: 'terminal gas estimate exceeds the configured ceiling', status: 'blocked' })
+	})
+
+	test('preserves finalized failure provenance and cleanup-only disposition through cleanup refresh', () => {
+		const original = { ...twoStepPlan(), maximumCleanupTransactionCount: 1 }
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, 'approve', `0x${'33'.repeat(32)}`)
+		markWorkflowFailed(workflow, 'act', 'Original transaction was superseded by a verified nonce cancellation', 'nonce-cancelled')
+		const failedStep = workflow.steps[1]
+		if (failedStep === undefined) throw new Error('Missing failed action step')
+		failedStep.transactionHash = `0x${'44'.repeat(32)}`
+		failedStep.transactionIntentId = 'intent:cancelled'
+
+		markRetryableWorkflowForRediscovery(workflow, 'Canonical cleanup is required')
+
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(failedStep).toMatchObject({
+			failure: 'Original transaction was superseded by a verified nonce cancellation',
+			failureKind: 'nonce-cancelled',
+			status: 'blocked',
+			transactionHash: `0x${'44'.repeat(32)}`,
+			transactionIntentId: 'intent:cancelled',
+		})
+
+		const approval = original.steps[0]
+		if (approval === undefined) throw new Error('Missing approval step')
+		const { maximumCleanupTransactionCount: _cleanupCount, ...cleanupPlanBase } = original
+		expect(() =>
+			refreshWorkflowContinuation(workflow, {
+				...cleanupPlanBase,
+				createdAtBlock: '2',
+				id: 'plan:unsafe-action-retry',
+				steps: [{ ...approval, data: '0x9999', id: 'revoke', label: 'Revoke approval' }],
+			}),
+		).toThrow('cannot replace its durable cleanup-only disposition')
+		refreshWorkflowContinuation(workflow, {
+			...cleanupPlanBase,
+			continuationDisposition: 'cleanup-only',
+			createdAtBlock: '2',
+			id: 'plan:cleanup',
+			steps: [{ ...approval, data: '0x9999', id: 'revoke', label: 'Revoke approval' }],
+		})
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(workflow.maximumCleanupTransactionCount).toBeUndefined()
+		expect(durableWorkflowPlan(workflow).maximumCleanupTransactionCount).toBeUndefined()
+		expect(workflow.steps.map(step => step.id)).toEqual(['approve', 'revoke'])
+		expect(workflow.steps.some(step => step.failureKind === 'nonce-cancelled')).toBeFalse()
+		const cleanupPlan = durableWorkflowPlan(workflow)
+		const { continuationDisposition: _cleanupDisposition, ...unmarkedPlan } = cleanupPlan
+		expect(retainWorkflow({ workflows: [workflow] }, cleanupPlan)).toBe(workflow)
+		expect(() => retainWorkflow({ workflows: [workflow] }, unmarkedPlan)).toThrow('does not match the durable continuation disposition')
 	})
 
 	test('fails closed when canonical rediscovery changes a confirmed step', () => {

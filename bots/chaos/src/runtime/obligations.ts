@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
-import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
-import type { DurableMetadata, DurableObligation, DurableObligationTombstone, DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
+import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableLifecycleWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableLifecyclePresenceBlocker, type DurableMetadata, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
 
 export const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
+export const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
 
 function now() {
 	return new Date().toISOString()
@@ -19,6 +20,54 @@ function operationInstanceId(instance: Pick<OperationPlan, 'definitionId' | 'met
 		.digest('hex')
 		.slice(0, 24)
 	return `obligation:${instance.definitionId}:${identity}`
+}
+
+function uniqueCanonicalPresence(canonicalPresence: readonly CanonicalLifecyclePresence[]) {
+	if (canonicalPresence.length > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
+		throw new Error(`Canonical lifecycle presence exceeds the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
+	}
+	const unique = new Map<string, CanonicalLifecyclePresence>()
+	for (const instance of canonicalPresence) {
+		const id = operationInstanceId(instance)
+		const existing = unique.get(id)
+		if (existing !== undefined && (existing.blocksNovelty !== instance.blocksNovelty || existing.definitionId !== instance.definitionId || existing.ecosystem !== instance.ecosystem || canonicalMetadata(existing.metadata) !== canonicalMetadata(instance.metadata))) {
+			throw new Error(`Canonical lifecycle identities collide at ${id}`)
+		}
+		unique.set(id, instance)
+		if (unique.size > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
+			throw new Error(`Canonical lifecycle presence exceeds the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
+		}
+	}
+	return unique
+}
+
+function lifecyclePresenceBlocker(instances: ReadonlyMap<string, CanonicalLifecyclePresence>, currentBlock: bigint, presenceComplete: boolean, reason: DurableLifecyclePresenceBlocker['reason']): DurableLifecyclePresenceBlocker | undefined {
+	const sorted = [...instances.entries()].sort(([left], [right]) => left.localeCompare(right))
+	const first = sorted[0]
+	if (first === undefined) return undefined
+	const digest = createHash('sha256')
+		.update('chaos-bot:unplanned-lifecycle-presence:v1\0')
+		.update(sorted.map(([id]) => `${id.length.toString()}:${id}`).join('\0'))
+		.digest('hex')
+	return {
+		count: sorted.length,
+		digest: `0x${digest}`,
+		firstDefinitionId: first[1].definitionId,
+		firstEcosystem: first[1].ecosystem,
+		observedAtBlock: currentBlock.toString(),
+		presenceComplete,
+		reason,
+	}
+}
+
+export function lifecyclePresenceBlockerMessage(blocker: DurableLifecyclePresenceBlocker) {
+	const noun = blocker.count === 1 ? 'identity' : 'identities'
+	if (blocker.reason === 'completed-identity-returned') {
+		const observation = blocker.presenceComplete ? `Complete canonical lifecycle discovery at block ${blocker.observedAtBlock} found ${blocker.count.toString()}` : `Incomplete canonical lifecycle discovery at block ${blocker.observedAtBlock} exposed at least ${blocker.count.toString()}`
+		return `${observation} previously completed due ${noun}, beginning with ${blocker.firstDefinitionId} (${blocker.firstEcosystem}), after complete discovery had confirmed absence; random novelty remains blocked until the canonical reorganization is reconciled manually or complete discovery proves the identities absent again`
+	}
+	const observation = blocker.presenceComplete ? `Complete canonical lifecycle discovery at block ${blocker.observedAtBlock} contained ${blocker.count.toString()}` : `Incomplete canonical lifecycle discovery at block ${blocker.observedAtBlock} exposed at least ${blocker.count.toString()}`
+	return `${observation} unplanned due ${noun}, beginning with ${blocker.firstDefinitionId} (${blocker.firstEcosystem}); random novelty remains blocked until complete discovery proves every due identity is represented by a durable obligation or terminal tombstone, or has left its obstructing protocol phase`
 }
 
 function timestampFromSeconds(value: string | undefined) {
@@ -122,12 +171,8 @@ function hasSemanticFailure(workflow: DurableWorkflow) {
 	return workflow.steps.some(step => step.failureKind === 'semantic-failure')
 }
 
-function deadlinePassed(workflow: DurableWorkflow, currentBlock: bigint, currentTimestamp: bigint) {
-	return (workflow.deadlineTimestamp !== undefined && currentTimestamp > BigInt(workflow.deadlineTimestamp)) || (workflow.semanticDeadlineBlockNumber !== undefined && currentBlock > BigInt(workflow.semanticDeadlineBlockNumber))
-}
-
 export function synchronizeLifecycleObligations(
-	state: Pick<RuntimeState, 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>,
+	state: Pick<RuntimeState, 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>,
 	evaluations: readonly EvaluatedOperation[],
 	canonicalPresence: readonly CanonicalLifecyclePresence[],
 	presenceComplete: boolean,
@@ -144,25 +189,38 @@ export function synchronizeLifecycleObligations(
 		}
 		return [evaluation.plan]
 	})
-	const present = new Set(canonicalPresence.map(instance => operationInstanceId(instance)))
+	const canonicalById = uniqueCanonicalPresence(canonicalPresence)
+	const present = new Set(canonicalById.keys())
+	const obstructing = new Set([...canonicalById].flatMap(([id, instance]) => (instance.blocksNovelty ? [id] : [])))
 	const actionable = new Set(plans.map(plan => operationInstanceId(plan)))
+	for (const id of actionable) {
+		if (!present.has(id)) throw new Error(`Actionable lifecycle identity ${id} is missing from canonical presence`)
+		if (!obstructing.has(id)) throw new Error(`Actionable lifecycle identity ${id} is missing from obstructing canonical presence`)
+	}
 	const terminalIds = new Set(state.obligationTombstones.map(tombstone => tombstone.id))
-	for (const tombstone of state.obligationTombstones) {
-		if (present.has(tombstone.id)) {
-			tombstone.lastSeenBlock = currentBlock.toString()
-		}
+	const obligationsById = new Map(state.obligations.map(obligation => [obligation.id, obligation]))
+	const workflowsById = new Map(state.workflows.map(workflow => [workflow.id, workflow]))
+	let activeObligationCount = state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').length
+	let reservedTombstoneCount = terminalIds.size + state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed' && !terminalIds.has(obligation.id)).length
+	if (reservedTombstoneCount > MAXIMUM_OBLIGATION_TOMBSTONE_COUNT) {
+		throw new Error(`Lifecycle obligations reserve more than the ${MAXIMUM_OBLIGATION_TOMBSTONE_COUNT.toString()}-tombstone durable safety limit`)
 	}
 	for (const plan of plans) {
 		const id = operationInstanceId(plan)
 		if (terminalIds.has(id)) {
 			continue
 		}
-		let obligation = state.obligations.find(candidate => candidate.id === id)
+		let obligation = obligationsById.get(id)
 		if (obligation === undefined) {
+			if (activeObligationCount >= MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS || reservedTombstoneCount >= MAXIMUM_OBLIGATION_TOMBSTONE_COUNT) continue
 			const workflow = createDurableWorkflow(plan)
 			state.workflows.unshift(workflow)
 			obligation = newObligation(plan, workflow)
 			state.obligations.unshift(obligation)
+			obligationsById.set(id, obligation)
+			workflowsById.set(workflow.id, workflow)
+			activeObligationCount += 1
+			reservedTombstoneCount += 1
 			continue
 		}
 		// A completed lifecycle item may remain visible for a few anchored scans while
@@ -171,7 +229,7 @@ export function synchronizeLifecycleObligations(
 		if (obligation.status === 'abandoned' || obligation.status === 'completed' || obligation.status === 'failed') {
 			continue
 		}
-		const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
+		const workflow = workflowsById.get(obligation.workflowId)
 		if (workflow === undefined) throw new Error(`Lifecycle obligation ${id} references a missing workflow`)
 		refreshPlannedWorkflow(workflow, plan)
 		obligation.blockers = []
@@ -188,17 +246,14 @@ export function synchronizeLifecycleObligations(
 		if (obligation.status === 'abandoned' || obligation.status === 'completed' || actionable.has(obligation.id)) {
 			continue
 		}
-		const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
-		if (workflow?.status === 'completed') {
+		const workflow = workflowsById.get(obligation.workflowId)
+		if (workflow === undefined) throw new Error(`Lifecycle obligation ${obligation.id} references a missing workflow`)
+		if (workflow.status === 'completed') {
 			recoverCompletedObligation(state, obligation, workflow, currentBlock)
 			continue
 		}
 		const hasPendingIntent = state.pendingTransactions.some(intent => intent.workflowId === obligation.workflowId)
-		if (workflow !== undefined && workflow.status !== 'waiting-obligation' && !hasPendingIntent && !hasSemanticFailure(workflow) && deadlinePassed(workflow, currentBlock, currentTimestamp)) {
-			recoverTerminalObligation(state, obligation, workflow, currentBlock, 'Canonical lifecycle deadline passed before this bot could complete the operation; the expired instance was superseded without claiming semantic success')
-			continue
-		}
-		if (presenceComplete && !present.has(obligation.id) && workflow !== undefined && !hasPendingIntent && !hasSemanticFailure(workflow)) {
+		if (presenceComplete && !present.has(obligation.id) && !hasPendingIntent && !hasSemanticFailure(workflow)) {
 			if (workflow.status === 'waiting-obligation') {
 				completeWorkflowFromCanonicalConfirmation(workflow)
 				recoverCompletedObligation(state, obligation, workflow, currentBlock)
@@ -208,15 +263,29 @@ export function synchronizeLifecycleObligations(
 			continue
 		}
 		if (obligation.status !== 'failed') {
-			obligation.blockers = ['The lifecycle item is not currently eligible at the canonical snapshot']
-			obligation.status = 'pending'
+			const canonical = canonicalById.get(obligation.id)
+			const canDefer = presenceComplete && canonical?.blocksNovelty === false && !hasPendingIntent && workflow.status !== 'waiting-obligation' && !hasSemanticFailure(workflow)
+			obligation.blockers = [canDefer ? 'The lifecycle item is tracked but not currently actionable; unrelated random work may continue' : 'The lifecycle item is not currently eligible at the canonical snapshot']
+			obligation.status = canDefer ? 'deferred' : 'pending'
 			obligation.updatedAt = now()
+		}
+	}
+	for (const tombstone of state.obligationTombstones) {
+		if (present.has(tombstone.id)) {
+			tombstone.lastSeenBlock = currentBlock.toString()
+		} else if (presenceComplete) {
+			const lastSeenBlock = tombstone.lastSeenBlock === undefined ? undefined : BigInt(tombstone.lastSeenBlock)
+			const observedAbsentAtBlock = tombstone.observedAbsentAtBlock === undefined ? undefined : BigInt(tombstone.observedAbsentAtBlock)
+			if (observedAbsentAtBlock === undefined || (lastSeenBlock !== undefined && lastSeenBlock >= observedAbsentAtBlock)) {
+				tombstone.observedAbsentAtBlock = currentBlock.toString()
+			}
 		}
 	}
 	const retiredIds = new Set(
 		state.obligationTombstones.flatMap(tombstone => {
 			if (!presenceComplete || present.has(tombstone.id)) return []
-			const retainedThrough = BigInt(tombstone.lastSeenBlock ?? tombstone.resolvedAtBlock)
+			if (tombstone.observedAbsentAtBlock === undefined) return []
+			const retainedThrough = BigInt(tombstone.observedAbsentAtBlock)
 			return currentBlock > retainedThrough + OBLIGATION_TOMBSTONE_RETENTION_BLOCKS ? [tombstone.id] : []
 		}),
 	)
@@ -225,6 +294,23 @@ export function synchronizeLifecycleObligations(
 		state.obligationTombstones = state.obligationTombstones.filter(tombstone => !retiredIds.has(tombstone.id))
 		state.obligations = state.obligations.filter(obligation => !retiredIds.has(obligation.id))
 		state.workflows = state.workflows.filter(workflow => !retiredWorkflowIds.has(workflow.id))
+	}
+	const tombstonesById = new Map(state.obligationTombstones.map(tombstone => [tombstone.id, tombstone]))
+	const completedIdentityReturned = new Map(
+		[...canonicalById].filter(([id, instance]) => {
+			const tombstone = tombstonesById.get(id)
+			return instance.blocksNovelty && tombstone?.resolution === 'completed' && tombstone.observedAbsentAtBlock !== undefined
+		}),
+	)
+	const returnedIds = new Set(completedIdentityReturned.keys())
+	const represented = new Set([...state.obligations.flatMap(obligation => (returnedIds.has(obligation.id) ? [] : [obligation.id])), ...state.obligationTombstones.flatMap(tombstone => (returnedIds.has(tombstone.id) ? [] : [tombstone.id]))])
+	const uncovered = new Map([...canonicalById].filter(([id, instance]) => instance.blocksNovelty && !represented.has(id)))
+	const blockerInstances = completedIdentityReturned.size === 0 ? uncovered : completedIdentityReturned
+	const blockerReason = completedIdentityReturned.size === 0 ? 'unplanned-due-identity' : 'completed-identity-returned'
+	if (presenceComplete) {
+		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, true, blockerReason)
+	} else if (state.lifecyclePresenceBlocker === undefined && blockerInstances.size !== 0) {
+		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, false, blockerReason)
 	}
 	return plans
 }
@@ -298,7 +384,7 @@ export function retryLifecycleObligation(state: Pick<RuntimeState, 'obligations'
 		throw new Error('Lifecycle retry is unavailable after a semantically uncertain on-chain transaction; abandon only after manual reconciliation')
 	}
 	if (retryableOnChainFailure) {
-		markRetryableWorkflowForRediscovery(workflow, 'Explicit operator retry requested after a finalized revert or verified nonce cancellation')
+		markRetryableLifecycleWorkflowForRediscovery(workflow, 'Explicit operator retry requested after a finalized revert or verified nonce cancellation')
 	} else {
 		markWorkflowForRediscovery(workflow, 'Explicit operator retry requested after an unsigned failure')
 	}

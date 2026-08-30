@@ -31,6 +31,21 @@ function stepRequiresCanonicalLifecycleConfirmation(step: Pick<DurableWorkflowSt
 	return step.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true)
 }
 
+const MAXIMUM_UINT256 = (1n << 256n) - 1n
+
+export function assertTerminalSubmissionBoundary(plan: Pick<OperationPlan, 'id' | 'steps' | 'terminalSubmission'>) {
+	const submission = plan.terminalSubmission
+	if (submission === undefined) return
+	if (submission.kind !== 'private-next-block') throw new Error(`Plan ${plan.id} has an unsupported terminal submission kind`)
+	if (!/^(?:0|[1-9]\d*)$/.test(submission.maximumFeePerGas) || BigInt(submission.maximumFeePerGas) > MAXIMUM_UINT256) {
+		throw new Error(`Plan ${plan.id} terminal maximum fee per gas must be a canonical uint256`)
+	}
+	if (plan.steps.at(-1) === undefined) throw new Error(`Plan ${plan.id} terminal submission constraint requires a terminal step`)
+	if (new Set(plan.steps.map(step => step.id)).size !== plan.steps.length) {
+		throw new Error(`Plan ${plan.id} terminal submission constraint requires unique step identifiers`)
+	}
+}
+
 export function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<OperationPlan, 'classification' | 'id' | 'obligation' | 'steps'>) {
 	if (!plan.steps.some(stepRequiresCanonicalLifecycleConfirmation)) return
 	if (plan.classification !== 'lifecycle-obligation' || !plan.obligation) {
@@ -56,6 +71,13 @@ function sameConfirmedStep(existing: DurableWorkflowStep, fresh: DurableWorkflow
 
 export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: OperationPlan) {
 	assertCanonicalLifecycleConfirmationBoundary(plan)
+	assertTerminalSubmissionBoundary(plan)
+	if (workflow.continuationDisposition === 'cleanup-only' && plan.continuationDisposition !== 'cleanup-only') {
+		throw new Error(`Workflow ${workflow.id} cannot replace its durable cleanup-only disposition with an action plan`)
+	}
+	if (plan.continuationDisposition !== undefined && (plan.classification !== 'selectable' || !workflow.steps.some(step => step.status === 'confirmed'))) {
+		throw new Error(`Cleanup continuation plan ${plan.id} requires confirmed selectable preparation`)
+	}
 	if (!workflowMatchesContinuationPlan(workflow, plan)) {
 		throw new Error(`Workflow ${workflow.id} does not match the canonical continuation plan`)
 	}
@@ -72,10 +94,14 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 	})
 	workflow.classification = plan.classification
 	workflow.createdAtBlock = plan.createdAtBlock
+	if (plan.continuationDisposition === undefined) delete workflow.continuationDisposition
+	else workflow.continuationDisposition = plan.continuationDisposition
 	if (plan.deadlineTimestamp === undefined) delete workflow.deadlineTimestamp
 	else workflow.deadlineTimestamp = plan.deadlineTimestamp
 	if (plan.lastValidBlockNumber === undefined) delete workflow.lastValidBlockNumber
 	else workflow.lastValidBlockNumber = plan.lastValidBlockNumber
+	if (plan.maximumCleanupTransactionCount === undefined) delete workflow.maximumCleanupTransactionCount
+	else workflow.maximumCleanupTransactionCount = plan.maximumCleanupTransactionCount
 	if (plan.semanticDeadlineBlockNumber === undefined) {
 		delete workflow.semanticDeadlineBlockNumber
 	} else {
@@ -90,6 +116,8 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 	workflow.priority = plan.priority
 	workflow.risk = plan.risk
 	workflow.steps = [...retainedHistoricalSteps, ...mergedFreshSteps]
+	if (plan.terminalSubmission === undefined) delete workflow.terminalSubmission
+	else workflow.terminalSubmission = { ...plan.terminalSubmission }
 	delete workflow.completedAt
 	workflow.status = 'waiting-continuation'
 	workflow.updatedAt = now()
@@ -99,6 +127,7 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 	return {
 		classification: workflow.classification,
+		...(workflow.continuationDisposition === undefined ? {} : { continuationDisposition: workflow.continuationDisposition }),
 		createdAtBlock: workflow.createdAtBlock,
 		definitionId: workflow.operationId,
 		...(workflow.deadlineTimestamp === undefined ? {} : { deadlineTimestamp: workflow.deadlineTimestamp }),
@@ -106,6 +135,7 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 		id: workflow.planId,
 		label: workflow.label,
 		...(workflow.lastValidBlockNumber === undefined ? {} : { lastValidBlockNumber: workflow.lastValidBlockNumber }),
+		...(workflow.maximumCleanupTransactionCount === undefined ? {} : { maximumCleanupTransactionCount: workflow.maximumCleanupTransactionCount }),
 		...(workflow.semanticDeadlineBlockNumber === undefined
 			? {}
 			: {
@@ -128,14 +158,20 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 			...(step.value === '0' ? {} : { value: step.value }),
 			walletAssetDebits: [...step.walletAssetDebits],
 		})),
+		...(workflow.terminalSubmission === undefined ? {} : { terminalSubmission: { ...workflow.terminalSubmission } }),
 	}
 }
 
 export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 	assertCanonicalLifecycleConfirmationBoundary(plan)
+	assertTerminalSubmissionBoundary(plan)
+	if (plan.continuationDisposition !== undefined) {
+		throw new Error(`Initial workflow plan ${plan.id} cannot declare a continuation disposition without confirmed preparation`)
+	}
 	const createdAt = now()
 	return {
 		classification: plan.classification,
+		...(plan.continuationDisposition === undefined ? {} : { continuationDisposition: plan.continuationDisposition }),
 		createdAtBlock: plan.createdAtBlock,
 		createdAt,
 		...(plan.deadlineTimestamp === undefined ? {} : { deadlineTimestamp: plan.deadlineTimestamp }),
@@ -143,6 +179,7 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 		id: `workflow:${randomUUID()}`,
 		label: plan.label,
 		...(plan.lastValidBlockNumber === undefined ? {} : { lastValidBlockNumber: plan.lastValidBlockNumber }),
+		...(plan.maximumCleanupTransactionCount === undefined ? {} : { maximumCleanupTransactionCount: plan.maximumCleanupTransactionCount }),
 		...(plan.semanticDeadlineBlockNumber === undefined
 			? {}
 			: {
@@ -158,6 +195,7 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 		risk: plan.risk,
 		status: 'planned',
 		steps: plan.steps.map(workflowStep),
+		...(plan.terminalSubmission === undefined ? {} : { terminalSubmission: { ...plan.terminalSubmission } }),
 		updatedAt: createdAt,
 	}
 }
@@ -167,6 +205,9 @@ export function retainWorkflow(state: Pick<RuntimeState, 'workflows'>, plan: Ope
 	if (existing !== undefined) {
 		if (!workflowMatchesContinuationPlan(existing, plan)) {
 			throw new Error(`Plan id ${plan.id} collides with a different operation identity in workflow ${existing.id}`)
+		}
+		if (existing.continuationDisposition !== plan.continuationDisposition) {
+			throw new Error(`Plan id ${plan.id} does not match the durable continuation disposition in workflow ${existing.id}`)
 		}
 		return existing
 	}
@@ -323,9 +364,29 @@ export function retryableOnChainWorkflowFailure(workflow: DurableWorkflow) {
 	return workflow.steps.some(step => step.status === 'failed' && (step.failureKind === 'receipt-reverted' || step.failureKind === 'nonce-cancelled'))
 }
 
+function retryableFinalizedFailureStep(workflow: DurableWorkflow) {
+	return workflow.steps.find(candidate => candidate.status === 'failed' && (candidate.failureKind === 'receipt-reverted' || candidate.failureKind === 'nonce-cancelled'))
+}
+
 export function markRetryableWorkflowForRediscovery(workflow: DurableWorkflow, reason: string) {
-	const step = workflow.steps.find(candidate => candidate.status === 'failed' && (candidate.failureKind === 'receipt-reverted' || candidate.failureKind === 'nonce-cancelled'))
+	const step = retryableFinalizedFailureStep(workflow)
 	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable finalized failure`)
+	if (workflow.classification !== 'selectable') throw new Error(`Workflow ${workflow.id} cannot use selectable cleanup recovery`)
+	if (!workflow.steps.some(candidate => candidate.status === 'confirmed')) throw new Error(`Workflow ${workflow.id} has no confirmed preparation to clean up`)
+	step.failure ??= reason
+	step.status = 'blocked'
+	workflow.continuationDisposition = 'cleanup-only'
+	delete workflow.completedAt
+	workflow.status = 'waiting-continuation'
+	workflow.updatedAt = now()
+}
+
+export function markRetryableLifecycleWorkflowForRediscovery(workflow: DurableWorkflow, reason: string) {
+	const step = retryableFinalizedFailureStep(workflow)
+	if (step === undefined) throw new Error(`Workflow ${workflow.id} has no retryable finalized failure`)
+	if (workflow.classification !== 'lifecycle-obligation') {
+		throw new Error(`Workflow ${workflow.id} cannot use lifecycle obligation retry recovery`)
+	}
 	delete step.failureKind
 	delete step.transactionHash
 	delete step.transactionIntentId
@@ -391,6 +452,9 @@ export function markWorkflowForRediscovery(workflow: DurableWorkflow, error: unk
 	if (workflow.steps.some(step => step.status === 'confirmed')) {
 		delete workflow.completedAt
 		workflow.status = 'waiting-continuation'
+		if (workflow.classification === 'selectable' && workflow.terminalSubmission !== undefined) {
+			workflow.continuationDisposition = 'cleanup-only'
+		}
 	} else if (workflow.classification === 'selectable') {
 		workflow.completedAt = timestamp
 		workflow.status = 'abandoned'

@@ -4,7 +4,8 @@ import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
 import { CONFIGURATION_REVISION_CONFLICT, configurationRevisionConflict, parseSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
-import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
+import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, retryLifecycleObligation } from './obligations.ts'
+import { liveInventoryReadinessBlockers } from './live-readiness.ts'
 import { workflowNeedsContinuation } from './workflows.ts'
 import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 
@@ -146,6 +147,18 @@ function signerAddress(settings: OperatorSettings): Address | undefined {
 	return settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address
 }
 
+function assertLiveExecutionReadiness(state: RuntimeState, settings: OperatorSettings) {
+	const address = signerAddress(settings)
+	if (address === undefined) throw new Error('Live execution requires a configured transaction signer')
+	const signerMatches = state.signerAddress?.toLowerCase() === address.toLowerCase() && state.wallet?.toLowerCase() === address.toLowerCase()
+	const topology = state.topology
+	if (!signerMatches || state.lastScanAt === undefined || state.lastScannedBlock === undefined || topology?.complete !== true || topology.anchor.blockNumber !== state.lastScannedBlock) {
+		throw new Error('Live execution requires a fresh, complete canonical scan for the configured signer')
+	}
+	const blocker = liveInventoryReadinessBlockers(state.inventory, topology.universes, settings.strategy)[0]
+	if (blocker !== undefined) throw new Error(blocker)
+}
+
 export function assertSignerCompatibleWithPending(pendingSender: Address | undefined, address: Address | undefined) {
 	if (pendingSender !== undefined && (address === undefined || address.toLowerCase() !== pendingSender.toLowerCase())) {
 		throw new Error('The signer cannot be cleared or replaced while a transaction intent is pending recovery')
@@ -176,6 +189,7 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 			eligible: boolean
 			enabled: boolean
 			id: string
+			independentlyExecutable: boolean
 			label: string
 			prerequisites: string[]
 			risk: (typeof state.evaluations)[number]['definition']['risk']
@@ -194,6 +208,7 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 				eligible: evaluation.eligibility.eligible,
 				enabled: enabled.has(evaluation.definition.ecosystem),
 				id,
+				independentlyExecutable: evaluation.definition.independentlyExecutable ?? (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation'),
 				label: evaluation.definition.label,
 				prerequisites: [...new Set(evaluation.definition.discoveryInputs)],
 				risk: evaluation.definition.risk,
@@ -211,10 +226,20 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
 	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction')
 	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
+	const lifecyclePresenceAlert = state.lifecyclePresenceBlocker === undefined ? undefined : lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 	return {
 		...state,
 		alerts: [
 			...(state.error === undefined ? [] : [{ message: state.error, severity: 'error' }]),
+			...(lifecyclePresenceAlert === undefined || lifecyclePresenceAlert === state.error ? [] : [{ message: lifecyclePresenceAlert, severity: 'error' }]),
+			...(state.safetyPaused
+				? [
+						{
+							message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution',
+							severity: 'error',
+						},
+					]
+				: []),
 			...(state.obligationTombstones.length >= MAXIMUM_OBLIGATION_TOMBSTONE_COUNT * 0.8
 				? [
 						{
@@ -227,6 +252,7 @@ function dashboardState(state: RuntimeState, configuration: ConfigurationState) 
 		],
 		currentWorkflow,
 		execute: configuration.settings.runtime.execute,
+		inventoryAvailable: state.lastScanAt !== undefined,
 		network: configuration.settings.network.name,
 		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed'),
 		operationEvaluations: groupedOperationEvaluations(state, enabled),
@@ -750,6 +776,8 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 			const candidate = pausedCandidate(options.configuration.settings, value)
 			try {
 				await update(async () => {
+					expectedRevision(candidate.revision, options.configuration.revision)
+					if (!candidate.settings.paused && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
 					await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, (state, baseline) => {
 						const priorSafetyPause = baseline.safetyPaused
 						if (!candidate.settings.paused) {
@@ -794,6 +822,8 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 			await update(async () => {
 				const candidate = settingsPatchCandidate(options.configuration.settings, value)
 				assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
+				expectedRevision(candidate.revision, options.configuration.revision)
+				if (!options.configuration.settings.runtime.execute && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
 				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
 					recordActivity(state, {
 						message: 'Execution policy updated',

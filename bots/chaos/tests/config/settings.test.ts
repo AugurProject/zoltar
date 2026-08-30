@@ -95,6 +95,7 @@ describe('chaos-bot settings', () => {
 			chainId: 4_242_424_242,
 			explorerUrl: 'https://explorer.custom-chain.example.invalid',
 			kind: 'custom',
+			maximumBlockIntervalSeconds: 30,
 			name: 'Zoltar Custom Chain Placeholder',
 		})
 		const serialized = serializedSettings(settings)
@@ -135,6 +136,16 @@ describe('chaos-bot settings', () => {
 		const loaded = await loadSettings(path)
 		const secondRevision = await saveSettings(path, loaded.settings, loaded.revision)
 		expect(secondRevision).toBe(firstRevision)
+	})
+
+	test('requires a bounded maximum block interval for custom deadline planning', async () => {
+		const source = record(JSON.parse(await readFile(customChainPlaceholderPath, 'utf8')))
+		const network = record(source['network'])
+		const withoutMaximum = Object.fromEntries(Object.entries(network).filter(([key]) => key !== 'maximumBlockIntervalSeconds'))
+		expect(() => parseSettings({ ...source, network: withoutMaximum })).toThrow('maximumBlockIntervalSeconds')
+		for (const maximumBlockIntervalSeconds of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+			expect(() => parseSettings({ ...source, network: { ...network, maximumBlockIntervalSeconds } })).toThrow('network.maximumBlockIntervalSeconds')
+		}
 	})
 
 	test('rejects ambiguous or unsafe custom chain identities', async () => {
@@ -178,13 +189,13 @@ describe('chaos-bot settings', () => {
 			...configuredSource,
 			runtime: { ...configuredRuntime, stateFile: '.state/chaos.sepolia.json' },
 		})
-		expect(sepolia.network).toEqual({ chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
+		expect(sepolia.network).toEqual({ chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', maximumBlockIntervalSeconds: 60, name: 'sepolia' })
 		const mainnet = parseSettings({
 			...serializedSettings(sepolia),
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(sepolia).runtime, stateFile: '.state/chaos.mainnet.json' },
 		})
-		expect(mainnet.network).toEqual({ chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' })
+		expect(mainnet.network).toEqual({ chainId: 1, explorerUrl: 'https://etherscan.io', maximumBlockIntervalSeconds: 60, name: 'mainnet' })
 		expect(mainnet.runtime.stateFile).not.toBe(sepolia.runtime.stateFile)
 		const customSource = record(JSON.parse(await readFile(customChainPlaceholderPath, 'utf8')))
 		const custom = parseSettings({
@@ -306,6 +317,12 @@ describe('chaos-bot settings', () => {
 		expect(settings.runtime.execute).toBeFalse()
 		expect(settings.strategy.minimumEthReserveAttoEth).toBe(0n)
 		expect(settings.strategy.minimumRepReserveAttoRep).toBe(0n)
+	})
+
+	test('keeps workflow validity open through two worst-case prerequisite finality waits', async () => {
+		const dryRun = await configuredExample()
+		expect(() => parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 74 } })).toThrow('strategy.workflowValidForBlocks')
+		expect(parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 75 } }).strategy.workflowValidForBlocks).toBe(75n)
 	})
 
 	test('rejects configured amounts with more than 18 decimal places', async () => {

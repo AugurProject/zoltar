@@ -1,11 +1,11 @@
-import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, truncate, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256 } from '../support/bot-shared.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { initialDurableState, loadDurableState, saveDurableState, serializedDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
-import { MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS, parseProtocolIndex, protocolIndexSidecarDirectory } from '../../src/state/protocol-index-store.ts'
+import { MAXIMUM_PROTOCOL_INDEX_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS, MAXIMUM_PROTOCOL_INDEX_RECORDS, parseProtocolIndex, protocolIndexSidecarDirectory } from '../../src/state/protocol-index-store.ts'
 
 const directories: string[] = []
 
@@ -67,6 +67,9 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		auctionBids: {
 			[openOracle.toLowerCase()]: [{ amountAttoEth: 25n.toString(), index: '2', refunded: false, tick: '-7' }],
 		},
+		auctionRefunds: {
+			[openOracle.toLowerCase()]: { generation: `0x${'33'.repeat(32)}`, pendingAttoEth: 8n.toString() },
+		},
 		chainId: 1,
 		childRepSplits: [{ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: openOracle }],
 		cursor: { blockHash: `0x${cursorByte.repeat(32)}`, blockNumber: cursorBlockNumber },
@@ -85,7 +88,7 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		migrationRepSplits: [{ childMigrationRepAmountAttoRep: 25n.toString(), childUniverseId: childUniverseId('0', '1'), outcomeIndex: '1', universeId: '0' }],
 		openOracle,
 		reports: [report(openOracle)],
-		schemaVersion: 2,
+		schemaVersion: 3,
 		securityPoolForker: address(30),
 		startBlock: '10',
 		wallet: address(22),
@@ -157,17 +160,20 @@ describe('protocol-index sidecar generations', () => {
 
 		const restored = await loadDurableState(path, 1)
 		expect(restored.protocolIndex?.auctionBids[expected.openOracle.toLowerCase()]).toHaveLength(count)
+		expect(restored.protocolIndex?.auctionRefunds).toEqual(expected.auctionRefunds)
 		expect(restored.protocolIndex?.escalationDeposits).toHaveLength(count)
 		expect(restored.protocolIndex?.migrationRepSplits).toHaveLength(count)
 		expect(restored.protocolIndex?.childRepSplits).toHaveLength(count)
 		expect(restored.protocolIndex?.migrationRepSplits.at(-1)?.outcomeIndex).toBe((count - 1).toString())
-		expect((await readdir(await generationPath(path))).filter(name => name.endsWith('.json')).length).toBeGreaterThan((count / MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) * 4)
+		const generationJsonFileCount = (await readdir(await generationPath(path))).filter(name => name.endsWith('.json')).length
+		expect(generationJsonFileCount).toBeGreaterThan((count / MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) * 4)
 
 		let chunkReadCount = 0
 		const filesystem: StateFilesystem = {
+			link,
 			mkdir,
 			open: async (filePath, flags, mode) => {
-				if (typeof flags === 'number' && /(?:reports|auction-bids|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReadCount += 1
+				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReadCount += 1
 				return open(filePath, flags, mode)
 			},
 			readFile,
@@ -176,7 +182,9 @@ describe('protocol-index sidecar generations', () => {
 			rm,
 		}
 		await saveDurableState(path, state, filesystem)
-		expect(chunkReadCount).toBe(0)
+		// Revalidate every immutable chunk before reusing the cached generation so
+		// post-load corruption cannot poison all future state saves.
+		expect(chunkReadCount).toBe(generationJsonFileCount - 1)
 	}, 300_000)
 
 	test('rejects corrupt, missing, and symbolic-link chunks', async () => {
@@ -189,7 +197,7 @@ describe('protocol-index sidecar generations', () => {
 		const missingPath = await statePath()
 		await saveIndex(missingPath)
 		await rm(await firstChunk(missingPath))
-		await expect(loadDurableState(missingPath, 1)).rejects.toThrow('missing or has extra chunks')
+		await expect(loadDurableState(missingPath, 1)).rejects.toThrow('is missing chunk')
 
 		const oversizedPath = await statePath()
 		await saveIndex(oversizedPath)
@@ -202,7 +210,94 @@ describe('protocol-index sidecar generations', () => {
 		const realChunk = `${linkedPath}.chunk-original`
 		await rename(linkedChunk, realChunk)
 		await symlink(realChunk, linkedChunk)
-		await expect(loadDurableState(linkedPath, 1)).rejects.toThrow('regular non-symbolic-link file')
+		await expect(loadDurableState(linkedPath, 1)).rejects.toThrow('must not be a symbolic link')
+	})
+
+	test('rejects an aggregate byte claim before reading generation chunks', async () => {
+		const path = await statePath()
+		await saveIndex(path)
+		const generation = await generationPath(path)
+		const manifestPath = join(generation, 'manifest.json')
+		const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { collections: Record<string, { byteCount: string }> }
+		const reports = manifest.collections['reports']
+		if (reports === undefined) throw new Error('Expected reports collection commitment')
+		reports.byteCount = (MAXIMUM_PROTOCOL_INDEX_BYTES + 1).toString()
+		await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`)
+
+		let chunkReads = 0
+		const filesystem: StateFilesystem = {
+			link,
+			mkdir,
+			open: async (filePath, flags, mode) => {
+				if (typeof flags === 'number' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) chunkReads += 1
+				return open(filePath, flags, mode)
+			},
+			readFile,
+			readdir,
+			rename,
+			rm,
+		}
+		await expect(loadDurableState(path, 1, filesystem)).rejects.toThrow('byte aggregate safety limit')
+		expect(chunkReads).toBe(0)
+	})
+
+	test('reuses immutable chunks when only the canonical cursor advances', async () => {
+		const path = await statePath()
+		await saveIndex(path, protocolIndex('50', '44'))
+		const state = initialDurableState(1, true, 'profile:index', address(22))
+		state.protocolIndex = protocolIndex('51', '66')
+		let linkedChunks = 0
+		let writtenChunks = 0
+		const filesystem: StateFilesystem = {
+			link: async (existingPath, newPath) => {
+				linkedChunks += 1
+				await link(existingPath, newPath)
+			},
+			mkdir,
+			open: async (filePath, flags, mode) => {
+				if (flags === 'wx' && /(?:reports|auction-bids|auction-refunds|escalation-deposits|migration-routes|child-routes)-\d+-[0-9a-f]{64}\.json$/.test(String(filePath))) writtenChunks += 1
+				return open(filePath, flags, mode)
+			},
+			readFile,
+			readdir,
+			rename,
+			rm,
+		}
+
+		await saveDurableState(path, state, filesystem)
+
+		expect(linkedChunks).toBeGreaterThan(0)
+		expect(writtenChunks).toBe(0)
+		expect((await loadDurableState(path, 1)).protocolIndex?.cursor.blockNumber).toBe('51')
+	})
+
+	test('rewrites prepared bytes when an old hard-link source was corrupted after persistence', async () => {
+		const path = await statePath()
+		await saveIndex(path, protocolIndex('50', '44'))
+		const oldChunk = await firstChunk(path)
+		await writeFile(oldChunk, `${await readFile(oldChunk, 'utf8')} `)
+		const replacement = initialDurableState(1, true, 'profile:index', address(22))
+		replacement.protocolIndex = protocolIndex('51', '66')
+
+		await saveDurableState(path, replacement)
+
+		expect((await loadDurableState(path, 1)).protocolIndex?.cursor.blockNumber).toBe('51')
+		expect((await readdir(protocolIndexSidecarDirectory(path))).filter(name => /^[0-9a-f]{64}$/.test(name))).toHaveLength(1)
+	})
+
+	test('does not delete a corrupt cached generation still referenced by the main journal', async () => {
+		const path = await statePath()
+		const state = await saveIndex(path)
+		const reference = await storedReference(path)
+		const generation = await generationPath(path)
+		const chunk = await firstChunk(path)
+		await writeFile(chunk, `${await readFile(chunk, 'utf8')} `)
+
+		await expect(saveDurableState(path, state)).rejects.toThrow('digest does not match')
+
+		expect((await storedReference(path)).manifestDigest).toBe(reference.manifestDigest)
+		expect(await stat(generation)).toMatchObject({})
+		await expect(loadDurableState(path, 1)).rejects.toThrow('digest does not match')
 	})
 
 	test('rejects permissive sidecar files and symbolic-link generation directories', async () => {
@@ -237,6 +332,7 @@ describe('protocol-index sidecar generations', () => {
 		const before = await readFile(path, 'utf8')
 		let sidecarCommitted = false
 		const filesystem: StateFilesystem = {
+			link,
 			mkdir,
 			open,
 			readFile,
@@ -308,7 +404,11 @@ describe('protocol-index sidecar generations', () => {
 		await expect(saveDurableState(signerPath, state)).rejects.toThrow('Protocol index wallet does not match the durable signer scope')
 	})
 
-	test('rejects duplicate canonical records without imposing a total item-count ceiling', () => {
+	test('rejects duplicate canonical records and an oversized aggregate index', () => {
+		expect(() => parseProtocolIndex({ ...protocolIndex(), schemaVersion: 2 }, 1)).toThrow('schemaVersion is unsupported')
+		const { auctionRefunds: _missingRefundEpisodes, ...missingRefundEpisodes } = protocolIndex()
+		expect(() => parseProtocolIndex(missingRefundEpisodes, 1)).toThrow('missing auctionRefunds')
+
 		const duplicateBid = protocolIndex()
 		const key = duplicateBid.openOracle.toLowerCase()
 		const bid = duplicateBid.auctionBids[key]?.[0]
@@ -316,7 +416,7 @@ describe('protocol-index sidecar generations', () => {
 		duplicateBid.auctionBids[key] = [bid, { ...bid }]
 		expect(() => parseProtocolIndex(duplicateBid, 1)).toThrow('canonical unique route order')
 
-		const many = largeProtocolIndex(10_001)
-		expect(parseProtocolIndex(many, 1)?.migrationRepSplits).toHaveLength(10_001)
+		const many = largeProtocolIndex(Math.floor(MAXIMUM_PROTOCOL_INDEX_RECORDS / 4) + 1)
+		expect(() => parseProtocolIndex(many, 1)).toThrow('record aggregate safety limit')
 	})
 })

@@ -3,20 +3,23 @@ import { constants } from 'node:fs'
 import { resolve } from 'node:path'
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { AuctionBidSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
 
 const PROTOCOL_INDEX_REFERENCE_VERSION = 1
 const PROTOCOL_INDEX_MANIFEST_VERSION = 1
 export const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
 export const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
+export const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
+export const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
+export const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
 const MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES = 64 * 1024
 
-const COLLECTION_KINDS = ['reports', 'auction-bids', 'escalation-deposits', 'migration-routes', 'child-routes'] as const
+const COLLECTION_KINDS = ['reports', 'auction-bids', 'auction-refunds', 'escalation-deposits', 'migration-routes', 'child-routes'] as const
 const GENERATION_NAME = /^[0-9a-f]{64}$/
 const TEMPORARY_GENERATION_NAME = /^\.tmp-[0-9]+-[0-9a-f-]+$/
-const CHUNK_FILE = /^(reports|auction-bids|escalation-deposits|migration-routes|child-routes)-(0|[1-9]\d*)-([0-9a-f]{64})\.json$/
 const validatedProtocolIndexes = new WeakSet<ChaosProtocolIndex>()
 const persistedReferences = new WeakMap<ChaosProtocolIndex, Map<string, ProtocolIndexReference>>()
+const latestPersistedReferences = new Map<string, ProtocolIndexReference>()
 
 type CollectionKind = (typeof COLLECTION_KINDS)[number]
 
@@ -49,6 +52,7 @@ export type ProtocolIndexDirectoryEntry = {
 }
 
 export type ProtocolIndexFilesystem = {
+	link: (existingPath: string, newPath: string) => Promise<unknown>
 	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
 	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<ProtocolIndexFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
@@ -61,7 +65,7 @@ type ProtocolIndexIdentity = {
 	chainId: number
 	cursor: { blockHash: Hash; blockNumber: string }
 	openOracle: Address
-	schemaVersion: 2
+	schemaVersion: 3
 	securityPoolForker: Address
 	startBlock: string
 	wallet: Address
@@ -69,7 +73,9 @@ type ProtocolIndexIdentity = {
 }
 
 type CollectionCommitment = {
+	byteCount: string
 	chunkCount: string
+	chunkDigests: Hex[]
 	chunksDigest: Hex
 	recordCount: string
 }
@@ -77,7 +83,7 @@ type CollectionCommitment = {
 type ProtocolIndexManifestPayload = {
 	collections: Record<CollectionKind, CollectionCommitment>
 	identity: ProtocolIndexIdentity
-	indexSchemaVersion: 2
+	indexSchemaVersion: 3
 	schemaVersion: 1
 }
 
@@ -88,6 +94,11 @@ type ProtocolIndexManifest = ProtocolIndexManifestPayload & {
 type AuctionBidRecord = {
 	auction: Address
 	bid: AuctionBidSnapshot
+}
+
+type AuctionRefundRecord = {
+	auction: Address
+	refund: AuctionRefundSnapshot
 }
 
 function requiredRecord(value: unknown, label: string): Record<string, unknown> {
@@ -155,7 +166,7 @@ function compareSignedStrings(left: string, right: string) {
 function parseIdentity(value: unknown, expectedChainId: number, label = 'protocolIndex'): ProtocolIndexIdentity {
 	const index = requiredRecord(value, label)
 	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], [], label)
-	if (index['schemaVersion'] !== 2) throw new Error(`${label}.schemaVersion is unsupported`)
+	if (index['schemaVersion'] !== 3) throw new Error(`${label}.schemaVersion is unsupported`)
 	if (index['chainId'] !== expectedChainId) throw new Error(`Protocol index belongs to chain ${String(index['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const startBlock = boundedUnsignedString(index['startBlock'], `${label}.startBlock`, 256)
 	const cursor = requiredRecord(index['cursor'], `${label}.cursor`)
@@ -166,7 +177,7 @@ function parseIdentity(value: unknown, expectedChainId: number, label = 'protoco
 		chainId: expectedChainId,
 		cursor: { blockHash: hash(cursor['blockHash'], `${label}.cursor.blockHash`), blockNumber: cursorBlockNumber },
 		openOracle: getAddress(nonemptyString(index['openOracle'], `${label}.openOracle`)),
-		schemaVersion: 2,
+		schemaVersion: 3,
 		securityPoolForker: getAddress(nonemptyString(index['securityPoolForker'], `${label}.securityPoolForker`)),
 		startBlock,
 		wallet: getAddress(nonemptyString(index['wallet'], `${label}.wallet`)),
@@ -257,6 +268,26 @@ function parseAuctionBidRecord(value: unknown, label: string): AuctionBidRecord 
 	}
 }
 
+function parseAuctionRefund(value: unknown, label: string): AuctionRefundSnapshot {
+	const refund = requiredRecord(value, label)
+	assertExactKeys(refund, ['generation', 'pendingAttoEth'], [], label)
+	const pendingAttoEth = boundedUnsignedString(refund['pendingAttoEth'], `${label}.pendingAttoEth`, 256)
+	if (pendingAttoEth === '0') throw new Error(`${label}.pendingAttoEth must be positive`)
+	return {
+		generation: hash(refund['generation'], `${label}.generation`),
+		pendingAttoEth,
+	}
+}
+
+function parseAuctionRefundRecord(value: unknown, label: string): AuctionRefundRecord {
+	const record = requiredRecord(value, label)
+	assertExactKeys(record, ['auction', 'refund'], [], label)
+	return {
+		auction: getAddress(nonemptyString(record['auction'], `${label}.auction`)),
+		refund: parseAuctionRefund(record['refund'], `${label}.refund`),
+	}
+}
+
 function parseEscalationDeposit(value: unknown, label: string): EscalationDepositSnapshot {
 	const deposit = requiredRecord(value, label)
 	assertExactKeys(deposit, ['amountAttoRep', 'claimed', 'depositIndex', 'escalationGame', 'outcome', 'parentDepositIndex', 'pool', 'vault'], [], label)
@@ -315,6 +346,10 @@ function compareAuctionBidRecords(left: AuctionBidRecord, right: AuctionBidRecor
 	return tickOrder === 0 ? compareUnsignedStrings(left.bid.index, right.bid.index) : tickOrder
 }
 
+function compareAuctionRefundRecords(left: AuctionRefundRecord, right: AuctionRefundRecord) {
+	return left.auction.toLowerCase().localeCompare(right.auction.toLowerCase())
+}
+
 function compareDeposits(left: EscalationDepositSnapshot, right: EscalationDepositSnapshot) {
 	const gameOrder = left.escalationGame.toLowerCase().localeCompare(right.escalationGame.toLowerCase())
 	if (gameOrder !== 0) return gameOrder
@@ -367,10 +402,44 @@ function auctionBidRecord(records: readonly AuctionBidRecord[]) {
 	return result
 }
 
+function parsedAuctionRefundRecords(value: unknown, label: string) {
+	const auctionRefundRecord = requiredRecord(value, label)
+	const flattened = Object.entries(auctionRefundRecord).map(([key, refund]) => {
+		const auction = getAddress(key)
+		if (key !== key.toLowerCase()) throw new Error(`${label} key ${key} must be lowercase`)
+		return { auction, refund: parseAuctionRefund(refund, `${label}.${key}`) }
+	})
+	flattened.sort(compareAuctionRefundRecords)
+	assertStrictCanonicalOrder(flattened, compareAuctionRefundRecords, label)
+	return flattened
+}
+
+function auctionRefundRecord(records: readonly AuctionRefundRecord[]) {
+	return Object.fromEntries(records.map(record => [record.auction.toLowerCase(), record.refund]))
+}
+
+function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
+	const arrays = ['childRepSplits', 'escalationDeposits', 'migrationRepSplits', 'reports'] as const
+	let recordCount = 0
+	for (const key of arrays) {
+		const records = index[key]
+		if (!Array.isArray(records)) throw new Error(`protocolIndex.${key} must be an array`)
+		recordCount += records.length
+	}
+	const auctionBids = requiredRecord(index['auctionBids'], 'protocolIndex.auctionBids')
+	for (const [key, bids] of Object.entries(auctionBids)) {
+		if (!Array.isArray(bids)) throw new Error(`protocolIndex.auctionBids.${key} must be an array`)
+		recordCount += bids.length
+	}
+	recordCount += Object.keys(requiredRecord(index['auctionRefunds'], 'protocolIndex.auctionRefunds')).length
+	if (recordCount > MAXIMUM_PROTOCOL_INDEX_RECORDS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_RECORDS.toString()}-record aggregate safety limit`)
+}
+
 export function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
 	if (value === null || value === undefined) return undefined
 	const index = requiredRecord(value, 'protocolIndex')
-	assertExactKeys(index, ['auctionBids', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], [], 'protocolIndex')
+	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], [], 'protocolIndex')
+	assertProtocolIndexRecordEnvelope(index)
 	const identity = parseIdentity(
 		{
 			chainId: index['chainId'],
@@ -389,6 +458,7 @@ export function parseProtocolIndex(value: unknown, expectedChainId: number): Cha
 	reports.sort(compareReports)
 	assertStrictCanonicalOrder(reports, compareReports, 'protocolIndex.reports')
 	const bids = parsedAuctionBidRecords(index['auctionBids'], 'protocolIndex.auctionBids')
+	const refunds = parsedAuctionRefundRecords(index['auctionRefunds'], 'protocolIndex.auctionRefunds')
 	if (!Array.isArray(index['escalationDeposits'])) throw new Error('protocolIndex.escalationDeposits must be an array')
 	const escalationDeposits = index['escalationDeposits'].map((deposit, depositIndex) => parseEscalationDeposit(deposit, `protocolIndex.escalationDeposits[${depositIndex.toString()}]`))
 	escalationDeposits.sort(compareDeposits)
@@ -402,6 +472,7 @@ export function parseProtocolIndex(value: unknown, expectedChainId: number): Cha
 	return {
 		...identity,
 		auctionBids: auctionBidRecord(bids),
+		auctionRefunds: auctionRefundRecord(refunds),
 		childRepSplits,
 		escalationDeposits,
 		migrationRepSplits,
@@ -426,16 +497,19 @@ function rememberedReference(index: ChaosProtocolIndex, statePath: string) {
 }
 
 function rememberReference(index: ChaosProtocolIndex, statePath: string, reference: ProtocolIndexReference) {
+	const resolvedStatePath = resolve(statePath)
 	const references = persistedReferences.get(index) ?? new Map<string, ProtocolIndexReference>()
-	references.set(resolve(statePath), reference)
+	references.set(resolvedStatePath, reference)
 	persistedReferences.set(index, references)
+	latestPersistedReferences.set(resolvedStatePath, reference)
 }
 
 export function snapshotProtocolIndex(index: ChaosProtocolIndex, expectedChainId: number) {
-	if (validatedProtocolIndexes.has(index)) return index
-	const parsed = parseProtocolIndex(index, expectedChainId)
-	if (parsed === undefined) throw new Error('Cannot snapshot an absent protocol index')
-	return immutableProtocolIndex(parsed)
+	const snapshot = validatedProtocolIndexes.has(index) ? index : parseProtocolIndex(index, expectedChainId)
+	if (snapshot === undefined) throw new Error('Cannot snapshot an absent protocol index')
+	const immutable = validatedProtocolIndexes.has(snapshot) ? snapshot : immutableProtocolIndex(snapshot)
+	prepareProtocolIndexCollections(immutable)
+	return immutable
 }
 
 function sha256(value: string) {
@@ -447,12 +521,13 @@ function manifestPayload(identity: ProtocolIndexIdentity, collections: Record<Co
 		collections: {
 			reports: collections.reports,
 			'auction-bids': collections['auction-bids'],
+			'auction-refunds': collections['auction-refunds'],
 			'escalation-deposits': collections['escalation-deposits'],
 			'migration-routes': collections['migration-routes'],
 			'child-routes': collections['child-routes'],
 		},
 		identity,
-		indexSchemaVersion: 2,
+		indexSchemaVersion: 3,
 		schemaVersion: PROTOCOL_INDEX_MANIFEST_VERSION,
 	}
 }
@@ -539,30 +614,116 @@ function chunkFilename(kind: CollectionKind, ordinal: number, digest: Hex) {
 	return `${kind}-${ordinal.toString()}-${digest.slice(2)}.json`
 }
 
-async function writeCollection(path: string, kind: CollectionKind, records: Iterable<unknown>, filesystem: ProtocolIndexFilesystem): Promise<CollectionCommitment> {
+type PreparedProtocolIndexChunk = {
+	contents: string
+	digest: Hex
+	filename: string
+}
+
+type PreparedProtocolIndexCollection = {
+	commitment: CollectionCommitment
+	chunks: PreparedProtocolIndexChunk[]
+}
+
+type PreparedProtocolIndexCollections = Record<CollectionKind, PreparedProtocolIndexCollection>
+
+const preparedProtocolIndexes = new WeakMap<ChaosProtocolIndex, PreparedProtocolIndexCollections>()
+
+type ProtocolIndexPreparationBudget = {
+	bytes: number
+	chunks: number
+	records: number
+}
+
+function prepareCollection(kind: CollectionKind, records: Iterable<unknown>, budget: ProtocolIndexPreparationBudget): PreparedProtocolIndexCollection {
 	const digests: Hex[] = []
-	let recordCount = 0n
+	const chunks: PreparedProtocolIndexChunk[] = []
+	let byteCount = 0
+	let recordCount = 0
 	let chunk: unknown[] = []
-	const flush = async () => {
+	const flush = () => {
 		if (chunk.length === 0) return
 		const ordinal = digests.length
 		const contents = `${JSON.stringify({ kind, ordinal: ordinal.toString(), records: chunk, schemaVersion: 1 })}\n`
-		if (Buffer.byteLength(contents, 'utf8') > MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} exceeds the ${MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES.toString()}-byte safety limit`)
+		const contentsBytes = Buffer.byteLength(contents, 'utf8')
+		if (contentsBytes > MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} exceeds the ${MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES.toString()}-byte safety limit`)
+		if (budget.chunks + 1 > MAXIMUM_PROTOCOL_INDEX_CHUNKS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_CHUNKS.toString()}-chunk aggregate safety limit`)
+		if (budget.bytes + contentsBytes > MAXIMUM_PROTOCOL_INDEX_BYTES) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_BYTES.toString()}-byte aggregate safety limit`)
 		const digest = sha256(contents)
-		await writeOwnerFile(`${path}/${chunkFilename(kind, ordinal, digest)}`, contents, filesystem)
 		digests.push(digest)
+		chunks.push({ contents, digest, filename: chunkFilename(kind, ordinal, digest) })
+		budget.bytes += contentsBytes
+		budget.chunks += 1
+		byteCount += contentsBytes
 		chunk = []
 	}
 	for (const record of records) {
+		if (budget.records + 1 > MAXIMUM_PROTOCOL_INDEX_RECORDS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_RECORDS.toString()}-record aggregate safety limit`)
 		chunk.push(record)
-		recordCount += 1n
-		if (chunk.length === MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) await flush()
+		budget.records += 1
+		recordCount += 1
+		if (chunk.length === MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) flush()
 	}
-	await flush()
+	flush()
 	return {
-		chunkCount: digests.length.toString(),
-		chunksDigest: collectionDigest(digests),
-		recordCount: recordCount.toString(),
+		commitment: {
+			byteCount: byteCount.toString(),
+			chunkCount: digests.length.toString(),
+			chunkDigests: digests,
+			chunksDigest: collectionDigest(digests),
+			recordCount: recordCount.toString(),
+		},
+		chunks,
+	}
+}
+
+function prepareProtocolIndexCollections(index: ChaosProtocolIndex) {
+	const cached = preparedProtocolIndexes.get(index)
+	if (cached !== undefined) return cached
+	const budget: ProtocolIndexPreparationBudget = { bytes: 0, chunks: 0, records: 0 }
+	const prepared: PreparedProtocolIndexCollections = {
+		'auction-bids': prepareCollection('auction-bids', auctionBidRecords(index), budget),
+		'auction-refunds': prepareCollection('auction-refunds', auctionRefundRecords(index), budget),
+		'child-routes': prepareCollection('child-routes', index.childRepSplits, budget),
+		'escalation-deposits': prepareCollection('escalation-deposits', index.escalationDeposits, budget),
+		'migration-routes': prepareCollection('migration-routes', index.migrationRepSplits, budget),
+		reports: prepareCollection('reports', index.reports, budget),
+	}
+	const commitments: Record<CollectionKind, CollectionCommitment> = {
+		'auction-bids': prepared['auction-bids'].commitment,
+		'auction-refunds': prepared['auction-refunds'].commitment,
+		'child-routes': prepared['child-routes'].commitment,
+		'escalation-deposits': prepared['escalation-deposits'].commitment,
+		'migration-routes': prepared['migration-routes'].commitment,
+		reports: prepared.reports.commitment,
+	}
+	validateManifestEnvelope(commitments)
+	preparedProtocolIndexes.set(index, prepared)
+	return prepared
+}
+
+function canFallBackFromLink(error: unknown) {
+	const code = errorCode(error)
+	return code === 'ENOENT' || code === 'ENOSYS' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'EPERM' || code === 'EXDEV'
+}
+
+async function writePreparedCollection(path: string, previousPath: string | undefined, prepared: PreparedProtocolIndexCollection, filesystem: ProtocolIndexFilesystem) {
+	for (const chunk of prepared.chunks) {
+		const destination = `${path}/${chunk.filename}`
+		if (previousPath !== undefined) {
+			let linked = false
+			try {
+				await filesystem.link(`${previousPath}/${chunk.filename}`, destination)
+				linked = true
+				const linkedContents = await readOwnerFile(destination, filesystem, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, 'Linked protocol index chunk')
+				if (linkedContents !== chunk.contents || sha256(linkedContents) !== chunk.digest) throw new Error(`Linked protocol index chunk ${chunk.filename} does not match its prepared immutable content`)
+				continue
+			} catch (error) {
+				if (linked) await filesystem.rm(destination, { force: true })
+				else if (!canFallBackFromLink(error)) throw error
+			}
+		}
+		await writeOwnerFile(destination, chunk.contents, filesystem)
 	}
 }
 
@@ -573,13 +734,46 @@ function* auctionBidRecords(index: ChaosProtocolIndex): Generator<AuctionBidReco
 	return
 }
 
+function* auctionRefundRecords(index: ChaosProtocolIndex): Generator<AuctionRefundRecord> {
+	for (const [auction, refund] of Object.entries(index.auctionRefunds)) {
+		yield { auction: getAddress(auction), refund }
+	}
+	return
+}
+
 function parseCollectionCommitment(value: unknown, label: string): CollectionCommitment {
 	const commitment = requiredRecord(value, label)
-	assertExactKeys(commitment, ['chunkCount', 'chunksDigest', 'recordCount'], [], label)
+	assertExactKeys(commitment, ['byteCount', 'chunkCount', 'chunkDigests', 'chunksDigest', 'recordCount'], [], label)
+	if (!Array.isArray(commitment['chunkDigests'])) throw new Error(`${label}.chunkDigests must be an array`)
+	const chunkDigests = commitment['chunkDigests'].map((digest, index) => hash(digest, `${label}.chunkDigests[${index.toString()}]`))
 	return {
+		byteCount: unsignedIntegerString(commitment['byteCount'], `${label}.byteCount`),
 		chunkCount: unsignedIntegerString(commitment['chunkCount'], `${label}.chunkCount`),
+		chunkDigests,
 		chunksDigest: hash(commitment['chunksDigest'], `${label}.chunksDigest`),
 		recordCount: unsignedIntegerString(commitment['recordCount'], `${label}.recordCount`),
+	}
+}
+
+function validateManifestEnvelope(collections: Record<CollectionKind, CollectionCommitment>) {
+	let totalBytes = 0
+	let totalChunks = 0
+	let totalRecords = 0
+	for (const kind of COLLECTION_KINDS) {
+		const commitment = collections[kind]
+		const byteCount = safeCount(commitment.byteCount, `Protocol index ${kind} byte count`)
+		const chunkCount = safeCount(commitment.chunkCount, `Protocol index ${kind} chunk count`)
+		const recordCount = safeCount(commitment.recordCount, `Protocol index ${kind} record count`)
+		const expectedChunkCount = Math.ceil(recordCount / MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS)
+		if (chunkCount !== expectedChunkCount || commitment.chunkDigests.length !== chunkCount) throw new Error(`Protocol index ${kind} collection geometry does not match its manifest`)
+		if ((chunkCount === 0) !== (byteCount === 0)) throw new Error(`Protocol index ${kind} collection byte count does not match its chunk count`)
+		if (collectionDigest(commitment.chunkDigests) !== commitment.chunksDigest) throw new Error(`Protocol index ${kind} chunk-root digest does not match its manifest`)
+		totalBytes += byteCount
+		totalChunks += chunkCount
+		totalRecords += recordCount
+		if (totalBytes > MAXIMUM_PROTOCOL_INDEX_BYTES) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_BYTES.toString()}-byte aggregate safety limit`)
+		if (totalChunks > MAXIMUM_PROTOCOL_INDEX_CHUNKS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_CHUNKS.toString()}-chunk aggregate safety limit`)
+		if (totalRecords > MAXIMUM_PROTOCOL_INDEX_RECORDS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_RECORDS.toString()}-record aggregate safety limit`)
 	}
 }
 
@@ -587,10 +781,11 @@ function parseManifest(value: unknown, expectedChainId: number, expectedDigest: 
 	const manifest = requiredRecord(value, 'protocol index manifest')
 	assertExactKeys(manifest, ['collections', 'identity', 'indexSchemaVersion', 'manifestDigest', 'schemaVersion'], [], 'protocol index manifest')
 	if (manifest['schemaVersion'] !== PROTOCOL_INDEX_MANIFEST_VERSION) throw new Error('Protocol index manifest schema is unsupported')
-	if (manifest['indexSchemaVersion'] !== 2) throw new Error('Protocol index manifest refers to an unsupported index schema')
+	if (manifest['indexSchemaVersion'] !== 3) throw new Error('Protocol index manifest refers to an unsupported index schema')
 	const rawCollections = requiredRecord(manifest['collections'], 'protocol index manifest.collections')
 	assertExactKeys(rawCollections, COLLECTION_KINDS, [], 'protocol index manifest.collections')
 	const collections = Object.fromEntries(COLLECTION_KINDS.map(kind => [kind, parseCollectionCommitment(rawCollections[kind], `protocol index manifest.collections.${kind}`)])) as Record<CollectionKind, CollectionCommitment>
+	validateManifestEnvelope(collections)
 	const identity = parseIdentity(manifest['identity'], expectedChainId, 'protocol index manifest.identity')
 	const parsed = manifestWithDigest(manifestPayload(identity, collections))
 	const recordedDigest = hash(manifest['manifestDigest'], 'protocol index manifest.manifestDigest')
@@ -629,29 +824,6 @@ function safeCount(value: string, label: string) {
 	return Number(count)
 }
 
-type CollectionFiles = Map<number, { digest: Hex; name: string }>
-
-function indexedCollectionFiles(entries: readonly ProtocolIndexDirectoryEntry[]) {
-	const files = Object.fromEntries(COLLECTION_KINDS.map(kind => [kind, new Map()])) as Record<CollectionKind, CollectionFiles>
-	for (const entry of entries) {
-		if (entry.name === 'manifest.json') {
-			if (!entry.isFile() || entry.isSymbolicLink()) throw new Error('Protocol index manifest must be a regular non-symbolic-link file')
-			continue
-		}
-		const match = CHUNK_FILE.exec(entry.name)
-		if (match === null) throw new Error(`Protocol index generation contains unsupported entry ${entry.name}`)
-		if (!entry.isFile() || entry.isSymbolicLink()) throw new Error(`Protocol index chunk ${entry.name} must be a regular non-symbolic-link file`)
-		const kind = match[1] as CollectionKind
-		const ordinalText = match[2]
-		const digestText = match[3]
-		if (ordinalText === undefined || digestText === undefined) throw new Error(`Protocol index chunk ${entry.name} has an invalid identity`)
-		const ordinal = safeCount(ordinalText, `Protocol index chunk ${entry.name} ordinal`)
-		if (files[kind].has(ordinal)) throw new Error(`Protocol index generation contains duplicate ${kind} chunk ordinal ${ordinal.toString()}`)
-		files[kind].set(ordinal, { digest: `0x${digestText}` as Hex, name: entry.name })
-	}
-	return files
-}
-
 function parseChunkEnvelope(contents: string, kind: CollectionKind, ordinal: number) {
 	const chunk = requiredRecord(parseJson(contents, `Protocol index ${kind} chunk ${ordinal.toString()}`), `protocol index ${kind} chunk ${ordinal.toString()}`)
 	assertExactKeys(chunk, ['kind', 'ordinal', 'records', 'schemaVersion'], [], `protocol index ${kind} chunk ${ordinal.toString()}`)
@@ -664,6 +836,7 @@ function parseChunkEnvelope(contents: string, kind: CollectionKind, ordinal: num
 
 type LoadedCollections = {
 	auctionBids: AuctionBidRecord[]
+	auctionRefunds: AuctionRefundRecord[]
 	childRepSplits: ChildRepSplitProgressSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	migrationRepSplits: MigrationRepSplitProgressSnapshot[]
@@ -671,12 +844,13 @@ type LoadedCollections = {
 }
 
 function emptyLoadedCollections(): LoadedCollections {
-	return { auctionBids: [], childRepSplits: [], escalationDeposits: [], migrationRepSplits: [], reports: [] }
+	return { auctionBids: [], auctionRefunds: [], childRepSplits: [], escalationDeposits: [], migrationRepSplits: [], reports: [] }
 }
 
 function appendParsedRecord(collections: LoadedCollections, kind: CollectionKind, value: unknown, identity: ProtocolIndexIdentity, label: string) {
 	if (kind === 'reports') collections.reports.push(parseOracleGame(value, label, identity.openOracle, BigInt(identity.cursor.blockNumber)))
 	else if (kind === 'auction-bids') collections.auctionBids.push(parseAuctionBidRecord(value, label))
+	else if (kind === 'auction-refunds') collections.auctionRefunds.push(parseAuctionRefundRecord(value, label))
 	else if (kind === 'escalation-deposits') collections.escalationDeposits.push(parseEscalationDeposit(value, label))
 	else if (kind === 'migration-routes') collections.migrationRepSplits.push(parseMigrationRepSplitProgress(value, label))
 	else collections.childRepSplits.push(parseChildRepSplitProgress(value, label))
@@ -685,6 +859,7 @@ function appendParsedRecord(collections: LoadedCollections, kind: CollectionKind
 function validateLoadedCollectionOrder(collections: LoadedCollections) {
 	assertStrictCanonicalOrder(collections.reports, compareReports, 'protocolIndex.reports')
 	assertStrictCanonicalOrder(collections.auctionBids, compareAuctionBidRecords, 'protocolIndex.auctionBids')
+	assertStrictCanonicalOrder(collections.auctionRefunds, compareAuctionRefundRecords, 'protocolIndex.auctionRefunds')
 	assertStrictCanonicalOrder(collections.escalationDeposits, compareDeposits, 'protocolIndex.escalationDeposits')
 	assertStrictCanonicalOrder(collections.migrationRepSplits, compareMigrationRoutes, 'protocolIndex.migrationRepSplits')
 	assertStrictCanonicalOrder(collections.childRepSplits, compareChildRoutes, 'protocolIndex.childRepSplits')
@@ -697,24 +872,29 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 	await ownerDirectory(generationPath, filesystem, 'Protocol index generation')
 	const manifestContents = await readOwnerFile(`${generationPath}/manifest.json`, filesystem, MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES, 'Protocol index manifest')
 	const manifest = parseManifest(parseJson(manifestContents, 'Protocol index manifest'), expectedChainId, reference.manifestDigest)
-	const entries = await filesystem.readdir(generationPath, { withFileTypes: true })
-	if (!entries.some(entry => entry.name === 'manifest.json')) throw new Error('Protocol index generation is missing manifest.json')
-	const collectionFiles = indexedCollectionFiles(entries)
 	const loaded = emptyLoadedCollections()
+	let loadedBytes = 0
 	for (const kind of COLLECTION_KINDS) {
 		const commitment = manifest.collections[kind]
 		const expectedChunkCount = safeCount(commitment.chunkCount, `Protocol index ${kind} chunk count`)
-		const files = collectionFiles[kind]
-		if (files.size !== expectedChunkCount) throw new Error(`Protocol index ${kind} collection is missing or has extra chunks`)
-		const digests: Hex[] = []
+		let parsedByteCount = 0n
 		let parsedRecordCount = 0n
 		for (let ordinal = 0; ordinal < expectedChunkCount; ordinal += 1) {
-			const file = files.get(ordinal)
-			if (file === undefined) throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
-			const contents = await readOwnerFile(`${generationPath}/${file.name}`, filesystem, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, 'Protocol index chunk')
+			const digest = commitment.chunkDigests[ordinal]
+			if (digest === undefined) throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
+			let contents: string
+			try {
+				contents = await readOwnerFile(`${generationPath}/${chunkFilename(kind, ordinal, digest)}`, filesystem, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, 'Protocol index chunk')
+			} catch (error) {
+				if (errorCode(error) === 'ENOENT') throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
+				throw error
+			}
 			const actualDigest = sha256(contents)
-			if (actualDigest !== file.digest) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} digest does not match its immutable filename`)
-			digests.push(actualDigest)
+			if (actualDigest !== digest) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} digest does not match its immutable filename`)
+			const contentsBytes = Buffer.byteLength(contents, 'utf8')
+			loadedBytes += contentsBytes
+			if (loadedBytes > MAXIMUM_PROTOCOL_INDEX_BYTES) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_BYTES.toString()}-byte aggregate safety limit`)
+			parsedByteCount += BigInt(contentsBytes)
 			const records = parseChunkEnvelope(contents, kind, ordinal)
 			if (ordinal + 1 < expectedChunkCount && records.length !== MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} is not a complete canonical chunk`)
 			for (let index = 0; index < records.length; index += 1) {
@@ -722,13 +902,14 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 				parsedRecordCount += 1n
 			}
 		}
+		if (parsedByteCount.toString() !== commitment.byteCount) throw new Error(`Protocol index ${kind} byte count does not match its manifest`)
 		if (parsedRecordCount.toString() !== commitment.recordCount) throw new Error(`Protocol index ${kind} record count does not match its manifest`)
-		if (collectionDigest(digests) !== commitment.chunksDigest) throw new Error(`Protocol index ${kind} chunk-root digest does not match its manifest`)
 	}
 	validateLoadedCollectionOrder(loaded)
 	const index = immutableProtocolIndex({
 		...manifest.identity,
 		auctionBids: auctionBidRecord(loaded.auctionBids),
+		auctionRefunds: auctionRefundRecord(loaded.auctionRefunds),
 		childRepSplits: loaded.childRepSplits,
 		escalationDeposits: loaded.escalationDeposits,
 		migrationRepSplits: loaded.migrationRepSplits,
@@ -744,12 +925,7 @@ function isExistingTargetError(error: unknown) {
 }
 
 async function validateCachedGeneration(statePath: string, reference: ProtocolIndexReference, expectedChainId: number, filesystem: ProtocolIndexFilesystem) {
-	const storePath = protocolIndexSidecarDirectory(statePath)
-	const targetPath = generationDirectory(statePath, reference.manifestDigest)
-	await ownerDirectory(storePath, filesystem, 'Protocol index store')
-	await ownerDirectory(targetPath, filesystem, 'Protocol index generation')
-	const contents = await readOwnerFile(`${targetPath}/manifest.json`, filesystem, MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES, 'Protocol index manifest')
-	parseManifest(parseJson(contents, 'Protocol index manifest'), expectedChainId, reference.manifestDigest)
+	await loadProtocolIndexGeneration(statePath, reference, expectedChainId, filesystem)
 }
 
 export async function persistProtocolIndexGeneration(statePath: string, index: ChaosProtocolIndex, filesystem: ProtocolIndexFilesystem): Promise<ProtocolIndexReference> {
@@ -761,10 +937,37 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		} catch (error) {
 			if (errorCode(error) !== 'ENOENT') throw error
 			persistedReferences.get(index)?.delete(resolve(statePath))
+			if (latestPersistedReferences.get(resolve(statePath))?.manifestDigest === cachedReference.manifestDigest) latestPersistedReferences.delete(resolve(statePath))
 		}
 	}
 	const parsed = snapshotProtocolIndex(index, index.chainId)
+	const preparedCollections = prepareProtocolIndexCollections(parsed)
+	const collections: Record<CollectionKind, CollectionCommitment> = {
+		'auction-bids': preparedCollections['auction-bids'].commitment,
+		'auction-refunds': preparedCollections['auction-refunds'].commitment,
+		'child-routes': preparedCollections['child-routes'].commitment,
+		'escalation-deposits': preparedCollections['escalation-deposits'].commitment,
+		'migration-routes': preparedCollections['migration-routes'].commitment,
+		reports: preparedCollections.reports.commitment,
+	}
+	const identity: ProtocolIndexIdentity = {
+		chainId: parsed.chainId,
+		cursor: parsed.cursor,
+		openOracle: parsed.openOracle,
+		schemaVersion: 3,
+		securityPoolForker: parsed.securityPoolForker,
+		startBlock: parsed.startBlock,
+		wallet: parsed.wallet,
+		zoltar: parsed.zoltar,
+	}
+	const manifest = manifestWithDigest(manifestPayload(identity, collections))
+	const manifestContents = `${JSON.stringify(manifest)}\n`
+	if (Buffer.byteLength(manifestContents, 'utf8') > MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES) throw new Error('Protocol index manifest exceeds its fixed safety envelope')
+	const reference: ProtocolIndexReference = { kind: 'protocol-index-sidecar', manifestDigest: manifest.manifestDigest, schemaVersion: PROTOCOL_INDEX_REFERENCE_VERSION }
+	const targetPath = generationDirectory(statePath, reference.manifestDigest)
 	const storePath = protocolIndexSidecarDirectory(statePath)
+	const previousReference = latestPersistedReferences.get(resolve(statePath))
+	const previousGenerationPath = previousReference === undefined ? undefined : generationDirectory(statePath, previousReference.manifestDigest)
 	await filesystem.mkdir(storePath, { mode: 0o700, recursive: true })
 	await ownerDirectory(storePath, filesystem, 'Protocol index store')
 	const temporaryPath = `${storePath}/.tmp-${process.pid.toString()}-${randomUUID()}`
@@ -772,30 +975,9 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 	await ownerDirectory(temporaryPath, filesystem, 'Temporary protocol index generation')
 	let renamed = false
 	try {
-		const collections = {
-			'auction-bids': await writeCollection(temporaryPath, 'auction-bids', auctionBidRecords(parsed), filesystem),
-			'child-routes': await writeCollection(temporaryPath, 'child-routes', parsed.childRepSplits, filesystem),
-			'escalation-deposits': await writeCollection(temporaryPath, 'escalation-deposits', parsed.escalationDeposits, filesystem),
-			'migration-routes': await writeCollection(temporaryPath, 'migration-routes', parsed.migrationRepSplits, filesystem),
-			reports: await writeCollection(temporaryPath, 'reports', parsed.reports, filesystem),
-		}
-		const identity: ProtocolIndexIdentity = {
-			chainId: parsed.chainId,
-			cursor: parsed.cursor,
-			openOracle: parsed.openOracle,
-			schemaVersion: 2,
-			securityPoolForker: parsed.securityPoolForker,
-			startBlock: parsed.startBlock,
-			wallet: parsed.wallet,
-			zoltar: parsed.zoltar,
-		}
-		const manifest = manifestWithDigest(manifestPayload(identity, collections))
-		const manifestContents = `${JSON.stringify(manifest)}\n`
-		if (Buffer.byteLength(manifestContents, 'utf8') > MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES) throw new Error('Protocol index manifest exceeds its fixed safety envelope')
+		for (const kind of COLLECTION_KINDS) await writePreparedCollection(temporaryPath, previousGenerationPath, preparedCollections[kind], filesystem)
 		await writeOwnerFile(`${temporaryPath}/manifest.json`, manifestContents, filesystem)
 		await syncDirectory(temporaryPath, filesystem)
-		const reference: ProtocolIndexReference = { kind: 'protocol-index-sidecar', manifestDigest: manifest.manifestDigest, schemaVersion: PROTOCOL_INDEX_REFERENCE_VERSION }
-		const targetPath = generationDirectory(statePath, reference.manifestDigest)
 		try {
 			await filesystem.rename(temporaryPath, targetPath)
 			renamed = true
@@ -806,9 +988,15 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		}
 		await loadProtocolIndexGeneration(statePath, reference, parsed.chainId, filesystem)
 		rememberReference(parsed, statePath, reference)
+		preparedProtocolIndexes.delete(parsed)
 		return reference
 	} catch (error) {
-		if (!renamed) await filesystem.rm(temporaryPath, { force: true, recursive: true })
+		if (renamed) {
+			await filesystem.rm(targetPath, { force: true, recursive: true })
+			await syncDirectory(storePath, filesystem)
+		} else {
+			await filesystem.rm(temporaryPath, { force: true, recursive: true })
+		}
 		throw error
 	}
 }

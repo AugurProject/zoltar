@@ -128,6 +128,11 @@ export function openOracleCreditDebit(openOracle: Address, asset: 'ETH' | Addres
 	return { amount: debitAmount.toString(), asset, category, kind: 'open-oracle-credit', openOracle }
 }
 
+export function securityPoolVaultRepDebit(pool: Address, vault: Address, debitAmount: bigint): OperationWalletAssetDebit {
+	if (debitAmount <= 0n) throw new Error('SecurityPool vault REP debit must be positive')
+	return { amount: debitAmount.toString(), category: 'rep', kind: 'security-pool-vault-rep', pool, vault }
+}
+
 export function planBase(parameters: {
 	snapshot: EcosystemSnapshot
 	definitionId: string
@@ -138,9 +143,12 @@ export function planBase(parameters: {
 	postconditions: string[]
 	metadata?: Record<string, string | number | boolean>
 	priority?: OperationPlan['priority']
+	continuationDisposition?: OperationPlan['continuationDisposition'] | undefined
 	deadlineTimestamp?: string | undefined
 	semanticDeadlineBlockNumber?: string | undefined
 	lastValidBlockNumber?: string | undefined
+	maximumCleanupTransactionCount?: number | undefined
+	terminalSubmission?: OperationPlan['terminalSubmission'] | undefined
 }): OperationPlanDraft {
 	const priority = parameters.priority ?? 'random'
 	const metadata = canonicalizeOperationMetadata(parameters.metadata ?? {})
@@ -160,10 +168,13 @@ export function planBase(parameters: {
 		steps: parameters.steps,
 	}
 	if (parameters.deadlineTimestamp !== undefined) plan.deadlineTimestamp = parameters.deadlineTimestamp
+	if (parameters.continuationDisposition !== undefined) plan.continuationDisposition = parameters.continuationDisposition
 	if (parameters.semanticDeadlineBlockNumber !== undefined) {
 		plan.semanticDeadlineBlockNumber = parameters.semanticDeadlineBlockNumber
 	}
 	if (parameters.lastValidBlockNumber !== undefined) plan.lastValidBlockNumber = parameters.lastValidBlockNumber
+	if (parameters.maximumCleanupTransactionCount !== undefined) plan.maximumCleanupTransactionCount = parameters.maximumCleanupTransactionCount
+	if (parameters.terminalSubmission !== undefined) plan.terminalSubmission = { ...parameters.terminalSubmission }
 	return plan
 }
 

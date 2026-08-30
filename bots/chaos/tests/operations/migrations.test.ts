@@ -13,6 +13,15 @@ import { hash, snapshotFixture } from './fixture.ts'
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
+	immutableTopologyCapacity: {
+		maxPools: 100,
+		maxQuestions: 100,
+		maxStagedOperationsPerPool: 100,
+		maxUniverses: 100,
+		maxVaultsPerPool: 100,
+		maximumAggregateItems: 10_000,
+	},
+	maximumBlockIntervalSeconds: 15,
 	maxEthSpendAttoEth: 1_000n.toString(),
 	maxRepSpendAttoRep: 10n.toString(),
 	minimumEthReserveAttoEth: 0n.toString(),
@@ -160,6 +169,7 @@ describe('indexed REP migration operations', () => {
 
 		const state = {
 			lastScannedBlock: 100n,
+			lifecyclePresenceBlocker: undefined,
 			obligationTombstones: [] as DurableObligationTombstone[],
 			obligations: [] as DurableObligation[],
 			pendingTransactions: [],
@@ -183,7 +193,7 @@ describe('indexed REP migration operations', () => {
 
 		const policyDisabled = { ...options, allowIrreversibleOperations: false }
 		expect(urgentOperationPlans(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, policyDisabled)).toContainEqual({ definitionId: 'statoblast.fork.migrate-rep', ecosystem: 'statoblast', metadata: plan.metadata })
+		expect(canonicalLifecyclePresence(snapshot, policyDisabled)).toContainEqual({ blocksNovelty: true, definitionId: 'statoblast.fork.migrate-rep', ecosystem: 'statoblast', metadata: plan.metadata })
 
 		pool.forkRepMigrationProgressByOutcome['0'] = '100'
 		expect(canonicalLifecyclePresence(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
@@ -198,15 +208,17 @@ describe('indexed REP migration operations', () => {
 		pool.forkRepMigrationTargetAttoRep = '100'
 		pool.forkRepMigrationProgressByOutcome = { '0': '25', '1': '100', '2': '100' }
 		const deadline = BigInt(pool.forkActivationTime) + 8n * 7n * 24n * 60n * 60n
-		snapshot.anchor.timestamp = (deadline - 100n).toString()
+		snapshot.anchor.timestamp = (deadline - 60n).toString()
 		expect(urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
 		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			blocksNovelty: false,
 			definitionId: 'statoblast.fork.migrate-rep',
 			ecosystem: 'statoblast',
 			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
 		})
 		snapshot.anchor.timestamp = (deadline + 1n).toString()
 		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			blocksNovelty: false,
 			definitionId: 'statoblast.fork.migrate-rep',
 			ecosystem: 'statoblast',
 			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
@@ -227,6 +239,7 @@ describe('indexed REP migration operations', () => {
 		let plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault-unresolved')
 		expect(plan?.metadata['childOutcomeIndex']).toBe('3')
 		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
+			blocksNovelty: true,
 			definitionId: 'statoblast.fork.migrate-vault-unresolved',
 			ecosystem: 'statoblast',
 			metadata: { childOutcomeIndex: '3', pool: pool.address },
