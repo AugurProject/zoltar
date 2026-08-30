@@ -13,6 +13,9 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 
 	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
 		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
+		// Reducing the denominator would reallocate live settlement collateral to every remaining vault.
+		if (nextCapacityOwnershipAttoRep < previousCapacityOwnershipAttoRep)
+			require(settlementCollateralAttoEth == 0, 'Capacity committed');
 		feeIndexRemainder = 0;
 		totalCapacityOwnershipAttoRep =
 			totalCapacityOwnershipAttoRep -

@@ -318,8 +318,8 @@
 						<tr>
 							<td><code>withdrawRepFromVault(vault, attoRepAmount)</code></td>
 							<td>This pool's <code>OpenOraclePriceCoordinator</code> only</td>
-							<td>Fresh coordinator price; operational pool in an unforked universe; <code>isEscalationResolved()</code> is false; no vault REP escrow; the remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.</td>
-							<td>Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces the vault and pool capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to <code>vault</code>.</td>
+							<td>Fresh coordinator price; operational pool in an unforked universe; <code>isEscalationResolved()</code> is false; no vault REP escrow. A withdrawal that would reduce capacity ownership requires zero settlement collateral; a backing-only withdrawal does not. The remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.</td>
+							<td>Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces vault and pool capacity ownership when the vault has positive capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to <code>vault</code>.</td>
 							<td>REP <code>Transfer</code>; <code>RepWithdrawnFromVault</code>; <code>VaultAccountingCheckpoint</code>; and applicable fee-accrual or retention <code>PoolAccountingCheckpoint</code> events</td>
 						</tr>
 						<tr>

@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'b7860e326218930fe1ca993643e4ecd7f2be246d6871d7205df03c3fbf16ed29'
+export const expectedProductionSoliditySourceFingerprint = '4550577ee15951cd226b0017b3377fded2cc6405409ac0b4fd889ed1fda8f21e'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -881,9 +881,11 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`withdrawRepFromVault(vault, attoRepAmount)`',
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
-				effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces the vault and pool capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
+				effect:
+					'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; proportionally reduces vault and pool capacity ownership when the vault has positive capacity ownership; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
 				declarations: [{ name: 'withdrawRepFromVault' }],
-				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow; the remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.',
+				preconditions:
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow. A withdrawal that would reduce capacity ownership requires zero settlement collateral; a backing-only withdrawal does not. The remaining vault and aggregate pool totals each meet the upward-rounded associated-REP and free-REP backing requirements, with equality healthy.',
 				signals: 'REP `Transfer`; `RepWithdrawnFromVault`; `VaultAccountingCheckpoint`; and applicable fee-accrual or retention `PoolAccountingCheckpoint` events',
 			},
 			{
