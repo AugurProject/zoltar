@@ -11,6 +11,7 @@ export type TestImpactRecommendation = {
 
 type TestImpactRule = TestImpactRecommendation & {
 	matches: (filePath: string) => boolean
+	ownedTestPaths?: readonly string[]
 }
 
 const TEST_INFRASTRUCTURE_PATHS = new Set([
@@ -66,11 +67,13 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:integration:mainnet-fork',
 		reason: 'deterministic historical Uniswap routing changed; requires MAINNET_ARCHIVE_RPC_URL',
 		matches: filePath => filePath === 'ui/zoltar/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
+		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'],
 	},
 	{
 		command: 'bun run test:integration:mainnet',
 		reason: 'mutable Uniswap mainnet smoke coverage changed',
 		matches: filePath => filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts',
+		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'],
 	},
 ]
 
@@ -235,17 +238,48 @@ export async function getImportGraphTestRecommendations(changes: readonly (strin
 }
 
 export function getTestImpactRecommendations(changes: readonly (string | ChangedFileEntry)[]) {
+	const normalizedChanges = normalizeChanges(changes)
+	const changedTestPaths = new Map<string, string | undefined>()
+	for (const change of normalizedChanges) {
+		if (change.status === 'deleted' && isTestSourceFile(change.path)) changedTestPaths.set(change.path, undefined)
+		else if (change.status === 'renamed' && change.previousPath !== undefined && isTestSourceFile(change.previousPath)) changedTestPaths.set(change.previousPath, change.path)
+	}
 	const recommendations = new Map<string, TestImpactRecommendation>()
-	for (const change of normalizeChanges(changes)) {
-		const paths = [change.path, ...(change.previousPath === undefined ? [] : [change.previousPath])]
-		const matchingRules = TEST_IMPACT_RULES.filter(rule => paths.some(filePath => rule.matches(filePath)))
+	const addRule = (rule: TestImpactRule) => {
+		const changedOwnedPaths = rule.ownedTestPaths?.filter(testPath => changedTestPaths.has(testPath)) ?? []
+		if (changedOwnedPaths.length > 0) {
+			for (const testPath of changedOwnedPaths) {
+				const currentPath = changedTestPaths.get(testPath)
+				if (currentPath === undefined) continue
+				const command = directTestCommand(currentPath)
+				if (command !== undefined) recommendations.set(command, { command, reason: `renamed test: ${testPath} -> ${currentPath}` })
+			}
+			return
+		}
+		recommendations.set(rule.command, { command: rule.command, reason: rule.reason })
+	}
+	for (const change of normalizedChanges) {
+		const changedTestWasDeleted = change.status === 'deleted' && isTestSourceFile(change.path)
+		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path))
 		if (matchingRules.length === 0) {
 			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path)
 			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${change.path}` })
 		}
-		for (const rule of matchingRules) recommendations.set(rule.command, { command: rule.command, reason: rule.reason })
+		for (const rule of matchingRules) addRule(rule)
 	}
-	return [...recommendations.values()].sort((left, right) => left.command.localeCompare(right.command))
+	const rewrittenRecommendations = new Map<string, TestImpactRecommendation>()
+	for (const recommendation of recommendations.values()) {
+		const tokens = recommendation.command.split(' ')
+		const originalTestPaths = tokens.filter(token => TEST_PATH_PATTERN.test(token))
+		const rewrittenTokens = tokens.flatMap(token => {
+			if (!TEST_PATH_PATTERN.test(token) || !changedTestPaths.has(token)) return [token]
+			return []
+		})
+		if (originalTestPaths.length > 0 && !rewrittenTokens.some(token => TEST_PATH_PATTERN.test(token))) continue
+		const command = rewrittenTokens.join(' ')
+		rewrittenRecommendations.set(command, { command, reason: recommendation.reason })
+	}
+	return [...rewrittenRecommendations.values()].sort((left, right) => left.command.localeCompare(right.command))
 }
 
 const TEST_PATH_PATTERN = /\.(?:fuzz|spec|test)\.(?:cts|mts|ts|tsx)$/

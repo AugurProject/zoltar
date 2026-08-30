@@ -47,6 +47,31 @@ describe('test impact recommendations', () => {
 		expect(getTestImpactRecommendations(changes).map(recommendation => recommendation.command)).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/new-name.test.ts'])
 	})
 
+	test('rewrites or removes static infrastructure commands when their tests move or are deleted', () => {
+		expect(getTestImpactRecommendations([{ path: 'scripts/test-impact.test.ts', status: 'deleted' }])).toEqual([])
+		expect(getTestImpactRecommendations([{ path: 'scripts/renamed-impact.test.ts', previousPath: 'scripts/test-impact.test.ts', status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['bun test scripts/renamed-impact.test.ts'])
+		expect(
+			getTestImpactRecommendations([
+				{ path: 'bun-test-setup.ts', status: 'modified' },
+				{ path: 'scripts/test-impact.test.ts', status: 'deleted' },
+			]).map(recommendation => recommendation.command),
+		).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts'])
+		expect(
+			getTestImpactRecommendations([
+				{ path: 'bun-test-setup.ts', status: 'modified' },
+				{ path: 'bots/liquidator/tests/renamed-impact.test.ts', previousPath: 'scripts/test-impact.test.ts', status: 'renamed' },
+			]).map(recommendation => recommendation.command),
+		).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts', 'cd bots/liquidator && bun test tests/renamed-impact.test.ts'])
+	})
+
+	test('does not retain opaque specialized tiers for deleted or renamed integration tests', () => {
+		const integrationTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'
+		expect(getTestImpactRecommendations([{ path: integrationTest, status: 'deleted' }])).toEqual([])
+		expect(getTestImpactRecommendations([{ path: 'ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts', previousPath: integrationTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual([
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
+		])
+	})
+
 	test('merges overlapping commands for the same runner so every selected test runs once', () => {
 		expect(
 			deduplicateTestRecommendations([
