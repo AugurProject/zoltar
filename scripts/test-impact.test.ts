@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,7 +78,26 @@ describe('test impact recommendations', () => {
 				{ path: 'ui/zoltar/ts/protocol/uniswapQuoter.ts', status: 'modified' },
 				{ path: renamedForkTest, previousPath: forkTest, status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test tests/uniswapQuoter.fork.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
+		).toEqual([
+			'bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --timeout 300000 tests/uniswapQuoter.fork.test.ts',
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
+		])
+	})
+
+	test('removes or rewrites browser tiers when their owned production-build test moves', () => {
+		const productionSource: ChangedFileEntry = { path: 'ui/coreShared/build/production.mts', status: 'modified' }
+		const productionTest = 'ui/coreShared/build/productionBuild.test.ts'
+		expect(getTestImpactRecommendations([productionSource, { path: productionTest, status: 'deleted' }])).toEqual([])
+		expect(getTestImpactRecommendations([{ path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['cd bots/liquidator && bun test tests/productionBuild.test.ts'])
+		const combinedCommands = getTestImpactRecommendations([productionSource, { path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)
+		expect(combinedCommands).toHaveLength(3)
+		expect(combinedCommands).toEqual(
+			expect.arrayContaining([
+				'bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && bun test --timeout 300000 tests/productionBuild.test.ts',
+				"bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun test --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
+				'cd bots/liquidator && bun test tests/productionBuild.test.ts',
+			]),
+		)
 	})
 
 	test('merges overlapping commands for the same runner so every selected test runs once', () => {
@@ -214,6 +234,34 @@ describe('test impact recommendations', () => {
 					reason: 'imports changed production source directly or transitively',
 				},
 			])
+		} finally {
+			await rm(repositoryRoot, { recursive: true })
+		}
+	})
+
+	test('reads deleted-source imports from the merge base when origin main has diverged', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'test-impact-diverged-baseline-'))
+		const git = (args: string[]) => execFileSync('git', args, { cwd: repositoryRoot, encoding: 'utf8' }).trim()
+		try {
+			await mkdir(join(repositoryRoot, 'pkg'), { recursive: true })
+			git(['init'])
+			git(['config', 'user.email', 'tests@example.com'])
+			git(['config', 'user.name', 'Test Runner'])
+			await writeFile(join(repositoryRoot, 'pkg', 'source.ts'), 'export const value = 1\n')
+			await writeFile(join(repositoryRoot, 'pkg', 'source.test.ts'), "import { value } from './source.js'\nvoid value\n")
+			git(['add', '.'])
+			git(['commit', '-m', 'merge base'])
+			git(['branch', 'feature'])
+			git(['checkout', '-b', 'upstream-main'])
+			await writeFile(join(repositoryRoot, 'pkg', 'source.test.ts'), 'void 0\n')
+			git(['add', '.'])
+			git(['commit', '-m', 'upstream removes import'])
+			git(['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+			git(['checkout', 'feature'])
+			git(['rm', 'pkg/source.ts'])
+			git(['commit', '-m', 'feature deletes source'])
+
+			expect(await getImportGraphTestRecommendations([{ path: 'pkg/source.ts', status: 'deleted' }], repositoryRoot)).toEqual([{ command: 'bun test pkg/source.test.ts', reason: 'imports changed production source directly or transitively' }])
 		} finally {
 			await rm(repositoryRoot, { recursive: true })
 		}

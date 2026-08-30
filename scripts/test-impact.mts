@@ -11,8 +11,15 @@ export type TestImpactRecommendation = {
 
 type TestImpactRule = TestImpactRecommendation & {
 	matches: (filePath: string) => boolean
-	ownedTestEnvironment?: string
+	ownedTestOptions?: SpecializedTestOptions
 	ownedTestPaths?: readonly string[]
+	selectOnOwnedRename?: boolean
+}
+
+type SpecializedTestOptions = {
+	environment?: string
+	testNamePattern?: string
+	timeout: number
 }
 
 const TEST_INFRASTRUCTURE_PATHS = new Set([
@@ -53,11 +60,19 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
 		matches: filePath => filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts',
+		ownedTestOptions: { timeout: 300_000 },
+		ownedTestPaths: ['ui/coreShared/build/productionBuild.test.ts'],
 	},
 	{
 		command: 'bun run test:browser:workflow',
 		reason: 'production browser workflow coverage changed',
 		matches: filePath => filePath === 'ui/coreShared/build/production.mts',
+		ownedTestOptions: {
+			environment: 'RUN_PRODUCTION_BROWSER_WORKFLOWS=1',
+			testNamePattern: "'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)'",
+			timeout: 600_000,
+		},
+		ownedTestPaths: ['ui/coreShared/build/productionBuild.test.ts'],
 	},
 	{
 		command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
@@ -68,15 +83,17 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:integration:mainnet-fork',
 		reason: 'deterministic historical Uniswap routing changed; requires MAINNET_ARCHIVE_RPC_URL',
 		matches: filePath => filePath === 'ui/zoltar/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
-		ownedTestEnvironment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1',
+		ownedTestOptions: { environment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1', timeout: 300_000 },
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'],
+		selectOnOwnedRename: true,
 	},
 	{
 		command: 'bun run test:integration:mainnet',
 		reason: 'mutable Uniswap mainnet smoke coverage changed',
 		matches: filePath => filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts',
-		ownedTestEnvironment: 'RUN_MAINNET_INTEGRATION_TESTS=1',
+		ownedTestOptions: { environment: 'RUN_MAINNET_INTEGRATION_TESTS=1', timeout: 300_000 },
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'],
+		selectOnOwnedRename: true,
 	},
 ]
 
@@ -90,13 +107,17 @@ function directTestCommand(filePath: string) {
 	return `bun test ${filePath}`
 }
 
-function specializedTestCommand(filePath: string, environment: string) {
+function specializedTestCommand(filePath: string, options: SpecializedTestOptions) {
 	const directCommand = directTestCommand(filePath)
 	if (directCommand === undefined) return undefined
 	const prerequisites = 'bun run ensure-contract-artifacts && bun run check:shared-dependencies'
-	const packageCommand = /^(cd [^ ]+ && )(.+)$/.exec(directCommand)
-	if (packageCommand?.[1] !== undefined && packageCommand[2] !== undefined) return `${prerequisites} && ${packageCommand[1]}${environment} ${packageCommand[2]}`
-	return `${prerequisites} && ${environment} ${directCommand}`
+	const flags = [`--timeout ${options.timeout.toString()}`, ...(options.testNamePattern === undefined ? [] : [`--test-name-pattern ${options.testNamePattern}`])].join(' ')
+	const commandWithoutTimeout = directCommand.replace(/ --timeout \d+/, '')
+	const commandWithOptions = commandWithoutTimeout.replace(/ ([^ ]+)$/, ` ${flags} $1`)
+	const environment = options.environment === undefined ? '' : `${options.environment} `
+	const packageCommand = /^(cd [^ ]+ && )(.+)$/.exec(commandWithOptions)
+	if (packageCommand?.[1] !== undefined && packageCommand[2] !== undefined) return `${prerequisites} && ${packageCommand[1]}${environment}${packageCommand[2]}`
+	return `${prerequisites} && ${environment}${commandWithOptions}`
 }
 
 const IMPORT_GRAPH_IGNORED_DIRECTORIES = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
@@ -161,22 +182,28 @@ async function readCurrentPackageImports(repositoryRoot: string, sourceFiles: It
 	return packageImports
 }
 
-function readBaselineSources(reference = 'origin/main') {
+function resolveMergeBase(repositoryRoot: string) {
+	const mergeBase = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim()
+	if (mergeBase === '') throw new Error('Git could not resolve the merge base of origin/main and HEAD')
+	return mergeBase
+}
+
+function readBaselineSources(reference: string, repositoryRoot: string) {
 	const sources = new Map<string, string>()
-	const filePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { encoding: 'utf8' })
+	const filePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { cwd: repositoryRoot, encoding: 'utf8' })
 		.split('\0')
 		.filter(filePath => IMPORT_GRAPH_SOURCE_PATTERN.test(filePath))
-	for (const filePath of filePaths) sources.set(filePath, execFileSync('git', ['show', `${reference}:${filePath}`], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }))
+	for (const filePath of filePaths) sources.set(filePath, execFileSync('git', ['show', `${reference}:${filePath}`], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }))
 	return sources
 }
 
-function readBaselinePackageImports(reference = 'origin/main') {
+function readBaselinePackageImports(reference: string, repositoryRoot: string) {
 	const packageImports = new Map<string, ReadonlyMap<string, string>>()
-	const packagePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { encoding: 'utf8' })
+	const packagePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { cwd: repositoryRoot, encoding: 'utf8' })
 		.split('\0')
 		.filter(filePath => path.posix.basename(filePath) === 'package.json')
 	for (const packagePath of packagePaths) {
-		const imports = parsePackageImports(execFileSync('git', ['show', `${reference}:${packagePath}`], { encoding: 'utf8' }))
+		const imports = parsePackageImports(execFileSync('git', ['show', `${reference}:${packagePath}`], { cwd: repositoryRoot, encoding: 'utf8' }))
 		if (imports.size > 0) packageImports.set(path.posix.dirname(packagePath), imports)
 	}
 	return packageImports
@@ -288,6 +315,7 @@ function findAffectedTests(changedFiles: readonly string[], sources: ReadonlyMap
 }
 
 type ImportGraphOptions = {
+	baselineReference?: string
 	baselinePackageImports?: PackageImportMap
 	baselineSources?: ReadonlyMap<string, string>
 }
@@ -309,8 +337,9 @@ export async function getImportGraphTestRecommendations(changes: readonly (strin
 		return []
 	})
 	if (baselineRoots.length > 0) {
-		const baselineSources = options.baselineSources ?? readBaselineSources()
-		const baselinePackageImports = options.baselinePackageImports ?? readBaselinePackageImports()
+		const baselineReference = options.baselineReference ?? (options.baselineSources === undefined ? resolveMergeBase(repositoryRoot) : undefined)
+		const baselineSources = options.baselineSources ?? readBaselineSources(baselineReference ?? resolveMergeBase(repositoryRoot), repositoryRoot)
+		const baselinePackageImports = options.baselinePackageImports ?? (options.baselineSources === undefined ? readBaselinePackageImports(baselineReference ?? resolveMergeBase(repositoryRoot), repositoryRoot) : new Map())
 		for (const testFile of findAffectedTests(baselineRoots, baselineSources, baselinePackageImports)) {
 			if (currentSources.has(testFile)) affectedTests.add(testFile)
 		}
@@ -332,7 +361,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 			for (const testPath of changedOwnedPaths) {
 				const currentPath = changedTestPaths.get(testPath)
 				if (currentPath === undefined) continue
-				const command = rule.ownedTestEnvironment === undefined ? directTestCommand(currentPath) : specializedTestCommand(currentPath, rule.ownedTestEnvironment)
+				const command = rule.ownedTestOptions === undefined ? directTestCommand(currentPath) : specializedTestCommand(currentPath, rule.ownedTestOptions)
 				if (command !== undefined) recommendations.set(command, { command, reason: `renamed test: ${testPath} -> ${currentPath}` })
 			}
 			return
@@ -341,7 +370,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 	}
 	for (const change of normalizedChanges) {
 		const changedTestWasDeleted = change.status === 'deleted' && isTestSourceFile(change.path)
-		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path) || (change.status === 'renamed' && change.previousPath !== undefined && rule.ownedTestPaths?.includes(change.previousPath) === true))
+		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path) || (rule.selectOnOwnedRename === true && change.status === 'renamed' && change.previousPath !== undefined && rule.ownedTestPaths?.includes(change.previousPath) === true))
 		if (matchingRules.length === 0) {
 			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path)
 			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${change.path}` })
