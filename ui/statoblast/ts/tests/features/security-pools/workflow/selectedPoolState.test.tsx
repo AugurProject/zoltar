@@ -166,7 +166,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('tab', { name: 'Truth Auction' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Settlement' })).toBeNull()
 
-		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Browse pools' }))
@@ -187,7 +187,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.getByText('Pool not found.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh this address after the pool is deployed.')).toBeNull()
 	})

@@ -1,6 +1,11 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const annualFee = 'Annual Fee'
+export const browsePoolsDescription = 'Find a pool, review its lifecycle and backing, then open it for operations.'
+export const createPoolDescription = 'Create a pool from an eligible binary question and review its security parameters before submitting.'
+export const createPoolFromQuestion = 'Create pool from question'
+export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
+export const managePoolDescription = 'Review the selected pool’s current stage and use the available position, pricing, reporting, or settlement actions.'
 export const badDebt = 'Bad Debt'
 export const depositRepToVault = 'Deposit REP'
 export const depositRepToVaultDescription = 'Increase this vault’s REP backing and collateralization.'

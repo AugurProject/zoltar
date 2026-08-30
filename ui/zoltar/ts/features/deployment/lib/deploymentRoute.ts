@@ -16,14 +16,26 @@ type BuildDeploymentRouteContentPropsParameters = {
 	isLoadingDeploymentStatuses: boolean
 	isOnActiveAppChain: boolean
 	onRetryDeploymentStatus: () => void
+	getSections?: (steps: DeploymentStatus[]) => DeploymentRouteContentProps['deploymentSections']
 }
 
-export function buildDeploymentRouteContentProps({ accountAddress, deploymentCompleteHref, deploymentStateReady, deploymentStatusError, deploymentStatuses, flow, isLoadingDeploymentStatuses, isOnActiveAppChain, onRetryDeploymentStatus }: BuildDeploymentRouteContentPropsParameters): DeploymentRouteContentProps {
+export function buildDeploymentRouteContentProps({
+	accountAddress,
+	deploymentCompleteHref,
+	deploymentStateReady,
+	deploymentStatusError,
+	deploymentStatuses,
+	flow,
+	getSections = getDeploymentSections,
+	isLoadingDeploymentStatuses,
+	isOnActiveAppChain,
+	onRetryDeploymentStatus,
+}: BuildDeploymentRouteContentPropsParameters): DeploymentRouteContentProps {
 	return {
 		accountAddress,
 		busyStepId: flow.busyStepId,
 		...(deploymentCompleteHref === undefined ? {} : { deploymentCompleteHref }),
-		deploymentSections: getDeploymentSections(deploymentStatuses),
+		deploymentSections: getSections(deploymentStatuses),
 		deploymentStateReady,
 		deploymentStatusError,
 		deploymentStatuses,

@@ -1,30 +1,39 @@
 import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { formatWriteErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../../transactionPresentations.js'
+import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../../zoltarTransactionPresentations.js'
 import { requireWallet } from '@zoltar/ui-core-shared/lib/requireWalletConnection.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/lib/assertActiveWallet.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
+import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
+	environmentRefreshKey: number
 	setDeploymentStatuses: (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => void
 	rpcStateRetryWait?: RpcStateRetryWait
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, rpcStateRetryWait, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
 	const deployNextMissingPending = useSignal(false)
 	const errorMessage = useSignal<string | undefined>(undefined)
+	useEffect(() => {
+		busyStepId.value = undefined
+		deploymentFeedback.value = undefined
+		deployNextMissingPending.value = false
+		errorMessage.value = undefined
+	}, [environmentRefreshKey])
 
 	const deployStep = async (stepId: DeploymentStepId, feedbackAction: DeploymentStepId | 'deployNextMissing' = stepId) => {
 		if (
@@ -39,6 +48,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			)
 		)
 			return
+		const environmentGuard = createActiveEnvironmentGuard()
 
 		const stepIndex = deploymentStatuses.findIndex(step => step.id === stepId)
 		if (stepIndex === -1) return
@@ -60,20 +70,25 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		try {
 			await assertActiveWallet(accountAddress)
+			if (!environmentGuard.isCurrent()) return
 			if (step.expectedRuntimeCodeHash === undefined && !step.trustedSimulationCodePresence) throw new Error(`Exact runtime-code verification is unavailable for ${step.label} on the active network`)
 			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
-			if (assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))) {
+			const existingCode = await client.getCode({ address: step.address })
+			if (!environmentGuard.isCurrent()) return
+			if (assertDeploymentStepRuntimeCode(step, existingCode)) {
 				setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 				deploymentFeedback.value = undefined
 				return
 			}
 			onTransactionRequested(createDeploymentTransactionIntent(step.label))
 			const hash = await step.deploy(client)
+			if (!environmentGuard.isCurrent()) return
 			const code = await readWithRpcStateRetries(
 				() => client.getCode({ address: step.address }),
 				candidate => candidate !== undefined && candidate !== '0x',
 				rpcStateRetryWait,
 			)
+			if (!environmentGuard.isCurrent()) return
 			if (!assertDeploymentStepRuntimeCode(step, code)) {
 				const message = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
 				errorMessage.value = message
@@ -85,25 +100,33 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
 			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))
 		} catch (error) {
+			if (!environmentGuard.isCurrent()) {
+				errorMessage.value = undefined
+				deploymentFeedback.value = undefined
+				return
+			}
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
 			onTransactionFailed?.(message)
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
-			busyStepId.value = undefined
-			onTransactionFinished()
+			if (environmentGuard.isCurrent()) {
+				busyStepId.value = undefined
+				onTransactionFinished()
+			}
 		}
 	}
 
 	const deployNextMissing = async () => {
 		if (deployNextMissingPending.value) return
+		const environmentGuard = createActiveEnvironmentGuard()
 		deployNextMissingPending.value = true
 		try {
 			const nextMissing = findNextDeployableStep(deploymentStatuses)
 			if (nextMissing === undefined) return
 			await deployStep(nextMissing.id, 'deployNextMissing')
 		} finally {
-			deployNextMissingPending.value = false
+			if (environmentGuard.isCurrent()) deployNextMissingPending.value = false
 		}
 	}
 

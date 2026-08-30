@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -460,7 +461,7 @@ export function SecurityPoolWorkflowSection({
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
 							</MetricField>
 						)}
-						<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
+						<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 							<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 						</MetricField>
 						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
@@ -681,26 +682,31 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPool.vaultScanCapped === true) detail = securityPoolCopy.vaultRegistryScanEmpty
 		return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail }} />
 	})()
+	let emptyWorkflowTitle: string | undefined
+	if (selectedPoolLookupState === 'missing') emptyWorkflowTitle = securityPoolCopy.poolNotFound
+	else if (showHeader) emptyWorkflowTitle = commonCopy.managePool
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
-			<StickyObjectContext
-				{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
-					? {}
-					: {
-							badge: (
-								<Badge tone={getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}>
-									{getSecurityPoolStatusBadgeLabel({
-										hasForkActivity: selectedPoolSummaryPool.hasForkActivity,
-										questionOutcome: selectedPoolSummaryPool.questionOutcome,
-										lifecycleState: selectedPoolStateModel.lifecycleState,
-									})}
-								</Badge>
-							),
-						})}
-				title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
-				items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> }]}
-				variant='embedded-context-strip'
-			/>
+			{selectedPoolSummaryPool === undefined ? undefined : (
+				<StickyObjectContext
+					{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
+						? {}
+						: {
+								badge: (
+									<Badge tone={getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}>
+										{getSecurityPoolStatusBadgeLabel({
+											hasForkActivity: selectedPoolSummaryPool.hasForkActivity,
+											questionOutcome: selectedPoolSummaryPool.questionOutcome,
+											lifecycleState: selectedPoolStateModel.lifecycleState,
+										})}
+									</Badge>
+								),
+							})}
+					title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
+					items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> }]}
+					variant='embedded-context-strip'
+				/>
+			)}
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-change-control'>
@@ -765,7 +771,7 @@ export function SecurityPoolWorkflowSection({
 
 					<div className='selected-pool-workflow-content'>
 						{!showSelectedPoolWorkflowDetails ? (
-							<SectionBlock title={selectedPoolLookupState === 'missing' ? securityPoolCopy.poolNotFound : commonCopy.managePool} variant='plain'>
+							<SectionBlock title={emptyWorkflowTitle} variant='plain'>
 								{selectedPoolUniverseMismatch || selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
 								{hasSelectedPoolAddress ? undefined : (
 									<div className='actions'>

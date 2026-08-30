@@ -1,7 +1,9 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../copy/market.js'
 import * as zoltarCopy from '../copy/zoltar.js'
 import type { ComponentChildren } from 'preact'
+import { useEffect } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
@@ -14,11 +16,8 @@ import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlo
 import { buildDeploymentRouteContentProps } from '../features/deployment/lib/deploymentRoute.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
-import { useOpenOracleOperations } from '../features/open-oracle/hooks/useOpenOracleOperations.js'
-import { getOpenOracleViewOptions } from '../features/open-oracle/lib/openOracleNavigation.js'
-import { useZoltarOperations } from '../features/universes/hooks/useZoltarOperations.js'
-import { useRepPrices } from '../features/open-oracle/hooks/useRepPrices.js'
-import { useUrlState } from '@zoltar/ui-core-shared/app/hooks/useUrlState.js'
+import { useQuestionCreation } from '../features/questions/hooks/useQuestionCreation.js'
+import { useZoltarUrlState } from './hooks/useZoltarUrlState.js'
 import { getActiveSimulationController, initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
@@ -27,17 +26,17 @@ import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/r
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
-import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
+import { resolveEnumValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
-import type { MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, ZoltarView } from '../features/types.js'
+import type { MarketRouteContentProps, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
-import { zoltarRouting } from '../lib/routing.js'
+import { isUniverseIndependentZoltarView, zoltarRouting } from '../lib/routing.js'
 
 export function App() {
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setZoltarView, zoltarView } = useUrlState()
+	const { activeUniverseId, replaceZoltarView, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const { navigate, route } = useHashRoute()
-	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'open-oracle', 'not-found'])
+	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -86,7 +85,7 @@ export function App() {
 		},
 	})
 	const { transactionState } = transactionTray
-	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
 	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const {
 		approveZoltarForkRep,
@@ -104,6 +103,13 @@ export function App() {
 		loadZoltarUniverse,
 		migrateInternalRep,
 		prepareRepForMigration,
+		createQuestion,
+		questionCreating,
+		questionError,
+		questionForm,
+		questionResult,
+		resetQuestion,
+		setQuestionForm,
 		setZoltarForkQuestionId,
 		setZoltarMigrationForm,
 		zoltarChildUniverseError,
@@ -129,16 +135,10 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseError,
 		zoltarUniverseMissing,
-	} = useZoltarOperations({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
-	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
-		...walletScopedHookConfig,
-		enabled: route === 'open-oracle' && canReadOnchainData,
-	})
-	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
+	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
-		refreshRepPrices()
 	}
 	const refreshActiveEnvironment = async () => {
 		await initializeActiveEnvironment()
@@ -155,22 +155,20 @@ export function App() {
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || showZoltarUniverseWarning)
+	const activeViewRequiresUniverse = !isUniverseIndependentZoltarView(activeZoltarView)
+	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || (activeViewRequiresUniverse && showZoltarUniverseWarning))
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
-	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
-	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
-	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeZoltarView, route: activeRoute })
+	const pageTitle = getAppPageTitle({ activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
 		applicationDeploymentMissing,
-		environmentReady: canReadOnchainData,
-		activeEnvironmentNonce,
-		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		navigate,
 		route: activeRoute,
-		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
-		urlOpenOracleReportId,
 	})
+	useEffect(() => {
+		if (activeRoute !== 'zoltar' || !showZoltarUniverseWarning || !activeViewRequiresUniverse) return
+		replaceZoltarView('questions')
+	}, [activeRoute, activeViewRequiresUniverse, replaceZoltarView, showZoltarUniverseWarning])
 	const deployRouteContentProps = buildDeploymentRouteContentProps({
 		accountAddress: accountState.address,
 		deploymentStateReady: hasLoadedDeploymentStatuses && environmentReady && readBackendReady,
@@ -195,12 +193,15 @@ export function App() {
 		onActiveViewChange: view => setZoltarView(view),
 		onApproveZoltarForkRep: amount => void approveZoltarForkRep(amount),
 		onCreateChildUniverseForOutcomeIndex: outcomeIndex => void createChildUniverse(outcomeIndex),
+		onCreateQuestion: () => void createQuestion(),
 		onForkZoltar: () => void forkZoltar(),
 		onLoadZoltarQuestion: async questionId => await loadZoltarQuestion(questionId),
 		onLoadZoltarQuestionPage: async (pageIndex, pageSize) => await loadZoltarQuestionPage(pageIndex, pageSize),
 		onLoadZoltarQuestions: async () => await loadZoltarQuestions(),
 		onMigrateInternalRep: () => void migrateInternalRep(),
 		onPrepareRepForMigration: () => void prepareRepForMigration(),
+		onQuestionFormChange: update => setQuestionForm(current => ({ ...current, ...update })),
+		onResetQuestion: resetQuestion,
 		onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
 		onZoltarMigrationFormChange: update => setZoltarMigrationForm(current => ({ ...current, ...update })),
 		zoltarChildUniverseError,
@@ -225,37 +226,12 @@ export function App() {
 		zoltarQuestionsError,
 		zoltarUniverse,
 		zoltarUniverseState,
+		questionCreating,
+		questionError,
+		questionForm,
+		questionResult,
 	}
-	const openOracleRouteContentProps: OpenOracleSectionProps = {
-		...openOracleSectionState,
-		activeView: activeOpenOracleView,
-		accountState,
-		environmentReady: canReadOnchainData,
-		environmentRefreshKey: activeEnvironmentNonce,
-		onApproveToken1: amount => void approveToken1(amount),
-		onApproveToken2: amount => void approveToken2(amount),
-		onCancelOpenOracleWithdrawalBalanceCheck: cancelWithdrawalBalanceCheck,
-		onCreateOpenOracleGame: () => void createOpenOracleGame(),
-		onDisputeReport: () => void disputeReport(),
-		onLoadOracleReport: reportId => {
-			if (reportId === undefined) return
-			void loadOracleReport(reportId)
-		},
-		onActiveViewChange: view => setOpenOracleView(view),
-		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
-		onOpenOracleFormChange: update => {
-			setOpenOracleForm(current => ({ ...current, ...update }))
-			if (update.reportId !== undefined) setOpenOracleReport(update.reportId)
-		},
-		onSettleReport: () => void settleReport(),
-		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
-		openOracleForm,
-	}
-	const tabNavigationTabs: RouteTabDefinition[] = [
-		...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []),
-		{ hash: zoltarRouting.getHash('zoltar'), label: marketCopy.questions, route: 'zoltar' },
-		{ hash: zoltarRouting.getHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
-	]
+	const tabNavigationTabs: RouteTabDefinition[] = [...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []), { hash: zoltarRouting.getHash('zoltar'), label: marketCopy.questions, route: 'zoltar' }]
 	const tabNavigationProps = {
 		route,
 		tabs: tabNavigationTabs,
@@ -270,24 +246,23 @@ export function App() {
 				onChange={view => setZoltarView(view)}
 				options={[
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
-					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' },
-					{
-						label: marketCopy.repMigration,
-						value: 'migrate',
-						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
-					},
+					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
+					...(showZoltarUniverseWarning
+						? []
+						: [
+								{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' as const },
+								{
+									label: marketCopy.repMigration,
+									value: 'migrate' as const,
+									disabled: zoltarUniverse?.hasForked !== true,
+									...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
+								},
+							]),
 				]}
 			/>
 		)
-	} else if (route === 'open-oracle') {
-		routeSubNavigation = <RouteSubNavigation ariaLabel={appCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(zoltarRouting.getHash('open-oracle'), getRouteHashSearch())} />
 	}
-	const transactionRouteKey = (() => {
-		if (route === 'zoltar') return `${route}:${activeZoltarView}`
-		if (route === 'open-oracle') return `${route}:${activeOpenOracleView}`
-		return route
-	})()
+	const transactionRouteKey = route === 'zoltar' ? `${route}:${activeZoltarView}` : route
 
 	return (
 		<ProtocolAppFrame
@@ -315,24 +290,25 @@ export function App() {
 							accountState={accountState}
 							isConnectingWallet={isConnectingWallet}
 							isManagingWallet={isManagingWallet}
-							isLoadingRepPrices={isLoadingRepPrices}
-							isRefreshingRepPrices={isRefreshingRepPrices}
+							isLoadingRepPrices={false}
+							isRefreshingRepPrices={false}
 							isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 							onConnect={() => void connectWallet()}
 							onChangeWallet={() => void changeWallet()}
 							onDisconnectWallet={() => void disconnectWallet()}
 							onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-							onRefreshRepPrices={refreshRepPrices}
+							onRefreshRepPrices={() => undefined}
 							onSwitchNetwork={() => void switchNetwork()}
 							parentUniverseId={zoltarUniverse?.parentUniverseId}
-							repPerEthFailure={repPerEthFailure}
-							repPerEthPrice={repPerEthPrice}
-							repPerEthSource={repPerEthSource}
-							repPerEthSourceUrl={repPerEthSourceUrl}
-							repUsdcFailure={repUsdcFailure}
-							repUsdcPrice={repUsdcPrice}
-							repUsdcSource={repUsdcSource}
-							repUsdcSourceUrl={repUsdcSourceUrl}
+							repPerEthFailure={undefined}
+							repPerEthPrice={undefined}
+							repPerEthSource={undefined}
+							repPerEthSourceUrl={undefined}
+							repUsdcFailure={undefined}
+							repUsdcPrice={undefined}
+							repUsdcSource={undefined}
+							repUsdcSourceUrl={undefined}
+							showRepPrices={false}
 							readBackendStatus={readBackendStatus}
 							universeForkTime={zoltarUniverse?.forkTime}
 							universeHasForked={zoltarUniverse?.hasForked}
@@ -354,7 +330,7 @@ export function App() {
 			transactionRouteKey={transactionRouteKey}
 			transactionState={transactionState.value}
 		>
-			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
+			<AppRouteContent deploy={deployRouteContentProps} zoltar={zoltarRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} />
 		</ProtocolAppFrame>
 	)
 }

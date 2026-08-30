@@ -833,6 +833,7 @@
 
 .question-draft-preview-chip {
 	display: inline-flex;
+	justify-self: start;
 	align-items: center;
 	border: 1px solid var(--border-default);
 	border-radius: 999px;

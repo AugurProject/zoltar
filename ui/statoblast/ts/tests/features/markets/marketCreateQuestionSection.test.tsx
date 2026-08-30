@@ -88,7 +88,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -137,7 +136,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -192,7 +190,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -243,7 +240,6 @@ describe('MarketCreateQuestionSection', () => {
 					onOpenForkTab={() => undefined}
 					onResetMarket={() => undefined}
 					onUseQuestionForFork={() => undefined}
-					onUseQuestionForPool={() => undefined}
 					zoltarQuestions={[]}
 				/>
 			</ChainTimestampContext.Provider>,
@@ -302,7 +298,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -317,7 +312,7 @@ describe('MarketCreateQuestionSection', () => {
 
 	test('renders selected market details and triggers selection callbacks', async () => {
 		let useForForkCount = 0
-		let useForPoolCount = 0
+		let useForPoolQuestionId: string | undefined
 		let resetCount = 0
 		let openForkTabCount = 0
 		const question = createMarketDetails()
@@ -348,8 +343,8 @@ describe('MarketCreateQuestionSection', () => {
 				onUseQuestionForFork={() => {
 					useForForkCount += 1
 				}}
-				onUseQuestionForPool={() => {
-					useForPoolCount += 1
+				onUseQuestionForPool={questionId => {
+					useForPoolQuestionId = questionId
 				}}
 				zoltarQuestions={[question]}
 			/>,
@@ -367,9 +362,9 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(useForForkCount).toBe(1)
-		expect(useForPoolCount).toBe(1)
 		expect(resetCount).toBe(1)
 		expect(openForkTabCount).toBe(1)
+		expect(useForPoolQuestionId).toBe(question.questionId)
 	})
 
 	test('calls categorical mutators', async () => {
@@ -396,7 +391,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -410,7 +404,9 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Add outcome' }))
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement)
+			expect(documentQueries.getByRole('button', { name: 'Remove outcome 1' })).toBeDefined()
+			expect(documentQueries.getByRole('button', { name: 'Remove outcome 2' })).toBeDefined()
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Remove outcome 1' }) as HTMLButtonElement)
 		})
 		expect(updates.some(update => update.categoricalOutcomes !== undefined)).toBe(true)
 	})
@@ -431,7 +427,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -479,7 +474,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -513,7 +507,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -547,7 +540,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -582,7 +574,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -619,7 +610,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -646,7 +636,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -695,7 +684,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -740,7 +728,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -785,7 +772,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -824,7 +810,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -849,7 +834,6 @@ describe('MarketCreateQuestionSection', () => {
 				onOpenForkTab={() => undefined}
 				onResetMarket={() => undefined}
 				onUseQuestionForFork={() => undefined}
-				onUseQuestionForPool={() => undefined}
 				zoltarQuestions={[]}
 			/>,
 		)
@@ -858,6 +842,6 @@ describe('MarketCreateQuestionSection', () => {
 		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: `Create pool from question: Question (${result.questionId})` }).getAttribute('disabled')).toBe('')
+		expect(document.body.textContent).not.toContain('Create pool from question')
 	})
 })

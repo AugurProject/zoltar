@@ -126,6 +126,49 @@ describe('runWriteAction', () => {
 		expect(errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
 	})
 
+	test('does not start a write when the environment changes during wallet preflight', async () => {
+		let resolveAccounts: (accounts: readonly (typeof walletAddress)[]) => void = () => undefined
+		const accounts = new Promise<readonly (typeof walletAddress)[]>(resolve => {
+			resolveAccounts = resolve
+		})
+		const previousBackend: ChainBackend = {
+			...createFakeBackend({ accountAddress: walletAddress }),
+			getAccounts: async () => await accounts,
+		}
+		restoreActiveEnvironment?.()
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(previousBackend)
+		let transactionRequested = false
+		let writeExecuted = false
+		let refreshExecuted = false
+		let submission = Promise.resolve()
+		submission = runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => {
+					transactionRequested = true
+				},
+				refreshState: async () => {
+					refreshExecuted = true
+				},
+				setErrorMessage: () => undefined,
+			},
+			async () => {
+				writeExecuted = true
+				return { hash: transactionHash }
+			},
+			'Failed to write',
+		)
+		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress }))
+		resolveAccounts([walletAddress])
+		await submission
+
+		expect(transactionRequested).toBe(false)
+		expect(writeExecuted).toBe(false)
+		expect(refreshExecuted).toBe(false)
+	})
+
 	test('fails before requesting a transaction when the wallet disconnects', async () => {
 		let errorMessage: string | undefined
 		let transactionRequested = false

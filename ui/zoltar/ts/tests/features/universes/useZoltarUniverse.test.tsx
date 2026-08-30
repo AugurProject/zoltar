@@ -209,6 +209,48 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
 	})
 
+	test('keeps the global question page when the selected universe changes', async () => {
+		const page = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
+		const loadZoltarUniverseSummary = mock(async () => undefined)
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => 1n,
+			loadZoltarQuestionPage: async () => page,
+			loadZoltarUniverseSummary,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness({ activeUniverseId }: { activeUniverseId: bigint }) {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness activeUniverseId={1n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(loadZoltarUniverseSummary).toHaveBeenCalledTimes(1))
+		await act(async () => await requireHookState(hookState).loadZoltarQuestionPage(0, 10))
+
+		await act(async () => {
+			render(<Harness activeUniverseId={2n} />, renderedComponent.container)
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(loadZoltarUniverseSummary).toHaveBeenCalledTimes(2))
+
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(page)
+		expect(requireHookState(hookState).zoltarQuestions).toEqual(page.questions)
+		expect(requireHookState(hookState).zoltarUniverseMissing).toBe(true)
+	})
+
 	test('loads and canonicalizes an exact existing question ID without loading the question list', async () => {
 		const question = createQuestion('0x99')
 		const loadMarketDetails = mock(async (_client, questionId: bigint) => {

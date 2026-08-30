@@ -1,5 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
@@ -43,6 +44,7 @@ import type { Route } from '../types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/types.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import { statoblastRouting } from '../lib/routing.js'
+import { getStatoblastDeploymentSections } from '../features/deployment/deploymentSections.js'
 
 export function App() {
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
@@ -114,7 +116,7 @@ export function App() {
 		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
 	})
 	const { transactionState } = transactionTray
-	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
 	const { errorMessage: deploymentErrorMessage } = deploymentFlow
 	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
@@ -291,7 +293,7 @@ export function App() {
 	}
 	const tabs: RouteTabDefinition[] = [
 		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: statoblastRouting.getHash('open-oracle'), label: appCopy.oracleReports, route: 'open-oracle' },
+		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
 		{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 	]
 	const tabNavigationProps = {
@@ -369,6 +371,7 @@ export function App() {
 		deploymentStatusError,
 		deploymentStatuses,
 		flow: deploymentFlow,
+		getSections: getStatoblastDeploymentSections,
 		isLoadingDeploymentStatuses,
 		isOnActiveAppChain,
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
@@ -618,7 +621,7 @@ export function App() {
 			/>
 		)
 	} else if (route === 'open-oracle') {
-		routeSubNavigation = <RouteSubNavigation ariaLabel={appCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch())} />
+		routeSubNavigation = <RouteSubNavigation ariaLabel={statoblastAppCopy.oracleReportViews} value={activeOpenOracleView} onChange={view => setOpenOracleView(view)} options={getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch())} />
 	}
 	const transactionRouteKey = (() => {
 		if (route === 'security-pools') return `${route}:${activeSecurityPoolsView}`
