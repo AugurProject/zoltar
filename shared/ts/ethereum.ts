@@ -1263,7 +1263,7 @@ function normalizeLog(value: unknown): TransactionLog {
 		data: normalizeRpcHex(log['data']),
 		logIndex: log['logIndex'] === undefined || log['logIndex'] === null ? undefined : normalizeRpcBigInt(log['logIndex']),
 		removed: normalizeBoolean(log['removed']),
-		topics: Array.isArray(log['topics']) ? log['topics'].map(topic => normalizeRpcHex(topic)) : [],
+		topics: Array.isArray(log['topics']) ? log['topics'].map(topic => normalizeHash(topic)) : [],
 		transactionHash: log['transactionHash'] === undefined || log['transactionHash'] === null ? undefined : normalizeHash(log['transactionHash']),
 		transactionIndex: log['transactionIndex'] === undefined || log['transactionIndex'] === null ? undefined : normalizeRpcBigInt(log['transactionIndex']),
 	}
