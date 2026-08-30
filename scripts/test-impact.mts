@@ -1,4 +1,5 @@
-import { getChangedFiles } from './changed-files.mts'
+import { execFileSync } from 'node:child_process'
+import { getChangedFileEntries, type ChangedFileEntry } from './changed-files.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { isTestSourceFile } from './test-discovery.mts'
@@ -13,6 +14,7 @@ type TestImpactRule = TestImpactRecommendation & {
 }
 
 const TEST_INFRASTRUCTURE_PATHS = new Set([
+	'bun-test-setup.ts',
 	'bun-test-setup-solidity.ts',
 	'bun-test-setup-ui.ts',
 	'bunfig.toml',
@@ -48,12 +50,12 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
-		matches: filePath => filePath === 'ui/coreShared/build/productionBuild.test.ts' || filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts',
+		matches: filePath => filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts',
 	},
 	{
 		command: 'bun run test:browser:workflow',
 		reason: 'production browser workflow coverage changed',
-		matches: filePath => filePath === 'ui/coreShared/build/productionBuild.test.ts',
+		matches: filePath => filePath === 'ui/coreShared/build/production.mts',
 	},
 	{
 		command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
@@ -102,6 +104,21 @@ async function collectImportGraphSources(repositoryRoot: string, directoryPath =
 		else if (entry.isFile() && IMPORT_GRAPH_SOURCE_PATTERN.test(entry.name)) files.push(path.relative(repositoryRoot, entryPath).replaceAll('\\', '/'))
 	}
 	return files
+}
+
+async function readCurrentSources(repositoryRoot: string) {
+	const sources = new Map<string, string>()
+	for (const filePath of await collectImportGraphSources(repositoryRoot)) sources.set(filePath, await fs.readFile(path.join(repositoryRoot, filePath), 'utf8'))
+	return sources
+}
+
+function readBaselineSources(reference = 'origin/main') {
+	const sources = new Map<string, string>()
+	const filePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { encoding: 'utf8' })
+		.split('\0')
+		.filter(filePath => IMPORT_GRAPH_SOURCE_PATTERN.test(filePath))
+	for (const filePath of filePaths) sources.set(filePath, execFileSync('git', ['show', `${reference}:${filePath}`], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }))
+	return sources
 }
 
 function extractImportSpecifiers(source: string) {
@@ -160,22 +177,18 @@ function groupedTestCommands(testFiles: readonly string[]) {
 		.sort((left, right) => left.localeCompare(right))
 }
 
-export async function getImportGraphTestRecommendations(changedFiles: readonly string[], repositoryRoot = process.cwd()) {
-	const sourceFiles = await collectImportGraphSources(repositoryRoot)
-	const sourceFileSet = new Set(sourceFiles)
+function findAffectedTests(changedFiles: readonly string[], sources: ReadonlyMap<string, string>) {
+	const sourceFileSet = new Set(sources.keys())
 	const reverseImports = new Map<string, Set<string>>()
-	await Promise.all(
-		sourceFiles.map(async importer => {
-			const source = await fs.readFile(path.join(repositoryRoot, importer), 'utf8')
-			for (const specifier of extractImportSpecifiers(source)) {
-				const dependency = resolveImportSpecifier(importer, specifier, sourceFileSet)
-				if (dependency === undefined) continue
-				const importers = reverseImports.get(dependency) ?? new Set<string>()
-				importers.add(importer)
-				reverseImports.set(dependency, importers)
-			}
-		}),
-	)
+	for (const [importer, source] of sources) {
+		for (const specifier of extractImportSpecifiers(source)) {
+			const dependency = resolveImportSpecifier(importer, specifier, sourceFileSet)
+			if (dependency === undefined) continue
+			const importers = reverseImports.get(dependency) ?? new Set<string>()
+			importers.add(importer)
+			reverseImports.set(dependency, importers)
+		}
+	}
 
 	const affectedTests = new Set<string>()
 	const visited = new Set(changedFiles.filter(filePath => sourceFileSet.has(filePath)))
@@ -191,27 +204,79 @@ export async function getImportGraphTestRecommendations(changedFiles: readonly s
 			}
 		}
 	}
+	return affectedTests
+}
+
+type ImportGraphOptions = {
+	baselineSources?: ReadonlyMap<string, string>
+}
+
+const normalizeChanges = (changes: readonly (string | ChangedFileEntry)[]): ChangedFileEntry[] => changes.map(change => (typeof change === 'string' ? { path: change, status: 'modified' } : change))
+
+export async function getImportGraphTestRecommendations(changes: readonly (string | ChangedFileEntry)[], repositoryRoot = process.cwd(), options: ImportGraphOptions = {}) {
+	const normalizedChanges = normalizeChanges(changes)
+	const currentSources = await readCurrentSources(repositoryRoot)
+	const affectedTests = findAffectedTests(
+		normalizedChanges.filter(change => change.status !== 'deleted').map(change => change.path),
+		currentSources,
+	)
+	const baselineRoots = normalizedChanges.flatMap(change => {
+		if (change.status === 'deleted') return [change.path]
+		if (change.status === 'renamed' && change.previousPath !== undefined) return [change.previousPath]
+		return []
+	})
+	if (baselineRoots.length > 0) {
+		const baselineSources = options.baselineSources ?? readBaselineSources()
+		for (const testFile of findAffectedTests(baselineRoots, baselineSources)) {
+			if (currentSources.has(testFile)) affectedTests.add(testFile)
+		}
+	}
 	return groupedTestCommands([...affectedTests]).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
 }
 
-export function getTestImpactRecommendations(changedFiles: readonly string[]) {
+export function getTestImpactRecommendations(changes: readonly (string | ChangedFileEntry)[]) {
 	const recommendations = new Map<string, TestImpactRecommendation>()
-	for (const filePath of changedFiles) {
-		const matchingRules = TEST_IMPACT_RULES.filter(rule => rule.matches(filePath))
+	for (const change of normalizeChanges(changes)) {
+		const paths = [change.path, ...(change.previousPath === undefined ? [] : [change.previousPath])]
+		const matchingRules = TEST_IMPACT_RULES.filter(rule => paths.some(filePath => rule.matches(filePath)))
 		if (matchingRules.length === 0) {
-			const directCommand = directTestCommand(filePath)
-			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${filePath}` })
+			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path)
+			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${change.path}` })
 		}
 		for (const rule of matchingRules) recommendations.set(rule.command, { command: rule.command, reason: rule.reason })
 	}
 	return [...recommendations.values()].sort((left, right) => left.command.localeCompare(right.command))
 }
 
+const TEST_PATH_PATTERN = /\.(?:fuzz|spec|test)\.(?:cts|mts|ts|tsx)$/
+
+export function deduplicateTestRecommendations(recommendations: readonly TestImpactRecommendation[]) {
+	const uniqueRecommendations = [...new Map(recommendations.map(recommendation => [recommendation.command, recommendation])).values()]
+	const standalone: TestImpactRecommendation[] = []
+	const groups = new Map<string, { reasons: Set<string>; testPaths: Set<string> }>()
+	for (const recommendation of uniqueRecommendations) {
+		const tokens = recommendation.command.split(' ')
+		const testPaths = new Set(tokens.filter(token => TEST_PATH_PATTERN.test(token)))
+		if (testPaths.size === 0) {
+			standalone.push(recommendation)
+			continue
+		}
+		const runner = tokens.filter(token => !testPaths.has(token)).join(' ')
+		const group = groups.get(runner) ?? { reasons: new Set<string>(), testPaths: new Set<string>() }
+		for (const testPath of testPaths) group.testPaths.add(testPath)
+		group.reasons.add(recommendation.reason)
+		groups.set(runner, group)
+	}
+	const grouped = [...groups].map(([runner, group]) => ({
+		command: `${runner} ${[...group.testPaths].sort((left, right) => left.localeCompare(right)).join(' ')}`,
+		reason: [...group.reasons].join('; '),
+	}))
+	return [...standalone, ...grouped].sort((left, right) => left.command.localeCompare(right.command))
+}
+
 if (import.meta.main) {
-	const changedFiles = getChangedFiles()
-	const recommendationsByCommand = new Map(getTestImpactRecommendations(changedFiles).map(recommendation => [recommendation.command, recommendation]))
-	for (const recommendation of await getImportGraphTestRecommendations(changedFiles)) recommendationsByCommand.set(recommendation.command, recommendation)
-	const recommendations = [...recommendationsByCommand.values()].sort((left, right) => left.command.localeCompare(right.command))
+	const changes = getChangedFileEntries()
+	const recommendations = deduplicateTestRecommendations([...getTestImpactRecommendations(changes), ...(await getImportGraphTestRecommendations(changes))])
 	if (recommendations.length === 0) {
 		console.log('No static test-impact mapping matched. Trace changed imports, ownership, interfaces, and consumers using AGENTS.md.')
 	} else {

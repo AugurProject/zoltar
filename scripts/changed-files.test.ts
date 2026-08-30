@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getChangedFiles } from './changed-files.mts'
+import { getChangedFileEntries, getChangedFiles } from './changed-files.mts'
 
 test('changed-files combines committed, staged, unstaged, and untracked paths', () => {
 	const changedFiles = getChangedFiles(args => {
@@ -22,4 +22,19 @@ test('changed-files surfaces branch diff failures instead of silently skipping t
 			return ''
 		}),
 	).toThrow('missing origin/main')
+})
+
+test('test planning preserves deletions and rename source paths', () => {
+	const changes = getChangedFileEntries(args => {
+		const command = args.join(' ')
+		if (command === 'diff --name-status -z --find-renames --diff-filter=ACMRTUXBD origin/main...HEAD') return 'D\0shared/ts/deleted.ts\0R100\0ui/zoltar/ts/tests/old.test.ts\0ui/zoltar/ts/tests/new.test.ts\0'
+		if (command === 'ls-files -z --others --exclude-standard') return 'scripts/new.test.ts\0'
+		return ''
+	})
+
+	expect(changes).toEqual([
+		{ path: 'scripts/new.test.ts', status: 'added' },
+		{ path: 'shared/ts/deleted.ts', status: 'deleted' },
+		{ path: 'ui/zoltar/ts/tests/new.test.ts', previousPath: 'ui/zoltar/ts/tests/old.test.ts', status: 'renamed' },
+	])
 })

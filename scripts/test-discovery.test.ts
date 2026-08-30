@@ -53,8 +53,8 @@ describe('canonical test discovery', () => {
 	})
 
 	test('domain timing fingerprints cover their package lockfiles and preload', () => {
-		expect(getTimingContextPaths('application')).toEqual(expect.arrayContaining(['bun-test-setup-ui.ts', 'shared/bun.lock', 'ui/coreShared/bun.lock', 'ui/statoblast/bun.lock', 'ui/trading/bun.lock', 'ui/zoltar/bun.lock']))
-		expect(getTimingContextPaths('solidity')).toEqual(expect.arrayContaining(['bun-test-setup-solidity.ts', 'shared/bun.lock', 'solidity/bun.lock']))
+		expect(getTimingContextPaths('application')).toEqual(expect.arrayContaining(['bun-test-setup.ts', 'bun-test-setup-ui.ts', 'bunfig.toml', 'shared/bun.lock', 'ui/coreShared/bun.lock', 'ui/statoblast/bun.lock', 'ui/trading/bun.lock', 'ui/zoltar/bun.lock']))
+		expect(getTimingContextPaths('solidity')).toEqual(expect.arrayContaining(['bun-test-setup.ts', 'bun-test-setup-solidity.ts', 'bunfig.toml', 'shared/bun.lock', 'solidity/bun.lock']))
 	})
 
 	test('bytecode coverage dynamically shards the complete Solidity source set', async () => {

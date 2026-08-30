@@ -2,17 +2,20 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getImportGraphTestRecommendations, getTestImpactRecommendations } from './test-impact.mts'
+import type { ChangedFileEntry } from './changed-files.mts'
+import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getTestImpactRecommendations } from './test-impact.mts'
 
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)
 
 describe('test impact recommendations', () => {
 	test('maps test infrastructure to its focused runner tests', () => {
 		expect(commandsFor(['scripts/test-timings.mts'])).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
+		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
 	})
 
-	test('maps production browser coverage to both explicit tiers', () => {
-		expect(commandsFor(['ui/coreShared/build/productionBuild.test.ts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
+	test('runs the changed production-build test without escalating solely because the test changed', () => {
+		expect(commandsFor(['ui/coreShared/build/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts'])
+		expect(commandsFor(['ui/coreShared/build/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {
@@ -34,6 +37,28 @@ describe('test impact recommendations', () => {
 	test('specialized external integration tiers replace ineffective raw test commands', () => {
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'])).toEqual(['bun run test:integration:mainnet'])
 		expect(commandsFor(['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'])).toEqual(['bun run test:integration:mainnet-fork'])
+	})
+
+	test('does not suggest a deleted test and uses the destination of a renamed test', () => {
+		const changes: ChangedFileEntry[] = [
+			{ path: 'ui/zoltar/ts/tests/deleted.test.ts', status: 'deleted' },
+			{ path: 'ui/zoltar/ts/tests/new-name.test.ts', previousPath: 'ui/zoltar/ts/tests/old-name.test.ts', status: 'renamed' },
+		]
+		expect(getTestImpactRecommendations(changes).map(recommendation => recommendation.command)).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/new-name.test.ts'])
+	})
+
+	test('merges overlapping commands for the same runner so every selected test runs once', () => {
+		expect(
+			deduplicateTestRecommendations([
+				{ command: 'bun test scripts/run-tests.test.ts scripts/test-impact.test.ts', reason: 'import graph' },
+				{ command: 'bun test scripts/test-discovery.test.ts scripts/test-impact.test.ts', reason: 'test infrastructure' },
+			]),
+		).toEqual([
+			{
+				command: 'bun test scripts/run-tests.test.ts scripts/test-discovery.test.ts scripts/test-impact.test.ts',
+				reason: 'import graph; test infrastructure',
+			},
+		])
 	})
 
 	test('traces changed production modules through transitive imports to owning tests', async () => {
@@ -69,6 +94,30 @@ describe('test impact recommendations', () => {
 			expect(await getImportGraphTestRecommendations(['bots/shared/src/value.ts'], repositoryRoot)).toEqual([
 				{
 					command: 'cd bots/open-oracle-arbitrager && bun test tests/consumer.test.ts',
+					reason: 'imports changed production source directly or transitively',
+				},
+			])
+		} finally {
+			await rm(repositoryRoot, { recursive: true })
+		}
+	})
+
+	test('uses the baseline graph to find surviving tests affected by a deleted source', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'test-impact-deleted-'))
+		try {
+			await mkdir(join(repositoryRoot, 'shared', 'ts'), { recursive: true })
+			await mkdir(join(repositoryRoot, 'ui', 'zoltar', 'ts', 'tests'), { recursive: true })
+			await writeFile(join(repositoryRoot, 'shared', 'ts', 'replacement.ts'), 'export const value = 2\n')
+			await writeFile(join(repositoryRoot, 'ui', 'zoltar', 'ts', 'tests', 'consumer.test.ts'), "import { value } from '@zoltar/shared/replacement'\nvoid value\n")
+			const baselineSources = new Map([
+				['shared/ts/deleted.ts', 'export const value = 1\n'],
+				['shared/ts/consumer.ts', "export { value } from './deleted.js'\n"],
+				['ui/zoltar/ts/tests/consumer.test.ts', "import { value } from '@zoltar/shared/consumer'\nvoid value\n"],
+			])
+
+			expect(await getImportGraphTestRecommendations([{ path: 'shared/ts/deleted.ts', status: 'deleted' }], repositoryRoot, { baselineSources })).toEqual([
+				{
+					command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/consumer.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])

@@ -6,8 +6,9 @@ import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeigh
 
 const repositoryRoot = process.cwd()
 
-const APPLICATION_TIMING_CONTEXT_PATHS = ['bun-test-setup-ui.ts', 'bun.lock', 'shared/bun.lock', 'ui/coreShared/bun.lock', 'ui/statoblast/bun.lock', 'ui/trading/bun.lock', 'ui/zoltar/bun.lock'] as const
-const SOLIDITY_TIMING_CONTEXT_PATHS = ['bun-test-setup-solidity.ts', 'bun.lock', 'shared/bun.lock', 'solidity/bun.lock'] as const
+const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml'] as const
+const APPLICATION_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-ui.ts', 'bun.lock', 'shared/bun.lock', 'ui/coreShared/bun.lock', 'ui/statoblast/bun.lock', 'ui/trading/bun.lock', 'ui/zoltar/bun.lock'] as const
+const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-solidity.ts', 'bun.lock', 'shared/bun.lock', 'solidity/bun.lock'] as const
 
 export function getTimingContextPaths(domain: TestDomain) {
 	if (domain === 'application') return [...APPLICATION_TIMING_CONTEXT_PATHS]
