@@ -501,12 +501,13 @@ export function completeOperationCoverage(evaluations: readonly EvaluatedOperati
 		const represented = completed.some(evaluation => evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method && (evaluation.definition.abiEntryKind ?? 'function') === entry.abiEntryKind)
 		if (represented) continue
 		const operationTarget = entry.operationId === undefined ? undefined : CHAOS_OPERATION_CATALOG.find(definition => definition.id === entry.operationId)
+		const coverageExplanation = surfaceBlocker(entry)
 		completed.push({
 			definition: {
 				abiEntryKind: entry.abiEntryKind,
 				classification: entry.classification,
 				contract: entry.contract,
-				description: entry.reason ?? `${entry.contract}.${entry.method} is classified as ${entry.classification.replace('-', ' ')}.`,
+				description: coverageExplanation,
 				discoveryInputs: [],
 				ecosystem: surfaceEcosystem(entry.contract),
 				id: coverageId,
@@ -516,7 +517,7 @@ export function completeOperationCoverage(evaluations: readonly EvaluatedOperati
 				risk: operationTarget?.risk ?? (entry.classification === 'prerequisite' ? 'medium' : 'high'),
 			},
 			eligibility: {
-				blockers: [surfaceBlocker(entry)],
+				blockers: [coverageExplanation],
 				eligible: false,
 			},
 		})

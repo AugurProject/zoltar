@@ -13,6 +13,8 @@ type CdpMessage = {
 
 type CaptureRequest = {
 	catalogDetail?: true | undefined
+	catalogExpectedExplanation?: string | undefined
+	catalogOperationId?: string | undefined
 	fullDocument?: true | undefined
 	height: number
 	name: string
@@ -47,6 +49,24 @@ if (requestedCaptureSource === undefined) {
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
 		{ height: 844, name: 'chaos-catalog-mobile', route: 'catalog', width: 390 },
 		{ catalogDetail: true, height: 844, name: 'chaos-catalog-mobile-details', route: 'catalog', width: 390 },
+		{
+			catalogDetail: true,
+			catalogExpectedExplanation: 'This method is submitted only as a prerequisite inside an eligible durable workflow',
+			catalogOperationId: 'surface.genesis-reputation-token.approve',
+			height: 844,
+			name: 'chaos-genesis-approve-mobile',
+			route: 'catalog',
+			width: 390,
+		},
+		{
+			catalogDetail: true,
+			catalogExpectedExplanation: 'Exact payable alias of WETH9.deposit and the same bounded wrap operation.',
+			catalogOperationId: 'surface.weth9.receive',
+			height: 844,
+			name: 'chaos-weth-receive-mobile',
+			route: 'catalog',
+			width: 390,
+		},
 		{ height: 844, name: 'chaos-ecosystem-mobile-topology', route: 'ecosystem', verticalScroll: 'topology', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
 		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
@@ -65,6 +85,8 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const parsed: unknown = JSON.parse(value)
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Capture request must be an object')
 	const catalogDetail = Reflect.get(parsed, 'catalogDetail')
+	const catalogExpectedExplanation = Reflect.get(parsed, 'catalogExpectedExplanation')
+	const catalogOperationId = Reflect.get(parsed, 'catalogOperationId')
 	const fullDocument = Reflect.get(parsed, 'fullDocument')
 	const height = Reflect.get(parsed, 'height')
 	const name = Reflect.get(parsed, 'name')
@@ -76,6 +98,9 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const width = Reflect.get(parsed, 'width')
 	if (
 		(catalogDetail !== undefined && catalogDetail !== true) ||
+		(catalogDetail === true && route !== 'catalog') ||
+		(catalogExpectedExplanation !== undefined && (typeof catalogExpectedExplanation !== 'string' || catalogExpectedExplanation.trim() === '' || catalogExpectedExplanation.trim() !== catalogExpectedExplanation || catalogOperationId === undefined)) ||
+		(catalogOperationId !== undefined && (typeof catalogOperationId !== 'string' || catalogOperationId.trim() === '' || catalogOperationId.trim() !== catalogOperationId || catalogDetail !== true || route !== 'catalog')) ||
 		(fullDocument !== undefined && fullDocument !== true) ||
 		typeof height !== 'number' ||
 		typeof name !== 'string' ||
@@ -87,7 +112,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
-	return { catalogDetail, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }
+	return { catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -193,7 +218,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ catalogDetail, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -211,11 +236,18 @@ try {
 		const renderedState = await evaluate(`(() => {
 			const visiblePage = document.querySelector(${JSON.stringify(`[data-page-content="${route}"]`)})
 			const labels = [...document.querySelectorAll('#catalog-rows .operation-name strong')].map(element => element.textContent)
+			const normalize = value => value?.trim().replaceAll(/\\s+/g, ' ').replace(/[.?!]+$/, '').toLowerCase()
+			const redundantCatalogCopy = [...document.querySelectorAll('#catalog-rows tr')].flatMap(row => {
+				const description = normalize(row.querySelector('.operation-description')?.textContent)
+				if (description === undefined || description === '') return []
+				return [...row.querySelectorAll('.blocker-list li')].some(blocker => normalize(blocker.textContent) === description) ? [row.querySelector('.operation-name strong')?.textContent] : []
+			})
 			const ecosystemToggles = [...document.querySelectorAll('[data-ecosystem-toggle]')]
 			return {
 				bodyPage: document.body.dataset.page,
 				catalogCaption: document.querySelector('#catalog-caption')?.textContent,
 				catalogLabels: labels,
+				catalogRedundantCopy: redundantCatalogCopy,
 				execute: document.querySelector('#execute') instanceof HTMLInputElement ? document.querySelector('#execute').checked : undefined,
 				highRisk: document.querySelector('#allow-high-risk') instanceof HTMLInputElement ? document.querySelector('#allow-high-risk').checked : undefined,
 				irreversible: document.querySelector('#allow-irreversible') instanceof HTMLInputElement ? document.querySelector('#allow-irreversible').checked : undefined,
@@ -235,8 +267,16 @@ try {
 		if (route === 'catalog') {
 			const labels = Reflect.get(renderedState, 'catalogLabels')
 			const caption = Reflect.get(renderedState, 'catalogCaption')
-			const requiredLabels = ['Create binary question', 'Deposit REP to vault', 'Submit OpenOracle report', 'Router enter', 'settle report']
-			if (!Array.isArray(labels) || labels.length !== expectedCatalogEntryCount || requiredLabels.some(label => !labels.includes(label)) || caption !== `${expectedCatalogEntryCount.toString()} of ${expectedCatalogEntryCount.toString()} classified catalog entries shown · 7 live candidates.`) {
+			const redundantCopy = Reflect.get(renderedState, 'catalogRedundantCopy')
+			const requiredLabels = ['Create binary question', 'Deposit REP to vault', 'GenesisReputationToken.approve', 'Submit OpenOracle report', 'Router enter', 'settle report', 'WETH9.receive']
+			if (
+				!Array.isArray(labels) ||
+				labels.length !== expectedCatalogEntryCount ||
+				requiredLabels.some(label => !labels.includes(label)) ||
+				caption !== `${expectedCatalogEntryCount.toString()} of ${expectedCatalogEntryCount.toString()} classified catalog entries shown · 7 live candidates.` ||
+				!Array.isArray(redundantCopy) ||
+				redundantCopy.length !== 0
+			) {
 				throw new Error(`Catalog fixture was incomplete before capture: ${JSON.stringify(renderedState)}`)
 			}
 		}
@@ -464,12 +504,17 @@ try {
 		if (catalogDetail === true) {
 			const detail = await evaluate(`new Promise(resolve => {
 				const shell = document.querySelector('.table-shell')
-				const row = document.querySelector('#catalog-rows tr:first-child')
+				const requestedExplanation = ${JSON.stringify(catalogExpectedExplanation)}
+				const requestedOperationId = ${JSON.stringify(catalogOperationId)}
+				const row = requestedOperationId === undefined
+					? document.querySelector('#catalog-rows tr:first-child')
+					: [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.querySelector('.operation-name small.mono')?.textContent?.trim() === requestedOperationId)
 				if (!(shell instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) {
 					resolve(undefined)
 					return
 				}
-				row.scrollIntoView({ block: 'start' })
+				row.setAttribute('data-qa-catalog-detail', 'true')
+				row.scrollIntoView({ block: 'center' })
 				requestAnimationFrame(() => requestAnimationFrame(() => {
 					const rowBounds = row.getBoundingClientRect()
 					resolve({
@@ -478,7 +523,9 @@ try {
 							text: cell.textContent?.trim(),
 						})),
 						cellsContained: [...row.querySelectorAll(':scope > td')].every(cell => cell.scrollWidth <= cell.clientWidth),
+						explanationOccurrences: requestedExplanation === undefined ? undefined : [...row.querySelectorAll('.operation-description, .blocker-list li')].filter(element => element.textContent?.trim() === requestedExplanation).length,
 						identity: row.querySelector('.operation-name strong')?.textContent?.trim(),
+						operationId: row.querySelector('.operation-name small.mono')?.textContent?.trim(),
 						maximumHorizontalScroll: shell.scrollWidth - shell.clientWidth,
 						rowDisplay: getComputedStyle(row).display,
 						rowOverflow: row.scrollWidth > row.clientWidth,
@@ -496,8 +543,10 @@ try {
 				JSON.stringify(attributes.map(attribute => (typeof attribute === 'object' && attribute !== null ? Reflect.get(attribute, 'label') : undefined))) !== JSON.stringify(expectedLabels) ||
 				attributes.some(attribute => typeof attribute !== 'object' || attribute === null || typeof Reflect.get(attribute, 'text') !== 'string' || String(Reflect.get(attribute, 'text')).length === 0) ||
 				Reflect.get(detail, 'cellsContained') !== true ||
+				(catalogExpectedExplanation !== undefined && Reflect.get(detail, 'explanationOccurrences') !== 1) ||
 				typeof Reflect.get(detail, 'identity') !== 'string' ||
 				String(Reflect.get(detail, 'identity')).length === 0 ||
+				(catalogOperationId !== undefined && Reflect.get(detail, 'operationId') !== catalogOperationId) ||
 				Reflect.get(detail, 'maximumHorizontalScroll') !== 0 ||
 				Reflect.get(detail, 'rowDisplay') !== 'grid' ||
 				Reflect.get(detail, 'rowOverflow') !== false ||
@@ -642,12 +691,13 @@ try {
 				{ label: 'resume action', minimumDistinctColors: 8, selector: '#confirm-resume' },
 			)
 		} else if (catalogDetail === true) {
+			const catalogDetailSelector = '#catalog-rows tr[data-qa-catalog-detail="true"]'
 			paintTargets.push(
-				{ label: 'complete catalog operation card', minimumDistinctColors: 12, selector: '#catalog-rows tr:first-child' },
-				{ label: 'catalog operation identity', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child .operation-name' },
-				{ label: 'catalog operation risk', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child td:nth-child(4)' },
-				{ label: 'catalog operation candidates', minimumDistinctColors: 8, selector: '#catalog-rows tr:first-child td:nth-child(5)' },
-				{ label: 'catalog operation eligibility and blockers', minimumDistinctColors: 12, selector: '#catalog-rows tr:first-child td:nth-child(6)' },
+				{ label: 'complete catalog operation card', minimumDistinctColors: 12, selector: catalogDetailSelector },
+				{ label: 'catalog operation identity', minimumDistinctColors: 8, selector: `${catalogDetailSelector} .operation-name` },
+				{ label: 'catalog operation risk', minimumDistinctColors: 8, selector: `${catalogDetailSelector} td:nth-child(4)` },
+				{ label: 'catalog operation candidates', minimumDistinctColors: 8, selector: `${catalogDetailSelector} td:nth-child(5)` },
+				{ label: 'catalog operation eligibility and blockers', minimumDistinctColors: 12, selector: `${catalogDetailSelector} td:nth-child(6)` },
 			)
 		} else if (verticalScroll === 'rpc-health') {
 			paintTargets.push({ label: 'RPC health panel', minimumDistinctColors: 12, selector: '.rpc-health-panel' }, { label: 'RPC health Retry', minimumDistinctColors: 8, selector: '#rpc-health-retry-button' })

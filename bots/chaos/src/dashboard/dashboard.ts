@@ -1030,6 +1030,14 @@ function renderCoverage(values: OperationEvaluation[]) {
 	coverageSummary.replaceChildren(...cards)
 }
 
+function normalizedCatalogCopy(value: string) {
+	return value
+		.trim()
+		.replaceAll(/\s+/g, ' ')
+		.replace(/[.?!]+$/, '')
+		.toLowerCase()
+}
+
 function renderCatalog(values: OperationEvaluation[]) {
 	const selectedEcosystem = catalogFilter.value
 	const selectedClassification = catalogClassificationFilter.value
@@ -1049,10 +1057,25 @@ function renderCatalog(values: OperationEvaluation[]) {
 	catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
 	const rows = filtered.map(value => {
 		const row = document.createElement('tr')
+		const enabled = value.enabled !== false
+		const independentlyExecutable = operationIsIndependentlyExecutable(value)
+		const eligible = independentlyExecutable && enabled && value.eligible === true
+		let displayedBlockers: string[] = []
+		if (!eligible) {
+			displayedBlockers = value.blockers
+			if (displayedBlockers.length === 0) {
+				if (!independentlyExecutable) displayedBlockers = ['This surface is classified for coverage but cannot be selected as a standalone operation']
+				else if (!enabled) displayedBlockers = ['Disabled by operator policy']
+				else displayedBlockers = ['No eligible candidate in current state']
+			}
+		}
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
 		if (value.id !== undefined) nameCell.append(node('small', 'mono', value.id))
-		if (value.description !== undefined) nameCell.append(node('small', undefined, value.description))
+		const description = value.description?.trim()
+		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
+			nameCell.append(node('small', 'operation-description', description))
+		}
 		const ecosystemCell = node('td', undefined, ecosystemLabel(value.ecosystem))
 		const classificationCell = node('td')
 		const classificationBadge = node('span')
@@ -1074,9 +1097,6 @@ function renderCatalog(values: OperationEvaluation[]) {
 		riskCell.dataset['label'] = 'Risk'
 		candidatesCell.dataset['label'] = 'Candidates'
 		eligibilityCell.dataset['label'] = 'Eligibility'
-		const enabled = value.enabled !== false
-		const independentlyExecutable = operationIsIndependentlyExecutable(value)
-		const eligible = independentlyExecutable && enabled && value.eligible === true
 		const eligibilityBadge = node('span')
 		if (!independentlyExecutable) setBadge(eligibilityBadge, 'Not independently selectable', 'neutral')
 		else if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
@@ -1084,14 +1104,8 @@ function renderCatalog(values: OperationEvaluation[]) {
 		else setBadge(eligibilityBadge, 'Blocked', 'warning')
 		eligibilityCell.append(eligibilityBadge)
 		if (!eligible) {
-			let reasons = value.blockers
-			if (reasons.length === 0) {
-				if (!independentlyExecutable) reasons = ['This surface is classified for coverage but cannot be selected as a standalone operation']
-				else if (!enabled) reasons = ['Disabled by operator policy']
-				else reasons = ['No eligible candidate in current state']
-			}
 			const listValue = node('ul', 'blocker-list')
-			for (const reason of reasons) listValue.append(node('li', undefined, reason))
+			for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
 			eligibilityCell.append(listValue)
 		}
 		row.append(nameCell, ecosystemCell, classificationCell, riskCell, candidatesCell, eligibilityCell)

@@ -138,10 +138,11 @@ const workflowRenderingState = state({
 		steps: workflowSteps,
 	},
 	evaluations: [
-		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-1' } },
+		{ definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-1' } },
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
+		{ definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: ['settle the anchored report'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.blocked-sibling', label: 'Blocked report sibling', risk: 'low' }, eligibility: { blockers: ['No safe fixture candidate exists'], eligible: false } },
-		{ definition: { classification: 'role-restricted', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['Factory only'], eligible: false } },
+		{ definition: { classification: 'role-restricted', description: 'Factory only.', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['factory only'], eligible: false } },
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
@@ -756,6 +757,35 @@ browserTest(
 						return { coverage: statoblast?.querySelector('strong')?.textContent, eligibility: alias?.querySelector('td:nth-child(6) .badge')?.textContent }
 					})()`),
 				).toEqual({ coverage: '0/0', eligibility: 'Not independently selectable' })
+				const redundantCatalogCopy = await cdp.evaluate(`(() => {
+					const normalize = value => value?.trim().replaceAll(/\\s+/g, ' ').replace(/[.?!]+$/, '').toLowerCase()
+					return [...document.querySelectorAll('#catalog-rows tr')].flatMap(row => {
+						const description = row.querySelector('.operation-name > small:not(.mono)')?.textContent
+						const normalizedDescription = normalize(description)
+						if (normalizedDescription === undefined || normalizedDescription === '') return []
+						const duplicate = [...row.querySelectorAll('.blocker-list li')].some(blocker => normalize(blocker.textContent) === normalizedDescription)
+						return duplicate ? [row.querySelector('.operation-name strong')?.textContent] : []
+					})
+				})()`)
+				expect(redundantCatalogCopy).toEqual([])
+				expect(
+					await cdp.evaluate(`(() => {
+						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.textContent?.includes('Pool.initialize'))
+						return {
+							blockers: [...(row?.querySelectorAll('.blocker-list li') ?? [])].map(blocker => blocker.textContent),
+							descriptions: row?.querySelectorAll('.operation-name > small:not(.mono)').length,
+						}
+					})()`),
+				).toEqual({ blockers: ['factory only'], descriptions: 0 })
+				expect(
+					await cdp.evaluate(`(() => {
+						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.querySelector('.operation-name small.mono')?.textContent === 'open-oracle.settle')
+						return {
+							blockers: row?.querySelectorAll('.blocker-list li').length,
+							description: row?.querySelector('.operation-description')?.textContent,
+						}
+					})()`),
+				).toEqual({ blockers: 0, description: 'Settle the anchored report.' })
 				if (viewport.label === 'desktop') {
 					expect(
 						await cdp.evaluate(`({

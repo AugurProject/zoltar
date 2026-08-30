@@ -437,6 +437,18 @@ describe('canonical scan policy', () => {
 		expect(new Set(coverage.map(operation => operation.definition.id)).size).toBe(coverage.length)
 	})
 
+	test('gives coverage-only entries one useful non-standalone explanation', () => {
+		const coverage = unavailableOperationCatalog('Configure an operator signer')
+		const synthetic = coverage.filter(operation => operation.definition.id.startsWith('surface.'))
+		expect(synthetic.length).toBeGreaterThan(0)
+		for (const operation of synthetic) {
+			expect(operation.eligibility.blockers).toHaveLength(1)
+			const explanation = operation.eligibility.blockers[0]
+			if (explanation === undefined) throw new Error(`Missing coverage explanation for ${operation.definition.id}`)
+			expect(operation.definition.description, operation.definition.id).toBe(explanation)
+		}
+	})
+
 	test('keeps a semantic selector alias visible beside its one executable catalog route', () => {
 		const coverage = unavailableOperationCatalog('Configure an operator signer')
 		const executable = coverage.filter(operation => operation.definition.id === 'statoblast.auction.settle-bids')
