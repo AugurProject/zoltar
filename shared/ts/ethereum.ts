@@ -659,9 +659,15 @@ function normalizeRpcHex(value: unknown) {
 
 function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	if (value === undefined || value === null) return fallback
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return BigInt(value)
-	if (typeof value !== 'string') throw new Error('RPC returned an invalid bigint value')
+	if (typeof value === 'bigint') {
+		if (value < 0n) throw new Error('RPC returned an invalid bigint value')
+		return value
+	}
+	if (typeof value === 'number') {
+		if (!Number.isSafeInteger(value) || value < 0) throw new Error('RPC returned an invalid bigint value')
+		return BigInt(value)
+	}
+	if (typeof value !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) throw new Error('RPC returned an invalid bigint value')
 	return BigInt(value)
 }
 
