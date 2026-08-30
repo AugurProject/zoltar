@@ -183,6 +183,7 @@ CREATE TABLE public.contracts (
     discovery_tx_hash text,
     canonical boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    configured_deployment_block bigint,
     deployment_block bigint,
     deployment_timestamp timestamp with time zone,
     deployment_block_exact boolean,
@@ -210,6 +211,10 @@ CREATE TABLE public.entity_state_snapshots (
     read_failure_reason text,
     observed_at timestamp with time zone DEFAULT now() NOT NULL,
     canonical boolean DEFAULT true NOT NULL,
+    indexer_run_id bigint,
+    abi_source_hash text,
+    application_source_hash text,
+    projection_source_hash text,
     CONSTRAINT entity_state_snapshots_read_status_check CHECK ((read_status = ANY (ARRAY['success'::text, 'failed'::text, 'pending'::text, 'stale'::text])))
 );
 
@@ -385,6 +390,9 @@ CREATE TABLE public.networks (
     next_retry_at timestamp with time zone,
     last_reorg_at timestamp with time zone,
     last_reorg_depth bigint,
+    applied_abi_source_hash text,
+    applied_application_source_hash text,
+    applied_projection_source_hash text,
     CONSTRAINT networks_checkpoint_pair CHECK (((indexed_block IS NULL) = (indexed_hash IS NULL))),
     CONSTRAINT networks_failure_count_non_negative CHECK ((consecutive_failures >= 0)),
     CONSTRAINT networks_reorg_depth_non_negative CHECK (((last_reorg_depth IS NULL) OR (last_reorg_depth >= 0))),
@@ -1577,21 +1585,37 @@ CREATE TABLE public.chain_reorganizations (
     ancestor_hash text,
     depth bigint NOT NULL,
     reason text NOT NULL,
+    indexer_run_id bigint,
+    abi_source_hash text,
+    application_source_hash text,
+    projection_source_hash text,
     detected_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT chain_reorganizations_pkey PRIMARY KEY (id),
     CONSTRAINT chain_reorganizations_chain_id_fkey FOREIGN KEY (chain_id) REFERENCES public.networks(chain_id),
     CONSTRAINT chain_reorganizations_depth_check CHECK ((depth >= 0)),
-    CONSTRAINT chain_reorganizations_reason_check CHECK ((reason = ANY (ARRAY['chain-reorg'::text, 'manifest-reset'::text, 'start-boundary-advanced'::text])))
+    CONSTRAINT chain_reorganizations_reason_check CHECK ((reason = ANY (ARRAY['chain-reorg'::text, 'manifest-reset'::text, 'start-boundary-advanced'::text, 'abi-redecode'::text, 'projection-rebuild'::text])))
 );
 
 CREATE INDEX chain_reorganizations_history
     ON public.chain_reorganizations USING btree (chain_id, detected_at DESC, id DESC);
+
+CREATE TABLE public.history_invalidation_causes (
+    invalidation_id bigint NOT NULL,
+    reason text NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT history_invalidation_causes_pkey PRIMARY KEY (invalidation_id, reason),
+    CONSTRAINT history_invalidation_causes_reason_check CHECK ((reason = ANY (ARRAY['chain-reorg'::text, 'manifest-reset'::text, 'start-boundary-advanced'::text, 'abi-redecode'::text, 'projection-rebuild'::text]))),
+    CONSTRAINT history_invalidation_causes_invalidation_fkey FOREIGN KEY (invalidation_id) REFERENCES public.chain_reorganizations(id)
+);
 
 CREATE TABLE public.indexer_runs (
     id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
     schema_version text NOT NULL,
     app_version text NOT NULL,
     abi_source_hash text NOT NULL,
+    application_source_hash text NOT NULL,
+    projection_source_hash text NOT NULL,
+    indexer_enabled boolean NOT NULL,
     network_configuration jsonb NOT NULL,
     started_at timestamp with time zone DEFAULT now() NOT NULL,
     stopped_at timestamp with time zone,
@@ -1599,6 +1623,148 @@ CREATE TABLE public.indexer_runs (
 );
 
 CREATE INDEX indexer_runs_started_at ON public.indexer_runs USING btree (started_at DESC, id DESC);
+
+ALTER TABLE ONLY public.chain_reorganizations
+    ADD CONSTRAINT chain_reorganizations_indexer_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id);
+
+CREATE TABLE public.entity_state_observations (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    chain_id bigint NOT NULL,
+    entity_type text NOT NULL,
+    entity_identity text NOT NULL,
+    block_number bigint NOT NULL,
+    block_hash text NOT NULL,
+    block_timestamp timestamp with time zone NOT NULL,
+    source_method text NOT NULL,
+    read_status text NOT NULL,
+    read_result jsonb,
+    read_failure_reason text,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    canonical boolean DEFAULT true NOT NULL,
+    indexer_run_id bigint,
+    abi_source_hash text,
+    application_source_hash text,
+    projection_source_hash text,
+    CONSTRAINT entity_state_observations_pkey PRIMARY KEY (id),
+    CONSTRAINT entity_state_observations_read_status_check CHECK ((read_status = ANY (ARRAY['success'::text, 'failed'::text, 'pending'::text, 'stale'::text]))),
+    CONSTRAINT entity_state_observations_block_fkey FOREIGN KEY (chain_id, block_hash) REFERENCES public.blocks(chain_id, hash),
+    CONSTRAINT entity_state_observations_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id)
+);
+
+CREATE INDEX entity_state_observation_canonical_history
+    ON public.entity_state_observations USING btree (chain_id, entity_type, entity_identity, block_number DESC, observed_at DESC, id DESC) WHERE canonical;
+
+CREATE TABLE public.address_balance_observations (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    chain_id bigint NOT NULL,
+    block_hash text NOT NULL,
+    block_number bigint NOT NULL,
+    address text NOT NULL,
+    asset_address text NOT NULL,
+    asset_kind text NOT NULL,
+    read_status text NOT NULL,
+    balance numeric(78,0),
+    read_failure_reason text,
+    canonical boolean DEFAULT true NOT NULL,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    indexer_run_id bigint,
+    abi_source_hash text,
+    application_source_hash text,
+    projection_source_hash text,
+    CONSTRAINT address_balance_observations_pkey PRIMARY KEY (id),
+    CONSTRAINT address_balance_observations_asset_kind_check CHECK ((asset_kind = ANY (ARRAY['native'::text, 'rep'::text, 'weth'::text]))),
+    CONSTRAINT address_balance_observations_read_status_check CHECK ((read_status = ANY (ARRAY['success'::text, 'failed'::text]))),
+    CONSTRAINT address_balance_observations_result_check CHECK ((((read_status = 'success'::text) AND (balance IS NOT NULL) AND (read_failure_reason IS NULL)) OR ((read_status = 'failed'::text) AND (balance IS NULL) AND (read_failure_reason IS NOT NULL) AND (length(read_failure_reason) > 0)))),
+    CONSTRAINT address_balance_observations_balance_check CHECK (((balance IS NULL) OR (balance >= (0)::numeric))),
+    CONSTRAINT address_balance_observations_block_fkey FOREIGN KEY (chain_id, block_hash, block_number) REFERENCES public.blocks(chain_id, hash, number),
+    CONSTRAINT address_balance_observations_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id)
+);
+
+CREATE INDEX address_balance_observation_history
+    ON public.address_balance_observations USING btree (chain_id, address, asset_address, block_number DESC, observed_at DESC, id DESC);
+
+CREATE TABLE public.token_metadata_observations (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    chain_id bigint NOT NULL,
+    address text NOT NULL,
+    block_hash text NOT NULL,
+    name text,
+    symbol text,
+    decimals integer,
+    read_status text NOT NULL,
+    read_error text,
+    read_block bigint NOT NULL,
+    canonical boolean DEFAULT true NOT NULL,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    indexer_run_id bigint,
+    abi_source_hash text,
+    application_source_hash text,
+    projection_source_hash text,
+    CONSTRAINT token_metadata_observations_pkey PRIMARY KEY (id),
+    CONSTRAINT token_metadata_observations_read_status_check CHECK ((read_status = ANY (ARRAY['success'::text, 'failed'::text]))),
+    CONSTRAINT token_metadata_observations_result_check CHECK ((((read_status = 'success'::text) AND (read_error IS NULL)) OR ((read_status = 'failed'::text) AND (read_error IS NOT NULL) AND (length(read_error) > 0)))),
+    CONSTRAINT token_metadata_observations_block_fkey FOREIGN KEY (chain_id, block_hash, read_block) REFERENCES public.blocks(chain_id, hash, number),
+    CONSTRAINT token_metadata_observations_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id)
+);
+
+CREATE INDEX token_metadata_observation_history
+    ON public.token_metadata_observations USING btree (chain_id, address, read_block DESC, observed_at DESC, id DESC);
+
+CREATE TABLE public.action_interpretations (
+    chain_id bigint NOT NULL,
+    block_hash text NOT NULL,
+    tx_hash text NOT NULL,
+    indexer_run_id bigint NOT NULL,
+    abi_source_hash text NOT NULL,
+    application_source_hash text NOT NULL,
+    interpretation jsonb NOT NULL,
+    interpreted_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT action_interpretations_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, indexer_run_id),
+    CONSTRAINT action_interpretations_action_fkey FOREIGN KEY (chain_id, block_hash, tx_hash) REFERENCES public.actions(chain_id, block_hash, tx_hash),
+    CONSTRAINT action_interpretations_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id)
+);
+
+CREATE INDEX action_interpretations_history
+    ON public.action_interpretations USING btree (chain_id, block_hash, tx_hash, interpreted_at DESC, indexer_run_id DESC);
+
+CREATE TABLE public.log_interpretations (
+    chain_id bigint NOT NULL,
+    block_hash text NOT NULL,
+    tx_hash text NOT NULL,
+    log_index integer NOT NULL,
+    interpretation_kind text NOT NULL,
+    interpretation_key text NOT NULL,
+    indexer_run_id bigint NOT NULL,
+    abi_source_hash text NOT NULL,
+    application_source_hash text NOT NULL,
+    projection_source_hash text NOT NULL,
+    interpretation jsonb NOT NULL,
+    interpreted_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT log_interpretations_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, interpretation_kind, interpretation_key, indexer_run_id),
+    CONSTRAINT log_interpretations_kind_check CHECK ((interpretation_kind = ANY (ARRAY['decode'::text, 'projection'::text]))),
+    CONSTRAINT log_interpretations_log_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index),
+    CONSTRAINT log_interpretations_run_fkey FOREIGN KEY (indexer_run_id) REFERENCES public.indexer_runs(id)
+);
+
+CREATE INDEX log_interpretations_history
+    ON public.log_interpretations USING btree (chain_id, block_hash, tx_hash, log_index, interpreted_at DESC, indexer_run_id DESC);
+
+CREATE TABLE public.history_invalidation_occurrences (
+    invalidation_id bigint NOT NULL,
+    occurrence_kind text NOT NULL,
+    chain_id bigint NOT NULL,
+    block_hash text NOT NULL,
+    occurrence_id text NOT NULL,
+    sub_index integer NOT NULL,
+    captured_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT history_invalidation_occurrences_pkey PRIMARY KEY (invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index),
+    CONSTRAINT history_invalidation_occurrences_kind_check CHECK ((occurrence_kind = ANY (ARRAY['block'::text, 'transaction'::text, 'log'::text, 'entity-state'::text, 'address-balance'::text, 'token-metadata'::text]))),
+    CONSTRAINT history_invalidation_occurrences_invalidation_fkey FOREIGN KEY (invalidation_id) REFERENCES public.chain_reorganizations(id),
+    CONSTRAINT history_invalidation_occurrences_chain_fkey FOREIGN KEY (chain_id) REFERENCES public.networks(chain_id)
+);
+
+CREATE INDEX history_invalidation_occurrences_lookup
+    ON public.history_invalidation_occurrences USING btree (occurrence_kind, chain_id, block_hash, occurrence_id, sub_index, invalidation_id DESC);
 
 
 --

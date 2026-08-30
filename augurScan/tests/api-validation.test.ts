@@ -28,7 +28,7 @@ test('validates state-history range and completeness metadata', () => {
 		offset: 0,
 		series: { snapshots: 10, events: 2 },
 		complete: false,
-		nextOffset: 1000,
+		nextCursor: 'opaque-page-2',
 	}
 	expect(isEntityHistoryCoverageValue(coverage)).toBeTrue()
 	expect(isEntityHistoryCoverageValue({ ...coverage, complete: 'yes' })).toBeFalse()

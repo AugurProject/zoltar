@@ -458,17 +458,28 @@ a.operations-row:focus-visible {
 	gap: 0.55rem;
 }
 
+.operations-detail-header > a {
+	display: inline-flex;
+	align-items: center;
+	justify-self: start;
+	width: fit-content;
+	min-height: 32px;
+	padding: 0.3rem 0.2rem;
+}
+
 .operations-detail-header h2,
 .operations-detail-header p {
 	margin: 0;
 }
 
-.operations-raw-evidence {
+.operations-raw-evidence,
+.operations-round-changes {
 	grid-column: 1 / -1;
 	max-width: 100%;
 }
 
-.operations-raw-evidence summary {
+.operations-raw-evidence summary,
+.operations-round-changes summary {
 	display: list-item;
 	width: fit-content;
 	min-height: 36px;
@@ -479,9 +490,20 @@ a.operations-row:focus-visible {
 	color: var(--muted);
 }
 .operations-raw-evidence summary:focus-visible,
+.operations-round-changes summary:focus-visible,
 .chart-data-disclosure summary:focus-visible {
 	outline: 2px solid var(--cyan);
 	outline-offset: 2px;
+}
+.operations-round-changes ul {
+	display: grid;
+	gap: 0.35rem;
+	margin: 0.25rem 0 0;
+	padding-left: 1.4rem;
+	color: var(--muted);
+	font:
+		0.68rem / 1.45 ui-monospace,
+		monospace;
 }
 
 .operations-raw-evidence pre {
@@ -502,12 +524,28 @@ a.operations-row:focus-visible {
 .operations-row span,
 .operations-row small {
 	margin-top: 0.2rem;
+	overflow-wrap: anywhere;
 	color: var(--muted);
 	font-size: 0.68rem;
 }
 .operations-row code {
 	max-width: 20rem;
 	overflow-wrap: anywhere;
+}
+.operations-risk-protocol {
+	border-left: 3px solid var(--cyan);
+}
+.operations-risk-assessment {
+	border-left: 3px solid var(--muted);
+}
+.operations-risk-healthy {
+	border-left-color: var(--green);
+}
+.operations-risk-warning {
+	border-left-color: var(--amber);
+}
+.operations-risk-critical {
+	border-left-color: var(--red);
 }
 .operations-exact-evidence {
 	display: grid;
@@ -1249,6 +1287,28 @@ a.operations-row:focus-visible {
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 }
+.operations-filters {
+	grid-template-columns: repeat(4, minmax(150px, 1fr));
+	margin: 0 0 1rem;
+	padding: 0.85rem;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: rgba(8, 14, 20, 0.45);
+}
+.operations-as-of-filter {
+	grid-template-columns: minmax(220px, 1fr) auto auto;
+}
+.operations-as-of-filter .primary,
+.operations-as-of-filter .secondary {
+	padding-inline: 0.65rem;
+	white-space: nowrap;
+}
+.operations-filter-actions {
+	display: flex;
+	gap: 0.65rem;
+	align-items: center;
+	justify-content: flex-end;
+}
 input,
 select {
 	width: 100%;
@@ -1323,6 +1383,17 @@ button[aria-busy="true"]:disabled {
 	border: 1px solid rgba(86, 215, 208, 0.24);
 	border-radius: 7px;
 	background: rgba(86, 215, 208, 0.05);
+}
+.state-history-complete:focus-visible,
+.operations-history-complete:focus-visible,
+.operations-pagination-complete:focus-visible {
+	outline: 2px solid var(--cyan);
+	outline-offset: 3px;
+}
+.state-history-complete,
+.operations-history-complete,
+.operations-pagination-complete {
+	scroll-margin-block: 0.5rem;
 }
 .operations-history-pagination {
 	display: grid;
@@ -2392,6 +2463,9 @@ dialog::backdrop {
 		grid-template-columns: 1fr 1fr;
 	}
 	.filters label {
+		grid-column: 1 / -1;
+	}
+	.operations-filter-actions {
 		grid-column: 1 / -1;
 	}
 	.state-detail-header {

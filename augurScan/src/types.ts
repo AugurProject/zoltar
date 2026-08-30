@@ -21,6 +21,7 @@ export type ContractMetadata = {
 	readonly provenance: string
 	readonly discoveryBlock?: bigint
 	readonly discoveryTxHash?: Hash
+	readonly configuredDeploymentBlock?: bigint
 	readonly deploymentBlock?: bigint
 	readonly deploymentTimestamp?: Date
 	readonly deploymentBlockExact?: boolean

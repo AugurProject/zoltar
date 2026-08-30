@@ -25,7 +25,7 @@ export interface EntityHistoryCoverageValue {
 	complete: boolean
 	rangeCovered?: boolean
 	hasPreviousPages?: boolean
-	nextOffset?: number
+	nextCursor?: string
 }
 
 const isNonNegativeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
@@ -44,7 +44,7 @@ export const isEntityHistoryCoverageValue = (value: unknown): value is EntityHis
 	typeof value['complete'] === 'boolean' &&
 	(value['rangeCovered'] === undefined || typeof value['rangeCovered'] === 'boolean') &&
 	(value['hasPreviousPages'] === undefined || typeof value['hasPreviousPages'] === 'boolean') &&
-	(value['nextOffset'] === undefined || isNonNegativeInteger(value['nextOffset']))
+	(value['nextCursor'] === undefined || isString(value['nextCursor']))
 
 export const isNetworkRecordValue = (value: unknown): boolean =>
 	isRecord(value) &&

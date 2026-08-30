@@ -239,8 +239,9 @@ describe('state projections', () => {
 		expect(projected.some((item) => item.type === 'ammPrice')).toBe(false)
 	})
 
-	test('retains LP share transfers only when the emitter is an Augur AMM pair', () => {
+	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
 		const transfer = { ...log('Transfer', { from: pool, to: vault, amount: '50' }), contractKind: 'ammPair' }
+		const approval = { ...log('Approval', { owner: pool, spender: vault, amount: '50' }), contractKind: 'ammPair' }
 		expect(projectionsFrom(transfer).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'trading',
@@ -248,6 +249,13 @@ describe('state projections', () => {
 			semanticEventKind: 'Transfer',
 		})
 		expect(projectionsFrom(log('Transfer', { from: pool, to: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
+		expect(projectionsFrom(approval).at(-1)).toMatchObject({
+			type: 'domainEvent',
+			domain: 'trading',
+			entityType: 'amm',
+			semanticEventKind: 'Approval',
+		})
+		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {

@@ -26,11 +26,11 @@ Logs emitted by protocol activity sources or tracked REP tokens select receipts 
 
 Token display rules are keyed by contract kind, event/function, and argument. Semantic `atto*` fields, the OpenOracle ETH sentinel, and known REP/share/WETH kinds use fixed 18-decimal protocol units; configured USDC uses a fixed 6-decimal unit. Arbitrary token values use canonical metadata read at an indexed block and fall back to exact base units only when that metadata is unavailable. Failed metadata reads retry with bounded block backoff and follow canonical reorg state.
 
-Before extending a chain, the indexer verifies parent hashes. A mismatch searches the configured 64-block window for a common ancestor, marks old branch evidence noncanonical, invalidates its derived state, and replays the replacement branch. If no retained ancestor matches, canonical state is rebuilt from the configured start boundary. Orphaned blocks, actions, receipts, and logs remain queryable as debugging evidence.
+Before extending a chain, the indexer verifies parent hashes. A mismatch searches the configured 64-block window for a common ancestor, marks old branch evidence noncanonical, records the exact invalidated occurrences, and replays the replacement branch. If no retained ancestor matches, canonical state is rebuilt from the configured start boundary. ABI, application, and projection source hashes provide the same explicit invalidation-and-replay path for semantic upgrades. Orphaned blocks, actions, receipts, logs, and immutable per-run interpretations remain queryable as debugging evidence.
 
 ## Current-state model
 
-Canonical decoded events populate registries for every observed pool, question, vault, and Zoltar universe. Immutable identity/configuration is stored separately from block-stamped temporal measurements. The UI plots pool collateral and REP capacity ownership, vault REP backing and capacity ownership, and universe theoretical REP supply; it also renders the bounded returned universe parent/child lineage. [STATE_MODEL.md](STATE_MODEL.md) is the field and event reference.
+Canonical decoded events populate registries for every observed pool, question, vault, and Zoltar universe. Immutable identity/configuration is stored separately from block-stamped temporal measurements. The UI plots pool collateral and REP capacity ownership, vault REP backing and capacity ownership, and universe theoretical REP supply; it also renders the bounded returned universe parent/child lineage. [STATE_MODEL.md](STATE_MODEL.md) explains how occurrences, interpretations, direct observations, and current materializations relate across reorgs and replay. [API_REFERENCE.md](API_REFERENCE.md) owns the field, endpoint, and cursor contracts, while [OPERATIONS.md](OPERATIONS.md) covers backup, upgrade, integrity review, and export procedures.
 
 The browser provides:
 
@@ -40,12 +40,12 @@ The browser provides:
 - searchable pool, question, vault, and universe catalogs with automatic loading, live commit refresh, error recovery, and responsive graph/detail layouts;
 - a single-network rich list ranked by ETH or SepoliaETH, WETH, or sent transactions, with bounded per-token REP balances, pool/vault participation, and explicit pending or partial balance state.
 - an Operations destination with freshness, report, escalation, auction, tagged pool/vault risk, fork/migration, price-provenance, semantic-change, and direct entity-detail views;
-- canonical domain projections and unified timelines for reports, games, auctions, AMM activity, forks, and migrations;
+- canonical domain projections and a filterable scanner-wide timeline for reports, games, auctions, AMM activity, forks, and migrations;
 - bounded canonical tagged-block reads for current pool, vault, escalation, and auction values, with retained read failures and stale-on-reorg semantics;
-- stable keyset pagination; full-window exact AMM volume and fee summaries; and explicitly bounded price-impact, TWAP-coverage, and candlestick observations;
+- snapshot-bound opaque pagination across high-volume evidence surfaces, with endpoint-specific cursor positions documented in [API_REFERENCE.md](API_REFERENCE.md); full-window exact AMM volume and fee summaries; and explicitly bounded price-impact, TWAP-coverage, and candlestick observations;
 - pool-level OpenOracle coordinator history plus REP/WETH, REP/native-ETH, REP/USDC, and liquidity histories.
-- explicit state-history block ranges, pagination and coverage metadata; actual-time charts; and NDJSON evidence export;
-- durable chain-reorganization records, canonical/orphan log selection, and schema/application/ABI/network provenance;
+- explicit state-history block ranges, point-in-time risk views, pagination and coverage metadata, actual-time charts, and restart-safe NDJSON evidence export;
+- durable history-invalidation records with exact affected occurrences, canonical/orphan log selection, and schema/application/ABI/projection/network provenance;
 - first-class fork, AMM-market, LP-position, reporter-participation, liquidation-history, and chain-integrity views.
 
 ## Delivery and validation
@@ -62,4 +62,4 @@ Acceptance requires an empty-volume Compose start to expose the UI and begin eac
 
 ## Deferred scope
 
-Provider-specific internal-call tracing and failed-call ingestion, automatic re-decoding after an ABI snapshot change, arbitrary contract state-at-block reads, normalized cross-venue liquidity, manipulation-resistant TWAP claims, very large deployment load testing, and automated backup/restore drills remain future work. Historical event APIs do support explicit block ranges, but they do not infer calls that emitted no retained log. A production operator must still choose archival-capable RPC providers, verified deployment start blocks, credentials, resource limits, backup schedules, and external access controls.
+Provider-specific internal-call tracing and failed-call ingestion, arbitrary historical contract reads beyond stored tagged snapshots, normalized cross-venue liquidity, manipulation-resistant TWAP claims, very large deployment load testing, and automated backup/restore drills remain future work. Historical event APIs do support explicit block ranges, but they do not infer calls that emitted no retained log. Built-in Basic access control and process-local rate limiting are deployment guardrails, not substitutes for TLS termination, distributed edge controls, archival-capable RPC providers, verified deployment start blocks, resource limits, backups, and restore drills.

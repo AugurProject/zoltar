@@ -16,11 +16,13 @@ FROM oven/bun:1.3.14-alpine AS runtime
 WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=dependencies /workspace/node_modules ./node_modules
-COPY augurScan/package.json augurScan/bun.lock ./
+COPY augurScan/package.json augurScan/bun.lock ./augurScan/
 COPY augurScan/config ./augurScan/config
 COPY augurScan/schema.sql ./augurScan/schema.sql
 COPY augurScan/migrations ./augurScan/migrations
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
+COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts
+COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts
 COPY augurScan/src ./augurScan/src
 COPY shared/ts/ethereum.ts ./shared/ts/ethereum.ts
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan

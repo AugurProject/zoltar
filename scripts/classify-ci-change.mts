@@ -93,7 +93,19 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	const expandedScopes = ordered(expanded)
 	const packageMatrix = expandedScopes.flatMap(scope => packageEntries[scope] ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
-	const augurScanIntegration = false
+	const augurScanIntegration =
+		forcedFull ||
+		(expandedScopes.includes('augur-scan') &&
+			changedFiles.some(
+				filePath =>
+					filePath.startsWith('shared/') ||
+					filePath === 'augurScan/schema.sql' ||
+					filePath.startsWith('augurScan/migrations/') ||
+					filePath.startsWith('augurScan/src/') ||
+					filePath.startsWith('augurScan/tests/') ||
+					filePath.startsWith('augurScan/scripts/') ||
+					['augurScan/package.json', 'augurScan/bun.lock', 'augurScan/tsconfig.json'].includes(filePath),
+			))
 	let reason = 'Selected direct scopes and expanded their verified local consumers.'
 	if (forcedFull) reason = 'A global or unknown path requires the full ordinary CI matrix.'
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'

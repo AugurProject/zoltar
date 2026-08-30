@@ -604,7 +604,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions(
 		'trading',
 		'amm',
-		['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer'],
+		['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'],
 		['pair'],
 	),
 	...definitions(
@@ -646,7 +646,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
 	if (eventName === 'PairCreated' && log.contractKind !== 'ammFactory') return undefined
-	if (eventName === 'Transfer' && log.contractKind !== 'ammPair') return undefined
+	if ((eventName === 'Transfer' || eventName === 'Approval') && log.contractKind !== 'ammPair') return undefined
 	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4
 	// also emit an event named Swap, but their sqrt-price shape belongs to the
 	// dedicated Uniswap projection and cannot be interpreted as Augur reserves.

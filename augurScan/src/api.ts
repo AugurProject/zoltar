@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { decodeOpaqueCursor, encodeOpaqueCursor } from './cursor-codec.ts'
 import {
 	auctionDemandCurve,
 	auctionLifecycle,
@@ -8,6 +9,7 @@ import {
 	fixedWindowTwap,
 	poolCapacity,
 	reportLifecycle,
+	reportRoundChanges,
 	swapAnalytics,
 	USDC_QUOTE_DECIMALS,
 	vaultRisk,
@@ -45,8 +47,35 @@ const normalize = (value: unknown): unknown => {
 	return value
 }
 
-const jsonRecord = (value: unknown): Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+const parsedJsonColumn = (value: unknown): unknown => {
+	if (typeof value !== 'string') return value
+	try {
+		return JSON.parse(value) as unknown
+	} catch (error) {
+		if (error instanceof SyntaxError) return value
+		throw error
+	}
+}
+
+const jsonRecord = (value: unknown): Record<string, unknown> => {
+	const parsed = parsedJsonColumn(value)
+	return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {}
+}
+
+const decodedJsonColumns = (row: Record<string, unknown>, columns: readonly string[]): Record<string, unknown> => ({
+	...row,
+	...Object.fromEntries(columns.flatMap((column) => (row[column] === undefined ? [] : [[column, parsedJsonColumn(row[column])]]))),
+})
+
+const actionJsonColumns = [
+	'arguments',
+	'display_arguments',
+	'argument_schema',
+	'action_arguments',
+	'action_display_arguments',
+	'action_argument_schema',
+	'receipt',
+] as const
 
 const json = (value: unknown, status = 200): Response =>
 	Response.json(normalize(value), {
@@ -60,54 +89,123 @@ const isExactIsoTimestamp = (value: string): boolean => {
 	return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value
 }
 
+const cursorTimestamp = (value: unknown): string => {
+	const result = value instanceof Date ? value.toISOString() : value
+	if (typeof result !== 'string' || !isExactIsoTimestamp(result)) throw new Error('Database returned an invalid cursor timestamp')
+	return result
+}
+
 const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-const isPostgresInteger = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= 2_147_483_647
+const POSTGRES_INTEGER_MAX = 2_147_483_647
+const isPostgresInteger = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= POSTGRES_INTEGER_MAX
+const isPostgresIntegerString = (value: unknown): value is string =>
+	typeof value === 'string' && /^\d+$/.test(value) && BigInt(value) <= BigInt(POSTGRES_INTEGER_MAX)
 const routeInteger = (value: string | undefined, postgresInteger = false): number | undefined => {
 	if (value === undefined || !/^\d+$/.test(value)) return undefined
 	const result = Number(value)
 	return (postgresInteger ? isPostgresInteger(result) : isNonNegativeSafeInteger(result)) ? result : undefined
 }
 
-export const parseCursor = (value: string | null): readonly [string, number, number, number, number, string] | undefined => {
+type LogCursor = readonly [
+	version: 1,
+	chainId: number,
+	event: string | null,
+	address: string | null,
+	decoded: 'true' | 'false' | null,
+	canonical: CanonicalHistoryFilter,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	timestamp: string,
+	blockNumber: string,
+	transactionIndex: number,
+	logIndex: number,
+	blockHash: string,
+]
+
+const isLogCursor = (parts: readonly unknown[]): parts is LogCursor =>
+	parts.length === 17 &&
+	parts[0] === 1 &&
+	isNonNegativeSafeInteger(parts[1]) &&
+	(parts[2] === null || (typeof parts[2] === 'string' && parts[2] !== '')) &&
+	(parts[3] === null || (typeof parts[3] === 'string' && /^0x[0-9a-f]{40}$/.test(parts[3]))) &&
+	(parts[4] === null || parts[4] === 'true' || parts[4] === 'false') &&
+	(parts[5] === 'canonical' || parts[5] === 'orphaned' || parts[5] === 'all') &&
+	isPostgresBigint(parts[6]) &&
+	typeof parts[7] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[7]) &&
+	isPostgresBigint(parts[8]) &&
+	parts.slice(9, 12).every((part) => typeof part === 'string') &&
+	typeof parts[12] === 'string' &&
+	isExactIsoTimestamp(parts[12]) &&
+	isPostgresBigint(parts[13]) &&
+	isPostgresInteger(parts[14]) &&
+	isPostgresInteger(parts[15]) &&
+	typeof parts[16] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[16])
+
+const parseLogCursor = (
+	value: string | null,
+	chainId: number,
+	event: string | null,
+	address: string | null,
+	decoded: 'true' | 'false' | null,
+	canonical: CanonicalHistoryFilter,
+): LogCursor | undefined => {
 	if (value === null) return undefined
+	let parts: unknown[]
 	try {
-		const parsed = JSON.parse(atob(value)) as unknown
-		const parts = Array.isArray(parsed) ? parsed : []
-		if (
-			parts.length !== 6 ||
-			typeof parts[0] !== 'string' ||
-			!isExactIsoTimestamp(parts[0]) ||
-			!isNonNegativeSafeInteger(parts[1]) ||
-			!isNonNegativeSafeInteger(parts[2]) ||
-			!isPostgresInteger(parts[3]) ||
-			!isPostgresInteger(parts[4]) ||
-			typeof parts[5] !== 'string' ||
-			!/^0x[0-9a-fA-F]{64}$/.test(parts[5])
-		)
-			throw new Error('shape')
-		return parts as [string, number, number, number, number, string]
+		const parsed = decodeOpaqueCursor(value)
+		parts = Array.isArray(parsed) ? parsed : []
+		if (!isLogCursor(parts)) throw new Error('shape')
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
+	if (parts[1] !== chainId || parts[2] !== event || parts[3] !== address || parts[4] !== decoded || parts[5] !== canonical)
+		throw new ApiRequestError('cursor does not match the requested log collection')
+	return parts
 }
 
-export const cursorFor = (row: Record<string, unknown>): string =>
-	btoa(
-		JSON.stringify([
-			row['block_timestamp'],
-			Number(row['chain_id']),
-			Number(row['block_number']),
-			Number(row['transaction_index']),
-			Number(row['log_index']),
-			row['block_hash'],
-		]),
-	)
+const logCursorFor = (
+	chainId: number,
+	event: string | null,
+	address: string | null,
+	decoded: 'true' | 'false' | null,
+	canonical: CanonicalHistoryFilter,
+	asOf: Record<string, unknown>,
+	row: Record<string, unknown>,
+): string =>
+	encodeOpaqueCursor([
+		1,
+		chainId,
+		event,
+		address,
+		decoded,
+		canonical,
+		...snapshotBoundary(asOf),
+		cursorTimestamp(row['block_timestamp']),
+		String(row['block_number']),
+		Number(row['transaction_index']),
+		Number(row['log_index']),
+		String(row['block_hash']),
+	] satisfies LogCursor)
 
-type AddressTransactionCursor = readonly [
+type AddressHistoryKind = 'referenced' | 'sent'
+
+type AddressHistoryCursor = readonly [
+	version: 1,
+	kind: AddressHistoryKind,
 	chainId: number,
 	address: string,
 	snapshotBlock: string,
 	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
 	total: number,
 	block: string,
 	transaction: number,
@@ -120,52 +218,132 @@ const isPostgresBigint = (value: unknown): value is string => {
 	return BigInt(value) <= POSTGRES_BIGINT_MAX
 }
 
+export const directObservationTotal = (value: unknown): number => {
+	if (!isPostgresBigint(value) || BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER))
+		throw new ApiRequestError('direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters')
+	return Number(value)
+}
+
 const postgresBigint = (value: string | null, name: string): string | undefined => {
 	if (value === null || value === '') return undefined
 	if (!isPostgresBigint(value)) throw new ApiRequestError(`${name} must be a non-negative PostgreSQL bigint`)
 	return value
 }
 
-export const nextHistoricalExportOffset = (offset: string, returned: number, truncated: boolean): string | undefined => {
-	if (!truncated) return undefined
-	const nextOffset = BigInt(offset) + BigInt(returned)
-	if (nextOffset > POSTGRES_BIGINT_MAX) throw new ApiRequestError('export offset exceeds the PostgreSQL bigint range; narrow the block range')
-	return nextOffset.toString()
-}
-
-const parseAddressTransactionCursor = (value: string | null): AddressTransactionCursor | undefined => {
+const parseAddressHistoryCursor = (value: string | null, kind: AddressHistoryKind): AddressHistoryCursor | undefined => {
 	if (value === null) return undefined
 	try {
-		const parsed = JSON.parse(atob(value)) as unknown
+		const parsed = decodeOpaqueCursor(value)
 		const parts = Array.isArray(parsed) ? parsed : []
 		if (
-			parts.length !== 7 ||
-			!isNonNegativeSafeInteger(parts[0]) ||
-			typeof parts[1] !== 'string' ||
-			!/^0x[0-9a-f]{40}$/.test(parts[1]) ||
-			!isPostgresBigint(parts[2]) ||
+			parts.length !== 13 ||
+			parts[0] !== 1 ||
+			parts[1] !== kind ||
+			!isNonNegativeSafeInteger(parts[2]) ||
 			typeof parts[3] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
-			!isNonNegativeSafeInteger(parts[4]) ||
-			!isPostgresBigint(parts[5]) ||
-			!isPostgresInteger(parts[6]) ||
-			BigInt(parts[5]) > BigInt(parts[2])
+			!/^0x[0-9a-f]{40}$/.test(parts[3]) ||
+			!isPostgresBigint(parts[4]) ||
+			typeof parts[5] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+			!isPostgresBigint(parts[6]) ||
+			!parts.slice(7, 10).every((part) => typeof part === 'string') ||
+			!isNonNegativeSafeInteger(parts[10]) ||
+			!isPostgresBigint(parts[11]) ||
+			!isPostgresInteger(parts[12]) ||
+			BigInt(parts[11]) > BigInt(parts[4])
 		)
 			throw new Error('shape')
-		return parts as [number, string, string, string, number, string, number]
+		return parts as [1, AddressHistoryKind, number, string, string, string, string, string, string, string, number, string, number]
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 }
 
-const addressTransactionCursorFor = (
+const addressHistoryCursorFor = (
+	kind: AddressHistoryKind,
 	chainId: number,
 	address: string,
 	snapshotBlock: string,
 	snapshotHash: string,
+	asOf: Record<string, unknown>,
 	total: number,
 	row: Record<string, unknown>,
-): string => btoa(JSON.stringify([chainId, address, snapshotBlock, snapshotHash, total, String(row['block_number']), Number(row['transaction_index'])]))
+): string =>
+	encodeOpaqueCursor([
+		1,
+		kind,
+		chainId,
+		address,
+		snapshotBlock,
+		snapshotHash,
+		String(asOf['invalidationId']),
+		String(asOf['abiSourceHash']),
+		String(asOf['applicationSourceHash']),
+		String(asOf['projectionSourceHash']),
+		total,
+		String(row['block_number']),
+		Number(row['transaction_index']),
+	] satisfies AddressHistoryCursor)
+
+type ActionCursor = readonly [
+	version: 1,
+	chainId: number,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	timestamp: string,
+	blockNumber: string,
+	transactionIndex: number,
+	blockHash: string,
+	txHash: string,
+]
+
+const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
+	parts.length === 13 &&
+	parts[0] === 1 &&
+	isNonNegativeSafeInteger(parts[1]) &&
+	isPostgresBigint(parts[2]) &&
+	typeof parts[3] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
+	isPostgresBigint(parts[4]) &&
+	parts.slice(5, 8).every((part) => typeof part === 'string') &&
+	typeof parts[8] === 'string' &&
+	isExactIsoTimestamp(parts[8]) &&
+	isPostgresBigint(parts[9]) &&
+	isPostgresInteger(parts[10]) &&
+	typeof parts[11] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[11]) &&
+	typeof parts[12] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[12])
+
+const parseActionCursor = (value: string | null, chainId: number): ActionCursor | undefined => {
+	if (value === null) return undefined
+	let parts: unknown[]
+	try {
+		const parsed = decodeOpaqueCursor(value)
+		parts = Array.isArray(parsed) ? parsed : []
+		if (!isActionCursor(parts)) throw new Error('shape')
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+	if (parts[1] !== chainId) throw new ApiRequestError('cursor does not match the requested action collection')
+	return parts
+}
+
+const actionCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+	encodeOpaqueCursor([
+		1,
+		chainId,
+		...snapshotBoundary(asOf),
+		cursorTimestamp(row['block_timestamp']),
+		String(row['block_number']),
+		Number(row['transaction_index']),
+		String(row['block_hash']),
+		String(row['tx_hash']),
+	] satisfies ActionCursor)
 
 type CanonicalHistoryFilter = 'canonical' | 'orphaned' | 'all'
 
@@ -179,21 +357,26 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	const cursor = parseCursor(url.searchParams.get('cursor'))
-	const event = url.searchParams.get('event')?.trim() || undefined
-	const address = evmAddress(url.searchParams.get('address'), 'address')
+	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
+	const event = url.searchParams.get('event')?.trim() || null
+	const address = evmAddress(url.searchParams.get('address'), 'address') ?? null
 	const decoded = url.searchParams.get('decoded')
 	if (decoded !== null && decoded !== '' && decoded !== 'true' && decoded !== 'false') throw new ApiRequestError('decoded must be true or false')
+	const decodedFilter: 'true' | 'false' | null = decoded === 'true' || decoded === 'false' ? decoded : null
 	const canonical = canonicalHistoryFilter(url)
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	const cursor = parseLogCursor(url.searchParams.get('cursor'), chainId, event, address, decodedFilter, canonical)
+	const asOf = await operationsAsOf(sql, chainId)
+	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 6, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	const values: Array<string | number> = []
 	const clauses = canonical === 'all' ? ['true'] : [`l.canonical = ${canonical === 'canonical' ? 'true' : 'false'}`]
 	const bind = (value: string | number): string => {
 		values.push(value)
 		return `$${values.length}`
 	}
-	if (chainId !== undefined) clauses.push(`l.chain_id = ${bind(chainId)}`)
-	if (event !== undefined) clauses.push(`l.event_name ILIKE ${bind(`%${event}%`)}`)
-	if (address !== undefined) {
+	clauses.push(`l.chain_id = ${bind(chainId)}`)
+	if (event !== null) clauses.push(`l.event_name ILIKE ${bind(`%${event}%`)}`)
+	if (address !== null) {
 		const addressParameter = bind(address)
 		const addressPatternParameter = bind(`%${address}%`)
 		clauses.push(`(
@@ -208,22 +391,42 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 			)
 		)`)
 	}
-	if (decoded === 'true') clauses.push("l.decode_status = 'decoded'")
-	if (decoded === 'false') clauses.push("l.decode_status <> 'decoded'")
+	if (decodedFilter === 'true') clauses.push("l.decode_status = 'decoded'")
+	if (decodedFilter === 'false') clauses.push("l.decode_status <> 'decoded'")
 	if (cursor !== undefined) {
-		const [timestamp, cursorChain, block, transaction, log, blockHash] = cursor
 		clauses.push(
-			`(b.timestamp, l.chain_id, l.block_number, l.transaction_index, l.log_index, l.block_hash) < (${bind(timestamp)}::timestamptz, ${bind(cursorChain)}, ${bind(block)}, ${bind(transaction)}, ${bind(log)}, ${bind(blockHash)})`,
+			`(b.timestamp, l.block_number, l.transaction_index, l.log_index, l.block_hash) < (${bind(cursor[12])}::timestamptz, ${bind(cursor[13])}::bigint, ${bind(cursor[14])}, ${bind(cursor[15])}, ${bind(cursor[16])})`,
 		)
 	}
 	values.push(limit + 1)
 	const rows = await sql.unsafe(
-		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, t.from_address AS origin_address, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url
+		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, t.from_address AS origin_address, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url,
+			CASE WHEN l.canonical THEN 'canonical'
+				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+				WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+				WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+				WHEN invalidation.reason = 'abi-redecode' THEN 'decode-superseded'
+				WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
+				ELSE 'noncanonical-unknown' END AS evidence_status,
+			invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
 		FROM logs l
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash
 		JOIN networks n ON n.chain_id = l.chain_id
 		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address AND c.canonical
+		LEFT JOIN LATERAL (
+			SELECT replacement.id, replacement.reason,
+				COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+					WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes,
+				replacement.detected_at
+			FROM history_invalidation_occurrences occurrence
+			JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+			WHERE occurrence.occurrence_kind = 'log' AND occurrence.chain_id = l.chain_id
+				AND occurrence.block_hash = l.block_hash AND occurrence.occurrence_id = l.tx_hash
+				AND occurrence.sub_index = l.log_index
+			ORDER BY replacement.id DESC LIMIT 1
+		) invalidation ON true
 		WHERE ${clauses.join(' AND ')}
 		ORDER BY b.timestamp DESC, l.chain_id DESC, l.block_number DESC, l.transaction_index DESC, l.log_index DESC, l.block_hash DESC
 		LIMIT $${values.length}`,
@@ -234,7 +437,11 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	return json({
 		items,
 		canonical,
-		nextCursor: hasMore && items.length > 0 ? cursorFor(items[items.length - 1] as Record<string, unknown>) : undefined,
+		asOf,
+		nextCursor:
+			hasMore && items.length > 0
+				? logCursorFor(chainId, event, address, decodedFilter, canonical, asOf, items[items.length - 1] as Record<string, unknown>)
+				: undefined,
 	})
 }
 
@@ -259,56 +466,291 @@ const logDetail = async (sql: SQL, parts: readonly string[], url: URL): Promise<
 	const rows = await sql`
 		SELECT l.*, b.timestamp AS block_timestamp, c.label AS contract_label, c.kind AS contract_kind, c.provenance AS contract_provenance,
 			t.from_address AS origin_address, t.to_address, t.value, t.input, t.gas_used, t.receipt, a.function_name, a.function_signature, a.arguments AS action_arguments, a.display_arguments AS action_display_arguments, a.argument_schema AS action_argument_schema, a.summary AS action_summary,
-			n.id AS network_id, n.explorer_base_url
+			n.id AS network_id, n.explorer_base_url,
+			CASE WHEN l.canonical THEN 'canonical'
+				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+				WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+				WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+				WHEN invalidation.reason = 'abi-redecode' THEN 'decode-superseded'
+				WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
+				ELSE 'noncanonical-unknown' END AS evidence_status,
+			invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
 		FROM logs l
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash
 		LEFT JOIN actions a ON a.chain_id = l.chain_id AND a.block_hash = l.block_hash AND a.tx_hash = l.tx_hash
 		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address AND c.canonical
+		LEFT JOIN LATERAL (
+			SELECT replacement.id, replacement.reason,
+				COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+					WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes,
+				replacement.detected_at
+			FROM history_invalidation_occurrences occurrence
+			JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+			WHERE occurrence.occurrence_kind = 'log' AND occurrence.chain_id = l.chain_id
+				AND occurrence.block_hash = l.block_hash AND occurrence.occurrence_id = l.tx_hash
+				AND occurrence.sub_index = l.log_index
+			ORDER BY replacement.id DESC LIMIT 1
+		) invalidation ON true
 		JOIN networks n ON n.chain_id = l.chain_id
 		WHERE (${canonicalOnly} = false OR (l.canonical AND b.canonical AND t.canonical))
 			AND l.chain_id = ${chainId} AND l.block_hash = ${blockHash.toLowerCase()} AND l.tx_hash = ${hash.toLowerCase()} AND l.log_index = ${logIndex}
 	`
 	if (rows.length === 0) return json({ error: 'Log not found' }, 404)
-	const related = await sql`
+	const [related, logInterpretations, actionInterpretations] = await Promise.all([
+		sql`
 		SELECT log_index, emitter_address, event_name, summary, canonical
 		FROM logs
 		WHERE (${canonicalOnly} = false OR canonical) AND chain_id = ${chainId}
 			AND block_hash = ${blockHash.toLowerCase()} AND tx_hash = ${hash.toLowerCase()}
 		ORDER BY log_index
-	`
-	return json({ ...rows[0], relatedLogs: related })
+	`,
+		sql`
+			SELECT interpretation_kind, interpretation_key, indexer_run_id::text, abi_source_hash,
+				application_source_hash, projection_source_hash, interpretation, interpreted_at
+			FROM log_interpretations
+			WHERE chain_id = ${chainId} AND block_hash = ${blockHash.toLowerCase()} AND tx_hash = ${hash.toLowerCase()} AND log_index = ${logIndex}
+			ORDER BY interpreted_at DESC, indexer_run_id DESC, interpretation_kind, interpretation_key
+		`,
+		sql`
+			SELECT indexer_run_id::text, abi_source_hash, application_source_hash, interpretation, interpreted_at
+			FROM action_interpretations
+			WHERE chain_id = ${chainId} AND block_hash = ${blockHash.toLowerCase()} AND tx_hash = ${hash.toLowerCase()}
+			ORDER BY interpreted_at DESC, indexer_run_id DESC
+		`,
+	])
+	const detail = decodedJsonColumns(rows[0] ?? {}, actionJsonColumns)
+	return json({
+		...detail,
+		relatedLogs: related,
+		interpretations: {
+			log: logInterpretations.map((row: Record<string, unknown>) => decodedJsonColumns(row, ['interpretation'])),
+			action: actionInterpretations.map((row: Record<string, unknown>) => decodedJsonColumns(row, ['interpretation'])),
+		},
+	})
 }
+
+type ReorganizationCursor = readonly [
+	version: 1,
+	chainId: number,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	detectedAt: string,
+	id: string,
+]
+
+const isReorganizationCursor = (parts: readonly unknown[]): parts is ReorganizationCursor =>
+	parts.length === 10 &&
+	parts[0] === 1 &&
+	isNonNegativeSafeInteger(parts[1]) &&
+	isPostgresBigint(parts[2]) &&
+	typeof parts[3] === 'string' &&
+	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
+	isPostgresBigint(parts[4]) &&
+	parts.slice(5, 8).every((part) => typeof part === 'string') &&
+	typeof parts[8] === 'string' &&
+	isExactIsoTimestamp(parts[8]) &&
+	isPostgresBigint(parts[9])
+
+const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
+	if (value === null) return undefined
+	let parts: unknown[]
+	try {
+		const parsed = decodeOpaqueCursor(value)
+		parts = Array.isArray(parsed) ? parsed : []
+		if (!isReorganizationCursor(parts)) throw new Error('shape')
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+	if (parts[1] !== chainId) throw new ApiRequestError('cursor does not match the requested reorganization collection')
+	return parts
+}
+
+const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['detected_at']), String(row['id'])] satisfies ReorganizationCursor)
 
 const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	const offset = boundedInteger(url.searchParams.get('offset') ?? url.searchParams.get('cursor'), 'offset', 100_000) ?? 0
+	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
+	const cursor = parseReorganizationCursor(url.searchParams.get('cursor'), chainId)
+	const asOf = await operationsAsOf(sql, chainId)
+	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	const snapshotInvalidationId = String(asOf['invalidationId'])
+	const cursorClause = cursor === undefined ? sql`` : sql`AND (reorganization.detected_at, reorganization.id) < (${cursor[8]}, ${cursor[9]})`
 	const rows = await sql`
 		SELECT reorganization.id::text, reorganization.chain_id, reorganization.previous_block::text,
 			reorganization.previous_hash, reorganization.ancestor_block::text, reorganization.ancestor_hash,
-			reorganization.depth::text, reorganization.reason, reorganization.detected_at,
-			count(*) OVER ()::integer AS total
+			reorganization.depth::text, reorganization.reason, reorganization.indexer_run_id::text,
+			reorganization.abi_source_hash, reorganization.application_source_hash, reorganization.projection_source_hash,
+			COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+				WHERE cause.invalidation_id = reorganization.id), jsonb_build_array(reorganization.reason)) AS causes,
+			COALESCE((SELECT jsonb_object_agg(counts.occurrence_kind, counts.occurrence_count ORDER BY counts.occurrence_kind)
+				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
+					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
+					GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
+			reorganization.detected_at
 		FROM chain_reorganizations reorganization
-		WHERE reorganization.chain_id = ${chainId}
+		WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotInvalidationId} ${cursorClause}
 		ORDER BY reorganization.detected_at DESC, reorganization.id DESC
-		LIMIT ${limit} OFFSET ${offset}
+		LIMIT ${limit + 1}
 	`
-	const total = Number(rows[0]?.['total'] ?? 0)
-	const items = rows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
-	return json({ items, total, limit, offset })
+	const totalRows = await sql`
+		SELECT count(*)::text AS total FROM chain_reorganizations
+		WHERE chain_id = ${chainId} AND id <= ${snapshotInvalidationId}
+	`
+	const total = directObservationTotal(totalRows[0]?.['total'] ?? '0')
+	const hasMore = rows.length > limit
+	const items = rows.slice(0, limit)
+	const last = items[items.length - 1]
+	return json({
+		items,
+		total,
+		limit,
+		asOf,
+		nextCursor: hasMore && last !== undefined ? reorganizationCursorFor(chainId, asOf, last) : undefined,
+	})
 }
 
-const provenanceHistory = async (sql: SQL): Promise<Response> => {
+type ProvenanceCursor = readonly [version: 1, startedAt: string, runId: string]
+
+const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const parsed = decodeOpaqueCursor(value)
+		const parts = Array.isArray(parsed) ? parsed : []
+		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isExactIsoTimestamp(parts[1]) || !isPostgresBigint(parts[2]))
+			throw new Error('shape')
+		return [1, parts[1], parts[2]]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> => {
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const cursor = parseProvenanceCursor(url.searchParams.get('cursor'))
+	const values: Array<string | number> = []
+	const cursorClause =
+		cursor === undefined
+			? ''
+			: (() => {
+					values.push(cursor[1], cursor[2])
+					return `WHERE (started_at, id) < ($1::timestamptz, $2::bigint)`
+				})()
+	values.push(limit + 1)
 	const [migrations, runRows] = await Promise.all([
 		sql`SELECT schema_version, description, applied_at FROM augurscan_schema_migrations ORDER BY applied_at, schema_version`,
-		sql`SELECT id::text, schema_version, app_version, abi_source_hash, network_configuration, started_at, stopped_at
-			FROM indexer_runs ORDER BY started_at DESC, id DESC LIMIT 101`,
+		sql.unsafe(
+			`SELECT id::text, schema_version, app_version, abi_source_hash, application_source_hash,
+				projection_source_hash, indexer_enabled, network_configuration, started_at, stopped_at,
+				count(*) OVER ()::integer AS remaining_total
+			FROM indexer_runs ${cursorClause} ORDER BY started_at DESC, id DESC LIMIT $${values.length}`,
+			values,
+		),
 	])
-	return json({ migrations, runs: runRows.slice(0, 100), runLimit: 100, runsTruncated: runRows.length > 100 })
+	const runs = runRows
+		.slice(0, limit)
+		.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'remaining_total')))
+	const hasMore = runRows.length > limit
+	const last = runs[runs.length - 1]
+	return json({
+		migrations,
+		runs,
+		runLimit: limit,
+		runsTruncated: hasMore,
+		remainingTotal: Number(runRows[0]?.['remaining_total'] ?? 0),
+		nextCursor:
+			hasMore && last !== undefined ? encodeOpaqueCursor([1, String(normalize(last['started_at'])), String(last['id'])] satisfies ProvenanceCursor) : undefined,
+	})
 }
+
+type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
+type HistoricalExportCursor = readonly [
+	version: 1,
+	dataset: HistoricalExportDataset,
+	chainId: number,
+	canonical: CanonicalHistoryFilter,
+	fromBlock: string,
+	toBlock: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	snapshotInvalidationId: string,
+	snapshotTotal: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	lastKey: readonly string[],
+]
+
+const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly unknown[]): key is readonly string[] => {
+	if (!key.every((item) => typeof item === 'string')) return false
+	if (dataset === 'logs')
+		return (
+			key.length === 5 &&
+			isPostgresBigint(key[0]) &&
+			isPostgresIntegerString(key[1]) &&
+			isPostgresIntegerString(key[2]) &&
+			/^0x[0-9a-f]{64}$/.test(key[3] ?? '') &&
+			/^0x[0-9a-f]{64}$/.test(key[4] ?? '')
+		)
+	if (dataset === 'timeline')
+		return (
+			key.length === 6 &&
+			isPostgresBigint(key[0]) &&
+			/^0x[0-9a-f]{64}$/.test(key[1] ?? '') &&
+			/^0x[0-9a-f]{64}$/.test(key[2] ?? '') &&
+			isPostgresIntegerString(key[3]) &&
+			(key[4]?.length ?? 0) > 0 &&
+			(key[5]?.length ?? 0) > 0
+		)
+	return key.length === 1 && isPostgresBigint(key[0])
+}
+
+export const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const parsed = decodeOpaqueCursor(value)
+		const parts = Array.isArray(parsed) ? parsed : []
+		const dataset = parts[1]
+		const canonical = parts[3]
+		const lastKey = parts[13]
+		if (
+			parts.length !== 14 ||
+			parts[0] !== 1 ||
+			(dataset !== 'logs' && dataset !== 'timeline' && dataset !== 'reorgs') ||
+			!isNonNegativeSafeInteger(parts[2]) ||
+			(canonical !== 'canonical' && canonical !== 'orphaned' && canonical !== 'all') ||
+			!isPostgresBigint(parts[4]) ||
+			!isPostgresBigint(parts[5]) ||
+			BigInt(parts[4]) > BigInt(parts[5]) ||
+			!isPostgresBigint(parts[6]) ||
+			typeof parts[7] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[7]) ||
+			!isPostgresBigint(parts[8]) ||
+			!isPostgresBigint(parts[9]) ||
+			typeof parts[10] !== 'string' ||
+			typeof parts[11] !== 'string' ||
+			typeof parts[12] !== 'string' ||
+			!Array.isArray(lastKey) ||
+			!historicalExportKeyValid(dataset, lastKey)
+		)
+			throw new Error('shape')
+		return [1, dataset, parts[2], canonical, parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parts[10], parts[11], parts[12], lastKey]
+	} catch (error) {
+		throw new ApiRequestError('export cursor is invalid', { cause: error })
+	}
+}
+
+const historicalExportCursorFor = (snapshot: readonly unknown[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])
 
 const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -320,47 +762,230 @@ const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 	if (BigInt(fromBlock) > BigInt(toBlock)) throw new ApiRequestError('fromBlock must not exceed toBlock')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 5_000
 	const limit = Math.min(Math.max(requestedLimit, 1), 50_000)
-	const offset = postgresBigint(url.searchParams.get('offset'), 'offset') ?? '0'
-	const canonical = canonicalHistoryFilter(url)
+	if (url.searchParams.has('offset')) throw new ApiRequestError('offset pagination is unavailable for exports; follow x-augurscan-next-cursor')
+	const canonical = dataset === 'reorgs' ? 'all' : canonicalHistoryFilter(url)
+	const cursor = parseHistoricalExportCursor(url.searchParams.get('cursor'))
+	if (cursor !== undefined && (cursor[1] !== dataset || cursor[2] !== chainId || cursor[3] !== canonical || cursor[4] !== fromBlock || cursor[5] !== toBlock))
+		throw new ApiRequestError('export cursor does not match the requested dataset, chain, canonical scope, or block range')
+	const snapshotRows = await sql`
+		SELECT COALESCE(network.indexed_block, 0)::text AS snapshot_block,
+			COALESCE(network.indexed_hash, ${`0x${'0'.repeat(64)}`}) AS snapshot_hash,
+			COALESCE((SELECT max(id) FROM chain_reorganizations WHERE chain_id = ${chainId}), 0)::text AS invalidation_id,
+			COALESCE(network.applied_abi_source_hash, 'unavailable') AS abi_source_hash,
+			COALESCE(network.applied_application_source_hash, 'unavailable') AS application_source_hash,
+			COALESCE(network.applied_projection_source_hash, 'unavailable') AS projection_source_hash
+		FROM networks network WHERE network.chain_id = ${chainId}
+	`
+	const snapshotRow = snapshotRows[0]
+	if (snapshotRow === undefined) throw new ApiRequestError('chainId is not configured')
+	const currentSnapshotBlock = String(snapshotRow['snapshot_block'])
+	const currentSnapshotHash = String(snapshotRow['snapshot_hash'])
+	const currentInvalidationId = String(snapshotRow['invalidation_id'])
+	const currentAbiHash = String(snapshotRow['abi_source_hash'])
+	const currentApplicationHash = String(snapshotRow['application_source_hash'])
+	const currentProjectionHash = String(snapshotRow['projection_source_hash'])
+	if (cursor !== undefined) {
+		const snapshotCanonicalRows = await sql`
+			SELECT (${cursor[6]} = '0' AND ${cursor[7]} = ${`0x${'0'.repeat(64)}`}) OR EXISTS (
+				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${cursor[6]} AND hash = ${cursor[7]} AND canonical
+			) AS snapshot_canonical
+		`
+		if (
+			snapshotCanonicalRows[0]?.['snapshot_canonical'] !== true ||
+			currentInvalidationId !== cursor[8] ||
+			currentAbiHash !== cursor[10] ||
+			currentApplicationHash !== cursor[11] ||
+			currentProjectionHash !== cursor[12]
+		)
+			throw new ApiConflictError('Export snapshot changed; restart pagination')
+	}
+	const snapshotBlock = cursor?.[6] ?? currentSnapshotBlock
+	const snapshotHash = cursor?.[7] ?? currentSnapshotHash
+	const snapshotInvalidationId = cursor?.[8] ?? currentInvalidationId
+	const abiHash = cursor?.[10] ?? currentAbiHash
+	const applicationHash = cursor?.[11] ?? currentApplicationHash
+	const projectionHash = cursor?.[12] ?? currentProjectionHash
+	const lastKey = cursor?.[13]
+	const totalRows =
+		cursor === undefined
+			? dataset === 'logs'
+				? await sql`
+					SELECT count(*)::text AS total FROM logs log
+					WHERE log.chain_id = ${chainId} AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
+						AND log.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})
+				`
+				: dataset === 'timeline'
+					? await sql`
+						SELECT count(*)::text AS total FROM protocol_timeline_entries timeline
+						WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
+							AND timeline.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+					`
+					: await sql`
+						SELECT count(*)::text AS total FROM chain_reorganizations
+						WHERE chain_id = ${chainId} AND id <= ${snapshotInvalidationId} AND (
+							reason = 'start-boundary-advanced' OR COALESCE(previous_block, ancestor_block) BETWEEN ${fromBlock} AND ${toBlock}
+						)
+					`
+			: []
+	const snapshotTotal = cursor?.[9] ?? String(totalRows[0]?.['total'] ?? '0')
 	const rows =
 		dataset === 'logs'
 			? await sql`
 				SELECT log.chain_id, log.block_number::text, log.block_hash, log.tx_hash, log.log_index,
-					log.emitter_address, log.event_name, log.event_signature, log.arguments, log.summary,
-					log.decode_status, log.canonical, log.finalized, block.timestamp
+					log.transaction_index,
+					log.emitter_address, log.topics, log.data, log.event_name, log.event_signature,
+					log.arguments, log.display_arguments, log.argument_schema, log.summary,
+					log.decode_status, log.decode_error, log.canonical, log.finalized, block.timestamp,
+					COALESCE(interpretation_history.interpretations, '[]'::jsonb) AS interpretations,
+					CASE WHEN log.canonical THEN 'canonical'
+						WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+						WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+						WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+						WHEN invalidation.reason = 'abi-redecode' THEN 'decode-superseded'
+						WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
+						ELSE 'noncanonical-unknown' END AS evidence_status,
+					invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+					invalidation.causes AS invalidation_causes
 				FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash
+				LEFT JOIN LATERAL (
+					SELECT jsonb_agg(
+						jsonb_build_object(
+							'interpretation_kind', interpretation.interpretation_kind,
+							'interpretation_key', interpretation.interpretation_key,
+							'indexer_run_id', interpretation.indexer_run_id::text,
+							'schema_version', run.schema_version,
+							'app_version', run.app_version,
+							'abi_source_hash', interpretation.abi_source_hash,
+							'application_source_hash', interpretation.application_source_hash,
+							'projection_source_hash', interpretation.projection_source_hash,
+							'interpretation', interpretation.interpretation,
+							'interpreted_at', interpretation.interpreted_at
+						)
+						ORDER BY interpretation.interpreted_at, interpretation.indexer_run_id,
+							interpretation.interpretation_kind, interpretation.interpretation_key
+					) AS interpretations
+					FROM log_interpretations interpretation
+					JOIN indexer_runs run ON run.id = interpretation.indexer_run_id
+					WHERE interpretation.chain_id = log.chain_id AND interpretation.block_hash = log.block_hash
+						AND interpretation.tx_hash = log.tx_hash AND interpretation.log_index = log.log_index
+				) interpretation_history ON true
+				LEFT JOIN LATERAL (
+					SELECT replacement.id, replacement.reason,
+						COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+							WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes
+					FROM history_invalidation_occurrences occurrence
+					JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+					WHERE occurrence.occurrence_kind = 'log' AND occurrence.chain_id = log.chain_id
+						AND occurrence.block_hash = log.block_hash AND occurrence.occurrence_id = log.tx_hash
+						AND occurrence.sub_index = log.log_index
+					ORDER BY replacement.id DESC LIMIT 1
+				) invalidation ON true
 				WHERE log.chain_id = ${chainId} AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
-					AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})
+					AND log.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR log.canonical = ${canonical === 'canonical'})
+					AND (${lastKey === undefined} OR (log.block_number, log.transaction_index, log.log_index, log.block_hash, log.tx_hash) >
+						(${lastKey?.[0] ?? '0'}::bigint, ${lastKey?.[1] ?? '0'}::integer, ${lastKey?.[2] ?? '0'}::integer,
+							${lastKey?.[3] ?? `0x${'0'.repeat(64)}`}, ${lastKey?.[4] ?? `0x${'0'.repeat(64)}`}))
 				ORDER BY log.block_number, log.transaction_index, log.log_index, log.block_hash, log.tx_hash
-				LIMIT ${limit + 1} OFFSET ${offset}
+				LIMIT ${limit + 1}
 			`
 			: dataset === 'timeline'
 				? await sql`
 					SELECT timeline.chain_id, timeline.block_number::text, timeline.block_hash, timeline.tx_hash,
 						timeline.log_index, timeline.entity_type, timeline.entity_identity, timeline.semantic_event_kind,
 						timeline.summary_data, timeline.related_entities, timeline.source_contract, timeline.source_event,
-						timeline.canonical, block.timestamp
+						timeline.canonical, block.timestamp,
+						CASE WHEN timeline.canonical THEN 'canonical'
+							WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+							WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+							WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+							WHEN invalidation.reason = 'abi-redecode' THEN 'decode-superseded'
+							WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
+							ELSE 'noncanonical-unknown' END AS evidence_status,
+						invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+						invalidation.causes AS invalidation_causes
 					FROM protocol_timeline_entries timeline
 					JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
+					LEFT JOIN LATERAL (
+						SELECT replacement.id, replacement.reason,
+							COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+								WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes
+						FROM history_invalidation_occurrences occurrence
+						JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+						WHERE occurrence.occurrence_kind = 'log' AND occurrence.chain_id = timeline.chain_id
+							AND occurrence.block_hash = timeline.block_hash AND occurrence.occurrence_id = timeline.tx_hash
+							AND occurrence.sub_index = timeline.log_index
+						ORDER BY replacement.id DESC LIMIT 1
+					) invalidation ON true
 					WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-						AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+						AND timeline.block_number <= ${snapshotBlock} AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+						AND (${lastKey === undefined} OR (timeline.block_number, timeline.block_hash, timeline.tx_hash, timeline.log_index,
+							timeline.entity_type, timeline.entity_identity) > (${lastKey?.[0] ?? '0'}::bigint,
+							${lastKey?.[1] ?? `0x${'0'.repeat(64)}`}, ${lastKey?.[2] ?? `0x${'0'.repeat(64)}`},
+							${lastKey?.[3] ?? '0'}::integer, ${lastKey?.[4] ?? ''}, ${lastKey?.[5] ?? ''}))
 					ORDER BY timeline.block_number, timeline.block_hash, timeline.tx_hash, timeline.log_index,
 						timeline.entity_type, timeline.entity_identity
-					LIMIT ${limit + 1} OFFSET ${offset}
+					LIMIT ${limit + 1}
 				`
 				: await sql`
-					SELECT id::text, chain_id, previous_block::text, previous_hash, ancestor_block::text,
-						ancestor_hash, depth::text, reason, detected_at
-					FROM chain_reorganizations
-					WHERE chain_id = ${chainId} AND (
-						reason = 'start-boundary-advanced'
-						OR COALESCE(previous_block, ancestor_block) BETWEEN ${fromBlock} AND ${toBlock}
+					SELECT reorganization.id::text, reorganization.chain_id, reorganization.previous_block::text,
+						reorganization.previous_hash, reorganization.ancestor_block::text, reorganization.ancestor_hash,
+						reorganization.depth::text, reorganization.reason, reorganization.indexer_run_id::text,
+						reorganization.abi_source_hash, reorganization.application_source_hash, reorganization.projection_source_hash,
+						COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+							WHERE cause.invalidation_id = reorganization.id), jsonb_build_array(reorganization.reason)) AS causes,
+						COALESCE((SELECT jsonb_object_agg(counts.occurrence_kind, counts.occurrence_count ORDER BY counts.occurrence_kind)
+							FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
+								FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
+								GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
+						reorganization.detected_at
+					FROM chain_reorganizations reorganization
+					WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotInvalidationId}
+						AND reorganization.id > ${lastKey?.[0] ?? '0'} AND (
+						reorganization.reason = 'start-boundary-advanced'
+						OR COALESCE(reorganization.previous_block, reorganization.ancestor_block) BETWEEN ${fromBlock} AND ${toBlock}
 					)
-					ORDER BY detected_at, id LIMIT ${limit + 1} OFFSET ${offset}
+					ORDER BY reorganization.id LIMIT ${limit + 1}
 				`
 	const truncated = rows.length > limit
 	const exported = rows.slice(0, limit)
-	const nextOffset = nextHistoricalExportOffset(offset, exported.length, truncated)
+	const finalRow = exported[exported.length - 1] as Record<string, unknown> | undefined
+	const exportedLastKey =
+		finalRow === undefined
+			? undefined
+			: dataset === 'logs'
+				? [
+						String(finalRow['block_number']),
+						String(finalRow['transaction_index']),
+						String(finalRow['log_index']),
+						String(finalRow['block_hash']),
+						String(finalRow['tx_hash']),
+					]
+				: dataset === 'timeline'
+					? [
+							String(finalRow['block_number']),
+							String(finalRow['block_hash']),
+							String(finalRow['tx_hash']),
+							String(finalRow['log_index']),
+							String(finalRow['entity_type']),
+							String(finalRow['entity_identity']),
+						]
+					: [String(finalRow['id'])]
+	const snapshotPrefix = [
+		1,
+		dataset,
+		chainId,
+		canonical,
+		fromBlock,
+		toBlock,
+		snapshotBlock,
+		snapshotHash,
+		snapshotInvalidationId,
+		snapshotTotal,
+		abiHash,
+		applicationHash,
+		projectionHash,
+	] as const
+	const nextCursor = truncated && exportedLastKey !== undefined ? historicalExportCursorFor(snapshotPrefix, exportedLastKey) : undefined
 	const body = `${exported.map((row: Record<string, unknown>) => JSON.stringify(normalize(row))).join('\n')}${exported.length === 0 ? '' : '\n'}`
 	return new Response(body, {
 		headers: {
@@ -369,31 +994,75 @@ const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 			'content-disposition': `attachment; filename="augurscan-${dataset}-${chainId}-${fromBlock}-${toBlock}.ndjson"`,
 			'x-augurscan-returned': String(exported.length),
 			'x-augurscan-truncated': String(truncated),
-			...(nextOffset === undefined ? {} : { 'x-augurscan-next-offset': nextOffset }),
+			'x-augurscan-snapshot-block': snapshotBlock,
+			'x-augurscan-snapshot-hash': snapshotHash,
+			'x-augurscan-snapshot-invalidation-id': snapshotInvalidationId,
+			'x-augurscan-snapshot-total': snapshotTotal,
+			'x-augurscan-abi-source-hash': abiHash,
+			'x-augurscan-application-source-hash': applicationHash,
+			'x-augurscan-projection-source-hash': projectionHash,
+			...(nextCursor === undefined ? {} : { 'x-augurscan-next-cursor': nextCursor }),
 		},
 	})
 }
 
-const operationsAsOf = async (sql: SQL, chainId: number): Promise<Record<string, unknown>> => {
-	const rows = await sql`
-		SELECT indexed_block::text AS "blockNumber", indexed_hash AS "blockHash",
-			EXTRACT(EPOCH FROM indexed_timestamp)::bigint::text AS "blockTimestamp",
-			observed_block::text AS "observedHead",
-			GREATEST(COALESCE(observed_block, indexed_block, 0) - COALESCE(indexed_block, observed_block, 0), 0)::text AS "lagBlocks",
-			phase, last_success_at AS "lastSuccessfulRefresh"
-		FROM networks WHERE chain_id = ${chainId}
-	`
+const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
+	const rows =
+		atBlock === undefined
+			? await sql`
+				SELECT indexed_block::text AS "blockNumber", indexed_hash AS "blockHash",
+					EXTRACT(EPOCH FROM indexed_timestamp)::bigint::text AS "blockTimestamp",
+					indexed_block::text AS "indexedHead", '0'::text AS "historyDepthBlocks",
+					observed_block::text AS "observedHead",
+					GREATEST(COALESCE(observed_block, indexed_block, 0) - COALESCE(indexed_block, observed_block, 0), 0)::text AS "lagBlocks",
+					COALESCE((SELECT max(reorganization.id) FROM chain_reorganizations reorganization
+						WHERE reorganization.chain_id = network.chain_id), 0)::text AS "invalidationId",
+					COALESCE(network.applied_abi_source_hash, 'unavailable') AS "abiSourceHash",
+					COALESCE(network.applied_application_source_hash, 'unavailable') AS "applicationSourceHash",
+					COALESCE(network.applied_projection_source_hash, 'unavailable') AS "projectionSourceHash",
+					phase, last_success_at AS "lastSuccessfulRefresh", false AS historical
+				FROM networks network WHERE chain_id = ${chainId}
+			`
+			: await sql`
+				SELECT block.number::text AS "blockNumber", block.hash AS "blockHash",
+					EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS "blockTimestamp",
+					network.indexed_block::text AS "indexedHead",
+					GREATEST(COALESCE(network.indexed_block, block.number, 0) - block.number, 0)::text AS "historyDepthBlocks",
+					network.observed_block::text AS "observedHead",
+					GREATEST(COALESCE(network.observed_block, block.number, 0) - block.number, 0)::text AS "lagBlocks",
+					COALESCE((SELECT max(reorganization.id) FROM chain_reorganizations reorganization
+						WHERE reorganization.chain_id = network.chain_id), 0)::text AS "invalidationId",
+					COALESCE(network.applied_abi_source_hash, 'unavailable') AS "abiSourceHash",
+					COALESCE(network.applied_application_source_hash, 'unavailable') AS "applicationSourceHash",
+					COALESCE(network.applied_projection_source_hash, 'unavailable') AS "projectionSourceHash",
+					'historical'::text AS phase, network.last_success_at AS "lastSuccessfulRefresh", true AS historical
+				FROM networks network JOIN blocks block ON block.chain_id = network.chain_id
+				WHERE network.chain_id = ${chainId} AND block.number = ${atBlock} AND block.canonical
+			`
 	const row = rows[0]
-	if (row === undefined) throw new ApiRequestError('chainId is not configured')
+	if (row === undefined) {
+		const configured = await sql`SELECT 1 FROM networks WHERE chain_id = ${chainId}`
+		if (configured.length === 0) throw new ApiRequestError('chainId is not configured')
+		throw new ApiRequestError('atBlock is outside retained canonical coverage')
+	}
 	return {
 		...row,
 		blockNumber: row['blockNumber'] ?? '0',
 		blockHash: row['blockHash'] ?? `0x${'0'.repeat(64)}`,
 		blockTimestamp: row['blockTimestamp'] ?? '0',
+		indexedHead: row['indexedHead'] ?? row['blockNumber'] ?? '0',
+		historyDepthBlocks: row['historyDepthBlocks'] ?? '0',
 		observedHead: row['observedHead'] ?? '0',
+		invalidationId: row['invalidationId'] ?? '0',
+		abiSourceHash: row['abiSourceHash'] ?? 'unavailable',
+		applicationSourceHash: row['applicationSourceHash'] ?? 'unavailable',
+		projectionSourceHash: row['projectionSourceHash'] ?? 'unavailable',
 		availability: row['blockNumber'] === null || row['blockNumber'] === undefined ? 'Awaiting indexed evidence' : 'available',
 	}
 }
+
+const operationsAsOfFromUrl = async (sql: SQL, chainId: number, url: URL): Promise<Record<string, unknown>> =>
+	await operationsAsOf(sql, chainId, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 
 const reportCatalogData = async (
 	sql: SQL,
@@ -404,27 +1073,32 @@ const reportCatalogData = async (
 	cursorLog = 2_147_483_647,
 	queryLimit = 250,
 ) => {
+	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
 		WITH identities AS (
-			SELECT DISTINCT open_oracle_address, report_id FROM open_oracle_report_events WHERE chain_id = ${chainId} AND canonical
+			SELECT DISTINCT open_oracle_address, report_id FROM open_oracle_report_events
+			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 		)
 		SELECT identity.open_oracle_address, identity.report_id::text AS report_id,
 			latest.event_name, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
 			round.report_data, round.round_number::text AS round_number,
 			(SELECT count(*) FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id
-				AND evidence.canonical AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed'))::integer AS observed_rounds,
+				AND evidence.canonical AND evidence.block_number <= ${snapshotBlock}
+				AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed'))::integer AS observed_rounds,
 			block.timestamp AS block_timestamp
 		FROM identities identity
 		JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
-				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id AND evidence.canonical
+				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id
+				AND evidence.canonical AND evidence.block_number <= ${snapshotBlock}
 			ORDER BY evidence.block_number DESC, evidence.log_index DESC, evidence.tx_hash DESC LIMIT 1
 		) latest ON true
 		LEFT JOIN LATERAL (
 			SELECT * FROM open_oracle_report_events evidence WHERE evidence.chain_id = ${chainId}
 				AND evidence.open_oracle_address = identity.open_oracle_address AND evidence.report_id = identity.report_id
-				AND evidence.canonical AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed')
+				AND evidence.canonical AND evidence.block_number <= ${snapshotBlock}
+				AND evidence.event_name IN ('ReportSubmitted', 'ReportDisputed')
 			ORDER BY evidence.block_number DESC, evidence.log_index DESC, evidence.tx_hash DESC LIMIT 1
 		) round ON true
 		JOIN blocks block ON block.chain_id = ${chainId} AND block.hash = latest.block_hash
@@ -452,26 +1126,34 @@ const reportCatalogData = async (
 const escalationCatalogData = async (
 	sql: SQL,
 	chainId: number,
-	cursorBlock: string,
+	snapshotBlock: string,
+	cursorBlock = snapshotBlock,
 	cursorTx = `0x${'f'.repeat(64)}`,
 	cursorLog = 2_147_483_647,
 	queryLimit = 250,
 ) =>
 	await sql`
-		WITH games AS (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical)
+		WITH games AS (
+			SELECT DISTINCT game_address FROM escalation_game_events
+			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+		)
 		SELECT game.game_address,
 			latest.event_name, latest.event_data, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
 			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
 				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
+				AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.invalid}), '0') AS invalid_stake_atto_rep,
 			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
 				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
+				AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.no}), '0') AS no_stake_atto_rep,
 			COALESCE((SELECT sum((event_data->>'attoRepAmount')::numeric)::text FROM escalation_game_events event
 				WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
+				AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'DepositOnOutcome' AND event.event_data->>'outcome' = ${ESCALATION_OUTCOME.yes}), '0') AS yes_stake_atto_rep
 		FROM games game JOIN LATERAL (
-			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address AND event.canonical
+			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address
+				AND event.canonical AND event.block_number <= ${snapshotBlock}
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
 		) latest ON true WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
@@ -486,18 +1168,36 @@ const auctionCatalogData = async (
 	cursorLog = 2_147_483_647,
 	queryLimit = 250,
 ) => {
+	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
-		WITH auctions AS (SELECT DISTINCT auction_address FROM truth_auction_events WHERE chain_id = ${chainId} AND canonical)
+		WITH auctions AS (
+			SELECT DISTINCT auction_address FROM truth_auction_events
+			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+		)
 		SELECT auction.auction_address,
 			started.event_data AS start_data, finalized.event_data AS final_data,
 			latest.event_name, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
-			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSubmitted')::integer AS bid_count,
-			(SELECT count(DISTINCT event.event_data->>'bidder') FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
-			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'BidSettled')::integer AS settlement_count
+			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+				AND event.event_name = 'BidSubmitted')::integer AS bid_count,
+			(SELECT count(DISTINCT event.event_data->>'bidder') FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+				AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
+			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+				AND event.event_name = 'BidSettled')::integer AS settlement_count
 		FROM auctions auction
-		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) latest ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionStarted' ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) started ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId} AND event.auction_address = auction.auction_address AND event.canonical AND event.event_name = 'AuctionFinalized' ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) finalized ON true
+		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) latest ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+			AND event.event_name = 'AuctionStarted'
+			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) started ON true
+		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
+			AND event.event_name = 'AuctionFinalized'
+			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) finalized ON true
 		WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
@@ -533,7 +1233,8 @@ const riskCatalogData = async (
 			)
 			SELECT identity.pool_address, snapshot.block_number::text AS block_number, snapshot.block_hash,
 				snapshot.block_timestamp, snapshot.read_status, snapshot.read_result, snapshot.read_failure_reason,
-				snapshot.source_method, snapshot.observed_at
+				snapshot.source_method, snapshot.observed_at, snapshot.indexer_run_id::text AS indexer_run_id,
+				snapshot.abi_source_hash, snapshot.application_source_hash, snapshot.projection_source_hash
 			FROM identities identity LEFT JOIN LATERAL (
 				SELECT state.* FROM entity_state_snapshots state
 				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
@@ -553,9 +1254,13 @@ const riskCatalogData = async (
 			SELECT identity.pool_address, identity.vault_address,
 				vault.block_number::text AS block_number, vault.block_hash, vault.block_timestamp,
 				vault.read_status, vault.read_result, vault.read_failure_reason, vault.source_method, vault.observed_at,
+				vault.indexer_run_id::text AS indexer_run_id, vault.abi_source_hash,
+				vault.application_source_hash, vault.projection_source_hash,
 				pool.read_result AS pool_read_result, pool.read_status AS pool_read_status,
 				pool.block_number::text AS pool_block_number, pool.block_hash AS pool_block_hash,
-				pool.block_timestamp AS pool_block_timestamp
+				pool.block_timestamp AS pool_block_timestamp, pool.indexer_run_id::text AS pool_indexer_run_id,
+				pool.abi_source_hash AS pool_abi_source_hash, pool.application_source_hash AS pool_application_source_hash,
+				pool.projection_source_hash AS pool_projection_source_hash
 			FROM identities identity
 			LEFT JOIN LATERAL (
 				SELECT state.* FROM entity_state_snapshots state
@@ -779,7 +1484,7 @@ const forkCatalogData = async (
 const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	const asOf = await operationsAsOf(sql, chainId)
+	const asOf = await operationsAsOfFromUrl(sql, chainId, url)
 	const [reports, escalations, auctions, risk, prices, recentChanges, forks, totals] = await Promise.all([
 		reportCatalogData(sql, chainId, asOf),
 		escalationCatalogData(sql, chainId, String(asOf['blockNumber'])),
@@ -816,7 +1521,7 @@ const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'escalations' | 'auctions' | 'risk' | 'forks'): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	const asOf = await operationsAsOf(sql, chainId)
+	const asOf = domain === 'risk' ? await operationsAsOfFromUrl(sql, chainId, url) : await operationsAsOf(sql, chainId)
 	if (domain === 'risk') {
 		const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 		const limit = Math.min(Math.max(requestedLimit, 1), 250)
@@ -838,14 +1543,14 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 		})
 	}
 	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows =
 		domain === 'reports'
 			? await reportCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
 			: domain === 'escalations'
-				? await escalationCatalogData(sql, chainId, cursorBlock, cursorTx, cursorLog, page.queryLimit)
+				? await escalationCatalogData(sql, chainId, String(asOf['blockNumber']), cursorBlock, cursorTx, cursorLog, page.queryLimit)
 				: domain === 'auctions'
 					? await auctionCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
 					: await forkCatalogData(sql, chainId, cursorBlock, cursorTx, cursorLog, page.queryLimit, String(asOf['blockNumber']))
@@ -857,40 +1562,63 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 	})
 }
 
-type ProtocolCursor = readonly [number, string, string, string, string, string, string, number]
+const snapshotBoundaryMatches = (parts: readonly unknown[], offset: number, asOf: Record<string, unknown>): boolean =>
+	parts[offset] === String(asOf['blockNumber']) &&
+	parts[offset + 1] === String(asOf['blockHash']) &&
+	parts[offset + 2] === String(asOf['invalidationId']) &&
+	parts[offset + 3] === String(asOf['abiSourceHash']) &&
+	parts[offset + 4] === String(asOf['applicationSourceHash']) &&
+	parts[offset + 5] === String(asOf['projectionSourceHash'])
 
-type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string]
+const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
+	String(asOf['blockNumber']),
+	String(asOf['blockHash']),
+	String(asOf['invalidationId']),
+	String(asOf['abiSourceHash']),
+	String(asOf['applicationSourceHash']),
+	String(asOf['projectionSourceHash']),
+]
+
+type ProtocolCursor = readonly [number, string, string, string, string, string, string, string, string, string, string, number]
+
+type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>): string | undefined => {
 	if (value === null) return undefined
+	let parts: unknown[]
 	try {
-		const parsed = JSON.parse(atob(value)) as unknown
-		const parts = Array.isArray(parsed) ? parsed : []
+		const parsed = decodeOpaqueCursor(value)
+		parts = Array.isArray(parsed) ? parsed : []
 		if (
-			parts.length !== 5 ||
-			parts[0] !== chainId ||
-			parts[1] !== kind ||
-			parts[2] !== String(asOf['blockNumber']) ||
-			parts[3] !== String(asOf['blockHash']) ||
-			typeof parts[4] !== 'string' ||
-			(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[4]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[4]))
+			parts.length !== 9 ||
+			!isNonNegativeSafeInteger(parts[0]) ||
+			(parts[1] !== 'pool' && parts[1] !== 'vault') ||
+			!isPostgresBigint(parts[2]) ||
+			typeof parts[3] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
+			!isPostgresBigint(parts[4]) ||
+			!parts.slice(5, 8).every((part) => typeof part === 'string') ||
+			typeof parts[8] !== 'string' ||
+			(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))
 		)
 			throw new Error('shape')
-		return parts[4]
 	} catch (error) {
 		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
 	}
+	if (parts[0] !== chainId || parts[1] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
+	if (!snapshotBoundaryMatches(parts, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	return String(parts[8])
 }
 
 const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string =>
-	btoa(JSON.stringify([chainId, kind, String(asOf['blockNumber']), String(asOf['blockHash']), key] satisfies RiskCursor))
+	encodeOpaqueCursor([chainId, kind, ...snapshotBoundary(asOf), key] satisfies RiskCursor)
 
 const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
 	try {
-		const parsed = JSON.parse(atob(value)) as unknown
+		const parsed = decodeOpaqueCursor(value)
 		const parts = Array.isArray(parsed) ? parsed : []
 		if (
-			parts.length !== 8 ||
+			parts.length !== 12 ||
 			!isNonNegativeSafeInteger(parts[0]) ||
 			typeof parts[1] !== 'string' ||
 			typeof parts[2] !== 'string' ||
@@ -898,31 +1626,30 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 			typeof parts[4] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
 			!isPostgresBigint(parts[5]) ||
-			typeof parts[6] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
-			!isPostgresInteger(parts[7]) ||
-			BigInt(parts[5]) > BigInt(parts[3])
+			!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+			!isPostgresBigint(parts[9]) ||
+			typeof parts[10] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
+			!isPostgresInteger(parts[11]) ||
+			BigInt(parts[9]) > BigInt(parts[3])
 		)
 			throw new Error('shape')
-		return parts as [number, string, string, string, string, string, string, number]
+		return parts as [number, string, string, string, string, string, string, string, string, string, string, number]
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 }
 
 const protocolCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	btoa(
-		JSON.stringify([
-			chainId,
-			domain,
-			identity,
-			String(asOf['blockNumber']),
-			String(asOf['blockHash']),
-			String(row['block_number']),
-			String(row['tx_hash']),
-			Number(row['log_index']),
-		]),
-	)
+	encodeOpaqueCursor([
+		chainId,
+		domain,
+		identity,
+		...snapshotBoundary(asOf),
+		String(row['block_number']),
+		String(row['tx_hash']),
+		Number(row['log_index']),
+	] satisfies ProtocolCursor)
 
 const detailPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>) => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
@@ -930,11 +1657,81 @@ const detailPage = (url: URL, chainId: number, domain: string, identity: string,
 	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
 	if (cursor !== undefined) {
 		if (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity) throw new ApiRequestError('cursor does not match the requested entity')
-		if (cursor[3] !== String(asOf['blockNumber']) || cursor[4] !== String(asOf['blockHash']))
-			throw new ApiConflictError('Indexed state changed; restart pagination')
+		if (!snapshotBoundaryMatches(cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	}
 	return { limit, queryLimit: limit + 1, cursor }
 }
+
+type TimelineCatalogCursor = readonly [number, string, string, string, string, string, string, string, string, number, string, string, string, string, 'v2']
+
+const parseTimelineCatalogCursor = (
+	value: string | null,
+	chainId: number,
+	filterIdentity: string,
+	asOf: Record<string, unknown>,
+): TimelineCatalogCursor | undefined => {
+	if (value === null) return undefined
+	let parts: unknown[]
+	try {
+		const parsed = decodeOpaqueCursor(value)
+		parts = Array.isArray(parsed) ? parsed : []
+		if (
+			parts.length !== 15 ||
+			!isNonNegativeSafeInteger(parts[0]) ||
+			typeof parts[1] !== 'string' ||
+			!isPostgresBigint(parts[2]) ||
+			typeof parts[3] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
+			!isPostgresBigint(parts[4]) ||
+			!parts.slice(5, 8).every((part) => typeof part === 'string') ||
+			!isPostgresBigint(parts[8]) ||
+			!isPostgresInteger(parts[9]) ||
+			typeof parts[10] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
+			typeof parts[11] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[11]) ||
+			typeof parts[12] !== 'string' ||
+			typeof parts[13] !== 'string' ||
+			parts[14] !== 'v2'
+		)
+			throw new Error('shape')
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+	if (parts[0] !== chainId || parts[1] !== filterIdentity) throw new ApiRequestError('cursor does not match the requested timeline filters')
+	if (!snapshotBoundaryMatches(parts, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	return [
+		Number(parts[0]),
+		String(parts[1]),
+		String(parts[2]),
+		String(parts[3]),
+		String(parts[4]),
+		String(parts[5]),
+		String(parts[6]),
+		String(parts[7]),
+		String(parts[8]),
+		Number(parts[9]),
+		String(parts[10]),
+		String(parts[11]),
+		String(parts[12]),
+		String(parts[13]),
+		'v2',
+	]
+}
+
+const timelineCatalogCursorFor = (chainId: number, filterIdentity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+	encodeOpaqueCursor([
+		chainId,
+		filterIdentity,
+		...snapshotBoundary(asOf),
+		String(row['block_number']),
+		Number(row['log_index']),
+		String(row['tx_hash']),
+		String(row['block_hash']),
+		String(row['entity_type']),
+		String(row['entity_identity']),
+		'v2',
+	] satisfies TimelineCatalogCursor)
 
 const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
 	const rows = await sql`
@@ -969,9 +1766,17 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 	const identity = `${openOracleAddress}:${reportId}`
 	const asOf = await operationsAsOf(sql, chainId)
 	const page = detailPage(url, chainId, 'report', identity, asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const decisionUrl = new URL(url)
+	decisionUrl.searchParams.delete('cursor')
+	decisionUrl.searchParams.delete('limit')
+	const decisionCursorValue = url.searchParams.get('decisionCursor')
+	const decisionLimitValue = url.searchParams.get('decisionLimit')
+	if (decisionCursorValue !== null) decisionUrl.searchParams.set('cursor', decisionCursorValue)
+	if (decisionLimitValue !== null) decisionUrl.searchParams.set('limit', decisionLimitValue)
+	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf)
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await sql`
 		SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
 		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
@@ -990,6 +1795,9 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 	`
 	const current = currentRows[0]
 	const currentData = jsonRecord(current?.['report_data'])
+	const decisionCursorBlock = decisionPage.cursor?.[9] ?? String(asOf['blockNumber'])
+	const decisionCursorTx = decisionPage.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const decisionCursorLog = decisionPage.cursor?.[11] ?? 2_147_483_647
 	const coordinatorDecisions = await sql`
 		WITH coordinators AS (
 			SELECT DISTINCT request.emitter_address
@@ -1006,7 +1814,9 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 		JOIN coordinators coordinator ON coordinator.emitter_address = log.emitter_address
 		WHERE log.chain_id = ${chainId} AND log.canonical AND log.arguments->>'reportId' = ${reportId}
 			AND log.event_name IN ('PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'CoordinatorStateCheckpoint')
-		ORDER BY log.block_number, log.log_index
+			AND (log.block_number, log.log_index, log.tx_hash) <
+				(${decisionCursorBlock}::bigint, ${decisionCursorLog}::integer, ${decisionCursorTx})
+		ORDER BY log.block_number DESC, log.log_index DESC, log.tx_hash DESC LIMIT ${decisionPage.queryLimit}
 	`
 	const lifecycle =
 		current === undefined
@@ -1027,8 +1837,8 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 		data: {
 			identity: { openOracleAddress, reportId },
 			current: current === undefined ? undefined : { ...current, report_data: currentData, lifecycle },
-			rounds: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'report', identity, asOf, row)),
-			coordinatorDecisions,
+			rounds: paged(reportRoundChanges(rows), page.limit, (row) => protocolCursorFor(chainId, 'report', identity, asOf, row)),
+			coordinatorDecisions: paged(coordinatorDecisions, decisionPage.limit, (row) => protocolCursorFor(chainId, 'report-decisions', identity, asOf, row)),
 		},
 	})
 }
@@ -1040,9 +1850,9 @@ const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url
 		return json({ error: `Invalid ${domain} identifier` }, 400)
 	const asOf = await operationsAsOf(sql, chainId)
 	const page = detailPage(url, chainId, domain, address, asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows: readonly Record<string, unknown>[] =
 		domain === 'auction'
 			? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND (event.block_number, event.log_index, event.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.queryLimit}`
@@ -1084,9 +1894,9 @@ const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 		return json({ error: 'Invalid fork identifier' }, 400)
 	const asOf = await operationsAsOf(sql, chainId)
 	const page = detailPage(url, chainId, 'fork', identity, asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await sql`
 		SELECT event.*, block.timestamp AS block_timestamp FROM fork_migration_events event
 		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash
@@ -1139,38 +1949,56 @@ const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 	})
 }
 
-type OffsetCursor = readonly [chainId: number, domain: string, identity: string, indexedBlock: string, indexedHash: string, offset: number]
+type OffsetCursor = readonly [number, string, string, string, string, string, string, string, string, number]
+
+const rejectRawSnapshotOffset = (url: URL): void => {
+	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
+}
 
 const offsetPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>) => {
 	const cursorValue = url.searchParams.get('cursor')
-	if (cursorValue === null) return boundedInteger(url.searchParams.get('offset'), 'offset', 100_000) ?? 0
+	if (cursorValue === null) return { identity, offset: 0 }
 	let parsed: unknown
 	try {
-		parsed = JSON.parse(atob(cursorValue)) as unknown
+		parsed = decodeOpaqueCursor(cursorValue)
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 	const parts = Array.isArray(parsed) ? parsed : []
-	if (parts.length !== 6 || parts[0] !== chainId || parts[1] !== domain || parts[2] !== identity || !isNonNegativeSafeInteger(parts[5]) || parts[5] > 100_000)
+	if (
+		parts.length !== 10 ||
+		!isNonNegativeSafeInteger(parts[0]) ||
+		typeof parts[1] !== 'string' ||
+		typeof parts[2] !== 'string' ||
+		!isPostgresBigint(parts[3]) ||
+		typeof parts[4] !== 'string' ||
+		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
+		!isPostgresBigint(parts[5]) ||
+		!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+		!isNonNegativeSafeInteger(parts[9])
+	)
 		throw new ApiRequestError('cursor is invalid')
-	if (parts[3] !== String(asOf['blockNumber']) || parts[4] !== String(asOf['blockHash']))
-		throw new ApiConflictError('Indexed state changed; restart pagination')
-	return parts[5]
+	if (parts[0] !== chainId || parts[1] !== domain) throw new ApiRequestError('cursor does not match filters')
+	if (!snapshotBoundaryMatches(parts, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	return { identity: parts[2], offset: parts[9] }
 }
 
 const offsetCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, offset: number): string =>
-	btoa(JSON.stringify([chainId, domain, identity, String(asOf['blockNumber']), String(asOf['blockHash']), offset] satisfies OffsetCursor))
+	encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), offset] satisfies OffsetCursor)
 
 const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	rejectRawSnapshotOffset(url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const query = url.searchParams.get('q')?.trim().toLowerCase()
 	if (query !== undefined && query.length > 128) throw new ApiRequestError('q must not exceed 128 characters')
 	const asOf = await operationsAsOf(sql, chainId)
 	const cursorIdentity = query ?? ''
-	const offset = offsetPage(url, chainId, 'trading-catalog', cursorIdentity, asOf)
+	const page = offsetPage(url, chainId, 'trading-catalog', cursorIdentity, asOf)
+	if (page.identity !== cursorIdentity) throw new ApiRequestError('cursor does not match filters')
+	const offset = page.offset
 	const rows = await sql`
 		WITH markets AS (
 			SELECT DISTINCT ON (market.pair_address) market.*
@@ -1248,17 +2076,37 @@ const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => 
 const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	rejectRawSnapshotOffset(url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const asOf = await operationsAsOf(sql, chainId)
-	const offset = offsetPage(url, chainId, 'integrity-catalog', '', asOf)
+	const snapshotRows = await sql`
+		SELECT COALESCE(max(id), 0)::text AS id
+		FROM chain_reorganizations WHERE chain_id = ${chainId}
+	`
+	const currentSnapshotId = snapshotRows[0]?.['id']
+	if (!isPostgresBigint(currentSnapshotId)) throw new Error('Integrity snapshot boundary is unavailable')
+	const page = offsetPage(url, chainId, 'integrity-catalog', currentSnapshotId, asOf)
+	if (!isPostgresBigint(page.identity) || BigInt(page.identity) > BigInt(currentSnapshotId)) throw new ApiRequestError('cursor is invalid')
+	const snapshotId = page.identity
+	const offset = page.offset
 	const [reorganizations, migrations, runs] = await Promise.all([
-		sql`SELECT id::text, previous_block::text, previous_hash, ancestor_block::text, ancestor_hash,
-			depth::text, reason, detected_at, count(*) OVER ()::integer AS total
-			FROM chain_reorganizations WHERE chain_id = ${chainId}
-			ORDER BY detected_at DESC, id DESC LIMIT ${limit} OFFSET ${offset}`,
+		sql`SELECT reorganization.id::text, reorganization.previous_block::text, reorganization.previous_hash,
+			reorganization.ancestor_block::text, reorganization.ancestor_hash, reorganization.depth::text,
+			reorganization.reason, reorganization.indexer_run_id::text,
+			reorganization.abi_source_hash, reorganization.application_source_hash, reorganization.projection_source_hash,
+			COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+				WHERE cause.invalidation_id = reorganization.id), jsonb_build_array(reorganization.reason)) AS causes,
+			COALESCE((SELECT jsonb_object_agg(counts.occurrence_kind, counts.occurrence_count ORDER BY counts.occurrence_kind)
+				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
+					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
+					GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
+			reorganization.detected_at, count(*) OVER ()::integer AS total
+			FROM chain_reorganizations reorganization WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotId}
+			ORDER BY reorganization.detected_at DESC, reorganization.id DESC LIMIT ${limit} OFFSET ${offset}`,
 		sql`SELECT schema_version, description, applied_at FROM augurscan_schema_migrations ORDER BY applied_at, schema_version`,
-		sql`SELECT id::text, schema_version, app_version, abi_source_hash, network_configuration, started_at, stopped_at
+		sql`SELECT id::text, schema_version, app_version, abi_source_hash, application_source_hash,
+			projection_source_hash, indexer_enabled, network_configuration, started_at, stopped_at
 			FROM indexer_runs ORDER BY started_at DESC, id DESC LIMIT 25`,
 	])
 	const total = Number(reorganizations[0]?.['total'] ?? 0)
@@ -1273,9 +2121,165 @@ const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> =
 			limit,
 			offset,
 			hasMore,
-			nextCursor: hasMore ? offsetCursorFor(chainId, 'integrity-catalog', '', asOf, offset + limit) : undefined,
+			nextCursor: hasMore ? offsetCursorFor(chainId, 'integrity-catalog', snapshotId, asOf, offset + limit) : undefined,
 			migrations,
 			runs,
+		},
+	})
+}
+
+type DirectObservationKind = 'all' | 'address-balance' | 'token-metadata'
+
+type DirectObservationSnapshot = {
+	readonly kind: DirectObservationKind
+	readonly address?: string
+	readonly canonical: CanonicalHistoryFilter
+	readonly maxBalanceId: string
+	readonly maxMetadataId: string
+	readonly total: string
+}
+
+const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
+	try {
+		const parsed = JSON.parse(value) as unknown
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('shape')
+		const record = jsonRecord(parsed)
+		const kind = record['kind']
+		const address = record['address']
+		const canonical = record['canonical']
+		const maxBalanceId = record['maxBalanceId']
+		const maxMetadataId = record['maxMetadataId']
+		const total = record['total']
+		if (
+			(kind !== 'all' && kind !== 'address-balance' && kind !== 'token-metadata') ||
+			(address !== undefined && (typeof address !== 'string' || !/^0x[0-9a-f]{40}$/.test(address))) ||
+			(canonical !== 'canonical' && canonical !== 'orphaned' && canonical !== 'all') ||
+			!isPostgresBigint(maxBalanceId) ||
+			!isPostgresBigint(maxMetadataId) ||
+			!isPostgresBigint(total) ||
+			BigInt(total) > BigInt(Number.MAX_SAFE_INTEGER)
+		)
+			throw new Error('shape')
+		return { kind, ...(address === undefined ? {} : { address }), canonical, maxBalanceId, maxMetadataId, total }
+	} catch (error) {
+		throw new ApiRequestError('cursor snapshot is invalid', { cause: error })
+	}
+}
+
+const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	rejectRawSnapshotOffset(url)
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const requestedKind = url.searchParams.get('kind') ?? 'all'
+	if (requestedKind !== 'all' && requestedKind !== 'address-balance' && requestedKind !== 'token-metadata')
+		throw new ApiRequestError('kind must be all, address-balance, or token-metadata')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	const canonical = canonicalHistoryFilter(url)
+	const asOf = await operationsAsOf(sql, chainId)
+	const cursorValue = url.searchParams.get('cursor')
+	let snapshot: DirectObservationSnapshot
+	let offset = 0
+	if (cursorValue === null) {
+		const maxima = await sql`
+			SELECT
+				COALESCE((SELECT max(id) FROM address_balance_observations WHERE chain_id = ${chainId}), 0)::text AS max_balance_id,
+				COALESCE((SELECT max(id) FROM token_metadata_observations WHERE chain_id = ${chainId}), 0)::text AS max_metadata_id
+		`
+		snapshot = {
+			kind: requestedKind,
+			...(address === undefined ? {} : { address }),
+			canonical,
+			maxBalanceId: String(maxima[0]?.['max_balance_id'] ?? '0'),
+			maxMetadataId: String(maxima[0]?.['max_metadata_id'] ?? '0'),
+			total: '0',
+		}
+	} else {
+		const page = offsetPage(url, chainId, 'direct-observations', '', asOf)
+		offset = page.offset
+		snapshot = directObservationSnapshot(page.identity)
+		if (snapshot.kind !== requestedKind || snapshot.address !== address || snapshot.canonical !== canonical)
+			throw new ApiRequestError('cursor does not match filters')
+	}
+	const rows = await sql`
+		WITH observations AS (
+			SELECT 'address-balance'::text AS observation_kind, observation.id,
+				observation.chain_id, observation.block_hash, observation.block_number,
+				observation.address, observation.asset_address, observation.asset_kind,
+				observation.read_status, observation.read_failure_reason,
+				jsonb_strip_nulls(jsonb_build_object('balance', observation.balance::text,
+					'readFailureReason', observation.read_failure_reason)) AS result,
+				observation.canonical, observation.observed_at, observation.indexer_run_id,
+				observation.abi_source_hash, observation.application_source_hash, observation.projection_source_hash
+			FROM address_balance_observations observation
+			WHERE observation.chain_id = ${chainId} AND observation.id <= ${snapshot.maxBalanceId}
+				AND ${snapshot.kind === 'token-metadata'} = false
+				AND (${snapshot.address ?? null}::text IS NULL OR observation.address = ${snapshot.address ?? null}
+					OR observation.asset_address = ${snapshot.address ?? null})
+				AND (${snapshot.canonical} = 'all' OR observation.canonical = (${snapshot.canonical} = 'canonical'))
+			UNION ALL
+			SELECT 'token-metadata'::text AS observation_kind, observation.id,
+				observation.chain_id, observation.block_hash, observation.read_block AS block_number,
+				observation.address, NULL::text AS asset_address, NULL::text AS asset_kind,
+				observation.read_status, observation.read_error AS read_failure_reason,
+				jsonb_strip_nulls(jsonb_build_object('name', observation.name, 'symbol', observation.symbol,
+					'decimals', observation.decimals, 'readError', observation.read_error)) AS result,
+				observation.canonical, observation.observed_at, observation.indexer_run_id,
+				observation.abi_source_hash, observation.application_source_hash, observation.projection_source_hash
+			FROM token_metadata_observations observation
+			WHERE observation.chain_id = ${chainId} AND observation.id <= ${snapshot.maxMetadataId}
+				AND ${snapshot.kind === 'address-balance'} = false
+				AND (${snapshot.address ?? null}::text IS NULL OR observation.address = ${snapshot.address ?? null})
+				AND (${snapshot.canonical} = 'all' OR observation.canonical = (${snapshot.canonical} = 'canonical'))
+		)
+		SELECT observation.observation_kind, observation.id::text AS observation_id,
+			observation.chain_id::text AS chain_id, observation.block_hash,
+			observation.block_number::text AS block_number, block.timestamp AS block_timestamp,
+			observation.address, observation.asset_address, observation.asset_kind,
+			observation.read_status, observation.read_failure_reason, observation.result,
+			observation.canonical, observation.observed_at, observation.indexer_run_id::text AS indexer_run_id,
+			observation.abi_source_hash, observation.application_source_hash, observation.projection_source_hash,
+			CASE WHEN observation.canonical THEN 'canonical'
+				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+				WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+				WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+				ELSE 'noncanonical-unknown' END AS evidence_status,
+			invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+			invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
+			count(*) OVER ()::text AS total
+		FROM observations observation
+		JOIN blocks block ON block.chain_id = observation.chain_id AND block.hash = observation.block_hash
+		LEFT JOIN LATERAL (
+			SELECT replacement.id, replacement.reason,
+				COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+					WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes,
+				replacement.detected_at
+			FROM history_invalidation_occurrences occurrence
+			JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+			WHERE occurrence.occurrence_kind = observation.observation_kind
+				AND occurrence.chain_id = observation.chain_id AND occurrence.block_hash = observation.block_hash
+				AND occurrence.occurrence_id = observation.id::text
+			ORDER BY replacement.id DESC LIMIT 1
+		) invalidation ON true
+		ORDER BY observation.observed_at DESC, observation.observation_kind DESC, observation.id DESC
+		LIMIT ${limit + 1} OFFSET ${offset}
+	`
+	if (cursorValue === null) snapshot = { ...snapshot, total: String(rows[0]?.['total'] ?? '0') }
+	const total = directObservationTotal(snapshot.total)
+	const items = rows.slice(0, limit).map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
+	const hasMore = offset + items.length < total
+	const snapshotIdentity = JSON.stringify(snapshot)
+	return json({
+		chainId,
+		asOf,
+		data: {
+			items,
+			total,
+			limit,
+			offset,
+			hasMore,
+			...(hasMore ? { nextCursor: offsetCursorFor(chainId, 'direct-observations', snapshotIdentity, asOf, offset + limit) } : {}),
 		},
 	})
 }
@@ -1287,9 +2291,9 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 		return json({ error: 'Invalid AMM identifier' }, 400)
 	const asOf = await operationsAsOf(sql, chainId)
 	const page = detailPage(url, chainId, 'trading', market, asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await sql`
 		SELECT event.*, block.timestamp AS block_timestamp,
 			EXTRACT(EPOCH FROM block.timestamp)::bigint::text AS timestamp_seconds
@@ -1426,10 +2430,15 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 		(kind === 'pools' ? parts.length !== 3 : parts.length !== 4 || vaultAddress === undefined || !/^0x[0-9a-f]{40}$/.test(vaultAddress))
 	)
 		return json({ error: 'Invalid risk entity identifier' }, 400)
-	const asOf = await operationsAsOf(sql, chainId)
+	rejectRawSnapshotOffset(url)
+	const asOf = await operationsAsOfFromUrl(sql, chainId, url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 250
 	const limit = Math.min(Math.max(requestedLimit, 1), 1_000)
-	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 100_000) ?? 0
+	const entityIdentity = kind === 'pools' ? poolAddress : `${poolAddress}:${vaultAddress}`
+	const historyIdentity = `${kind}:${entityIdentity}`
+	const page = offsetPage(url, chainId, 'risk-history', historyIdentity, asOf)
+	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
+	const offset = page.offset
 	const risk = await riskCatalogData(sql, chainId, {
 		poolAddress,
 		...(kind === 'vaults' && vaultAddress !== undefined ? { vaultAddress } : {}),
@@ -1442,26 +2451,41 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 			: risk.vaults.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress && row['vault_address'] === vaultAddress)
 	if (entity === undefined) return json({ error: `${kind === 'pools' ? 'Pool' : 'Vault'} risk state not found` }, 404)
 	const entityType = kind === 'pools' ? 'pool' : 'vault'
-	const entityIdentity = kind === 'pools' ? poolAddress : `${poolAddress}:${vaultAddress}`
 	const [stateSnapshots, accountingSnapshots, lifecycleEvents, liquidations] = await Promise.all([
 		sql`
-			SELECT snapshot.*, block.timestamp AS block_timestamp FROM entity_state_snapshots snapshot
-			JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash
-			WHERE snapshot.chain_id = ${chainId} AND snapshot.entity_type = ${entityType}
-				AND snapshot.entity_identity = ${entityIdentity} AND snapshot.canonical
-			ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC, snapshot.block_hash DESC, snapshot.source_method DESC
+			SELECT observation.*, observation.id::text AS id, observation.indexer_run_id::text AS indexer_run_id,
+				block.timestamp AS block_timestamp, invalidation.id::text AS invalidation_id,
+				invalidation.reason AS invalidation_reason, invalidation.causes AS invalidation_causes
+			FROM entity_state_observations observation
+			JOIN blocks block ON block.chain_id = observation.chain_id AND block.hash = observation.block_hash
+			LEFT JOIN LATERAL (
+				SELECT replacement.id, replacement.reason,
+					COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+						WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes
+				FROM history_invalidation_occurrences occurrence
+				JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+				WHERE occurrence.occurrence_kind = 'entity-state' AND occurrence.chain_id = observation.chain_id
+					AND occurrence.block_hash = observation.block_hash AND occurrence.occurrence_id = observation.id::text
+				ORDER BY replacement.id DESC LIMIT 1
+			) invalidation ON true
+			WHERE observation.chain_id = ${chainId} AND observation.entity_type = ${entityType}
+				AND observation.entity_identity = ${entityIdentity} AND observation.canonical
+				AND observation.block_number <= ${String(asOf['blockNumber'])}
+			ORDER BY observation.block_number DESC, observation.observed_at DESC, observation.id DESC
 			LIMIT ${limit + 1} OFFSET ${offset}
 		`,
 		kind === 'pools'
 			? sql`SELECT snapshot.*, block.timestamp AS block_timestamp FROM pool_snapshots snapshot
 				JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash
 				WHERE snapshot.chain_id = ${chainId} AND snapshot.pool_address = ${poolAddress} AND snapshot.canonical
+					AND snapshot.block_number <= ${String(asOf['blockNumber'])}
 				ORDER BY snapshot.block_number DESC, snapshot.log_index DESC, snapshot.tx_hash DESC, snapshot.block_hash DESC
 				LIMIT ${limit + 1} OFFSET ${offset}`
 			: sql`SELECT snapshot.*, block.timestamp AS block_timestamp FROM vault_snapshots snapshot
 				JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash
 				WHERE snapshot.chain_id = ${chainId} AND snapshot.pool_address = ${poolAddress}
 					AND snapshot.vault_address = ${vaultAddress ?? ''} AND snapshot.canonical
+					AND snapshot.block_number <= ${String(asOf['blockNumber'])}
 				ORDER BY snapshot.block_number DESC, snapshot.log_index DESC, snapshot.tx_hash DESC, snapshot.block_hash DESC
 				LIMIT ${limit + 1} OFFSET ${offset}`,
 		sql`
@@ -1469,6 +2493,7 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			WHERE timeline.chain_id = ${chainId} AND timeline.entity_type = ${entityType}
 				AND timeline.entity_identity = ${entityIdentity} AND timeline.canonical
+				AND timeline.block_number <= ${String(asOf['blockNumber'])}
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC
 			LIMIT ${limit + 1} OFFSET ${offset}
 		`,
@@ -1476,6 +2501,7 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 			SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			WHERE timeline.chain_id = ${chainId} AND timeline.semantic_event_kind = 'VaultLiquidated' AND timeline.canonical
+				AND timeline.block_number <= ${String(asOf['blockNumber'])}
 				AND (timeline.summary_data->>'targetVault' = ${vaultAddress ?? ''} OR timeline.summary_data->>'vault' = ${vaultAddress ?? ''}
 					OR (timeline.source_contract = ${poolAddress} AND ${kind === 'pools'}))
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC,
@@ -1498,8 +2524,103 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 				limit,
 				offset,
 				truncated: historyTruncated,
-				nextOffset: historyTruncated ? offset + limit : undefined,
+				nextCursor: historyTruncated ? offsetCursorFor(chainId, 'risk-history', historyIdentity, asOf, offset + limit) : undefined,
 			},
+		},
+	})
+}
+
+const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	const entityType = url.searchParams.get('entityType')?.trim() || undefined
+	if (entityType !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(entityType)) throw new ApiRequestError('entityType must be a lowercase semantic entity type')
+	const event = url.searchParams.get('event')?.trim() || undefined
+	if (event !== undefined && (event.length > 128 || !/^[A-Za-z][A-Za-z0-9_]*$/.test(event)))
+		throw new ApiRequestError('event must be a complete semantic event name')
+	const address = evmAddress(url.searchParams.get('address'), 'address')
+	const query = url.searchParams.get('q')?.trim() || undefined
+	if (query !== undefined && query.length > 128) throw new ApiRequestError('q must not exceed 128 characters')
+	const fromBlock = postgresBigint(url.searchParams.get('fromBlock'), 'fromBlock') ?? '0'
+	const toBlock = postgresBigint(url.searchParams.get('toBlock'), 'toBlock') ?? POSTGRES_BIGINT_MAX.toString()
+	if (BigInt(fromBlock) > BigInt(toBlock)) throw new ApiRequestError('fromBlock must not exceed toBlock')
+	const canonical = canonicalHistoryFilter(url)
+	const asOf = await operationsAsOf(sql, chainId)
+	const filterIdentity = JSON.stringify({ entityType, event, address, query, fromBlock, toBlock, canonical })
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const cursor = parseTimelineCatalogCursor(url.searchParams.get('cursor'), chainId, filterIdentity, asOf)
+	const cursorBlock = cursor?.[8] ?? String(asOf['blockNumber'])
+	const cursorLog = cursor?.[9] ?? 2_147_483_647
+	const cursorTx = cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorBlockHash = cursor?.[11] ?? `0x${'f'.repeat(64)}`
+	const cursorEntityType = cursor?.[12] ?? '\uffff'
+	const cursorEntityIdentity = cursor?.[13] ?? '\uffff'
+	const [rows, totalRows] = await Promise.all([
+		sql`
+			SELECT timeline.*, block.timestamp AS block_timestamp,
+				CASE WHEN timeline.canonical THEN 'canonical'
+					WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
+					WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
+					WHEN invalidation.reason = 'start-boundary-advanced' THEN 'coverage-reset'
+					WHEN invalidation.reason = 'abi-redecode' THEN 'decode-superseded'
+					WHEN invalidation.reason = 'projection-rebuild' THEN 'projection-superseded'
+					ELSE 'noncanonical-unknown' END AS evidence_status,
+				invalidation.id::text AS invalidation_id, invalidation.reason AS invalidation_reason,
+				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at
+			FROM protocol_timeline_entries timeline
+			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
+			LEFT JOIN LATERAL (
+				SELECT replacement.id, replacement.reason,
+					COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
+						WHERE cause.invalidation_id = replacement.id), jsonb_build_array(replacement.reason)) AS causes,
+					replacement.detected_at
+				FROM history_invalidation_occurrences occurrence
+				JOIN chain_reorganizations replacement ON replacement.id = occurrence.invalidation_id
+				WHERE occurrence.occurrence_kind = 'log' AND occurrence.chain_id = timeline.chain_id
+					AND occurrence.block_hash = timeline.block_hash AND occurrence.occurrence_id = timeline.tx_hash
+					AND occurrence.sub_index = timeline.log_index
+				ORDER BY replacement.id DESC LIMIT 1
+			) invalidation ON true
+			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
+				AND timeline.block_number <= ${String(asOf['blockNumber'])}
+				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
+				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
+				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
+					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
+				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.source_contract ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : `%${query}%`})
+				AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
+					(${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx}, ${cursorBlockHash}, ${cursorEntityType}, ${cursorEntityIdentity})
+			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
+				timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC
+			LIMIT ${limit + 1}
+		`,
+		sql`
+			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline
+			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
+				AND timeline.block_number <= ${String(asOf['blockNumber'])}
+				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
+				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
+				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
+					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
+				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.source_contract ILIKE ${query === undefined ? '' : `%${query}%`}
+					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : `%${query}%`})
+		`,
+	])
+	return json({
+		chainId,
+		asOf,
+		filters: { entityType, event, address, query, fromBlock, toBlock, canonical },
+		data: {
+			...paged(rows, limit, (row) => timelineCatalogCursorFor(chainId, filterIdentity, asOf, row)),
+			total: String(totalRows[0]?.['total'] ?? '0'),
 		},
 	})
 }
@@ -1522,9 +2643,9 @@ const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): P
 	url.searchParams.set('limit', String(requestedLimit))
 	const identity = `${entityType}:${entityIdentity}`
 	const page = detailPage(url, chainId, 'timeline', identity, asOf)
-	const cursorBlock = page.cursor?.[5] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[6] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[7] ?? 2_147_483_647
+	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
+	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
+	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await sql`
 		SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
 		JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
@@ -1639,7 +2760,6 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 	const chainId = routeInteger(parts[1])
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 1_000
 	const limit = Math.min(Math.max(requestedLimit, 1), 2_000)
-	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 1_000_000) ?? 0
 	const fromBlock = postgresBigint(url.searchParams.get('fromBlock'), 'fromBlock') ?? '0'
 	const toBlock = postgresBigint(url.searchParams.get('toBlock'), 'toBlock') ?? '9223372036854775807'
 	if (BigInt(fromBlock) > BigInt(toBlock)) throw new ApiRequestError('fromBlock must not exceed toBlock')
@@ -1654,6 +2774,8 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 		if (type !== 'pools' && type !== 'vaults' && type !== 'universes' && type !== 'questions') return json({ error: 'Unknown state history type' }, 404)
 		return json({ error: 'Invalid state identifier' }, 400)
 	}
+	rejectRawSnapshotOffset(url)
+	const asOf = await operationsAsOf(sql, chainId)
 	const networkRows = await sql`
 		SELECT start_block::text, indexed_block::text, indexed_hash FROM networks WHERE chain_id = ${chainId}
 	`
@@ -1663,6 +2785,10 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 	const indexedThroughBlock = network['indexed_block'] === null ? undefined : String(network['indexed_block'])
 	const requestedFromBlock = url.searchParams.has('fromBlock') ? fromBlock : indexedFromBlock
 	const requestedToBlock = url.searchParams.has('toBlock') ? toBlock : indexedThroughBlock
+	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map((part) => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
+	const page = offsetPage(url, chainId, 'state-history', historyIdentity, asOf)
+	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
+	const offset = page.offset
 	const rangeCovered =
 		indexedThroughBlock !== undefined &&
 		requestedToBlock !== undefined &&
@@ -1680,7 +2806,7 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 		complete: rangeCovered && offset === 0 && !truncated,
 		rangeCovered,
 		hasPreviousPages: offset > 0,
-		...(truncated ? { nextOffset: offset + limit } : {}),
+		...(truncated ? { nextCursor: offsetCursorFor(chainId, 'state-history', historyIdentity, asOf, offset + limit) } : {}),
 	})
 	if (type === 'pools') {
 		const address = parts[2]?.toLowerCase()
@@ -1738,7 +2864,11 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 					AND quote_contract.address = CASE WHEN market.token0_address = universe_rep.reputation_token_address THEN market.token1_address ELSE market.token0_address END
 				LEFT JOIN LATERAL (
 					SELECT metadata.symbol, metadata.decimals FROM token_metadata metadata
+					JOIN blocks metadata_block ON metadata_block.chain_id = metadata.chain_id
+						AND metadata_block.hash = metadata.block_hash AND metadata_block.canonical
+					JOIN networks metadata_network ON metadata_network.chain_id = metadata.chain_id
 					WHERE metadata.chain_id = market.chain_id AND metadata.address = quote_contract.address AND metadata.canonical
+						AND metadata.read_block <= metadata_network.indexed_block
 					ORDER BY metadata.read_block DESC LIMIT 1
 				) quote_metadata ON true
 				WHERE observation.chain_id = ${chainId} AND observation.canonical
@@ -1843,8 +2973,17 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 	if (address === undefined) throw new ApiRequestError('address is required')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 50
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
-	const cursor = parseAddressTransactionCursor(url.searchParams.get('cursor'))
-	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== address)) throw new ApiRequestError('cursor does not match the requested account')
+	const cursor = parseAddressHistoryCursor(url.searchParams.get('cursor'), 'sent')
+	if (cursor !== undefined && (cursor[2] !== chainId || cursor[3] !== address)) throw new ApiRequestError('cursor does not match the requested account')
+	const asOf = await operationsAsOf(sql, chainId)
+	if (
+		cursor !== undefined &&
+		(cursor[6] !== String(asOf['invalidationId']) ||
+			cursor[7] !== String(asOf['abiSourceHash']) ||
+			cursor[8] !== String(asOf['applicationSourceHash']) ||
+			cursor[9] !== String(asOf['projectionSourceHash']))
+	)
+		throw new ApiConflictError('Indexed state changed; restart pagination')
 	const anchorRows =
 		cursor === undefined
 			? await sql`SELECT transaction.block_number AS snapshot_block, transaction.block_hash AS snapshot_hash
@@ -1853,8 +2992,8 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 				WHERE transaction.canonical AND transaction.chain_id = ${chainId} AND transaction.from_address = ${address}
 				ORDER BY transaction.block_number DESC, transaction.transaction_index DESC LIMIT 1`
 			: []
-	const snapshotBlock = cursor?.[2] ?? String(anchorRows[0]?.['snapshot_block'] ?? 0)
-	const snapshotHash = cursor?.[3] ?? String(anchorRows[0]?.['snapshot_hash'] ?? '')
+	const snapshotBlock = cursor?.[4] ?? String(anchorRows[0]?.['snapshot_block'] ?? 0)
+	const snapshotHash = cursor?.[5] ?? String(anchorRows[0]?.['snapshot_hash'] ?? '')
 	if (cursor !== undefined) {
 		const validationRows = await sql`
 			SELECT
@@ -1864,7 +3003,7 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 					WHERE transaction.canonical AND transaction.chain_id = ${chainId} AND transaction.from_address = ${address}
 						AND transaction.block_number <= ${snapshotBlock}) AS snapshot_total
 		`
-		if (validationRows[0]?.['snapshot_canonical'] !== true || Number(validationRows[0]?.['snapshot_total'] ?? -1) !== cursor[4])
+		if (validationRows[0]?.['snapshot_canonical'] !== true || Number(validationRows[0]?.['snapshot_total'] ?? -1) !== cursor[10])
 			throw new ApiConflictError('Transaction history changed; restart pagination')
 	}
 	const values: Array<string | number> = [chainId, address, snapshotBlock]
@@ -1872,7 +3011,7 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 		cursor === undefined
 			? ''
 			: (() => {
-					values.push(cursor[5], cursor[6])
+					values.push(cursor[11], cursor[12])
 					return `AND (t.block_number, t.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
 				})()
 	values.push(limit + 1)
@@ -1899,10 +3038,12 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 		LIMIT $${values.length}`,
 		values,
 	)
-	const total = cursor?.[4] ?? Number(rows[0]?.['snapshot_total'] ?? 0)
+	const total = cursor?.[10] ?? Number(rows[0]?.['snapshot_total'] ?? 0)
 	const hasMore = rows.length > limit
 	const pageRows = rows.slice(0, limit)
-	const items = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'snapshot_total')))
+	const items = pageRows.map((row: Record<string, unknown>) =>
+		decodedJsonColumns(Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'snapshot_total')), actionJsonColumns),
+	)
 	return json({
 		items,
 		total,
@@ -1910,7 +3051,7 @@ const addressTransactions = async (sql: SQL, url: URL): Promise<Response> => {
 		snapshotBlock,
 		nextCursor:
 			hasMore && pageRows.length > 0
-				? addressTransactionCursorFor(chainId, address, snapshotBlock, snapshotHash, total, pageRows[pageRows.length - 1] as Record<string, unknown>)
+				? addressHistoryCursorFor('sent', chainId, address, snapshotBlock, snapshotHash, asOf, total, pageRows[pageRows.length - 1] as Record<string, unknown>)
 				: undefined,
 	})
 }
@@ -1922,22 +3063,74 @@ const addressInteractions = async (sql: SQL, url: URL): Promise<Response> => {
 	if (address === undefined) throw new ApiRequestError('address is required')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 20
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
-	const rows = await sql`
-		WITH interactions AS (
+	const cursor = parseAddressHistoryCursor(url.searchParams.get('cursor'), 'referenced')
+	if (cursor !== undefined && (cursor[2] !== chainId || cursor[3] !== address)) throw new ApiRequestError('cursor does not match the requested account')
+	const asOf = await operationsAsOf(sql, chainId)
+	if (
+		cursor !== undefined &&
+		(cursor[6] !== String(asOf['invalidationId']) ||
+			cursor[7] !== String(asOf['abiSourceHash']) ||
+			cursor[8] !== String(asOf['applicationSourceHash']) ||
+			cursor[9] !== String(asOf['projectionSourceHash']))
+	)
+		throw new ApiConflictError('Indexed state changed; restart pagination')
+	const anchorRows =
+		cursor === undefined
+			? await sql`
+				SELECT activity.block_number AS snapshot_block, activity.block_hash AS snapshot_hash
+				FROM address_activity activity
+				JOIN blocks block ON block.chain_id = activity.chain_id AND block.hash = activity.block_hash AND block.canonical
+				JOIN transactions transaction ON transaction.chain_id = activity.chain_id AND transaction.block_hash = activity.block_hash
+					AND transaction.hash = activity.tx_hash AND transaction.canonical
+				WHERE activity.canonical AND activity.role = 'referenced' AND activity.chain_id = ${chainId} AND activity.address = ${address}
+				ORDER BY activity.block_number DESC, transaction.transaction_index DESC LIMIT 1`
+			: []
+	const snapshotBlock = cursor?.[4] ?? String(anchorRows[0]?.['snapshot_block'] ?? 0)
+	const snapshotHash = cursor?.[5] ?? String(anchorRows[0]?.['snapshot_hash'] ?? '')
+	if (cursor !== undefined) {
+		const validationRows = await sql`
+			SELECT
+				EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${snapshotBlock} AND hash = ${snapshotHash} AND canonical) AS snapshot_canonical,
+				(SELECT count(*) FROM (
+					SELECT activity.block_hash, activity.tx_hash
+					FROM address_activity activity
+					JOIN blocks block ON block.chain_id = activity.chain_id AND block.hash = activity.block_hash AND block.canonical
+					JOIN transactions transaction ON transaction.chain_id = activity.chain_id AND transaction.block_hash = activity.block_hash
+						AND transaction.hash = activity.tx_hash AND transaction.canonical
+					WHERE activity.canonical AND activity.role = 'referenced' AND activity.chain_id = ${chainId}
+						AND activity.address = ${address} AND activity.block_number <= ${snapshotBlock}
+					GROUP BY activity.block_hash, activity.tx_hash
+				) interaction) AS snapshot_total
+		`
+		if (validationRows[0]?.['snapshot_canonical'] !== true || Number(validationRows[0]?.['snapshot_total'] ?? -1) !== cursor[10])
+			throw new ApiConflictError('Interaction history changed; restart pagination')
+	}
+	const values: Array<string | number> = [chainId, address, snapshotBlock]
+	const cursorClause =
+		cursor === undefined
+			? ''
+			: (() => {
+					values.push(cursor[11], cursor[12])
+					return `WHERE (interaction.block_number, interaction.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
+				})()
+	values.push(limit + 1)
+	const rows = await sql.unsafe(
+		`WITH interactions AS (
 			SELECT activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash,
+				transaction.transaction_index,
 				array_agg(DISTINCT activity.role ORDER BY activity.role) AS roles,
 				array_agg(DISTINCT activity.pool_address ORDER BY activity.pool_address)
-					FILTER (WHERE activity.pool_address <> '0x0000000000000000000000000000000000000000') AS pool_addresses
+					FILTER (WHERE activity.pool_address <> '0x0000000000000000000000000000000000000000') AS pool_addresses,
+				count(*) OVER () AS snapshot_total
 			FROM address_activity activity
-			JOIN blocks canonical_block ON canonical_block.chain_id = activity.chain_id AND canonical_block.hash = activity.block_hash AND canonical_block.canonical
-			JOIN transactions canonical_transaction ON canonical_transaction.chain_id = activity.chain_id
-				AND canonical_transaction.block_hash = activity.block_hash AND canonical_transaction.hash = activity.tx_hash AND canonical_transaction.canonical
-			WHERE activity.canonical AND activity.role = 'referenced' AND activity.chain_id = ${chainId} AND activity.address = ${address}
-			GROUP BY activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash
-			ORDER BY activity.block_number DESC, max(canonical_transaction.transaction_index) DESC
-			LIMIT ${limit}
+			JOIN blocks block ON block.chain_id = activity.chain_id AND block.hash = activity.block_hash AND block.canonical
+			JOIN transactions transaction ON transaction.chain_id = activity.chain_id AND transaction.block_hash = activity.block_hash
+				AND transaction.hash = activity.tx_hash AND transaction.canonical
+			WHERE activity.canonical AND activity.role = 'referenced' AND activity.chain_id = $1 AND activity.address = $2
+				AND activity.block_number <= $3::bigint
+			GROUP BY activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash, transaction.transaction_index
 		)
-		SELECT interaction.*, transaction.transaction_index, transaction.from_address, transaction.to_address,
+		SELECT interaction.*, transaction.from_address, transaction.to_address,
 			transaction.value, transaction.status, transaction.gas_used, block.timestamp AS block_timestamp,
 			action.function_name, action.function_signature, action.arguments AS action_arguments,
 			action.display_arguments AS action_display_arguments, action.argument_schema AS action_argument_schema,
@@ -1950,9 +3143,35 @@ const addressInteractions = async (sql: SQL, url: URL): Promise<Response> => {
 		JOIN networks network ON network.chain_id = interaction.chain_id
 		LEFT JOIN actions action ON action.chain_id = interaction.chain_id AND action.block_hash = interaction.block_hash AND action.tx_hash = interaction.tx_hash
 		LEFT JOIN contracts destination ON destination.chain_id = interaction.chain_id AND destination.address = transaction.to_address AND destination.canonical
-		ORDER BY interaction.block_number DESC, transaction.transaction_index DESC
-	`
-	return json({ items: rows, limit })
+		${cursorClause}
+		ORDER BY interaction.block_number DESC, interaction.transaction_index DESC
+		LIMIT $${values.length}`,
+		values,
+	)
+	const total = cursor?.[10] ?? Number(rows[0]?.['snapshot_total'] ?? 0)
+	const hasMore = rows.length > limit
+	const pageRows = rows.slice(0, limit)
+	return json({
+		items: pageRows.map((row: Record<string, unknown>) =>
+			decodedJsonColumns(Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'snapshot_total')), actionJsonColumns),
+		),
+		total,
+		limit,
+		snapshotBlock,
+		nextCursor:
+			hasMore && pageRows.length > 0
+				? addressHistoryCursorFor(
+						'referenced',
+						chainId,
+						address,
+						snapshotBlock,
+						snapshotHash,
+						asOf,
+						total,
+						pageRows[pageRows.length - 1] as Record<string, unknown>,
+					)
+				: undefined,
+	})
 }
 
 const addressIdentity = async (sql: SQL, url: URL): Promise<Response> => {
@@ -2008,7 +3227,10 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 				snapshot.chain_id, snapshot.address, snapshot.asset_address, snapshot.asset_kind, snapshot.balance,
 				snapshot.block_number, snapshot.observed_at
 			FROM address_balance_snapshots snapshot
-			WHERE snapshot.canonical AND (
+			JOIN blocks observed_block ON observed_block.chain_id = snapshot.chain_id
+				AND observed_block.hash = snapshot.block_hash AND observed_block.canonical
+			JOIN networks observed_network ON observed_network.chain_id = snapshot.chain_id
+			WHERE snapshot.canonical AND snapshot.block_number <= observed_network.indexed_block AND (
 				snapshot.asset_kind = 'native' OR EXISTS (
 					SELECT 1 FROM contracts asset
 					WHERE asset.chain_id = snapshot.chain_id AND asset.address = snapshot.asset_address AND asset.canonical
@@ -2031,9 +3253,14 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 				count(*) FILTER (WHERE kind = 'weth') AS weth_token_count
 			FROM contracts WHERE canonical GROUP BY chain_id
 		), latest_token_metadata AS (
-			SELECT DISTINCT ON (chain_id, address) chain_id, address, name, symbol, decimals
-			FROM token_metadata WHERE canonical
-			ORDER BY chain_id, address, read_block DESC
+			SELECT DISTINCT ON (metadata.chain_id, metadata.address)
+				metadata.chain_id, metadata.address, metadata.name, metadata.symbol, metadata.decimals
+			FROM token_metadata metadata
+			JOIN blocks observed_block ON observed_block.chain_id = metadata.chain_id
+				AND observed_block.hash = metadata.block_hash AND observed_block.canonical
+			JOIN networks observed_network ON observed_network.chain_id = metadata.chain_id
+			WHERE metadata.canonical AND metadata.read_block <= observed_network.indexed_block
+			ORDER BY metadata.chain_id, metadata.address, metadata.read_block DESC
 		), latest_vaults AS (
 			SELECT DISTINCT ON (chain_id, pool_address, vault_address) chain_id, pool_address, vault_address,
 				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, block_number
@@ -2192,7 +3419,7 @@ const richList = async (sql: SQL, url: URL): Promise<Response> => {
 }
 
 type PortfolioCollection = 'forks' | 'lp' | 'reports'
-type PortfolioCursor = readonly [number, string, PortfolioCollection, string, string, number, number]
+type PortfolioCursor = readonly [number, string, PortfolioCollection, string, string, string, string, string, string, number, number]
 
 const parsePortfolioCursor = (
 	value: string | null,
@@ -2204,24 +3431,29 @@ const parsePortfolioCursor = (
 	if (value === null) return { total: 0, offset: 0 }
 	let parts: unknown[]
 	try {
-		const parsed = JSON.parse(atob(value)) as unknown
+		const parsed = decodeOpaqueCursor(value)
 		parts = Array.isArray(parsed) ? parsed : []
 	} catch (error) {
 		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
 	}
 	if (
-		parts.length !== 7 ||
-		parts[0] !== chainId ||
-		parts[1] !== address ||
-		parts[2] !== kind ||
-		!isNonNegativeSafeInteger(parts[5]) ||
-		!isNonNegativeSafeInteger(parts[6]) ||
-		parts[6] > parts[5]
+		parts.length !== 11 ||
+		!isNonNegativeSafeInteger(parts[0]) ||
+		typeof parts[1] !== 'string' ||
+		(parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports') ||
+		!isPostgresBigint(parts[3]) ||
+		typeof parts[4] !== 'string' ||
+		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
+		!isPostgresBigint(parts[5]) ||
+		!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+		!isNonNegativeSafeInteger(parts[9]) ||
+		!isNonNegativeSafeInteger(parts[10]) ||
+		parts[10] > parts[9]
 	)
 		throw new ApiRequestError(`${kind}Cursor is invalid`)
-	if (parts[3] !== String(asOf['blockNumber']) || parts[4] !== String(asOf['blockHash']))
-		throw new ApiConflictError('Indexed state changed; restart pagination')
-	return { total: parts[5], offset: parts[6] }
+	if (parts[0] !== chainId || parts[1] !== address || parts[2] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
+	if (!snapshotBoundaryMatches(parts, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	return { total: parts[9], offset: parts[10] }
 }
 
 const portfolioCursorFor = (
@@ -2231,7 +3463,7 @@ const portfolioCursorFor = (
 	asOf: Record<string, unknown>,
 	total: number,
 	offset: number,
-): string => btoa(JSON.stringify([chainId, address, kind, String(asOf['blockNumber']), String(asOf['blockHash']), total, offset] satisfies PortfolioCursor))
+): string => encodeOpaqueCursor([chainId, address, kind, ...snapshotBoundary(asOf), total, offset] satisfies PortfolioCursor)
 
 const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -2379,12 +3611,12 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 				WHERE contract.chain_id = ${chainId} AND contract.canonical
 				ORDER BY (contract.deployment_block IS NOT NULL) DESC, contract.label, contract.address
 			`
-			return json({ items: rows })
+			return json({ items: rows.map((row: Record<string, unknown>) => decodedJsonColumns(row, actionJsonColumns)) })
 		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
 		if (url.pathname.startsWith('/api/v1/logs/')) return await logDetail(sql, url.pathname.slice('/api/v1/logs/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/reorgs') return await reorganizationHistory(sql, url)
-		if (url.pathname === '/api/v1/provenance') return await provenanceHistory(sql)
+		if (url.pathname === '/api/v1/provenance') return await provenanceHistory(sql, url)
 		if (url.pathname === '/api/v1/export') return await historicalExport(sql, url)
 		if (url.pathname === '/api/v1/operations') return await operationsResponse(sql, url)
 		if (url.pathname === '/api/v1/state/reports') return await domainCatalogResponse(sql, url, 'reports')
@@ -2394,6 +3626,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/forks') return await domainCatalogResponse(sql, url, 'forks')
 		if (url.pathname === '/api/v1/state/trading') return await tradingCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/integrity') return await integrityCatalogResponse(sql, url)
+		if (url.pathname === '/api/v1/state/direct-observations') return await directObservationsResponse(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/reports/'))
 			return await reportDetailResponse(sql, url.pathname.slice('/api/v1/state/reports/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/escalations/'))
@@ -2405,6 +3638,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname.startsWith('/api/v1/state/trading/'))
 			return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/address-portfolio') return await addressPortfolioResponse(sql, url)
+		if (url.pathname === '/api/v1/state/timeline') return await timelineCatalogResponse(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/timeline/'))
 			return await timelineResponse(sql, url.pathname.slice('/api/v1/state/timeline/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
@@ -2415,11 +3649,45 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/address-interactions') return await addressInteractions(sql, url)
 		if (url.pathname === '/api/v1/actions') {
 			const chainId = integer(url.searchParams.get('chainId'), 'chainId')
-			const rows =
-				chainId === undefined
-					? await sql`SELECT a.*, t.block_number, t.transaction_index, t.from_address, t.to_address, t.status, t.value, n.id AS network_id FROM actions a JOIN transactions t ON t.chain_id = a.chain_id AND t.block_hash = a.block_hash AND t.hash = a.tx_hash JOIN networks n ON n.chain_id = a.chain_id WHERE t.canonical ORDER BY t.block_number DESC, t.transaction_index DESC LIMIT 100`
-					: await sql`SELECT a.*, t.block_number, t.transaction_index, t.from_address, t.to_address, t.status, t.value, n.id AS network_id FROM actions a JOIN transactions t ON t.chain_id = a.chain_id AND t.block_hash = a.block_hash AND t.hash = a.tx_hash JOIN networks n ON n.chain_id = a.chain_id WHERE t.canonical AND a.chain_id = ${chainId} ORDER BY t.block_number DESC, t.transaction_index DESC LIMIT 100`
-			return json({ items: rows })
+			if (chainId === undefined) throw new ApiRequestError('chainId is required')
+			const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+			const limit = Math.min(Math.max(requestedLimit, 1), 250)
+			if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
+			const cursor = parseActionCursor(url.searchParams.get('cursor'), chainId)
+			const asOf = await operationsAsOf(sql, chainId)
+			if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+			const values: Array<string | number> = []
+			const clauses = ['t.canonical', 'block.canonical']
+			const bind = (value: string | number): string => {
+				values.push(value)
+				return `$${values.length}`
+			}
+			clauses.push(`a.chain_id = ${bind(chainId)}`)
+			if (cursor !== undefined)
+				clauses.push(
+					`(block.timestamp, t.block_number, t.transaction_index, a.block_hash, a.tx_hash) < (${bind(cursor[8])}::timestamptz, ${bind(cursor[9])}::bigint, ${bind(cursor[10])}, ${bind(cursor[11])}, ${bind(cursor[12])})`,
+				)
+			values.push(limit + 1)
+			const rows = await sql.unsafe(
+				`SELECT a.*, t.block_number, t.transaction_index, t.from_address, t.to_address, t.status, t.value,
+					block.timestamp AS block_timestamp, n.id AS network_id
+				FROM actions a
+				JOIN transactions t ON t.chain_id = a.chain_id AND t.block_hash = a.block_hash AND t.hash = a.tx_hash
+				JOIN blocks block ON block.chain_id = a.chain_id AND block.hash = a.block_hash
+				JOIN networks n ON n.chain_id = a.chain_id
+				WHERE ${clauses.join(' AND ')}
+				ORDER BY block.timestamp DESC, a.chain_id DESC, t.block_number DESC, t.transaction_index DESC, a.block_hash DESC, a.tx_hash DESC
+				LIMIT $${values.length}`,
+				values,
+			)
+			const hasMore = rows.length > limit
+			const pageRows = rows.slice(0, limit)
+			return json({
+				items: pageRows.map((row: Record<string, unknown>) => decodedJsonColumns(row, actionJsonColumns)),
+				limit,
+				asOf,
+				nextCursor: hasMore && pageRows.length > 0 ? actionCursorFor(chainId, asOf, pageRows[pageRows.length - 1] as Record<string, unknown>) : undefined,
+			})
 		}
 		if (url.pathname.startsWith('/api/v1/contracts/')) {
 			const parts = url.pathname.slice('/api/v1/contracts/'.length).split('/')
