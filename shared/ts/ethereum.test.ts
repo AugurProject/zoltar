@@ -1544,6 +1544,43 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	for (const allowFailure of [true, false] as const) {
+		test(`public client rejects truncated multicall responses when allowFailure is ${allowFailure.toString()}`, async () => {
+			const provider = createProvider(({ method }) => {
+				if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+				return encodeAbiParameters(
+					[
+						{
+							components: [
+								{ name: 'success', type: 'bool' },
+								{ name: 'returnData', type: 'bytes' },
+							],
+							name: 'returnData',
+							type: 'tuple[]',
+						},
+					],
+					[[]],
+				)
+			}, [])
+			const client = createPublicClient({ transport: custom(provider) })
+
+			await expect(
+				client.multicall({
+					allowFailure,
+					contracts: [
+						{
+							abi: BALANCE_OF_ABI,
+							address: TOKEN_ADDRESS,
+							args: [OWNER_ADDRESS],
+							functionName: 'balanceOf',
+						},
+					],
+					multicallAddress: MULTICALL_ADDRESS,
+				}),
+			).rejects.toThrow('Multicall returned 0 results for 1 calls')
+		})
+	}
+
 	test('wallet client uses rpc sendTransaction for json-rpc accounts and raw signing for local accounts', async () => {
 		const remoteCalls: { method: string; params: unknown }[] = []
 		const remoteProvider = createProvider(({ method, params }) => {
