@@ -24,6 +24,10 @@
 		["0xAcE7Fde809DEaE38A751E1Cc2d1a694e6A5aE1a9", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x20c9Dd90dD4b5548c27850C42B0D83748D1C9920", "Escalation Game Factory", "escalationGameFactory"],
 		["0x3815b29F356CD7F6bd2edE6eEf790A09eE3EC200", "Security Pool Factory", "securityPoolFactory"],
-		["0x526186B90D97bb6bB9A44228a7373189507850D5", "Escalation Game Proof Verifier", "escalationProofVerifier"]
+		["0x526186B90D97bb6bB9A44228a7373189507850D5", "Escalation Game Proof Verifier", "escalationProofVerifier"],
+		["0xE90bedcdb34907ec088aa9a74758FDE8fA9d61F0", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xFC19c724B59b0afA1d4bA97Aa0879237e1cDB3b1", "SecurityPoolUtils", "securityPoolUtils"],
+		["0x69F718c283EB3Bc5f817E07BEe0f120112B27eFA", "Security Pool Forker", "securityPoolForker"],
+		["0x9df870F521964Fb1361b9FdCd98b18dba2ac57ba", "Security Pool Factory", "securityPoolFactory"]
 	]
 }

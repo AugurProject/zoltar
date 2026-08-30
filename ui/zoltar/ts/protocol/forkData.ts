@@ -13,11 +13,24 @@ type ForkDataView = {
 	forkOwnSecurityPool: boolean
 	unresolvedEscalationAtFork: boolean
 	forkOutcomeIndex: bigint
+	forkActivationTime: bigint
 }
 
 export function requireForkDataView(value: unknown): ForkDataView {
-	const [auctionableAttoRepAtFork, truthAuctionAddress, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, escalationElapsedAtFork, escalationStartBondAtForkAttoRep, escalationNonDecisionThresholdAtForkAttoRep, forkOwnSecurityPool, unresolvedEscalationAtFork, forkOutcomeIndex] =
-		requireTupleValue(value, 11, 'security pool fork data')
+	const [
+		auctionableAttoRepAtFork,
+		truthAuctionAddress,
+		truthAuctionStartedAt,
+		migratedAttoRep,
+		auctionedCapacityOwnershipAttoRep,
+		escalationElapsedAtFork,
+		escalationStartBondAtForkAttoRep,
+		escalationNonDecisionThresholdAtForkAttoRep,
+		forkOwnSecurityPool,
+		unresolvedEscalationAtFork,
+		forkOutcomeIndex,
+		forkActivationTime,
+	] = requireTupleValue(value, 12, 'security pool fork data')
 	return {
 		auctionableAttoRepAtFork: requireBigintValue(auctionableAttoRepAtFork, 'security pool fork data auctionable REP at fork'),
 		truthAuctionAddress: requireAddressValue(truthAuctionAddress, 'security pool fork data truth auction address'),
@@ -30,5 +43,6 @@ export function requireForkDataView(value: unknown): ForkDataView {
 		forkOwnSecurityPool: requireBooleanValue(forkOwnSecurityPool, 'security pool fork data own-pool flag'),
 		unresolvedEscalationAtFork: requireBooleanValue(unresolvedEscalationAtFork, 'security pool fork data unresolved escalation flag'),
 		forkOutcomeIndex: requireBigintValue(forkOutcomeIndex, 'security pool fork data fork outcome index'),
+		forkActivationTime: requireBigintValue(forkActivationTime, 'security pool fork data fork activation time'),
 	}
 }

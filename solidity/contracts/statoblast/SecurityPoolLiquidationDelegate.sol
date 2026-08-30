@@ -75,9 +75,10 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			request.requestedDebtAttoEth >= targetOpenInterestAttoEth ? 0 : minimumVaultRepDepositAttoRep;
 		(nominalDebtToMoveAttoEth, capacityOwnershipToMoveAttoRep, , maximumBackingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(securityVaults[request.targetVault].repBackingUnits, request.snapshotTargetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, request.requestedDebtAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, minimumRemainingAttoRep);
 		uint256 receiverGrossOpenInterestAfterAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[request.receiverVault].capacityOwnershipAttoRep + capacityOwnershipToMoveAttoRep, totalCapacityOwnershipAttoRep);
+		uint256 receiverBadDebtAttoEth = _getVaultBadDebtAttoEth(request.receiverVault);
 		uint256 receiverOpenInterestAfterAttoEth =
-			receiverGrossOpenInterestAfterAttoEth > vaultBadDebtAttoEth[request.receiverVault]
-				? receiverGrossOpenInterestAfterAttoEth - vaultBadDebtAttoEth[request.receiverVault]
+			receiverGrossOpenInterestAfterAttoEth > receiverBadDebtAttoEth
+				? receiverGrossOpenInterestAfterAttoEth - receiverBadDebtAttoEth
 				: 0;
 		require(receiverOpenInterestAfterAttoEth >= receiverOpenInterestBeforeAttoEth, 'Receiver debt decreased');
 		debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;
@@ -89,8 +90,9 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth;
 			if (badDebtAttoEth != 0) {
 				totalBadDebtAttoEth += badDebtAttoEth;
-				vaultBadDebtAttoEth[request.targetVault] += badDebtAttoEth;
-				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, vaultBadDebtAttoEth[request.targetVault], totalBadDebtAttoEth);
+				uint256 resultingVaultBadDebtAttoEth = _getVaultBadDebtAttoEth(request.targetVault) + badDebtAttoEth;
+				_setVaultBadDebtAttoEth(request.targetVault, resultingVaultBadDebtAttoEth);
+				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, resultingVaultBadDebtAttoEth, totalBadDebtAttoEth);
 			}
 		}
 		require(debtToMoveAttoEth > 0 || badDebtAttoEth > 0, 'No liq');

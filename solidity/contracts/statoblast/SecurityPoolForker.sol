@@ -54,7 +54,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			uint256 escalationNonDecisionThresholdAtForkAttoRep,
 			bool ownFork,
 			bool unresolvedEscalationAtFork,
-			uint256 outcomeIndex
+			uint256 outcomeIndex,
+			uint256 forkActivationTime
 		)
 	{
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
@@ -69,29 +70,20 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.escalationNonDecisionThresholdAtForkAttoRep,
 			data.ownFork,
 			data.unresolvedEscalationAtFork,
-			data.outcomeIndex
+			data.outcomeIndex,
+			data.forkActivationTime
 		);
 	}
 
-	function getMigratedAttoRep(ISecurityPool securityPool) public view returns (uint256) {
-		return forkDataByPool[securityPool].migratedAttoRep;
-	}
-
-	function getForkActivationTime(ISecurityPool securityPool) external view returns (uint256) {
-		return forkDataByPool[securityPool].forkActivationTime;
-	}
-
-	function getUnassignedPosition(ISecurityPool securityPool) external view returns (uint256, uint256, uint256) {
+	function getUnassignedPosition(ISecurityPool securityPool) external view returns (uint256, uint256, uint256, uint256, uint256) {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
 			data.unassignedRepBackingUnitsAtFinalization - data.claimedAuctionRepBackingUnits,
 			data.auctionedCapacityOwnershipAttoRep - data.claimedAuctionedCapacityOwnershipAttoRep,
-			auctionedBadDebtByPool[securityPool] - claimedAuctionedBadDebtByPool[securityPool]
+			auctionedBadDebtByPool[securityPool] - claimedAuctionedBadDebtByPool[securityPool],
+			data.auctionBadDebtGeneration,
+			data.auctionFeeIndexAtFinalization
 		);
-	}
-
-	function getUnassignedPositionFeeIndex(ISecurityPool securityPool) external view returns (uint256) {
-		return forkDataByPool[securityPool].auctionFeeIndexAtFinalization;
 	}
 
 	function isEscalationDepositClaimedDirectly(ISecurityPool securityPool, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256 parentDepositIndex) external view returns (bool) {

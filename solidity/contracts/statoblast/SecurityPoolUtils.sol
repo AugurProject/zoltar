@@ -48,7 +48,7 @@ library SecurityPoolUtils {
 		emit VaultBadDebtMigrated(parent, child, vault, migratedBadDebtAttoEth, resultingParentTotalBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
 	}
 
-	function creditForkAuctionVault(ISecurityPool securityPool, address vault, uint256 auctionRepBackingUnits, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 auctionFeeIndexAtFinalization) external returns (uint256 resultingTotalRepBackingUnits) {
+	function creditForkAuctionVault(ISecurityPool securityPool, address vault, uint256 auctionRepBackingUnits, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 auctionBadDebtGeneration, uint256 auctionFeeIndexAtFinalization) external returns (uint256 resultingTotalRepBackingUnits) {
 		securityPool.updateVaultFees(vault);
 		(
 			uint256 currentVaultRepBackingUnits,
@@ -57,7 +57,11 @@ library SecurityPoolUtils {
 			uint256 currentFeeIndex
 		) = securityPool.securityVaults(vault);
 		uint256 lastDepositTargetHealthFactorBps = securityPool.lastDepositTargetHealthFactorBpsByVault(vault);
-		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, lastDepositTargetHealthFactorBps, securityPool.vaultBadDebtAttoEth(vault) + badDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
+		uint256 currentBadDebtToAssignAttoEth =
+			auctionBadDebtGeneration == securityPool.getPoolAccountingSnapshot().badDebtGeneration
+				? badDebtToAssignAttoEth
+				: 0;
+		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, lastDepositTargetHealthFactorBps, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
 		securityPool.assignFinalizedAuctionFees(vault, newCapacityOwnershipAttoRep, auctionFeeIndexAtFinalization);
 		return securityPool.totalRepBackingUnits();
 	}
@@ -101,12 +105,16 @@ library SecurityPoolUtils {
 	function getUnassignedPositionFeeAccounting(address securityPoolAddress) external view returns (uint256 feeIndexAtFinalization, uint256 claimableFeesAttoEth) {
 		ISecurityPool securityPool = ISecurityPool(payable(securityPoolAddress));
 		ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
-		feeIndexAtFinalization = forker.getUnassignedPositionFeeIndex(securityPool);
+		(, uint256 capacityOwnershipAttoRep, , , uint256 unassignedFeeIndexAtFinalization) = forker.getUnassignedPosition(securityPool);
+		feeIndexAtFinalization = unassignedFeeIndexAtFinalization;
 		address truthAuction = securityPool.truthAuction();
 		if (truthAuction == address(0) || IUniformPriceDualCapBatchAuction(truthAuction).totalAttoRepPurchased() == 0)
 			return (feeIndexAtFinalization, 0);
-		(, uint256 capacityOwnershipAttoRep, ) = forker.getUnassignedPosition(securityPool);
 		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
+	}
+
+	function getBadDebtGeneration(ISecurityPool securityPool) external view returns (uint256) {
+		return securityPool.getPoolAccountingSnapshot().badDebtGeneration;
 	}
 
 	function calculateMintingCapacityAttoEth(uint256 capacityOwnershipAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
@@ -132,7 +140,9 @@ library SecurityPoolUtils {
 		uint256 repBackingUnits;
 		uint256 capacityOwnershipAttoRep;
 		uint256 badDebtAttoEth;
-		(repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
+		uint256 debtGeneration;
+		(repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth, debtGeneration, ) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
+		if (debtGeneration != securityPool.getPoolAccountingSnapshot().badDebtGeneration) badDebtAttoEth = 0;
 		(, bool healthy) = calculateUnassignedPositionHealth(securityPool, settlementCollateralAttoEth, repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth);
 		return healthy;
 	}

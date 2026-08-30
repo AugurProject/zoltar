@@ -12,7 +12,7 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
-const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
 const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCapacityOwnershipAttoRep = 0n, feeEligibleCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep) => ({
 	settlementCollateralAttoEth,
 	currentRetentionRate: 0n,
@@ -25,6 +25,7 @@ const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCap
 	totalCapacityOwnershipAttoRep,
 	unallocatedAccruedFeesAttoEth: 0n,
 	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+	badDebtGeneration: 0n,
 })
 
 describe('securityPools protocol client', () => {
@@ -197,7 +198,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
-					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n, zeroAddress]
+					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)

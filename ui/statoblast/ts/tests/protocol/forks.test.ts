@@ -14,7 +14,7 @@ const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
-const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
 
 function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void) {
 	return createMockWriteClient(onSendTransaction, async request => {
@@ -115,7 +115,7 @@ describe('forks protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 3n, [0n, 0n, 0n]]
+					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n], 3n, [0n, 0n, 0n]]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -132,7 +132,7 @@ describe('forks protocol client', () => {
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
 		const questionId = 1n
-		const forkTime = 1_000n
+		const forkActivationTime = 1_000n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
@@ -140,9 +140,8 @@ describe('forks protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n], 4n, [0n, 0n, 0n]]
+					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, forkActivationTime], 4n, [0n, 0n, 0n]]
 				}
-				if (getContractFunctionName(firstContract) === 'getForkTime') return [forkTime]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				if (getContractFunctionName(firstContract) === 'computeClearing') {
 					return [[false, 0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false, 0n, 0n, 0n]
@@ -159,7 +158,7 @@ describe('forks protocol client', () => {
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)
 
 		expect(details.truthAuctionStartedAt).toBe(1n)
-		expect(details.migrationEndsAt).toBe(forkTime + 4_838_400n)
+		expect(details.migrationEndsAt).toBe(forkActivationTime + 4_838_400n)
 	})
 
 	test('loadForkAuctionDetails preserves finalized underfunded auction fields from the multicall tuple', async () => {
@@ -173,7 +172,7 @@ describe('forks protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n], 0n]
+					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -209,7 +208,7 @@ describe('forks protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n], 0n]
+					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
@@ -244,7 +243,7 @@ describe('forks protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, securityPoolAddress, 1n, 0n, zeroAddress, 0n, [30n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, true, false, 1n], 4n]
+					return [questionId, securityPoolAddress, 1n, 0n, zeroAddress, 0n, [30n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, true, false, 1n, 1n], 4n]
 				}
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]

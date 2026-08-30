@@ -240,7 +240,8 @@ contract SecurityPool is SecurityPoolStorage {
 			mstore(add(snapshot, 0x100), sload(13))
 			mstore(add(snapshot, 0x120), sload(7))
 			mstore(add(snapshot, 0x140), sload(14))
-			return(snapshot, 0x160)
+			mstore(add(snapshot, 0x160), sload(27))
+			return(snapshot, 0x180)
 		}
 	}
 
@@ -378,12 +379,15 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {
-		if (totalCapacityOwnershipAttoRep == 0 || securityVaults[vault].capacityOwnershipAttoRep == 0) return 0;
-		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].capacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
-		return
-			grossOpenInterestAttoEth > vaultBadDebtAttoEth[vault]
-				? grossOpenInterestAttoEth - vaultBadDebtAttoEth[vault]
-				: 0;
+		uint256 vaultCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
+		if (totalCapacityOwnershipAttoRep == 0 || vaultCapacityOwnershipAttoRep == 0) return 0;
+		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+		uint256 vaultBadDebt = _getVaultBadDebtAttoEth(vault);
+		return grossOpenInterestAttoEth > vaultBadDebt ? grossOpenInterestAttoEth - vaultBadDebt : 0;
+	}
+
+	function vaultBadDebtAttoEth(address vault) external view returns (uint256) {
+		return _getVaultBadDebtAttoEth(vault);
 	}
 
 	/// @notice Returns current REP-to-capacity ratios, not a target or current vault health factor.
@@ -564,6 +568,7 @@ contract SecurityPool is SecurityPoolStorage {
 		shareToken.burnCompleteSets(universeId, msg.sender, amountAttoShares);
 		shareTokenSupplyAttoShares -= amountAttoShares;
 		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
+		_resetBadDebtGenerationIfClaimsExhausted();
 		updateRetentionRate();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
@@ -583,9 +588,19 @@ contract SecurityPool is SecurityPoolStorage {
 				: (winningSharesBurnedAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
 		shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares;
 		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
+		_resetBadDebtGenerationIfClaimsExhausted();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		_sendEth(payable(msg.sender), settlementCollateralRedeemedAttoEth);
+	}
+
+	function _resetBadDebtGenerationIfClaimsExhausted() private {
+		assembly ('memory-safe') {
+			if iszero(sload(5)) {
+				sstore(21, 0)
+				sstore(27, add(sload(27), 1))
+			}
+		}
 	}
 
 	function redeemRepFromVault(address vault) external {
@@ -780,7 +795,7 @@ contract SecurityPool is SecurityPoolStorage {
 		securityVaults[vault].capacityOwnershipAttoRep = capacityOwnershipAttoRep;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
 		lastDepositTargetHealthFactorBpsByVault[vault] = lastDepositTargetHealthFactorBps;
-		vaultBadDebtAttoEth[vault] = newVaultBadDebtAttoEth;
+		_setVaultBadDebtAttoEth(vault, newVaultBadDebtAttoEth);
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		_registerVault(vault);
 		_emitVaultAccountingCheckpoint(vault);
