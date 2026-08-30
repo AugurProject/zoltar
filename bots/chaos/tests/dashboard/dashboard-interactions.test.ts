@@ -1031,6 +1031,14 @@ browserTest(
 					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
 					pauseNoteVisible: true,
 				})
+				expect(
+					await cdp.evaluate(`(() => {
+						const input = document.querySelector('#workflow-valid-blocks')
+						const unit = input?.nextElementSibling
+						const bounds = unit?.getBoundingClientRect()
+						return { disabled: input?.matches(':disabled'), unit: unit?.textContent?.trim(), unitVisible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
+					})()`),
+				).toEqual({ disabled: true, unit: 'blocks', unitVisible: true })
 				const disabledButtonPresentation = await cdp.evaluate(`(() => {
 					const button = document.querySelector('#save-settings')
 					if (!(button instanceof HTMLButtonElement)) return undefined
@@ -1073,6 +1081,14 @@ browserTest(
 				stateRequests = 0
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} paused execution policy did not become editable`)
+				expect(
+					await cdp.evaluate(`(() => {
+						const input = document.querySelector('#workflow-valid-blocks')
+						const unit = input?.nextElementSibling
+						const bounds = unit?.getBoundingClientRect()
+						return { disabled: input?.matches(':disabled'), unit: unit?.textContent?.trim(), unitVisible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
+					})()`),
+				).toEqual({ disabled: false, unit: 'blocks', unitVisible: true })
 				failNextStateRead = true
 				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/settings`] })
 				await cdp.evaluate(`document.querySelector('#settings-form')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))`)

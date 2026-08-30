@@ -243,6 +243,8 @@ try {
 				return [...row.querySelectorAll('.blocker-list li')].some(blocker => normalize(blocker.textContent) === description) ? [row.querySelector('.operation-name strong')?.textContent] : []
 			})
 			const ecosystemToggles = [...document.querySelectorAll('[data-ecosystem-toggle]')]
+			const workflowValidityUnit = document.querySelector('#workflow-valid-blocks + span')
+			const workflowValidityUnitBounds = workflowValidityUnit?.getBoundingClientRect()
 			return {
 				bodyPage: document.body.dataset.page,
 				catalogCaption: document.querySelector('#catalog-caption')?.textContent,
@@ -260,6 +262,8 @@ try {
 				toggleCount: ecosystemToggles.length,
 				togglesChecked: ecosystemToggles.every(toggle => toggle instanceof HTMLInputElement && toggle.checked),
 				visiblePage: visiblePage instanceof HTMLElement && getComputedStyle(visiblePage).display !== 'none',
+				workflowValidityUnit: workflowValidityUnit?.textContent?.trim(),
+				workflowValidityUnitVisible: (workflowValidityUnitBounds?.width ?? 0) > 0 && (workflowValidityUnitBounds?.height ?? 0) > 0,
 			}
 		})()`)
 		if (typeof renderedState !== 'object' || renderedState === null || Array.isArray(renderedState)) throw new Error(`Dashboard route /${route} did not expose its rendered state`)
@@ -292,7 +296,9 @@ try {
 				Reflect.get(renderedState, 'settingsDisabled') === true &&
 				Reflect.get(renderedState, 'settingsScope') === 'sepolia · chain 11155111' &&
 				Reflect.get(renderedState, 'toggleCount') === 4 &&
-				Reflect.get(renderedState, 'togglesChecked') === true
+				Reflect.get(renderedState, 'togglesChecked') === true &&
+				Reflect.get(renderedState, 'workflowValidityUnit') === 'blocks' &&
+				Reflect.get(renderedState, 'workflowValidityUnitVisible') === true
 			if (!settingsMatchFixture) throw new Error(`Settings controls did not match the visual fixture before capture: ${JSON.stringify(renderedState)}`)
 		}
 		if (stateRefreshFailure === true) {
