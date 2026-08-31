@@ -1534,6 +1534,62 @@ describe('shared ethereum compatibility layer', () => {
 		expect(logs[0]?.topics).toEqual([normalizedTopic])
 	})
 
+	test('public client rejects receipt logs that are not bound to their receipt', async () => {
+		const foreignBlockHash = `0x${'44'.repeat(32)}` satisfies Hash
+		const foreignTransactionHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const validLog = {
+			address: TOKEN_ADDRESS,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0xa',
+			data: '0x',
+			logIndex: '0x0',
+			removed: false,
+			topics: [],
+			transactionHash: RECEIPT_HASH,
+			transactionIndex: '0x0',
+		}
+		let returnedLog: Record<string, unknown> = validLog
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			return {
+				blockHash: BLOCK_HASH,
+				blockNumber: '0xa',
+				cumulativeGasUsed: '0x5208',
+				effectiveGasPrice: '0x3',
+				from: OWNER_ADDRESS,
+				gasUsed: '0x5208',
+				logs: [returnedLog],
+				status: '0x1',
+				to: RECIPIENT_ADDRESS,
+				transactionHash: RECEIPT_HASH,
+				transactionIndex: '0x0',
+				type: '0x2',
+			}
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const receipt = await client.getTransactionReceipt({ hash: RECEIPT_HASH })
+		expect(receipt.logs[0]).toMatchObject({
+			blockHash: receipt.blockHash,
+			blockNumber: receipt.blockNumber,
+			transactionHash: receipt.transactionHash,
+			transactionIndex: receipt.transactionIndex,
+		})
+
+		const mismatches = {
+			blockHash: foreignBlockHash,
+			blockNumber: '0xb',
+			transactionHash: foreignTransactionHash,
+			transactionIndex: '0x1',
+		}
+		for (const [field, mismatchedValue] of Object.entries(mismatches)) {
+			for (const value of [mismatchedValue, undefined]) {
+				returnedLog = { ...validLog, [field]: value }
+				await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow(`RPC returned a transaction receipt with a log whose ${field} does not match the receipt`)
+			}
+		}
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
