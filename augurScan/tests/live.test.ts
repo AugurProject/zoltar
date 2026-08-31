@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import type { LiveEvent } from '../src/database.ts'
 import { liveStreamResponse } from '../src/http.ts'
 import { LiveBus } from '../src/live.ts'
 
@@ -74,6 +75,48 @@ test('new streams start at the latest durable event without replaying history', 
 	await reader.read()
 	await bus.poll()
 	expect(requestedAfter).toBe(41)
+	await bus.close()
+})
+
+test('new streams refresh the durable cursor after an idle period', async () => {
+	let latest = 1
+	const requestedAfter: number[] = []
+	const bus = new LiveBus({
+		latestEventId: async () => latest,
+		eventsAfter: async (id) => {
+			requestedAfter.push(id)
+			return []
+		},
+	})
+	const first = streamFrom(bus).getReader()
+	await first.read()
+	await first.cancel()
+
+	latest = 41
+	const second = streamFrom(bus).getReader()
+	await second.read()
+	await bus.poll()
+
+	expect(requestedAfter.at(-1)).toBe(41)
+	await second.cancel()
+	await bus.close()
+})
+
+test('delivers a reset when a reconnect cursor is ahead of the durable event head', async () => {
+	let events: LiveEvent[] = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
+	const bus = new LiveBus({
+		latestEventId: async () => 50,
+		eventsAfter: async (id) => events.filter((event) => (event.event === 'reset' ? id > event.id : event.id > id)),
+	})
+	const reader = streamFrom(bus, 1_000).getReader()
+	expect(decoder.decode((await reader.read()).value)).toContain('connected')
+	await bus.poll()
+	bus.heartbeat()
+	expect(decoder.decode((await reader.read()).value)).toContain('id: 50\nevent: reset')
+
+	events = [{ id: 51, event: 'block', payload: { blockNumber: '51' } }]
+	await bus.poll()
+	expect(decoder.decode((await reader.read()).value)).toContain('id: 51\nevent: block')
 	await bus.close()
 })
 
