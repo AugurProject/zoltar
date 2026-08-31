@@ -1659,6 +1659,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 			const decoded = decodeFunctionOutput(rawResult.abiItem, rawResult.data)
 			if (!Array.isArray(decoded)) throw new Error('Unexpected multicall response')
+			if (decoded.length !== parameters.contracts.length) throw new Error(`Multicall returned ${decoded.length.toString()} results for ${parameters.contracts.length.toString()} calls`)
 
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
