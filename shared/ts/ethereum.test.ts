@@ -182,6 +182,36 @@ function getObjectEntry(value: unknown, key: string, context: string) {
 	return Reflect.get(value, key)
 }
 
+function createRawLog(overrides: Readonly<Record<string, unknown>> = {}) {
+	return {
+		address: TOKEN_ADDRESS,
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		data: '0x',
+		logIndex: '0x0',
+		removed: false,
+		topics: [],
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+		...overrides,
+	}
+}
+
+function createRawReceipt(logs: readonly unknown[]) {
+	return {
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		cumulativeGasUsed: '0x5208',
+		from: OWNER_ADDRESS,
+		gasUsed: '0x5208',
+		logs,
+		status: '0x1',
+		to: RECIPIENT_ADDRESS,
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+	}
+}
+
 function getDecodedEntry(value: unknown, index: number, key: string, context: string) {
 	if (Array.isArray(value)) return value[index]
 	if (typeof value !== 'object' || value === null) throw new Error(`${context} must be an object or array`)
@@ -1110,6 +1140,34 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
 	})
 
+	test('public client rejects logs without the required topics array', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => [log], [])) })
+
+		await expect(client.getLogs({})).rejects.toThrow('without topics')
+	})
+
+	test('public client preserves an omitted removed flag and rejects invalid flag values', async () => {
+		const logWithoutRemoved = createRawLog()
+		Reflect.deleteProperty(logWithoutRemoved, 'removed')
+		let result: unknown = [logWithoutRemoved]
+		const client = createPublicClient({ transport: custom(createProvider(() => result, [])) })
+
+		expect((await client.getLogs({}))[0]?.removed).toBeUndefined()
+
+		result = [createRawLog({ removed: '0x0' })]
+		await expect(client.getLogs({})).rejects.toThrow('invalid removed flag')
+	})
+
+	test('transaction receipt normalization rejects embedded logs without topics', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => createRawReceipt([log]), [])) })
+
+		await expect(client.getTransactionReceipt({ hash: TX_HASH })).rejects.toThrow('without topics')
+	})
+
 	test('waitForTransactionReceipt resolves same-nonce replacements and reports the replacement reason', async () => {
 		const originalHash = `0x${'55'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'66'.repeat(32)}` satisfies Hash
@@ -1419,6 +1477,47 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
 	})
 
+	test('waitForTransactionReceipt enforces its deadline while a request or polling delay is pending', async () => {
+		const settleBeforeWatchdog = async (operation: Promise<unknown>) => {
+			let watchdog: ReturnType<typeof setTimeout> | undefined
+			try {
+				return await Promise.race([
+					operation.then(
+						() => new Error('Receipt wait unexpectedly resolved'),
+						error => (error instanceof Error ? error : new Error(String(error))),
+					),
+					new Promise<Error>(resolve => {
+						watchdog = setTimeout(() => resolve(new Error('Receipt wait exceeded its watchdog')), 100)
+					}),
+				])
+			} finally {
+				if (watchdog !== undefined) clearTimeout(watchdog)
+			}
+		}
+		const hungClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(
+					async () =>
+						await new Promise(() => {
+							// Deliberately never settles.
+						}),
+					[],
+				),
+			),
+		})
+
+		const hungRequestError = await settleBeforeWatchdog(hungClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 }))
+		expect(hungRequestError.message).toBe(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+
+		const pollingClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(createProvider(() => null, [])),
+		})
+		const pollingError = await settleBeforeWatchdog(pollingClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, pollingInterval: 1_000, timeout: 5 }))
+		expect(pollingError.message).toBe(`Transaction receipt with hash "${RECEIPT_HASH}" could not be found.`)
+	})
+
 	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
 		let receiptRequests = 0
 		const calls: { method: string; params: unknown }[] = []
@@ -1476,6 +1575,49 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(receiptRequests).toBe(1)
+	})
+
+	test('waitForTransactionReceipt preserves replacement scan rate limits at its deadline', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: RECEIPT_HASH,
+			input: '0x',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			type: '0x2',
+			value: 0n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') throw { code: 429, message: 'replacement scan rate limit' }
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 50 }) })
+		const originalDateNow = Date.now
+
+		Date.now = () => 0
+		try {
+			await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, onReplaced: () => undefined, pollingInterval: 0, timeout: 5, transaction: originalTransaction })).rejects.toThrow('replacement scan rate limit')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
+	test('waitForTransactionReceipt clears a stale rate limit when its retry request hangs', async () => {
+		let receiptRequests = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'stale rate limit' }
+			return new Promise(() => {
+				// Deliberately never settles.
+			})
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 0 }) })
+
+		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 50 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+		expect(receiptRequests).toBe(2)
 	})
 
 	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
