@@ -1154,7 +1154,7 @@ describe('Statoblast invariant harness', () => {
 		assert.ok(forkData.auctionableAttoRepAtFork > 0n, 'own-fork migration balance should include non-burned parent REP')
 	})
 
-	test('capacity ownership', async () => {
+	test('fork activation preserves total capacity ownership while excluding unmigrated vaults from fees', async () => {
 		const capacityOwnershipAttoRep = repDeposit / 4n
 		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const unmigratedCapacityOwnershipAttoRepHolder = createClient(1)
@@ -1476,7 +1476,7 @@ describe('Statoblast invariant harness', () => {
 		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /staged operation unavailable/i)
 	})
 
-	test('capacity ownership', async () => {
+	test('vault registry pagination remains stable after a vault fully exits', async () => {
 		const vaultA = createClient(1)
 		const vaultB = createClient(2)
 		const vaultC = createClient(3)

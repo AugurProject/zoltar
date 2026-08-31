@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { discoverTestFiles } from './test-discovery.mts'
-import { mergeTestTimingHistory, readTestTimingHistory, TEST_TIMING_HISTORY_VERSION, type TestTimingObservation } from './test-timings.mts'
+import { createTestTimingReport, mergeTestTimingHistory, readTestTimingHistory, renderTestTimingMarkdown, TEST_TIMING_HISTORY_VERSION, type TestTimingObservation } from './test-timings.mts'
 
 function isTestTimingObservation(value: unknown): value is TestTimingObservation {
 	if (typeof value !== 'object' || value === null) return false
@@ -32,7 +32,14 @@ const observations = await Promise.all(
 		return parsed
 	}),
 )
-const history = mergeTestTimingHistory(await readTestTimingHistory(historyPath), observations, await discoverTestFiles())
+const previousHistory = await readTestTimingHistory(historyPath)
+const timingReport = createTestTimingReport(previousHistory, observations)
+const timingMarkdown = renderTestTimingMarkdown(timingReport)
+const history = mergeTestTimingHistory(previousHistory, observations, await discoverTestFiles())
 await fs.mkdir(path.dirname(historyPath), { recursive: true })
 await fs.writeFile(historyPath, `${JSON.stringify(history, undefined, 2)}\n`)
 console.log(`Updated timing history for ${Object.keys(history.samplesByFile).length.toString()} test files from ${observations.length.toString()} shards.`)
+console.log(timingMarkdown)
+const githubStepSummaryPath = process.env['GITHUB_STEP_SUMMARY']
+if (githubStepSummaryPath !== undefined) await fs.appendFile(githubStepSummaryPath, timingMarkdown)
+if (timingReport.regressions.length > 0) process.exit(1)
