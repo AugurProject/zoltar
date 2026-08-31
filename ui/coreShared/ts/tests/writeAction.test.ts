@@ -5,7 +5,7 @@ import { getAddress } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -98,6 +98,121 @@ describe('runWriteAction', () => {
 
 		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome.')
 		expect(transactionFailureMessage).toBe('Transaction failed while attempting to report on outcome.')
+	})
+
+	test('does not run or finish an action rejected by the global transaction admission gate', async () => {
+		let transactionState = createInitialTransactionTrayState()
+		let releaseFirstAction: (() => void) | undefined
+		let markFirstActionStarted: (() => void) | undefined
+		const firstActionStarted = new Promise<void>(resolve => {
+			markFirstActionStarted = resolve
+		})
+		const firstActionCanFinish = new Promise<void>(resolve => {
+			releaseFirstAction = resolve
+		})
+		let secondActionRuns = 0
+		let secondError: string | undefined
+		const config = (onWriteError?: (message: string) => void) => ({
+			accountAddress: walletAddress,
+			missingWalletMessage: 'Connect wallet',
+			onTransactionFinished: () => {
+				transactionState = markTransactionFinished(transactionState)
+			},
+			onTransactionRequested: () => {
+				if (transactionState.inFlightCount > 0) return false
+				transactionState = markTransactionRequested(transactionState, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+				return true
+			},
+			onWriteError,
+			refreshState: async () => undefined,
+			setErrorMessage: () => undefined,
+		})
+
+		const first = runWriteAction(
+			config(),
+			async () => {
+				markFirstActionStarted?.()
+				await firstActionCanFinish
+				return { hash: transactionHash }
+			},
+			'Failed to create question',
+		)
+		await firstActionStarted
+
+		await runWriteAction(
+			config(message => {
+				secondError = message
+			}),
+			async () => {
+				secondActionRuns += 1
+				return { hash: transactionHash }
+			},
+			'Failed to create question',
+		)
+
+		expect(secondActionRuns).toBe(0)
+		expect(secondError).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(transactionState.inFlightCount).toBe(1)
+		releaseFirstAction?.()
+		await first
+		expect(transactionState.inFlightCount).toBe(0)
+	})
+
+	test('does not fail an admitted transaction when another action fails wallet validation', async () => {
+		let transactionState = createInitialTransactionTrayState()
+		let releaseAdmittedAction: (() => void) | undefined
+		let markAdmittedActionStarted: (() => void) | undefined
+		const admittedActionStarted = new Promise<void>(resolve => {
+			markAdmittedActionStarted = resolve
+		})
+		const admittedActionCanFinish = new Promise<void>(resolve => {
+			releaseAdmittedAction = resolve
+		})
+		let globalFailureCalls = 0
+		const config = {
+			accountAddress: walletAddress,
+			missingWalletMessage: 'Connect wallet',
+			onTransactionFailed: (message: string) => {
+				globalFailureCalls += 1
+				transactionState = markTransactionFailed(transactionState, message)
+			},
+			onTransactionFinished: () => {
+				transactionState = markTransactionFinished(transactionState)
+			},
+			onTransactionRequested: () => {
+				if (transactionState.inFlightCount > 0) return false
+				transactionState = markTransactionRequested(transactionState, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+				return true
+			},
+			refreshState: async () => undefined,
+			setErrorMessage: () => undefined,
+		}
+
+		const admittedAction = runWriteAction(
+			config,
+			async () => {
+				markAdmittedActionStarted?.()
+				await admittedActionCanFinish
+				return { hash: transactionHash }
+			},
+			'Failed to create question',
+		)
+		await admittedActionStarted
+		const admittedIntent = transactionState.pendingIntent
+		const admittedRequestKey = transactionState.pendingRequestKey
+		const admittedPresentation = transactionState.active
+
+		installWalletBackend({ accounts: [nextWalletAddress] })
+		await runWriteAction(config, async () => ({ hash: transactionHash }), 'Failed to create question')
+
+		expect(globalFailureCalls).toBe(0)
+		expect(transactionState.inFlightCount).toBe(1)
+		expect(transactionState.pendingIntent).toBe(admittedIntent)
+		expect(transactionState.pendingRequestKey).toBe(admittedRequestKey)
+		expect(transactionState.active).toBe(admittedPresentation)
+		releaseAdmittedAction?.()
+		await admittedAction
+		expect(transactionState.inFlightCount).toBe(0)
 	})
 
 	test('fails before requesting a transaction when the active wallet account changed', async () => {

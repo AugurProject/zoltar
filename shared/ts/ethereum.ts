@@ -682,10 +682,27 @@ function normalizeRpcHex(value: unknown) {
 
 function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	if (value === undefined || value === null) return fallback
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return BigInt(value)
-	if (typeof value !== 'string') throw new Error('RPC returned an invalid bigint value')
+	if (typeof value === 'bigint') {
+		if (value < 0n) throw new Error('RPC returned an invalid bigint value')
+		return value
+	}
+	if (typeof value === 'number') {
+		if (!Number.isSafeInteger(value) || value < 0) throw new Error('RPC returned an invalid bigint value')
+		return BigInt(value)
+	}
+	if (typeof value !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) throw new Error('RPC returned an invalid bigint value')
 	return BigInt(value)
+}
+
+function normalizeRequiredReceiptQuantity(value: unknown, field: string) {
+	if (value === undefined || value === null) throw new Error(`RPC returned a transaction receipt without required ${field}`)
+	return normalizeRpcBigInt(value)
+}
+
+function normalizeReceiptStatus(value: unknown): TransactionReceipt['status'] {
+	if (value === '0x1') return 'success'
+	if (value === '0x0') return 'reverted'
+	throw new Error('RPC returned a transaction receipt without a valid status')
 }
 
 function normalizeInputValues(values: readonly unknown[] | undefined) {
@@ -1307,20 +1324,21 @@ function normalizeLog(value: unknown): TransactionLog {
 function normalizeReceipt(value: unknown): TransactionReceipt {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction receipt')
 	const receipt = value as Record<string, unknown>
+	if (!Array.isArray(receipt['logs'])) throw new Error('RPC returned a transaction receipt without required logs')
 	return {
 		blockHash: normalizeHash(receipt['blockHash']),
-		blockNumber: normalizeRpcBigInt(receipt['blockNumber']),
+		blockNumber: normalizeRequiredReceiptQuantity(receipt['blockNumber'], 'blockNumber'),
 		contractAddress: normalizeNullableAddress(receipt['contractAddress']) ?? null,
-		cumulativeGasUsed: normalizeRpcBigInt(receipt['cumulativeGasUsed']),
+		cumulativeGasUsed: normalizeRequiredReceiptQuantity(receipt['cumulativeGasUsed'], 'cumulativeGasUsed'),
 		effectiveGasPrice: receipt['effectiveGasPrice'] === undefined ? undefined : normalizeRpcBigInt(receipt['effectiveGasPrice']),
 		from: normalizeAddress(receipt['from']),
-		gasUsed: normalizeRpcBigInt(receipt['gasUsed']),
-		logs: Array.isArray(receipt['logs']) ? receipt['logs'].map(item => normalizeLog(item)) : [],
+		gasUsed: normalizeRequiredReceiptQuantity(receipt['gasUsed'], 'gasUsed'),
+		logs: receipt['logs'].map(item => normalizeLog(item)),
 		logsBloom: receipt['logsBloom'] === undefined ? undefined : normalizeRpcHex(receipt['logsBloom']),
-		status: normalizeBoolean(receipt['status']) ? 'success' : 'reverted',
+		status: normalizeReceiptStatus(receipt['status']),
 		to: normalizeNullableAddress(receipt['to']) ?? null,
 		transactionHash: normalizeHash(receipt['transactionHash']),
-		transactionIndex: normalizeRpcBigInt(receipt['transactionIndex']),
+		transactionIndex: normalizeRequiredReceiptQuantity(receipt['transactionIndex'], 'transactionIndex'),
 		type: normalizeTransactionType(receipt['type']),
 	}
 }
