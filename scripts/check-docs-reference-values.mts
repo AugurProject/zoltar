@@ -620,10 +620,13 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Genesis REP requires allowance; child REP is burned directly without allowance/)
 	assert.match(
 		securityPool,
-		/function isEscalationResolved\(\) public view returns \(bool\) \{\s*if \(address\(escalationGame\) == address\(0x0\)\) return false;\s*return\s+ISecurityPoolForker\(securityPoolForker\)\.getQuestionOutcome\(ISecurityPool\(payable\(address\(this\)\)\)\) !=\s+BinaryOutcomes\.BinaryOutcome\.None/,
+		/function isEscalationResolved\(\) public view returns \(bool\) \{\s*return\s+hasInheritedForkOutcome \|\|\s+\(address\(escalationGame\) != address\(0x0\) &&\s+ISecurityPoolForker\(securityPoolForker\)\.getQuestionOutcome\(ISecurityPool\(payable\(address\(this\)\)\)\) !=\s+BinaryOutcomes\.BinaryOutcome\.None\);/,
 	)
 	assert.match(securityPoolForker, /if \(data\.fixedQuestionOutcomePlusOne > 0\)\s*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
-	assert.match(contractInteractionReference, /`isEscalationResolved\(\)` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false/)
+	assert.match(
+		contractInteractionReference,
+		/`isEscalationResolved\(\)` is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-`None` outcome\. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations/,
+	)
 	assert.match(contractInteractionReference, /createCompleteSet\(\)[\s\S]*Operational and unforked; `isEscalationResolved\(\)` is false; not awaiting continuation/)
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`securityPool\.isEscalationResolved\(\)` is false/)
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`/)
@@ -665,7 +668,7 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(createChildUniverseRow, /returned auction is nonzero, deployed, and has never been trusted by this forker[\s\S]*child's fork-data slot is unused[\s\S]*expected parent, universe, source factory, forker, and auction[\s\S]*do not independently prove configured-factory registration/)
 	assert.match(escalationDepositRow, /pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation/)
-	assert.match(securityPool, /function depositToEscalationGame\([^}]+require\(!hasInheritedForkOutcome, 'Resolved'\);/)
+	assert.match(securityPool, /function depositToEscalationGame\([^}]+if \(hasInheritedForkOutcome\) revert\(\);/)
 	assert.match(migrateSharesRow, /an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
 	assert.match(claimForkedEscalationDepositsRow, /every deposit to commit `vault` as its immutable depositor/)
@@ -732,7 +735,7 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amountAttoRep = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amountAttoRep == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amountAttoRep\)/)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
-	assert.match(securityPool, /function activateForkMode\(\)[\s\S]*require\(!hasInheritedForkOutcome, 'Resolved'\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*mstore\(0x00, shl\(224, 0x3c250020\)\)[\s\S]*call\(gas\(\), game/)
+	assert.match(securityPool, /function activateForkMode\(\)[\s\S]*if \(hasInheritedForkOutcome\) revert\(\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*mstore\(0x00, shl\(224, 0x3c250020\)\)[\s\S]*call\(gas\(\), game/)
 	assert.match(securityPoolForker, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'/)
 	assert.match(securityPoolForkerBase, /function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
 	assert.match(
@@ -859,7 +862,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /event SystemStateSet\(SystemState systemState\)/)
 	assert.match(securityPool, /require\(zoltar\.getForkTime\(universeId\) == 0, 'Forked'\)/)
 	assert.match(securityPool, /function activateForkMode\(\) external onlyForker/)
-	assert.match(securityPool, /function activateForkMode\(\) external onlyForker \{\s*require\(!hasInheritedForkOutcome, 'Resolved'\)/)
+	assert.match(securityPool, /function activateForkMode\(\) external onlyForker \{\s*if \(hasInheritedForkOutcome\) revert\(\)/)
 	const externalForkBody = readSolidityFunctionBody(securityPoolForker, 'function initiateSecurityPoolFork(')
 	assertCallOrder(externalForkBody, '_prepareForkState(securityPool, escalationGame)', 'securityPool.activateForkMode()', 'external pool-fork handling must validate the existing universe fork before activating pool fork mode')
 	const prepareForkBody = readSolidityFunctionBody(securityPoolForker, 'function _prepareForkState(')

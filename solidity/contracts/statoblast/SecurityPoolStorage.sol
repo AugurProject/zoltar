@@ -33,4 +33,6 @@ abstract contract SecurityPoolStorage {
 	uint256 public minimumVaultRepDepositAttoRep;
 	/// @notice Latest target supplied with a positive REP deposit; metadata only, not aggregate vault health.
 	mapping(address => uint256) public lastDepositTargetHealthFactorBpsByVault;
+	/// @dev Fork continuations do not set this because their terminal residual is burned.
+	bool internal ordinaryEscalationGameStarted;
 }
