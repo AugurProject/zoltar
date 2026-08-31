@@ -1,0 +1,40 @@
+name: Test Stability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "43 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-stability-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.3.14
+  FOUNDRY_VERSION: v1.5.1
+
+jobs:
+  repeat-timing-sensitive-tests:
+    name: Repeat timing-sensitive tests (${{ matrix.iteration }}/3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        iteration: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - name: Exercise deterministic polling and lifecycle boundaries
+        run: >-
+          bun test --preload ./bun-test-setup-ui.ts --timeout 300000
+          scripts/documentation-tools-runtime.test.ts
+          ui/coreShared/build/chromiumPath.test.ts
+          ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx
+      - name: Exercise AugurScan lifecycle concurrency
+        working-directory: augurScan
+        run: bun test tests/indexer-lifecycle.test.ts tests/live.test.ts
+      - name: Publish repeat metadata
+        run: echo "Completed stability iteration ${{ matrix.iteration }} without retries." >> "${GITHUB_STEP_SUMMARY}"
