@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/shared/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../lib/chainBackend.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 
@@ -251,8 +251,7 @@ describe('injected backend read transport', () => {
 
 	test('invokes injected transaction callbacks for write methods', async () => {
 		const callbacks: string[] = []
-		let sendRawTransactionCalls = 0
-		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method, params }) => {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0x01'
 			if (method === 'eth_getTransactionCount') return '0x1'
@@ -264,8 +263,9 @@ describe('injected backend read transport', () => {
 				return `0x${String(callbacks.length).padStart(64, '0')}`
 			}
 			if (method === 'eth_sendRawTransaction') {
-				sendRawTransactionCalls += 1
-				return `0x${String(sendRawTransactionCalls + callbacks.length).padStart(64, '0')}`
+				const serializedTransaction = Array.isArray(params) ? params[0] : undefined
+				if (typeof serializedTransaction !== 'string' || !isHex(serializedTransaction, { strict: true })) throw new Error('Test received an invalid raw transaction')
+				return keccak256(serializedTransaction)
 			}
 			return '0x'
 		})
@@ -286,7 +286,7 @@ describe('injected backend read transport', () => {
 
 		expect(onTransactionSubmitted).toHaveBeenCalledTimes(3)
 		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000001')
-		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000002')
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(keccak256('0x'))
 		expect(onTransactionSubmitted).toHaveBeenCalledWith('0x0000000000000000000000000000000000000000000000000000000000000002')
 		expect(callbacks.length).toBe(2)
 	})

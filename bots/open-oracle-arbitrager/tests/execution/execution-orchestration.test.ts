@@ -847,6 +847,7 @@ describe('funded execution orchestration', () => {
 
 	test('discovers a canonical replacement by durable sender and nonce across RPCs', async () => {
 		const requestedNonceTags: string[][] = []
+		const blockHash = `0x${'78'.repeat(32)}` as Hex
 		const reader = () => {
 			const nonceTags: string[] = []
 			requestedNonceTags.push(nonceTags)
@@ -863,7 +864,7 @@ describe('funded execution orchestration', () => {
 						const blockTag = params[0]
 						if (typeof blockTag !== 'string') throw new Error('Block tag is invalid')
 						return {
-							hash: `0x${'78'.repeat(32)}`,
+							hash: blockHash,
 							number: blockTag,
 							parentHash: `0x${'79'.repeat(32)}`,
 							timestamp: '0x5',
@@ -871,6 +872,8 @@ describe('funded execution orchestration', () => {
 								BigInt(blockTag) === 102n
 									? [
 											{
+												blockHash,
+												blockNumber: blockTag,
 												from: address,
 												gas: '0x5208',
 												hash: replacementHash,

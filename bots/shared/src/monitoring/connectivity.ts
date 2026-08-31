@@ -1,7 +1,10 @@
 import type { Address, Hex } from '../ethereum.ts'
-import { bigintToSafeNumber, keccak256 } from '../ethereum.ts'
+import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
+import { authenticatedRelayHeaders, type RelayAuthentication } from '../execution/relay-authentication.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
+
+export type { RelayAuthentication } from '../execution/relay-authentication.ts'
 
 export type NetworkName = 'mainnet' | 'sepolia'
 
@@ -11,6 +14,7 @@ export type ConnectivitySettings = {
 }
 
 export type EndpointCheck = {
+	authenticatedAddress?: Address | undefined
 	chainId: number | undefined
 	checkedAt: string
 	error: string | undefined
@@ -158,16 +162,18 @@ export async function readRpcChainId(url: string, timeoutMilliseconds = 5_000) {
 
 export async function sendRawTransactionToRpc(url: string, serializedTransaction: Hex, timeoutMilliseconds = 10_000) {
 	try {
+		const expectedHash = keccak256(serializedTransaction)
 		let result: unknown
 		try {
 			result = await rpcRequest(url, 'eth_sendRawTransaction', [serializedTransaction], timeoutMilliseconds)
 		} catch (error) {
 			const message = error instanceof Error ? error.message.toLowerCase() : ''
-			if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return keccak256(serializedTransaction)
+			if (/\balready known\b/.test(message) || /\bknown transaction\b/.test(message)) return expectedHash
 			throw error
 		}
 		if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Error('RPC returned an invalid transaction hash')
-		return result as Hex
+		if (result.toLowerCase() !== expectedHash) throw new Error(`RPC returned transaction hash ${result}, which does not match submitted transaction ${expectedHash}`)
+		return expectedHash
 	} catch (error) {
 		throw endpointMethodFailure(error, url, 'eth_sendRawTransaction')
 	}
@@ -221,16 +227,213 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	}
 }
 
-async function rawAssertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds: number) {
+// A validly encoded legacy envelope with v=27, r=1, and s=0. secp256k1
+// signatures require s >= 1, so no client can recover a sender or admit it.
+export const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180' as const
+
+type TransactionSubmissionMethod = 'eth_sendPrivateTransaction' | 'eth_sendRawTransaction'
+
+function transactionRejectionEvidence(message: string) {
+	return (
+		message.includes('invalid transaction') ||
+		message.includes('malformed transaction') ||
+		message.includes('transaction rejected') ||
+		message.includes('invalid sender') ||
+		message.includes('invalid v, r, s') ||
+		message.includes('failed to recover the signer') ||
+		message.includes('failed to recover signer') ||
+		message.includes('could not recover the signer') ||
+		message.includes('could not recover signer') ||
+		message.includes('transaction decode') ||
+		message.includes('decode transaction') ||
+		message.includes('failed to decode') ||
+		message.includes('rlp')
+	)
+}
+
+function publicTransactionRejectionEvidence(code: number, message: string) {
+	return transactionRejectionEvidence(message) || (code === -32_602 && message === 'signature error')
+}
+
+async function rawCapabilityErrorResponse(url: string, body: string, headers: Readonly<Record<string, string>>, parameters: { allowClientErrorResponse: boolean; alternateExpectedId?: 1 | null | undefined; expectedId: 1 | null; label: string; timeoutMilliseconds: number }) {
 	const response = await fetch(url, {
-		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params: [] }),
+		body,
+		headers,
+		method: 'POST',
+		redirect: 'error',
+		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
+	})
+	const boundedClientErrorResponse = response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 425 && response.status !== 429
+	if (!response.ok && !(parameters.allowClientErrorResponse && boundedClientErrorResponse)) {
+		const message = `${parameters.label}: RPC returned HTTP ${response.status.toString()}`
+		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
+		throw new EndpointSafetyError(message)
+	}
+	let value: unknown
+	try {
+		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, parameters.label)
+	} catch (error) {
+		if (error instanceof SyntaxError) throw new EndpointSafetyError(`${parameters.label} returned a non-JSON response`)
+		throw error
+	}
+	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value.id === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value.id === parameters.alternateExpectedId))
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
+		throw new EndpointSafetyError(`${parameters.label} did not return the expected matching JSON-RPC 2.0 error`)
+	}
+	const error = value.error
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+		throw new EndpointSafetyError(`${parameters.label} returned a malformed JSON-RPC error`)
+	}
+	return { code: error.code, message: error.message.trim(), status: response.status }
+}
+
+async function rawTransactionSubmissionCapabilityError(
+	url: string,
+	method: TransactionSubmissionMethod,
+	authentication: RelayAuthentication | undefined,
+	timeoutMilliseconds: number,
+	responseParameters: { allowClientErrorResponse?: boolean | undefined; alternateExpectedId?: 1 | null | undefined; expectedId?: 1 | null | undefined; label?: string | undefined } = {},
+) {
+	const body = transactionSubmissionCapabilityBody(method)
+	return await rawCapabilityErrorResponse(url, body, authentication === undefined ? { 'content-type': 'application/json' } : await authenticatedRelayHeaders(body, authentication), {
+		allowClientErrorResponse: responseParameters.allowClientErrorResponse ?? false,
+		alternateExpectedId: responseParameters.alternateExpectedId,
+		expectedId: responseParameters.expectedId ?? 1,
+		label: responseParameters.label ?? `Endpoint did not prove ${method} support`,
+		timeoutMilliseconds,
+	})
+}
+
+function transactionSubmissionCapabilityBody(method: TransactionSubmissionMethod) {
+	return JSON.stringify({
+		id: 1,
+		jsonrpc: '2.0',
+		method,
+		params: method === 'eth_sendRawTransaction' ? [TRANSACTION_SUBMISSION_CAPABILITY_PROBE] : [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }],
+	})
+}
+
+async function assertPublicTransactionSubmissionCapability(url: string, timeoutMilliseconds = 5_000) {
+	try {
+		const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendRawTransaction', undefined, timeoutMilliseconds)
+		const recognizedCode = code === -32_602 || (code >= -32_099 && code <= -32_000)
+		if (status === 200 && recognizedCode && publicTransactionRejectionEvidence(code, message.toLowerCase())) return
+		throw new EndpointSafetyError(`Endpoint did not prove eth_sendRawTransaction support: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_sendRawTransaction')
+	}
+}
+
+const PRIVATE_TRANSACTION_METHOD_CONTROL = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+const FLASHBOTS_MAINNET_RELAY_ORIGIN = 'https://relay.flashbots.net'
+const FLASHBOTS_SEPOLIA_RELAY_ORIGIN = 'https://relay-sepolia.flashbots.net'
+export function flashbotsPrivateTransactionCompatibilityProfileAllowed(url: string, expectedChainId: number) {
+	const parsed = new URL(url)
+	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]'
+	let officialOrigin: string | undefined
+	if (expectedChainId === 1) officialOrigin = FLASHBOTS_MAINNET_RELAY_ORIGIN
+	else if (expectedChainId === 11_155_111) officialOrigin = FLASHBOTS_SEPOLIA_RELAY_ORIGIN
+	return loopback || parsed.origin === officialOrigin
+}
+
+function privateCapabilityControlBody(method: string, params: readonly unknown[]) {
+	return JSON.stringify({ id: 1, jsonrpc: '2.0', method, params })
+}
+
+async function authenticatedPrivateCapabilityControlError(url: string, method: string, params: readonly unknown[], authentication: RelayAuthentication, parameters: { allowClientErrorResponse: boolean; expectedId: 1 | null; label: string; timeoutMilliseconds: number }) {
+	const body = privateCapabilityControlBody(method, params)
+	return await rawCapabilityErrorResponse(url, body, await authenticatedRelayHeaders(body, authentication), parameters)
+}
+
+async function assertFlashbotsPrivateTransactionControls(url: string, authentication: RelayAuthentication, timeoutMilliseconds: number) {
+	const unsupported = await authenticatedPrivateCapabilityControlError(url, PRIVATE_TRANSACTION_METHOD_CONTROL, [], authentication, {
+		allowClientErrorResponse: true,
+		expectedId: 1,
+		label: 'Private transaction unsupported-method control',
+		timeoutMilliseconds,
+	})
+	if (unsupported.status !== 403 || unsupported.code !== -32_601 || unsupported.message.trim().toLowerCase() !== 'rpc method is not whitelisted') {
+		throw new EndpointSafetyError(`Private transaction unsupported-method control returned HTTP ${unsupported.status.toString()} RPC ${unsupported.code.toString()}: ${unsupported.message}`)
+	}
+
+	// This is the hash of the impossible-signature envelope above. The envelope
+	// cannot enter a relay, so asking to cancel its hash cannot cancel bot work.
+	const cancellationHash = keccak256(TRANSACTION_SUBMISSION_CAPABILITY_PROBE)
+	const cancellationParams = [{ txHash: cancellationHash }]
+	const authenticatedCancellation = await authenticatedPrivateCapabilityControlError(url, 'eth_cancelPrivateTransaction', cancellationParams, authentication, {
+		allowClientErrorResponse: false,
+		expectedId: 1,
+		label: 'Authenticated private transaction cancellation control',
+		timeoutMilliseconds,
+	})
+	if (authenticatedCancellation.status !== 200 || authenticatedCancellation.code !== -32_700 || authenticatedCancellation.message.trim().toLowerCase() !== 'tx not found') {
+		throw new EndpointSafetyError(`Authenticated private transaction cancellation control returned HTTP ${authenticatedCancellation.status.toString()} RPC ${authenticatedCancellation.code.toString()}: ${authenticatedCancellation.message}`)
+	}
+
+	const unauthenticatedBody = privateCapabilityControlBody('eth_cancelPrivateTransaction', cancellationParams)
+	const unauthenticatedCancellation = await rawCapabilityErrorResponse(
+		url,
+		unauthenticatedBody,
+		{ 'content-type': 'application/json' },
+		{
+			allowClientErrorResponse: true,
+			expectedId: null,
+			label: 'Unauthenticated private transaction cancellation control',
+			timeoutMilliseconds,
+		},
+	)
+	if (unauthenticatedCancellation.status !== 200 || unauthenticatedCancellation.code !== -32_600 || unauthenticatedCancellation.message.trim().toLowerCase() !== 'signature is required') {
+		throw new EndpointSafetyError(`Unauthenticated private transaction cancellation control returned HTTP ${unauthenticatedCancellation.status.toString()} RPC ${unauthenticatedCancellation.code.toString()}: ${unauthenticatedCancellation.message}`)
+	}
+}
+
+async function assertAuthenticatedPrivateTransactionSubmissionCapability(url: string, expectedChainId: number, authentication: RelayAuthentication, timeoutMilliseconds = 5_000) {
+	try {
+		const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendPrivateTransaction', authentication, timeoutMilliseconds)
+		const normalizedMessage = message.toLowerCase()
+		if (status === 200 && code === -32_600 && normalizedMessage === 'incorrect request') {
+			if (!flashbotsPrivateTransactionCompatibilityProfileAllowed(url, expectedChainId)) throw new EndpointSafetyError('Flashbots private-transaction compatibility evidence is restricted to the official relay matching the configured chain or a loopback test relay')
+			await assertFlashbotsPrivateTransactionControls(url, authentication, timeoutMilliseconds)
+			return
+		}
+		throw new EndpointSafetyError(`Endpoint did not prove the official relay's authenticated eth_sendPrivateTransaction compatibility profile: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
+	} catch (error) {
+		throw endpointMethodFailure(error, url, 'eth_sendPrivateTransaction')
+	}
+}
+
+async function checkPublicTransactionSubmissionEndpoint(url: string, expectedChainId: number): Promise<EndpointCheck> {
+	let chainId: number | undefined
+	try {
+		chainId = await readRpcChainId(url)
+		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
+		await assertPublicTransactionSubmissionCapability(url)
+		return { chainId, checkedAt: new Date().toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: endpointLabel(url) }
+	} catch (error) {
+		return {
+			chainId,
+			checkedAt: new Date().toISOString(),
+			error: error instanceof Error ? error.message : String(error),
+			failureDisposition: endpointFailureDisposition(error),
+			kind: 'public-rpc',
+			status: 'failed',
+			target: endpointLabel(url),
+		}
+	}
+}
+
+type RelayMethod = 'eth_callBundle' | 'eth_sendBundle'
+
+async function rawRelayCapabilityError(url: string, requestedMethod: string, capabilityMethod: RelayMethod, timeoutMilliseconds: number) {
+	const response = await fetch(url, {
+		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: requestedMethod, params: [] }),
 		headers: { 'content-type': 'application/json' },
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
 	if (!response.ok) {
-		const message = `Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`
+		const message = `Endpoint did not prove ${capabilityMethod} support: RPC returned HTTP ${response.status.toString()}`
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
 	}
@@ -242,29 +445,53 @@ async function rawAssertRelayMethodCapability(url: string, method: 'eth_callBund
 		throw error
 	}
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
-		throw new Error(`Endpoint did not prove ${method} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
+		throw new Error(`Endpoint did not prove ${capabilityMethod} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
 	}
 	const error = value.error
 	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
-		throw new Error(`Endpoint did not prove ${method} support: malformed JSON-RPC error`)
+		throw new Error(`Endpoint did not prove ${capabilityMethod} support: malformed JSON-RPC error`)
 	}
-	const code = error.code
-	const message = error.message.trim()
+	return { code: error.code, id: value.id, message: error.message.trim() }
+}
+
+async function rawAssertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds: number) {
+	const { code, message } = await rawRelayCapabilityError(url, method, method, timeoutMilliseconds)
 	const normalizedMessage = message.toLowerCase()
 	const authenticationEvidence = normalizedMessage.includes('signature is required') || normalizedMessage.includes('invalid signature') || normalizedMessage.includes('authentication required') || normalizedMessage.includes('authentication is required')
 	const parameterEvidence =
 		normalizedMessage.includes('invalid params') || normalizedMessage.includes('invalid parameters') || normalizedMessage.includes('invalid argument') || normalizedMessage.includes('missing transaction') || normalizedMessage.includes('missing tx') || normalizedMessage.includes('invalid transaction')
-	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
-	if (!recognizedCapabilityEvidence) {
-		throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
-	}
+	if (code === -32_602 && parameterEvidence) return
+	if (code === -32_600 && authenticationEvidence) return
+	throw new EndpointSafetyError(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
 }
 
-async function assertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds = 5_000) {
+async function assertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds = 5_000) {
 	try {
 		await rawAssertRelayMethodCapability(url, method, timeoutMilliseconds)
 	} catch (error) {
 		throw endpointMethodFailure(error, url, method)
+	}
+}
+
+async function checkPrivateTransactionRelayEndpoint(url: string, expectedChainId: number, authentication: RelayAuthentication): Promise<EndpointCheck> {
+	const authenticatedAddress = getAddress(authentication.address)
+	let chainId: number | undefined
+	try {
+		chainId = await readRpcChainId(url)
+		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
+		await assertAuthenticatedPrivateTransactionSubmissionCapability(url, expectedChainId, authentication)
+		return { authenticatedAddress, chainId, checkedAt: new Date().toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
+	} catch (error) {
+		return {
+			authenticatedAddress,
+			chainId,
+			checkedAt: new Date().toISOString(),
+			error: error instanceof Error ? error.message : String(error),
+			failureDisposition: endpointFailureDisposition(error),
+			kind: 'private-relay',
+			status: 'failed',
+			target: endpointLabel(url),
+		}
 	}
 }
 
@@ -301,8 +528,32 @@ export async function checkSubmissionEndpoints(settings: SubmissionSettings, exp
 	if (settings.mode === 'public') return []
 	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
+	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
+	const healthyOriginCount = new Set(checks.filter(check => check.status === 'healthy').map(check => check.target)).size
+	if (safetyFailure !== undefined || healthyOriginCount < settings.minimumBundleRelaySuccesses) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
+	}
 	return checks
+}
+
+function checkedSubmissionThreshold(checks: readonly EndpointCheck[], requiredHealthyOriginCount: number, failureLabel: string) {
+	const failed = checks.filter(check => check.status === 'failed')
+	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
+	const healthyOriginCount = new Set(checks.filter(check => check.status === 'healthy').map(check => check.target)).size
+	if (safetyFailure !== undefined || healthyOriginCount < requiredHealthyOriginCount) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? failureLabel}`)).join('; '), checks)
+	}
+	return checks
+}
+
+export async function checkPublicTransactionSubmissionEndpoints(publicRpcUrls: readonly string[], expectedChainId: number) {
+	if (publicRpcUrls.length === 0) throw new Error('Public submission preflight requires at least one RPC URL')
+	return checkedSubmissionThreshold(await Promise.all(publicRpcUrls.map(url => checkPublicTransactionSubmissionEndpoint(url, expectedChainId))), 1, 'public transaction endpoint check failed')
+}
+
+export async function checkPrivateTransactionSubmissionEndpoints(settings: SubmissionSettings, expectedChainId: number, authentication: RelayAuthentication) {
+	if (settings.mode === 'public') return []
+	return checkedSubmissionThreshold(await Promise.all(settings.relayUrls.map(url => checkPrivateTransactionRelayEndpoint(url, expectedChainId, authentication))), settings.minimumBundleRelaySuccesses, 'private transaction relay check failed')
 }
 
 export function withConnectivityChecks(existing: readonly EndpointCheck[], connectivityChecks: readonly EndpointCheck[]) {

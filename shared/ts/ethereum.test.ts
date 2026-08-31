@@ -35,6 +35,8 @@ import {
 	requestRpc,
 	toHex,
 	type EIP1193Provider,
+	type Abi,
+	type AbiParameter,
 	type BlockTransaction,
 	type Hash,
 	type Hex,
@@ -49,6 +51,9 @@ const MULTICALL_ADDRESS = '0x00000000000000000000000000000000000000DD'
 const RECEIPT_HASH = `0x${'11'.repeat(32)}` satisfies Hash
 const BLOCK_HASH = `0x${'22'.repeat(32)}` satisfies Hash
 const TX_HASH = `0x${'33'.repeat(32)}` satisfies Hash
+const LOG_TOPIC_A = `0x${'44'.repeat(32)}` satisfies Hex
+const LOG_TOPIC_B = `0x${'55'.repeat(32)}` satisfies Hex
+const LOG_TOPIC_C = `0x${'66'.repeat(32)}` satisfies Hex
 
 test('converts bigint values only inside the safe integer range', () => {
 	expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
@@ -446,6 +451,95 @@ describe('shared ethereum compatibility layer', () => {
 		expect(concatHex(['0x12', '0x34', '0xab'])).toBe('0x1234ab')
 	})
 
+	test('event argument types match the named-object decoder shape', async () => {
+		const topics = encodeEventTopics({
+			abi: TRANSFER_EVENT_ABI,
+			args: [OWNER_ADDRESS, RECIPIENT_ADDRESS, null],
+			eventName: 'Transfer',
+		}).filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters([{ name: 'value', type: 'uint256' }], [25n])
+		const decodedEvent = decodeEventLog({
+			abi: TRANSFER_EVENT_ABI,
+			data,
+			topics,
+		})
+		type DecodedArgsAreArray = typeof decodedEvent.args extends readonly unknown[] ? true : false
+		const decodedArgsAreArray: DecodedArgsAreArray = false
+		expect(decodedArgsAreArray).toBe(false)
+		expect(Array.isArray(decodedEvent.args)).toBe(false)
+		expect(decodedEvent.args.from).toBe(getAddress(OWNER_ADDRESS))
+		expect(decodedEvent.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
+		expect(decodedEvent.args.value).toBe(25n)
+		const widenedNamedAbi: Abi = TRANSFER_EVENT_ABI
+		const widenedDecodedEvent = decodeEventLog({ abi: widenedNamedAbi, data, topics })
+		const widenedNamedArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedDecodedEvent.args
+		expect(Array.isArray(widenedNamedArgs)).toBe(false)
+		expect(Reflect.get(widenedNamedArgs, 'from')).toBe(getAddress(OWNER_ADDRESS))
+
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data,
+							logIndex: '0x0',
+							removed: false,
+							topics,
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+		const [log] = await client.getLogs({ event: TRANSFER_EVENT_ABI[0] })
+		if (log?.args === undefined) throw new Error('decoded event log args missing')
+		type LogArgsAreArray = typeof log.args extends readonly unknown[] ? true : false
+		const logArgsAreArray: LogArgsAreArray = false
+		expect(logArgsAreArray).toBe(false)
+		expect(Array.isArray(log.args)).toBe(false)
+		expect(log.args.from).toBe(getAddress(OWNER_ADDRESS))
+		expect(log.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
+		expect(log.args.value).toBe(25n)
+		const widenedEvent: AbiParameter = TRANSFER_EVENT_ABI[0]
+		const [widenedLog] = await client.getLogs({ event: widenedEvent })
+		if (widenedLog?.args === undefined) throw new Error('widened decoded event log args missing')
+		const widenedLogArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedLog.args
+		expect(Array.isArray(widenedLogArgs)).toBe(false)
+	})
+
+	test('zero-input events expose empty named argument objects', async () => {
+		const event = [{ inputs: [], name: 'Finished', type: 'event' }] as const
+		const topics = encodeEventTopics({ abi: event, eventName: 'Finished' }).filter((topic): topic is Hex => topic !== null)
+		const decoded = decodeEventLog({ abi: event, data: '0x', topics })
+		type DecodedArgsAreArray = typeof decoded.args extends readonly unknown[] ? true : false
+		const decodedArgsAreArray: DecodedArgsAreArray = false
+		expect(decodedArgsAreArray).toBe(false)
+		expect(decoded.args).toEqual({})
+		expect(Array.isArray(decoded.args)).toBe(false)
+
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [{ address: TOKEN_ADDRESS, blockHash: BLOCK_HASH, blockNumber: '0x1', data: '0x', logIndex: '0x0', removed: false, topics, transactionHash: TX_HASH, transactionIndex: '0x0' }]
+				}, []),
+			),
+		})
+		const [log] = await client.getLogs({ event: event[0] })
+		if (log?.args === undefined) throw new Error('zero-input event log args missing')
+		type LogArgsAreArray = typeof log.args extends readonly unknown[] ? true : false
+		const logArgsAreArray: LogArgsAreArray = false
+		expect(logArgsAreArray).toBe(false)
+		expect(log.args).toEqual({})
+		expect(Array.isArray(log.args)).toBe(false)
+	})
+
 	test('ABI formatting preserves mutability and named tuple components', () => {
 		expect(
 			formatAbiItem({
@@ -730,6 +824,40 @@ describe('shared ethereum compatibility layer', () => {
 
 		expect([...decodedPartiallyNamedEvent.args]).toEqual([3n, 4n])
 		expect(Reflect.has(decodedPartiallyNamedEvent.args, 'named')).toBeFalse()
+		const widenedPartiallyNamedAbi: Abi = partiallyNamedEvent
+		const widenedPartiallyNamedEvent = decodeEventLog({
+			abi: widenedPartiallyNamedAbi,
+			data: encodeAbiParameters(partiallyNamedEvent[0].inputs, [3n, 4n]),
+			topics: encodeEventTopics({ abi: partiallyNamedEvent, eventName: 'PartiallyNamed' }).filter((topic): topic is Hex => topic !== null),
+		})
+		const widenedPartialArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedPartiallyNamedEvent.args
+		expect(Array.isArray(widenedPartialArgs)).toBe(true)
+	})
+
+	test('widened partially named event inputs expose positional getLogs arguments', async () => {
+		const partiallyNamedEvent = [
+			{
+				inputs: [{ name: 'named', type: 'uint256' }, { type: 'uint256' }],
+				name: 'PartiallyNamed',
+				type: 'event',
+			},
+		] as const
+		const topics = encodeEventTopics({ abi: partiallyNamedEvent, eventName: 'PartiallyNamed' }).filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters(partiallyNamedEvent[0].inputs, [3n, 4n])
+		const widenedEvent: AbiParameter = partiallyNamedEvent[0]
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [{ address: TOKEN_ADDRESS, blockHash: BLOCK_HASH, blockNumber: '0x1', data, logIndex: '0x0', removed: false, topics, transactionHash: TX_HASH, transactionIndex: '0x0' }]
+				}, []),
+			),
+		})
+
+		const [log] = await client.getLogs({ event: widenedEvent })
+		if (log?.args === undefined) throw new Error('widened partially named event log args missing')
+		const widenedLogArgs: Readonly<Record<string, unknown>> | readonly unknown[] = log.args
+		expect(Array.isArray(widenedLogArgs)).toBe(true)
 	})
 
 	test('getLogs encodes alternative indexed values as a JSON-RPC topic set', async () => {
@@ -750,6 +878,216 @@ describe('shared ethereum compatibility layer', () => {
 		const parameters = getArrayEntry(calls[0]?.params, 0, 'eth_getLogs params')
 		const topics = getObjectEntry(parameters, 'topics', 'eth_getLogs filter')
 		expect(topics).toEqual([encodeEventTopics({ abi: [event], eventName: 'Swap' })[0], [id1, id2], null])
+	})
+
+	for (const mismatch of [
+		{ label: 'address', parameters: { address: TOKEN_ADDRESS }, response: { address: RECIPIENT_ADDRESS } },
+		{ label: 'lower block bound', parameters: { fromBlock: 2n }, response: { blockNumber: '0x1' } },
+		{ label: 'upper block bound', parameters: { toBlock: 0n }, response: { blockNumber: '0x1' } },
+		{ label: 'required block metadata', parameters: { fromBlock: 1n }, response: { blockNumber: null } },
+		{ label: 'single topic', parameters: { topics: [LOG_TOPIC_A] }, response: { topics: [LOG_TOPIC_B] } },
+		{ label: 'alternative topics', parameters: { topics: [[LOG_TOPIC_A, LOG_TOPIC_B]] }, response: { topics: [LOG_TOPIC_C] } },
+		{ label: 'wildcard topic positions', parameters: { topics: [null, null] }, response: { topics: [LOG_TOPIC_A] } },
+		{ label: 'empty wildcard topic positions', parameters: { topics: [[], []] }, response: { topics: [LOG_TOPIC_A] } },
+	] as const) {
+		test(`getLogs rejects a provider result outside the requested ${mismatch.label} filter`, async () => {
+			const client = createPublicClient({
+				transport: custom(
+					createProvider(
+						() => [
+							{
+								address: TOKEN_ADDRESS,
+								blockHash: BLOCK_HASH,
+								blockNumber: '0x1',
+								data: '0x',
+								logIndex: '0x0',
+								removed: false,
+								topics: [LOG_TOPIC_A],
+								transactionHash: TX_HASH,
+								transactionIndex: '0x0',
+								...mismatch.response,
+							},
+						],
+						[],
+					),
+				),
+			})
+
+			await expect(client.getLogs(mismatch.parameters)).rejects.toThrow('RPC returned a log outside the requested filter')
+		})
+	}
+
+	test('getLogs validates results against an immutable snapshot of nested topic alternatives', async () => {
+		const requestedTopics = [[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A]
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ params }) => {
+					const filter = getArrayEntry(params, 0, 'eth_getLogs params')
+					const topics = getObjectEntry(filter, 'topics', 'eth_getLogs filter')
+					if (!Array.isArray(topics)) throw new Error('Expected mutable RPC topics')
+					expect(topics).toEqual([[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A])
+					const alternatives = topics[0]
+					if (!Array.isArray(alternatives)) throw new Error('Expected mutable RPC topic alternatives')
+					alternatives.splice(0, alternatives.length, LOG_TOPIC_B)
+					topics.splice(1, 1, LOG_TOPIC_B)
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_B, LOG_TOPIC_B],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+
+		await expect(client.getLogs({ topics: requestedTopics })).rejects.toThrow('RPC returned a log outside the requested filter')
+		expect(requestedTopics).toEqual([[LOG_TOPIC_A, LOG_TOPIC_C], LOG_TOPIC_A])
+	})
+
+	test('getLogs validates results against an immutable snapshot of block bounds', async () => {
+		const parameters = { fromBlock: 2n }
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ params }) => {
+					const filter = getArrayEntry(params, 0, 'eth_getLogs params')
+					expect(getObjectEntry(filter, 'fromBlock', 'eth_getLogs filter')).toBe('0x2')
+					parameters.fromBlock = 0n
+					return [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					]
+				}, []),
+			),
+		})
+
+		await expect(client.getLogs(parameters)).rejects.toThrow('RPC returned a log outside the requested filter')
+	})
+
+	test('getLogs accepts results matching address arrays, block boundaries, wildcards, and alternative topics', async () => {
+		const mixedCaseTopic = `0x${'AB'.repeat(32)}` satisfies Hex
+		const normalizedTopic = `0x${'ab'.repeat(32)}` satisfies Hex
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_C, mixedCaseTopic, LOG_TOPIC_C],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({
+			address: [RECIPIENT_ADDRESS, TOKEN_ADDRESS],
+			fromBlock: 1n,
+			toBlock: 1n,
+			topics: [null, [LOG_TOPIC_A, mixedCaseTopic]],
+		})
+		expect(logs[0]?.topics).toEqual([LOG_TOPIC_C, normalizedTopic, LOG_TOPIC_C])
+	})
+
+	test('getLogs allows missing block metadata when no block range was requested', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: null,
+							blockNumber: null,
+							data: '0x',
+							logIndex: null,
+							removed: false,
+							topics: [],
+							transactionHash: null,
+							transactionIndex: null,
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ address: TOKEN_ADDRESS, topics: [] })
+		expect(logs[0]?.blockNumber).toBeUndefined()
+	})
+
+	test('getLogs treats an empty address array as a wildcard', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: RECIPIENT_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ address: [] })
+		expect(logs[0]?.address.toLowerCase()).toBe(RECIPIENT_ADDRESS.toLowerCase())
+	})
+
+	test('getLogs treats an empty positional topic alternative as a wildcard', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [LOG_TOPIC_A],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({ topics: [[]] })
+		expect(logs[0]?.topics).toEqual([LOG_TOPIC_A])
 	})
 
 	test('overloaded function selection resolves by signature and argument count', () => {
@@ -1073,6 +1411,8 @@ describe('shared ethereum compatibility layer', () => {
 					timestamp: '0x5',
 					transactions: [
 						{
+							blockHash: BLOCK_HASH,
+							blockNumber: '0xa',
 							from: OWNER_ADDRESS,
 							gas: '0x5208',
 							hash: TX_HASH,
@@ -1249,6 +1589,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x0',
 			gasPrice: '0x9',
 			hash: replacementHash,
 			transactionIndex: '0x0',
@@ -1365,6 +1707,8 @@ describe('shared ethereum compatibility layer', () => {
 					timestamp: '0x5',
 					transactions: [
 						{
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x0',
 							from: OWNER_ADDRESS,
 							gas: '0x5208',
 							hash: replacementHash,
@@ -1419,6 +1763,310 @@ describe('shared ethereum compatibility layer', () => {
 				blockNumber: 1n,
 			}),
 		).rejects.toThrow('RPC returned an invalid hash')
+	})
+
+	test('public client rejects incomplete rpc transactions instead of inventing required values', async () => {
+		const completeTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: '0x7',
+			to: RECIPIENT_ADDRESS,
+			value: '0x5',
+		}
+		const requiredFields = {
+			gas: 'gas',
+			input: 'input data',
+			nonce: 'nonce',
+			to: 'to',
+			value: 'value',
+		} as const
+
+		for (const [field, label] of Object.entries(requiredFields)) {
+			const transaction = Object.fromEntries(Object.entries(completeTransaction).filter(([key]) => key !== field))
+			const client = createPublicClient({
+				transport: custom(createProvider(() => transaction, [])),
+			})
+			await expect(client.getTransaction({ hash: TX_HASH })).rejects.toThrow(`RPC returned a transaction without ${label}`)
+		}
+		for (const field of ['gas', 'input', 'nonce', 'value'] as const) {
+			const client = createPublicClient({
+				transport: custom(createProvider(() => ({ ...completeTransaction, [field]: null }), [])),
+			})
+			await expect(client.getTransaction({ hash: TX_HASH })).rejects.toThrow(`RPC returned a transaction without ${requiredFields[field]}`)
+		}
+
+		const dataOnlyTransaction = Object.fromEntries(Object.entries(completeTransaction).filter(([key]) => key !== 'input'))
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ ...dataOnlyTransaction, data: '0x5678' }), [])),
+		})
+		expect((await client.getTransaction({ hash: TX_HASH })).input).toBe('0x5678')
+
+		const contractCreationClient = createPublicClient({
+			transport: custom(createProvider(() => ({ ...completeTransaction, to: null }), [])),
+		})
+		expect((await contractCreationClient.getTransaction({ hash: TX_HASH })).to).toBeNull()
+	})
+
+	for (const rpcData of ['code', 'call result', 'transaction input', 'log data'] as const) {
+		test(`clients reject odd-length ${rpcData} returned by RPC`, async () => {
+			const transport = custom(
+				createProvider(() => {
+					switch (rpcData) {
+						case 'code':
+						case 'call result':
+							return '0x1'
+						case 'transaction input':
+							return {
+								from: OWNER_ADDRESS,
+								gas: '0x5208',
+								gasPrice: '0x1',
+								hash: TX_HASH,
+								input: '0x1',
+								nonce: '0x0',
+								to: RECIPIENT_ADDRESS,
+								transactionIndex: '0x0',
+								type: '0x2',
+								value: '0x0',
+							}
+						case 'log data':
+							return [
+								{
+									address: TOKEN_ADDRESS,
+									blockHash: BLOCK_HASH,
+									blockNumber: '0x1',
+									data: '0x1',
+									logIndex: '0x0',
+									removed: false,
+									topics: [],
+									transactionHash: TX_HASH,
+									transactionIndex: '0x0',
+								},
+							]
+						default:
+							throw new Error('Unknown RPC data test case')
+					}
+				}, []),
+			)
+			const publicClient = createPublicClient({ transport })
+			const walletClient = createWalletClient({ account: OWNER_ADDRESS, transport })
+			const result = (() => {
+				switch (rpcData) {
+					case 'code':
+						return publicClient.getCode({ address: TOKEN_ADDRESS })
+					case 'call result':
+						return walletClient.call({ to: TOKEN_ADDRESS })
+					case 'transaction input':
+						return publicClient.getTransaction({ hash: TX_HASH })
+					case 'log data':
+						return publicClient.getLogs({})
+					default:
+						throw new Error('Unknown RPC data test case')
+				}
+			})()
+
+			await expect(result).rejects.toThrow('RPC returned an invalid hex value')
+		})
+	}
+
+	test('clients preserve valid even-length and empty RPC data', async () => {
+		const publicClient = createPublicClient({ transport: custom(createProvider(() => '0xABcd', [])) })
+		const walletClient = createWalletClient({ account: OWNER_ADDRESS, transport: custom(createProvider(() => '0x', [])) })
+
+		expect(await publicClient.getCode({ address: TOKEN_ADDRESS })).toBe('0xabcd')
+		expect(await walletClient.call({ to: TOKEN_ADDRESS })).toEqual({ data: '0x' })
+	})
+
+	for (const source of ['log query', 'transaction receipt'] as const) {
+		test(`public client rejects a non-bytes32 topic from a ${source}`, async () => {
+			const rawLog = {
+				address: TOKEN_ADDRESS,
+				blockHash: BLOCK_HASH,
+				blockNumber: '0x1',
+				data: '0x',
+				logIndex: '0x0',
+				removed: false,
+				topics: ['0x12'],
+				transactionHash: TX_HASH,
+				transactionIndex: '0x0',
+			}
+			const client = createPublicClient({
+				transport: custom(
+					createProvider(
+						() =>
+							source === 'log query'
+								? [rawLog]
+								: {
+										blockHash: BLOCK_HASH,
+										blockNumber: '0x1',
+										cumulativeGasUsed: '0x5208',
+										from: OWNER_ADDRESS,
+										gasUsed: '0x5208',
+										logs: [rawLog],
+										status: '0x1',
+										to: RECIPIENT_ADDRESS,
+										transactionHash: TX_HASH,
+										transactionIndex: '0x0',
+										type: '0x2',
+									},
+						[],
+					),
+				),
+			})
+			const result = source === 'log query' ? client.getLogs({}) : client.getTransactionReceipt({ hash: TX_HASH })
+
+			await expect(result).rejects.toThrow('RPC returned an invalid hash')
+		})
+	}
+
+	test('public client preserves valid mixed-case bytes32 log topics', async () => {
+		const topic = `0x${'AB'.repeat(32)}` satisfies Hex
+		const normalizedTopic = `0x${'ab'.repeat(32)}` satisfies Hex
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [topic],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({})
+		expect(logs[0]?.topics).toEqual([normalizedTopic])
+	})
+
+	test('public client rejects receipt logs that are not bound to their receipt', async () => {
+		const foreignBlockHash = `0x${'44'.repeat(32)}` satisfies Hash
+		const foreignTransactionHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const validLog = {
+			address: TOKEN_ADDRESS,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0xa',
+			data: '0x',
+			logIndex: '0x0',
+			removed: false,
+			topics: [],
+			transactionHash: RECEIPT_HASH,
+			transactionIndex: '0x0',
+		}
+		let returnedLog: Record<string, unknown> = validLog
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			return {
+				blockHash: BLOCK_HASH,
+				blockNumber: '0xa',
+				cumulativeGasUsed: '0x5208',
+				effectiveGasPrice: '0x3',
+				from: OWNER_ADDRESS,
+				gasUsed: '0x5208',
+				logs: [returnedLog],
+				status: '0x1',
+				to: RECIPIENT_ADDRESS,
+				transactionHash: RECEIPT_HASH,
+				transactionIndex: '0x0',
+				type: '0x2',
+			}
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const receipt = await client.getTransactionReceipt({ hash: RECEIPT_HASH })
+		expect(receipt.logs[0]).toMatchObject({
+			blockHash: receipt.blockHash,
+			blockNumber: receipt.blockNumber,
+			transactionHash: receipt.transactionHash,
+			transactionIndex: receipt.transactionIndex,
+		})
+
+		const mismatches = {
+			blockHash: foreignBlockHash,
+			blockNumber: '0xb',
+			transactionHash: foreignTransactionHash,
+			transactionIndex: '0x1',
+		}
+		for (const [field, mismatchedValue] of Object.entries(mismatches)) {
+			for (const value of [mismatchedValue, undefined]) {
+				returnedLog = { ...validLog, [field]: value }
+				await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow(`RPC returned a transaction receipt with a log whose ${field} does not match the receipt`)
+			}
+		}
+	})
+
+	test('public client rejects mined block transactions that are not bound to their block position', async () => {
+		const foreignBlockHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const validTransaction = {
+			blockHash: BLOCK_HASH,
+			blockNumber: '0xa',
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: TX_HASH,
+			input: '0x',
+			nonce: '0x0',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: '0x0',
+			type: '0x2',
+			value: '0x5',
+		}
+		let returnedBlock: Record<string, unknown> = {
+			hash: BLOCK_HASH,
+			number: '0xa',
+			parentHash: `0x${'44'.repeat(32)}`,
+			timestamp: '0x5',
+			transactions: [validTransaction],
+		}
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getBlockByNumber') throw new Error(`Unexpected rpc method: ${method}`)
+			return returnedBlock
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const block = await client.getBlock({ blockNumber: 10n, includeTransactions: true })
+		expect(block.transactions[0]).toMatchObject({
+			blockHash: block.hash,
+			blockNumber: block.number,
+			transactionIndex: 0n,
+		})
+
+		const mismatches = {
+			blockHash: foreignBlockHash,
+			blockNumber: '0xb',
+			transactionIndex: '0x1',
+		}
+		for (const [field, mismatchedValue] of Object.entries(mismatches)) {
+			for (const value of [mismatchedValue, undefined]) {
+				returnedBlock = { ...returnedBlock, transactions: [{ ...validTransaction, [field]: value }] }
+				await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow(`RPC returned a block with a transaction whose ${field} does not match the block`)
+			}
+		}
+
+		returnedBlock = { hash: null, number: '0xa', parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a hash')
+		returnedBlock = { hash: BLOCK_HASH, number: null, parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a number')
+
+		returnedBlock = {
+			hash: null,
+			number: null,
+			parentHash: BLOCK_HASH,
+			timestamp: '0x5',
+			transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: '0x0' }],
+		}
+		await expect(client.getBlock({ blockTag: 'pending', includeTransactions: true })).rejects.toThrow('RPC returned a pending block with a transaction containing mined metadata')
+		returnedBlock = { ...returnedBlock, transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: null }] }
+		const pendingBlock = await client.getBlock({ blockTag: 'pending', includeTransactions: true })
+		expect(pendingBlock.transactions[0]).toMatchObject({ blockHash: undefined, blockNumber: undefined, transactionIndex: undefined })
 	})
 
 	test('public client rejects transaction lookups whose response hash differs from the request', async () => {
@@ -1504,12 +2152,72 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
+	test('public client rejects blocks whose number differs from the requested height', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x2', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5', transactions: [] }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('does not match requested block 1')
+	})
+
 	test('public client rejects blocks without a required transaction list', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5' }), [])),
 		})
 
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without transactions')
+	})
+
+	test('replacement scans reject blocks from a different height', async () => {
+		const replacementHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionReceipt') {
+				if (getArrayEntry(params, 0, 'receipt params') === TX_HASH) return null
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: replacementHash,
+					transactionIndex: '0x0',
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x1',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: [{ ...originalTransaction, blockHash: BLOCK_HASH, blockNumber: '0x1', hash: replacementHash, transactionIndex: '0x0' }],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		await expect(
+			client.waitForTransactionReceipt({
+				hash: TX_HASH,
+				onReplaced: () => undefined,
+				pollingInterval: 0,
+				transaction: originalTransaction,
+				timeout: 0,
+			}),
+		).rejects.toThrow('does not match requested block 0')
 	})
 
 	test('replacement scans reject missing block transactions instead of advancing past them', async () => {
@@ -1739,6 +2447,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x1',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -1805,6 +2515,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x1',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -1880,6 +2592,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: `0x${replacementBlockNumber.toString(16)}`,
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -1949,6 +2663,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: `0x${replacementBlockNumber.toString(16)}`,
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -2021,6 +2737,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x0',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -2289,28 +3007,27 @@ describe('shared ethereum compatibility layer', () => {
 		const localProvider = createProvider(({ method, params }) => {
 			if (method !== 'eth_sendRawTransaction') throw new Error(`Unexpected rpc method: ${method}`)
 			capturedRawTransaction = requireHex(getArrayEntry(params, 0, 'raw send params'), 'serialized transaction')
-			return RECEIPT_HASH
+			return keccak256(capturedRawTransaction)
 		}, localCalls)
 		const localClient = createWalletClient({
 			account: privateKeyToAccount(PRIVATE_KEY),
 			chain: mainnet,
 			transport: custom(localProvider),
 		})
-		expect(
-			await localClient.sendTransaction({
-				data: encodeFunctionData({
-					abi: TRANSFER_ABI,
-					functionName: 'transfer',
-					args: [RECIPIENT_ADDRESS, 9n],
-				}),
-				gas: 100_000n,
-				maxFeePerGas: 20n,
-				maxPriorityFeePerGas: 3n,
-				nonce: 0n,
-				to: TOKEN_ADDRESS,
+		const localHash = await localClient.sendTransaction({
+			data: encodeFunctionData({
+				abi: TRANSFER_ABI,
+				functionName: 'transfer',
+				args: [RECIPIENT_ADDRESS, 9n],
 			}),
-		).toBe(RECEIPT_HASH)
+			gas: 100_000n,
+			maxFeePerGas: 20n,
+			maxPriorityFeePerGas: 3n,
+			nonce: 0n,
+			to: TOKEN_ADDRESS,
+		})
 		if (capturedRawTransaction === undefined) throw new Error('raw transaction was not captured')
+		expect(localHash).toBe(keccak256(capturedRawTransaction))
 
 		const parsedRawTransaction = parseTransaction(capturedRawTransaction)
 		expect(parsedRawTransaction.to).toBe(getAddress(TOKEN_ADDRESS))
@@ -2324,6 +3041,20 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('wallet client rejects a broadcast hash for a different raw transaction', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_sendRawTransaction') throw new Error(`Unexpected rpc method: ${method}`)
+			return RECEIPT_HASH
+		}, [])
+		const client = createWalletClient({
+			account: OWNER_ADDRESS,
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		await expect(client.sendRawTransaction({ serializedTransaction: '0x1234' })).rejects.toThrow('does not match submitted transaction')
 	})
 
 	test('local wallet clients prepare omitted nonce, gas, and fee fields before signing', async () => {
@@ -2344,7 +3075,7 @@ describe('shared ethereum compatibility layer', () => {
 			if (method === 'eth_gasPrice') return '0x9'
 			if (method === 'eth_sendRawTransaction') {
 				capturedRawTransaction = requireHex(getArrayEntry(params, 0, 'raw send params'), 'serialized transaction')
-				return RECEIPT_HASH
+				return keccak256(capturedRawTransaction)
 			}
 			throw new Error(`Unexpected rpc method: ${method}`)
 		}, calls)
@@ -2354,8 +3085,9 @@ describe('shared ethereum compatibility layer', () => {
 			transport: custom(provider),
 		})
 
-		expect(await client.sendTransaction({ to: RECIPIENT_ADDRESS, value: 5n })).toBe(RECEIPT_HASH)
+		const transactionHash = await client.sendTransaction({ to: RECIPIENT_ADDRESS, value: 5n })
 		if (capturedRawTransaction === undefined) throw new Error('raw transaction was not captured')
+		expect(transactionHash).toBe(keccak256(capturedRawTransaction))
 		expect(parseTransaction(capturedRawTransaction)).toMatchObject({
 			chainId: 1n,
 			gas: 100_000n,
@@ -2613,6 +3345,25 @@ describe('shared ethereum compatibility layer', () => {
 		expect(await client.getGasPrice()).toBe(1_000_000_000n)
 		expect(await client.getTransactionCount({ address: OWNER_ADDRESS, blockTag: 'pending' })).toBe(7n)
 		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
+	})
+
+	test('public client rejects missing required rpc quantities', async () => {
+		const client = createPublicClient({ transport: custom(createProvider(() => null, [])) })
+
+		await expect(
+			client.estimateContractGas({
+				abi: BALANCE_OF_ABI,
+				address: TOKEN_ADDRESS,
+				args: [OWNER_ADDRESS],
+				functionName: 'balanceOf',
+			}),
+		).rejects.toThrow('missing required gas estimate')
+		await expect(client.estimateGas({ account: OWNER_ADDRESS, to: RECIPIENT_ADDRESS })).rejects.toThrow('missing required gas estimate')
+		await expect(client.getBalance({ address: OWNER_ADDRESS })).rejects.toThrow('missing required balance')
+		await expect(client.getBlockNumber()).rejects.toThrow('missing required block number')
+		await expect(client.getChainId()).rejects.toThrow('missing required chain ID')
+		await expect(client.getGasPrice()).rejects.toThrow('missing required gas price')
+		await expect(client.getTransactionCount({ address: OWNER_ADDRESS })).rejects.toThrow('missing required transaction count')
 	})
 
 	for (const malformed of [

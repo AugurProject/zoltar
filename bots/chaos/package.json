@@ -1,0 +1,39 @@
+{
+	"name": "@zoltar/chaos",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Long-running randomized Zoltar ecosystem transaction operator",
+	"imports": {
+		"#cli/*": "./src/cli/*.ts",
+		"#config/*": "./src/config/*.ts",
+		"#contracts/*": "./src/contracts/*.ts",
+		"#core/*": "./src/core/*.ts",
+		"#dashboard/*": "./src/dashboard/*.ts",
+		"#execution/*": "./src/execution/*.ts",
+		"#monitoring/*": "./src/monitoring/*.ts",
+		"#operations/*": "./src/operations/*.ts",
+		"#runtime/*": "./src/runtime/*.ts",
+		"#state/*": "./src/state/*.ts"
+	},
+	"scripts": {
+		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
+		"doctor": "bun ./src/cli/doctor.ts",
+		"ensure-contract-artifacts": "bun ../../scripts/ensure-contract-artifacts.mts",
+		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
+		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config",
+		"run": "bun ./src/cli/run.ts",
+		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",
+		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@zoltar/bot-shared": "file:../shared"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.11",
+		"bun-types": "1.3.11",
+		"micro-eth-signer": "0.18.1",
+		"typescript": "5.8.2"
+	}
+}
