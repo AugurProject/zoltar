@@ -941,6 +941,7 @@ if (redeemRepFromVaultRow === undefined) {
 	throw new Error('contract interaction reference should document redeemRepFromVault(vault)')
 }
 assert.match(redeemRepFromVaultRow, /specified `vault` has no escalation escrow and has redeemable REP/i, 'contract interaction reference should scope the redemption escrow precondition to the specified vault')
+assert.match(redeemRepFromVaultRow, /caller must equal `vault`/i, 'contract interaction reference should require the vault to authorize its own REP redemption')
 assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRepFromVault requires global escrow clearance')
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
