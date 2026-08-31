@@ -198,13 +198,14 @@ export function useMarketCreation(
 						const nextCreatingScopes = new Set(marketCreatingScopes.value)
 						nextCreatingScopes.delete(submittedMarketActionScopeKey)
 						marketCreatingScopes.value = nextCreatingScopes
-						if (isCurrentMarketActionScope()) onTransactionFinished()
+						onTransactionFinished()
 					},
 					onTransactionFailed: message => {
 						if (isCurrentMarketActionScope()) onTransactionFailed?.(message)
 					},
 					onWriteError: message => {
 						marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createErrorActionFeedback('createMarket', 'Question creation failed', message) }
+						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }
 					},
 					refreshState: async () => {
 						if (!isCurrentMarketActionScope()) return

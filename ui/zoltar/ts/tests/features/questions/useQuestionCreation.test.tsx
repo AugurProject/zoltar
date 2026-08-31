@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -70,12 +70,13 @@ describe('useQuestionCreation', () => {
 
 	async function renderHook(
 		options: {
-			accountAddress?: typeof WALLET_ADDRESS
+			accountAddress?: Address
 			activeUniverseId?: bigint
 			createQuestion?: UseQuestionCreationDependencies['createQuestion']
 			deploymentStatuses?: DeploymentStatus[]
 			environmentRefreshKey?: number
 			loadZoltarQuestions?: () => Promise<void>
+			onTransactionFinished?: () => void
 			onTransactionRequested?: () => boolean | void
 			refreshState?: () => Promise<void>
 		} = {},
@@ -88,17 +89,18 @@ describe('useQuestionCreation', () => {
 		const { useQuestionCreation } = await import(`../../../features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
 		const onTransactionFailed = mock(() => undefined)
-		const onTransactionFinished = mock(() => undefined)
+		const onTransactionFinished = mock(options.onTransactionFinished ?? (() => undefined))
 		const onTransactionPresented = mock(() => undefined)
 		const onTransactionPrepared = mock(() => undefined)
 		const onTransactionRequested = mock(options.onTransactionRequested ?? (() => undefined))
 		const onTransactionSubmitted = mock(() => undefined)
 		const refreshState = mock(options.refreshState ?? (async () => undefined))
 		let hookState: UseQuestionCreationState | undefined
-		const Harness = function QuestionCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
+		const initialAccountAddress = options.accountAddress ?? WALLET_ADDRESS
+		const Harness = function QuestionCreationHarness({ accountAddress, environmentRefreshKey }: { accountAddress: Address; environmentRefreshKey: number }) {
 			hookState = useQuestionCreation(
 				{
-					accountAddress: options.accountAddress ?? WALLET_ADDRESS,
+					accountAddress,
 					activeUniverseId: options.activeUniverseId ?? 1n,
 					activeZoltarView: 'questions',
 					autoLoadInitialData: false,
@@ -116,14 +118,20 @@ describe('useQuestionCreation', () => {
 			)
 			return <div />
 		}
-		const rendered = await renderIntoDocument(h(Harness, { environmentRefreshKey: options.environmentRefreshKey ?? 0 }))
+		const rendered = await renderIntoDocument(h(Harness, { accountAddress: initialAccountAddress, environmentRefreshKey: options.environmentRefreshKey ?? 0 }))
 		cleanupRenderedComponent = rendered.cleanup
 		await act(async () => {
 			requireHookState(hookState).setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will this work?' }))
 		})
 		const rerenderEnvironment = async (environmentRefreshKey: number) => {
 			await act(async () => {
-				render(h(Harness, { environmentRefreshKey }), rendered.container)
+				render(h(Harness, { accountAddress: initialAccountAddress, environmentRefreshKey }), rendered.container)
+				await Promise.resolve()
+			})
+		}
+		const rerenderAccount = async (accountAddress: Address, environmentRefreshKey = options.environmentRefreshKey ?? 0) => {
+			await act(async () => {
+				render(h(Harness, { accountAddress, environmentRefreshKey }), rendered.container)
 				await Promise.resolve()
 			})
 		}
@@ -131,10 +139,25 @@ describe('useQuestionCreation', () => {
 			await rendered.cleanup()
 			cleanupRenderedComponent = undefined
 			hookState = undefined
-			const remounted = await renderIntoDocument(h(Harness, { environmentRefreshKey }))
+			const remounted = await renderIntoDocument(h(Harness, { accountAddress: initialAccountAddress, environmentRefreshKey }))
 			cleanupRenderedComponent = remounted.cleanup
 		}
-		return { createQuestion, hookState: () => requireHookState(hookState), loadZoltarQuestions, onTransactionFailed, onTransactionFinished, onTransactionPrepared, onTransactionPresented, onTransactionRequested, onTransactionSubmitted, refreshState, remount, rerenderEnvironment, setZoltarForkQuestionId }
+		return {
+			createQuestion,
+			hookState: () => requireHookState(hookState),
+			loadZoltarQuestions,
+			onTransactionFailed,
+			onTransactionFinished,
+			onTransactionPrepared,
+			onTransactionPresented,
+			onTransactionRequested,
+			onTransactionSubmitted,
+			refreshState,
+			remount,
+			rerenderAccount,
+			rerenderEnvironment,
+			setZoltarForkQuestionId,
+		}
 	}
 
 	test('records a successful creation, selects it for a fork, and refreshes state', async () => {
@@ -267,7 +290,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.onTransactionPresented).not.toHaveBeenCalled()
 		expect(harness.onTransactionPrepared).not.toHaveBeenCalled()
 		expect(harness.onTransactionSubmitted).not.toHaveBeenCalled()
-		expect(harness.onTransactionFinished).not.toHaveBeenCalled()
+		expect(harness.onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(harness.refreshState).not.toHaveBeenCalled()
 		expect(harness.loadZoltarQuestions).not.toHaveBeenCalled()
 		expect(harness.setZoltarForkQuestionId).not.toHaveBeenCalled()
@@ -311,6 +334,53 @@ describe('useQuestionCreation', () => {
 			await secondSubmission
 		})
 		expect(harness.hookState().questionCreating).toBe(false)
+		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
+	})
+
+	test('releases global transaction ownership after the submitting account changes', async () => {
+		const firstDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
+		let requestCount = 0
+		let transactionInFlight = false
+		const harness = await renderHook({
+			createQuestion: async () => {
+				requestCount += 1
+				return requestCount === 1 ? await firstDeferred.promise : CREATION_RESULT
+			},
+			onTransactionFinished: () => {
+				transactionInFlight = false
+			},
+			onTransactionRequested: () => {
+				if (transactionInFlight) return false
+				transactionInFlight = true
+				return true
+			},
+		})
+		let firstSubmission = Promise.resolve()
+		await act(async () => {
+			firstSubmission = harness.hookState().createQuestion()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		await harness.rerenderAccount(NEXT_WALLET_ADDRESS)
+		await act(async () => {
+			harness.hookState().setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will the replacement account submit?' }))
+		})
+		await act(async () => await harness.hookState().createQuestion())
+		expect(harness.hookState().questionError).toBe('Finish the current transaction before starting another transaction.')
+		expect(requestCount).toBe(1)
+
+		await act(async () => {
+			firstDeferred.resolve(CREATION_RESULT)
+			await firstSubmission
+		})
+		expect(transactionInFlight).toBe(false)
+
+		await act(async () => await harness.hookState().createQuestion())
+		expect(harness.hookState().questionError).toBeUndefined()
+		expect(requestCount).toBe(2)
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 	})
 

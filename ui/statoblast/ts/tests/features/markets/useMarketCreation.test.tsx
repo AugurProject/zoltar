@@ -210,6 +210,7 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).marketFeedback?.status.tone).toBe('error')
 		expect(requireHookState(hookState).marketFeedback?.status.detail).toContain('Wallet account is no longer connected')
+		expect(requireHookState(hookState).marketError).toContain('Wallet account is no longer connected')
 
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
@@ -305,6 +306,43 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
 		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
+	})
+
+	test('shows a rendered error source when global transaction admission rejects creation', async () => {
+		const createMarketTransaction = mock(async () => ({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary' as const, questionId: '0x0b' }))
+		const onTransactionFinished = mock(() => undefined)
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketAdmissionHarness() {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey: 0,
+					onTransactionFinished,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => false,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{ createMarket: createMarketTransaction },
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => await requireHookState(hookState).createMarket())
+
+		expect(createMarketTransaction).not.toHaveBeenCalled()
+		expect(onTransactionFinished).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).marketError).toBe('Finish the current transaction before starting another transaction.')
 	})
 
 	test('preserves an anonymous question draft when a wallet connects', async () => {
@@ -927,7 +965,7 @@ describe('useMarketCreation', () => {
 		expect(onTransactionPrepared).not.toHaveBeenCalled()
 		expect(onTransactionSubmitted).not.toHaveBeenCalled()
 		expect(onTransactionPresented).not.toHaveBeenCalled()
-		expect(onTransactionFinished).not.toHaveBeenCalled()
+		expect(onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(refreshState).not.toHaveBeenCalled()
 		expect(loadZoltarQuestions).not.toHaveBeenCalled()
 		expect(setZoltarForkQuestionId).not.toHaveBeenCalled()

@@ -842,6 +842,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
+		expect(missingQueries.getByRole('alert').textContent).toContain('Unable to load details')
 		expect(document.body.textContent).not.toContain('Create pool from question')
 	})
 })

@@ -197,7 +197,7 @@ export function useQuestionCreation(
 						const nextCreatingScopes = new Set(questionCreatingScopes.value)
 						nextCreatingScopes.delete(submittedQuestionActionScopeKey)
 						questionCreatingScopes.value = nextCreatingScopes
-						if (isCurrentQuestionActionScope()) onTransactionFinished()
+						onTransactionFinished()
 					},
 					onTransactionFailed: message => {
 						if (isCurrentQuestionActionScope()) onTransactionFailed?.(message)
