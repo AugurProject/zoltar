@@ -33,8 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
-      - run: bun run tsc
-      - run: bun run ui:build:prod
+      - name: TypeScript checks and production UI build
+        run: |
+          bun run ui:build:apps
+          bun ./scripts/install-frozen.mts ui/statoblast
+          bun run ci:preflight:current
       - uses: actions/upload-artifact@v4
         with:
           name: domain-production-ui
