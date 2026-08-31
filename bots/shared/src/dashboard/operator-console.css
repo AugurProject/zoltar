@@ -262,7 +262,7 @@
 	}
 
 	.dialog-actions {
-		flex-direction: column-reverse;
+		flex-direction: column;
 	}
 
 	.dialog-actions button {

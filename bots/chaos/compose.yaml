@@ -1,0 +1,39 @@
+name: zoltar-chaos
+
+services:
+  chaos:
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: bots/chaos/Dockerfile
+    image: zoltar-chaos
+    environment:
+      # Keep this assertion paired with the host-loopback port mapping below.
+      ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
+      # The entrypoint creates this owner-only secret in the private state volume.
+      ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password
+      # flock coordinates containers on this Docker host through the shared volume.
+      ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
+    ports:
+      - 127.0.0.1:4193:4193
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:4193/healthz'); if (!response.ok) process.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - chaos-state:/app/bots/chaos/.state
+      # This fixed-name nested volume fences every shipped Compose project on the host,
+      # even when a different project name uses a separate runtime-state volume.
+      - chaos-signer-locks:/app/bots/chaos/.state/process-locks
+
+volumes:
+  chaos-state:
+  chaos-signer-locks:
+    name: zoltar-chaos-signer-locks
+
+networks:
+  default:
+    name: zoltar
+    external: true
