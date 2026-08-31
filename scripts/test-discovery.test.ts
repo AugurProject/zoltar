@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
-import { discoverTestFiles, discoverTestFilesForDomain, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
+import { discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
 	createTestFingerprints,
 	createTestTimingObservation,
@@ -19,6 +19,8 @@ import {
 	TEST_TIMING_HISTORY_VERSION,
 	type TestTimingHistory,
 } from './test-timings.mts'
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 describe('canonical test discovery', () => {
 	test('local and CI discovery include source, shared, and fuzz tests exactly once', async () => {
@@ -35,6 +37,17 @@ describe('canonical test discovery', () => {
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
 		expect(new Set(canonicalFiles).size).toBe(canonicalFiles.length)
 		for (const weightedPath of KNOWN_FILE_WEIGHTS.keys()) expect(canonicalFiles).toContain(weightedPath)
+	})
+
+	test('the explicit browser smoke tier sequentially owns every test excluded from root discovery', async () => {
+		const packageManifest: unknown = JSON.parse(await readFile('package.json', 'utf8'))
+		if (!isRecord(packageManifest) || !isRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
+		const smokeCommand = packageManifest['scripts']['test:browser:smoke']
+		if (typeof smokeCommand !== 'string') throw new Error('package.json must define test:browser:smoke')
+
+		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun test '))
+		expect(smokeTestCommands).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/browserSmoke.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts'])
+		expect(smokeTestCommands.map(command => command.split(' ').at(-1)).sort()).toEqual([...EXPLICIT_TEST_TIER_FILES].sort())
 	})
 
 	test('Bun default discovery ignores every generated UI test tree', async () => {
