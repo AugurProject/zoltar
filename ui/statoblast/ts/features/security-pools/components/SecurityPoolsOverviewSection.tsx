@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
@@ -127,7 +128,7 @@ export function SecurityPoolsOverviewSection({
 	return (
 		<SectionBlock
 			density='compact'
-			title={commonCopy.securityPools}
+			title={securityPoolCopy.directory}
 			variant='plain'
 			actions={
 				<PaginationControls
@@ -229,9 +230,9 @@ export function SecurityPoolsOverviewSection({
 										}
 										metrics={[
 											{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
-											{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
+											{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x` },
 											{
-												label: commonCopy.openOraclePrice,
+												label: statoblastAppCopy.openOraclePrice,
 												value: <OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />,
 											},
 											{

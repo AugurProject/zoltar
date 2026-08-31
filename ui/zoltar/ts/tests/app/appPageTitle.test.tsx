@@ -10,7 +10,6 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const baseInput: AppPageTitleInput = {
-	activeOpenOracleView: 'browse',
 	activeZoltarView: 'questions',
 	route: 'zoltar',
 }
@@ -38,9 +37,6 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Universe' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Open Oracle' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Open Oracle Report' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Open Oracle Report Details' },
 			{ input: { ...baseInput, route: 'not-found' }, title: 'Page Not Found' },
 		]
 
@@ -123,18 +119,18 @@ describe('app page titles', () => {
 				)
 			})
 
-			window.history.pushState({}, '', '#/open-oracle')
+			window.history.pushState({}, '', '#/zoltar?view=migrate')
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Open Oracle' />
-						<div id='app-content'>Oracle content</div>
+						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Migrate REP' />
+						<div id='app-content'>Migration content</div>
 					</>,
 					renderedComponent.container,
 				)
 			})
 
-			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Open Oracle' })
+			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Migrate REP' })
 			expect(document.activeElement).toBe(heading)
 			expect(scrollIntoViewCalls).toBe(1)
 		} finally {

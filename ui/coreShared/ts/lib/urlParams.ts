@@ -6,16 +6,14 @@ const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
 const SECURITY_POOLS_VIEW_QUERY_PARAM = 'securityPoolsView'
 const SELECTED_POOL_VIEW_QUERY_PARAM = 'selectedPoolView'
-const OPEN_ORACLE_VIEW_QUERY_PARAM = 'openOracleView'
-const OPEN_ORACLE_REPORT_ID_QUERY_PARAM = 'openOracleReportId'
 
-function readStringQueryParam(search: string, key: string) {
+export function readStringQueryParam(search: string, key: string) {
 	const value = new URLSearchParams(search).get(key)
 	if (value === null || value.trim() === '') return undefined
 	return value
 }
 
-function writeStringQueryParam(search: string, key: string, value: string | undefined) {
+export function writeStringQueryParam(search: string, key: string, value: string | undefined) {
 	const params = new URLSearchParams(search)
 	if (value === undefined || value.trim() === '') {
 		params.delete(key)
@@ -125,41 +123,6 @@ export function writeSelectedPoolViewQueryParam(search: string, view: string | u
 	} else {
 		params.set(SELECTED_POOL_VIEW_QUERY_PARAM, view.trim())
 		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
-	}
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
-}
-
-export function readOpenOracleReportIdQueryParam(search: string) {
-	return readStringQueryParam(search, OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-}
-
-export function readOpenOracleViewQueryParam(search: string) {
-	return readStringQueryParam(search, OPEN_ORACLE_VIEW_QUERY_PARAM)
-}
-
-export function writeOpenOracleViewQueryParam(search: string, view: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (view === undefined || view.trim() === '') {
-		params.delete(OPEN_ORACLE_VIEW_QUERY_PARAM)
-	} else {
-		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, view.trim())
-	}
-
-	if (view !== 'selected-report') params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
-}
-
-export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {
-	const params = new URLSearchParams(search)
-	if (reportId === undefined || reportId.trim() === '') {
-		params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-	} else {
-		params.set(OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId.trim())
-		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, 'selected-report')
 	}
 
 	const nextSearch = params.toString()
