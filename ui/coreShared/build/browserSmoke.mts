@@ -84,7 +84,7 @@ export async function terminateBrowserProcess(
 	}
 }
 
-const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline: number, description: string, action: Promise<TValue>, cancel: () => void): Promise<TValue> => {
+const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline: number, description: string, action: () => Promise<TValue>, cancel: () => void): Promise<TValue> => {
 	const remainingMilliseconds = deadline - Date.now()
 	if (remainingMilliseconds <= 0) {
 		cancel()
@@ -108,7 +108,7 @@ const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline:
 			const timeoutId = setTimeout(() => finish({ error: new Error(`Chromium initialization timed out while ${description}`) }), remainingMilliseconds)
 			browser.once('error', handleError)
 			browser.once('exit', handleExit)
-			action.then(
+			action().then(
 				value => finish({ value }),
 				error => finish({ error: error instanceof Error ? error : new Error(String(error)) }),
 			)
@@ -288,7 +288,7 @@ export async function createDevToolsSession(
 						browser,
 						initializationDeadline,
 						'requesting the DevTools target list',
-						fetch(`http://127.0.0.1:${devToolsPort}/json/list`, { signal: fetchController.signal }).then(async response => (await response.json()) as Array<{ type: string; webSocketDebuggerUrl: string }>),
+						() => fetch(`http://127.0.0.1:${devToolsPort}/json/list`, { signal: fetchController.signal }).then(async response => (await response.json()) as Array<{ type: string; webSocketDebuggerUrl: string }>),
 						() => fetchController.abort(),
 					)) as Array<{ type: string; webSocketDebuggerUrl: string }>
 					const page = targets.find(target => target.type === 'page')
@@ -298,10 +298,11 @@ export async function createDevToolsSession(
 							browser,
 							initializationDeadline,
 							'opening the DevTools WebSocket',
-							new Promise<void>((resolve, reject) => {
-								ws.addEventListener('open', () => resolve(), { once: true })
-								ws.addEventListener('error', () => reject(new Error('Could not open the Chromium DevTools WebSocket')), { once: true })
-							}),
+							() =>
+								new Promise<void>((resolve, reject) => {
+									ws.addEventListener('open', () => resolve(), { once: true })
+									ws.addEventListener('error', () => reject(new Error('Could not open the Chromium DevTools WebSocket')), { once: true })
+								}),
 							() => ws.close(),
 						)
 						return ws
