@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -36,7 +37,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
-				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
+				<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
 				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
@@ -61,7 +62,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 					<strong className='security-pool-ribbon-stat-value'>{pool.vaultCount.toString()}</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{commonCopy.statoblastSecurityMultiplierBps}</span>
+					<span className='security-pool-ribbon-stat-label'>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
 					<strong className='security-pool-ribbon-stat-value'>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>

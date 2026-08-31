@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { getDeploymentSteps } from '../protocol/deployment.js'
-import { getZoltarAddress } from '../protocol/deploymentHelpers.js'
+import { getZoltarAddress } from '../protocol/zoltarDeploymentHelpers.js'
 import type { SimulationEngineDependencies } from '@zoltar/ui-core-shared/simulation/tevmEngine.js'
 
 const dependencies: SimulationEngineDependencies = {

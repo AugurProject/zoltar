@@ -18,6 +18,7 @@ const defaultInjectedBackend = createInjectedBackend()
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
 let initializeActiveEnvironmentGeneration = 0
+let activeEnvironmentGeneration = 0
 
 export const SIMULATION_QUERY_PARAM = 'simulate'
 export const SIMULATION_QUERY_VALUE = '1'
@@ -96,6 +97,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		}
 		if (options.shouldCommit?.() === false || requestGeneration !== initializeActiveEnvironmentGeneration) return getActiveBackend()
 		activeBackend = injectedBackend
+		activeEnvironmentGeneration += 1
 		setRuntimeNetworkProfile(injectedBackend.profile)
 		activeSimulationController = undefined
 		if (previousSimulationController !== undefined) {
@@ -144,6 +146,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		return getActiveBackend()
 	}
 	activeBackend = simulationBackend
+	activeEnvironmentGeneration += 1
 	setRuntimeNetworkProfile(simulationBackend.profile)
 	activeSimulationController = simulationBackend
 	if (previousSimulationController !== undefined && previousSimulationController !== simulationBackend) {
@@ -164,6 +167,13 @@ export function getActiveBackend() {
 	return activeBackend ?? defaultInjectedBackend
 }
 
+export function createActiveEnvironmentGuard() {
+	const generation = activeEnvironmentGeneration
+	return {
+		isCurrent: () => generation === activeEnvironmentGeneration,
+	}
+}
+
 export function getActiveNetworkProfile(): NetworkProfile {
 	return getActiveBackend().profile
 }
@@ -174,6 +184,7 @@ export function getActiveSimulationController() {
 
 function setActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	activeBackend = backend
+	activeEnvironmentGeneration += 1
 	activeSimulationController = simulationController
 	setRuntimeNetworkProfile(backend.profile)
 }
@@ -187,6 +198,7 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 
 export function resetActiveEnvironmentForTesting() {
 	initializeActiveEnvironmentGeneration += 1
+	activeEnvironmentGeneration += 1
 	activeBackend = undefined
 	activeSimulationController = undefined
 	resetRuntimeNetworkProfile()

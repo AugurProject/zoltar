@@ -10,13 +10,17 @@ export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitt
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
 	const transactionTray = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
+	const replaceActiveEnvironmentNonce: typeof setActiveEnvironmentNonce = updater => {
+		transactionTray.resetForEnvironment()
+		setActiveEnvironmentNonce(updater)
+	}
 	const supportedNetworkChangeCoordinator =
 		supportedNetworkChangeCoordinatorRef.current ??
 		createSupportedNetworkChangeCoordinator({
 			getInFlightCount: () => transactionTray.transactionState.value.inFlightCount,
 			replaceEnvironment: async canCommit => {
 				if (!(await replaceEnvironment(canCommit))) return false
-				setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+				replaceActiveEnvironmentNonce(currentNonce => currentNonce + 1)
 				onEnvironmentCommitted?.()
 				return true
 			},
@@ -25,7 +29,7 @@ export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitt
 	return {
 		activeEnvironmentNonce,
 		followSupportedWalletNetwork: shouldFollowWalletNetwork(),
-		setActiveEnvironmentNonce,
+		setActiveEnvironmentNonce: replaceActiveEnvironmentNonce,
 		supportedNetworkChangeCoordinator,
 		transactionTray,
 	}

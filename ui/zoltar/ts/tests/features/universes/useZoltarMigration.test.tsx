@@ -194,7 +194,7 @@ describe('useZoltarMigration', () => {
 			}
 		})
 
-		mock.module('../../../protocol/index.js', () => ({
+		mock.module('../../../protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
 			prepareRepForMigrationInZoltar: mock(async () => {
 				throw new Error('prepareRepForMigrationInZoltar should not be called in this test')
