@@ -320,7 +320,7 @@ export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | unde
 
 export const rewindDepth = (previousBlock: bigint, startBlock: bigint, ancestor: bigint): bigint => previousBlock - (ancestor < 0n ? startBlock - 1n : ancestor)
 
-export const replayWindowExpired = (cursor: number, prunedThroughId: number): boolean => cursor < prunedThroughId
+export const replayCursorRequiresReset = (cursor: number, prunedThroughId: number, latestId: number): boolean => cursor < prunedThroughId || cursor > latestId
 
 export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
 	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
@@ -663,7 +663,10 @@ export class ScannerDatabase {
 
 	async latestEventId(): Promise<number> {
 		return await this.read(async (sql) => {
-			const rows = await sql`SELECT COALESCE(max(id), 0) AS id FROM live_events`
+			const rows = await sql`
+				SELECT GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS id
+				FROM live_event_state state WHERE singleton
+			`
 			return Number(rows[0]?.['id'] ?? 0)
 		}, 3_000)
 	}
@@ -678,14 +681,14 @@ export class ScannerDatabase {
 				), requested AS (
 					SELECT event.id, event.event, event.payload
 					FROM live_events event, event_window
-					WHERE ${id} >= event_window.pruned_through_id AND event.id > ${id}
+					WHERE ${id} >= event_window.pruned_through_id AND ${id} <= event_window.latest_id AND event.id > ${id}
 					ORDER BY event.id LIMIT ${limit}
 				)
 				SELECT id, event, payload FROM requested
 				UNION ALL
 				SELECT latest_id AS id, 'reset' AS event,
-					jsonb_build_object('reason', 'replay-window-expired', 'refreshRequired', true) AS payload
-				FROM event_window WHERE ${id} < pruned_through_id
+					jsonb_build_object('reason', CASE WHEN ${id} < pruned_through_id THEN 'replay-window-expired' ELSE 'cursor-ahead-of-head' END, 'refreshRequired', true) AS payload
+				FROM event_window WHERE ${id} < pruned_through_id OR ${id} > latest_id
 				ORDER BY id
 			`
 			return rows.map((row: Record<string, unknown>) => ({ id: Number(row['id']), event: String(row['event']), payload: row['payload'] }))
