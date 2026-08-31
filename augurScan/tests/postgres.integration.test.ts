@@ -13,7 +13,7 @@ import {
 	type IndexerLease,
 	lockLiveEventWriter,
 	releaseReservedConnection,
-	replayWindowExpired,
+	replayCursorRequiresReset,
 	rewindDepth,
 	ScannerDatabase,
 	type StoredTransaction,
@@ -268,10 +268,12 @@ describe('database checkpoint fencing', () => {
 		expect(rewindDepth(1_250n, 1_000n, 1_200n)).toBe(50n)
 	})
 
-	test('requires a canonical refresh only when an event cursor predates retained history', () => {
-		expect(replayWindowExpired(8, 9)).toBe(true)
-		expect(replayWindowExpired(9, 9)).toBe(false)
-		expect(replayWindowExpired(0, 0)).toBe(false)
+	test('requires a canonical refresh when an event cursor falls outside durable history', () => {
+		expect(replayCursorRequiresReset(8, 9, 12)).toBe(true)
+		expect(replayCursorRequiresReset(9, 9, 12)).toBe(false)
+		expect(replayCursorRequiresReset(12, 9, 12)).toBe(false)
+		expect(replayCursorRequiresReset(13, 9, 12)).toBe(true)
+		expect(replayCursorRequiresReset(0, 0, 0)).toBe(false)
 	})
 
 	test('accepts only the configured first block or the direct checkpoint child', () => {
@@ -2165,6 +2167,7 @@ postgresTest(
 			await database.sql`INSERT INTO live_events (event, payload, created_at) VALUES ('status', '{}'::jsonb, now() - interval '8 days')`
 			await database.pruneLiveEvents()
 			expect(await database.eventsAfter(0)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'replay-window-expired', refreshRequired: true } }])
+			expect(await database.eventsAfter(2)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }])
 			const network: NetworkConfig = {
 				id: 'integration',
 				name: 'Integration chain',

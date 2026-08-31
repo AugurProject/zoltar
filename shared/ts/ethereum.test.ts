@@ -447,6 +447,35 @@ describe('shared ethereum compatibility layer', () => {
 		expect(formatAbiItem({ inputs: [{ name: 'amount', type: 'uint256' }], name: 'deposit', outputs: [], stateMutability: 'payable', type: 'function' })).toBe('function deposit(uint256 amount) payable')
 	})
 
+	test('decodes anonymous events without treating their first indexed topic as a signature', () => {
+		const anonymousEventAbi = [
+			{
+				anonymous: true,
+				inputs: [
+					{ indexed: true, name: 'owner', type: 'address' },
+					{ name: 'amount', type: 'uint256' },
+				],
+				name: 'AnonymousDeposit',
+				type: 'event',
+			},
+		] as const
+		const topics = encodeEventTopics({
+			abi: anonymousEventAbi,
+			args: { amount: null, owner: OWNER_ADDRESS },
+			eventName: 'AnonymousDeposit',
+		}).filter((topic): topic is Hex => topic !== null)
+
+		const decoded = decodeEventLog({
+			abi: anonymousEventAbi,
+			data: encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [25n]),
+			topics,
+		})
+
+		expect(decoded.eventName).toBe('AnonymousDeposit')
+		expect(getDecodedEntry(decoded.args, 0, 'owner', 'anonymous event args')).toBe(getAddress(OWNER_ADDRESS))
+		expect(getDecodedEntry(decoded.args, 1, 'amount', 'anonymous event args')).toBe(25n)
+	})
+
 	test('named multi-output results support positional and property access', () => {
 		const abi = [
 			{
@@ -1619,6 +1648,75 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toEqual(['0x0', '0x1'])
 	})
 
+	test('waitForTransactionReceipt locates a replacement older than its bounded block scan', async () => {
+		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
+		const replacementBlockNumber = 7n
+		const calls: { method: string; params: unknown }[] = []
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0xabcd',
+			nonce: '0x9',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x7',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') return originalTransaction
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				if (hash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: `0x${replacementBlockNumber.toString(16)}`,
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x14'
+			if (method === 'eth_getTransactionCount') {
+				expect(getArrayEntry(params, 0, 'transaction count params')).toBe(getAddress(OWNER_ADDRESS))
+				const blockNumber = BigInt(String(getArrayEntry(params, 1, 'transaction count params')))
+				return blockNumber >= replacementBlockNumber ? '0xa' : '0x9'
+			}
+			if (method === 'eth_getBlockByNumber') {
+				const blockNumber = getArrayEntry(params, 0, 'replacement block params')
+				return {
+					hash: BLOCK_HASH,
+					number: blockNumber,
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: blockNumber === `0x${replacementBlockNumber.toString(16)}` ? [replacementTransaction] : [],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const receipt = await client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 0 })
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toContain('0x7')
+	})
+
 	test('waitForTransactionReceipt retries original transaction lookup before replacement scanning', async () => {
 		const originalHash = `0x${'99'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'aa'.repeat(32)}` satisfies Hash
@@ -1941,6 +2039,54 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('local wallet clients prepare omitted nonce, gas, and fee fields before signing', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		let capturedRawTransaction: Hex | undefined
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_estimateGas') {
+				const transaction = getArrayEntry(params, 0, 'gas estimate params')
+				expect(getObjectEntry(transaction, 'from', 'gas estimate transaction')).toBe(ACCOUNT_ADDRESS)
+				expect(getObjectEntry(transaction, 'to', 'gas estimate transaction')).toBe(RECIPIENT_ADDRESS)
+				return '0x186a0'
+			}
+			if (method === 'eth_getTransactionCount') {
+				expect(getArrayEntry(params, 0, 'transaction count params')).toBe(ACCOUNT_ADDRESS)
+				expect(getArrayEntry(params, 1, 'transaction count params')).toBe('pending')
+				return '0x7'
+			}
+			if (method === 'eth_gasPrice') return '0x9'
+			if (method === 'eth_sendRawTransaction') {
+				capturedRawTransaction = requireHex(getArrayEntry(params, 0, 'raw send params'), 'serialized transaction')
+				return RECEIPT_HASH
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createWalletClient({
+			account: privateKeyToAccount(PRIVATE_KEY),
+			chain: mainnet,
+			transport: custom(provider),
+		})
+
+		expect(await client.sendTransaction({ to: RECIPIENT_ADDRESS, value: 5n })).toBe(RECEIPT_HASH)
+		if (capturedRawTransaction === undefined) throw new Error('raw transaction was not captured')
+		expect(parseTransaction(capturedRawTransaction)).toMatchObject({
+			chainId: 1n,
+			gas: 100_000n,
+			gasPrice: 9n,
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		})
+		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_getTransactionCount', 'eth_gasPrice', 'eth_sendRawTransaction'])
+	})
+
+	test('local transaction signers reject network-dependent fields that were not prepared', async () => {
+		const account = privateKeyToAccount(PRIVATE_KEY)
+		if (account.signTransaction === undefined) throw new Error('local signer missing')
+
+		await expect(account.signTransaction({ maxFeePerGas: 20n, to: RECIPIENT_ADDRESS })).rejects.toThrow('requires chainId, gas, and nonce')
 	})
 
 	test('wallet client never retries rpc-managed transaction submissions', async () => {

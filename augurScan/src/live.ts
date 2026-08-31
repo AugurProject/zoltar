@@ -24,7 +24,6 @@ export class LiveBus {
 	readonly #heartbeatTimer: ReturnType<typeof setInterval>
 	readonly #maxClients: number
 	#pollPromise: Promise<void> | undefined
-	#latestCursor: number | undefined
 	#latestCursorPromise: Promise<number> | undefined
 	#admittedClients = 0
 	#closed = false
@@ -72,15 +71,12 @@ export class LiveBus {
 	}
 
 	async #initialCursor(): Promise<number> {
-		if (this.#latestCursor !== undefined) return this.#latestCursor
-		this.#latestCursorPromise ??= this.#store.latestEventId().then((cursor) => {
-			this.#latestCursor = cursor
-			return cursor
-		})
+		this.#latestCursorPromise ??= this.#store.latestEventId()
+		const cursorPromise = this.#latestCursorPromise
 		try {
-			return await this.#latestCursorPromise
+			return await cursorPromise
 		} finally {
-			this.#latestCursorPromise = undefined
+			if (this.#latestCursorPromise === cursorPromise) this.#latestCursorPromise = undefined
 		}
 	}
 
@@ -122,8 +118,7 @@ export class LiveBus {
 
 	#enqueueEvents(client: Client, events: readonly LiveEvent[]): void {
 		for (const event of events) {
-			this.#latestCursor = Math.max(this.#latestCursor ?? 0, event.id)
-			if (event.id <= client.cursor) continue
+			if (event.id <= client.cursor && event.event !== 'reset') continue
 			if (client.controller.desiredSize !== null && client.controller.desiredSize <= 0) break
 			try {
 				client.controller.enqueue(this.#encoder.encode(`id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(event.payload)}\n\n`))
