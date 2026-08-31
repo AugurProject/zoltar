@@ -29,7 +29,9 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			transactionState.value = markTransactionPresented(transactionState.value, presentation)
 		},
 		onTransactionRequested: (intent: TransactionIntent) => {
+			if (transactionState.value.inFlightCount > 0) return false
 			transactionState.value = markTransactionRequested(transactionState.value, intent)
+			return true
 		},
 		onTransactionSubmitted: (hash: Hash) => {
 			transactionState.value = markTransactionSubmitted(transactionState.value, hash)
