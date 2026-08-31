@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, PublicClient, WalletClient } from '@zoltar/shared/ethereum'
 import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
@@ -10,7 +11,7 @@ import * as workflowCopy from '../copy/workflows.js'
 import * as settlementCopy from '../copy/settlement.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, observeKnownReceipt, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
+import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState, TransactionState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from './LiveSettlementModel.js'
@@ -310,8 +311,17 @@ export function LiveSettlementControls({
 			)
 			setTransactionHash(broadcastHash)
 			setState('pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					onKnownReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setTransactionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') throw new Error('Settlement transaction reverted')
 			setQuote(undefined)
 			setReceiptWarning(undefined)
@@ -362,8 +372,17 @@ export function LiveSettlementControls({
 			})
 			setTransactionHash(broadcastHash)
 			setState('approval-pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					onKnownReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setTransactionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') {
 				if (!walletContextIsCurrent(account)) {
 					setState('error')

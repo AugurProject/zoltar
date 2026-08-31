@@ -164,6 +164,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				isNetworkConfigured: () => settings.networkConfigured,
 				loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 				password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
+				publicAuthority: process.env['ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY'],
 				switchNetworkProfile: value =>
 					configurationMutationGate.run(async () => {
 						if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Chain profile request must be an object')
