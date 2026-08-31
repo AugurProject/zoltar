@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '085038603c8d67aa542a79f1a60c6a7d4040d68d3056479ec29dbe78188982d8'
+export const expectedProductionSoliditySourceFingerprint = 'd53447d3a25a29a925a84f5ea6a0b2e85a74e9689ac5854e79294367462cb5eb'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',

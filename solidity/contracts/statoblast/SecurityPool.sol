@@ -447,7 +447,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
 		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
 		if (isEscalationResolved()) revert();
-		if (block.timestamp > vaultAdmissionEndTime && !postEndVaultAdmissionAllowed) revert();
+		if (block.timestamp >= vaultAdmissionEndTime && !postEndVaultAdmissionAllowed) revert();
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		updateVaultFees(msg.sender);

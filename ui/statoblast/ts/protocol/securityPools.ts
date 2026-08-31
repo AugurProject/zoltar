@@ -118,7 +118,7 @@ export async function isSecurityPoolVaultAdmissionClosed(client: Pick<ReadClient
 		}),
 		client.getBlock(),
 	])
-	if (block.timestamp <= questionEndTime) return false
+	if (block.timestamp < questionEndTime) return false
 	if (sameAddress(escalationGame, zeroAddress)) return true
 	return !(await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,

@@ -38,7 +38,7 @@ function isActionEnabledForProvidedAxes({
 }
 
 export function deriveVaultAdmissionClosed({ currentTimestamp, hasForkContinuationEscalationGame, questionEndTime }: { currentTimestamp: bigint | undefined; hasForkContinuationEscalationGame: boolean | undefined; questionEndTime: bigint | undefined }) {
-	return currentTimestamp !== undefined && questionEndTime !== undefined && currentTimestamp > questionEndTime && hasForkContinuationEscalationGame !== true
+	return currentTimestamp !== undefined && questionEndTime !== undefined && currentTimestamp >= questionEndTime && hasForkContinuationEscalationGame !== true
 }
 
 export function evaluateSecurityPoolState(input: SecurityPoolStateInput): SecurityPoolStateModel {
