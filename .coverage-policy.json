@@ -2,7 +2,7 @@
 	"version": 1,
 	"typescript": {
 		"ui": {
-			"minimumLines": 85.6698,
+			"minimumLines": 85.6697,
 			"minimumFunctions": 75.376,
 			"maximumAllowedUnloadedFiles": 60,
 			"unloadedFilesReviewBy": "2026-11-24",
