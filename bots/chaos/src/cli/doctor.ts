@@ -16,6 +16,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
 import type { ChaosReadClient } from '../monitoring/discovery.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
+import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
 
 type DoctorReaderResult = {
@@ -376,13 +377,12 @@ function liveFundingBlockers(settings: OperatorSettings, snapshot: ChaosDoctorPr
 		if (settings.runtime.execute) blockers.push('live execution has no configured signer')
 		return blockers
 	}
-	const requiredEth = settings.strategy.minimumEthReserveAttoEth + settings.strategy.maximumEthPerOperationAttoEth + settings.strategy.maximumGasCostAttoEth
+	const required = requiredLiveInventory(settings.strategy)
 	const eth = BigInt(snapshot.wallet.ethBalanceAttoEth)
-	if (eth < requiredEth) blockers.push(`signer ETH ${eth.toString()} is below the reserve plus one maximum ETH principal and one gas budget ${requiredEth.toString()}`)
+	if (eth < required.ethAttoEth) blockers.push(`signer ETH ${eth.toString()} is below the reserve plus one maximum ETH principal and one gas budget ${required.ethAttoEth.toString()}`)
 	const repTokens = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
-	const requiredRep = settings.strategy.minimumRepReserveAttoRep + settings.strategy.maximumRepPerOperationAttoRep
-	const fundedRep = snapshot.wallet.tokens.some(token => repTokens.has(token.address.toLowerCase()) && BigInt(token.balance) >= requiredRep)
-	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${requiredRep.toString()}`)
+	const fundedRep = snapshot.wallet.tokens.some(token => repTokens.has(token.address.toLowerCase()) && BigInt(token.balance) >= required.repAttoRep)
+	if (!fundedRep) blockers.push(`no canonical REP balance meets reserve plus one maximum operation principal ${required.repAttoRep.toString()}`)
 	return blockers
 }
 

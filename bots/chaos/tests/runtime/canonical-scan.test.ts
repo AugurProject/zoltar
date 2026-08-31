@@ -340,17 +340,23 @@ describe('canonical scan policy', () => {
 			eligibility: { blockers: [], eligible: true },
 			plan: { classification: 'lifecycle-obligation', createdAtBlock: '1', definitionId: 'settle', ecosystem: 'open-oracle', id: 'settle:1', label: 'Settle', metadata: {}, obligation: true, planningSeed: 1, postconditions: [], priority: 'urgent', risk: 'low', steps: [] },
 		}
-		const strategy = { maximumGasCostAttoEth: 2n, minimumEthReserveAttoEth: 5n, minimumRepReserveAttoRep: 9n }
+		const strategy = {
+			maximumEthPerOperationAttoEth: 3n,
+			maximumGasCostAttoEth: 2n,
+			maximumRepPerOperationAttoRep: 4n,
+			minimumEthReserveAttoEth: 5n,
+			minimumRepReserveAttoRep: 9n,
+		}
 		const universes = [{ id: '0', repToken: rep }]
-		const fundedRep = { balance: '9', symbol: 'REP', token: rep, universeId: '0' }
-		const funded = { eth: '7', rep: [fundedRep] }
+		const fundedRep = { balance: '13', symbol: 'REP', token: rep, universeId: '0' }
+		const funded = { eth: '10', rep: [fundedRep] }
 
 		expect(liveInventoryReadinessBlockers(funded, universes, strategy)).toEqual([])
 		expect(applyLiveNoveltyInventoryReadiness([selectable, lifecycle], funded, universes, strategy)).toEqual([selectable, lifecycle])
 
 		for (const inventory of [
-			{ ...funded, eth: '6' },
-			{ ...funded, rep: [{ ...fundedRep, balance: '8' }] },
+			{ ...funded, eth: '9' },
+			{ ...funded, rep: [{ ...fundedRep, balance: '12' }] },
 			{ ...funded, rep: [{ ...fundedRep, token: weth }] },
 		]) {
 			const result = applyLiveNoveltyInventoryReadiness([selectable, lifecycle], inventory, universes, strategy)

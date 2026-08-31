@@ -78,10 +78,10 @@ function completeSignerScan(state: RuntimeState, current: OperatorSettings, bala
 	const wallet = privateKeyToAccount(current.privateKey).address
 	bindRuntimeStateToSigner(state, wallet)
 	state.inventory = {
-		eth: (balances.eth ?? current.strategy.minimumEthReserveAttoEth + current.strategy.maximumGasCostAttoEth).toString(),
+		eth: (balances.eth ?? current.strategy.minimumEthReserveAttoEth + current.strategy.maximumEthPerOperationAttoEth + current.strategy.maximumGasCostAttoEth).toString(),
 		rep: [
 			{
-				balance: (balances.rep ?? current.strategy.minimumRepReserveAttoRep).toString(),
+				balance: (balances.rep ?? current.strategy.minimumRepReserveAttoRep + current.strategy.maximumRepPerOperationAttoRep).toString(),
 				symbol: 'REP',
 				token: canonicalRepToken,
 				universeId: 'root',
@@ -498,7 +498,7 @@ describe('chaos dashboard configuration boundary', () => {
 		completeSignerScan(state, current, { eth: 0n })
 		const { controller } = noopController(current, state)
 
-		await expect(controller.setSettings(settingsUpdate(current, 'revision', true))).rejects.toThrow('minimumEthReserve plus one strategy.maximumGasCostEth')
+		await expect(controller.setSettings(settingsUpdate(current, 'revision', true))).rejects.toThrow('minimumEthReserve plus one strategy.maximumEthPerOperation principal')
 		expect(state.paused).toBeTrue()
 		expect(state.activities).toEqual([])
 	})

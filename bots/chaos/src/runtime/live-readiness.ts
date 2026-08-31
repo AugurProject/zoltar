@@ -2,7 +2,7 @@ import type { StrategySettings } from '../config/settings.ts'
 import type { EvaluatedOperation } from '../operations/types.ts'
 import type { RuntimeTopologySummary, WalletBalanceState } from '../state/operator-state.ts'
 
-type LiveInventoryStrategy = Pick<StrategySettings, 'maximumGasCostAttoEth' | 'minimumEthReserveAttoEth' | 'minimumRepReserveAttoRep'>
+type LiveInventoryStrategy = Pick<StrategySettings, 'maximumEthPerOperationAttoEth' | 'maximumGasCostAttoEth' | 'maximumRepPerOperationAttoRep' | 'minimumEthReserveAttoEth' | 'minimumRepReserveAttoRep'>
 type CanonicalUniverse = Pick<RuntimeTopologySummary['universes'][number], 'id' | 'repToken'>
 
 function inventoryAmount(value: string, label: string) {
@@ -15,19 +15,26 @@ function inventoryAmount(value: string, label: string) {
 	}
 }
 
+export function requiredLiveInventory(strategy: LiveInventoryStrategy) {
+	return {
+		ethAttoEth: strategy.minimumEthReserveAttoEth + strategy.maximumEthPerOperationAttoEth + strategy.maximumGasCostAttoEth,
+		repAttoRep: strategy.minimumRepReserveAttoRep + strategy.maximumRepPerOperationAttoRep,
+	}
+}
+
 export function liveInventoryReadinessBlockers(inventory: Pick<WalletBalanceState, 'eth' | 'rep'>, universes: readonly CanonicalUniverse[], strategy: LiveInventoryStrategy) {
 	const blockers: string[] = []
-	const requiredEth = strategy.minimumEthReserveAttoEth + strategy.maximumGasCostAttoEth
-	if (inventoryAmount(inventory.eth, 'ETH') < requiredEth) {
-		blockers.push('Live execution requires scanned ETH inventory to cover strategy.minimumEthReserve plus one strategy.maximumGasCostEth budget')
+	const required = requiredLiveInventory(strategy)
+	if (inventoryAmount(inventory.eth, 'ETH') < required.ethAttoEth) {
+		blockers.push('Live execution requires scanned ETH inventory to cover strategy.minimumEthReserve plus one strategy.maximumEthPerOperation principal and one strategy.maximumGasCostEth budget')
 	}
 	const canonicalRepTokens = new Set(universes.map(universe => `${universe.id}:${universe.repToken.toLowerCase()}`))
 	const fundedRep = inventory.rep.some(candidate => {
 		if (!canonicalRepTokens.has(`${candidate.universeId}:${candidate.token.toLowerCase()}`)) return false
-		return inventoryAmount(candidate.balance, `${candidate.symbol} REP`) >= strategy.minimumRepReserveAttoRep
+		return inventoryAmount(candidate.balance, `${candidate.symbol} REP`) >= required.repAttoRep
 	})
 	if (!fundedRep) {
-		blockers.push('Live execution requires at least one canonical REP inventory balance that meets strategy.minimumRepReserve')
+		blockers.push('Live execution requires at least one canonical REP inventory balance that covers strategy.minimumRepReserve plus one strategy.maximumRepPerOperation principal')
 	}
 	return blockers
 }

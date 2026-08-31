@@ -5,8 +5,10 @@ import type { EvaluatedOperation } from '../../src/operations/types.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
 
 const repToken = getAddress('0x0000000000000000000000000000000000000002')
-const strategy: Pick<StrategySettings, 'maximumGasCostAttoEth' | 'minimumEthReserveAttoEth' | 'minimumRepReserveAttoRep'> = {
+const strategy: Pick<StrategySettings, 'maximumEthPerOperationAttoEth' | 'maximumGasCostAttoEth' | 'maximumRepPerOperationAttoRep' | 'minimumEthReserveAttoEth' | 'minimumRepReserveAttoRep'> = {
+	maximumEthPerOperationAttoEth: 7n,
 	maximumGasCostAttoEth: 5n,
+	maximumRepPerOperationAttoRep: 11n,
 	minimumEthReserveAttoEth: 10n,
 	minimumRepReserveAttoRep: 20n,
 }
@@ -32,7 +34,7 @@ function evaluation(classification: EvaluatedOperation['definition']['classifica
 describe('continuous live inventory readiness', () => {
 	test('blocks only novel selectable work after canonical REP is drained', () => {
 		const evaluations = [evaluation('selectable'), evaluation('lifecycle-obligation')]
-		const funded = { eth: '15', rep: [{ balance: '20', symbol: 'REP', token: repToken, universeId: 'root' }] }
+		const funded = { eth: '22', rep: [{ balance: '31', symbol: 'REP', token: repToken, universeId: 'root' }] }
 		expect(liveInventoryReadinessBlockers(funded, universes, strategy)).toEqual([])
 		expect(applyLiveNoveltyInventoryReadiness(evaluations, funded, universes, strategy)).toEqual(evaluations)
 
@@ -43,9 +45,11 @@ describe('continuous live inventory readiness', () => {
 		expect(guarded[1]).toEqual(evaluations[1])
 	})
 
-	test('requires ETH for one maximum gas budget above the retained reserve', () => {
-		const rep = [{ balance: '20', symbol: 'REP', token: repToken, universeId: 'root' }]
-		expect(liveInventoryReadinessBlockers({ eth: '14', rep }, universes, strategy).join(' ')).toContain('minimumEthReserve plus one strategy.maximumGasCostEth')
-		expect(liveInventoryReadinessBlockers({ eth: '15', rep }, universes, strategy)).toEqual([])
+	test('requires reserves, maximum operation principals, and one maximum gas budget', () => {
+		const exactRepBalance = { balance: '31', symbol: 'REP', token: repToken, universeId: 'root' }
+		const exactRep = [exactRepBalance]
+		expect(liveInventoryReadinessBlockers({ eth: '15', rep: exactRep }, universes, strategy).join(' ')).toContain('one strategy.maximumEthPerOperation principal')
+		expect(liveInventoryReadinessBlockers({ eth: '22', rep: [{ ...exactRepBalance, balance: '20' }] }, universes, strategy).join(' ')).toContain('one strategy.maximumRepPerOperation principal')
+		expect(liveInventoryReadinessBlockers({ eth: '22', rep: exactRep }, universes, strategy)).toEqual([])
 	})
 })
