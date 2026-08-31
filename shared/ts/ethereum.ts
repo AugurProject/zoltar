@@ -53,7 +53,7 @@ type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind ext
 	[TIndex in keyof TComponents]: TComponents[TIndex] extends AbiParameter ? AbiParameterValue<TComponents[TIndex], TKind> : never
 }>
 
-type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsObject<TComponents, 'output'> : TupleComponentsArray<TComponents, 'output'>
+type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = number extends TComponents['length'] ? Readonly<Record<string, unknown>> | readonly unknown[] : TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsObject<TComponents, 'output'> : TupleComponentsArray<TComponents, 'output'>
 
 type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = TKind extends 'input'
 	? TupleComponentsAllNamed<TComponents> extends true
@@ -472,7 +472,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
 	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
-	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
+	getBlock: (parameters?: { blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
@@ -1440,19 +1440,28 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 	}
 }
 
-function normalizeBlock(value: unknown, includeTransactions: boolean) {
+function normalizeBlock(value: unknown, includeTransactions: boolean, pending: boolean) {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid block')
 	const block = value as Record<string, unknown>
 	if (block['timestamp'] === undefined || block['timestamp'] === null) throw new Error('RPC returned a block without a timestamp')
 	const hash = block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash'])
 	const number = block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number'])
+	if (pending) {
+		if (hash !== undefined || number !== undefined) throw new Error('RPC returned a pending block with mined identifiers')
+	} else {
+		if (hash === undefined) throw new Error('RPC returned a mined block without a hash')
+		if (number === undefined) throw new Error('RPC returned a mined block without a number')
+	}
 	const rawTransactions = block['transactions']
 	if (!Array.isArray(rawTransactions)) throw new Error('RPC returned a block without transactions')
 	const transactions = (() => {
 		if (!includeTransactions) return rawTransactions.map(transaction => normalizeHash(transaction))
 		const normalizedTransactions = rawTransactions.map(transaction => normalizeTransaction(transaction))
-		if (hash === undefined || number === undefined) return normalizedTransactions
 		for (const [index, transaction] of normalizedTransactions.entries()) {
+			if (pending) {
+				if (transaction.blockHash !== undefined || transaction.blockNumber !== undefined || transaction.transactionIndex !== undefined) throw new Error('RPC returned a pending block with a transaction containing mined metadata')
+				continue
+			}
 			if (transaction.blockHash !== hash) throw new Error('RPC returned a block with a transaction whose blockHash does not match the block')
 			if (transaction.blockNumber !== number) throw new Error('RPC returned a block with a transaction whose blockNumber does not match the block')
 			if (transaction.transactionIndex !== BigInt(index)) throw new Error('RPC returned a block with a transaction whose transactionIndex does not match the block')
@@ -1645,12 +1654,12 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			),
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
-			const blockTag = normalizeBlockTag(parameters?.blockNumber)
+			const blockTag = parameters?.blockNumber === undefined ? (parameters?.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
 			const block = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
-			const normalizedBlock = normalizeBlock(block, includeTransactions)
+			const normalizedBlock = normalizeBlock(block, includeTransactions, blockTag === 'pending')
 			if (parameters?.blockNumber !== undefined && normalizedBlock.number !== parameters.blockNumber) {
 				throw new Error(`RPC returned block ${normalizedBlock.number?.toString() ?? 'without a number'}, which does not match requested block ${parameters.blockNumber.toString()}`)
 			}

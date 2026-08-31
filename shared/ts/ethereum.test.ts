@@ -35,6 +35,8 @@ import {
 	requestRpc,
 	toHex,
 	type EIP1193Provider,
+	type Abi,
+	type AbiParameter,
 	type BlockTransaction,
 	type Hash,
 	type Hex,
@@ -468,6 +470,11 @@ describe('shared ethereum compatibility layer', () => {
 		expect(decodedEvent.args.from).toBe(getAddress(OWNER_ADDRESS))
 		expect(decodedEvent.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
 		expect(decodedEvent.args.value).toBe(25n)
+		const widenedNamedAbi: Abi = TRANSFER_EVENT_ABI
+		const widenedDecodedEvent = decodeEventLog({ abi: widenedNamedAbi, data, topics })
+		const widenedNamedArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedDecodedEvent.args
+		expect(Array.isArray(widenedNamedArgs)).toBe(false)
+		expect(Reflect.get(widenedNamedArgs, 'from')).toBe(getAddress(OWNER_ADDRESS))
 
 		const client = createPublicClient({
 			chain: mainnet,
@@ -499,6 +506,11 @@ describe('shared ethereum compatibility layer', () => {
 		expect(log.args.from).toBe(getAddress(OWNER_ADDRESS))
 		expect(log.args.to).toBe(getAddress(RECIPIENT_ADDRESS))
 		expect(log.args.value).toBe(25n)
+		const widenedEvent: AbiParameter = TRANSFER_EVENT_ABI[0]
+		const [widenedLog] = await client.getLogs({ event: widenedEvent })
+		if (widenedLog?.args === undefined) throw new Error('widened decoded event log args missing')
+		const widenedLogArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedLog.args
+		expect(Array.isArray(widenedLogArgs)).toBe(false)
 	})
 
 	test('ABI formatting preserves mutability and named tuple components', () => {
@@ -742,6 +754,40 @@ describe('shared ethereum compatibility layer', () => {
 
 		expect([...decodedPartiallyNamedEvent.args]).toEqual([3n, 4n])
 		expect(Reflect.has(decodedPartiallyNamedEvent.args, 'named')).toBeFalse()
+		const widenedPartiallyNamedAbi: Abi = partiallyNamedEvent
+		const widenedPartiallyNamedEvent = decodeEventLog({
+			abi: widenedPartiallyNamedAbi,
+			data: encodeAbiParameters(partiallyNamedEvent[0].inputs, [3n, 4n]),
+			topics: encodeEventTopics({ abi: partiallyNamedEvent, eventName: 'PartiallyNamed' }).filter((topic): topic is Hex => topic !== null),
+		})
+		const widenedPartialArgs: Readonly<Record<string, unknown>> | readonly unknown[] = widenedPartiallyNamedEvent.args
+		expect(Array.isArray(widenedPartialArgs)).toBe(true)
+	})
+
+	test('widened partially named event inputs expose positional getLogs arguments', async () => {
+		const partiallyNamedEvent = [
+			{
+				inputs: [{ name: 'named', type: 'uint256' }, { type: 'uint256' }],
+				name: 'PartiallyNamed',
+				type: 'event',
+			},
+		] as const
+		const topics = encodeEventTopics({ abi: partiallyNamedEvent, eventName: 'PartiallyNamed' }).filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters(partiallyNamedEvent[0].inputs, [3n, 4n])
+		const widenedEvent: AbiParameter = partiallyNamedEvent[0]
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [{ address: TOKEN_ADDRESS, blockHash: BLOCK_HASH, blockNumber: '0x1', data, logIndex: '0x0', removed: false, topics, transactionHash: TX_HASH, transactionIndex: '0x0' }]
+				}, []),
+			),
+		})
+
+		const [log] = await client.getLogs({ event: widenedEvent })
+		if (log?.args === undefined) throw new Error('widened partially named event log args missing')
+		const widenedLogArgs: Readonly<Record<string, unknown>> | readonly unknown[] = log.args
+		expect(Array.isArray(widenedLogArgs)).toBe(true)
 	})
 
 	test('getLogs encodes alternative indexed values as a JSON-RPC topic set', async () => {
@@ -1935,14 +1981,21 @@ describe('shared ethereum compatibility layer', () => {
 			}
 		}
 
+		returnedBlock = { hash: null, number: '0xa', parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a hash')
+		returnedBlock = { hash: BLOCK_HASH, number: null, parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a number')
+
 		returnedBlock = {
 			hash: null,
 			number: null,
 			parentHash: BLOCK_HASH,
 			timestamp: '0x5',
-			transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: null }],
+			transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: '0x0' }],
 		}
-		const pendingBlock = await client.getBlock({ includeTransactions: true })
+		await expect(client.getBlock({ blockTag: 'pending', includeTransactions: true })).rejects.toThrow('RPC returned a pending block with a transaction containing mined metadata')
+		returnedBlock = { ...returnedBlock, transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: null }] }
+		const pendingBlock = await client.getBlock({ blockTag: 'pending', includeTransactions: true })
 		expect(pendingBlock.transactions[0]).toMatchObject({ blockHash: undefined, blockNumber: undefined, transactionIndex: undefined })
 	})
 

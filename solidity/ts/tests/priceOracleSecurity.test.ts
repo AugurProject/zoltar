@@ -346,7 +346,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const replayLogs: ReplayLog[] = []
 		for (const log of logs) {
 			if (log.address.toLowerCase() !== priceOracle.toLowerCase()) continue
-			let decoded: { args: Readonly<Record<string, unknown>>; eventName: string }
+			let decoded: ReturnType<typeof decodeEventLog>
 			try {
 				decoded = decodeEventLog({
 					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
