@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,32 +88,12 @@ test('browser commands bound a stalled DevTools response', async () => {
 	await waitForBrowserExit(browser)
 })
 
-test('browser launch failure removes the temporary profile', async () => {
-	let profilePath: string | undefined
-	await expect(
-		createDevToolsSession(join(tmpdir(), `missing-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, {
-			onProfileCreated: createdProfilePath => {
-				profilePath = createdProfilePath
-			},
-			pollMilliseconds: 1,
-		}),
-	).rejects.toThrow(/launch Chromium|ENOENT/)
-	if (profilePath === undefined) throw new Error('Expected Chromium profile creation before launch')
-	expect(await Bun.file(profilePath).exists()).toBe(false)
-})
+const listBrowserProfiles = async () => (await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
 
-test('browser profile observer failures remove the temporary profile', async () => {
-	let profilePath: string | undefined
-	await expect(
-		createDevToolsSession(join(tmpdir(), `unused-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, {
-			onProfileCreated: createdProfilePath => {
-				profilePath = createdProfilePath
-				throw new Error('profile observer failed')
-			},
-		}),
-	).rejects.toThrow('profile observer failed')
-	if (profilePath === undefined) throw new Error('Expected Chromium profile creation before observer failure')
-	expect(await Bun.file(profilePath).exists()).toBe(false)
+test('browser launch failure removes the temporary profile', async () => {
+	const profilesBefore = new Set(await listBrowserProfiles())
+	await expect(createDevToolsSession(join(tmpdir(), `missing-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, { pollMilliseconds: 1 })).rejects.toThrow(/launch Chromium|ENOENT/)
+	expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
 })
 
 test.skipIf(process.platform === 'win32')('browser cleanup escalates when Chromium ignores SIGTERM', async () => {
@@ -157,7 +137,6 @@ test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out 
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-stall-fixture-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
 	const pidPath = join(fixtureRoot, 'pid')
-	const profilePathFile = join(fixtureRoot, 'profile-path')
 	const sockets = new Set<Socket>()
 	const server = createServer(socket => {
 		sockets.add(socket)
@@ -169,17 +148,14 @@ test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out 
 	})
 	const address = server.address()
 	if (address === null || typeof address === 'string') throw new Error('Expected the DevTools stall fixture to use a TCP port')
-	await writeFile(
-		executablePath,
-		`#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '${address.port.toString()}\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nprintf '%s\\n' "$profile" > ${JSON.stringify(profilePathFile)}\nexec sleep 60\n`,
-	)
+	const profilesBefore = new Set(await listBrowserProfiles())
+	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '${address.port.toString()}\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
 		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out/)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
-		const profilePath = (await readFile(profilePathFile, 'utf8')).trim()
-		expect(await Bun.file(profilePath).exists()).toBe(false)
+		expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
 	} finally {
 		for (const socket of sockets) socket.destroy()
 		await new Promise<void>((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
@@ -325,23 +301,15 @@ test.skipIf(process.platform === 'win32')('browser initialization failure reaps 
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-fixture-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
 	const pidPath = join(fixtureRoot, 'pid')
-	let profilePath: string | undefined
+	const profilesBefore = new Set(await listBrowserProfiles())
 	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '9\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
-		await expect(
-			createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, {
-				onProfileCreated: createdProfilePath => {
-					profilePath = createdProfilePath
-				},
-				pollMilliseconds: 1,
-				targetAttempts: 1,
-			}),
-		).rejects.toThrow(/connect/i)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { pollMilliseconds: 1, targetAttempts: 1 })).rejects.toThrow(/connect/i)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
-		if (profilePath === undefined) throw new Error('Expected Chromium profile creation before initialization')
-		expect(await Bun.file(profilePath).exists()).toBe(false)
+		const profilesAfter = await listBrowserProfiles()
+		expect(profilesAfter.filter(entry => !profilesBefore.has(entry))).toEqual([])
 	} finally {
 		await rm(fixtureRoot, { force: true, recursive: true })
 	}
