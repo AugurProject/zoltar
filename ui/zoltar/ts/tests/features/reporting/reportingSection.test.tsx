@@ -216,6 +216,7 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		currentTimestamp: 150n,
 		embedInCard: false,
 		loadingReportingDetails: false,
+		onApproveReportingRep: () => undefined,
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,
@@ -636,6 +637,74 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
 		expect(document.body.textContent?.includes('Pool-held vault REP backing available for reporting:')).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report Yes', "Deposit 3 more REP into your vault's pool-held backing before reporting.")
+	})
+
+	test('offers wallet REP approval to an active ordinary-game participant without a vault', async () => {
+		let approvalCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					onApproveReportingRep: () => {
+						approvalCalls += 1
+					},
+					reportingDetails: createReportingDetails({
+						contributionFunding: 'wallet',
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerVaultExists: false,
+						viewerVaultRepBackingAttoRep: 0n,
+						viewerWalletRepAllowanceAttoRep: 0n,
+						viewerWalletRepBalanceAttoRep: rep(10n),
+					}),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent).toContain('Wallet REP available for reporting:')
+		expect(document.body.textContent).not.toContain('Pool-held vault REP backing available for reporting:')
+		expectTransactionButtonEnabled(document.body, 'Approve REP')
+		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Approve REP for this escalation game before reporting.')
+		const reportButton = within(document.body).getByRole('button', { name: 'Report Yes' })
+		const reportAction = reportButton.closest('.tx-action')
+		const actionRow = reportButton.closest('.actions')
+		const disabledReason = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
+		expect(actionRow?.classList.contains('reporting-wallet-action-row')).toBe(true)
+		expect(Array.from(actionRow?.children ?? []).filter(child => child.classList.contains('tx-action'))).toHaveLength(2)
+		expect(actionRow?.contains(disabledReason)).toBe(false)
+		expect(reportAction?.contains(disabledReason)).toBe(false)
+		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Approve REP' }))
+		expect(approvalCalls).toBe(1)
+	})
+
+	test('preserves the wallet-report action positions after REP approval', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({
+						contributionFunding: 'wallet',
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerVaultExists: false,
+						viewerVaultRepBackingAttoRep: 0n,
+						viewerWalletRepAllowanceAttoRep: rep(10n),
+						viewerWalletRepBalanceAttoRep: rep(10n),
+					}),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const actionButtons = within(document.body)
+			.getAllByRole('button')
+			.filter(button => button.textContent === 'REP approved' || button.textContent === 'Report Yes')
+		const actionRow = actionButtons[1]?.closest('.actions')
+		expect(actionButtons.map(button => button.textContent)).toEqual(['REP approved', 'Report Yes'])
+		expect(actionRow?.classList.contains('reporting-wallet-action-row')).toBe(true)
+		expect(Array.from(actionRow?.children ?? []).filter(child => child.classList.contains('tx-action'))).toHaveLength(2)
+		expectTransactionButtonDisabled(document.body, 'REP approved')
+		expectTransactionButtonEnabled(document.body, 'Report Yes')
 	})
 
 	test('renders a compact withdraw-only mode without the reporting banner or report form', async () => {

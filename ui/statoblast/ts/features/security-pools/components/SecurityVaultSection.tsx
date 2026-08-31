@@ -174,6 +174,7 @@ export function SecurityVaultSection({
 		if (poolState?.lifecycleState === 'ended') return securityPoolCopy.vaultActionsEndedDetail
 		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
 		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail
+		if (poolState?.ordinaryEscalationGameStarted) return securityPoolCopy.vaultDepositEscalationStartedDetail
 		return undefined
 	})()
 	const poolCollateralActionsEnabled = depositRepToVaultEnabled
@@ -220,7 +221,7 @@ export function SecurityVaultSection({
 	const showMissingVaultNotice = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain
 	const autoLoadKey = `${normalizeAddress(selectedVaultOwner) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
-	const lastAutoLoadKey = useRef<string | undefined>(undefined)
+	const lastAutoLoadKey = useRef<string | undefined>(securityVaultError === undefined ? undefined : autoLoadKey)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: oracleManagerDetails?.pendingOperation,
 		selectedVaultOwner: selectedVaultOwner ?? '',
@@ -266,7 +267,13 @@ export function SecurityVaultSection({
 
 		return undefined
 	})()
+	const vaultLookupActionLabel = securityVaultError === undefined ? commonCopy.refresh : commonCopy.retry
 	const loadedVaultMissingBlocker = currentSelectedVaultDetails !== undefined && !vaultExistsOnchain ? securityPoolCopy.missingVaultDetail : undefined
+	const vaultActionsLoadBlocker = (() => {
+		if (hasLoadedSelectedVaultDetails || loadingSecurityVault) return undefined
+		if (autoLoadVault && securityVaultError === undefined) return undefined
+		return securityVaultError === undefined ? securityPoolCopy.refreshVaultActionsDetail : securityPoolCopy.retryVaultActionsDetail
+	})()
 	const getVaultLauncherBlocker = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit') => {
 		const walletGuardState = getWalletActiveAppChainGuardState({
 			accountAddress: accountState.address,
@@ -275,7 +282,7 @@ export function SecurityVaultSection({
 		})
 		if (walletGuardState.blocked) return walletGuardState.reason
 		if (!selectedVaultIsOwnedByAccount) return getVaultLauncherVaultOwnerReason(action, effectiveRepExitMode)
-		if (!hasLoadedSelectedVaultDetails) return securityPoolCopy.refreshVaultActionsDetail
+		if (!hasLoadedSelectedVaultDetails) return vaultActionsLoadBlocker
 		if (action === 'deposit-rep') {
 			if (!vaultExistsOnchain && walletRepBalanceAttoRep !== undefined && walletRepBalanceAttoRep <= 0n) return securityPoolCopy.missingVaultRepBalanceReason
 			return undefined
@@ -285,7 +292,7 @@ export function SecurityVaultSection({
 	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep')
 	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit')
 	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees')
-	const showSharedRefreshVaultBlocker = vaultLifecycleBlocker === undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && !hasLoadedSelectedVaultDetails && isOnActiveAppChain
+	const showSharedRefreshVaultBlocker = vaultActionsLoadBlocker !== undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && isOnActiveAppChain
 	const getVaultActionDisabledReasonId = (lifecycleActionEnabled: boolean) => {
 		if (vaultLifecycleBlocker !== undefined && !lifecycleActionEnabled) return vaultLifecycleBlockerId
 		if (showSharedRefreshVaultBlocker) return refreshVaultActionsDescriptionId
@@ -351,7 +358,7 @@ export function SecurityVaultSection({
 				)}
 				{showSharedRefreshVaultBlocker ? (
 					<p className='detail' id={refreshVaultActionsDescriptionId}>
-						{securityPoolCopy.refreshVaultActionsDetail}
+						{vaultActionsLoadBlocker}
 					</p>
 				) : undefined}
 				<div className='vault-action-launcher-grid'>
@@ -722,7 +729,7 @@ export function SecurityVaultSection({
 						placeholder={commonCopy.hexValuePlaceholder}
 						action={
 							<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
-								{loadingSecurityVault ? <LoadingText>{securityPoolCopy.refreshing}</LoadingText> : commonCopy.refresh}
+								{loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : vaultLookupActionLabel}
 							</button>
 						}
 					/>
