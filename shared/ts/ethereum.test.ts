@@ -848,6 +848,26 @@ describe('shared ethereum compatibility layer', () => {
 				value: 9n,
 			}),
 		).rejects.toThrow('safe integer range')
+		await expect(
+			account.signTransaction?.({
+				chainId: 1,
+				gas: 21_000n,
+				gasPrice: 5n,
+				maxFeePerGas: 20n,
+				nonce: 7n,
+				to: TOKEN_ADDRESS,
+			}),
+		).rejects.toThrow('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
+		await expect(
+			account.signTransaction?.({
+				chainId: 1,
+				gas: 21_000n,
+				gasPrice: 5n,
+				maxPriorityFeePerGas: 3n,
+				nonce: 7n,
+				to: TOKEN_ADDRESS,
+			}),
+		).rejects.toThrow('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
 		expect(hexToBytes('0x1')).toEqual(new Uint8Array([1]))
 		expect(isHex('0x1')).toBe(true)
 		expect(isHex('0x1', { strict: true })).toBe(true)
@@ -1356,6 +1376,44 @@ describe('shared ethereum compatibility layer', () => {
 				blockNumber: 1n,
 			}),
 		).rejects.toThrow('RPC returned an invalid hash')
+	})
+
+	test('public client rejects transaction lookups whose response hash differs from the request', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionByHash') {
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					from: OWNER_ADDRESS,
+					gas: '0x5208',
+					hash: TX_HASH,
+					input: '0x',
+					nonce: '0x0',
+					to: RECIPIENT_ADDRESS,
+					transactionIndex: '0x0',
+					value: '0x0',
+				}
+			}
+			if (method === 'eth_getTransactionReceipt') {
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: TX_HASH,
+					transactionIndex: '0x0',
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ transport: custom(provider) })
+
+		await expect(client.getTransaction({ hash: RECEIPT_HASH })).rejects.toThrow('different hash')
+		await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow('different hash')
 	})
 
 	test('public client rejects transaction receipts without required mined fields', async () => {
