@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { fetchLogsWithAdaptiveRanges, historyUnavailableError, initialCursor, latestLogRange, logRangeLimitError, LogScanError, newestFirstScanRanges, scanRanges } from '../src/monitoring/block-sync.ts'
 import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
-import { boundedDashboardJson } from '../src/dashboard/security.ts'
+import { boundedDashboardJson, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, validateDashboardAuthentication } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
@@ -434,6 +434,21 @@ describe('shared bot primitives', () => {
 			method: 'PUT',
 		})
 		await expect(boundedDashboardJson(request)).rejects.toThrow('exceeds 1 MiB')
+	})
+
+	test('requires an explicit public authority for a directly network-bound dashboard', () => {
+		expect(() => validateDashboardAuthentication('0.0.0.0', 'correct horse battery staple')).toThrow('ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY')
+		expect(() => validateDashboardAuthentication('0.0.0.0', 'correct horse battery staple', false, 'dashboard.example:4173')).not.toThrow()
+	})
+
+	test('rejects malformed or non-exact dashboard authorities', () => {
+		for (const authority of ['dashboard.example?', 'dashboard.example#', 'dashboard.example:', '%64ashboard.example']) {
+			expect(() => validateDashboardAuthentication('0.0.0.0', 'correct horse battery staple', false, authority)).toThrow('Dashboard public authority')
+		}
+		const authorities = dashboardAuthorities(4173, 'dashboard.example')
+		for (const authority of ['dashboard.example?', 'dashboard.example#', 'dashboard.example:', '%64ashboard.example']) {
+			expect(dashboardRequestAuthorityIsAccepted(new Request('http://127.0.0.1', { headers: { host: authority } }), authorities)).toBeFalse()
+		}
 	})
 
 	test('aborts a stalled JSON-RPC request at the transport deadline', async () => {
