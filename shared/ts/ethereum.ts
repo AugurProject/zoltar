@@ -23,13 +23,30 @@ export type AbiFunction = AbiParameter & { readonly inputs: readonly AbiParamete
 
 type FixedArrayValue<TValue, TLength extends number, TAccumulator extends readonly unknown[] = readonly []> = TAccumulator['length'] extends TLength ? TAccumulator : FixedArrayValue<TValue, TLength, readonly [...TAccumulator, TValue]>
 
-type TupleComponentName<TComponent extends AbiParameter> = TComponent['name']
 type AbiValueKind = 'input' | 'output'
 
-type TupleComponentsAllNamed<TComponents extends readonly AbiParameter[]> = TComponents extends readonly [] ? false : Extract<TupleComponentName<TComponents[number]>, undefined | ''> extends never ? true : false
+type TupleComponentsAllNamed<TComponents extends readonly AbiParameter[]> = TComponents extends readonly [infer TComponent extends AbiParameter, ...infer TRest extends readonly AbiParameter[]]
+	? TComponent extends { readonly name: infer TName extends string }
+		? TName extends ''
+			? false
+			: TRest extends readonly []
+				? true
+				: TupleComponentsAllNamed<TRest>
+		: false
+	: false
+
+type TupleComponentReservedAliasName = keyof unknown[] | keyof Object | '__defineGetter__' | '__defineSetter__' | '__lookupGetter__' | '__lookupSetter__' | '__proto__'
+
+type IsCanonicalNonNegativeIntegerName<TName extends string> = TName extends '0' ? true : TName extends `${infer TInteger extends bigint}` ? (`${TInteger}` extends TName ? (TName extends `-${string}` ? false : true) : false) : false
 
 type TupleComponentsObject<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = {
 	readonly [TComponent in TComponents[number] as TComponent['name'] extends string ? TComponent['name'] : never]: AbiParameterValue<TComponent, TKind>
+}
+
+type TupleComponentArrayAliasName<TComponent extends AbiParameter> = TComponent['name'] extends infer TName extends string ? (TName extends TupleComponentReservedAliasName ? never : IsCanonicalNonNegativeIntegerName<TName> extends true ? never : TName) : never
+
+type TupleComponentsArrayAliases<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = {
+	readonly [TComponent in TComponents[number] as TupleComponentArrayAliasName<TComponent>]: AbiParameterValue<TComponent, TKind>
 }
 
 type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = Readonly<{
@@ -40,7 +57,13 @@ type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiVa
 	? TupleComponentsAllNamed<TComponents> extends true
 		? TupleComponentsArray<TComponents, TKind> | TupleComponentsObject<TComponents, TKind>
 		: TupleComponentsArray<TComponents, TKind>
-	: TupleComponentsArray<TComponents, TKind> & (TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsObject<TComponents, TKind> : {})
+	: TupleComponentsAllNamed<TComponents> extends true
+		? TupleComponentsObject<TComponents, TKind>
+		: TupleComponentsArray<TComponents, TKind>
+
+type DecodedTupleArrayValue<TComponents extends readonly AbiParameter[]> = TupleComponentsArray<TComponents, 'output'> & (TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsArrayAliases<TComponents, 'output'> : {})
+
+type DecodedEventArgsValue<TComponents extends readonly AbiParameter[]> = DecodedTupleArrayValue<TComponents>
 
 type RebasedAbiParameter<TParameter extends AbiParameter, TType extends string> = {
 	readonly anonymous?: boolean
@@ -126,7 +149,7 @@ type ContractFunctionResult<TAbi extends Abi, TFunctionName extends string> = Co
 		: TOutputs extends readonly [infer TOutput extends AbiParameter]
 			? AbiParameterValue<TOutput, 'output'>
 			: TOutputs extends readonly AbiParameter[]
-				? TupleValue<TOutputs, 'output'>
+				? DecodedTupleArrayValue<TOutputs>
 				: unknown
 	: unknown
 
@@ -140,7 +163,7 @@ type ContractEventDefinition<TAbi extends Abi, TEventName extends string> = [Kno
 		}
 	: Extract<KnownAbiEvents<TAbi>, { name: TEventName }>
 
-type ContractEventArgs<TAbi extends Abi, TEventName extends string> = TupleValue<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly [], 'output'>
+type ContractEventArgs<TAbi extends Abi, TEventName extends string> = DecodedEventArgsValue<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly []>
 
 type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [never]
 	? {
@@ -156,7 +179,7 @@ type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [
 
 type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 	? {
-			args: TupleValue<readonly AbiParameter[], 'output'>
+			args: DecodedEventArgsValue<readonly AbiParameter[]>
 			eventName: string
 		}
 	: {
@@ -166,7 +189,7 @@ type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 			}
 		}[ContractEventName<TAbi>]
 
-type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? TupleValue<TEvent['inputs'], 'output'> : TupleValue<readonly AbiParameter[], 'output'>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
+type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? DecodedEventArgsValue<TEvent['inputs']> : DecodedEventArgsValue<readonly AbiParameter[]>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
@@ -665,6 +688,17 @@ function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	return BigInt(value)
 }
 
+function normalizeRequiredReceiptQuantity(value: unknown, field: string) {
+	if (value === undefined || value === null) throw new Error(`RPC returned a transaction receipt without required ${field}`)
+	return normalizeRpcBigInt(value)
+}
+
+function normalizeReceiptStatus(value: unknown): TransactionReceipt['status'] {
+	if (value === '0x1') return 'success'
+	if (value === '0x0') return 'reverted'
+	throw new Error('RPC returned a transaction receipt without a valid status')
+}
+
 function normalizeInputValues(values: readonly unknown[] | undefined) {
 	return values === undefined ? [] : [...values]
 }
@@ -778,10 +812,22 @@ function isIntegerAbiType(type: string) {
 
 function normalizeDecodedTuple(components: readonly AbiParameter[], value: unknown): unknown {
 	if (Array.isArray(value)) {
-		return value.map((item, index) => {
+		const normalized = value.map((item, index) => {
 			const component = components[index]
 			return component === undefined ? item : normalizeDecodedValue(component, item)
 		})
+		if (components.length === 0 || components.some(component => component.name === undefined || component.name === '')) return normalized
+		for (const [index, component] of components.entries()) {
+			if (component.name === undefined || component.name === '') throw new Error('Decoded tuple alias eligibility changed during normalization')
+			if (component.name in normalized || /^(?:0|[1-9]\d*)$/u.test(component.name)) continue
+			Object.defineProperty(normalized, component.name, {
+				configurable: false,
+				enumerable: false,
+				value: normalized[index],
+				writable: false,
+			})
+		}
+		return normalized
 	}
 	if (typeof value !== 'object' || value === null) return value
 	const tuple = value as Record<string, unknown>
@@ -1272,20 +1318,21 @@ function normalizeLog(value: unknown): TransactionLog {
 function normalizeReceipt(value: unknown): TransactionReceipt {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction receipt')
 	const receipt = value as Record<string, unknown>
+	if (!Array.isArray(receipt['logs'])) throw new Error('RPC returned a transaction receipt without required logs')
 	return {
 		blockHash: normalizeHash(receipt['blockHash']),
-		blockNumber: normalizeRpcBigInt(receipt['blockNumber']),
+		blockNumber: normalizeRequiredReceiptQuantity(receipt['blockNumber'], 'blockNumber'),
 		contractAddress: normalizeNullableAddress(receipt['contractAddress']) ?? null,
-		cumulativeGasUsed: normalizeRpcBigInt(receipt['cumulativeGasUsed']),
+		cumulativeGasUsed: normalizeRequiredReceiptQuantity(receipt['cumulativeGasUsed'], 'cumulativeGasUsed'),
 		effectiveGasPrice: receipt['effectiveGasPrice'] === undefined ? undefined : normalizeRpcBigInt(receipt['effectiveGasPrice']),
 		from: normalizeAddress(receipt['from']),
-		gasUsed: normalizeRpcBigInt(receipt['gasUsed']),
-		logs: Array.isArray(receipt['logs']) ? receipt['logs'].map(item => normalizeLog(item)) : [],
+		gasUsed: normalizeRequiredReceiptQuantity(receipt['gasUsed'], 'gasUsed'),
+		logs: receipt['logs'].map(item => normalizeLog(item)),
 		logsBloom: receipt['logsBloom'] === undefined ? undefined : normalizeRpcHex(receipt['logsBloom']),
-		status: normalizeBoolean(receipt['status']) ? 'success' : 'reverted',
+		status: normalizeReceiptStatus(receipt['status']),
 		to: normalizeNullableAddress(receipt['to']) ?? null,
 		transactionHash: normalizeHash(receipt['transactionHash']),
-		transactionIndex: normalizeRpcBigInt(receipt['transactionIndex']),
+		transactionIndex: normalizeRequiredReceiptQuantity(receipt['transactionIndex'], 'transactionIndex'),
 		type: normalizeTransactionType(receipt['type']),
 	}
 }
@@ -2084,7 +2131,7 @@ export function encodeDeployData(parameters: { abi: Abi; args?: readonly unknown
 
 export function decodeEventLog<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex; topics: readonly Hex[] }): DecodedEventLog<TAbi>
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }): {
-	args: TupleValue<readonly AbiParameter[], 'output'>
+	args: DecodedEventArgsValue<readonly AbiParameter[]>
 	eventName: string
 }
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }) {
