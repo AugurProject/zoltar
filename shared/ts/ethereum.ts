@@ -1219,6 +1219,21 @@ async function retryRateLimited<TValue>(operation: () => Promise<TValue>, option
 	}
 }
 
+type DeadlineRunner = <TValue>(operation: () => Promise<TValue>) => Promise<TValue>
+
+async function runWithDeadline<TValue>(parameters: { getTimeoutError: () => Error; operation: (runBeforeDeadline: DeadlineRunner) => Promise<TValue>; timeout: number }) {
+	let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<never>((_resolve, reject) => {
+		deadlineTimer = setTimeout(() => reject(parameters.getTimeoutError()), parameters.timeout)
+	})
+	const runBeforeDeadline: DeadlineRunner = async operation => await Promise.race([operation(), deadline])
+	try {
+		return await parameters.operation(runBeforeDeadline)
+	} finally {
+		if (deadlineTimer !== undefined) clearTimeout(deadlineTimer)
+	}
+}
+
 async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
 		retryCount: transport.retryCount,
@@ -1329,7 +1344,7 @@ function isBlockTransaction(value: unknown): value is BlockTransaction {
 	return typeof value === 'object' && value !== null && 'hash' in value && 'from' in value && 'nonce' in value
 }
 
-function isTransactionNotFoundError(error: unknown) {
+function isTransactionNotFoundError(error: unknown): error is Error {
 	return error instanceof Error && error.message.includes('could not be found')
 }
 
@@ -1646,41 +1661,47 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
-			const waitForNextPoll = async () => {
-				await new Promise(resolve => {
-					setTimeout(resolve, pollingInterval)
-				})
-			}
-			const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) =>
-				await retryRateLimited(operation, {
-					retryDelay: transport.retryDelay,
-					startTime,
-					timeout: timeoutMilliseconds,
-				})
-			let originalTransaction = parameters.transaction
-			let lastScannedReplacementBlock: bigint | undefined
-			if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
-				try {
-					originalTransaction = await retryReceiptRateLimited(
-						async () =>
-							await actions.getTransaction({
-								hash: parameters.hash,
-							}),
-					)
-				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
-				}
-			}
-			while (true) {
-				try {
-					return await retryReceiptRateLimited(
-						async () =>
-							await actions.getTransactionReceipt({
-								hash: parameters.hash,
-							}),
-					)
-				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
+			let lastRequestError: Error | undefined
+			let lastReceiptNotFoundError: Error | undefined
+			return await runWithDeadline({
+				getTimeoutError: () => lastReceiptNotFoundError ?? lastRequestError ?? new Error(`Timed out while waiting for transaction receipt "${parameters.hash}".`),
+				operation: async runBeforeDeadline => {
+					const waitForNextPoll = async () => {
+						let pollingTimer: ReturnType<typeof setTimeout> | undefined
+						try {
+							await runBeforeDeadline(
+								async () =>
+									await new Promise(resolve => {
+										pollingTimer = setTimeout(resolve, pollingInterval)
+									}),
+							)
+						} finally {
+							if (pollingTimer !== undefined) clearTimeout(pollingTimer)
+						}
+					}
+					const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
+						lastRequestError = undefined
+						return await runBeforeDeadline(
+							async () =>
+								await retryRateLimited(
+									async () => {
+										try {
+											return await operation()
+										} catch (error) {
+											if (error instanceof Error) lastRequestError = error
+											throw error
+										}
+									},
+									{
+										retryDelay: transport.retryDelay,
+										startTime,
+										timeout: timeoutMilliseconds,
+									},
+								),
+						)
+					}
+					let originalTransaction = parameters.transaction
+					let lastScannedReplacementBlock: bigint | undefined
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
 							originalTransaction = await retryReceiptRateLimited(
@@ -1689,40 +1710,66 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 										hash: parameters.hash,
 									}),
 							)
-						} catch (transactionError) {
-							if (!isTransactionNotFoundError(transactionError)) throw transactionError
+						} catch (error) {
+							if (!isTransactionNotFoundError(error)) throw error
 						}
 					}
-					if (originalTransaction !== undefined) {
-						const transactionToReplace = originalTransaction
-						const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
-						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
-						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
-							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
-						}
-						const replacementTransaction =
-							firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
-						lastScannedReplacementBlock = latestBlockNumber
-						if (replacementTransaction !== undefined) {
-							const transactionReceipt = await retryReceiptRateLimited(
+					while (true) {
+						try {
+							return await retryReceiptRateLimited(
 								async () =>
 									await actions.getTransactionReceipt({
-										hash: replacementTransaction.hash,
+										hash: parameters.hash,
 									}),
 							)
-							parameters.onReplaced?.({
-								reason: getReplacementReason(transactionToReplace, replacementTransaction),
-								replacedTransaction: transactionToReplace,
-								transaction: replacementTransaction,
-								transactionReceipt,
-							})
-							return transactionReceipt
+						} catch (error) {
+							if (!isTransactionNotFoundError(error)) throw error
+							lastReceiptNotFoundError = error
+							if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
+								try {
+									originalTransaction = await retryReceiptRateLimited(
+										async () =>
+											await actions.getTransaction({
+												hash: parameters.hash,
+											}),
+									)
+								} catch (transactionError) {
+									if (!isTransactionNotFoundError(transactionError)) throw transactionError
+								}
+							}
+							if (originalTransaction !== undefined) {
+								const transactionToReplace = originalTransaction
+								const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
+								let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
+								if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
+									firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
+								}
+								const replacementTransaction =
+									firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
+								lastScannedReplacementBlock = latestBlockNumber
+								if (replacementTransaction !== undefined) {
+									const transactionReceipt = await retryReceiptRateLimited(
+										async () =>
+											await actions.getTransactionReceipt({
+												hash: replacementTransaction.hash,
+											}),
+									)
+									parameters.onReplaced?.({
+										reason: getReplacementReason(transactionToReplace, replacementTransaction),
+										replacedTransaction: transactionToReplace,
+										transaction: replacementTransaction,
+										transactionReceipt,
+									})
+									return transactionReceipt
+								}
+							}
+							if (Date.now() - startTime >= timeoutMilliseconds) throw error
+							await waitForNextPoll()
 						}
 					}
-					if (Date.now() - startTime >= timeoutMilliseconds) throw error
-					await waitForNextPoll()
-				}
-			}
+				},
+				timeout: timeoutMilliseconds,
+			})
 		},
 	}
 }

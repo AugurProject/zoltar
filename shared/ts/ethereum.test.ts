@@ -1122,6 +1122,47 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
 	})
 
+	test('waitForTransactionReceipt enforces its deadline while a request or polling delay is pending', async () => {
+		const settleBeforeWatchdog = async (operation: Promise<unknown>) => {
+			let watchdog: ReturnType<typeof setTimeout> | undefined
+			try {
+				return await Promise.race([
+					operation.then(
+						() => new Error('Receipt wait unexpectedly resolved'),
+						error => (error instanceof Error ? error : new Error(String(error))),
+					),
+					new Promise<Error>(resolve => {
+						watchdog = setTimeout(() => resolve(new Error('Receipt wait exceeded its watchdog')), 100)
+					}),
+				])
+			} finally {
+				if (watchdog !== undefined) clearTimeout(watchdog)
+			}
+		}
+		const hungClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(
+					async () =>
+						await new Promise(() => {
+							// Deliberately never settles.
+						}),
+					[],
+				),
+			),
+		})
+
+		const hungRequestError = await settleBeforeWatchdog(hungClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 }))
+		expect(hungRequestError.message).toBe(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+
+		const pollingClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(createProvider(() => null, [])),
+		})
+		const pollingError = await settleBeforeWatchdog(pollingClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, pollingInterval: 1_000, timeout: 5 }))
+		expect(pollingError.message).toBe(`Transaction receipt with hash "${RECEIPT_HASH}" could not be found.`)
+	})
+
 	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
 		let receiptRequests = 0
 		const calls: { method: string; params: unknown }[] = []
