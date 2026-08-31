@@ -106,6 +106,17 @@ export interface OracleRequestFundingSnapshot {
 	targetPriceErrorForDispute: CanonicalUintString
 }
 
+export interface DirectEscalationDepositQuoteSnapshot {
+	/** Exact REP amount the game preview accepts from the wallet. */
+	acceptedAmountAttoRep: CanonicalUintString
+	/** Fixed calldata ceiling used by both the anchored preview and mutation. */
+	maximumDepositAttoRep: CanonicalUintString
+	/** Whether the exact wallet-originated mutation succeeded in anchored simulation. */
+	mutationExpectedSuccess: boolean
+	/** Exact resulting outcome balance returned by the canonical preview. */
+	resultingCumulativeAmountAttoRep: CanonicalUintString
+}
+
 export interface PoolSnapshot {
 	address: Address
 	/** Exact authenticated size of the canonical pool vault registry. */
@@ -181,6 +192,8 @@ export interface PoolSnapshot {
 	escalationStartBondAttoRep: CanonicalUintString
 	escalationNonDecisionThresholdAttoRep: CanonicalUintString
 	escalationOutcomeBalancesAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString]
+	/** Anchored direct-wallet quotes for outcomes Invalid/Yes/No. */
+	directEscalationDepositQuotes: [DirectEscalationDepositQuoteSnapshot, DirectEscalationDepositQuoteSnapshot, DirectEscalationDepositQuoteSnapshot]
 	/** Maximum arguments proven by anchored simulation for outcomes Invalid/Yes/No. */
 	safeEscalationDepositMaximumsAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString]
 	/** True only when every canonical vault was included in this anchored snapshot. */

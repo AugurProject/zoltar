@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { erc20Abi, openOracleAbi, securityPoolAbi, zoltarAbi } from '../../src/contracts/abi.ts'
+import { erc20Abi, escalationGameAbi, openOracleAbi, securityPoolAbi, zoltarAbi } from '../../src/contracts/abi.ts'
 import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
 import { decodeFunctionData } from '../support/bot-shared.ts'
@@ -40,6 +40,10 @@ function confirmApproval(snapshot: EcosystemSnapshot, step: OperationPlan['steps
 	const inventory = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === step.to.toLowerCase())
 	if (inventory === undefined) throw new Error(`Missing inventory for ${step.id}`)
 	inventory.allowances[spender] = required.toString()
+	const escalationPool = snapshot.pools.find(pool => pool.escalationGame.toLowerCase() === spender.toLowerCase())
+	if (escalationPool !== undefined) {
+		for (const quote of escalationPool.directEscalationDepositQuotes) quote.mutationExpectedSuccess = true
+	}
 	return step.id
 }
 
@@ -101,7 +105,7 @@ function disputeSnapshot() {
 describe('non-Trading exact approval continuations', () => {
 	test('keeps persisted principal exact after inbound inventory for every approval workflow', () => {
 		const cases: Array<{
-			abi: typeof openOracleAbi | typeof zoltarAbi | typeof securityPoolAbi
+			abi: typeof openOracleAbi | typeof zoltarAbi | typeof securityPoolAbi | typeof escalationGameAbi
 			definitionId: string
 			prepare(snapshot: EcosystemSnapshot): void
 		}> = [
@@ -127,6 +131,7 @@ describe('non-Trading exact approval continuations', () => {
 			},
 			{ abi: zoltarAbi, definitionId: 'zoltar.rep.burn', prepare: () => undefined },
 			{ abi: securityPoolAbi, definitionId: 'statoblast.vault.deposit-rep', prepare: () => undefined },
+			{ abi: escalationGameAbi, definitionId: 'statoblast.escalation.deposit-wallet-rep', prepare: () => undefined },
 		]
 
 		for (const candidate of cases) {
@@ -185,6 +190,16 @@ describe('non-Trading exact approval continuations', () => {
 		if (pool === undefined) throw new Error('Missing vault pool')
 		pool.minimumSafeWalletVaultDepositAttoRep = (BigInt(String(deposit.metadata['amountAttoRep'])) + 1n).toString()
 		expectOnlyExactRevokes(continuation(poolSnapshot, deposit, [poolConfirmed]), [{ spender: pool.address, token: poolApproval.to }])
+
+		const directSnapshot = snapshotFixture()
+		const direct = requiredPlan(directSnapshot, 'statoblast.escalation.deposit-wallet-rep')
+		const directApproval = approvalSteps(direct)[0]
+		if (directApproval === undefined) throw new Error('Missing direct escalation approval')
+		const directConfirmed = confirmApproval(directSnapshot, directApproval)
+		directSnapshot.pools[0]?.directEscalationDepositQuotes.forEach(quote => {
+			quote.mutationExpectedSuccess = false
+		})
+		expectOnlyExactRevokes(continuation(directSnapshot, direct, [directConfirmed]), [{ spender: directSnapshot.pools[0]?.escalationGame ?? address(0), token: directApproval.to }])
 	})
 
 	test('does not reuse a confirmed approval step identity after its allowance is externally spent', () => {
@@ -232,6 +247,29 @@ describe('non-Trading exact approval continuations', () => {
 		const burnConfirmed = confirmApproval(zoltarSnapshot, burnApproval)
 		zoltarSnapshot.deployments.zoltar = address(91)
 		expectOnlyExactRevokes(continuation(zoltarSnapshot, burn, [burnConfirmed]), [{ spender: originalZoltar, token: burnApproval.to }])
+
+		const directSnapshot = snapshotFixture()
+		const directPool = directSnapshot.pools[0]
+		if (directPool === undefined) throw new Error('Missing direct escalation pool')
+		const originalGame = directPool.escalationGame
+		const direct = requiredPlan(directSnapshot, 'statoblast.escalation.deposit-wallet-rep')
+		const directApproval = approvalSteps(direct)[0]
+		if (directApproval === undefined) throw new Error('Missing direct escalation approval')
+		const directConfirmed = confirmApproval(directSnapshot, directApproval)
+		directPool.escalationGame = address(92)
+		expectOnlyExactRevokes(continuation(directSnapshot, direct, [directConfirmed]), [{ spender: originalGame, token: directApproval.to }])
+	})
+
+	test('revokes the direct escalation approval when the persisted action is tampered', () => {
+		const snapshot = snapshotFixture()
+		const direct = requiredPlan(snapshot, 'statoblast.escalation.deposit-wallet-rep')
+		const approval = approvalSteps(direct)[0]
+		if (approval === undefined) throw new Error('Missing direct escalation approval')
+		const confirmed = confirmApproval(snapshot, approval)
+		const action = direct.steps.find(step => step.id === 'deposit-wallet-rep')
+		if (action === undefined) throw new Error('Missing direct escalation action')
+		action.data = '0x1234'
+		expectOnlyExactRevokes(continuation(snapshot, direct, [confirmed]), [{ spender: snapshot.pools[0]?.escalationGame ?? address(0), token: approval.to }])
 	})
 
 	test('cleans up only confirmed workflow-created approvals after terminal invalidation', () => {

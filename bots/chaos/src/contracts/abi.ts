@@ -930,6 +930,20 @@ export const escalationGameAbi = [
 	{
 		anonymous: false,
 		inputs: [
+			{ indexed: true, name: 'depositor', type: 'address' },
+			{ indexed: true, name: 'outcome', type: 'uint8' },
+			{ indexed: false, name: 'attoRepAmount', type: 'uint256' },
+			{ indexed: false, name: 'depositIndex', type: 'uint256' },
+			{ indexed: false, name: 'cumulativeRepAmountAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'resultingVaultDisputeStakedAttoRep', type: 'uint256' },
+			{ indexed: false, name: 'resultingTotalDisputeStakedAttoRep', type: 'uint256' },
+		],
+		name: 'DepositOnOutcome',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
 			{ indexed: true, name: 'nodeId', type: 'uint256' },
 			{ indexed: true, name: 'outcome', type: 'uint8' },
 			{ indexed: true, name: 'depositor', type: 'address' },
@@ -1063,6 +1077,29 @@ export const escalationGameAbi = [
 	{ inputs: [], name: 'startBondAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'nonDecisionThresholdAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'getOutcomeBalancesAttoRep', outputs: [{ name: 'balancesAttoRep', type: 'uint256[3]' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'outcome', type: 'uint8' },
+			{ name: 'amountAttoRep', type: 'uint256' },
+		],
+		name: 'previewDepositOnOutcome',
+		outputs: [
+			{ name: 'acceptedAmountAttoRep', type: 'uint256' },
+			{ name: 'resultingCumulativeAmountAttoRep', type: 'uint256' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'outcome', type: 'uint8' },
+			{ name: 'maximumDepositAttoRep', type: 'uint256' },
+		],
+		name: 'depositRepOnOutcome',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
 	{ inputs: [{ name: 'vault', type: 'address' }], name: 'disputeStakedRepByVaultAttoRep', outputs: [{ name: 'amountAttoRep', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'sweepResidualRepToSecurityPool', outputs: [], stateMutability: 'nonpayable', type: 'function' },
 ] as const

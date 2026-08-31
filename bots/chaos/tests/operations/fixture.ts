@@ -44,6 +44,11 @@ export function snapshotFixture(): EcosystemSnapshot {
 				escalationNonDecisionState: 0,
 				escalationNonDecisionThresholdAttoRep: (10n ** 20n).toString(),
 				escalationOutcomeBalancesAttoRep: ['0', '0', '0'],
+				directEscalationDepositQuotes: [
+					{ acceptedAmountAttoRep: 1_000n.toString(), maximumDepositAttoRep: 1_000n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 1_000n.toString() },
+					{ acceptedAmountAttoRep: 1_000n.toString(), maximumDepositAttoRep: 1_000n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 1_000n.toString() },
+					{ acceptedAmountAttoRep: 1_000n.toString(), maximumDepositAttoRep: 1_000n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 1_000n.toString() },
+				],
 				safeEscalationDepositMaximumsAttoRep: ['1000', '1000', '1000'],
 				escalationRepBalanceAttoRep: 0n.toString(),
 				escalationResolved: false,
@@ -147,7 +152,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 			openOracleEthCredit: '1',
 			shares: [{ invalid: '1000000000000000000', isApprovedForAll: { [pair]: false, [router]: false }, migrationProgressByRoute: {}, no: '1000000000000000000', shareToken, universeId: '0', yes: '1000000000000000000' }],
 			tokens: [
-				{ address: rep, allowances: { [openOracle]: '0', [pool]: '0', [zoltar]: '0' }, balance: '10000000000000000000', openOracleCredit: '1', openOracleInternalAllowanceToSelf: '0', symbol: 'REP' },
+				{ address: rep, allowances: { [openOracle]: '0', [pool]: '0', [address(15)]: '0', [zoltar]: '0' }, balance: '10000000000000000000', openOracleCredit: '1', openOracleInternalAllowanceToSelf: '0', symbol: 'REP' },
 				{ address: weth, allowances: { [openOracle]: '0', [pool]: '0', [zoltar]: '0' }, balance: '1000000000000000000', openOracleCredit: '1', openOracleInternalAllowanceToSelf: '0', symbol: 'WETH' },
 			],
 		},

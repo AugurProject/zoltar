@@ -12,6 +12,7 @@ import {
 	collectCountedPages,
 	DISCOVERY_RPC_CONCURRENCY,
 	DISCOVERY_RPC_QUEUE_LIMIT,
+	discoverDirectEscalationDepositQuotes,
 	discoverEcosystemSnapshot,
 	discoverShareInventory,
 	discoverStagedOperations,
@@ -1133,10 +1134,113 @@ describe('anchored ecosystem discovery', () => {
 		const fixture = snapshotFixture()
 		const template = fixture.pools[0]
 		if (template === undefined) throw new Error('Pool fixture missing')
-		const pools = Array.from({ length: 100 }, (_, index) => ({ ...template, address: address(1_000 + index), coordinator: address(1_100 + index), repToken: address(2_000 + index) }))
+		const pools = Array.from({ length: 100 }, (_, index) => ({ ...template, address: address(1_000 + index), coordinator: address(1_100 + index), escalationGame: address(1_200 + index), repToken: address(2_000 + index) }))
 		const tokens = [fixture.deployments.weth, ...pools.map(pool => pool.repToken)]
 		const allowanceReads = tokens.reduce((total, token) => total + relevantTokenSpenders(fixture.deployments, pools, token).length, 0)
-		expect(allowanceReads).toBeLessThanOrEqual(502)
+		expect(allowanceReads).toBe(602)
+	})
+
+	test('discovers each canonical escalation game as a deduplicated REP spender and omits the zero address', () => {
+		const fixture = snapshotFixture()
+		const template = fixture.pools[0]
+		if (template === undefined) throw new Error('Pool fixture missing')
+		const game = address(90)
+		const pools = [
+			{ ...template, escalationGame: address(0) },
+			{ ...template, address: address(91), escalationGame: game },
+			{ ...template, address: address(92), escalationGame: game },
+		]
+		const spenders = relevantTokenSpenders(fixture.deployments, pools, template.repToken)
+		expect(spenders).toContain(game)
+		expect(spenders).not.toContain(address(0))
+		expect(spenders.filter(spender => spender === game)).toHaveLength(1)
+	})
+
+	test('fixed-points a tie-adjusted direct escalation quote before simulating the exact accepted amount', async () => {
+		const wallet = address(1)
+		const game = address(15)
+		const previews: Array<readonly unknown[]> = []
+		const simulations: Array<readonly unknown[]> = []
+		const client = new Proxy({} as ChaosReadClient, {
+			get(_target, property) {
+				if (property === 'readContract') {
+					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+						if (parameters.functionName !== 'previewDepositOnOutcome') throw new Error(`Unexpected read ${parameters.functionName}`)
+						previews.push(parameters.args ?? [])
+						const outcome = parameters.args?.[0]
+						const requested = parameters.args?.[1]
+						if (typeof outcome !== 'number' || typeof requested !== 'bigint') throw new Error('Direct quote arguments missing')
+						const accepted = requested === 1_000n ? 999n : requested
+						return [accepted, BigInt(outcome * 10) + accepted] as const
+					}
+				}
+				if (property === 'simulateContract') {
+					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+						if (parameters.functionName !== 'depositRepOnOutcome') throw new Error(`Unexpected simulation ${parameters.functionName}`)
+						simulations.push(parameters.args ?? [])
+						return { result: undefined }
+					}
+				}
+				throw new Error(`Unexpected client method ${String(property)}`)
+			},
+		})
+		const quotes = await discoverDirectEscalationDepositQuotes(client, wallet, game, 1_000n, [0n, 10n, 20n], 55n)
+		const acceptedAmountAttoRep = 999n.toString()
+		expect(quotes).toEqual([
+			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 999n.toString() },
+			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 1_009n.toString() },
+			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 1_019n.toString() },
+		])
+		expect(previews).toHaveLength(6)
+		expect(simulations).toEqual([
+			[0, 999n],
+			[1, 999n],
+			[2, 999n],
+		])
+	})
+
+	test('rejects a direct escalation quote that is not stable at its accepted amount', async () => {
+		const client = new Proxy({} as ChaosReadClient, {
+			get(_target, property) {
+				if (property === 'readContract') {
+					return async (parameters: { args?: readonly unknown[] }) => {
+						const requested = parameters.args?.[1]
+						if (typeof requested !== 'bigint') throw new Error('Direct quote amount missing')
+						return requested === 1_000n ? ([999n, 999n] as const) : ([998n, 998n] as const)
+					}
+				}
+				if (property === 'simulateContract')
+					return async () => {
+						throw new Error('Unstable quote must not be simulated')
+					}
+				throw new Error(`Unexpected client method ${String(property)}`)
+			},
+		})
+		expect(await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 55n)).toEqual([
+			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
+			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
+			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
+		])
+	})
+
+	test('keeps forked or otherwise reverted direct escalation previews ineligible', async () => {
+		let simulations = 0
+		const client = new Proxy({} as ChaosReadClient, {
+			get(_target, property) {
+				if (property === 'readContract')
+					return async () => {
+						throw new Error('execution reverted: Fork game')
+					}
+				if (property === 'simulateContract')
+					return async () => {
+						simulations += 1
+					}
+				throw new Error(`Unexpected client method ${String(property)}`)
+			},
+		})
+		const quotes = await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 55n)
+		expect(quotes.every(quote => quote.acceptedAmountAttoRep === '0' && !quote.mutationExpectedSuccess)).toBeTrue()
+		expect(simulations).toBe(0)
 	})
 
 	test('rounds the wallet REP deposit up until post-transfer backing satisfies the minimum', () => {

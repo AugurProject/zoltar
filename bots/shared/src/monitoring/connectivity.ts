@@ -355,9 +355,18 @@ async function assertPublicTransactionSubmissionCapability(url: string, timeoutM
 }
 
 const PRIVATE_TRANSACTION_METHOD_CONTROL = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+const FLASHBOTS_MAINNET_RELAY_ORIGIN = 'https://relay.flashbots.net'
+const FLASHBOTS_SEPOLIA_RELAY_ORIGIN = 'https://relay-sepolia.flashbots.net'
 // Public, unfunded deterministic canaries used only to produce a recoverable
 // EIP-191 signature that intentionally does not match another canary address.
 const RELAY_AUTHENTICATION_MISMATCH_CANARY_KEYS: readonly Hex[] = [`0x${'01'.repeat(32)}`, `0x${'02'.repeat(32)}`, `0x${'03'.repeat(32)}`]
+
+export function flashbotsPrivateTransactionCompatibilityProfileAllowed(url: string, expectedChainId: number) {
+	const parsed = new URL(url)
+	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]'
+	const officialOrigin = expectedChainId === 1 ? FLASHBOTS_MAINNET_RELAY_ORIGIN : expectedChainId === 11_155_111 ? FLASHBOTS_SEPOLIA_RELAY_ORIGIN : undefined
+	return loopback || parsed.origin === officialOrigin
+}
 
 function privateCapabilityControlBody(method: string, params: readonly unknown[]) {
 	return JSON.stringify({ id: 1, jsonrpc: '2.0', method, params })
@@ -424,11 +433,21 @@ async function assertUnauthenticatedPrivateTransactionIsRejected(url: string, ti
 	throw new EndpointSafetyError(`Endpoint did not prove relay authentication enforcement: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
 }
 
-async function assertInvalidRelayAuthenticationIsRejected(url: string, authentication: RelayAuthentication, timeoutMilliseconds: number) {
+async function assertDirectRelayAuthenticationValidation(url: string, authentication: RelayAuthentication, expectedParserResponse: { code: number; message: string; status: number }, timeoutMilliseconds: number) {
 	const body = transactionSubmissionCapabilityBody('eth_sendPrivateTransaction')
 	const configuredAddress = getAddress(authentication.address)
 	const [claimedCanary, signingCanary] = RELAY_AUTHENTICATION_MISMATCH_CANARY_KEYS.map(privateKeyToAccount).filter(account => account.address !== configuredAddress)
 	if (claimedCanary === undefined || signingCanary === undefined || claimedCanary.address === signingCanary.address) throw new EndpointSafetyError('Two distinct relay-authentication mismatch canaries are required')
+	const validCanaryResponse = await rawCapabilityErrorResponse(url, body, await authenticatedRelayHeaders(body, claimedCanary), {
+		allowClientErrorResponse: false,
+		expectedId: 1,
+		label: 'Valid private relay canary authentication control',
+		timeoutMilliseconds,
+	})
+	const validCanaryMessage = validCanaryResponse.message.toLowerCase()
+	if (validCanaryResponse.status !== expectedParserResponse.status || validCanaryResponse.code !== expectedParserResponse.code || validCanaryResponse.message !== expectedParserResponse.message || relayAuthenticationRejectionEvidence(validCanaryMessage) || !transactionRejectionEvidence(validCanaryMessage)) {
+		throw new EndpointSafetyError(`Endpoint did not prove valid canary relay authentication before transaction parsing: HTTP ${validCanaryResponse.status.toString()} RPC ${validCanaryResponse.code.toString()}: ${validCanaryResponse.message}`)
+	}
 	const mismatchedSignature = await signingCanary.signMessage(keccak256(body))
 	const { code, message, status } = await rawCapabilityErrorResponse(
 		url,
@@ -448,16 +467,17 @@ async function assertInvalidRelayAuthenticationIsRejected(url: string, authentic
 	throw new EndpointSafetyError(`Endpoint did not prove relay authentication signature validation: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
 }
 
-async function assertAuthenticatedPrivateTransactionSubmissionCapability(url: string, authentication: RelayAuthentication, timeoutMilliseconds = 5_000) {
+async function assertAuthenticatedPrivateTransactionSubmissionCapability(url: string, expectedChainId: number, authentication: RelayAuthentication, timeoutMilliseconds = 5_000) {
 	try {
 		const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendPrivateTransaction', authentication, timeoutMilliseconds)
 		const normalizedMessage = message.toLowerCase()
 		if (status === 200 && code === -32_602 && !relayAuthenticationRejectionEvidence(normalizedMessage) && transactionRejectionEvidence(normalizedMessage)) {
 			await assertUnauthenticatedPrivateTransactionIsRejected(url, timeoutMilliseconds)
-			await assertInvalidRelayAuthenticationIsRejected(url, authentication, timeoutMilliseconds)
+			await assertDirectRelayAuthenticationValidation(url, authentication, { code, message, status }, timeoutMilliseconds)
 			return
 		}
 		if (status === 200 && code === -32_600 && normalizedMessage === 'incorrect request') {
+			if (!flashbotsPrivateTransactionCompatibilityProfileAllowed(url, expectedChainId)) throw new EndpointSafetyError('Generic Flashbots private-transaction compatibility evidence is restricted to the official relay matching the configured chain or a loopback test relay')
 			await assertFlashbotsPrivateTransactionControls(url, authentication, timeoutMilliseconds)
 			return
 		}
@@ -546,7 +566,7 @@ async function checkPrivateTransactionRelayEndpoint(url: string, expectedChainId
 	try {
 		chainId = await readRpcChainId(url)
 		if (chainId !== expectedChainId) throw endpointMethodFailure(new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`), url, 'eth_chainId')
-		await assertAuthenticatedPrivateTransactionSubmissionCapability(url, authentication)
+		await assertAuthenticatedPrivateTransactionSubmissionCapability(url, expectedChainId, authentication)
 		return { authenticatedAddress, chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
 	} catch (error) {
 		return {

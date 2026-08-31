@@ -7,6 +7,7 @@ import {
 	checkPublicTransactionSubmissionEndpoints,
 	checkSubmissionEndpoints,
 	endpointLabel,
+	flashbotsPrivateTransactionCompatibilityProfileAllowed,
 	readRpcChainId,
 	sendRawTransactionToRpc,
 	TRANSACTION_SUBMISSION_CAPABILITY_PROBE,
@@ -23,12 +24,8 @@ import {
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []
-const relayAuthenticationSignature = `0x${'22'.repeat(65)}` as const
-const relayAuthentication = {
-	address: '0x0000000000000000000000000000000000000001' as const,
-	signMessage: async () => relayAuthenticationSignature,
-}
-const validRelayAuthenticationHeader = `${relayAuthentication.address}:${relayAuthenticationSignature}`
+const RELAY_AUTHENTICATION_PRIVATE_KEY: Hex = `0x${'44'.repeat(32)}`
+const relayAuthentication = privateKeyToAccount(RELAY_AUTHENTICATION_PRIVATE_KEY)
 
 function invalidRelayAuthenticationResponse() {
 	return Response.json({ error: { code: -32_025, message: 'invalid flashbots signature' }, id: null, jsonrpc: '2.0' }, { status: 403 })
@@ -55,13 +52,20 @@ function rpc(handler: (method: string, params: readonly unknown[], request: Requ
 	return `http://127.0.0.1:${server.port.toString()}`
 }
 
+function relayAuthenticationHeaderIsValid(value: string | null, method: string, params: readonly unknown[]) {
+	if (value === null) return false
+	const [address, signature, extra] = value.split(':')
+	if (address === undefined || signature === undefined || extra !== undefined || !/^0x[0-9a-fA-F]{40}$/.test(address) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return false
+	return eip191Signer.verify(signature, keccak256(JSON.stringify({ id: 1, jsonrpc: '2.0', method, params })), address)
+}
+
 function privateTransactionRelayWithAuthenticationControls(responses: { invalidAuthentication?: () => Response; missingAuthentication?: () => Response } = {}) {
-	return rpc((method, _params, request) => {
+	return rpc((method, params, request) => {
 		if (method === 'eth_chainId') return '0x1'
 		if (method === 'eth_sendPrivateTransaction') {
 			const authenticationHeader = request.headers.get('x-flashbots-signature')
 			if (authenticationHeader === null) return responses.missingAuthentication?.() ?? Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }, { status: 401 })
-			if (authenticationHeader === validRelayAuthenticationHeader) return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			if (relayAuthenticationHeaderIsValid(authenticationHeader, method, params)) return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
 			return responses.invalidAuthentication?.() ?? invalidRelayAuthenticationResponse()
 		}
 		throw new Error(`Unexpected method: ${method}`)
@@ -259,7 +263,7 @@ describe('operator connectivity', () => {
 			...relayAuthentication,
 			signMessage: async (message: string | Uint8Array) => {
 				signedMessages.push(message)
-				return relayAuthenticationSignature
+				return await relayAuthentication.signMessage(message)
 			},
 		}
 		const relay = (supportsPrivateTransactions: boolean) =>
@@ -268,8 +272,7 @@ describe('operator connectivity', () => {
 				if (method === 'eth_sendPrivateTransaction') {
 					const authenticationHeader = request.headers.get('x-flashbots-signature')
 					if (authenticationHeader === null) return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' })
-					if (authenticationHeader !== validRelayAuthenticationHeader) return invalidRelayAuthenticationResponse()
-					expect(authenticationHeader).toBe(`${authentication.address}:${relayAuthenticationSignature}`)
+					if (!relayAuthenticationHeaderIsValid(authenticationHeader, method, params)) return invalidRelayAuthenticationResponse()
 					expect(params).toEqual([{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }])
 					return Response.json({
 						error: supportsPrivateTransactions ? { code: -32_602, message: 'failed to recover the signer' } : { code: -32_601, message: 'method not found' },
@@ -314,7 +317,7 @@ describe('operator connectivity', () => {
 		})
 
 		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('authentication signature validation')
-		expect(requestedAuthenticationHeaders).toEqual([expect.any(String), null, expect.any(String)])
+		expect(requestedAuthenticationHeaders).toEqual([expect.any(String), null, expect.any(String), expect.any(String)])
 	})
 
 	test('rejects a relay that only checks signature scalar shape before transaction parsing', async () => {
@@ -333,21 +336,46 @@ describe('operator connectivity', () => {
 		})
 
 		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, cryptographicAuthentication)).rejects.toThrow('authentication signature validation')
-		expect(requestedAuthenticationHeaders).toHaveLength(3)
+		expect(requestedAuthenticationHeaders).toHaveLength(4)
 		const configuredHeader = requestedAuthenticationHeaders[0]
-		const mismatchHeader = requestedAuthenticationHeaders[2]
-		if (configuredHeader === undefined || configuredHeader === null || mismatchHeader === undefined || mismatchHeader === null) throw new Error('Capability controls did not send relay authentication')
+		const validCanaryHeader = requestedAuthenticationHeaders[2]
+		const mismatchHeader = requestedAuthenticationHeaders[3]
+		if (configuredHeader === undefined || configuredHeader === null || validCanaryHeader === undefined || validCanaryHeader === null || mismatchHeader === undefined || mismatchHeader === null) throw new Error('Capability controls did not send relay authentication')
 		const [configuredClaim, configuredSignature] = configuredHeader.split(':')
+		const [validCanaryClaim, validCanarySignature] = validCanaryHeader.split(':')
 		const [mismatchClaim, mismatchSignature] = mismatchHeader.split(':')
-		if (configuredClaim === undefined || configuredSignature === undefined || mismatchClaim === undefined || mismatchSignature === undefined) throw new Error('Capability control sent malformed relay authentication')
+		if (configuredClaim === undefined || configuredSignature === undefined || validCanaryClaim === undefined || validCanarySignature === undefined || mismatchClaim === undefined || mismatchSignature === undefined) throw new Error('Capability control sent malformed relay authentication')
 		const capabilityBody = JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }] })
 		const signedMessage = keccak256(capabilityBody)
 		expect(eip191Signer.recoverPublicKey(configuredSignature, signedMessage).toLowerCase()).toBe(cryptographicAuthentication.address.toLowerCase())
 		expect(configuredClaim.toLowerCase()).toBe(cryptographicAuthentication.address.toLowerCase())
+		expect(eip191Signer.recoverPublicKey(validCanarySignature, signedMessage).toLowerCase()).toBe(validCanaryClaim.toLowerCase())
+		expect(validCanaryClaim.toLowerCase()).not.toBe(cryptographicAuthentication.address.toLowerCase())
+		expect(mismatchClaim.toLowerCase()).toBe(validCanaryClaim.toLowerCase())
 		expect(eip191Signer.recoverPublicKey(mismatchSignature, signedMessage).toLowerCase()).not.toBe(mismatchClaim.toLowerCase())
 		expect(mismatchClaim.toLowerCase()).not.toBe(cryptographicAuthentication.address.toLowerCase())
 		expect(eip191Signer.recoverPublicKey(mismatchSignature, signedMessage).toLowerCase()).not.toBe(cryptographicAuthentication.address.toLowerCase())
 		expect(mismatchHeader.endsWith(`0x${'00'.repeat(65)}`)).toBeFalse()
+	})
+
+	test('rejects a relay that allowlists the configured claim without validating its signature', async () => {
+		const requestedAuthenticationHeaders: Array<string | null> = []
+		const endpoint = rpc((method, _params, request) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') {
+				const header = request.headers.get('x-flashbots-signature')
+				requestedAuthenticationHeaders.push(header)
+				if (header === null) return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }, { status: 401 })
+				return header.split(':')[0]?.toLowerCase() === relayAuthentication.address.toLowerCase() ? Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' }) : invalidRelayAuthenticationResponse()
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('Valid private relay canary authentication control')
+		expect(requestedAuthenticationHeaders).toHaveLength(3)
+		const validCanaryHeader = requestedAuthenticationHeaders[2]
+		if (validCanaryHeader === undefined || validCanaryHeader === null) throw new Error('Valid canary control did not send relay authentication')
+		expect(validCanaryHeader.startsWith(`${relayAuthentication.address}:`)).toBeFalse()
 	})
 
 	test.each(['invalid signature', 'x-flashbots-signature is not required', 'authentication header is optional', 'missing signature'])('rejects ambiguous or negative unauthenticated target evidence: %s', async unauthenticatedMessage => {
@@ -430,6 +458,16 @@ describe('operator connectivity', () => {
 		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow()
 	})
 
+	test('restricts the Flashbots compatibility profile to the official relay for each chain or loopback tests', () => {
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 1)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 11_155_111)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net/path', 11_155_111)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 1)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 11_155_111)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://untrusted-private-relay.example', 11_155_111)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('http://127.0.0.1:8545', 1)).toBeTrue()
+	})
+
 	test('accepts the strict authenticated control sequence used by the official Sepolia Flashbots relay', async () => {
 		const unsupportedMethod = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
 		const cancellationHash = keccak256(TRANSACTION_SUBMISSION_CAPABILITY_PROBE)
@@ -438,7 +476,7 @@ describe('operator connectivity', () => {
 			...relayAuthentication,
 			signMessage: async (message: string | Uint8Array) => {
 				signedMessages.push(message)
-				return relayAuthenticationSignature
+				return await relayAuthentication.signMessage(message)
 			},
 		}
 		const requestedMethods: string[] = []
@@ -446,18 +484,21 @@ describe('operator connectivity', () => {
 			requestedMethods.push(method)
 			if (method === 'eth_chainId') return '0x1'
 			if (method === 'eth_sendPrivateTransaction') {
-				if (request.headers.get('x-flashbots-signature') !== validRelayAuthenticationHeader) return invalidRelayAuthenticationResponse()
+				if (!relayAuthenticationHeaderIsValid(request.headers.get('x-flashbots-signature'), method, params)) return invalidRelayAuthenticationResponse()
 				expect(params).toEqual([{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }])
 				return Response.json({ error: { code: -32_600, data: null, message: 'incorrect request' }, id: 1, jsonrpc: '2.0' })
 			}
 			if (method === unsupportedMethod) {
-				expect(request.headers.get('x-flashbots-signature')).not.toBeNull()
+				expect(relayAuthenticationHeaderIsValid(request.headers.get('x-flashbots-signature'), method, params)).toBeTrue()
 				expect(params).toEqual([])
 				return Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }, { status: 403 })
 			}
 			if (method === 'eth_cancelPrivateTransaction') {
 				expect(params).toEqual([{ txHash: cancellationHash }])
-				return request.headers.get('x-flashbots-signature') === null ? Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' })
+				const authenticationHeader = request.headers.get('x-flashbots-signature')
+				if (authenticationHeader === null) return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
+				expect(relayAuthenticationHeaderIsValid(authenticationHeader, method, params)).toBeTrue()
+				return Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' })
 			}
 			throw new Error(`Unexpected method: ${method}`)
 		})
@@ -479,15 +520,18 @@ describe('operator connectivity', () => {
 		const relay = rpc((method, params, request) => {
 			if (method === 'eth_chainId') return '0x1'
 			if (method === 'eth_sendPrivateTransaction') {
-				if (request.headers.get('x-flashbots-signature') !== validRelayAuthenticationHeader) return invalidRelayAuthenticationResponse()
+				if (!relayAuthenticationHeaderIsValid(request.headers.get('x-flashbots-signature'), method, params)) return invalidRelayAuthenticationResponse()
 				return Response.json({ error: { code: -32_600, data: null, message: 'incorrect request' }, id: 1, jsonrpc: '2.0' })
 			}
 			if (method === unsupportedMethod) {
+				expect(relayAuthenticationHeaderIsValid(request.headers.get('x-flashbots-signature'), method, params)).toBeTrue()
 				return brokenControl === 'unsupported-method' ? Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }, { status: 403 })
 			}
 			if (method === 'eth_cancelPrivateTransaction') {
 				expect(params).toEqual([{ txHash: cancellationHash }])
-				if (request.headers.get('x-flashbots-signature') !== null) {
+				const authenticationHeader = request.headers.get('x-flashbots-signature')
+				if (authenticationHeader !== null) {
+					expect(relayAuthenticationHeaderIsValid(authenticationHeader, method, params)).toBeTrue()
 					return brokenControl === 'authenticated-cancellation' ? Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' }, { status: 201 }) : Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' })
 				}
 				return brokenControl === 'unauthenticated-cancellation' ? Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' }, { status: 403 }) : Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
@@ -504,7 +548,7 @@ describe('operator connectivity', () => {
 			if (method === 'eth_sendPrivateTransaction') {
 				const authenticationHeader = request.headers.get('x-flashbots-signature')
 				if (authenticationHeader === null) return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' })
-				return authenticationHeader === validRelayAuthenticationHeader ? Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' }) : invalidRelayAuthenticationResponse()
+				return relayAuthenticationHeaderIsValid(authenticationHeader, method, _params) ? Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' }) : invalidRelayAuthenticationResponse()
 			}
 			throw new Error(`Unexpected method: ${method}`)
 		})
@@ -524,7 +568,7 @@ describe('operator connectivity', () => {
 				if (method === 'eth_sendPrivateTransaction') {
 					const authenticationHeader = request.headers.get('x-flashbots-signature')
 					if (authenticationHeader === null) return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' })
-					return authenticationHeader === validRelayAuthenticationHeader ? Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' }) : invalidRelayAuthenticationResponse()
+					return relayAuthenticationHeaderIsValid(authenticationHeader, method, _params) ? Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' }) : invalidRelayAuthenticationResponse()
 				}
 				throw new Error(`Unexpected method: ${method}`)
 			})

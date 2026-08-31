@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '../support/bot-shared.ts'
-import { coordinatorAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
+import { coordinatorAbi, erc20Abi, escalationGameAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
@@ -622,6 +622,28 @@ describe('chaos operation catalog', () => {
 				vault: snapshot.wallet.address,
 			},
 		])
+	})
+
+	test('plans a distinct exact wallet-funded escalation deposit with canonical evidence', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Fixture pool missing')
+		const plan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.deposit-wallet-rep')
+		if (plan === undefined) throw new Error('Direct escalation deposit fixture is unavailable')
+		const approval = plan.steps[0]
+		const action = plan.steps[1]
+		const outcome = plan.metadata['outcome']
+		if (approval === undefined || action === undefined || typeof outcome !== 'number') throw new Error('Direct escalation workflow is incomplete')
+
+		expect(decodeFunctionData({ abi: erc20Abi, data: approval.data })).toMatchObject({ args: [pool.escalationGame, 1000n], functionName: 'approve' })
+		expect(decodeFunctionData({ abi: escalationGameAbi, data: action.data })).toMatchObject({ args: [BigInt(outcome), 1000n], functionName: 'depositRepOnOutcome' })
+		expect(action.walletAssetDebits).toEqual([{ amount: '1000', asset: pool.repToken, category: 'rep', kind: 'erc20' }])
+		expect(action.preflightCalls).toEqual([expect.objectContaining({ caller: snapshot.wallet.address, expectedResult: '0x', to: pool.escalationGame })])
+		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.escalationGame, equals: '1000', field: 'attoRepAmount', indexed: expect.objectContaining({ depositor: snapshot.wallet.address }), signature: 'DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)' }))
+		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.escalationGame, equals: '1000', field: 'cumulativeRepAmountAttoRep', signature: 'LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)' }))
+		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.repToken, equals: '1000', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.escalationGame }, signature: 'Transfer(address,address,uint256)' }))
+		expect(plan.maximumCleanupTransactionCount).toBe(1)
+		expect(plan.lastValidBlockNumber).toBe('101')
 	})
 
 	test('builds one private next-block carry proof per lifecycle plan with exact Invalid-outcome evidence', () => {

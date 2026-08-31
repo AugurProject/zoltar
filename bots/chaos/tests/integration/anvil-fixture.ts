@@ -1,4 +1,5 @@
-import { encodeDeployData, getAddress, privateKeyToAccount, TRANSACTION_SUBMISSION_CAPABILITY_PROBE, type Address, type Hex } from '../support/bot-shared.ts'
+import { eip191Signer } from 'micro-eth-signer'
+import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, TRANSACTION_SUBMISSION_CAPABILITY_PROBE, type Address, type Hex } from '../support/bot-shared.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
@@ -61,14 +62,14 @@ function privateTransaction(value: unknown): Hex {
 	return value.tx
 }
 
-function relayAuthenticationMatches(value: string | null, expectedSigner: Address) {
+function relayAuthenticationMatches(value: string | null, requestBody: string) {
 	if (value === null) return false
 	const [address, signature, extra] = value.split(':')
 	if (address === undefined || signature === undefined || extra !== undefined || !/^0x[0-9a-fA-F]{40}$/.test(address) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return false
-	return getAddress(address).toLowerCase() === expectedSigner.toLowerCase()
+	return eip191Signer.verify(signature, keccak256(requestBody), address)
 }
 
-function createPrivateRelay(node: AnvilNode, expectedSigner: Address): ChaosPrivateRelay {
+function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
 	const rawTransactions: Hex[] = []
 	const server = Bun.serve({
 		port: 0,
@@ -82,7 +83,7 @@ function createPrivateRelay(node: AnvilNode, expectedSigner: Address): ChaosPriv
 			if (relayAuthentication === null) {
 				return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }, { status: 401 })
 			}
-			if (!relayAuthenticationMatches(relayAuthentication, expectedSigner)) {
+			if (!relayAuthenticationMatches(relayAuthentication, requestText)) {
 				return Response.json({ error: { code: -32_600, message: 'Invalid relay authentication' }, id: body.id, jsonrpc: '2.0' }, { status: 401 })
 			}
 			if (body.method !== 'eth_sendPrivateTransaction' || body.params.length !== 1) {
@@ -281,7 +282,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,
-			createPrivateRelay: () => createPrivateRelay(node, signer),
+			createPrivateRelay: () => createPrivateRelay(node),
 			createRpcProxy: options => createRpcProxy(node, options),
 			dispose: node.dispose,
 			infra,
