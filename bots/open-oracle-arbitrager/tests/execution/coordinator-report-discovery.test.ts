@@ -175,7 +175,7 @@ describe('configured coordinator report discovery', () => {
 		expect(reports.map(report => report.helper.reportId)).toEqual([7n])
 		expect(methods).not.toContain('eth_getLogs')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n), client(8n)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('RPC disagreement')
-		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [] }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending coordinator report snapshot block 100 is missing its canonical hash before the read')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [] }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: RPC returned a mined block without a hash')
 		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, true), client(7n, false, true)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('changed during pending coordinator report snapshot')
 		await expect(replacementDisputeAmountsWithQuorum([client(7n, false, true), client(7n, false, true)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'] }, 7n, 2n, 100n)).rejects.toThrow('changed during replacement dispute snapshot')
 	})
