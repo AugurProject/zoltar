@@ -161,7 +161,7 @@ docker compose start chaos
 
 After loading or remembering a signer, make changes only through the authenticated dashboard. For a saved-signer live preflight, pause and stop the service, run the same one-off `doctor` command, then restart paused and complete step 6's readiness checks.
 
-Any manually created container must mount `zoltar-chaos-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. The [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) defines container ownership, launcher, backup, and fencing details.
+Any manually created container must mount `zoltar-chaos-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. This section owns the container-specific ownership and fencing guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
 
 ## Coverage and dashboard fixture
 

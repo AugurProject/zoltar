@@ -1024,6 +1024,10 @@ browserTest(
 				await expectVisibleIdentifiers([{ type: 'transaction signer address', value: walletAddress }], viewport.width === 390 ? 44 : 32)
 				expect(
 					await cdp.evaluate(`({
+						catalogLink: {
+							href: document.querySelector('#selectable-operation-catalog-link')?.getAttribute('href'),
+							text: document.querySelector('#selectable-operation-catalog-link')?.textContent,
+						},
 						executeDescription: document.querySelector('#execute')?.getAttribute('aria-describedby'),
 						executeHelp: document.querySelector('#execute-help')?.textContent,
 						lede: document.querySelector('.settings-intro .lede')?.textContent,
@@ -1032,6 +1036,7 @@ browserTest(
 						pauseNoteVisible: document.querySelector('#settings-pause-note')?.classList.contains('hidden') === false,
 					})`),
 				).toEqual({
+					catalogLink: { href: '/catalog', text: 'Operation catalog' },
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',

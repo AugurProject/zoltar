@@ -124,11 +124,11 @@ describe('chaos dashboard server', () => {
 				privateKey: '__redacted__',
 				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
 				scheduler: { maximumDelaySeconds: 3_600 },
-				strategy: { maximumGasCostEth: '0.02', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
 			},
 		}
 		const state = {
-			inventory: { eth: '70000000000000000', rep: [{ balance: '10000000000000000000' }] },
+			inventory: { eth: '100000000000000000', rep: [{ balance: '15000000000000000000' }] },
 			lastScanAt: '2026-08-31T11:59:00.000Z',
 			obligations: [],
 			paused: false,
@@ -164,6 +164,49 @@ describe('chaos dashboard server', () => {
 			now,
 		)
 		expect(blocked).toMatchObject({ blockers: expect.arrayContaining(['paused', 'recovery']), failedObligationCount: 1, pendingTransactionCount: 1, ready: false, safetyPaused: true })
+	})
+
+	test('requires full live-operation principal and reserve funding at exact boundaries', () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const configuration = {
+			hasSigner: true,
+			settings: {
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://one.example', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				networkConfigured: true,
+				paused: false,
+				privateKey: '__redacted__',
+				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+			},
+		}
+		const exactEth = '100000000000000000'
+		const exactRep = '15000000000000000000'
+		const state = {
+			inventory: { eth: exactEth, rep: [{ balance: exactRep }] },
+			lastScanAt: '2026-08-31T11:59:00.000Z',
+			obligations: [],
+			paused: false,
+			pendingTransactions: [],
+			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			safetyPaused: false,
+			status: 'running',
+			topology: { complete: true },
+			workflows: [],
+		}
+
+		expect(publicChaosReadiness(state, configuration, now)).toMatchObject({ blockers: [], checks: { inventory: { ready: true } }, ready: true })
+		const underfundedDetail = 'Live inventory does not cover the ETH reserve, maximum ETH principal, maximum gas budget, REP reserve, and maximum REP principal'
+		expect(publicChaosReadiness({ ...state, inventory: { ...state.inventory, eth: (BigInt(exactEth) - 1n).toString() } }, configuration, now)).toMatchObject({
+			blockers: expect.arrayContaining(['inventory']),
+			checks: { inventory: { detail: underfundedDetail, ready: false } },
+			ready: false,
+		})
+		expect(publicChaosReadiness({ ...state, inventory: { ...state.inventory, rep: [{ balance: (BigInt(exactRep) - 1n).toString() }] } }, configuration, now)).toMatchObject({
+			blockers: expect.arrayContaining(['inventory']),
+			checks: { inventory: { detail: underfundedDetail, ready: false } },
+			ready: false,
+		})
 	})
 
 	test('fails readiness on the same lifecycle states that prevent scheduled novelty', () => {

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
+import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
 export type ChaosDashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
@@ -624,14 +625,20 @@ function inventoryReadyForLiveExecution(state: Record<string, unknown>, settings
 	const strategy = record(settings['strategy'])
 	if (inventory === undefined || strategy === undefined) return false
 	const eth = typeof inventory['eth'] === 'string' && /^\d+$/.test(inventory['eth']) ? BigInt(inventory['eth']) : undefined
-	const minimumEth = decimalAtto(strategy['minimumEthReserve'])
-	const maximumGas = decimalAtto(strategy['maximumGasCostEth'])
-	const minimumRep = decimalAtto(strategy['minimumRepReserve'])
-	if (eth === undefined || minimumEth === undefined || maximumGas === undefined || minimumRep === undefined || eth < minimumEth + maximumGas) return false
+	const maximumEthPerOperationAttoEth = decimalAtto(strategy['maximumEthPerOperation'])
+	const maximumGasCostAttoEth = decimalAtto(strategy['maximumGasCostEth'])
+	const maximumRepPerOperationAttoRep = decimalAtto(strategy['maximumRepPerOperation'])
+	const minimumEthReserveAttoEth = decimalAtto(strategy['minimumEthReserve'])
+	const minimumRepReserveAttoRep = decimalAtto(strategy['minimumRepReserve'])
+	if (eth === undefined || maximumEthPerOperationAttoEth === undefined || maximumGasCostAttoEth === undefined || maximumRepPerOperationAttoRep === undefined || minimumEthReserveAttoEth === undefined || minimumRepReserveAttoRep === undefined) {
+		return false
+	}
+	const required = requiredLiveInventory({ maximumEthPerOperationAttoEth, maximumGasCostAttoEth, maximumRepPerOperationAttoRep, minimumEthReserveAttoEth, minimumRepReserveAttoRep })
+	if (eth < required.ethAttoEth) return false
 	if (!Array.isArray(inventory['rep'])) return false
 	return inventory['rep'].some(candidate => {
 		const balance = record(candidate)?.['balance']
-		return typeof balance === 'string' && /^\d+$/.test(balance) && BigInt(balance) >= minimumRep
+		return typeof balance === 'string' && /^\d+$/.test(balance) && BigInt(balance) >= required.repAttoRep
 	})
 }
 
@@ -697,7 +704,7 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	if (!scanReady) scanDetail = lastScanAt === undefined ? 'No complete canonical scan is available' : 'Canonical scan is incomplete or stale'
 	const checks: Record<string, ChaosReadinessCheck> = {
 		configuration: readinessCheck(configured, configured ? undefined : 'Network deployment and connectivity are not configured'),
-		inventory: readinessCheck(inventoryReady, inventoryReady ? undefined : 'Live inventory does not cover configured ETH/gas and REP reserves'),
+		inventory: readinessCheck(inventoryReady, inventoryReady ? undefined : 'Live inventory does not cover the ETH reserve, maximum ETH principal, maximum gas budget, REP reserve, and maximum REP principal'),
 		paused: readinessCheck(!paused, pauseDetail),
 		recovery: readinessCheck(recoveryReady, recoveryReady ? undefined : 'A transaction, workflow, lifecycle obligation, or lifecycle-presence guard prevents scheduled novelty'),
 		rpc: readinessCheck(rpcReady, rpcReady ? undefined : 'Read RPC quorum is not currently healthy'),
