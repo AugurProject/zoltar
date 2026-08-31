@@ -637,8 +637,9 @@ test('rejects every chain-specific mutation until network connectivity is config
 	expect(chainSpecificMutations).toBe(1)
 })
 
-test('supports a container bind while retaining loopback request authority', async () => {
+test('supports loopback and configured network authorities for a container bind', async () => {
 	const password = 'correct horse battery staple'
+	const publicAuthority = 'dashboard.example'
 	expect(() =>
 		startDashboardServer(0, {
 			getSnapshot: () => {
@@ -668,6 +669,7 @@ test('supports a container bind while retaining loopback request authority', asy
 		hostname: '0.0.0.0',
 		isNetworkConfigured: () => true,
 		password,
+		publicAuthority,
 		setPaused: () => undefined,
 		updateConnectivity: () => {
 			throw new Error('Not needed')
@@ -689,6 +691,21 @@ test('supports a container bind while retaining loopback request authority', asy
 	const authorization = `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
 	const response = await fetch(origin, { headers: { authorization } })
 	expect(response.status).toBe(200)
+	const publicOrigin = `http://${publicAuthority}`
+	const publicResponse = await fetch(origin, { headers: { authorization, host: publicAuthority } })
+	expect(publicResponse.status).toBe(200)
+	const publicMutation = await fetch(`${origin}/api/paused`, {
+		body: JSON.stringify({ paused: true }),
+		headers: { authorization, 'content-type': 'application/json', host: publicAuthority, origin: publicOrigin },
+		method: 'PUT',
+	})
+	expect(publicMutation.status).toBe(200)
+	const mixedAuthorityMutation = await fetch(`${origin}/api/paused`, {
+		body: JSON.stringify({ paused: false }),
+		headers: { authorization, 'content-type': 'application/json', origin: publicOrigin },
+		method: 'PUT',
+	})
+	expect(mixedAuthorityMutation.status).toBe(403)
 })
 
 test('allows passwordless access through an explicitly loopback-published container port', async () => {

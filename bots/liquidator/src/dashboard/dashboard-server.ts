@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 
 export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
@@ -8,6 +8,7 @@ export type DashboardController = {
 	isNetworkConfigured: () => boolean | Promise<boolean>
 	loopbackPublished?: boolean
 	password?: string | undefined
+	publicAuthority?: string | undefined
 	setApprovedUniverses: (value: unknown) => unknown | Promise<unknown>
 	setMarketConfiguration?: (value: unknown) => unknown | Promise<unknown>
 	setNetworkConnectivity?: (value: unknown) => unknown | Promise<unknown>
@@ -202,7 +203,7 @@ function publicError(error: unknown, status: number, operation: string, fallback
 }
 
 export function startDashboardServer(port: number, controller: DashboardController) {
-	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished)
+	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished, controller.publicAuthority)
 	const directory = import.meta.dir
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const dashboardPages = new Set(['overview', 'pools', 'markets', 'operations', 'settings'])
@@ -213,12 +214,12 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		return source.replace('<body>', `<body data-page="${page}">`)
 	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
-	let authority = ''
+	let acceptedAuthorities: ReadonlySet<string> = new Set()
 	const server = Bun.serve({
 		hostname: controller.hostname,
 		port,
 		async fetch(request) {
-			if (request.headers.get('host') !== authority) {
+			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) {
 				return json({ error: 'Request authority is not accepted' }, 403)
 			}
 			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: headers('text/plain; charset=utf-8') })
@@ -259,8 +260,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return publicError(error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
 				}
 			}
-			const origin = request.headers.get('origin')
-			if (request.method === 'PUT' && origin !== `http://${authority}`) {
+			if (request.method === 'PUT' && !dashboardRequestIsSameOrigin(request, acceptedAuthorities)) {
 				return json({ error: 'Cross-origin requests are not accepted' }, 403)
 			}
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
@@ -294,6 +294,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		},
 	})
 	if (server.port === undefined) throw new Error('Dashboard server did not expose its listening port')
-	authority = `127.0.0.1:${server.port.toString()}`
+	acceptedAuthorities = dashboardAuthorities(server.port, controller.publicAuthority)
 	return server
 }

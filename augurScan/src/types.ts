@@ -21,6 +21,7 @@ export type ContractMetadata = {
 	readonly provenance: string
 	readonly discoveryBlock?: bigint
 	readonly discoveryTxHash?: Hash
+	readonly configuredDeploymentBlock?: bigint
 	readonly deploymentBlock?: bigint
 	readonly deploymentTimestamp?: Date
 	readonly deploymentBlockExact?: boolean
@@ -69,6 +70,7 @@ export type StoredLog = {
 	readonly transactionIndex: number
 	readonly logIndex: number
 	readonly address: Address
+	readonly contractKind?: string
 	readonly topics: readonly Hex[]
 	readonly data: Hex
 	readonly decoded: DecodedRecord

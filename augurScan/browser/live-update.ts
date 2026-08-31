@@ -3,6 +3,8 @@ export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | '
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
 export type RefreshOperation<T> = () => T | Promise<T>
 
+export const operationsForkChildCount = (formattedCount: string, value: unknown): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
+
 export interface RefreshGate {
 	runBackground<T>(operation: RefreshOperation<T>): Promise<T>
 	runForeground<T>(operation: RefreshOperation<T>): Promise<T>
@@ -39,6 +41,27 @@ export interface TransactionDialogSnapshot {
 	scrollTop?: number
 }
 
+export type HistoryInvalidationReason = 'chain-reorg' | 'manifest-reset' | 'start-boundary-advanced' | 'abi-redecode' | 'projection-rebuild'
+
+export const isHistoryInvalidationReason = (value: unknown): value is HistoryInvalidationReason =>
+	value === 'chain-reorg' || value === 'manifest-reset' || value === 'start-boundary-advanced' || value === 'abi-redecode' || value === 'projection-rebuild'
+
+export const historyInvalidationNotice = (reason: HistoryInvalidationReason, depth: string) => {
+	const blocks = `${depth} indexed block${depth === '1' ? '' : 's'}`
+	switch (reason) {
+		case 'chain-reorg':
+			return { title: 'Chain reorganization detected', detail: `${depth} block${depth === '1' ? '' : 's'} replaced; views are refreshing.` }
+		case 'manifest-reset':
+			return { title: 'Manifest history reset', detail: `${blocks} invalidated for manifest replay; views are refreshing.` }
+		case 'start-boundary-advanced':
+			return { title: 'History coverage reset', detail: `${blocks} invalidated after the retrievable history boundary advanced; views are refreshing.` }
+		case 'abi-redecode':
+			return { title: 'Historical ABI re-decode', detail: `${blocks} invalidated so historical evidence can be decoded again; views are refreshing.` }
+		case 'projection-rebuild':
+			return { title: 'Historical projection rebuild', detail: `${blocks} invalidated so historical views can be rebuilt; views are refreshing.` }
+	}
+}
+
 export const classifyLiveRecords = (previous: ReadonlyMap<string, string>, current: readonly LiveRecord[]): ClassifiedLiveRecord[] =>
 	current.map((record) => ({
 		...record,
@@ -55,13 +78,298 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
-export const operationsCatalogRecordKey = (section: 'auctions' | 'escalations' | 'reports', record: Readonly<Record<string, unknown>>): string => {
+export const operationsCatalogRecordKey = (
+	section: 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading',
+	record: Readonly<Record<string, unknown>>,
+): string => {
 	if (section === 'reports') return `${String(record['open_oracle_address'] ?? '')}:${String(record['report_id'] ?? '')}`
+	if (section === 'trading') return String(record['pair_address'] ?? '')
+	if (section === 'integrity') return String(record['id'] ?? '')
+	if (section === 'timeline')
+		return `${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['entity_type'] ?? '')}:${String(record['entity_identity'] ?? '')}`
+	if (section === 'forks') return String(record['universe_identity'] ?? '')
 	return String(record[section === 'auctions' ? 'auction_address' : 'game_address'] ?? '')
 }
 
 export const operationsDetailRecordKey = (record: Readonly<Record<string, unknown>>): string =>
 	`${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['event_name'] ?? record['semantic_event_kind'] ?? '')}`
+
+export const timelineOccurrenceFields = (record: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [label: string, value: unknown]> => [
+	['Block', record['block_number']],
+	['Block hash', record['block_hash']],
+	['Transaction hash', record['tx_hash']],
+	['Log index', record['log_index']],
+	['Entity type', record['entity_type']],
+	['Entity identity', record['entity_identity']],
+]
+
+export const demoTimelineEvidenceStatus = (canonical: boolean, invalidationReason?: string): string => {
+	if (canonical) return 'canonical'
+	switch (invalidationReason) {
+		case 'chain-reorg':
+			return 'chain-orphaned'
+		case 'manifest-reset':
+			return 'manifest-superseded'
+		case 'start-boundary-advanced':
+			return 'coverage-reset'
+		case 'abi-redecode':
+			return 'decode-superseded'
+		case 'projection-rebuild':
+			return 'projection-superseded'
+		default:
+			return 'noncanonical-unknown'
+	}
+}
+
+const enumValueLabel = (value: unknown, fallback: string): string => {
+	if (typeof value !== 'string' || value.trim() === '') return fallback
+	const words = value.trim().split('-').filter(Boolean)
+	const [first, ...rest] = words
+	if (first === undefined) return fallback
+	return [`${first.slice(0, 1).toUpperCase()}${first.slice(1)}`, ...rest].join(' ')
+}
+
+export const timelineEntityTypeLabel = (value: unknown): string => {
+	switch (value) {
+		case 'question':
+			return 'Question'
+		case 'deployment':
+			return 'Deployment'
+		case 'reputation-token':
+			return 'Reputation token'
+		case 'share-token':
+			return 'Share token'
+		case 'open-oracle-report':
+			return 'OpenOracle report'
+		case 'price-coordinator':
+			return 'Price coordinator'
+		case 'escalation':
+			return 'Escalation game'
+		case 'auction':
+			return 'Truth auction'
+		case 'pool':
+			return 'Security pool'
+		case 'vault':
+			return 'Vault'
+		case 'liquidation-approval':
+			return 'Liquidation approval'
+		case 'amm':
+			return 'AMM market'
+		case 'fork':
+			return 'Universe fork'
+		case 'reporter':
+			return 'Reporter'
+		default:
+			return enumValueLabel(value, 'Entity')
+	}
+}
+
+export const evidenceStatusLabel = (value: unknown): string => {
+	switch (value) {
+		case 'canonical':
+			return 'Canonical evidence'
+		case 'chain-orphaned':
+			return 'Replaced-chain evidence'
+		case 'manifest-superseded':
+			return 'Superseded after manifest reset'
+		case 'coverage-reset':
+			return 'Outside current scanner coverage'
+		case 'decode-superseded':
+			return 'Superseded after ABI re-decode'
+		case 'projection-superseded':
+			return 'Superseded after projection rebuild'
+		case 'noncanonical-unknown':
+			return 'Noncanonical evidence'
+		default:
+			return enumValueLabel(value, 'Evidence status unavailable')
+	}
+}
+
+export const historyInvalidationReasonLabel = (value: unknown): string => {
+	switch (value) {
+		case 'chain-reorg':
+			return 'Chain reorganization'
+		case 'manifest-reset':
+			return 'Manifest reset'
+		case 'start-boundary-advanced':
+			return 'Scanner coverage boundary advanced'
+		case 'abi-redecode':
+			return 'ABI re-decode'
+		case 'projection-rebuild':
+			return 'Projection rebuild'
+		default:
+			return enumValueLabel(value, 'Invalidation reason unavailable')
+	}
+}
+
+const invalidationOccurrenceLabels: Readonly<Record<string, string>> = {
+	block: 'Affected blocks',
+	transaction: 'Affected transactions',
+	log: 'Affected logs',
+	'entity-state': 'Affected state observations',
+	'address-balance': 'Affected balance observations',
+	'token-metadata': 'Affected token metadata observations',
+}
+
+export const historyInvalidationEvidencePresentation = (causes: unknown, occurrenceCounts: unknown) => {
+	const causeCodes = Array.isArray(causes) ? causes.filter((cause): cause is string => typeof cause === 'string') : []
+	const countsRecord = typeof occurrenceCounts === 'object' && occurrenceCounts !== null && !Array.isArray(occurrenceCounts) ? occurrenceCounts : {}
+	const occurrenceFields: Array<readonly [label: string, value: string]> = []
+	let occurrenceTotal = 0n
+	for (const [kind, count] of Object.entries(countsRecord)) {
+		if (typeof count !== 'string' || !/^\d+$/.test(count)) continue
+		occurrenceTotal += BigInt(count)
+		occurrenceFields.push([invalidationOccurrenceLabels[kind] ?? enumValueLabel(kind, 'Affected occurrences'), count])
+	}
+	occurrenceFields.sort(([left], [right]) => left.localeCompare(right))
+	return {
+		causeCodes,
+		causeLabel: causeCodes.length === 0 ? 'Cause set not recorded' : causeCodes.map(historyInvalidationReasonLabel).join(' + '),
+		occurrenceTotal: occurrenceTotal.toString(),
+		occurrenceFields,
+	}
+}
+
+const operationsInteger = (value: unknown): string => {
+	const serialized = typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? String(value) : ''
+	return /^-?\d+$/.test(serialized) ? BigInt(serialized).toLocaleString('en-US') : 'Unavailable'
+}
+
+export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>, liveConnected: boolean): string => {
+	if (asOf['historical'] === true || asOf['phase'] === 'historical')
+		return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current indexed head #${operationsInteger(
+			asOf['indexedHead'],
+		)} · ${operationsInteger(asOf['historyDepthBlocks'])} blocks earlier · fixed point-in-time evidence`
+	return `As of indexed block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${
+		liveConnected ? 'live updates connected' : 'live updates reconnecting'
+	}`
+}
+
+type OperationsDetailKind = 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading' | 'vault'
+
+const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string>> = {
+	auction: '/operations/auctions',
+	escalation: '/operations/escalations',
+	fork: '/operations/forks',
+	pool: '/operations/risk',
+	report: '/operations/reports',
+	trading: '/operations/trading',
+	vault: '/operations/risk',
+}
+
+export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: Readonly<Record<string, unknown>>, liveConnected: boolean) => {
+	const catalogPath = operationsDetailCatalogPaths[kind]
+	return {
+		backLabel: '← Back to catalog',
+		catalogPath,
+		freshness: operationsRouteFreshness(asOf, liveConnected),
+		riskPanelTitle: asOf['historical'] === true || asOf['phase'] === 'historical' ? 'Risk state at snapshot' : 'Current risk state',
+	}
+}
+
+const poolProtocolStateLabel = (value: unknown): string => {
+	switch (String(value).toLowerCase()) {
+		case '0':
+			return 'Operational'
+		case '1':
+			return 'Pool forked'
+		case '2':
+			return 'Fork migration'
+		case '3':
+			return 'Fork truth auction'
+		case 'bad-debt':
+			return 'Bad debt'
+		case 'unavailable':
+			return 'Unavailable'
+		default:
+			return 'Unrecognized pool state'
+	}
+}
+
+const vaultProtocolStateLabel = (value: unknown): string => {
+	switch (String(value).toLowerCase()) {
+		case 'healthy':
+			return 'Healthy'
+		case 'liquidatable':
+			return 'Liquidatable'
+		case 'bad-debt':
+			return 'Bad debt'
+		case 'unavailable':
+			return 'Unavailable'
+		default:
+			return 'Unrecognized vault state'
+	}
+}
+
+export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: unknown, scannerSeverity: unknown) => {
+	const severity = String(scannerSeverity).toLowerCase()
+	switch (severity) {
+		case 'healthy':
+			return {
+				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
+				scannerAssessment: 'Healthy',
+				scannerTone: 'healthy',
+			}
+		case 'warning':
+			return {
+				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
+				scannerAssessment: 'Warning',
+				scannerTone: 'warning',
+			}
+		case 'critical':
+			return {
+				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
+				scannerAssessment: 'Critical',
+				scannerTone: 'critical',
+			}
+		case 'unavailable':
+			return {
+				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
+				scannerAssessment: 'Unavailable',
+				scannerTone: 'unavailable',
+			}
+		default:
+			return {
+				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
+				scannerAssessment: 'Unrecognized assessment',
+				scannerTone: 'unavailable',
+			}
+	}
+}
+
+export const operationsDetailSummaryPresentation = (
+	kind: OperationsDetailKind,
+	state: {
+		readonly currentEvent?: unknown
+		readonly lifecycleState?: unknown
+		readonly protocolState?: unknown
+		readonly scannerSeverity?: unknown
+		readonly snapshotReadStatus?: unknown
+	},
+): { readonly label: string; readonly value: string } => {
+	if (kind === 'pool' || kind === 'vault')
+		return {
+			label: 'Protocol state',
+			value: operationsRiskPresentation(kind, state.protocolState, state.scannerSeverity).protocolState,
+		}
+	if (kind === 'report') {
+		const value = state.lifecycleState ?? state.currentEvent
+		return { label: 'Report lifecycle', value: value === undefined || value === null || value === '' ? 'Event-derived' : String(value) }
+	}
+	const readStatus = state.snapshotReadStatus
+	return {
+		label: 'Evidence state',
+		value:
+			readStatus === 'success'
+				? 'Current tagged read available'
+				: readStatus === undefined || readStatus === null || readStatus === ''
+					? 'Event-derived'
+					: `Tagged read ${String(readStatus)}`,
+	}
+}
+
+export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean =>
+	kind === 'pool' || kind === 'vault' ? itemCount > 0 || hasMore || focusedContinuation : true
 
 const approvalFieldDefinitions = [
 	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'attoETH'],
@@ -157,6 +465,103 @@ export const collectCanonicalPages = async <T, Cursor = string>(
 	return { items: targetCount > 0 ? items.slice(0, targetCount) : items, nextCursor: cursor }
 }
 
+export const collectCursorCollections = async <T>(
+	fetchPage: (cursor?: string) => Promise<{
+		readonly collections: Readonly<Record<string, readonly T[]>>
+		readonly offset: number
+		readonly nextCursor?: string
+	}>,
+	collectionKeys: readonly string[],
+	throughOffset: number,
+): Promise<{ readonly collections: Readonly<Record<string, readonly T[]>>; readonly loadedOffset: number; readonly nextCursor?: string }> => {
+	const collections: Record<string, T[]> = {}
+	for (const key of collectionKeys) collections[key] = []
+	let cursor: string | undefined
+	let priorOffset: number | undefined
+	while (true) {
+		const page = await fetchPage(cursor)
+		if (!Number.isSafeInteger(page.offset) || page.offset < 0 || (priorOffset === undefined ? page.offset !== 0 : page.offset <= priorOffset))
+			throw new Error('History continuation page offset did not advance')
+		for (const key of collectionKeys) {
+			const retained = collections[key]
+			if (retained === undefined) throw new Error(`History collection ${key} was not initialized`)
+			retained.push(...(page.collections[key] ?? []))
+		}
+		if (page.nextCursor === undefined || page.offset >= throughOffset)
+			return { collections, loadedOffset: page.offset, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) }
+		priorOffset = page.offset
+		cursor = page.nextCursor
+	}
+}
+
+export const collectDualCursorCollections = async <T, Cursor = string>(
+	fetchPage: (options: { readonly leftCursor?: Cursor; readonly rightCursor?: Cursor; readonly limit: number }) => Promise<{
+		readonly left: readonly T[]
+		readonly right: readonly T[]
+		readonly leftNextCursor?: Cursor
+		readonly rightNextCursor?: Cursor
+	}>,
+	leftTargetCount: number,
+	rightTargetCount: number,
+	leftKeyFor: (record: T) => string,
+	rightKeyFor: (record: T) => string,
+): Promise<{ readonly left: readonly T[]; readonly right: readonly T[]; readonly leftNextCursor?: Cursor; readonly rightNextCursor?: Cursor }> => {
+	let left: T[] = []
+	let right: T[] = []
+	let leftNextCursor: Cursor | undefined
+	let rightNextCursor: Cursor | undefined
+	let firstPage = true
+	do {
+		const requestLeft = firstPage || (left.length < leftTargetCount && leftNextCursor !== undefined)
+		const requestRight = firstPage || (right.length < rightTargetCount && rightNextCursor !== undefined)
+		if (!requestLeft && !requestRight) break
+		const remaining = Math.max(requestLeft ? Math.max(leftTargetCount - left.length, 1) : 0, requestRight ? Math.max(rightTargetCount - right.length, 1) : 0)
+		const page = await fetchPage({
+			...(requestLeft && leftNextCursor !== undefined ? { leftCursor: leftNextCursor } : {}),
+			...(requestRight && rightNextCursor !== undefined ? { rightCursor: rightNextCursor } : {}),
+			limit: firstPage ? 100 : Math.min(100, remaining),
+		})
+		left = mergeUniqueRecords(left, page.left, leftKeyFor)
+		right = mergeUniqueRecords(right, page.right, rightKeyFor)
+		if (requestLeft) leftNextCursor = page.leftNextCursor
+		if (requestRight) rightNextCursor = page.rightNextCursor
+		firstPage = false
+	} while (left.length < leftTargetCount || right.length < rightTargetCount)
+	return {
+		left,
+		right,
+		...(leftNextCursor === undefined ? {} : { leftNextCursor }),
+		...(rightNextCursor === undefined ? {} : { rightNextCursor }),
+	}
+}
+
+const historyBlockNumber = (value: unknown): bigint | undefined => {
+	if (typeof value === 'bigint' && value >= 0n) return value
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
+	if (typeof value === 'string' && /^\d+$/.test(value)) return BigInt(value)
+	return undefined
+}
+
+export const summarizeHistoryCollections = (
+	collections: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>,
+	collectionKeys: readonly string[],
+): { readonly counts: Readonly<Record<string, number>>; readonly oldestBlock?: bigint; readonly newestBlock?: bigint } => {
+	const counts: Record<string, number> = {}
+	let oldestBlock: bigint | undefined
+	let newestBlock: bigint | undefined
+	for (const key of collectionKeys) {
+		const records = collections[key] ?? []
+		counts[key] = records.length
+		for (const record of records) {
+			const blockNumber = historyBlockNumber(record['block_number'])
+			if (blockNumber === undefined) continue
+			if (oldestBlock === undefined || blockNumber < oldestBlock) oldestBlock = blockNumber
+			if (newestBlock === undefined || blockNumber > newestBlock) newestBlock = blockNumber
+		}
+	}
+	return { counts, ...(oldestBlock === undefined ? {} : { oldestBlock }), ...(newestBlock === undefined ? {} : { newestBlock }) }
+}
+
 export const reconcilePaginatedTotal = (currentTotal: number, responseTotal: number, append: boolean): number =>
 	append ? Math.max(currentTotal, responseTotal) : responseTotal
 
@@ -188,6 +593,19 @@ export const queuedPaginationPresentation = (canonicalRefreshRequired: boolean) 
 	busy: !canonicalRefreshRequired,
 	label: canonicalRefreshRequired ? 'Show more' : 'Loading more…',
 })
+
+export const entityHistoryContinuationPresentation = (state: 'pending' | 'error') =>
+	state === 'pending'
+		? {
+				buttonLabel: 'Showing older history…',
+				statusText: 'Loading older historical records…',
+				statusVisuallyHidden: true,
+			}
+		: {
+				buttonLabel: 'Retry older history',
+				statusText: 'Older historical records could not be loaded.',
+				statusVisuallyHidden: false,
+			}
 
 export const transactionRetryMode = (appendFailure: boolean, hasLoadedTransactions: boolean) => ({
 	append: appendFailure,
