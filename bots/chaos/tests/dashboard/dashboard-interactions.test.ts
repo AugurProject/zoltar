@@ -150,6 +150,18 @@ const workflowRenderingState = state({
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
 		{ definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: ['settle the anchored report'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.blocked-sibling', label: 'Blocked report sibling', risk: 'low' }, eligibility: { blockers: ['No safe fixture candidate exists'], eligible: false } },
+		{
+			definition: {
+				classification: 'selectable',
+				description: 'Exact payable alias of WETH9.deposit and the same bounded wrap operation.',
+				ecosystem: 'open-oracle',
+				id: 'surface.weth9.receive',
+				independentlyExecutable: false,
+				label: 'WETH9.receive',
+				risk: 'low',
+			},
+			eligibility: { blockers: ['Covered by open-oracle.weth.wrap'], eligible: false },
+		},
 		{ definition: { classification: 'role-restricted', description: 'Factory only.', ecosystem: 'statoblast', id: 'surface.pool.initialize', label: 'Pool.initialize', risk: 'high' }, eligibility: { blockers: ['factory only'], eligible: false } },
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
@@ -795,10 +807,23 @@ browserTest(
 				expect(
 					await cdp.evaluate(`(() => {
 						const alias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('claimAuctionProceeds'))
+						const selectableAlias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.querySelector('.operation-name small.mono')?.textContent === 'surface.weth9.receive')
 						const statoblast = [...document.querySelectorAll('#coverage-summary .coverage-card')].find(card => card.textContent?.includes('Statoblast'))
-						return { coverage: statoblast?.querySelector('strong')?.textContent, eligibility: alias?.querySelector('td:nth-child(6) .badge')?.textContent }
+						return {
+							aliasClassification: selectableAlias?.querySelector('td:nth-child(3) .badge')?.textContent,
+							aliasCopyable: selectableAlias?.querySelector('.operation-id-copy') instanceof HTMLButtonElement,
+							aliasEligibility: selectableAlias?.querySelector('td:nth-child(6) .badge')?.textContent,
+							coverage: statoblast?.querySelector('strong')?.textContent,
+							eligibility: alias?.querySelector('td:nth-child(6) .badge')?.textContent,
+						}
 					})()`),
-				).toEqual({ coverage: '0/0', eligibility: 'Not independently selectable' })
+				).toEqual({
+					aliasClassification: 'Coverage alias',
+					aliasCopyable: false,
+					aliasEligibility: 'Not independently selectable',
+					coverage: '0/0',
+					eligibility: 'Not independently selectable',
+				})
 				const redundantCatalogCopy = await cdp.evaluate(`(() => {
 					const normalize = value => value?.trim().replaceAll(/\\s+/g, ' ').replace(/[.?!]+$/, '').toLowerCase()
 					return [...document.querySelectorAll('#catalog-rows tr')].flatMap(row => {
@@ -834,7 +859,7 @@ browserTest(
 								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
 								rows: document.querySelectorAll('#catalog-rows tr').length,
 							})`),
-					).toEqual({ candidate: '2', rows: 5 })
+					).toEqual({ candidate: '2', rows: 6 })
 					expect(
 						await cdp.evaluate(`(() => {
 							const shell = document.querySelector('.table-shell')
@@ -848,6 +873,13 @@ browserTest(
 							}
 						})()`),
 					).toEqual({ allColumnsVisible: true, headerLabels: ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility'], horizontalOverflow: false })
+					await cdp.evaluate(`(() => {
+						const filter = document.querySelector('#catalog-classification-filter')
+						if (!(filter instanceof HTMLSelectElement)) return
+						filter.value = 'coverage-alias'
+						filter.dispatchEvent(new Event('change', { bubbles: true }))
+					})()`)
+					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('WETH9.receive') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
 					await cdp.evaluate(`(() => {
 							const filter = document.querySelector('#catalog-classification-filter')
 							if (!(filter instanceof HTMLSelectElement)) return
@@ -913,6 +945,7 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
 				await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", `${viewport.label} anchored topology did not render`)
+				expect(await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-metrics')].map(metrics => [...metrics.querySelectorAll('span')].map(label => label.textContent))`)).toEqual(Array.from({ length: 4 }, () => ['Independent operations', 'Eligible', 'Candidates']))
 				expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 protocol identities · discovery complete.')
 				expect(
 					await cdp.evaluate(`({
@@ -1163,10 +1196,22 @@ browserTest(
 					if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
 					all.checked = false
 					all.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					allowlist.value = 'surface.weth9.receive'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown independently selectable operation definition ID surface.weth9.receive') === true", `${viewport.label} coverage-only alias was not rejected from the selectable-operation allowlist`)
+				expect(settingsMutations).toHaveLength(rejectedAllowlistMutationCount)
+				await cdp.evaluate(`(() => {
+					const all = document.querySelector('#all-selectable-operations')
+					const allowlist = document.querySelector('#selectable-operation-allowlist')
+					const form = document.querySelector('#settings-form')
+					if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
+					all.checked = false
+					all.dispatchEvent(new InputEvent('input', { bubbles: true }))
 					allowlist.value = 'open-oracle.weth.typo'
 					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
 				})()`)
-				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown selectable operation definition ID open-oracle.weth.typo') === true", `${viewport.label} unknown selectable operation ID was not rejected locally`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown independently selectable operation definition ID open-oracle.weth.typo') === true", `${viewport.label} unknown selectable operation ID was not rejected locally`)
 				expect(settingsMutations).toHaveLength(rejectedAllowlistMutationCount)
 				const stagedAllowlistMutationCount = settingsMutations.length + 1
 				await cdp.evaluate(`(() => {

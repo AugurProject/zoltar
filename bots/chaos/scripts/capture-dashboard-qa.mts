@@ -37,7 +37,13 @@ type PaintTarget = {
 const outputDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
 const unavailableCatalog = unavailableOperationCatalog('visual fixture')
 const expectedCatalogEntryCount = new Set(unavailableCatalog.map(evaluation => evaluation.definition.id)).size
-const expectedCopyableOperationCount = new Set(unavailableCatalog.filter(evaluation => evaluation.definition.classification === 'selectable').map(evaluation => evaluation.definition.id)).size
+const expectedCopyableOperationCount = new Set(unavailableCatalog.filter(evaluation => evaluation.definition.classification === 'selectable' && evaluation.definition.independentlyExecutable !== false).map(evaluation => evaluation.definition.id)).size
+const expectedIndependentOperationCounts = ['zoltar', 'statoblast', 'open-oracle', 'trading'].map(ecosystem => ({
+	count: new Set(
+		unavailableCatalog.filter(evaluation => evaluation.definition.ecosystem === ecosystem && (evaluation.definition.independentlyExecutable ?? (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation'))).map(evaluation => evaluation.definition.id),
+	).size,
+	ecosystem,
+}))
 await mkdir(outputDirectory, { recursive: true })
 const requestedCaptureSource = process.argv[2]
 if (requestedCaptureSource === undefined) {
@@ -244,6 +250,7 @@ try {
 		const renderedState = await evaluate(`(() => {
 			const visiblePage = document.querySelector(${JSON.stringify(`[data-page-content="${route}"]`)})
 			const labels = [...document.querySelectorAll('#catalog-rows .operation-name strong')].map(element => element.textContent)
+			const coverageAlias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.querySelector('.operation-name small.mono')?.textContent?.trim() === 'surface.weth9.receive')
 			const normalize = value => value?.trim().replaceAll(/\\s+/g, ' ').replace(/[.?!]+$/, '').toLowerCase()
 			const redundantCatalogCopy = [...document.querySelectorAll('#catalog-rows tr')].flatMap(row => {
 				const description = normalize(row.querySelector('.operation-description')?.textContent)
@@ -256,8 +263,21 @@ try {
 			return {
 				bodyPage: document.body.dataset.page,
 				catalogCaption: document.querySelector('#catalog-caption')?.textContent,
+				catalogCoverageAlias: coverageAlias === undefined ? undefined : {
+					classification: coverageAlias.querySelector('td:nth-child(3) .badge')?.textContent,
+					copyable: coverageAlias.querySelector('.operation-id-copy') instanceof HTMLButtonElement,
+					eligibility: coverageAlias.querySelector('td:nth-child(6) .badge')?.textContent,
+				},
 				catalogLabels: labels,
 				catalogRedundantCopy: redundantCatalogCopy,
+				ecosystemMetrics: [...document.querySelectorAll('#ecosystem-grid .ecosystem-card')].map(card => {
+					const metrics = [...card.querySelectorAll('.ecosystem-metrics > div')]
+					return {
+						ecosystem: card.dataset['ecosystem'],
+						independent: metrics[0]?.querySelector('strong')?.textContent,
+						labels: metrics.map(metric => metric.querySelector('span')?.textContent),
+					}
+				}),
 				execute: document.querySelector('#execute') instanceof HTMLInputElement ? document.querySelector('#execute').checked : undefined,
 				highRisk: document.querySelector('#allow-high-risk') instanceof HTMLInputElement ? document.querySelector('#allow-high-risk').checked : undefined,
 				irreversible: document.querySelector('#allow-irreversible') instanceof HTMLInputElement ? document.querySelector('#allow-irreversible').checked : undefined,
@@ -279,6 +299,7 @@ try {
 		if (route === 'catalog') {
 			const labels = Reflect.get(renderedState, 'catalogLabels')
 			const caption = Reflect.get(renderedState, 'catalogCaption')
+			const coverageAlias = Reflect.get(renderedState, 'catalogCoverageAlias')
 			const redundantCopy = Reflect.get(renderedState, 'catalogRedundantCopy')
 			const requiredLabels = ['Create binary question', 'Deposit REP to vault', 'GenesisReputationToken.approve', 'Submit OpenOracle report', 'Router enter', 'settle report', 'WETH9.receive']
 			if (
@@ -286,10 +307,28 @@ try {
 				labels.length !== expectedCatalogEntryCount ||
 				requiredLabels.some(label => !labels.includes(label)) ||
 				caption !== `${expectedCatalogEntryCount.toString()} of ${expectedCatalogEntryCount.toString()} classified catalog entries shown · 7 live candidates.` ||
+				typeof coverageAlias !== 'object' ||
+				coverageAlias === null ||
+				Reflect.get(coverageAlias, 'classification') !== 'Coverage alias' ||
+				Reflect.get(coverageAlias, 'copyable') !== false ||
+				Reflect.get(coverageAlias, 'eligibility') !== 'Not independently selectable' ||
 				!Array.isArray(redundantCopy) ||
 				redundantCopy.length !== 0
 			) {
 				throw new Error(`Catalog fixture was incomplete before capture: ${JSON.stringify(renderedState)}`)
+			}
+		}
+		if (route === 'ecosystem') {
+			const metrics = Reflect.get(renderedState, 'ecosystemMetrics')
+			if (
+				!Array.isArray(metrics) ||
+				metrics.length !== expectedIndependentOperationCounts.length ||
+				expectedIndependentOperationCounts.some((expected, index) => {
+					const metric = metrics[index]
+					return typeof metric !== 'object' || metric === null || Reflect.get(metric, 'ecosystem') !== expected.ecosystem || Reflect.get(metric, 'independent') !== expected.count.toString() || JSON.stringify(Reflect.get(metric, 'labels')) !== JSON.stringify(['Independent operations', 'Eligible', 'Candidates'])
+				})
+			) {
+				throw new Error(`Ecosystem metrics did not distinguish independent operations from classified coverage: ${JSON.stringify(metrics)}`)
 			}
 		}
 		if (route === 'settings') {

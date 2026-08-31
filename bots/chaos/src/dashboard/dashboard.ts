@@ -830,12 +830,18 @@ function operationIsIndependentlyExecutable(value: OperationEvaluation) {
 	return value.independentlyExecutable ?? (value.classification === 'selectable' || value.classification === 'lifecycle-obligation')
 }
 
+function displayedClassification(value: OperationEvaluation) {
+	if (value.classification === 'selectable' && !operationIsIndependentlyExecutable(value)) return 'coverage-alias'
+	return value.classification
+}
+
 function classificationLabel(value: string | undefined) {
 	if (value === 'lifecycle-obligation') return 'Lifecycle obligation'
 	if (value === 'excluded-dangerous') return 'Excluded: dangerous'
 	if (value === 'role-restricted') return 'Role restricted'
 	if (value === 'prerequisite') return 'Workflow prerequisite'
 	if (value === 'selectable') return 'Randomly selectable'
+	if (value === 'coverage-alias') return 'Coverage alias'
 	return 'Classification unavailable'
 }
 
@@ -1175,7 +1181,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 	const selectedEligibility = catalogEligibilityFilter.value
 	const filtered = values.filter(value => {
 		if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
-		if (selectedClassification !== 'all' && value.classification !== selectedClassification) return false
+		if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
 		const independentlyExecutable = operationIsIndependentlyExecutable(value)
 		const eligible = independentlyExecutable && value.enabled !== false && value.eligible === true
 		let eligibility = 'blocked'
@@ -1190,6 +1196,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 		const row = document.createElement('tr')
 		const enabled = value.enabled !== false
 		const independentlyExecutable = operationIsIndependentlyExecutable(value)
+		const displayClassification = displayedClassification(value)
 		const eligible = independentlyExecutable && enabled && value.eligible === true
 		let displayedBlockers: string[] = []
 		if (!eligible) {
@@ -1202,7 +1209,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 		}
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
-		if (value.id !== undefined) nameCell.append(value.classification === 'selectable' ? copyableOperationId(value.id) : node('small', 'mono', value.id))
+		if (value.id !== undefined) nameCell.append(displayClassification === 'selectable' ? copyableOperationId(value.id) : node('small', 'mono', value.id))
 		const description = value.description?.trim()
 		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
 			nameCell.append(node('small', 'operation-description', description))
@@ -1211,10 +1218,10 @@ function renderCatalog(values: OperationEvaluation[]) {
 		const classificationCell = node('td')
 		const classificationBadge = node('span')
 		let classificationTone: Parameters<typeof setBadge>[2] = 'success'
-		if (value.classification === 'excluded-dangerous') classificationTone = 'error'
-		else if (value.classification === 'role-restricted' || value.classification === 'prerequisite') classificationTone = 'neutral'
-		else if (value.classification === 'lifecycle-obligation') classificationTone = 'info'
-		setBadge(classificationBadge, classificationLabel(value.classification), classificationTone)
+		if (displayClassification === 'excluded-dangerous') classificationTone = 'error'
+		else if (displayClassification === 'role-restricted' || displayClassification === 'prerequisite' || displayClassification === 'coverage-alias') classificationTone = 'neutral'
+		else if (displayClassification === 'lifecycle-obligation') classificationTone = 'info'
+		setBadge(classificationBadge, classificationLabel(displayClassification), classificationTone)
 		classificationCell.append(classificationBadge)
 		const riskCell = node('td')
 		const riskBadge = node('span')
@@ -1268,7 +1275,7 @@ function renderEcosystems(values: OperationEvaluation[]) {
 		heading.append(readiness)
 		const metrics = node('div', 'ecosystem-metrics')
 		for (const [label, amount] of [
-			['Catalog', operations.length],
+			['Independent operations', operations.length],
 			['Eligible', eligible.length],
 			['Candidates', candidates],
 		] as const) {
@@ -2107,9 +2114,9 @@ settingsForm.addEventListener('submit', event => {
 							.map(value => value.trim())
 							.filter(value => value !== '')
 						if (new Set(operationIds).size !== operationIds.length) throw new Error('Selectable operation allowlist must not contain duplicate definition IDs.')
-						const selectableIds = new Set(snapshot?.operationEvaluations.flatMap(operation => (operation.classification === 'selectable' && operation.id !== undefined ? [operation.id] : [])) ?? [])
+						const selectableIds = new Set(snapshot?.operationEvaluations.flatMap(operation => (operation.classification === 'selectable' && operationIsIndependentlyExecutable(operation) && operation.id !== undefined ? [operation.id] : [])) ?? [])
 						const unknown = operationIds.find(operationId => !selectableIds.has(operationId))
-						if (unknown !== undefined) throw new Error(`Unknown selectable operation definition ID ${unknown}. Copy the exact ID from Operation catalog.`)
+						if (unknown !== undefined) throw new Error(`Unknown independently selectable operation definition ID ${unknown}. Copy the exact ID from Operation catalog.`)
 						return operationIds
 					})()
 			const maximumEthPerOperation = parseReserve(maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
