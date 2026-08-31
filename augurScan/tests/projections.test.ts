@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, type Hex } from '../src/ethereum.ts'
-import { projectionsFrom } from '../src/projections.ts'
+import { projectionsFrom, semanticEventNames } from '../src/projections.ts'
 import type { StoredLog } from '../src/types.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
@@ -8,19 +8,29 @@ const pool = getAddress('0x1111111111111111111111111111111111111111')
 const vault = getAddress('0x2222222222222222222222222222222222222222')
 const atomic = (value: bigint): string => value.toString()
 
-const log = (name: string, argumentsValue: Record<string, unknown>, address = pool): StoredLog => ({
+const log = (name: string, argumentsValue: Record<string, unknown>, address = pool, contractKind?: string): StoredLog => ({
 	transactionHash: hash,
 	blockHash: hash,
 	blockNumber: 10n,
 	transactionIndex: 0,
 	logIndex: 0,
 	address,
+	contractKind,
 	topics: [hash],
 	data: '0x',
 	decoded: { name, arguments: argumentsValue, status: 'decoded', summary: name },
 })
 
 describe('state projections', () => {
+	test('keeps every semantic taxonomy entry backed by the pinned ABI catalog', async () => {
+		const catalog = (await Bun.file(new URL('../config/abis.json', import.meta.url)).json()) as {
+			contracts: Record<string, { abi: Array<{ type?: unknown; name?: unknown }> }>
+		}
+		const abiEvents = new Set(
+			Object.values(catalog.contracts).flatMap(({ abi }) => abi.flatMap((item) => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))),
+		)
+		expect(semanticEventNames.filter((eventName) => !abiEvents.has(eventName))).toEqual([])
+	})
 	test('captures immutable question metadata', () => {
 		const [projection] = projectionsFrom(
 			log('QuestionCreated', {
@@ -145,13 +155,18 @@ describe('state projections', () => {
 	test('records Augur AMM identity and derives complementary conditional prices from Sync reserves', () => {
 		const pair = getAddress('0x3333333333333333333333333333333333333333')
 		const [market] = projectionsFrom(
-			log('PairCreated', {
-				securityPool: pool,
-				shareToken: vault,
-				universeId: '7',
-				pair,
-				feeBps: '30',
-			}),
+			log(
+				'PairCreated',
+				{
+					securityPool: pool,
+					shareToken: vault,
+					universeId: '7',
+					pair,
+					feeBps: '30',
+				},
+				pool,
+				'ammFactory',
+			),
 		)
 		expect(market).toMatchObject({
 			type: 'ammMarket',
@@ -224,6 +239,74 @@ describe('state projections', () => {
 		expect(projected.some((item) => item.type === 'ammPrice')).toBe(false)
 	})
 
+	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
+		const transfer = { ...log('Transfer', { from: pool, to: vault, amount: '50' }), contractKind: 'ammPair' }
+		const approval = { ...log('Approval', { owner: pool, spender: vault, amount: '50' }), contractKind: 'ammPair' }
+		expect(projectionsFrom(transfer).at(-1)).toMatchObject({
+			type: 'domainEvent',
+			domain: 'trading',
+			entityType: 'amm',
+			semanticEventKind: 'Transfer',
+		})
+		expect(projectionsFrom(log('Transfer', { from: pool, to: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
+		expect(projectionsFrom(approval).at(-1)).toMatchObject({
+			type: 'domainEvent',
+			domain: 'trading',
+			entityType: 'amm',
+			semanticEventKind: 'Approval',
+		})
+		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
+	})
+
+	test('adds stable timeline identities for registries, markets, and universes', () => {
+		expect(
+			projectionsFrom(
+				log('QuestionCreated', {
+					questionId: '42',
+					createdTimestamp: '1000',
+					questionData: {
+						title: 'Will it rain?',
+						description: 'Observed at the airport',
+						startTime: '1100',
+						endTime: '2100',
+						numTicks: '0',
+						displayValueMin: '0',
+						displayValueMax: '0',
+						answerUnit: '',
+					},
+					outcomeOptions: ['Yes', 'No'],
+				}),
+			).at(-1),
+		).toMatchObject({
+			domain: 'system',
+			entityType: 'question',
+			entityIdentity: '42',
+		})
+		expect(
+			projectionsFrom(log('PairCreated', { pair: vault, securityPool: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1),
+		).toMatchObject({
+			domain: 'trading',
+			entityType: 'amm',
+			entityIdentity: vault.toLowerCase(),
+		})
+		expect(
+			projectionsFrom(
+				log('UniverseInitialized', {
+					universeId: '7',
+					parentUniverseId: '0',
+					forkingOutcomeIndex: '1',
+					reputationToken: vault,
+					universeTheoreticalSupplyAttoRep: atomic(100n),
+					forkTime: '0',
+					forkQuestionId: '0',
+				}),
+			).at(-1),
+		).toMatchObject({
+			domain: 'fork',
+			entityIdentity: '7',
+		})
+	})
+
 	test('distinguishes initialization seeds from accepted REP per ETH coordinator prices', () => {
 		const [originSeed] = projectionsFrom(log('RepEthPriceSet', { price: '0' }, vault))
 		expect(originSeed).toEqual({
@@ -256,12 +339,14 @@ describe('state projections', () => {
 		const rep = getAddress('0x3333333333333333333333333333333333333333')
 		const weth = getAddress('0x4444444444444444444444444444444444444444')
 		const marketId = `0x${'ab'.repeat(32)}`
-		expect(projectionsFrom(log('PairCreated', { token0: rep, token1: weth, pair: pool, '3': '1' }))[0]).toMatchObject({
+		const uniswapPairCreated = projectionsFrom(log('PairCreated', { token0: rep, token1: weth, pair: pool, '3': '1' }, pool, 'uniswapV2Factory'))
+		expect(uniswapPairCreated[0]).toMatchObject({
 			type: 'uniswapMarket',
 			venue: 'v2',
 			marketId: pool.toLowerCase(),
 			feeHundredthsBip: '3000',
 		})
+		expect(uniswapPairCreated.some((projection) => projection.type === 'domainEvent')).toBe(false)
 		expect(projectionsFrom(log('Sync', { reserve0: '900', reserve1: '50' }))[0]).toEqual({
 			type: 'uniswapPrice',
 			venue: 'v2',
@@ -336,6 +421,15 @@ describe('state projections', () => {
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
 		})
+		expect(projectionsFrom(log('VaultDepositTargetHealthFactorRecorded', { vault })).at(-1)).toMatchObject({
+			domain: 'risk',
+			entityType: 'vault',
+			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
+		})
+		expect(projectionsFrom(log('ForkContinuationResidualRepBurned', { amountAttoRep: atomic(1n) })).at(-1)).toMatchObject({
+			domain: 'escalation',
+			entityIdentity: pool.toLowerCase(),
+		})
 		for (const eventName of [
 			'LiquidationApprovalSet',
 			'LiquidationApprovalReserved',
@@ -357,6 +451,19 @@ describe('state projections', () => {
 			domain: 'fork',
 			entityIdentity: vault.toLowerCase(),
 		})
-		expect(projectionsFrom(log('Migrate', { childUniverseId: '7' })).at(-1)).toMatchObject({ domain: 'fork', entityIdentity: '7' })
+		for (const eventName of ['EscalationMigrationEntitlementInitialized', 'EscalationMigrationEntitlementMaterialized'])
+			expect(projectionsFrom(log(eventName, { parent: vault, vault: pool, childOutcomeIndex: '1' })).at(-1)).toMatchObject({
+				domain: 'fork',
+				entityIdentity: vault.toLowerCase(),
+			})
+		expect(projectionsFrom(log('MigrationRepSplit', { universeId: '2', childUniverseId: '7' })).at(-1)).toMatchObject({
+			domain: 'fork',
+			entityIdentity: '2',
+		})
+		expect(projectionsFrom(log('Migrate', { migrator: vault, fromId: '1', toId: '2', amountAttoShares: atomic(7n) })).at(-1)).toMatchObject({
+			domain: 'system',
+			entityType: 'share-token',
+			entityIdentity: pool.toLowerCase(),
+		})
 	})
 })

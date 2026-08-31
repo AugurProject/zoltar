@@ -1,32 +1,23 @@
-import { createHash } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { contractSourceHash, contractSources } from './project-metadata-source.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
-const contractsRoot = path.join(projectRoot, 'solidity/contracts')
 const compiledArtifactPath = path.join(projectRoot, 'solidity/artifacts/Contracts.json')
-const outputPath = path.resolve(import.meta.dir, '../config/abis.json')
-const manifestsRoot = path.resolve(import.meta.dir, '../config/manifests')
+const outputRootIndex = process.argv.indexOf('--output-root')
+const configuredOutputRoot = outputRootIndex < 0 ? undefined : process.argv[outputRootIndex + 1]
+if (outputRootIndex >= 0 && (configuredOutputRoot === undefined || configuredOutputRoot === '')) throw new Error('--output-root requires a directory')
+const configOutputRoot = configuredOutputRoot === undefined ? path.resolve(import.meta.dir, '../config') : path.resolve(configuredOutputRoot)
+const outputPath = path.join(configOutputRoot, 'abis.json')
+const manifestsRoot = path.join(configOutputRoot, 'manifests')
+await mkdir(manifestsRoot, { recursive: true })
 
-const collectSources = async (directory: string, relativeRoot = path.join(projectRoot, 'solidity')): Promise<Record<string, { content: string }>> => {
-	const sources: Record<string, { content: string }> = {}
-	const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))
-	for (const entry of entries) {
-		const absolute = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			if (entry.name === 'test') continue
-			Object.assign(sources, await collectSources(absolute, relativeRoot))
-			continue
-		}
-		if (!entry.name.endsWith('.sol')) continue
-		const relative = path.relative(relativeRoot, absolute).replaceAll(path.sep, '/')
-		const content = (await readFile(absolute, 'utf8')).replace('pragma solidity 0.8.28;', 'pragma solidity >=0.8.28;')
-		sources[relative] = { content }
-	}
-	return sources
+const serializeManifest = (contracts: readonly (readonly [string, string, string])[]): string => {
+	const entries = contracts.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
+	return `{\n\t"contracts": [\n${entries}\n\t]\n}\n`
 }
 
-const sources = await collectSources(contractsRoot)
+const sources = await contractSources(projectRoot)
 const vendorPrefix = 'contracts/statoblast/openOracle/openzeppelin/contracts/'
 for (const [name, source] of Object.entries(sources)) {
 	if (name.startsWith(vendorPrefix)) sources[`@openzeppelin/contracts/${name.slice(vendorPrefix.length)}`] = source
@@ -86,15 +77,7 @@ for (const [source, name] of [
 }
 
 const payload = {
-	sourceHash: createHash('sha256')
-		.update(
-			Object.entries(sources)
-				.filter(([name]) => !name.startsWith('@openzeppelin/'))
-				.sort(([left], [right]) => left.localeCompare(right))
-				.map(([name, source]) => `${name}\0${source.content}`)
-				.join('\0'),
-		)
-		.digest('hex'),
+	sourceHash: contractSourceHash(sources),
 	contracts,
 }
 
@@ -170,7 +153,12 @@ const deploymentKind: Readonly<Record<string, string>> = {
 	zoltarQuestionData: 'zoltarQuestionData',
 }
 
-for (const networkId of ['mainnet', 'sepolia']) {
+const usdcAddress = {
+	mainnet: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+	sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+} as const
+
+for (const networkId of ['mainnet', 'sepolia'] as const) {
 	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
 	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
@@ -178,12 +166,15 @@ for (const networkId of ['mainnet', 'sepolia']) {
 		const kind = deploymentKind[id]
 		return kind === undefined ? [] : [[address, label, kind] as [string, string, string]]
 	})
-	configured.push([deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'], [deployment.network.wethAddress, 'Wrapped Ether', 'weth'])
+	configured.push(
+		[deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'],
+		[deployment.network.wethAddress, 'Wrapped Ether', 'weth'],
+		[usdcAddress[networkId], 'USD Coin', 'usdc'],
+	)
 	const manifestPath = path.join(manifestsRoot, `${networkId}.json`)
 	const historical = manifestEntries(JSON.parse(await readFile(manifestPath, 'utf8')), manifestPath)
 	const unique = [...new Map([...historical, ...configured].map((entry) => [entry[0].toLowerCase(), entry])).values()]
-	const serializedContracts = unique.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
-	await Bun.write(manifestPath, `{\n\t"contracts": [\n${serializedContracts}\n\t]\n}\n`)
+	await Bun.write(manifestPath, serializeManifest(unique))
 }
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)

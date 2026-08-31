@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
+import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
 import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
@@ -62,6 +62,17 @@ describe('standalone trading UI model', () => {
 		expect(marketRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet · conditional prices only')
 		expect(portfolioRouteSubtitle('Browser Simulation', true)).toBeUndefined()
 		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
+	})
+
+	test('presents liquidity as its own workflow instead of repeating the markets header', () => {
+		expect(liveWorkflowRoutePresentation('liquidity', 'Browser Simulation', true)).toEqual({
+			description: 'Manage YES and NO liquidity for the selected SecurityPool.',
+			title: 'Liquidity',
+		})
+		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false)).toEqual({
+			description: 'Ethereum Mainnet · conditional prices only',
+			title: 'Markets',
+		})
 	})
 
 	test('validates a registry anchor at the current tip without requesting historical blocks', async () => {

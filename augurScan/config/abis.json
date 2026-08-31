@@ -1,5 +1,5 @@
 {
-  "sourceHash": "8f2d9e78a1de046899eee48bfc3cfc6f4bbf273b6300ec90d66b8d9862a41378",
+  "sourceHash": "a2fe37de491c06f1e3329b113b800ff3300a5ce1435eb1c9bc1bc5a4b8b4b025",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -3282,7 +3282,7 @@
               "type": "uint256"
             }
           ],
-          "name": "depositRepFromWallet",
+          "name": "depositRepOnOutcome",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -7601,6 +7601,24 @@
           "type": "function"
         },
         {
+          "inputs": [
+            {
+              "internalType": "enum BinaryOutcomes.BinaryOutcome",
+              "name": "outcome",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maximumDepositAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "depositRepOnOutcome",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
           "inputs": [],
           "name": "fixedQuestionOutcome",
           "outputs": [
@@ -7798,24 +7816,6 @@
             }
           ],
           "name": "recordForkedEscrowForOutcome",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "enum BinaryOutcomes.BinaryOutcome",
-              "name": "outcome",
-              "type": "uint8"
-            },
-            {
-              "internalType": "uint256",
-              "name": "maximumDepositAttoRep",
-              "type": "uint256"
-            }
-          ],
-          "name": "recordWalletDeposit",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"

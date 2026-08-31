@@ -12,6 +12,7 @@ import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
@@ -57,6 +58,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		busyStepId.value = step.id
 		errorMessage.value = undefined
 		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
+		let ownsTransaction = false
 
 		try {
 			await assertActiveWallet(accountAddress)
@@ -67,7 +69,12 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 				deploymentFeedback.value = undefined
 				return
 			}
-			onTransactionRequested(createDeploymentTransactionIntent(step.label))
+			if (onTransactionRequested(createDeploymentTransactionIntent(step.label)) === false) {
+				errorMessage.value = TRANSACTION_ACTION_LOCK_REASON
+				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment blocked', TRANSACTION_ACTION_LOCK_REASON)
+				return
+			}
+			ownsTransaction = true
 			const hash = await step.deploy(client)
 			const code = await readWithRpcStateRetries(
 				() => client.getCode({ address: step.address }),
@@ -87,11 +94,11 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		} catch (error) {
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
-			onTransactionFailed?.(message)
+			if (ownsTransaction) onTransactionFailed?.(message)
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
 			busyStepId.value = undefined
-			onTransactionFinished()
+			if (ownsTransaction) onTransactionFinished()
 		}
 	}
 

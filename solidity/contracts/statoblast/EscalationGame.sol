@@ -60,8 +60,8 @@ contract EscalationGame is EscalationGameSettlement {
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
 
-	function depositRepFromWallet(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.recordWalletDeposit, (outcome, maximumDepositAttoRep)));
+	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.depositRepOnOutcome, (outcome, maximumDepositAttoRep)));
 	}
 
 	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {

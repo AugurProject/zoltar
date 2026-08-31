@@ -179,8 +179,10 @@ export function useMarketCreation(
 						if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionRequested: () => {
+						const accepted = onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						if (accepted === false) return false
 						marketCreating.value = { storageKey: submittedQuestionDraftStorageKey, value: true }
-						onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						return accepted
 					},
 					onTransactionFinished: () => {
 						marketCreating.value = undefined
