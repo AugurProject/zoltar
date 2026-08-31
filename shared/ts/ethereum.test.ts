@@ -1190,6 +1190,66 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
+	test('public client rejects blocks whose number differs from the requested height', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x2', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5', transactions: [] }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('does not match requested block 1')
+	})
+
+	test('replacement scans reject blocks from a different height', async () => {
+		const replacementHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionReceipt') {
+				if (getArrayEntry(params, 0, 'receipt params') === TX_HASH) return null
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: replacementHash,
+					transactionIndex: '0x0',
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x1',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: [{ ...originalTransaction, hash: replacementHash }],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		await expect(
+			client.waitForTransactionReceipt({
+				hash: TX_HASH,
+				onReplaced: () => undefined,
+				pollingInterval: 0,
+				transaction: originalTransaction,
+				timeout: 0,
+			}),
+		).rejects.toThrow('does not match requested block 0')
+	})
+
 	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const clockValues = [0, 120_000, 180_000]

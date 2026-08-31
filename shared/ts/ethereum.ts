@@ -1530,7 +1530,11 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
-			return normalizeBlock(block, includeTransactions)
+			const normalizedBlock = normalizeBlock(block, includeTransactions)
+			if (parameters?.blockNumber !== undefined && normalizedBlock.number !== parameters.blockNumber) {
+				throw new Error(`RPC returned block ${normalizedBlock.number?.toString() ?? 'without a number'}, which does not match requested block ${parameters.blockNumber.toString()}`)
+			}
+			return normalizedBlock
 		},
 		getBlockNumber: async () => normalizeRequiredRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' }), 'block number'),
 		getChainId: async () => bigintToSafeNumber(normalizeRequiredRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' }), 'chain ID'), 'Chain ID'),
