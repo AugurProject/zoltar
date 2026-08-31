@@ -1,5 +1,5 @@
 import { createPublicClient, createWalletClient, encodeFunctionData, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
-import { paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings, StrategySettings } from '#config/settings'
@@ -44,14 +44,14 @@ export function requireFinalizedTransactionReceipt(label: string, hash: Hex, res
 	throw new TransactionAwaitingCanonicalFinality(label, hash)
 }
 
-function maximumFeePerGas(baseFeePerGas: bigint) {
-	return baseFeePerGas * 2n + 2n * 10n ** 9n
-}
-
 export function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
 	if (maxFeePerGas * paddedTransactionGas(gasEstimate) > maximumGasCost) {
 		throw new Error(`${label} estimated gas ceiling exceeds strategy.maximumGasCostAttoEth`)
 	}
+}
+
+export function assertGasCostLimitForBaseFee(gasEstimate: bigint, baseFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
+	assertGasCostLimit(gasEstimate, maximumFeePerGas(baseFeePerGas), maximumGasCost, label)
 }
 
 export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
@@ -100,7 +100,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		throw new Error('Latest block is missing number or base fee')
 	}
 	assertExecutionActive(state)
-	assertGasCostLimit(call.gas, maximumFeePerGas(block.baseFeePerGas), settings.strategy.maximumGasCostAttoEth, call.label)
+	assertGasCostLimitForBaseFee(call.gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
 	await settledQuorumValue(
 		`${call.label} simulation`,
 		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({

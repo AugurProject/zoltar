@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>Zoltar chaos bot</title>
+		<link rel="stylesheet" href="/operator-console.css" />
+		<link rel="stylesheet" href="/dashboard.css" />
+	</head>
+	<body>
+		<header class="topbar operator-shell">
+			<div class="operator-primary">
+				<div class="brand">
+					<div class="brand-mark" aria-hidden="true">C</div>
+					<div>
+						<p class="eyebrow">Ecosystem operator</p>
+						<h1>Zoltar chaos bot</h1>
+					</div>
+				</div>
+				<div class="topbar-actions operator-safety" aria-label="Bot safety status">
+					<span id="mode-badge" class="badge">Starting</span>
+					<span id="network-badge" class="badge">Network loading</span>
+					<span id="signer-badge" class="badge">Signer loading</span>
+					<a id="recovery-badge" class="badge" href="/activity">Recovery loading</a>
+					<button id="refresh-button" class="secondary" type="button">Refresh</button>
+					<button id="pause-button" class="secondary" type="button">Pause</button>
+					<span id="pause-status" class="action-status" role="alert"></span>
+				</div>
+			</div>
+			<nav class="section-nav" aria-label="Dashboard sections">
+				<a href="/overview">Overview</a>
+				<a href="/catalog">Operation catalog</a>
+				<a href="/ecosystem">Ecosystem state</a>
+				<a href="/activity">Activity &amp; recovery</a>
+				<a href="/settings">Settings</a>
+			</nav>
+		</header>
+
+		<main>
+			<div id="global-error" class="notice error hidden" data-page-content="all" role="alert"></div>
+			<ul id="operator-alerts" class="operator-alerts hidden" data-page-content="all" aria-live="assertive" role="alert"></ul>
+
+			<section data-page-content="overview" aria-labelledby="overview-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Randomized execution</p>
+						<h2 id="overview-title">Overview</h2>
+					</div>
+					<div class="section-status">
+						<p id="last-block" class="muted">Block —</p>
+						<p id="last-scan" class="muted">Waiting for first scan</p>
+					</div>
+				</div>
+
+				<div class="overview-layout">
+					<article class="panel schedule-panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Next random choice</p>
+								<h3 id="countdown">—</h3>
+							</div>
+							<span id="scheduler-state" class="badge neutral">Waiting</span>
+						</div>
+						<div class="countdown-track" aria-hidden="true"><span id="countdown-progress"></span></div>
+						<dl class="fact-grid">
+							<div>
+								<dt>Scheduled for</dt>
+								<dd id="next-run">Not scheduled</dd>
+							</div>
+							<div>
+								<dt>Previous delay</dt>
+								<dd id="last-delay">—</dd>
+							</div>
+							<div>
+								<dt>Eligible now</dt>
+								<dd id="eligible-count">—</dd>
+							</div>
+							<div>
+								<dt>Selected operation</dt>
+								<dd id="selected-operation">None</dd>
+							</div>
+						</dl>
+					</article>
+
+					<article class="panel inventory-panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Execution account</p>
+								<h3>Inventory</h3>
+							</div>
+							<span id="wallet-short" class="mono muted">No signer</span>
+						</div>
+						<div class="balance-grid">
+							<div class="balance"><span>ETH</span><strong id="balance-eth">—</strong></div>
+							<div class="balance"><span>WETH</span><strong id="balance-weth">—</strong></div>
+							<div class="balance rep-balance"><span>REP positions</span><strong id="balance-rep-total">—</strong></div>
+						</div>
+						<div id="rep-balances" class="token-list empty-state">No REP inventory observed.</div>
+					</article>
+
+					<article class="panel rpc-health-panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Sanitized connectivity</p>
+								<h3>Read RPC quorum</h3>
+							</div>
+							<div class="rpc-health-heading-actions">
+								<span id="rpc-health-status" class="badge neutral">Health loading</span>
+								<button id="rpc-health-retry-button" class="secondary hidden" type="button" aria-label="Retry dashboard state refresh">Retry</button>
+							</div>
+						</div>
+						<dl class="rpc-health-grid">
+							<div>
+								<dt>Configured reads</dt>
+								<dd id="rpc-configured-total">—</dd>
+							</div>
+							<div>
+								<dt>Healthy reads</dt>
+								<dd id="rpc-healthy-count">—</dd>
+							</div>
+							<div>
+								<dt>Required quorum</dt>
+								<dd id="rpc-required-quorum">—</dd>
+							</div>
+							<div>
+								<dt>Chain readiness</dt>
+								<dd id="rpc-chain-readiness">Not yet verified</dd>
+							</div>
+							<div class="rpc-last-check">
+								<dt>Last endpoint check</dt>
+								<dd id="rpc-last-check">No completed check</dd>
+							</div>
+						</dl>
+						<p class="rpc-health-note muted">Endpoint identities and error details remain in protected bot logs.</p>
+					</article>
+
+					<article class="panel submission-health-panel" aria-labelledby="submission-health-title">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Sanitized submission</p>
+								<h3 id="submission-health-title">Transaction path</h3>
+							</div>
+							<span id="submission-health-status" class="badge neutral" role="status" aria-live="polite">Readiness loading</span>
+						</div>
+						<dl class="rpc-health-grid">
+							<div>
+								<dt>Submission mode</dt>
+								<dd id="submission-mode">—</dd>
+							</div>
+							<div>
+								<dt>Healthy origins</dt>
+								<dd id="submission-healthy-count">—</dd>
+							</div>
+							<div>
+								<dt>Required threshold</dt>
+								<dd id="submission-required-threshold">—</dd>
+							</div>
+							<div>
+								<dt>Current evidence</dt>
+								<dd id="submission-freshness">Not yet verified</dd>
+							</div>
+							<div>
+								<dt>Signer proof</dt>
+								<dd id="submission-signer-proof">Not required</dd>
+							</div>
+							<div class="rpc-last-check">
+								<dt>Last path check</dt>
+								<dd id="submission-last-check">No completed check</dd>
+							</div>
+						</dl>
+						<p class="rpc-health-note muted">Only origin counts and proof state are shown. Relay and RPC identities remain in protected bot logs.</p>
+					</article>
+				</div>
+
+				<div class="two-column">
+					<article class="panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Durable workflow</p>
+								<h3>Current operation</h3>
+							</div>
+							<a class="text-link" href="/activity">Open recovery</a>
+						</div>
+						<div id="current-workflow" class="empty-state">No operation is in progress.</div>
+					</article>
+					<article class="panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Readiness</p>
+								<h3>Operation coverage</h3>
+							</div>
+							<a class="text-link" href="/catalog">View catalog</a>
+						</div>
+						<div id="coverage-summary" class="coverage-grid"></div>
+					</article>
+				</div>
+			</section>
+
+			<section data-page-content="catalog" aria-labelledby="catalog-title">
+				<div class="section-heading">
+					<div>
+						<h2 id="catalog-title">Operation catalog</h2>
+						<p class="lede">Every catalog entry shows live eligibility. Blocked operations are never submitted.</p>
+					</div>
+					<div class="catalog-filters">
+						<label class="filter-control"
+							>Ecosystem
+							<select id="catalog-filter">
+								<option value="all">All ecosystems</option>
+								<option value="zoltar">Zoltar</option>
+								<option value="statoblast">Statoblast</option>
+								<option value="open-oracle">Open Oracle</option>
+								<option value="trading">Trading</option>
+							</select>
+						</label>
+						<label class="filter-control"
+							>Classification
+							<select id="catalog-classification-filter">
+								<option value="all">All classifications</option>
+								<option value="selectable">Randomly selectable</option>
+								<option value="coverage-alias">Coverage alias</option>
+								<option value="lifecycle-obligation">Lifecycle obligation</option>
+								<option value="prerequisite">Workflow prerequisite</option>
+								<option value="role-restricted">Role restricted</option>
+								<option value="excluded-dangerous">Excluded: dangerous</option>
+							</select>
+						</label>
+						<label class="filter-control"
+							>Eligibility
+							<select id="catalog-eligibility-filter">
+								<option value="all">All eligibility states</option>
+								<option value="eligible">Eligible now</option>
+								<option value="blocked">Blocked now</option>
+								<option value="disabled">Policy disabled</option>
+								<option value="not-selectable">Not independently selectable</option>
+							</select>
+						</label>
+					</div>
+				</div>
+				<p class="table-scroll-hint muted">Scroll horizontally to inspect risk, candidates, and eligibility.</p>
+				<div class="table-shell">
+					<table>
+						<caption id="catalog-caption">
+							Waiting for operation discovery.
+						</caption>
+						<thead>
+							<tr>
+								<th scope="col">Operation</th>
+								<th scope="col">Ecosystem</th>
+								<th scope="col">Classification</th>
+								<th scope="col">Risk</th>
+								<th scope="col">Candidates</th>
+								<th scope="col">Eligibility</th>
+							</tr>
+						</thead>
+						<tbody id="catalog-rows"></tbody>
+					</table>
+				</div>
+			</section>
+
+			<section data-page-content="ecosystem" aria-labelledby="ecosystem-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Canonical observations</p>
+						<h2 id="ecosystem-title">Ecosystem state</h2>
+						<p class="lede">A consolidated view of operation readiness across all protocol surfaces.</p>
+					</div>
+				</div>
+				<div id="ecosystem-grid" class="ecosystem-grid"></div>
+				<article class="panel topology-panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Sanitized canonical graph</p>
+							<h3>Anchored topology</h3>
+						</div>
+						<span id="topology-anchor" class="badge neutral">Anchor loading</span>
+					</div>
+					<p id="topology-status" class="muted">Waiting for canonical topology.</p>
+					<div class="topology-grid">
+						<details open>
+							<summary><strong>Universes</strong></summary>
+							<div id="topology-universes" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Security pools</strong></summary>
+							<div id="topology-pools" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Open Oracle reports</strong></summary>
+							<div id="topology-reports" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Truth auctions</strong></summary>
+							<div id="topology-auctions" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+						<details open>
+							<summary><strong>Trading pairs</strong></summary>
+							<div id="topology-pairs" class="topology-list empty-state">Waiting for discovery.</div>
+						</details>
+					</div>
+				</article>
+			</section>
+
+			<section data-page-content="activity" aria-labelledby="activity-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Recovery before novelty</p>
+						<h2 id="activity-title">Activity &amp; recovery</h2>
+						<p class="lede">Pending nonces and deadline-bound obligations take priority over the random scheduler.</p>
+					</div>
+				</div>
+				<div class="two-column recovery-columns">
+					<article class="panel">
+						<div class="panel-heading">
+							<h3>Pending transactions</h3>
+							<span id="pending-count" class="badge neutral">0</span>
+						</div>
+						<div id="pending-transactions" class="stack-list empty-state">No transaction requires confirmation.</div>
+						<form id="replacement-form" class="reconciliation-form">
+							<fieldset id="replacement-fields" disabled>
+								<label
+									>Verified replacement transaction hash
+									<input id="replacement-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" />
+								</label>
+								<p class="muted">Pause first. The bot accepts the replacement only after quorum verification proves the exact sender, nonce, destination, calldata, value, finality, and semantic result.</p>
+								<div class="form-actions"><button type="submit">Queue verification</button></div>
+							</fieldset>
+							<div class="recovery-status-row"><span id="replacement-status" class="action-status" role="alert"></span><button id="replacement-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="replacement-status">Retry</button></div>
+						</form>
+						<form id="cancellation-form" class="reconciliation-form">
+							<fieldset id="cancellation-fields" disabled>
+								<p class="muted">Use only after manually sending a zero-value, empty-calldata self-transfer from the recovery signer at the exact pending nonce. The bot requires quorum identity checks and a finalized successful receipt.</p>
+								<label>Nonce cancellation transaction hash<input id="cancellation-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" /></label>
+								<label>Audit reason<textarea id="cancellation-reason" minlength="12" maxlength="2048" required></textarea></label>
+								<label>Typed confirmation<input id="cancellation-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="VERIFY NONCE CANCELLATION" /></label>
+								<div class="form-actions"><button type="submit">Queue cancellation verification</button></div>
+							</fieldset>
+							<div class="recovery-status-row"><span id="cancellation-status" class="action-status" role="alert"></span><button id="cancellation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="cancellation-status">Retry</button></div>
+						</form>
+						<form id="candidate-form" class="reconciliation-form">
+							<fieldset id="candidate-fields" disabled>
+								<p class="muted">A mistyped or stale replacement/cancellation hash can be cleared without changing the original signed intent.</p>
+								<label>Audit reason<textarea id="candidate-reason" minlength="12" maxlength="2048" required></textarea></label>
+								<label>Typed confirmation<input id="candidate-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="CLEAR RECOVERY CANDIDATE" /></label>
+								<div class="form-actions"><button type="submit">Clear queued candidate</button></div>
+							</fieldset>
+							<div class="recovery-status-row"><span id="candidate-status" class="action-status" role="alert"></span><button id="candidate-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="candidate-status">Retry</button></div>
+						</form>
+						<form id="workflow-form" class="reconciliation-form">
+							<fieldset id="workflow-fields" disabled>
+								<p class="muted">If a partial random workflow can no longer produce its exact canonical continuation, abandonment transfers responsibility to the operator and starts a fresh randomized wait.</p>
+								<label>Audit reason<textarea id="workflow-reason" minlength="12" maxlength="2048" required></textarea></label>
+								<label>Typed confirmation<input id="workflow-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="ABANDON PARTIAL WORKFLOW" /></label>
+								<div class="form-actions"><button type="submit">Abandon partial workflow</button></div>
+							</fieldset>
+							<div class="recovery-status-row"><span id="workflow-status" class="action-status" role="alert"></span><button id="workflow-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="workflow-status">Retry</button></div>
+						</form>
+					</article>
+					<article class="panel">
+						<div class="panel-heading">
+							<h3>Lifecycle obligations</h3>
+							<span id="obligation-count" class="badge neutral">0</span>
+						</div>
+						<div id="obligations" class="stack-list empty-state">No follow-up obligation is due.</div>
+						<form id="obligation-form" class="reconciliation-form">
+							<fieldset id="obligation-fields" disabled>
+								<label>Lifecycle item<select id="obligation-id"></select></label>
+								<label
+									>Resolution
+									<select id="obligation-action">
+										<option value="retry">Retry verified-safe failure</option>
+										<option value="abandon">Abandon after manual reconciliation</option>
+									</select>
+								</label>
+								<label>Audit reason<textarea id="obligation-reason" minlength="12" maxlength="2048" required></textarea></label>
+								<label>Typed confirmation<input id="obligation-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
+								<p id="obligation-confirmation-help" class="muted">Type RETRY VERIFIED SAFE FAILURE. Retry is limited to unsigned failures, finalized reverts, and verified nonce cancellations.</p>
+								<div class="form-actions"><button type="submit">Reconcile lifecycle item</button></div>
+							</fieldset>
+							<div class="recovery-status-row"><span id="obligation-status" class="action-status" role="alert"></span><button id="obligation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="obligation-status">Retry</button></div>
+						</form>
+					</article>
+				</div>
+				<article class="panel activity-panel">
+					<div class="panel-heading">
+						<h3>Recent activity</h3>
+						<span class="muted">Newest first</span>
+					</div>
+					<ol id="activity-list" class="timeline">
+						<li class="empty-state">No activity recorded.</li>
+					</ol>
+				</article>
+			</section>
+
+			<section data-page-content="settings" aria-labelledby="settings-title">
+				<div class="settings-intro">
+					<div>
+						<p class="eyebrow">Safety controls</p>
+						<h2 id="settings-title">Settings</h2>
+						<p class="lede">Changes apply before the next selection cycle.</p>
+					</div>
+					<span id="settings-scope" class="badge neutral">Configuration loading</span>
+				</div>
+				<div id="configuration-status" class="notice hidden" role="status"></div>
+				<div id="settings-pause-note" class="notice warning hidden" role="status">Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.</div>
+				<div class="settings-stack">
+					<details class="panel settings-group" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Execution policy</strong><small>Timing, reserves, and irreversible operation gate</small></span>
+						</summary>
+						<div class="settings-body">
+							<form id="settings-form">
+								<fieldset id="settings-fields" disabled>
+									<div class="switch-row danger-switch">
+										<div>
+											<label for="execute">Submit live transactions</label>
+											<p id="execute-help">Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.</p>
+										</div>
+										<input id="execute" name="execute" type="checkbox" aria-describedby="execute-help" />
+									</div>
+									<div class="switch-row">
+										<div>
+											<label for="allow-high-risk">Allow high-risk operations</label>
+											<p>Includes disputes, auction participation, and other economically adversarial workflows.</p>
+										</div>
+										<input id="allow-high-risk" name="allowHighRiskOperations" type="checkbox" />
+									</div>
+									<div class="switch-row">
+										<div>
+											<label for="allow-irreversible">Allow irreversible operations</label>
+											<p>Includes forks, REP migration, burns, and global lifecycle transitions.</p>
+										</div>
+										<input id="allow-irreversible" name="allowIrreversibleOperations" type="checkbox" />
+									</div>
+									<div class="switch-row">
+										<div>
+											<label for="all-selectable-operations">Allow every selectable operation</label>
+											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enter exact selectable definition IDs from the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only; lifecycle discovery, recovery, and execution are never disabled by this control.</p>
+										</div>
+										<input id="all-selectable-operations" name="allSelectableOperations" type="checkbox" aria-describedby="selectable-operation-scope-help" />
+									</div>
+									<label class="selectable-operation-allowlist-label" for="selectable-operation-allowlist"
+										>Selectable operation allowlist
+										<textarea id="selectable-operation-allowlist" aria-describedby="selectable-operation-scope-help" placeholder="One exact definition ID per line, for example:&#10;open-oracle.weth.wrap" rows="5" spellcheck="false"></textarea>
+									</label>
+									<div class="form-grid">
+										<label
+											>Minimum random delay
+											<span class="input-with-unit"><input id="min-delay" min="60" max="3599" inputmode="numeric" type="number" required /><span>seconds</span></span>
+										</label>
+										<label
+											>Maximum random delay
+											<span class="input-with-unit"><input id="max-delay" min="60" max="3600" inputmode="numeric" type="number" required /><span>seconds</span></span>
+										</label>
+										<label>ETH reserve<input id="reserve-eth" inputmode="decimal" type="text" required /></label>
+										<label>REP reserve<input id="reserve-rep" inputmode="decimal" type="text" required /></label>
+										<label>Maximum ETH per operation<input id="maximum-eth-operation" inputmode="decimal" type="text" required /></label>
+										<label>Maximum gas cost (ETH)<input id="maximum-gas-cost" inputmode="decimal" type="text" required /></label>
+										<label>Maximum REP per operation<input id="maximum-rep-operation" inputmode="decimal" type="text" required /></label>
+										<label
+											>Workflow validity
+											<span class="input-with-unit"><input id="workflow-valid-blocks" min="243" max="1000000" inputmode="numeric" type="number" required /><span>blocks</span></span>
+										</label>
+									</div>
+									<fieldset class="ecosystem-controls">
+										<legend>Enabled ecosystems</legend>
+										<label class="checkbox-row"><input data-ecosystem-toggle="zoltar" type="checkbox" /><span>Zoltar</span></label>
+										<label class="checkbox-row"><input data-ecosystem-toggle="statoblast" type="checkbox" /><span>Statoblast</span></label>
+										<label class="checkbox-row"><input data-ecosystem-toggle="open-oracle" type="checkbox" /><span>Open Oracle</span></label>
+										<label class="checkbox-row"><input data-ecosystem-toggle="trading" type="checkbox" /><span>Trading</span></label>
+									</fieldset>
+									<div class="form-actions"><button id="save-settings" type="submit">Save execution policy</button><button id="discard-settings" class="secondary" type="button" disabled>Discard edits and reload</button><span id="settings-save-status" class="action-status" role="alert"></span></div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+
+					<details class="panel settings-group" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Transaction signer</strong><small id="signer-summary">No signer configured</small></span>
+						</summary>
+						<div class="settings-body">
+							<form id="signer-form" autocomplete="off">
+								<fieldset id="signer-fields">
+									<p class="notice warning">The private key is accepted only by this protected endpoint. It is never returned by the API, embedded in the page, or written to activity. Do not let a browser or password manager save it; autocomplete suppression is defense in depth, not a guarantee.</p>
+									<label
+										>Private key
+										<input id="private-key" autocomplete="off" placeholder="0x…" spellcheck="false" type="password" />
+									</label>
+									<label class="checkbox-row"><input id="remember-signer" name="remember" type="checkbox" /><span>Remember in the bot's owner-only state directory</span></label>
+									<div class="form-actions">
+										<button id="update-signer" type="submit">Update signer</button>
+										<button id="clear-signer" class="secondary" type="button">Clear signer</button>
+										<span id="signer-status" class="action-status" role="alert"></span>
+									</div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+				</div>
+			</section>
+		</main>
+
+		<dialog id="resume-dialog" class="operator-dialog" aria-labelledby="resume-dialog-title">
+			<div class="dialog-body">
+				<div>
+					<p class="eyebrow">Safety confirmation</p>
+					<h2 id="resume-dialog-title">Resume chaos scheduling?</h2>
+				</div>
+				<p>Recovery work may run immediately. A new randomized operation runs only when its timer is due and its exact transaction passes simulation.</p>
+				<ul id="resume-preflight" class="preflight-list"></ul>
+				<p id="resume-random-scope-warning" class="notice warning hidden" role="alert"></p>
+				<div class="dialog-actions"><button id="cancel-resume" class="secondary" type="button">Keep paused</button><button id="confirm-resume" type="button">Resume bot</button></div>
+			</div>
+		</dialog>
+
+		<script type="module" src="/dashboard.js"></script>
+	</body>
+</html>

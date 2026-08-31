@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '#ethereum'
-import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
+import { assertSubmissionWindowOpen, maximumFeePerGas, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -286,6 +286,28 @@ describe('signed transaction delivery', () => {
 		).rejects.toThrow('required 2 successful relays')
 	})
 
+	test('counts distinct relay origins toward the successful simulation threshold', async () => {
+		const acceptedOrigin = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: { bundleHash: expectedBundleHash([serializedTransaction]), results: [{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) }], stateBlockNumber: 99, totalGasUsed: 21_000 },
+			}),
+		)
+		const rejectedOrigin = relay(() => Response.json({ error: { code: -32_000, message: 'bundle reverted' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			simulateSignedBundleEveryRelay({
+				address,
+				minimumSuccessfulRelays: 2,
+				relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('received 1 distinct relay origin')
+	})
+
 	test('fans one ordered bundle out to every configured relay without allowed reverts', async () => {
 		const requests: unknown[] = []
 		const transactions = [serializedTransaction, '0x1234'] as const
@@ -324,6 +346,21 @@ describe('signed transaction delivery', () => {
 				transactions: [serializedTransaction],
 			}),
 		).rejects.toThrow('required 2 accepting relays')
+	})
+
+	test('counts distinct relay origins toward the successful bundle submission threshold', async () => {
+		const acceptedOrigin = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash([serializedTransaction]) } }))
+		const rejectedOrigin = relay(() => Response.json({ error: { code: -32_000, message: 'submission rejected' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedBundle({
+				address,
+				minimumSuccessfulRelays: 2,
+				relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
+				signMessage: () => Promise.resolve(signature),
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('received 1 distinct relay origin')
 	})
 
 	test('applies the configured simulation threshold to entry and lifecycle bundle submission', async () => {
@@ -388,7 +425,7 @@ describe('signed transaction delivery', () => {
 		expect(prepared.maxBlockNumber).toBe(125n)
 		expect(parsed.chainId).toBe(1n)
 		expect(parsed.gas).toBe(130_000n)
-		expect(parsed.maxFeePerGas).toBe(22n * 10n ** 9n)
+		expect(parsed.maxFeePerGas).toBe(maximumFeePerGas(10n * 10n ** 9n))
 		expect(parsed.maxPriorityFeePerGas).toBe(2n * 10n ** 9n)
 		expect(parsed.nonce).toBe(7n)
 		expect(parsed.to).toBe(address)
@@ -457,6 +494,73 @@ describe('signed transaction delivery', () => {
 			method: 'eth_sendPrivateTransaction',
 			params: [{ maxBlockNumber: '0x7d', tx: serializedTransaction }],
 		})
+	})
+
+	test('enforces the configured acceptance threshold for private transactions', async () => {
+		const accepted = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: hash }))
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'relay unavailable' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: [],
+				serializedTransaction,
+				settings: validateSubmissionSettings({
+					minimumBundleRelaySuccesses: 2,
+					mode: 'private',
+					relayUrls: [accepted, rejected],
+				}),
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('required 2 accepting relays')
+	})
+
+	test('counts distinct relay origins toward the private transaction acceptance threshold', async () => {
+		const acceptedOrigin = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: hash }))
+		const rejectedOrigin = relay(() => Response.json({ error: { code: -32_000, message: 'relay unavailable' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: [],
+				serializedTransaction,
+				settings: validateSubmissionSettings({
+					minimumBundleRelaySuccesses: 2,
+					mode: 'private',
+					relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
+				}),
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('received 1 distinct relay origin')
+	})
+
+	test.each([0, -1, 1.5, 2])('rejects an unvalidated private relay threshold of %p before submission', async minimumBundleRelaySuccesses => {
+		let relayRequests = 0
+		const accepted = relay(() => {
+			relayRequests += 1
+			return Response.json({ id: 1, jsonrpc: '2.0', result: hash })
+		})
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: [],
+				serializedTransaction,
+				settings: {
+					minimumBundleRelaySuccesses,
+					mode: 'private',
+					relayUrls: [accepted],
+				},
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('Minimum bundle relay successes must be an integer between 1 and the configured private relay count')
+		expect(relayRequests).toBe(0)
 	})
 
 	test.each([
