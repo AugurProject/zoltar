@@ -1251,6 +1251,76 @@ describe('shared ethereum compatibility layer', () => {
 		expect(await walletClient.call({ to: TOKEN_ADDRESS })).toEqual({ data: '0x' })
 	})
 
+	for (const source of ['log query', 'transaction receipt'] as const) {
+		test(`public client rejects a non-bytes32 topic from a ${source}`, async () => {
+			const rawLog = {
+				address: TOKEN_ADDRESS,
+				blockHash: BLOCK_HASH,
+				blockNumber: '0x1',
+				data: '0x',
+				logIndex: '0x0',
+				removed: false,
+				topics: ['0x12'],
+				transactionHash: TX_HASH,
+				transactionIndex: '0x0',
+			}
+			const client = createPublicClient({
+				transport: custom(
+					createProvider(
+						() =>
+							source === 'log query'
+								? [rawLog]
+								: {
+										blockHash: BLOCK_HASH,
+										blockNumber: '0x1',
+										cumulativeGasUsed: '0x5208',
+										from: OWNER_ADDRESS,
+										gasUsed: '0x5208',
+										logs: [rawLog],
+										status: '0x1',
+										to: RECIPIENT_ADDRESS,
+										transactionHash: TX_HASH,
+										transactionIndex: '0x0',
+										type: '0x2',
+									},
+						[],
+					),
+				),
+			})
+			const result = source === 'log query' ? client.getLogs({}) : client.getTransactionReceipt({ hash: TX_HASH })
+
+			await expect(result).rejects.toThrow('RPC returned an invalid hash')
+		})
+	}
+
+	test('public client preserves valid mixed-case bytes32 log topics', async () => {
+		const topic = `0x${'AB'.repeat(32)}` satisfies Hex
+		const normalizedTopic = `0x${'ab'.repeat(32)}` satisfies Hex
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() => [
+						{
+							address: TOKEN_ADDRESS,
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x1',
+							data: '0x',
+							logIndex: '0x0',
+							removed: false,
+							topics: [topic],
+							transactionHash: TX_HASH,
+							transactionIndex: '0x0',
+						},
+					],
+					[],
+				),
+			),
+		})
+
+		const logs = await client.getLogs({})
+		expect(logs[0]?.topics).toEqual([normalizedTopic])
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
