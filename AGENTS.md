@@ -68,10 +68,16 @@ Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatti
 
 Run tests for behavior changes, bug fixes, tests or helpers, contracts, dependency wiring, and executable tooling or configuration.
 
-- Start with the smallest meaningful targeted test for a narrow change.
-- Run the full suite for contracts, shared behavior, cross-module interfaces, package/dependency wiring, or broad behavior.
-- If TypeScript has not already run, use `bun run test`; this command includes TypeScript transitively.
-- If `bun run tsc` already passed in the same cycle, avoid repeating it:
+- Run only tests whose behavior, dependency path, interface, or regression risk intersects the task change set. Do not run unrelated tests for reassurance.
+- Start with the narrowest test file or named test that can fail for the changed behavior. Add directly affected sibling tests only when they exercise a distinct relevant boundary, then add an integration or invariant test only when the task touches that boundary or invariant.
+- Determine the affected test set from imports and ownership, not directory proximity alone. Include current consumers when a shared export, ABI, generated contract output, package dependency, build entry point, test helper, or cross-module interface changes.
+- Match the repository's separate test domains. Root discovery does not include `augurScan` or `bots/*`; run a package's tests from that package when its source or a dependency it consumes changes.
+- Match the repository's test tiers. `bun run test:browser:smoke` covers production artifacts and short browser boots; `bun run test:browser:workflow` covers the long fork/auction and end-to-end transaction workflow. Browser tiers are excluded from canonical root discovery and must be invoked explicitly; the workflow tier is opt-in locally and runs in its own CI job. `bun run test:integration:mainnet` is a mutable live-network smoke check, while `bun run test:integration:mainnet-fork` owns deterministic historical route assertions.
+- Use `bun run test:plan` for repository-maintained starting suggestions when the changed paths intersect a mapped runner, browser, coverage, or external-integration boundary. Treat its output as a starting point, not proof of completeness; still trace imports, ownership, interfaces, and current consumers before selecting the final test set.
+- Use explicit paths with the appropriate existing setup or package command. Examples include `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 <paths...>` for root UI or mixed source tests, `bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 <paths...>` for Solidity-facing tests, and `cd <package> && bun test <paths...>` for package-owned tests. Preserve any prerequisite artifact or dependency checks required by the selected tests.
+- Do not use `bun run test` as the default validation command: it includes TypeScript and the complete root suite. Run it only when the task changes canonical test discovery or the root test runner, has repository-wide impact or an affected test set that cannot be bounded, explicitly requires CI/full-suite parity, or the user requests the full suite.
+- A contract or shared-module change does not by itself require every test. Run the owning contract or shared tests plus affected consumers and relevant integration, security-regression, fuzz, or invariant tests. Run the complete suite only when impact cannot be bounded more narrowly.
+- If TypeScript has not already run and the selected validation genuinely is the complete root suite, use `bun run test`; this command includes TypeScript transitively. If TypeScript already passed in the same cycle, avoid repeating it:
 
 ```bash
 bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run test:run -- --bail=1
@@ -79,7 +85,7 @@ bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun ru
 
 If selected tests require Anvil and `anvil` is missing, run `bun run install:anvil`.
 
-When the task changes tests themselves, running the relevant tests is sufficient; do not require a second layer of tests for those tests. Skip tests for non-executable documentation, instructions, formatting, and agent-prompt changes.
+When the task changes tests themselves, run the changed tests and any production tests needed to prove the behavior under test; do not require unrelated tests to test those tests. Skip tests for non-executable documentation, instructions, formatting, and agent-prompt changes.
 
 ### 3. Formatting
 
@@ -161,9 +167,9 @@ For a deterministic executable bug:
 2. Run it and confirm the expected failure before changing the implementation.
 3. Fix the root cause at the narrowest shared layer.
 4. Rerun the focused test and relevant surrounding suite.
-5. Run the full suite when contracts, shared behavior, or cross-module interfaces changed.
+5. Add affected consumer, integration, security-regression, fuzz, or invariant tests only when the fix intersects those boundaries. Use the complete suite only under the full-suite criteria in Validation.
 
-If a failing automated reproduction is impractical, document why and provide the strongest deterministic validation available. Solidity bugs require the failing-test-first process and the full test suite.
+If a failing automated reproduction is impractical, document why and provide the strongest deterministic validation available. Solidity bugs require the failing-test-first process, the owning contract tests, and any affected security, integration, fuzz, or invariant coverage; they do not automatically require unrelated repository tests.
 
 ## Code style
 

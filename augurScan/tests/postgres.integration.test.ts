@@ -8,16 +8,19 @@ import {
 	assertLogScanCursorUpdate,
 	assertRewindTarget,
 	assertStartBlockCompatible,
+	canonicalTablePolicies,
 	type IndexedBlock,
+	type IndexerLease,
 	lockLiveEventWriter,
 	releaseReservedConnection,
-	replayWindowExpired,
+	replayCursorRequiresReset,
 	rewindDepth,
 	ScannerDatabase,
 	type StoredTransaction,
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../src/ethereum.ts'
+import { LiveBus } from '../src/live.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
@@ -266,10 +269,12 @@ describe('database checkpoint fencing', () => {
 		expect(rewindDepth(1_250n, 1_000n, 1_200n)).toBe(50n)
 	})
 
-	test('requires a canonical refresh only when an event cursor predates retained history', () => {
-		expect(replayWindowExpired(8, 9)).toBe(true)
-		expect(replayWindowExpired(9, 9)).toBe(false)
-		expect(replayWindowExpired(0, 0)).toBe(false)
+	test('requires a canonical refresh when an event cursor falls outside durable history', () => {
+		expect(replayCursorRequiresReset(8, 9, 12)).toBe(true)
+		expect(replayCursorRequiresReset(9, 9, 12)).toBe(false)
+		expect(replayCursorRequiresReset(12, 9, 12)).toBe(false)
+		expect(replayCursorRequiresReset(13, 9, 12)).toBe(true)
+		expect(replayCursorRequiresReset(0, 0, 0)).toBe(false)
 	})
 
 	test('accepts only the configured first block or the direct checkpoint child', () => {
@@ -712,6 +717,89 @@ postgresTest('limits health continuity auditing to the latest 10,000 indexed blo
 	}
 })
 
+postgresTest('classifies every chain-scoped canonical table', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	try {
+		await initializeSchema(database.sql)
+		const rows = await database.sql`
+			SELECT canonical.table_name
+			FROM information_schema.columns AS canonical
+			JOIN information_schema.columns AS chain
+				ON chain.table_schema = canonical.table_schema AND chain.table_name = canonical.table_name
+			WHERE canonical.table_schema = 'public' AND canonical.column_name = 'canonical' AND chain.column_name = 'chain_id'
+			ORDER BY canonical.table_name
+		`
+		expect(rows.map((row: Record<string, unknown>) => String(row['table_name']))).toEqual(canonicalTablePolicies.map(({ table }) => table).toSorted())
+	} finally {
+		await database.close()
+	}
+})
+
+postgresTest('drains lease operations queued before release and rejects later work', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const blocker = new ScannerDatabase(postgresUrl)
+	const releaseChainId = chainId + 20 + process.pid
+	const network = {
+		id: `lease-release-${releaseChainId}`,
+		name: 'Lease release ordering',
+		chainId: releaseChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 0n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [],
+	} satisfies NetworkConfig
+	let lease: IndexerLease | undefined
+	let unblockRow: (() => void) | undefined
+	let blockingTransaction: Promise<void> | undefined
+	const rowBlocked = new Promise<void>((resolve) => {
+		unblockRow = resolve
+	})
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork(network)
+		lease = await database.tryAcquireIndexerLock(releaseChainId)
+		if (lease === undefined) throw new Error('release-ordering writer did not acquire its lock')
+		let confirmRowLocked: (() => void) | undefined
+		const rowLocked = new Promise<void>((resolve) => {
+			confirmRowLocked = resolve
+		})
+		blockingTransaction = blocker.sql.begin(async (transaction) => {
+			await transaction`SELECT 1 FROM networks WHERE chain_id = ${releaseChainId} FOR UPDATE`
+			confirmRowLocked?.()
+			await rowBlocked
+		})
+		await rowLocked
+
+		const firstUpdate = database.updateObservedHead(releaseChainId, 1n, 'backfilling', lease)
+		for (let attempt = 0; attempt < 100; attempt++) {
+			const activity = await database.sql`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${lease.backendPid}`
+			if (activity[0]?.['wait_event_type'] === 'Lock') break
+			if (attempt === 99) throw new Error('lease operation did not wait for the network row lock')
+			await Bun.sleep(10)
+		}
+		const secondUpdate = database.updateObservedHead(releaseChainId, 2n, 'live', lease)
+		const release = lease.release()
+		unblockRow?.()
+		await blockingTransaction
+		await Promise.all([firstUpdate, secondUpdate, release])
+
+		const stored = await database.sql`SELECT observed_block, phase FROM networks WHERE chain_id = ${releaseChainId}`
+		expect(stored).toEqual([{ observed_block: '2', phase: 'live' }])
+		await expect(database.updateObservedHead(releaseChainId, 3n, 'live', lease)).rejects.toThrow('Indexer lease was released')
+	} finally {
+		unblockRow?.()
+		await blockingTransaction?.catch(() => undefined)
+		await lease?.release().catch(() => undefined)
+		await database.sql`DELETE FROM networks WHERE chain_id = ${releaseChainId}`
+		await blocker.close()
+		await database.close()
+	}
+})
+
 postgresTest('advances the canonical coverage floor when RPC log history is pruned', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
@@ -828,9 +916,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 						startBlock: 2n,
 						contracts: [...network.contracts, [promotedAddress, 'Additional manifest source', 'openOracle']],
 					},
-					lease,
-					true,
-					true,
+					{ lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true },
 				),
 			).toBe(true)
 			const contractsAfterReseed = await database.contracts(boundaryChainId, lease)
@@ -847,18 +933,20 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 					[orphanOnlyAddress, 'Promoted orphan', 'securityPool'],
 				],
 			} satisfies NetworkConfig
-			expect(await database.seedNetwork(promotedNetwork, lease, true, true)).toBe(true)
+			expect(await database.seedNetwork(promotedNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
 			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({
 				discoveryBlock: 1n,
 				provenance: 'manifest',
 			})
-			expect(await database.seedNetwork(promotedNetwork, lease, true, true)).toBe(false)
+			expect(await database.seedNetwork(promotedNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(false)
 			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({
 				discoveryBlock: 1n,
 				provenance: 'manifest',
 			})
 			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-during-promotion', new Date('2026-02-14T00:00:00Z')), lease)
-			expect(await database.seedNetwork({ ...network, startBlock: 2n }, lease, true, true)).toBe(true)
+			expect(
+				await database.seedNetwork({ ...network, startBlock: 2n }, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true }),
+			).toBe(true)
 			const contractsAfterPromotionRemoval = await database.contracts(boundaryChainId, lease)
 			expect(contractsAfterPromotionRemoval.get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
 			expect(contractsAfterPromotionRemoval.has(orphanOnlyAddress.toLowerCase())).toBe(false)
@@ -1003,9 +1091,9 @@ postgresTest(
 			if (replayLease === undefined) throw new Error('direct observation writer did not acquire its replay lock')
 			try {
 				expect(
-					await database.seedNetwork(network, replayLease, false, false, {
-						reason: 'projection-rebuild',
-						causes: ['projection-rebuild'],
+					await database.seedNetwork(network, {
+						lease: replayLease,
+						sourceReplayPlan: { reason: 'projection-rebuild', causes: ['projection-rebuild'] },
 					}),
 				).toBeTrue()
 				const retainedDuringReplay = await database.sql`
@@ -1494,13 +1582,11 @@ postgresTest(
 		try {
 			await initializeSchema(database.sql)
 			const firstRun = await insertRun('one')
-			await expect(database.seedNetwork(network, undefined, false, false, undefined, firstRun)).rejects.toThrow(
-				'Applied source hashes require the network indexer lease',
-			)
+			await expect(database.seedNetwork(network, { appliedSourceHashes: firstRun })).rejects.toThrow('Applied source hashes require the network indexer lease')
 			const firstLease = await database.tryAcquireIndexerLock(provenanceChainId)
 			if (firstLease === undefined) throw new Error('first provenance writer did not acquire its lock')
 			try {
-				await database.seedNetwork(network, firstLease, false, false, undefined, firstRun)
+				await database.seedNetwork(network, { lease: firstLease, appliedSourceHashes: firstRun })
 				await database.storeBlock(provenanceChainId, evidenceBlock, firstLease, firstRun)
 				await database.storeEntityStateSnapshots(
 					provenanceChainId,
@@ -1587,7 +1673,13 @@ postgresTest(
 			try {
 				const applicationReplayPlan = await database.sourceReplayPlan(provenanceChainId, applicationOnlyRun, applicationOnlyLease)
 				expect(applicationReplayPlan).toEqual({ reason: 'projection-rebuild', causes: ['projection-rebuild'] })
-				expect(await database.seedNetwork(network, applicationOnlyLease, false, false, applicationReplayPlan, applicationOnlyRun)).toBeTrue()
+				expect(
+					await database.seedNetwork(network, {
+						lease: applicationOnlyLease,
+						sourceReplayPlan: applicationReplayPlan,
+						appliedSourceHashes: applicationOnlyRun,
+					}),
+				).toBeTrue()
 			} finally {
 				await applicationOnlyLease.release()
 			}
@@ -1690,7 +1782,14 @@ postgresTest(
 				contracts: [...network.contracts, [address, 'Combined reset fixture', 'priceCoordinator']],
 			} satisfies NetworkConfig
 			try {
-				expect(await database.seedNetwork(combinedResetNetwork, abiResetLease, true, false, combinedReplayPlan, combinedRun)).toBeTrue()
+				expect(
+					await database.seedNetwork(combinedResetNetwork, {
+						lease: abiResetLease,
+						resetCanonicalHistoryOnManifestChange: true,
+						sourceReplayPlan: combinedReplayPlan,
+						appliedSourceHashes: combinedRun,
+					}),
+				).toBeTrue()
 			} finally {
 				await abiResetLease.release()
 			}
@@ -1899,7 +1998,12 @@ postgresTest(
 
 			const resetLease = await database.tryAcquireIndexerLock(manifestChainId)
 			if (resetLease === undefined) throw new Error('manifest replay writer did not acquire its reset lock')
-			expect(await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Reclassified contract', 'zoltar']] }, resetLease, true)).toBeTrue()
+			expect(
+				await database.seedNetwork(
+					{ ...network, contracts: [[discoveredAddress, 'Reclassified contract', 'zoltar']] },
+					{ lease: resetLease, resetCanonicalHistoryOnManifestChange: true },
+				),
+			).toBeTrue()
 			await resetLease.release()
 			const manifestResetEvents = await database.sql`
 				SELECT payload FROM live_events
@@ -1972,8 +2076,10 @@ postgresTest(
 					...network,
 					contracts: [[discoveredAddress, 'OpenOracle', 'openOracle', 1n]],
 				} satisfies NetworkConfig
-				expect(await database.seedNetwork(earlierBoundaryNetwork, lease, true, true)).toBe(true)
-				expect(await database.seedNetwork(earlierBoundaryNetwork, lease, true, true)).toBe(false)
+				expect(await database.seedNetwork(earlierBoundaryNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
+				expect(await database.seedNetwork(earlierBoundaryNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(
+					false,
+				)
 
 				const invalidation = await database.sql`
 					SELECT id::text, reason FROM chain_reorganizations WHERE chain_id = ${manifestChainId} ORDER BY id DESC LIMIT 1
@@ -2061,7 +2167,25 @@ postgresTest(
 			await database.sql.unsafe('TRUNCATE TABLE live_events RESTART IDENTITY')
 			await database.sql`INSERT INTO live_events (event, payload, created_at) VALUES ('status', '{}'::jsonb, now() - interval '8 days')`
 			await database.pruneLiveEvents()
+			expect(await database.latestEventId()).toBe(1)
 			expect(await database.eventsAfter(0)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'replay-window-expired', refreshRequired: true } }])
+			expect(await database.eventsAfter(2)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }])
+			const requestedLiveCursors: number[] = []
+			const liveBus = new LiveBus({
+				latestEventId: async () => await database.latestEventId(),
+				eventsAfter: async (id) => {
+					requestedLiveCursors.push(id)
+					return await database.eventsAfter(id)
+				},
+			})
+			const liveStream = liveBus.stream()
+			if (liveStream === undefined) throw new Error('Expected live stream capacity')
+			const liveReader = liveStream.getReader()
+			await liveReader.read()
+			await liveBus.poll()
+			expect(requestedLiveCursors).toEqual([1])
+			await liveBus.close()
+			expect(await liveReader.read()).toEqual({ done: true, value: undefined })
 			const network: NetworkConfig = {
 				id: 'integration',
 				name: 'Integration chain',
@@ -2075,11 +2199,13 @@ postgresTest(
 			}
 			expect(await database.seedNetwork(network)).toBe(false)
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
-			await expect(database.seedNetwork({ ...network, startBlock: 3n }, undefined, false, true)).rejects.toThrow('while an effective index start is retained')
+			await expect(database.seedNetwork({ ...network, startBlock: 3n }, { preserveStoredStart: true })).rejects.toThrow(
+				'while an effective index start is retained',
+			)
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
 			const zeroBoundaryNetwork = { ...network, id: 'zero-boundary', chainId: chainId + 1, startBlock: 0n }
 			expect(await database.seedNetwork(zeroBoundaryNetwork)).toBe(false)
-			await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, undefined, false, true)).rejects.toThrow(
+			await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, { preserveStoredStart: true })).rejects.toThrow(
 				'while an effective index start is retained',
 			)
 			expect(await database.networkStartBlock(zeroBoundaryNetwork.chainId)).toBe(0n)
@@ -2226,7 +2352,7 @@ postgresTest(
 							[promotedAddress, 'Promoted manifest helper', 'securityPool'],
 						],
 					},
-					writeLease,
+					{ lease: writeLease },
 				),
 			).toBe(true)
 			const seededContracts = await database.contracts(chainId)
@@ -2438,8 +2564,8 @@ postgresTest(
 				],
 				writeLease,
 			)
-			await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Temporarily promoted pool', 'securityPool']] }, writeLease)
-			await database.seedNetwork({ ...network, contracts: [] }, writeLease)
+			await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Temporarily promoted pool', 'securityPool']] }, { lease: writeLease })
+			await database.seedNetwork({ ...network, contracts: [] }, { lease: writeLease })
 			const reconciledContracts = await database.contracts(chainId)
 			expect(reconciledContracts.has(address.toLowerCase())).toBe(false)
 			expect(reconciledContracts.has(promotedAddress.toLowerCase())).toBe(false)
@@ -3201,7 +3327,12 @@ postgresTest(
 
 			const manifestResetLease = await database.tryAcquireIndexerLock(chainId)
 			if (manifestResetLease === undefined) throw new Error('manifest reset did not acquire its lock')
-			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] }, manifestResetLease, true)).toBe(true)
+			expect(
+				await database.seedNetwork(
+					{ ...network, contracts: [[address, 'Final manifest', 'zoltar']] },
+					{ lease: manifestResetLease, resetCanonicalHistoryOnManifestChange: true },
+				),
+			).toBe(true)
 			await manifestResetLease.release()
 			expect(await database.checkpoint(chainId)).toBeUndefined()
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
@@ -4530,7 +4661,12 @@ postgresTest(
 
 			const resetLease = await database.tryAcquireIndexerLock(operationsChainId)
 			if (resetLease === undefined) throw new Error('operations manifest-reset writer did not acquire its lock')
-			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] }, resetLease, true)).toBe(true)
+			expect(
+				await database.seedNetwork(
+					{ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] },
+					{ lease: resetLease, resetCanonicalHistoryOnManifestChange: true },
+				),
+			).toBe(true)
 			await resetLease.release()
 			const retainedSnapshots = await database.sql`
 				SELECT DISTINCT read_status, canonical FROM entity_state_snapshots WHERE chain_id = ${operationsChainId}

@@ -87,7 +87,7 @@ describe('reporting protocol client', () => {
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
-		expect(decodedCall.functionName).toBe('depositRepFromWallet')
+		expect(decodedCall.functionName).toBe('depositRepOnOutcome')
 		expect(decodedCall.args).toEqual([1n, 7n])
 		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
 	})

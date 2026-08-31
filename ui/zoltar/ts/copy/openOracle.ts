@@ -26,6 +26,10 @@ export const formatApproveToken = (tokenSymbol: CopyTemplateValue) => `Approve $
 export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Approved`
 export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Withdrawn`
 export const browseReports = 'Browse Reports'
+export const reportDirectory = 'Report Directory'
+export const browseReportsDescription = 'Find a report on the loaded page, review its status, and open it for available actions.'
+export const createReportDescription = 'Create a standalone report and review its assets, funding, and escalation settings before submitting.'
+export const selectedReportDescription = 'Review the selected report’s current stage, balances, and available settlement or dispute actions.'
 export const formatBrowseShownCountSummary = (shownCount: string, pageCount: string) => `${shownCount} of ${pageCount} reports shown on this page.`
 export const callbackContract = 'Callback Contract'
 export const callbackExtra = 'Callback / Extra'

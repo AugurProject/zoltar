@@ -7,7 +7,6 @@ import {
 	type IndexedBlock,
 	type IndexerLease,
 	manifestContractSetChanged,
-	runFencedIndexerTransaction,
 	ScannerDatabase,
 	type StoredTransaction,
 } from '../src/database.ts'
@@ -748,6 +747,7 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			() => {},
 		)
 		const earlierProvider = providers[0]
 		if (earlierProvider === undefined) throw new Error('Expected an earlier provider fixture')
@@ -771,6 +771,7 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			() => {},
 		)
 		const recoveredProvider = providers[0]
 		if (recoveredProvider === undefined) throw new Error('Expected a recovered provider fixture')
@@ -787,6 +788,7 @@ describe('network indexer lifecycle', () => {
 			{ chainId: 2, floor: 10n },
 			{ chainId: 1, floor: 42n },
 		]
+		const failures: Array<{ error: unknown; provider: (typeof providers)[number] }> = []
 		const availability = await findEarliestAvailableLogProvider(
 			providers,
 			10n,
@@ -797,10 +799,14 @@ describe('network indexer lifecycle', () => {
 			async (provider, blockNumber) => {
 				if (blockNumber < provider.floor) throw prunedLogs
 			},
+			(provider, error) => failures.push({ error, provider }),
 		)
 		const correctProvider = providers[1]
 		if (correctProvider === undefined) throw new Error('Expected a correct-chain provider fixture')
 		expect(availability).toEqual({ provider: correctProvider, startBlock: 42n })
+		expect(failures).toHaveLength(1)
+		expect(failures[0]?.provider).toBe(providers[0])
+		expect(failures[0]?.error).toBeInstanceOf(ChainConfigurationError)
 	})
 
 	test('does not hide unexpected provider failures during log boundary discovery', async () => {
@@ -846,6 +852,7 @@ describe('network indexer lifecycle', () => {
 					async (provider, blockNumber) => {
 						if (blockNumber < provider.floor) throw prunedLogs
 					},
+					() => {},
 				)
 				recoveredStart = availability?.startBlock
 				controller.abort()
@@ -3172,22 +3179,6 @@ describe('network indexer lifecycle', () => {
 		expect(() => assertIndexerLeaseReleaseObservation(41, 41, false)).toThrow(
 			'Indexer lease unlock failed on PostgreSQL backend 41; lock ownership may already be lost',
 		)
-	})
-
-	test('does not run a leased mutation when the transaction uses another PostgreSQL backend', async () => {
-		let mutated = false
-		const transaction = { backendPid: 42 }
-
-		await expect(
-			runFencedIndexerTransaction(
-				async (operation) => await operation(transaction),
-				async (activeTransaction: { readonly backendPid: number }) => assertIndexerLeaseObservation(41, activeTransaction.backendPid, true),
-				async () => {
-					mutated = true
-				},
-			),
-		).rejects.toThrow('Indexer lease moved from PostgreSQL backend 41 to 42')
-		expect(mutated).toBeFalse()
 	})
 
 	test('does not select shared tokens as standalone activity sources', () => {

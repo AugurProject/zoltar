@@ -42,6 +42,7 @@ export type SecurityPoolActionState = {
 
 export type SecurityPoolStateInput = {
 	lifecycleState?: SecurityPoolLifecycleState | undefined
+	ordinaryEscalationGameStarted?: boolean | undefined
 	reportingStage?: SecurityPoolReportingStage | undefined
 	forkStage?: SecurityPoolForkStage | undefined
 	universeHasForked: boolean
@@ -50,6 +51,7 @@ export type SecurityPoolStateInput = {
 
 export type SecurityPoolStateModel = {
 	lifecycleState?: SecurityPoolLifecycleState | undefined
+	ordinaryEscalationGameStarted: boolean
 	reportingStage?: SecurityPoolReportingStage | undefined
 	forkStage?: SecurityPoolForkStage | undefined
 	universeHasForked: boolean

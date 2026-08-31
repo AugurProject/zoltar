@@ -7,7 +7,7 @@ import * as url from 'node:url'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/zoltar/ts/protocol/deployment.ts'
-import { getDeploymentSteps } from '../ui/statoblast/ts/protocol/deployment.ts'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../ui/statoblast/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../ui/coreShared/ts/lib/networkProfile.ts'
 import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
@@ -58,6 +58,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
 	uniswapV3Factory: '0x6377aa1b105d3ee2a54d73d3652812d6209ca56871954f61ad6e87d9c184fa5e',
 	uniswapV3Quoter: '0x8410f80f6ddf60c46fe39dc3394f3b245c16d62d1c401f4ebc2d030afbb1a264',
@@ -68,16 +69,16 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 
 const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainnet' | 'sepolia', Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		escalationGameCreationCodePartOne: '0xd0596f97866e1be3022fd599dae18a6e1d5d435a9ce23ed2e209ef1dc42fc783',
-		escalationGameCreationCodePartTwo: '0xc58dfc77e2da9ad8dd5d48dffca03f248e788940209c63297c02d0ecc7a9ff8f',
+		escalationGameCreationCodePartOne: '0xa5fd2dfefe573b8f87769bcfec9bcf54d2a2419e25d5d35b31c319f3a448dabf',
+		escalationGameCreationCodePartTwo: '0x1fbb7128ea81343de00a04feaae84f7ca74538c91bdd6e1cd64800889c878b83',
 		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
 		liquidationApprovalRegistryDeployer: '0xdf8d31c4c3a7fd67763b61c9cf8a26dd494b3c4c632b02d2441ab3b7fdbd0f86',
 		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
 		priceCoordinatorCreationCodeFirstChunk: '0xb2d923d6091e5526573d9c740a0442c01fe608239077cc132d174e7a1e23ae78',
 		priceCoordinatorCreationCodeSecondChunk: '0x31600fba62534dc98d7af851bd88fe79105b904dba03585d9cacc9cae3bda8b4',
 		priceCoordinatorDeploymentWorker: '0xc7d9eff4511ad136ef6642e6de8dfdbc333478bdd1fe05c2e78004e7690d0500',
-		securityPoolDeployer: '0xd83bde7b8e59e95e9a52f6f76eb7bcb4db6d0a29ca720a9f97137047820f70b6',
-		securityPoolDeploymentWorker: '0x308142b06ffee9f0651bccbad2b059ee1db644a893575160814e82f7cb7d2c40',
+		securityPoolDeployer: '0xb7af27786860cfcc1ced24f3ff4898955dec3de2c9807dd915ecebb0bdb74fca',
+		securityPoolDeploymentWorker: '0xd64cdff38c1d46dd4b42b3e119e540436d93cdf2664e677794a9562d3caf6214',
 		securityPoolCreationCodeFirstChunk: '0x8bcb74dcbd890841071ba4c5f9fb2d51e96178cbd15d88b59231df6daa523ae3',
 		securityPoolCreationCodeSecondChunk: '0x39f60026395bba364f64a9a9eee2942f183b51c92d164e44632757f7ee93f673',
 		securityPoolEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
@@ -86,16 +87,16 @@ const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainne
 		securityPoolForkerVaultMigrationDelegate: '0xeb30183c6271a10148e3ee9a99cf1ca6b4c35d2e92951f68d9d4fef5315d5759',
 	},
 	mainnet: {
-		escalationGameCreationCodePartOne: '0xd0596f97866e1be3022fd599dae18a6e1d5d435a9ce23ed2e209ef1dc42fc783',
-		escalationGameCreationCodePartTwo: '0xc58dfc77e2da9ad8dd5d48dffca03f248e788940209c63297c02d0ecc7a9ff8f',
+		escalationGameCreationCodePartOne: '0xa5fd2dfefe573b8f87769bcfec9bcf54d2a2419e25d5d35b31c319f3a448dabf',
+		escalationGameCreationCodePartTwo: '0x1fbb7128ea81343de00a04feaae84f7ca74538c91bdd6e1cd64800889c878b83',
 		escalationGameProofVerifier: '0xfc49238fed42490497fb4e8674a8c246e50c23e3ab87bf87b5f1d0f7e4a4393a',
 		liquidationApprovalRegistryDeployer: '0x4dc7e011fb5e889196605329cc61e25a44971232db0d9d58a1340a3aa18fa36d',
 		liquidationApprovalRegistryImplementation: '0x3627fef43fff4635e4ed78d5499bc1d7ac142e00bec7514272a699416b1933d8',
 		priceCoordinatorCreationCodeFirstChunk: '0xb2d923d6091e5526573d9c740a0442c01fe608239077cc132d174e7a1e23ae78',
 		priceCoordinatorCreationCodeSecondChunk: '0x31600fba62534dc98d7af851bd88fe79105b904dba03585d9cacc9cae3bda8b4',
 		priceCoordinatorDeploymentWorker: '0xd360771cdeb4b775d39d311964b5b1a5485f7c2c59394f874caa6135799ea4cd',
-		securityPoolDeployer: '0xcbc2d06907efbad9d65c17078a9f1695cd186fdd1d003eb10a0b1fc16011edc6',
-		securityPoolDeploymentWorker: '0xcb020caa26662638eb3be2a0cd8e5380791e468312f6fe27810cb4708888e073',
+		securityPoolDeployer: '0xe8209e47939286238f6f61f580048a5ad02011ff7db2824b1e7f08d440d89f22',
+		securityPoolDeploymentWorker: '0x99066c5c2bca9fceceecd6e8a50863f966169977ea2befbbaf909fdef2bb09fd',
 		securityPoolCreationCodeFirstChunk: '0x8bcb74dcbd890841071ba4c5f9fb2d51e96178cbd15d88b59231df6daa523ae3',
 		securityPoolCreationCodeSecondChunk: '0x39f60026395bba364f64a9a9eee2942f183b51c92d164e44632757f7ee93f673',
 		securityPoolEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
@@ -637,6 +638,7 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 
 export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
 	assertStaticDeploymentArtifactRuntimeCodeHashes()
+	assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()
 	const chainId = parseChainId(parameters.chainId.toString())
 	const rpcUrl = parseRpcUrl(parameters.rpcUrl)
 	const log = parameters.log ?? console.log

@@ -590,13 +590,6 @@ function isHexCharacter(value: string) {
 	return /^[0-9a-fA-F]*$/.test(value)
 }
 
-function hexToBigInt(value: string | bigint | number | undefined) {
-	if (value === undefined) return undefined
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return normalizeQuantityValue(value)
-	return BigInt(value)
-}
-
 function normalizeQuantityValue(value: bigint | number) {
 	if (typeof value === 'number') {
 		if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Number "${value.toString()}" is not in safe integer range`)
@@ -622,15 +615,10 @@ function normalizeHexData(value: string | undefined) {
 	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
 }
 
-function normalizeBoolean(value: unknown) {
-	if (typeof value === 'boolean') return value
-	if (typeof value === 'string') {
-		if (value === '0x1' || value.toLowerCase() === 'true') return true
-		if (value === '0x0' || value.toLowerCase() === 'false') return false
-	}
-	if (typeof value === 'number') return value !== 0
-	if (typeof value === 'bigint') return value !== 0n
-	return false
+function normalizeOptionalLogRemoved(value: unknown) {
+	if (value === undefined) return undefined
+	if (typeof value !== 'boolean') throw new Error('RPC returned a log with an invalid removed flag')
+	return value
 }
 
 function normalizeTransactionType(value: unknown) {
@@ -673,6 +661,10 @@ function normalizeHash(value: unknown) {
 	const normalized = stripHexPrefix(value).toLowerCase()
 	if (normalized.length !== 64) throw new Error('RPC returned an invalid hash')
 	return ensure0x(normalized) as Hash
+}
+
+function requireMatchingTransactionHash(expected: Hash, actual: Hash, resultLabel: string) {
+	if (actual !== expected) throw new Error(`RPC returned ${resultLabel} with a different hash: expected "${expected}", received "${actual}"`)
 }
 
 function normalizeRpcHex(value: unknown) {
@@ -1271,7 +1263,26 @@ async function retryRateLimited<TValue>(operation: () => Promise<TValue>, option
 	}
 }
 
+type DeadlineRunner = <TValue>(operation: () => Promise<TValue>) => Promise<TValue>
+
+async function runWithDeadline<TValue>(parameters: { getTimeoutError: () => Error; operation: (runBeforeDeadline: DeadlineRunner) => Promise<TValue>; timeout: number }) {
+	let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<never>((_resolve, reject) => {
+		deadlineTimer = setTimeout(() => reject(parameters.getTimeoutError()), parameters.timeout)
+	})
+	const runBeforeDeadline: DeadlineRunner = async operation => await Promise.race([operation(), deadline])
+	try {
+		return await parameters.operation(runBeforeDeadline)
+	} finally {
+		if (deadlineTimer !== undefined) clearTimeout(deadlineTimer)
+	}
+}
+
 async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+	return await requestTransportOnce<TValue>(transport, parameters)
+}
+
+async function requestTransportWithRateLimitRetries<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
 		retryCount: transport.retryCount,
 		retryDelay: transport.retryDelay,
@@ -1308,14 +1319,16 @@ function toRpcError(error: unknown, fallbackMessage: string) {
 function normalizeLog(value: unknown): TransactionLog {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid log')
 	const log = value as Record<string, unknown>
+	const topics = log['topics']
+	if (!Array.isArray(topics)) throw new Error('RPC returned a log without topics')
 	return {
 		address: normalizeAddress(log['address']),
 		blockHash: log['blockHash'] === undefined || log['blockHash'] === null ? undefined : normalizeHash(log['blockHash']),
 		blockNumber: log['blockNumber'] === undefined || log['blockNumber'] === null ? undefined : normalizeRpcBigInt(log['blockNumber']),
 		data: normalizeRpcHex(log['data']),
 		logIndex: log['logIndex'] === undefined || log['logIndex'] === null ? undefined : normalizeRpcBigInt(log['logIndex']),
-		removed: normalizeBoolean(log['removed']),
-		topics: Array.isArray(log['topics']) ? log['topics'].map(topic => normalizeRpcHex(topic)) : [],
+		removed: normalizeOptionalLogRemoved(log['removed']),
+		topics: topics.map(topic => normalizeRpcHex(topic)),
 		transactionHash: log['transactionHash'] === undefined || log['transactionHash'] === null ? undefined : normalizeHash(log['transactionHash']),
 		transactionIndex: log['transactionIndex'] === undefined || log['transactionIndex'] === null ? undefined : normalizeRpcBigInt(log['transactionIndex']),
 	}
@@ -1384,7 +1397,7 @@ function isBlockTransaction(value: unknown): value is BlockTransaction {
 	return typeof value === 'object' && value !== null && 'hash' in value && 'from' in value && 'nonce' in value
 }
 
-function isTransactionNotFoundError(error: unknown) {
+function isTransactionNotFoundError(error: unknown): error is Error {
 	return error instanceof Error && error.message.includes('could not be found')
 }
 
@@ -1421,6 +1434,30 @@ async function findReplacementTransaction(actions: PublicClientActions, original
 		if (replacementTransaction !== undefined) return replacementTransaction
 	}
 	return undefined
+}
+
+async function findReplacementTransactionBackwards(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
+	for (let blockNumber = parameters.fromBlock; blockNumber >= parameters.toBlock; blockNumber -= 1n) {
+		const replacementTransaction = await findReplacementTransaction(actions, originalTransaction, { fromBlock: blockNumber, toBlock: blockNumber }, blockReader)
+		if (replacementTransaction !== undefined) return replacementTransaction
+	}
+	return undefined
+}
+
+async function findMinedNonceBlock(actions: Pick<PublicClientActions, 'getTransactionCount'>, originalTransaction: Pick<BlockTransaction, 'from' | 'nonce'>, toBlock: bigint) {
+	if ((await actions.getTransactionCount({ address: originalTransaction.from, blockNumber: toBlock })) <= originalTransaction.nonce) return undefined
+	let lowerBlock = 0n
+	let upperBlock = toBlock
+	while (lowerBlock < upperBlock) {
+		const candidateBlock = lowerBlock + (upperBlock - lowerBlock) / 2n
+		const transactionCount = await actions.getTransactionCount({
+			address: originalTransaction.from,
+			blockNumber: candidateBlock,
+		})
+		if (transactionCount > originalTransaction.nonce) upperBlock = candidateBlock
+		else lowerBlock = candidateBlock + 1n
+	}
+	return lowerBlock
 }
 
 function buildRpcTransactionRequest(parameters: {
@@ -1466,7 +1503,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
 	let rpcResult: string
 	try {
-		rpcResult = await requestTransport<string>(transport, {
+		rpcResult = await requestTransportWithRateLimitRetries<string>(transport, {
 			method: 'eth_call',
 			params: [
 				buildRpcTransactionRequest({
@@ -1507,7 +1544,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
 	const getCode: PublicClientActions['getCode'] = async parameters => {
 		const result = normalizeRpcHex(
-			await requestTransport<string>(transport, {
+			await requestTransportWithRateLimitRetries<string>(transport, {
 				method: 'eth_getCode',
 				params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 			}),
@@ -1518,7 +1555,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 	return {
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [
 						buildRpcTransactionRequest({
@@ -1539,14 +1576,14 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			),
 		estimateGas: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [buildRpcTransactionRequest(parameters)],
 				}),
 			),
 		getBalance: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getBalance',
 					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
@@ -1554,20 +1591,20 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
 			const blockTag = normalizeBlockTag(parameters?.blockNumber)
-			const block = await requestTransport<unknown>(transport, {
+			const block = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
 			return normalizeBlock(block, includeTransactions)
 		},
-		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
+		getBlockNumber: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_blockNumber' })),
+		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode,
 		getBytecode: getCode,
-		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
+		getGasPrice: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_gasPrice' })),
 		getTransactionCount: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getTransactionCount',
 					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
@@ -1584,7 +1621,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							...(parameters.args === undefined ? {} : { args: parameters.args }),
 							eventName: event.name ?? 'event',
 						}))
-			const rawLogs = await requestTransport<unknown[]>(transport, {
+			const rawLogs = await requestTransportWithRateLimitRetries<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
 					{
@@ -1611,20 +1648,26 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}) as unknown as readonly RpcLogForEvent<TEvent>[]
 		},
 		getTransaction: async parameters => {
-			const rawTransaction = await requestTransport<unknown>(transport, {
+			const requestedHash = normalizeHash(parameters.hash)
+			const rawTransaction = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionByHash',
-				params: [parameters.hash],
+				params: [requestedHash],
 			})
-			if (rawTransaction === null) throw new Error(`Transaction with hash "${parameters.hash}" could not be found.`)
-			return normalizeTransaction(rawTransaction)
+			if (rawTransaction === null) throw new Error(`Transaction with hash "${requestedHash}" could not be found.`)
+			const transaction = normalizeTransaction(rawTransaction)
+			requireMatchingTransactionHash(requestedHash, transaction.hash, 'transaction')
+			return transaction
 		},
 		getTransactionReceipt: async parameters => {
-			const rawReceipt = await requestTransport<unknown>(transport, {
+			const requestedHash = normalizeHash(parameters.hash)
+			const rawReceipt = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionReceipt',
-				params: [parameters.hash],
+				params: [requestedHash],
 			})
-			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${parameters.hash}" could not be found.`)
-			return normalizeReceipt(rawReceipt)
+			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${requestedHash}" could not be found.`)
+			const receipt = normalizeReceipt(rawReceipt)
+			requireMatchingTransactionHash(requestedHash, receipt.transactionHash, 'transaction receipt')
+			return receipt
 		},
 		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => {
 			const calls: { allowFailure: boolean; callData: Hex; target: Address }[] = []
@@ -1651,6 +1694,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 			const decoded = decodeFunctionOutput(rawResult.abiItem, rawResult.data)
 			if (!Array.isArray(decoded)) throw new Error('Unexpected multicall response')
+			if (decoded.length !== parameters.contracts.length) throw new Error(`Multicall returned ${decoded.length.toString()} results for ${parameters.contracts.length.toString()} calls`)
 
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
@@ -1701,41 +1745,56 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
-			const waitForNextPoll = async () => {
-				await new Promise(resolve => {
-					setTimeout(resolve, pollingInterval)
-				})
-			}
-			const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) =>
-				await retryRateLimited(operation, {
-					retryDelay: transport.retryDelay,
-					startTime,
-					timeout: timeoutMilliseconds,
-				})
-			let originalTransaction = parameters.transaction
-			let lastScannedReplacementBlock: bigint | undefined
-			if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
-				try {
-					originalTransaction = await retryReceiptRateLimited(
-						async () =>
-							await actions.getTransaction({
-								hash: parameters.hash,
-							}),
-					)
-				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
-				}
-			}
-			while (true) {
-				try {
-					return await retryReceiptRateLimited(
-						async () =>
-							await actions.getTransactionReceipt({
-								hash: parameters.hash,
-							}),
-					)
-				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
+			let lastRateLimitError: Error | undefined
+			let lastRequestError: Error | undefined
+			let lastReceiptNotFoundError: Error | undefined
+			return await runWithDeadline({
+				getTimeoutError: () => lastRateLimitError ?? lastReceiptNotFoundError ?? lastRequestError ?? new Error(`Timed out while waiting for transaction receipt "${parameters.hash}".`),
+				operation: async runBeforeDeadline => {
+					const waitForNextPoll = async () => {
+						let pollingTimer: ReturnType<typeof setTimeout> | undefined
+						try {
+							await runBeforeDeadline(
+								async () =>
+									await new Promise(resolve => {
+										pollingTimer = setTimeout(resolve, pollingInterval)
+									}),
+							)
+						} finally {
+							if (pollingTimer !== undefined) clearTimeout(pollingTimer)
+						}
+					}
+					const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
+						lastRateLimitError = undefined
+						lastRequestError = undefined
+						return await runBeforeDeadline(
+							async () =>
+								await retryRateLimited(
+									async () => {
+										lastRateLimitError = undefined
+										lastRequestError = undefined
+										try {
+											const result = await operation()
+											lastRateLimitError = undefined
+											return result
+										} catch (error) {
+											if (error instanceof Error) {
+												lastRateLimitError = isRateLimitError(error) ? error : undefined
+												lastRequestError = error
+											}
+											throw error
+										}
+									},
+									{
+										retryDelay: transport.retryDelay,
+										startTime,
+										timeout: timeoutMilliseconds,
+									},
+								),
+						)
+					}
+					let originalTransaction = parameters.transaction
+					let lastScannedReplacementBlock: bigint | undefined
 					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 						try {
 							originalTransaction = await retryReceiptRateLimited(
@@ -1744,40 +1803,87 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 										hash: parameters.hash,
 									}),
 							)
-						} catch (transactionError) {
-							if (!isTransactionNotFoundError(transactionError)) throw transactionError
+						} catch (error) {
+							if (!isTransactionNotFoundError(error)) throw error
 						}
 					}
-					if (originalTransaction !== undefined) {
-						const transactionToReplace = originalTransaction
-						const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
-						let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
-						if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
-							firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
-						}
-						const replacementTransaction =
-							firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
-						lastScannedReplacementBlock = latestBlockNumber
-						if (replacementTransaction !== undefined) {
-							const transactionReceipt = await retryReceiptRateLimited(
+					while (true) {
+						try {
+							return await retryReceiptRateLimited(
 								async () =>
 									await actions.getTransactionReceipt({
-										hash: replacementTransaction.hash,
+										hash: parameters.hash,
 									}),
 							)
-							parameters.onReplaced?.({
-								reason: getReplacementReason(transactionToReplace, replacementTransaction),
-								replacedTransaction: transactionToReplace,
-								transaction: replacementTransaction,
-								transactionReceipt,
-							})
-							return transactionReceipt
+						} catch (error) {
+							if (!isTransactionNotFoundError(error)) throw error
+							lastReceiptNotFoundError = error
+							if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
+								try {
+									originalTransaction = await retryReceiptRateLimited(
+										async () =>
+											await actions.getTransaction({
+												hash: parameters.hash,
+											}),
+									)
+								} catch (transactionError) {
+									if (!isTransactionNotFoundError(transactionError)) throw transactionError
+								}
+							}
+							if (originalTransaction !== undefined) {
+								const transactionToReplace = originalTransaction
+								const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
+								const initialReplacementScan = lastScannedReplacementBlock === undefined
+								let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
+								if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
+									firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
+								}
+								const replacementBlockReader: Pick<PublicClientActions, 'getBlock'> = {
+									getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)),
+								}
+								let replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, replacementBlockReader)
+								if (replacementTransaction === undefined && initialReplacementScan && firstScanBlock > 0n) {
+									const historicalScanEnd = firstScanBlock - 1n
+									try {
+										const replacementBlock = await findMinedNonceBlock(
+											{
+												getTransactionCount: async parameters => await retryReceiptRateLimited(async () => await actions.getTransactionCount(parameters)),
+											},
+											transactionToReplace,
+											historicalScanEnd,
+										)
+										if (replacementBlock !== undefined) {
+											replacementTransaction = await findReplacementTransaction(actions, transactionToReplace, { fromBlock: replacementBlock, toBlock: replacementBlock }, replacementBlockReader)
+										}
+									} catch (error) {
+										if (Date.now() - startTime >= timeoutMilliseconds) throw error
+										replacementTransaction = await findReplacementTransactionBackwards(actions, transactionToReplace, { fromBlock: historicalScanEnd, toBlock: 0n }, replacementBlockReader)
+									}
+								}
+								lastScannedReplacementBlock = latestBlockNumber
+								if (replacementTransaction !== undefined) {
+									const transactionReceipt = await retryReceiptRateLimited(
+										async () =>
+											await actions.getTransactionReceipt({
+												hash: replacementTransaction.hash,
+											}),
+									)
+									parameters.onReplaced?.({
+										reason: getReplacementReason(transactionToReplace, replacementTransaction),
+										replacedTransaction: transactionToReplace,
+										transaction: replacementTransaction,
+										transactionReceipt,
+									})
+									return transactionReceipt
+								}
+							}
+							if (Date.now() - startTime >= timeoutMilliseconds) throw error
+							await waitForNextPoll()
 						}
 					}
-					if (Date.now() - startTime >= timeoutMilliseconds) throw error
-					await waitForNextPoll()
-				}
-			}
+				},
+				timeout: timeoutMilliseconds,
+			})
 		},
 	}
 }
@@ -1863,7 +1969,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 		call: async parameters => {
 			const account = parameters.account ?? normalizedAccount
 			const data = normalizeRpcHex(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_call',
 					params: [
 						buildRpcTransactionRequest({
@@ -1892,7 +1998,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 		sendRawTransaction: async parameters => {
 			try {
 				return normalizeHash(
-					await requestTransport<string>(transport, {
+					await requestTransportWithRateLimitRetries<string>(transport, {
 						method: 'eth_sendRawTransaction',
 						params: [parameters.serializedTransaction],
 					}),
@@ -1910,16 +2016,35 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 		sendTransaction: async parameters => {
 			const sender = parameters.account ?? normalizedAccount
 			if (typeof sender === 'object' && sender !== null && sender.type === 'local' && sender.signTransaction !== undefined) {
+				const hasMaxFeePerGas = parameters.maxFeePerGas !== undefined
+				const hasMaxPriorityFeePerGas = parameters.maxPriorityFeePerGas !== undefined
+				if (hasMaxFeePerGas !== hasMaxPriorityFeePerGas) throw new Error('Local EIP-1559 transactions require both maxFeePerGas and maxPriorityFeePerGas')
+				const value = parameters.value ?? parameters.amount
+				const [preparedChainId, preparedGas, preparedNonce, preparedGasPrice] = await Promise.all([
+					chain?.id ?? baseClient.getChainId(),
+					parameters.gas ??
+						baseClient.estimateGas({
+							account: sender,
+							data: parameters.data,
+							gasPrice: parameters.gasPrice,
+							maxFeePerGas: parameters.maxFeePerGas,
+							maxPriorityFeePerGas: parameters.maxPriorityFeePerGas,
+							to: parameters.to ?? undefined,
+							value,
+						}),
+					parameters.nonce ?? baseClient.getTransactionCount({ address: sender.address, blockTag: 'pending' }),
+					parameters.gasPrice ?? (hasMaxFeePerGas ? undefined : baseClient.getGasPrice()),
+				])
 				const serializedTransaction = await sender.signTransaction({
-					chainId: chain?.id,
+					chainId: preparedChainId,
 					data: parameters.data,
-					gas: parameters.gas,
-					gasPrice: parameters.gasPrice,
+					gas: preparedGas,
+					gasPrice: preparedGasPrice,
 					maxFeePerGas: parameters.maxFeePerGas,
 					maxPriorityFeePerGas: parameters.maxPriorityFeePerGas,
-					nonce: parameters.nonce,
+					nonce: preparedNonce,
 					to: parameters.to ?? undefined,
-					value: parameters.value ?? parameters.amount,
+					value,
 				})
 				return await walletClient.sendRawTransaction({
 					serializedTransaction,
@@ -2144,24 +2269,30 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 }
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }) {
 	const selector = parameters.topics[0]
-	if (selector === undefined) throw createDecodeError('DecodeLogTopicsMismatch', 'Event topics were missing')
-	const matchingEvent = normalizeAbi(parameters.abi).find((entry: AbiParameter) => entry.type === 'event' && getEventSignatureHash(entry) === stripHexPrefix(selector).toLowerCase())
-	if (matchingEvent === undefined || matchingEvent.name === undefined) {
+	const matchingEvents = normalizeAbi(parameters.abi).filter((entry: AbiParameter): entry is AbiParameter & { name: string } => entry.type === 'event' && entry.name !== undefined && (entry.anonymous === true || (selector !== undefined && getEventSignatureHash(entry) === stripHexPrefix(selector).toLowerCase())))
+	if (matchingEvents.length === 0) {
+		if (selector === undefined) throw createDecodeError('DecodeLogTopicsMismatch', 'Event topics were missing')
 		throw createDecodeError('AbiEventSignatureNotFoundError', 'Event signature was not found in the ABI')
 	}
-	try {
-		const decodedArgs = getEventDecoder(matchingEvent).decode(parameters.topics as string[], parameters.data)
-		return {
-			args: normalizeDecodedTuple(matchingEvent.inputs ?? [], decodedArgs),
-			eventName: matchingEvent.name,
+	const decodedEvents: { args: unknown; eventName: string }[] = []
+	let firstDecodeError: Error | undefined
+	for (const matchingEvent of matchingEvents) {
+		try {
+			const decodedArgs = getEventDecoder(matchingEvent).decode(parameters.topics as string[], parameters.data)
+			decodedEvents.push({
+				args: normalizeDecodedTuple(matchingEvent.inputs ?? [], decodedArgs),
+				eventName: matchingEvent.name,
+			})
+		} catch (error) {
+			if (firstDecodeError !== undefined) continue
+			if (error instanceof Error && error.message.toLowerCase().includes('topic')) firstDecodeError = createDecodeError('DecodeLogTopicsMismatch', error.message)
+			else if (error instanceof Error) firstDecodeError = createDecodeError('DecodeLogDataMismatch', error.message)
+			else firstDecodeError = createDecodeError('DecodeLogDataMismatch', 'Failed to decode event log')
 		}
-	} catch (error) {
-		if (error instanceof Error && error.message.toLowerCase().includes('topic')) {
-			throw createDecodeError('DecodeLogTopicsMismatch', error.message)
-		}
-		if (error instanceof Error) throw createDecodeError('DecodeLogDataMismatch', error.message)
-		throw createDecodeError('DecodeLogDataMismatch', 'Failed to decode event log')
 	}
+	if (decodedEvents.length === 1) return decodedEvents[0]
+	if (decodedEvents.length > 1) throw createDecodeError('AbiEventSignatureAmbiguousError', 'Event log matches more than one ABI event')
+	throw firstDecodeError ?? createDecodeError('DecodeLogDataMismatch', 'Failed to decode event log')
 }
 
 type EncodedEventTopic<TArgs> = TArgs extends readonly unknown[] ? (Extract<TArgs[number], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : TArgs extends Readonly<Record<string, unknown>> ? (Extract<TArgs[keyof TArgs], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : Hex
@@ -2253,11 +2384,20 @@ export function privateKeyToAccount(privateKey: Hex) {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
 		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
+			if (parameters.gasPrice !== undefined && (parameters.maxFeePerGas !== undefined || parameters.maxPriorityFeePerGas !== undefined)) {
+				throw new Error('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
+			}
+			if (parameters.chainId === undefined || parameters.gas === undefined || parameters.nonce === undefined) {
+				throw new Error('Local transaction signing requires chainId, gas, and nonce to be prepared')
+			}
+			if (parameters.gasPrice === undefined && (parameters.maxFeePerGas === undefined || parameters.maxPriorityFeePerGas === undefined)) {
+				throw new Error('Local EIP-1559 transaction signing requires maxFeePerGas and maxPriorityFeePerGas to be prepared')
+			}
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
 			const transaction = MicroTransaction.prepare({
-				chainId: hexToBigInt(parameters.chainId) ?? 1n,
+				chainId: normalizeQuantityValue(parameters.chainId),
 				data: parameters.data ?? '0x',
-				gasLimit: hexToBigInt(parameters.gas) ?? 21_000n,
+				gasLimit: normalizeQuantityValue(parameters.gas),
 				...(type === 'legacy'
 					? {
 							gasPrice: parameters.gasPrice ?? 0n,
@@ -2268,7 +2408,7 @@ export function privateKeyToAccount(privateKey: Hex) {
 							maxPriorityFeePerGas: parameters.maxPriorityFeePerGas ?? 0n,
 							type,
 						}),
-				nonce: hexToBigInt(parameters.nonce) ?? 0n,
+				nonce: normalizeQuantityValue(parameters.nonce),
 				to: parameters.to ?? '0x',
 				value: parameters.value ?? 0n,
 			})

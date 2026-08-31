@@ -17,6 +17,7 @@ function isActionEnabledForProvidedAxes({
 	actionId,
 	forkStage,
 	lifecycleState,
+	ordinaryEscalationGameStarted,
 	reportingStage,
 	universeHasForked,
 	vaultAdmissionClosed,
@@ -24,11 +25,12 @@ function isActionEnabledForProvidedAxes({
 	actionId: SecurityPoolActionId
 	forkStage: SecurityPoolForkStage | undefined
 	lifecycleState: SecurityPoolLifecycleState | undefined
+	ordinaryEscalationGameStarted: boolean
 	reportingStage: SecurityPoolReportingStage | undefined
 	universeHasForked: boolean
 	vaultAdmissionClosed: boolean
 }) {
-	if (vaultAdmissionClosed && actionId === 'depositRepToVault') return false
+	if ((vaultAdmissionClosed || ordinaryEscalationGameStarted) && actionId === 'depositRepToVault') return false
 	if (universeHasForked && UNIVERSE_FORKED_DISABLE.includes(actionId)) return false
 	if (universeHasForked && UNIVERSE_FORKED_ENABLE.includes(actionId)) return true
 	if (lifecycleState !== undefined && isLifecycleAction(actionId) && !ENABLED_ACTIONS_BY_LIFECYCLE[lifecycleState].includes(actionId)) return false
@@ -42,7 +44,7 @@ export function deriveVaultAdmissionClosed({ currentTimestamp, hasForkContinuati
 }
 
 export function evaluateSecurityPoolState(input: SecurityPoolStateInput): SecurityPoolStateModel {
-	const { forkStage, lifecycleState, reportingStage, universeHasForked, vaultAdmissionClosed = false } = input
+	const { forkStage, lifecycleState, ordinaryEscalationGameStarted = false, reportingStage, universeHasForked, vaultAdmissionClosed = false } = input
 
 	const actions = {} as Record<SecurityPoolActionId, SecurityPoolActionState>
 	for (const actionId of ALL_SECURITY_POOL_ACTIONS) {
@@ -51,6 +53,7 @@ export function evaluateSecurityPoolState(input: SecurityPoolStateInput): Securi
 				actionId,
 				forkStage,
 				lifecycleState,
+				ordinaryEscalationGameStarted,
 				reportingStage,
 				universeHasForked,
 				vaultAdmissionClosed,
@@ -62,6 +65,7 @@ export function evaluateSecurityPoolState(input: SecurityPoolStateInput): Securi
 		actions,
 		forkStage,
 		lifecycleState,
+		ordinaryEscalationGameStarted,
 		reportingStage,
 		universeHasForked,
 		vaultAdmissionClosed,

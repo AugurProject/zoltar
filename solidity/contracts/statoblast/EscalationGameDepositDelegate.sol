@@ -53,7 +53,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		return _recordDeposit(depositor, outcome, attoRepAmount, expectedCumulativeRepAmountAttoRep);
 	}
 
-	function recordWalletDeposit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		require(!forkContinuation, 'Fork game');
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		address poolAddress = game.securityPool();

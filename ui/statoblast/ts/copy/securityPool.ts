@@ -1,6 +1,11 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const annualFee = 'Annual Fee'
+export const browsePoolsDescription = 'Find a pool, review its lifecycle and backing, then open it for operations.'
+export const createPoolDescription = 'Create a pool from an eligible binary question and review its security parameters before submitting.'
+export const createPoolFromQuestion = 'Create pool from question'
+export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
+export const managePoolDescription = 'Review the selected pool’s current stage and use the available position, pricing, reporting, or settlement actions.'
 export const badDebt = 'Bad Debt'
 export const depositRepToVault = 'Deposit REP'
 export const depositRepToVaultDescription = 'Increase this vault’s REP backing and collateralization.'
@@ -209,6 +214,7 @@ export const vaultActionsEndedDetail = 'REP deposits are unavailable because thi
 export const vaultActionsForkMigrationDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.'
 export const vaultActionsTruthAuctionDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.'
 export const vaultDepositAdmissionClosedDetail = 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.'
+export const vaultDepositEscalationStartedDetail = 'New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.'
 export const vaultLookup = 'Vault Lookup'
 export const vaultMissing = 'Vault missing'
 export const vaultSummary = 'Vault Summary'

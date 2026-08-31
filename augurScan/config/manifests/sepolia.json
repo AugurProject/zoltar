@@ -28,6 +28,16 @@
 		["0x7E5E26Ebbb28a7F287211D8912760A9F401B101E", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0xFC19c724B59b0afA1d4bA97Aa0879237e1cDB3b1", "SecurityPoolUtils", "securityPoolUtils"],
 		["0x49eCFF1B7d870d64A773204c5512eDBf7449F82e", "Security Pool Forker", "securityPoolForker"],
-		["0xbc6B5348B401D64A4170098626Ce4bA169FB2982", "Security Pool Factory", "securityPoolFactory"]
+		["0xbc6B5348B401D64A4170098626Ce4bA169FB2982", "Security Pool Factory", "securityPoolFactory"],
+		["0xEB6383B700066AcD6601098C365e96db28F86595", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x594Baa70146fBB9c29d9cBaE51102a699a10707c", "Escalation Game Factory", "escalationGameFactory"],
+		["0x3Ac07D2357C9C200794758d669390303e04bAF1f", "Security Pool Factory", "securityPoolFactory"],
+		["0x8C648789566Ae350f147228e46aBE8bB63540Ffd", "Escalation Game Proof Verifier", "escalationProofVerifier"],
+		["0x8B4Bbd3bEC7E1F65eE0435d3b8D8d1e312b0b359", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x58CFc60a3978E4a86EE1c0175E07759645d18532", "Security Pool Factory", "securityPoolFactory"],
+		["0x19138180CFb059b5695789e73c79bA300db03A3c", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xb3929faea19B9d5A3464e62A996E489404D6Cce9", "Security Pool Factory", "securityPoolFactory"],
+		["0x5D8D6D36ba0655a4AA6E66C875d77226DbfB51aC", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x1CDDf2EFA44700042901336666A2A6fe1cFB705d", "Security Pool Factory", "securityPoolFactory"]
 	]
 }

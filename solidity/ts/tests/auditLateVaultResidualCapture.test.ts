@@ -69,11 +69,11 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		questionId = fixture.questionId
 	})
 
-	const depositRepFromWallet = async (depositor: TestClient, escalationGame: Address, outcome = QuestionOutcome.No, maximumDepositAttoRep = 100n * 10n ** 18n) => {
+	const depositRepOnOutcome = async (depositor: TestClient, escalationGame: Address, outcome = QuestionOutcome.No, maximumDepositAttoRep = 100n * 10n ** 18n) => {
 		const hash = await depositor.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
-			functionName: 'depositRepFromWallet',
+			functionName: 'depositRepOnOutcome',
 			args: [outcome, maximumDepositAttoRep],
 		})
 		await depositor.waitForTransactionReceipt({ hash })
@@ -109,7 +109,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 
 	const expectWalletDepositRejectionWithoutStateChange = async (depositor: TestClient, securityPool: Address, escalationGame: Address, repToken: Address, expectedError: RegExp, outcome = QuestionOutcome.No) => {
 		const before = await readWalletDepositGuardState(depositor, securityPool, escalationGame, repToken, outcome)
-		await assert.rejects(depositRepFromWallet(depositor, escalationGame, outcome), expectedError)
+		await assert.rejects(depositRepOnOutcome(depositor, escalationGame, outcome), expectedError)
 		assert.deepStrictEqual(await readWalletDepositGuardState(depositor, securityPool, escalationGame, repToken, outcome), before, 'rejected wallet deposit must not mutate balances, backing units, or dispute accounting')
 	}
 
@@ -162,7 +162,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		const walletDepositHash = await attacker.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
-			functionName: 'depositRepFromWallet',
+			functionName: 'depositRepOnOutcome',
 			args: [QuestionOutcome.No, 100n * 10n ** 18n],
 		})
 		await attacker.waitForTransactionReceipt({ hash: walletDepositHash })

@@ -11,16 +11,6 @@ export type StagedOperationTuple = {
 	operation: IntegerLike
 	targetVault: Address
 }
-export type SecurityPoolDeploymentTuple = {
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	parent: Address
-	priceOracleManagerAndOperatorQueuer: Address
-	questionId: bigint
-	statoblastSecurityMultiplierBps: bigint
-	securityPool: Address
-	truthAuction: Address
-	universeId: bigint
-}
 export type DeployedChildUniverseTuple = {
 	forkQuestionId: bigint
 	forkTime: bigint
@@ -91,25 +81,6 @@ function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
 
 export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {
 	if (Array.isArray(value) && value.every(isStagedOperationTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDeploymentTuple {
-	return (
-		isObjectRecord(value) &&
-		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
-		typeof value['parent'] === 'string' &&
-		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
-		typeof value['questionId'] === 'bigint' &&
-		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
-		typeof value['securityPool'] === 'string' &&
-		typeof value['truthAuction'] === 'string' &&
-		typeof value['universeId'] === 'bigint'
-	)
-}
-
-export function requireSecurityPoolDeploymentTupleArray(value: unknown, context: string): SecurityPoolDeploymentTuple[] {
-	if (Array.isArray(value) && value.every(isSecurityPoolDeploymentTuple)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 
