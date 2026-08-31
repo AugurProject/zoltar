@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { contractSourceHash } from '../scripts/project-metadata-source.ts'
 import { effectiveAbiSourceHash } from '../src/abi-provenance.ts'
 import { sourceProvenance } from '../src/provenance.ts'
 
@@ -15,6 +16,17 @@ test('fingerprints the complete effective ABI decoder deterministically', () => 
 	expect(effectiveAbiSourceHash({ Zoltar: { abi: [{ name: 'QuestionResolved', type: 'event' }] } }, routing, external)).not.toBe(baseline)
 	expect(effectiveAbiSourceHash(catalog, { zoltar: 'OtherZoltar' }, external)).not.toBe(baseline)
 	expect(effectiveAbiSourceHash(catalog, routing, { uniswapV2Pair: [{ name: 'Swap', type: 'event' }] })).not.toBe(baseline)
+})
+
+test('fingerprints canonical contract sources independently of generated import aliases', () => {
+	const sources = {
+		'contracts/Zoltar.sol': { content: 'contract Zoltar {}' },
+		'contracts/statoblast/OpenOracle.sol': { content: 'contract OpenOracle {}' },
+	}
+	const baseline = contractSourceHash(sources)
+	expect(baseline).toMatch(/^[0-9a-f]{64}$/)
+	expect(contractSourceHash({ ...sources, '@openzeppelin/contracts/Token.sol': { content: 'contract Token {}' } })).toBe(baseline)
+	expect(contractSourceHash({ ...sources, 'contracts/Zoltar.sol': { content: 'contract Zoltar { uint256 value; }' } })).not.toBe(baseline)
 })
 
 test('changes the application hash when a shared runtime dependency changes', async () => {

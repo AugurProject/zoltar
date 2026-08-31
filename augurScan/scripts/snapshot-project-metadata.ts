@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto'
-import { mkdir, readdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { contractSourceHash, contractSources } from './project-metadata-source.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
-const contractsRoot = path.join(projectRoot, 'solidity/contracts')
 const compiledArtifactPath = path.join(projectRoot, 'solidity/artifacts/Contracts.json')
 const outputRootIndex = process.argv.indexOf('--output-root')
 const configuredOutputRoot = outputRootIndex < 0 ? undefined : process.argv[outputRootIndex + 1]
@@ -13,25 +12,7 @@ const outputPath = path.join(configOutputRoot, 'abis.json')
 const manifestsRoot = path.join(configOutputRoot, 'manifests')
 await mkdir(manifestsRoot, { recursive: true })
 
-const collectSources = async (directory: string, relativeRoot = path.join(projectRoot, 'solidity')): Promise<Record<string, { content: string }>> => {
-	const sources: Record<string, { content: string }> = {}
-	const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))
-	for (const entry of entries) {
-		const absolute = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			if (entry.name === 'test') continue
-			Object.assign(sources, await collectSources(absolute, relativeRoot))
-			continue
-		}
-		if (!entry.name.endsWith('.sol')) continue
-		const relative = path.relative(relativeRoot, absolute).replaceAll(path.sep, '/')
-		const content = (await readFile(absolute, 'utf8')).replace('pragma solidity 0.8.28;', 'pragma solidity >=0.8.28;')
-		sources[relative] = { content }
-	}
-	return sources
-}
-
-const sources = await collectSources(contractsRoot)
+const sources = await contractSources(projectRoot)
 const vendorPrefix = 'contracts/statoblast/openOracle/openzeppelin/contracts/'
 for (const [name, source] of Object.entries(sources)) {
 	if (name.startsWith(vendorPrefix)) sources[`@openzeppelin/contracts/${name.slice(vendorPrefix.length)}`] = source
@@ -91,15 +72,7 @@ for (const [source, name] of [
 }
 
 const payload = {
-	sourceHash: createHash('sha256')
-		.update(
-			Object.entries(sources)
-				.filter(([name]) => !name.startsWith('@openzeppelin/'))
-				.sort(([left], [right]) => left.localeCompare(right))
-				.map(([name, source]) => `${name}\0${source.content}`)
-				.join('\0'),
-		)
-		.digest('hex'),
+	sourceHash: contractSourceHash(sources),
 	contracts,
 }
 
