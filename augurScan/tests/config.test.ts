@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import mainnetDeployment from '../../docs/mainnet-deployment-addresses.json'
+import sepoliaDeployment from '../../docs/sepolia-deployment-addresses.json'
+import mainnetManifest from '../config/manifests/mainnet.json'
+import sepoliaManifest from '../config/manifests/sepolia.json'
 import { loadNetworks, parseManifestValue } from '../src/config.ts'
 
 const originalNetworks = process.env['NETWORKS']
@@ -27,6 +31,19 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
+	test('indexes the canonical deterministic deployments', () => {
+		for (const { id, deployment, manifest } of [
+			{ id: 'mainnet', deployment: mainnetDeployment, manifest: mainnetManifest },
+			{ id: 'sepolia', deployment: sepoliaDeployment, manifest: sepoliaManifest },
+		]) {
+			const deployedById = new Map(deployment.deploymentSteps.map(({ id: deploymentId, address }) => [deploymentId, address]))
+			const indexedByKind = new Map(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => [kind, address]))
+			expect(deployedById.get('deploymentStatusOracle')).toBe(indexedByKind.get('deploymentStatusOracle'))
+			expect(deployedById.get('securityPoolFactory')).toBe(indexedByKind.get('securityPoolFactory'))
+			expect(indexedByKind.get('usdc')).toBeDefined()
+		}
+	})
+
 	test('accepts an optional exact deployment block in manifest entries', () => {
 		expect(
 			parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', '900000']] }, 'test.json'),
