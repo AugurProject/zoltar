@@ -1337,12 +1337,11 @@ describe('Statoblast: fork migration', () => {
 					const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 					await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 					await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
-					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
+					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit * 2n)
 
 					await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 					await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 					const lockedDeposit = 600n * 10n ** 18n
-					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
 					await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 					await depositToEscalationGame(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.No, lockedDeposit)
 					await triggerExternalForkForSecurityPool(undefined, 'carried liquidation-owner payout')
