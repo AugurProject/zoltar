@@ -11,6 +11,7 @@ import {
 	ScannerDatabase,
 	type StoredTransaction,
 } from '../src/database.ts'
+import { readRichListBalance } from '../src/direct-observations.ts'
 import {
 	type Address,
 	createPublicClient,
@@ -258,6 +259,31 @@ describe('network indexer lifecycle', () => {
 		).toBe(false)
 		expect(manifestContractSetChanged([[replacement, 'Zoltar', 'zoltar']], [{ address, label: 'Zoltar', kind: 'zoltar' }])).toBe(true)
 		expect(manifestContractSetChanged([[address, 'Zoltar v2', 'zoltar']], [{ address, label: 'Zoltar', kind: 'zoltar' }])).toBe(true)
+	})
+
+	test('treats an earlier explicit deployment boundary as a manifest history change', async () => {
+		const storedContract = {
+			address,
+			label: 'OpenOracle',
+			kind: 'openOracle',
+			provenance: 'manifest',
+			configuredDeploymentBlock: 75n,
+			deploymentBlock: 75n,
+			deploymentBlockExact: true,
+		} satisfies ContractMetadata
+		const configured = [[address, storedContract.label, storedContract.kind, 50n]] as const
+		expect(manifestContractSetChanged(configured, [storedContract])).toBe(true)
+		expect(
+			await manifestChangeRequiresFullReplay(
+				configured,
+				new Map([[address.toLowerCase(), storedContract]]),
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
+				100n,
+				0n,
+				0n,
+				mock(async () => undefined),
+			),
+		).toBe(true)
 	})
 
 	test('queues RPC work above the configured concurrency limit', async () => {
@@ -2599,29 +2625,29 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
-	test('does not turn token metadata transport failures into committed fallback data', async () => {
+	test('retains token metadata transport failures without inventing fallback fields', async () => {
 		const transportFailure = new Error('provider unavailable')
 		transportFailure.name = 'HttpRequestError'
-		await expect(
-			readTokenMetadata(address, 10n, {
+		expect(
+			await readTokenMetadata(address, 10n, {
 				decimals: async () => {
 					throw transportFailure
 				},
 				name: async () => 'Token',
 				symbol: async () => 'TKN',
 			}),
-		).rejects.toThrow('provider unavailable')
-		await expect(
-			readTokenMetadata(address, 10n, {
+		).toEqual({ address, readError: 'HttpRequestError', readBlock: 10n })
+		expect(
+			await readTokenMetadata(address, 10n, {
 				decimals: async () => 18,
 				name: async () => {
 					throw transportFailure
 				},
 				symbol: async () => 'TKN',
 			}),
-		).rejects.toThrow('provider unavailable')
-		await expect(
-			readTokenMetadata(address, 10n, {
+		).toEqual({ address, readError: 'HttpRequestError', readBlock: 10n })
+		expect(
+			await readTokenMetadata(address, 10n, {
 				decimals: async () => 18,
 				name: async () => {
 					throw new RpcError('state at block #10 is pruned', { code: -32603, shortMessage: 'state at block #10 is pruned' })
@@ -2630,7 +2656,33 @@ describe('network indexer lifecycle', () => {
 					throw transportFailure
 				},
 			}),
-		).rejects.toThrow('provider unavailable')
+		).toEqual({ address, readError: 'HttpRequestError', readBlock: 10n })
+	})
+
+	test('retains independent native and token balance outcomes when one read fails', async () => {
+		const native = await readRichListBalance(
+			{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native' },
+			async () => 42n,
+		)
+		const token = await readRichListBalance({ owner: address, assetAddress: address, assetKind: 'rep' }, async () => {
+			const failure = new Error('provider unavailable')
+			failure.name = 'HttpRequestError'
+			throw failure
+		})
+		expect(native).toEqual({
+			owner: address,
+			assetAddress: getAddress('0x0000000000000000000000000000000000000000'),
+			assetKind: 'native',
+			readStatus: 'success',
+			balance: 42n,
+		})
+		expect(token).toEqual({
+			owner: address,
+			assetAddress: address,
+			assetKind: 'rep',
+			readStatus: 'failed',
+			readFailureReason: 'HttpRequestError',
+		})
 	})
 
 	test('records a stable fallback for contracts that do not implement token metadata', async () => {

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { getAddress, isAddress } from './ethereum.ts'
+import { parseBasicAccessCredentials } from './http.ts'
 import type { ManifestContract, NetworkConfig } from './types.ts'
 
 type NetworkFile = {
@@ -129,4 +130,6 @@ export const runtimeConfig = {
 	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
 	rpcLogPath: resolveRpcLogPath(process.env['RPC_LOG_PATH']),
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
+	accessCredentials: parseBasicAccessCredentials(process.env['AUGURSCAN_ACCESS_USERNAME'], process.env['AUGURSCAN_ACCESS_PASSWORD']),
+	apiRateLimitPerMinute: requirePositiveInteger(process.env['API_RATE_LIMIT_PER_MINUTE'] ?? '600', 'API_RATE_LIMIT_PER_MINUTE', true),
 }
