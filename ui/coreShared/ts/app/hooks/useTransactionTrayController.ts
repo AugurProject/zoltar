@@ -38,8 +38,10 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			transactionState.value = markTransactionPresented(transactionState.value, presentation)
 		},
 		onTransactionRequested: (intent: TransactionIntent) => {
-			if (!isCurrentGeneration()) return
+			if (!isCurrentGeneration()) return false
+			if (transactionState.value.inFlightCount > 0) return false
 			transactionState.value = markTransactionRequested(transactionState.value, intent)
+			return true
 		},
 		onTransactionSubmitted: (hash: Hash) => {
 			if (!isCurrentGeneration()) return

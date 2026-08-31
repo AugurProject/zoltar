@@ -189,8 +189,10 @@ export function useMarketCreation(
 						if (result !== undefined && isCurrentMarketActionScope()) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionRequested: () => {
+						const accepted = onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						if (accepted === false) return false
 						marketCreatingScopes.value = new Set([...marketCreatingScopes.value, submittedMarketActionScopeKey])
-						onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						return accepted
 					},
 					onTransactionFinished: () => {
 						const nextCreatingScopes = new Set(marketCreatingScopes.value)

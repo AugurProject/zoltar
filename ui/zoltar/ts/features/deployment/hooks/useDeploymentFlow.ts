@@ -14,6 +14,7 @@ import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
@@ -67,6 +68,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 		busyStepId.value = step.id
 		errorMessage.value = undefined
 		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
+		let ownsTransaction = false
 
 		try {
 			await assertActiveWallet(accountAddress)
@@ -80,7 +82,12 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 				deploymentFeedback.value = undefined
 				return
 			}
-			onTransactionRequested(createDeploymentTransactionIntent(step.label))
+			if (onTransactionRequested(createDeploymentTransactionIntent(step.label)) === false) {
+				errorMessage.value = TRANSACTION_ACTION_LOCK_REASON
+				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment blocked', TRANSACTION_ACTION_LOCK_REASON)
+				return
+			}
+			ownsTransaction = true
 			const hash = await step.deploy(client)
 			if (!environmentGuard.isCurrent()) return
 			const code = await readWithRpcStateRetries(
@@ -107,12 +114,12 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			}
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
-			onTransactionFailed?.(message)
+			if (ownsTransaction) onTransactionFailed?.(message)
 			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
 			if (environmentGuard.isCurrent()) {
 				busyStepId.value = undefined
-				onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished()
 			}
 		}
 	}

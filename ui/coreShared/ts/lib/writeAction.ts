@@ -4,6 +4,7 @@ import { assertActiveWallet, type ActiveWalletContext } from './assertActiveWall
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 import { createActiveEnvironmentGuard } from './activeEnvironment.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from './transactionTray.js'
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
@@ -13,7 +14,7 @@ type RunWriteActionParameters = {
 	onTransactionCanceled?: (() => void) | undefined
 	onTransactionFailed?: ((message: string) => void) | undefined
 	onTransactionFinished: () => void
-	onTransactionRequested: () => void
+	onTransactionRequested: () => boolean | void
 	onWriteCanceled?: (() => void) | undefined
 	onWriteError?: ((message: string) => void) | undefined
 	refreshErrorFallback?: string
@@ -39,7 +40,7 @@ export function buildWriteActionConfig(params: BuildWriteActionConfigParameters,
 		onTransactionFinished: params.onTransactionFinished,
 		onTransactionFailed: params.onTransactionFailed,
 		onTransactionRequested: () => {
-			params.onTransactionRequested(transactionIntent)
+			return params.onTransactionRequested(transactionIntent)
 		},
 		refreshState: params.refreshState,
 		setErrorMessage: (message: string | undefined) => {
@@ -59,13 +60,22 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		return
 	}
 
+	let ownsTransaction = false
 	try {
 		const environmentGuard = createActiveEnvironmentGuard()
 		let result: TResult | undefined
 		try {
 			const activeWallet = await assertActiveWallet(parameters.accountAddress)
 			if (!environmentGuard.isCurrent()) return
-			parameters.onTransactionRequested()
+			if (parameters.onTransactionRequested() === false) {
+				if (parameters.onWriteError === undefined) {
+					parameters.setErrorMessage(TRANSACTION_ACTION_LOCK_REASON)
+				} else {
+					parameters.onWriteError(TRANSACTION_ACTION_LOCK_REASON)
+				}
+				return
+			}
+			ownsTransaction = true
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress, activeWallet)
 			if (!environmentGuard.isCurrent()) return
@@ -77,7 +87,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		} catch (error) {
 			if (!environmentGuard.isCurrent()) return
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
-			parameters.onTransactionFailed?.(message)
+			if (ownsTransaction) parameters.onTransactionFailed?.(message)
 			if (parameters.onWriteError === undefined) {
 				parameters.setErrorMessage(message)
 			} else {
@@ -101,6 +111,6 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			}
 		}
 	} finally {
-		await Promise.resolve(parameters.onTransactionFinished())
+		if (ownsTransaction) await Promise.resolve(parameters.onTransactionFinished())
 	}
 }

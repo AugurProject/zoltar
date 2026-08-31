@@ -17,6 +17,7 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import type { TransactionLifecycleParameters, WriteOperationContext, ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 type UseZoltarMigrationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -85,6 +86,7 @@ export function useZoltarMigration({
 	const runZoltarMigrationAction = useCallback(
 		async ({ actionName, action, errorFallback, refreshAfter, requiresOutcomeIndexes, resolveAmount = amount => amount }: RunZoltarMigrationActionParameters) => {
 			let writeFailed = false
+			let ownsTransaction = false
 			if (
 				!requireWallet(
 					accountAddress,
@@ -107,13 +109,20 @@ export function useZoltarMigration({
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				onTransactionRequested(
-					createZoltarMigrationTransactionIntent(actionName, {
-						amount: submittedForm.amount,
-						outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
-						universeId: activeUniverseId,
-					}),
-				)
+				if (
+					onTransactionRequested(
+						createZoltarMigrationTransactionIntent(actionName, {
+							amount: submittedForm.amount,
+							outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
+							universeId: activeUniverseId,
+						}),
+					) === false
+				) {
+					writeFailed = true
+					zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), TRANSACTION_ACTION_LOCK_REASON)
+					return
+				}
+				ownsTransaction = true
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
@@ -134,13 +143,13 @@ export function useZoltarMigration({
 				}
 				const message = formatWriteErrorMessage(error, errorFallback)
 				writeFailed = true
-				onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 			} finally {
 				if (environmentGuard.isCurrent()) {
 					zoltarMigrationPending.value = false
 					zoltarMigrationActiveAction.value = undefined
-					onTransactionFinished()
+					if (ownsTransaction) onTransactionFinished()
 				}
 			}
 
