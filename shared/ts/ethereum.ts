@@ -663,6 +663,10 @@ function normalizeHash(value: unknown) {
 	return ensure0x(normalized) as Hash
 }
 
+function requireMatchingTransactionHash(expected: Hash, actual: Hash, resultLabel: string) {
+	if (actual !== expected) throw new Error(`RPC returned ${resultLabel} with a different hash: expected "${expected}", received "${actual}"`)
+}
+
 function normalizeRpcHex(value: unknown) {
 	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('RPC returned an invalid hex value')
 	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
@@ -1644,20 +1648,26 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}) as unknown as readonly RpcLogForEvent<TEvent>[]
 		},
 		getTransaction: async parameters => {
+			const requestedHash = normalizeHash(parameters.hash)
 			const rawTransaction = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionByHash',
-				params: [parameters.hash],
+				params: [requestedHash],
 			})
-			if (rawTransaction === null) throw new Error(`Transaction with hash "${parameters.hash}" could not be found.`)
-			return normalizeTransaction(rawTransaction)
+			if (rawTransaction === null) throw new Error(`Transaction with hash "${requestedHash}" could not be found.`)
+			const transaction = normalizeTransaction(rawTransaction)
+			requireMatchingTransactionHash(requestedHash, transaction.hash, 'transaction')
+			return transaction
 		},
 		getTransactionReceipt: async parameters => {
+			const requestedHash = normalizeHash(parameters.hash)
 			const rawReceipt = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionReceipt',
-				params: [parameters.hash],
+				params: [requestedHash],
 			})
-			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${parameters.hash}" could not be found.`)
-			return normalizeReceipt(rawReceipt)
+			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${requestedHash}" could not be found.`)
+			const receipt = normalizeReceipt(rawReceipt)
+			requireMatchingTransactionHash(requestedHash, receipt.transactionHash, 'transaction receipt')
+			return receipt
 		},
 		multicall: async <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; blockNumber?: bigint | undefined; contracts: TContracts; multicallAddress: Address }) => {
 			const calls: { allowFailure: boolean; callData: Hex; target: Address }[] = []
@@ -2374,6 +2384,9 @@ export function privateKeyToAccount(privateKey: Hex) {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
 		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
+			if (parameters.gasPrice !== undefined && (parameters.maxFeePerGas !== undefined || parameters.maxPriorityFeePerGas !== undefined)) {
+				throw new Error('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
+			}
 			if (parameters.chainId === undefined || parameters.gas === undefined || parameters.nonce === undefined) {
 				throw new Error('Local transaction signing requires chainId, gas, and nonce to be prepared')
 			}
