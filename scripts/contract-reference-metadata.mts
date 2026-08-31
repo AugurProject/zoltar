@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '40698cf809aec8a876da2539d1483a1f8a9c969722a7eec6a7550fa46d9521a6'
+export const expectedProductionSoliditySourceFingerprint = '6a3db0f24c3151a141fa0c089ee9bceb5a144203563ee8bb65a837a95cf3ddc6'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -505,7 +505,7 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': ['securityPool'],
-	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory'],
+	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'liquidationDelegate'],
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': [],
 }
 
@@ -795,7 +795,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
+					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; actual pool-held REP satisfies both live backing constraints for resulting collateral net of recorded bad debt, with dispute-staked REP counting only toward the associated-REP constraint; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 
-contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
+contract SecurityPoolLiquidationDelegate is SecurityPoolSettlementDelegate {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);

@@ -248,7 +248,7 @@
 						<tr>
 							<td><code>createCompleteSet()</code> with ETH</td>
 							<td>Trader</td>
-							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; any explicit unassigned auction position remains healthy after the mint; under <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract trader accepts <code>onERC1155BatchReceived</code>.</td>
+							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; actual pool-held REP satisfies both live backing constraints for resulting collateral net of recorded bad debt, with dispute-staked REP counting only toward the associated-REP constraint; any explicit unassigned auction position remains healthy after the mint; under <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract trader accepts <code>onERC1155BatchReceived</code>.</td>
 							<td>Adds collateral and mints one <code>Invalid</code>, <code>Yes</code>, and <code>No</code> share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.</td>
 							<td><code>CompleteSetCreated</code>, <code>PoolAccountingCheckpoint</code>, then ERC-1155 <code>TransferBatch</code> on a successful callback</td>
 						</tr>

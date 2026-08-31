@@ -16,6 +16,7 @@ import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
+import { SecurityPoolLiquidationDelegate } from '../SecurityPoolLiquidationDelegate.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -40,7 +41,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 
 	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _initialEscalationGameDepositAttoRep, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep) {
-		require(_initialEscalationGameDepositAttoRep == 1e18, 'Initial escalation game deposit must equal 1 REP');
+		require(_initialEscalationGameDepositAttoRep == 1e18, 'Initial deposit must be 1 REP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -53,7 +54,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(_minimumSecurityBondDebtAttoEth > 0, 'Minimum security bond debt zero');
 		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
-		securityPoolDeployer = new SecurityPoolDeployer();
+		address operationsDelegate = address(new SecurityPoolLiquidationDelegate());
+		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate);
 	}
 
 	function securityPoolDeploymentCount() external view returns (uint256) {
@@ -91,12 +93,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
-		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
+		require(msg.sender == address(securityPoolForker), 'Only security pool forker');
 		bytes32 originId = securityPoolOriginIds[parent];
-		require(address(securityPoolsById[getPoolId(originId, parent.universeId())]) == address(parent), 'Security pool parent must be canonical');
+		require(address(securityPoolsById[getPoolId(originId, parent.universeId())]) == address(parent), 'Parent pool is not canonical');
 		bool hasInheritedForkOutcome =
 			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
-		require(address(parent.shareToken()) == address(shareToken), 'Security pool child must use parent share token');
+		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
 		uint256 initialReportPriorityFeeAttoEthPerGas = parent.priceOracleManagerAndOperatorQueuer().initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
@@ -117,17 +119,17 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(statoblastSecurityMultiplierBps > SecurityPoolUtils.BPS_DENOMINATOR + 1, 'Multiplier must exceed 10001 BPS');
 
 		// Validate that the question exists
-		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Security pool question must exist before deployment');
+		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 
 		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
 		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
-		require(outcomes.length == 2, 'Security pool question must have exactly two outcomes');
-		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'Security pool first outcome must be Yes');
-		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Security pool second outcome must be No');
-		require(zoltar.getForkTime(universeId) == 0, 'Security pool universe has already forked');
+		require(outcomes.length == 2, 'Question must have two outcomes');
+		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'First outcome must be Yes');
+		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be No');
+		require(zoltar.getForkTime(universeId) == 0, 'Universe already forked');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
+		require(address(reputationToken) != address(0x0), 'Universe REP token missing');
 		require(zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(reputationToken), 'Escalation threshold too low');
 		bytes32 originId = getOriginId(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		_reserveSecurityPool(originId, universeId);
@@ -152,7 +154,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _registerSecurityPool(bytes32 originId, uint248 universeId, ISecurityPool securityPool, bool hasInheritedForkOutcome) private {
 		bytes32 poolId = getPoolId(originId, universeId);
-		require(address(securityPoolsById[poolId]) == address(0x0), 'Security pool origin and universe already registered');
+		require(address(securityPoolsById[poolId]) == address(0x0), 'Pool already registered');
 		securityPoolsById[poolId] = securityPool;
 		securityPoolOriginIds[securityPool] = originId;
 		securityPoolHasInheritedForkOutcome[securityPool] = hasInheritedForkOutcome;

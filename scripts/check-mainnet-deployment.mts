@@ -162,6 +162,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		const networkProfileModule = await import(url.pathToFileURL(networkProfileModulePath).href)
 		const protocolConfigModule = await import(url.pathToFileURL(protocolConfigModulePath).href)
 		const getDeploymentSteps = readFunction(deploymentModule, 'getDeploymentSteps')
+		const getBootstrapDescendantAddresses = readFunction(deploymentHelpersModule, 'getBootstrapDescendantAddresses')
 		const getInfraContractAddresses = readFunction(deploymentHelpersModule, 'getInfraContractAddresses')
 		const getMainnetProtocolConfig = readFunction(protocolConfigModule, 'getMainnetProtocolConfig')
 		const setRuntimeNetworkProfile = readFunction(networkProfileModule, 'setRuntimeNetworkProfile')
@@ -170,6 +171,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		if (!isRecord(profile)) throw new Error(`Module export ${profileExportName} is missing`)
 		setRuntimeNetworkProfile(profile)
 		const infraContractAddresses = getInfraContractAddresses(profile)
+		const bootstrapDescendantAddresses = getBootstrapDescendantAddresses(profile)
 		return {
 			network: readNetworkProfile(profile, manifestId),
 			protocolConfig: readProtocolConfig(getMainnetProtocolConfig()),
@@ -194,6 +196,11 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					id: 'securityPoolFactory',
 					label: 'Security Pool Factory',
 					address: readStringField(infraContractAddresses, 'securityPoolFactory', 'infraContractAddresses.securityPoolFactory'),
+				},
+				{
+					id: 'securityPoolOperationsDelegate',
+					label: 'Security Pool Operations Delegate',
+					address: readStringField(bootstrapDescendantAddresses, 'securityPoolOperationsDelegate', 'bootstrapDescendantAddresses.securityPoolOperationsDelegate'),
 				},
 				{
 					id: 'escalationGameProofVerifier',

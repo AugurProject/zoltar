@@ -69,13 +69,15 @@ export function getCallerScopedSalt(caller: Address, salt: Hex) {
 function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: securityPoolFactory,
-		nonce: 1n,
+		// The factory creates the shared operations delegate before its deployer.
+		nonce: 2n,
 	})
 }
 
 function getSecurityPoolDeploymentWorkerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: getSecurityPoolDeployerAddress(securityPoolFactory),
+		// The deployer creates the event emitter, then its deployment worker.
 		nonce: 2n,
 	})
 }

@@ -706,11 +706,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="bal-03">
-						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
+						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity and backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so this is not a continuous collateral-below-capacity invariant. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
-							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A later REP price change can lower capacity below 9 ETH without changing the existing open interest or ownership records.</p>
+							<div class="invariant-property">At a complete-set mint or fork-finalization boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. The pool must also hold enough actual REP to satisfy both backing constraints for collateral net of recorded bad debt. Dispute-staked REP contributes to the associated-REP constraint but not the migration-safety constraint. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so these are transaction-boundary checks rather than continuous invariants. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
+							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A mint within that capacity also reverts if unresolved escalation has moved too much REP out of the pool to cover the resulting active open interest. A later REP price change can lower capacity or backing without changing existing open interest or ownership records.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -723,7 +723,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>_requireCapacityNotExceeded</code>, <code>setPoolFinancials</code>, and fee redemption</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code>, <code>setPoolFinancials</code>, and fee redemption</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> and <code>setValidatedSettlementCollateral</code></a
+										>,
 										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">fork finalization</a>
 									</dd>
 								</div>
@@ -922,7 +923,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>createCompleteSet</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and the <code>createCompleteSet</code> wrapper</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> settlement accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -2571,8 +2573,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code></a
-										>, ERC-1155 receiver checks, and receiver callback tests
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code> wrapper</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> accounting</a>, ERC-1155 receiver checks, and receiver callback tests
 									</dd>
 								</div>
 								<div>

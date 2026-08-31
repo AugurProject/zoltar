@@ -109,7 +109,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const multiOutcomeQuestionId = getQuestionId(multiOutcomeQuestionData, multiOutcomes)
 
 		// Attempt to deploy security pool with non-binary question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, statoblastSecurityMultiplierBps), /Security pool question must have exactly two outcomes/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, statoblastSecurityMultiplierBps), /Question must have two outcomes/)
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -129,7 +129,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const scalarQuestionId = getQuestionId(scalarQuestionData, scalarOutcomes)
 
 		// Attempt to deploy security pool with scalar question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, statoblastSecurityMultiplierBps), /Security pool question must have exactly two outcomes/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, statoblastSecurityMultiplierBps), /Question must have two outcomes/)
 	})
 
 	test('cannot deploy security pool when either binary outcome label is not canonical', async () => {
@@ -137,12 +137,12 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			{
 				title: 'wrong first binary outcome',
 				outcomes: sortStringArrayByKeccak(['Apple', 'Banana']),
-				expected: /Security pool first outcome must be Yes/,
+				expected: /First outcome must be Yes/,
 			},
 			{
 				title: 'wrong second binary outcome',
 				outcomes: sortStringArrayByKeccak(['Yes', 'Apple']),
-				expected: /Security pool second outcome must be No/,
+				expected: /Second outcome must be No/,
 			},
 		]
 
@@ -163,7 +163,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const nonExistentQuestionId = 999999999999n
 
 		// Attempt to deploy security pool with non-existent question should fail
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, statoblastSecurityMultiplierBps), /Security pool question must exist before deployment/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, statoblastSecurityMultiplierBps), /Question does not exist/)
 	})
 
 	test('cannot deploy origin security pool in an already-forked universe', async () => {
@@ -178,13 +178,13 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps), /Security pool universe has already forked/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps), /Universe already forked/)
 	})
 
 	test('cannot deploy origin security pool in a missing universe', async () => {
 		const missingUniverseId = 999999n
 
-		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, statoblastSecurityMultiplierBps), /Security pool universe is missing a REP token/)
+		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, statoblastSecurityMultiplierBps), /Universe REP token missing/)
 	})
 
 	test('allows an independent descendant origin alongside the inherited child pool', async () => {

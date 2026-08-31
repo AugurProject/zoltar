@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x13f99E75B6011fe5cf1F4C53Cfa47D55217dE0Ec"
+			"address": "0xcA4D1542F796Bb365aEdCBA10bBE9aa1FbaDea70"
 		},
 		{
 			"id": "multicall3",
@@ -73,7 +73,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x51cf207A931e76C837441dA3b70c57d71C62fF77"
+			"address": "0xf3684bD2423B02eD4b623cE92a3acF2C0bE06632"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -88,14 +88,14 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x7D6f603599b13F43a52588965f7650A772DE2726"
+			"address": "0x1610c916229d6bE96c34C3a96f5F4fA48b16536d"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x51cf207A931e76C837441dA3b70c57d71C62fF77"
+			"address": "0xf3684bD2423B02eD4b623cE92a3acF2C0bE06632"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -110,7 +110,12 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x7D6f603599b13F43a52588965f7650A772DE2726"
+			"address": "0x1610c916229d6bE96c34C3a96f5F4fA48b16536d"
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "Security Pool Operations Delegate",
+			"address": "0x952780dF7f0E2C2E8358F54729C7F96D0741F625"
 		},
 		{
 			"id": "escalationGameProofVerifier",

@@ -227,6 +227,8 @@ type BootstrapDescendantAddresses = {
 	priceCoordinatorDeploymentWorker: Address
 	securityPoolCreationCodeFirstChunk: Address
 	securityPoolCreationCodeSecondChunk: Address
+	securityPoolDeployer: Address
+	securityPoolOperationsDelegate: Address
 	securityPoolDeploymentWorker: Address
 }
 
@@ -234,7 +236,8 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 	const infrastructure = getInfraContractAddresses(profile)
 	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
 	const priceCoordinatorDeploymentWorker = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n })
-	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
+	const securityPoolOperationsDelegate = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
+	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 2n })
 	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 2n })
 	return {
 		liquidationApprovalRegistryDeployer,
@@ -246,6 +249,7 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
 		securityPoolDeployer,
+		securityPoolOperationsDelegate,
 		securityPoolDeploymentWorker,
 		securityPoolCreationCodeFirstChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 1n }),
 		securityPoolCreationCodeSecondChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 2n }),

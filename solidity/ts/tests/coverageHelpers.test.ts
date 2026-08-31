@@ -307,7 +307,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n],
 				}),
 			}),
-			/Initial escalation game deposit must equal 1 REP/,
+			/Initial deposit must be 1 REP/,
 		)
 
 		const factoryAddress = await deployContract(
@@ -342,7 +342,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'deployChildSecurityPool',
 				args: [zeroAddress, zeroAddress, 0n, 0n, 2n, 0n, 0n],
 			}),
-			/Only the security pool forker can deploy child pools/,
+			/Only security pool forker/,
 		)
 	})
 
@@ -1613,7 +1613,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress],
+				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
@@ -1643,6 +1643,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
+				args: [zeroAddress],
 			}),
 		)
 		await assert.rejects(
