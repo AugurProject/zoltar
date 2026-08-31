@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { parseUnits } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.js'
 import { liveBalancesForMarket, mapWithConcurrency, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
@@ -17,7 +18,6 @@ import {
 	livePairInitialized,
 	liveTradingControllerServices,
 	marketSelectionAfterDiscovery,
-	observeKnownReceipt,
 	parseSlippageBps,
 	parseTransactionValidityMinutes,
 	securityPoolAddressFromRoute,
@@ -760,8 +760,17 @@ export function useLiveTradingController({
 			})
 			setPositionHash(broadcastHash)
 			setState('approval-pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					refreshWalletSummaryAfterReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setPositionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') {
 				if (!balanceRequests.isCurrent(balanceRequest)) {
 					setState('error')
@@ -831,8 +840,17 @@ export function useLiveTradingController({
 			broadcastHash = quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
 			setPositionHash(broadcastHash)
 			setState('pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), refreshWalletSummaryAfterReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					refreshWalletSummaryAfterReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setPositionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') throw new Error('Transaction reverted')
 			setQuote(undefined)
 			setPositionReceiptWarning(undefined)

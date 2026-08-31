@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
 import { formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { approveLpRouter, marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiquidityOperation, type LiveBalances, type LiveMarket, type MarketLifecycle } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as liquidityCopy from '../copy/liquidity.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, observeKnownReceipt, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
+import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState, QuoteContext, TransactionState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 type LiquidityQuote = Awaited<ReturnType<typeof simulateLiquidity>> & QuoteContext
@@ -176,8 +177,17 @@ export function LiveLiquidityControls({
 			})
 			setTransactionHash(broadcastHash)
 			setState('approval-pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					onKnownReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setTransactionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') {
 				if (!walletContextIsCurrent(account)) {
 					setState('error')
@@ -264,8 +274,17 @@ export function LiveLiquidityControls({
 			)
 			setTransactionHash(broadcastHash)
 			setState('pending')
-			const receipt = await observeKnownReceipt(walletClient.waitForTransactionReceipt({ hash: broadcastHash }), onKnownReceipt)
-			receiptKnown = true
+			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
+				allowRevertedReceipt: true,
+				onKnownReceipt: () => {
+					receiptKnown = true
+					onKnownReceipt()
+				},
+				onTransactionReplaced: replacementHash => {
+					broadcastHash = replacementHash
+					setTransactionHash(replacementHash)
+				},
+			})
 			if (receipt.status === 'reverted') throw new Error('Liquidity transaction reverted')
 			setQuote(undefined)
 			setReceiptWarning(undefined)
