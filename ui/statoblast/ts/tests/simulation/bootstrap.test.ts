@@ -143,6 +143,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const primaryPoolAddress = poolAddresses[0] ?? getAddress('0x00000000000000000000000000000000000000b1')
 	const secondaryPoolAddress = poolAddresses[1] ?? getAddress('0x00000000000000000000000000000000000000b2')
 	const yesChildPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
+	const ordinaryEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000d1')
 	const deployedCodes = new Map<string, string>([[firstDeploymentAddress, '0x01']])
 	const managerByPool = new Map<Address, Address>()
 	const openOracleByManager = new Map<Address, Address>()
@@ -446,6 +447,12 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		}),
 		loadReportingDetails: mock(async () => {
 			state.callLog.loadReportingDetails += 1
+			if (scenario === 'securitypoolx2-auction' && state.callLog.reportOutcomeInSecurityPool === 1) {
+				return {
+					escalationGameAddress: ordinaryEscalationGameAddress,
+					status: 'active',
+				} as never
+			}
 			return {
 				currentTime: SIMULATION_INITIAL_TIMESTAMP,
 				marketDetails: {

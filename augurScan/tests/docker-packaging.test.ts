@@ -30,9 +30,18 @@ describe('Docker packaging', () => {
 		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.3.14-alpine AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
-		expect(runtimeStage).not.toContain('COPY augurScan/migrations')
+		expect(runtimeStage).toContain('COPY augurScan/migrations ./augurScan/migrations')
 		expect(runtimeStage).not.toContain('COPY augurScan/browser')
 		expect(runtimeStage).not.toContain('COPY --from=browser-build /workspace/augurScan/node_modules')
+	})
+
+	test('packages source-provenance inputs beside the runtime server', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.3.14-alpine AS runtime'))
+		expect(runtimeStage).toContain('COPY augurScan/package.json augurScan/bun.lock ./augurScan/')
+		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts')
+		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts')
+		expect(runtimeStage).not.toContain('COPY augurScan/package.json augurScan/bun.lock ./\n')
 	})
 
 	test('persists the rotating RPC exchange log in a dedicated writable volume', async () => {
@@ -44,5 +53,11 @@ describe('Docker packaging', () => {
 		expect(composeSource).toContain('augurscan-logs:/var/log/augurscan')
 		expect(composeSource).toContain('augurscan-logs:')
 		expect(gitIgnorePatterns).toContain('/augurScan/logs/')
+	})
+
+	test('forwards external PostgreSQL and standby indexer settings through Compose', async () => {
+		const source = await readFile(composeFile, 'utf8')
+		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)
+		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
 	})
 })

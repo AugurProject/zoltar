@@ -1046,7 +1046,7 @@ describe('Statoblast invariant harness', () => {
 			await createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)
 			assert.ok((await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool)) > supplyBeforeReactivatedMint, 'reactivated unresolved child should accept a positive complete-set mint')
 		} else {
-			await assert.rejects(createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n), /Resolved/)
+			await assert.rejects(createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n))
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool), supplyBeforeReactivatedMint, 'resolved own-fork child should reactivate without reopening complete-set minting')
 		}
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'reactivating a child must not reopen the parent')

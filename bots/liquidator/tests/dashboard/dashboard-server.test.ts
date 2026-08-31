@@ -342,9 +342,10 @@ describe('liquidator dashboard server', () => {
 		expect(reconciliation).toEqual(recoveryRequest)
 	})
 
-	test('accepts loopback browser requests when bound to all interfaces', async () => {
+	test('accepts configured network authority when bound to all interfaces', async () => {
 		let paused = false
 		const password = 'correct horse battery staple'
+		const publicAuthority = 'dashboard.example'
 		expect(() =>
 			startDashboardServer(0, {
 				getConfiguration: () => ({}),
@@ -364,6 +365,7 @@ describe('liquidator dashboard server', () => {
 			hostname: '0.0.0.0',
 			isNetworkConfigured: () => true,
 			password,
+			publicAuthority,
 			setApprovedUniverses: value => value,
 			setPaused: value => {
 				paused = Reflect.get(value as object, 'paused') === true
@@ -381,16 +383,26 @@ describe('liquidator dashboard server', () => {
 		const authorization = `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
 		const page = await fetch(origin, { headers: { authorization } })
 		expect(page.status).toBe(200)
+		const publicOrigin = `http://${publicAuthority}`
+		const publicPage = await fetch(origin, { headers: { authorization, host: publicAuthority } })
+		expect(publicPage.status).toBe(200)
 		const mutation = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: true }),
 			headers: {
 				authorization,
 				'content-type': 'application/json',
-				origin,
+				host: publicAuthority,
+				origin: publicOrigin,
 			},
 			method: 'PUT',
 		})
 		expect(mutation.status).toBe(200)
+		const mixedAuthorityMutation = await fetch(`${origin}/api/paused`, {
+			body: JSON.stringify({ paused: false }),
+			headers: { authorization, 'content-type': 'application/json', origin: publicOrigin },
+			method: 'PUT',
+		})
+		expect(mixedAuthorityMutation.status).toBe(403)
 		expect(paused).toBe(true)
 	})
 
