@@ -5,6 +5,9 @@ import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_
 
 export const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
 export const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
+export const MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS = 3
+const AUTOMATIC_LIFECYCLE_RETRY_BASE_SECONDS = 60n
+const AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS = 3_600n
 
 function now() {
 	return new Date().toISOString()
@@ -78,6 +81,51 @@ function timestampFromSeconds(value: string | undefined) {
 	return new Date(Number(milliseconds)).toISOString()
 }
 
+function automaticLifecycleRetryDelaySeconds(automaticRetryCount: number) {
+	if (!Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 1) throw new Error('Automatic lifecycle retry requires a positive finalized-failure count')
+	const exponent = Math.min(automaticRetryCount - 1, 20)
+	const delay = AUTOMATIC_LIFECYCLE_RETRY_BASE_SECONDS * 2n ** BigInt(exponent)
+	return delay < AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS ? delay : AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS
+}
+
+function accountAutomaticLifecycleFailure(obligation: DurableObligation, currentTimestamp: bigint) {
+	// notBefore is persisted with the first accounting pass for a failure episode.
+	// Subsequent canonical scans must retain the same budget slot and deadline.
+	const existing = obligation.notBefore
+	if (existing !== undefined) return existing
+	if (obligation.automaticRetryCount >= MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS) return undefined
+	const automaticRetryCount = obligation.automaticRetryCount + 1
+	if (automaticRetryCount >= MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS) {
+		obligation.automaticRetryCount = automaticRetryCount
+		return undefined
+	}
+	const retryAt = timestampFromSeconds((currentTimestamp + automaticLifecycleRetryDelaySeconds(automaticRetryCount)).toString())
+	if (retryAt === undefined) throw new Error('Automatic lifecycle retry timestamp is unavailable')
+	// Commit the count and its durable marker together after every fallible calculation.
+	obligation.automaticRetryCount = automaticRetryCount
+	obligation.notBefore = retryAt
+	return retryAt
+}
+
+function retryTimestampSeconds(value: string) {
+	const milliseconds = Date.parse(value)
+	if (!Number.isSafeInteger(milliseconds) || milliseconds < 0 || milliseconds % 1_000 !== 0) throw new Error('Automatic lifecycle retry timestamp is invalid')
+	return BigInt(milliseconds / 1_000)
+}
+
+function retainAutomaticLifecycleRetry(obligation: DurableObligation, retryAt: string, reason: string) {
+	obligation.blockers = [`${reason}; automatic retry is scheduled for ${retryAt}`]
+	obligation.status = 'deferred'
+	obligation.updatedAt = now()
+}
+
+function retainExhaustedLifecycleRetry(obligation: DurableObligation) {
+	delete obligation.notBefore
+	obligation.blockers = [`The automatic retry limit of ${MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS.toString()} canonically finalized lifecycle failures is exhausted; explicit operator reconciliation is required`]
+	obligation.status = 'failed'
+	obligation.updatedAt = now()
+}
+
 function planSteps(plan: OperationPlan) {
 	return createDurableWorkflow(plan).steps
 }
@@ -121,6 +169,7 @@ function newObligation(plan: OperationPlan, workflow: DurableWorkflow): DurableO
 	const createdAt = now()
 	const expiresAt = timestampFromSeconds(plan.deadlineTimestamp)
 	return {
+		automaticRetryCount: 0,
 		attemptCount: 0,
 		blockers: [],
 		createdAt,
@@ -223,14 +272,35 @@ export function synchronizeLifecycleObligations(
 			reservedTombstoneCount += 1
 			continue
 		}
+		const workflow = workflowsById.get(obligation.workflowId)
+		if (workflow === undefined) throw new Error(`Lifecycle obligation ${id} references a missing workflow`)
+		if ((obligation.status === 'failed' || obligation.status === 'deferred') && retryableOnChainWorkflowFailure(workflow)) {
+			const retryAt = accountAutomaticLifecycleFailure(obligation, currentTimestamp)
+			if (obligation.automaticRetryCount >= MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS) {
+				retainExhaustedLifecycleRetry(obligation)
+				continue
+			}
+			if (retryAt === undefined) throw new Error(`Lifecycle obligation ${id} is missing its automatic retry deadline`)
+			if (currentTimestamp < retryTimestampSeconds(retryAt)) {
+				retainAutomaticLifecycleRetry(obligation, retryAt, 'A canonically finalized lifecycle attempt reverted or was nonce-cancelled')
+				continue
+			}
+			markRetryableLifecycleWorkflowForRediscovery(workflow, 'Automatic retry after a canonically finalized revert or verified nonce cancellation')
+			refreshPlannedWorkflow(workflow, plan)
+			delete obligation.notBefore
+			obligation.blockers = []
+			obligation.label = plan.label
+			obligation.metadata = plan.metadata
+			obligation.status = 'pending'
+			obligation.updatedAt = now()
+			continue
+		}
 		// A completed lifecycle item may remain visible for a few anchored scans while
 		// RPC nodes converge. Its stable identity must stay terminal; recreating it
 		// here could repeat an irreversible operation against the same protocol item.
 		if (obligation.status === 'abandoned' || obligation.status === 'completed' || obligation.status === 'failed') {
 			continue
 		}
-		const workflow = workflowsById.get(obligation.workflowId)
-		if (workflow === undefined) throw new Error(`Lifecycle obligation ${id} references a missing workflow`)
 		refreshPlannedWorkflow(workflow, plan)
 		obligation.blockers = []
 		obligation.label = plan.label
@@ -259,6 +329,15 @@ export function synchronizeLifecycleObligations(
 				recoverCompletedObligation(state, obligation, workflow, currentBlock)
 			} else {
 				recoverTerminalObligation(state, obligation, workflow, currentBlock, 'Complete canonical lifecycle discovery no longer contains this outstanding identity; it was terminally superseded without claiming semantic success')
+			}
+			continue
+		}
+		if (retryableOnChainWorkflowFailure(workflow)) {
+			const retryAt = accountAutomaticLifecycleFailure(obligation, currentTimestamp)
+			if (obligation.automaticRetryCount >= MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS) retainExhaustedLifecycleRetry(obligation)
+			else {
+				if (retryAt === undefined) throw new Error(`Lifecycle obligation ${obligation.id} is missing its automatic retry deadline`)
+				retainAutomaticLifecycleRetry(obligation, retryAt, 'The lifecycle item is awaiting a fresh canonical action plan')
 			}
 			continue
 		}
@@ -328,6 +407,7 @@ export function beginLifecycleObligation(obligation: DurableObligation) {
 	obligation.blockers = []
 	obligation.lastAttemptAt = timestamp
 	delete obligation.lastError
+	delete obligation.notBefore
 	obligation.status = 'executing'
 	obligation.updatedAt = timestamp
 }
@@ -390,6 +470,7 @@ export function retryLifecycleObligation(state: Pick<RuntimeState, 'obligations'
 	}
 	const timestamp = now()
 	obligation.blockers = []
+	delete obligation.notBefore
 	obligation.status = 'pending'
 	obligation.updatedAt = timestamp
 }

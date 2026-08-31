@@ -231,13 +231,15 @@ describe('chaos dashboard configuration boundary', () => {
 		const state = runtimeState(current)
 		state.obligations = [
 			{
-				attemptCount: 0,
+				attemptCount: 1,
+				automaticRetryCount: 1,
 				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
 				createdAt: '2026-08-29T00:00:00.000Z',
 				ecosystem: 'statoblast',
 				id: 'obligation:future-auction',
 				label: 'Future auction settlement',
 				metadata: { auction: '0x0000000000000000000000000000000000000001' },
+				notBefore: '2026-08-29T00:03:00.000Z',
 				operationId: 'statoblast.auction.settle',
 				status: 'deferred',
 				updatedAt: '2026-08-29T00:00:00.000Z',
@@ -260,8 +262,12 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(await controller.getState()).toMatchObject({
 			obligations: [
 				{
+					attemptCount: 1,
+					automaticRetryCount: 1,
+					automaticRetryLimit: 3,
 					blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
 					id: 'obligation:future-auction',
+					notBefore: '2026-08-29T00:03:00.000Z',
 					status: 'deferred',
 				},
 			],
@@ -323,13 +329,15 @@ describe('chaos dashboard configuration boundary', () => {
 					maximumRepPerOperation: '1',
 					minimumEthReserve: '0.1',
 					minimumRepReserve: '2',
-					workflowValidForBlocks: 96,
+					selectableOperationAllowlist: ['open-oracle.weth.wrap'],
+					workflowValidForBlocks: 288,
 				},
 			},
 			revision: 'revision',
 		})
 		expect(candidate.settings.scheduler).toEqual({ maximumDelaySeconds: 180, minimumDelaySeconds: 90 })
 		expect(candidate.settings.strategy.enabledEcosystems).toEqual(['zoltar', 'open-oracle'])
+		expect(candidate.settings.strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap'])
 	})
 
 	test('rejects a dashboard transition from single-reader dry run to live execution', () => {

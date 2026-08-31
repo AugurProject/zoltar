@@ -153,7 +153,7 @@ const workflowRenderingState = state({
 	},
 	obligations: [
 		{ id: 'obligation-rendering', label: 'Rendered obligation', status: 'executing', updatedAt: '2026-08-24T00:01:00.000Z' },
-		{ ecosystem: 'open-oracle', id: 'obligation-deferred', label: 'Deferred obligation', status: 'deferred', updatedAt: '2026-08-24T00:01:00.000Z' },
+		{ attemptCount: 4, automaticRetryCount: 1, automaticRetryLimit: 3, ecosystem: 'open-oracle', id: 'obligation-deferred', label: 'Deferred obligation', notBefore: '2026-08-24T00:03:00.000Z', status: 'deferred', updatedAt: '2026-08-24T00:01:00.000Z' },
 	],
 	paused: false,
 	pendingTransactions: [
@@ -279,6 +279,7 @@ browserTest(
 		let recoveredDashboardState = firstScenario.recoveredState
 		let failSecondStateRead = true
 		let failNextStateRead = false
+		let selectableOperationAllowlist: string[] | null = null
 		const settingsMutations: unknown[] = []
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
@@ -305,7 +306,8 @@ browserTest(
 						maximumRepPerOperation: '10',
 						minimumEthReserve: '0.05',
 						minimumRepReserve: '10',
-						workflowValidForBlocks: 96,
+						selectableOperationAllowlist,
+						workflowValidForBlocks: 288,
 					},
 				},
 				signerAddress: walletAddress,
@@ -750,6 +752,12 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
 				await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
+				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
+					configurable: true,
+					value: { writeText: value => { window.__identifierCopies = [...(window.__identifierCopies ?? []), value]; return Promise.resolve() } },
+				}); document.querySelector('#catalog-rows .operation-id-copy')?.click()`)
+				await waitFor("document.querySelector('#catalog-rows .operation-id-feedback')?.textContent === 'Copied'", `${viewport.label} selectable operation ID copy did not succeed`)
+				expect(await cdp.evaluate('window.__identifierCopies?.at(-1)')).toBe('open-oracle.blocked-sibling')
 				expect(
 					await cdp.evaluate(`(() => {
 						const alias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('claimAuctionProceeds'))
@@ -964,7 +972,7 @@ browserTest(
 						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
 						return { detail: row?.querySelector('small')?.textContent, status: row?.querySelector('.badge')?.textContent, tone: row?.querySelector('.badge')?.className }
 					})()`),
-				).toEqual({ detail: 'Open Oracle · tracked, not currently actionable', status: 'Deferred', tone: 'badge neutral' })
+				).toEqual({ detail: 'Open Oracle · 1 of 3 finalized attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
 				const recoveryTextarea = await cdp.evaluate(`(() => {
 					const fields = document.querySelector('#candidate-fields')
 					const input = document.querySelector('#candidate-confirmation')
@@ -1097,6 +1105,41 @@ browserTest(
 				await cdp.command('Network.setBlockedURLs', { urls: [] })
 				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
 				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} unresolved settings mutation did not recover after a complete refresh`)
+				expect(
+					await cdp.evaluate(`({
+						all: document.querySelector('#all-selectable-operations')?.checked,
+						allowlistDisabled: document.querySelector('#selectable-operation-allowlist')?.disabled,
+					})`),
+				).toEqual({ all: true, allowlistDisabled: true })
+				const rejectedAllowlistMutationCount = settingsMutations.length
+				await cdp.evaluate(`(() => {
+					const all = document.querySelector('#all-selectable-operations')
+					const allowlist = document.querySelector('#selectable-operation-allowlist')
+					const form = document.querySelector('#settings-form')
+					if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
+					all.checked = false
+					all.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					allowlist.value = 'open-oracle.weth.typo'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown selectable operation definition ID open-oracle.weth.typo') === true", `${viewport.label} unknown selectable operation ID was not rejected locally`)
+				expect(settingsMutations).toHaveLength(rejectedAllowlistMutationCount)
+				const stagedAllowlistMutationCount = settingsMutations.length + 1
+				await cdp.evaluate(`(() => {
+					const all = document.querySelector('#all-selectable-operations')
+					const allowlist = document.querySelector('#selectable-operation-allowlist')
+					const form = document.querySelector('#settings-form')
+					if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
+					all.checked = false
+					all.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					allowlist.value = 'open-oracle.blocked-sibling\\ntrading.position.enter'
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+				})()`)
+				await waitForSettingsMutation(stagedAllowlistMutationCount, `${viewport.label} selectable-operation canary policy was not submitted`)
+				expect(settingsMutations.at(-1)).toMatchObject({
+					patch: { strategy: { selectableOperationAllowlist: ['open-oracle.blocked-sibling', 'trading.position.enter'] } },
+				})
+				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} selectable-operation canary policy did not reconcile`)
 				await cdp.evaluate(`(() => {
 					const execute = document.querySelector('#execute')
 					const ethReserve = document.querySelector('#reserve-eth')
@@ -1212,7 +1255,8 @@ browserTest(
 							maximumRepPerOperation: '10',
 							minimumEthReserve: '0',
 							minimumRepReserve: '0.000000000000000000',
-							workflowValidForBlocks: 96,
+							selectableOperationAllowlist: null,
+							workflowValidForBlocks: 288,
 						},
 					},
 					revision: 'fixture-1',
@@ -1251,7 +1295,8 @@ browserTest(
 							maximumRepPerOperation: '10',
 							minimumEthReserve: '0.123456789012345678',
 							minimumRepReserve: '0.000000000000000001',
-							workflowValidForBlocks: 96,
+							selectableOperationAllowlist: null,
+							workflowValidForBlocks: 288,
 						},
 					},
 					revision: 'fixture-1',
@@ -1276,11 +1321,39 @@ browserTest(
 				initialDashboardState = pausedWorkflowRenderingState
 				recoveredDashboardState = pausedWorkflowRenderingState
 				stateRequests = 0
+				selectableOperationAllowlist = ['open-oracle.blocked-sibling', 'trading.position.enter']
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} paused resume fixture did not render`)
 				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} resume dialog did not open`)
 				expect(await accessibilityIdentity('#resume-dialog')).toEqual({ name: 'Resume chaos scheduling?', role: 'dialog' })
+				expect(
+					await cdp.evaluate(`(() => {
+						const scope = [...document.querySelectorAll('#resume-preflight li')].find(row => row.querySelector('span')?.textContent === 'Random novelty scope')
+						return {
+							ids: scope?.querySelector('.resume-random-scope-ids')?.textContent,
+							summary: scope?.querySelector('.resume-random-scope > span')?.textContent,
+							warningHidden: document.querySelector('#resume-random-scope-warning')?.classList.contains('hidden'),
+						}
+					})()`),
+				).toEqual({ ids: 'open-oracle.blocked-sibling\ntrading.position.enter', summary: '2-ID canary', warningHidden: true })
+				await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
+				selectableOperationAllowlist = null
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${viewport.label} unrestricted resume fixture did not render`)
+				await cdp.evaluate("document.querySelector('#pause-button')?.click()")
+				await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} unrestricted resume dialog did not open`)
+				expect(
+					await cdp.evaluate(`(() => {
+						const scope = [...document.querySelectorAll('#resume-preflight li')].find(row => row.querySelector('span')?.textContent === 'Random novelty scope')
+						return {
+							button: document.querySelector('#confirm-resume')?.textContent,
+							disabled: document.querySelector('#confirm-resume')?.disabled,
+							scope: scope?.querySelector('strong')?.textContent,
+							warning: document.querySelector('#resume-random-scope-warning')?.textContent,
+						}
+					})()`),
+				).toEqual({ button: 'Resume unrestricted bot', disabled: false, scope: 'ALL selectable operations', warning: 'Random novelty is unrestricted. Any due eligible selectable operation may run immediately after resume.' })
 				expect(
 					await cdp.evaluate(`(() => {
 						const actions = [...document.querySelectorAll('#resume-dialog .dialog-actions button')]

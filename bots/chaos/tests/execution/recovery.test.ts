@@ -38,6 +38,7 @@ type RecoveryRpcOptions = {
 	ethBalanceAttoEth?: bigint | undefined
 	ethBalanceAttoEthUnavailable?: boolean | undefined
 	ethCallUnavailable?: boolean | undefined
+	exactTransactionVisible?: boolean | undefined
 	gasEstimate?: RecoveryGasEstimateOutcome | undefined
 	head?: bigint | undefined
 	repBalances?: { credit: bigint; wallet: bigint } | undefined
@@ -74,6 +75,28 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 					if (options.ethBalanceAttoEthUnavailable === true) return new Response('RPC temporarily unavailable', { status: 503 })
 					return Response.json({ id, jsonrpc: '2.0', result: toHex(options.ethBalanceAttoEth ?? 10n ** 20n) })
 				case 'eth_getTransactionByHash':
+					return Response.json({
+						id,
+						jsonrpc: '2.0',
+						result:
+							options.exactTransactionVisible === true
+								? {
+										blockHash: null,
+										blockNumber: null,
+										from: privateKeyToAccount(`0x${'11'.repeat(32)}`).address,
+										gas: toHex(100_000n),
+										hash: transactionHash,
+										input: '0x1234',
+										maxFeePerGas: '0x2',
+										maxPriorityFeePerGas: '0x1',
+										nonce: '0x3',
+										to: target,
+										transactionIndex: null,
+										type: '0x2',
+										value: '0x0',
+									}
+								: null,
+					})
 				case 'eth_getTransactionReceipt':
 					return Response.json({ id, jsonrpc: '2.0', result: null })
 				case 'eth_call':
@@ -371,7 +394,7 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 					return Response.json({ id, jsonrpc: '2.0', result: state.signerCode })
 				case 'eth_getBlockByNumber': {
 					if (typeof params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
-					const blockNumber = BigInt(params[0])
+					const blockNumber = params[0] === 'finalized' ? 112n : BigInt(params[0])
 					return Response.json({
 						id,
 						jsonrpc: '2.0',
@@ -543,6 +566,7 @@ type RecoveryEnvironmentOptions = {
 	catchUpThirdDuringReplay?: boolean | undefined
 	downstreamPreflight?: boolean | undefined
 	ethBalanceAttoEth?: bigint | undefined
+	exactTransactionVisible?: boolean | undefined
 	maximumEthPerOperationAttoEth?: bigint | undefined
 	maximumGasCostAttoEth?: bigint | undefined
 	maximumRepPerOperationAttoRep?: bigint | undefined
@@ -574,6 +598,7 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 	const commonRpcOptions = {
 		baseFeePerGas: options.baseFeePerGas,
 		ethBalanceAttoEth: options.ethBalanceAttoEth,
+		exactTransactionVisible: options.exactTransactionVisible,
 		repBalances: options.repBalances,
 		vaultBacking: options.vaultBackingAttoRep === undefined ? undefined : { amountAttoRep: options.vaultBackingAttoRep, vault: account.address },
 	}
@@ -1018,14 +1043,27 @@ describe('pending chaos transaction recovery decisions', () => {
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 	})
 
-	test('enters manual reconciliation before consulting stale transaction visibility after a nonce mismatch', async () => {
+	test('waits for an exact visible pending transaction when the pending nonce has advanced', async () => {
+		const fixture = await forkedRecoveryEnvironment({ exactTransactionVisible: true })
+		fixture.setNonces(4n)
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).resolves.toBeTrue()
+
+		for (const methods of fixture.requestedMethods) {
+			expect(methods).toContain('eth_getTransactionByHash')
+			expect(methods).not.toContain('eth_sendRawTransaction')
+		}
+		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toBeUndefined()
+	})
+
+	test('enters manual reconciliation after exact transaction visibility is ruled out for a nonce mismatch', async () => {
 		const fixture = await forkedRecoveryEnvironment()
 		fixture.setNonces(4n)
 
 		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('Signer nonce 3 was consumed without a quorum receipt')
 
 		for (const methods of fixture.requestedMethods) {
-			expect(methods).not.toContain('eth_getTransactionByHash')
+			expect(methods).toContain('eth_getTransactionByHash')
 			expect(methods).not.toContain('eth_sendRawTransaction')
 		}
 		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toContain('was consumed without a quorum receipt')
@@ -1124,9 +1162,9 @@ describe('pending chaos transaction recovery decisions', () => {
 		expect(pendingIntentRecoveryAction({ maxBlockNumber: 100n, mode: 'public', nonce: 7n }, 7n, [101n, 102n], 12n, true, 2)).toBe('wait-known-pending')
 	})
 
-	test('requires manual reconciliation when nonce state contradicts cached exact-hash visibility', () => {
+	test('continues monitoring a visible exact transaction when its pending nonce is consumed', () => {
 		const intent = { maxBlockNumber: 100n, mode: 'public' as const, nonce: 7n }
-		expect(pendingIntentRecoveryAction(intent, 8n, [101n, 102n], 12n, true, 2)).toBe('manual-reconciliation')
+		expect(pendingIntentRecoveryAction(intent, 8n, [101n, 102n], 12n, true, 2)).toBe('wait-known-pending')
 		expect(pendingIntentRecoveryAction(intent, 6n, [101n, 102n], 12n, true, 2)).toBe('manual-reconciliation')
 	})
 

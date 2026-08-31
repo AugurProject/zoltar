@@ -52,6 +52,19 @@ describe('chaos operation selection', () => {
 		expect(selectOperationPlan(evaluations, () => 1)?.id).toBe('second')
 	})
 
+	test('enforces the selectable-definition canary allowlist at the final random selection boundary', () => {
+		const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('second', 'random'))]
+		expect(randomOperationPlans(evaluations, ['second']).map(value => value.id)).toEqual(['second'])
+		expect(randomOperationPlans(evaluations, [])).toEqual([])
+		expect(selectOperationPlan(evaluations, () => 0, ['second'])?.id).toBe('second')
+		expect(selectOperationPlan(evaluations, () => 0, [])).toBeUndefined()
+	})
+
+	test('keeps urgent lifecycle work selectable when the novelty allowlist is empty', () => {
+		const evaluations = [evaluation(plan('random', 'random')), evaluation(plan('urgent', 'urgent', '20'))]
+		expect(selectOperationPlan(evaluations, () => 0, [])?.id).toBe('urgent')
+	})
+
 	test('returns undefined when no operation has an eligible plan', () => {
 		expect(selectOperationPlan([evaluation(undefined), evaluation(plan('blocked', 'random'), false)])).toBeUndefined()
 	})

@@ -1,6 +1,6 @@
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
+import { confirmCanonicalReceiptFinality, type CanonicalReceiptFinalityPolicy } from '@zoltar/bot-shared/execution/canonical-finality'
 import { assertSubmissionWindowOpen, maximumFeePerGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -59,6 +59,7 @@ export type ExecutionEnvironment = {
 	chain: Chain
 	clock?: (() => number) | undefined
 	executionCancelled?: (() => boolean) | undefined
+	/** Local-chain test override; live execution uses the consensus `finalized` checkpoint. */
 	finalityBlocks?: bigint | undefined
 	pool: RpcPool
 	persistState?: ((state: RuntimeState) => Promise<void>) | undefined
@@ -128,14 +129,31 @@ export function requiredConnectivity(settings: OperatorSettings) {
 
 export function executionReadClients(environment: ExecutionEnvironment) {
 	const connectivity = requiredConnectivity(environment.settings)
-	return [connectivity.readRpcUrl, ...connectivity.quorumRpcUrls].map(rpcUrl => ({
-		client: createPublicClient({
-			chain: environment.chain,
-			transport: environment.pool.transportFor(rpcUrl),
-		}),
-		endpoint: endpointLabel(rpcUrl),
-		rpcUrl,
-	}))
+	return [connectivity.readRpcUrl, ...connectivity.quorumRpcUrls].map(rpcUrl => {
+		const transport = environment.pool.transportFor(rpcUrl)
+		return {
+			client: createPublicClient({
+				chain: environment.chain,
+				transport,
+			}),
+			endpoint: endpointLabel(rpcUrl),
+			rpcUrl,
+			transport,
+		}
+	})
+}
+
+function rpcBlockHash(value: unknown): value is Hex {
+	return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
+
+function finalizedBlockResponse(value: unknown, endpoint: string) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`RPC ${endpoint} returned a malformed finalized block`)
+	const hash = 'hash' in value ? value.hash : undefined
+	const number = 'number' in value ? value.number : undefined
+	if (!rpcBlockHash(hash)) throw new Error(`RPC ${endpoint} finalized block is missing its canonical hash`)
+	if (typeof number !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(number)) throw new Error(`RPC ${endpoint} finalized block has a malformed number`)
+	return { hash, number: BigInt(number) }
 }
 
 function requiredExecutionWallet(environment: ExecutionEnvironment) {
@@ -877,12 +895,25 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 	}
 	const receipt = receiptObservations.find(candidate => candidate.value.blockHash.toLowerCase() === evidence.blockHash.toLowerCase() && candidate.value.blockNumber === evidence.blockNumber && candidate.value.hash.toLowerCase() === evidence.hash.toLowerCase())?.receipt
 	if (receipt === undefined) throw new Error(`Receipt ${hash} quorum evidence is missing its source receipt`)
+	const finalityPolicy: CanonicalReceiptFinalityPolicy | bigint = environment.finalityBlocks === undefined ? { blockTag: 'finalized' } : environment.finalityBlocks
+	const finalityReaders = capableObservations.map(observation => ({
+		getBlock: observation.reader.client.getBlock,
+		getBlockNumber: observation.reader.client.getBlockNumber,
+		getFinalizedBlock: async () =>
+			finalizedBlockResponse(
+				await requestTransport<unknown>(observation.reader.transport, {
+					method: 'eth_getBlockByNumber',
+					params: ['finalized', false],
+				}),
+				observation.reader.endpoint,
+			),
+	}))
 	const finalized = await confirmCanonicalReceiptFinality(
-		capableObservations.map(observation => observation.reader.client),
+		finalityReaders,
 		capableObservations.map(observation => observation.reader.endpoint),
 		`transaction ${hash}`,
 		receipt,
-		environment.finalityBlocks ?? CHAOS_FINALITY_BLOCKS,
+		finalityPolicy,
 		undefined,
 		connectivity.rpcQuorum,
 	)

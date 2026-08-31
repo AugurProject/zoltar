@@ -67,11 +67,15 @@ type PendingTransaction = {
 }
 
 type Obligation = {
+	attemptCount?: number | undefined
+	automaticRetryCount?: number | undefined
+	automaticRetryLimit?: number | undefined
 	blockers: string[]
 	dueAt?: string | undefined
 	ecosystem?: string | undefined
 	id?: string | undefined
 	label?: string | undefined
+	notBefore?: string | undefined
 	operationId?: string | undefined
 	status?: string | undefined
 	updatedAt?: string | undefined
@@ -147,6 +151,7 @@ type Configuration = {
 	paused?: boolean | undefined
 	rememberSigner?: boolean | undefined
 	revision?: string | number | undefined
+	selectableOperationAllowlist?: string[] | null | undefined
 	wallet?: string | undefined
 	workflowValidForBlocks?: string | number | undefined
 }
@@ -259,6 +264,8 @@ const settingsFields = element('settings-fields', HTMLFieldSetElement)
 const executeInput = element('execute', HTMLInputElement)
 const highRiskInput = element('allow-high-risk', HTMLInputElement)
 const irreversibleInput = element('allow-irreversible', HTMLInputElement)
+const allSelectableOperationsInput = element('all-selectable-operations', HTMLInputElement)
+const selectableOperationAllowlistInput = element('selectable-operation-allowlist', HTMLTextAreaElement)
 const minDelayInput = element('min-delay', HTMLInputElement)
 const maxDelayInput = element('max-delay', HTMLInputElement)
 const reserveEthInput = element('reserve-eth', HTMLInputElement)
@@ -279,6 +286,7 @@ const clearSignerButton = element('clear-signer', HTMLButtonElement)
 const signerStatus = element('signer-status', HTMLSpanElement)
 const resumeDialog = element('resume-dialog', HTMLDialogElement)
 const resumePreflight = element('resume-preflight', HTMLUListElement)
+const resumeRandomScopeWarning = element('resume-random-scope-warning', HTMLParagraphElement)
 const cancelResume = element('cancel-resume', HTMLButtonElement)
 const confirmResume = element('confirm-resume', HTMLButtonElement)
 
@@ -396,6 +404,11 @@ function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
 
 function strings(value: unknown) {
 	return Array.isArray(value) ? value.flatMap(entry => (typeof entry === 'string' ? [entry] : [])) : []
+}
+
+function nullableStrings(value: unknown) {
+	if (value === null) return null
+	return Array.isArray(value) ? strings(value) : undefined
 }
 
 function list<T>(value: unknown, transform: (entry: Record<string, unknown>) => T) {
@@ -525,11 +538,15 @@ function parseSnapshot(value: unknown): Snapshot {
 		lastScannedBlock: scalarValue(source['lastScannedBlock']),
 		network: stringValue(source['network']),
 		obligations: list(source['obligations'], entry => ({
+			attemptCount: nonnegativeIntegerValue(entry['attemptCount']),
+			automaticRetryCount: nonnegativeIntegerValue(entry['automaticRetryCount']),
+			automaticRetryLimit: nonnegativeIntegerValue(entry['automaticRetryLimit']),
 			blockers: strings(entry['blockers']),
 			dueAt: stringValue(entry['dueAt']),
 			ecosystem: stringValue(entry['ecosystem']),
 			id: stringValue(entry['id']),
 			label: stringValue(entry['label']),
+			notBefore: stringValue(entry['notBefore']),
 			operationId: stringValue(entry['operationId']),
 			status: stringValue(entry['status']),
 			updatedAt: stringValue(entry['updatedAt']),
@@ -587,6 +604,7 @@ function parseSnapshot(value: unknown): Snapshot {
 
 function parseConfiguration(value: unknown): Configuration {
 	const source = record(value) ?? {}
+	const selectableOperationAllowlist = source['selectableOperationAllowlist']
 	return {
 		allowHighRiskOperations: booleanValue(source['allowHighRiskOperations']),
 		allowIrreversibleOperations: booleanValue(source['allowIrreversibleOperations']),
@@ -607,6 +625,7 @@ function parseConfiguration(value: unknown): Configuration {
 		paused: booleanValue(source['paused']),
 		rememberSigner: booleanValue(source['rememberSigner']),
 		revision: scalarValue(source['revision']),
+		selectableOperationAllowlist: nullableStrings(selectableOperationAllowlist),
 		wallet: stringValue(source['wallet']),
 		workflowValidForBlocks: scalarValue(source['workflowValidForBlocks']),
 	}
@@ -644,7 +663,7 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 	}
 }
 
-function node(tag: keyof HTMLElementTagNameMap, className?: string, text?: string) {
+function node<Tag extends keyof HTMLElementTagNameMap>(tag: Tag, className?: string, text?: string): HTMLElementTagNameMap[Tag] {
 	const value = document.createElement(tag)
 	if (className !== undefined) value.className = className
 	if (text !== undefined) value.textContent = text
@@ -711,6 +730,37 @@ function compactIdentifier(value: string, type: string) {
 		)
 	})
 	wrapper.append(display, copy, disclosure, feedback, full)
+	return wrapper
+}
+
+function copyableOperationId(value: string) {
+	const wrapper = node('span', 'operation-id-control')
+	const identifier = node('small', 'mono', value)
+	const copy = node('button', 'operation-id-copy', 'Copy ID')
+	copy.setAttribute('aria-label', `Copy selectable operation definition ID: ${value}`)
+	copy.setAttribute('type', 'button')
+	const feedback = node('small', 'operation-id-feedback')
+	feedback.setAttribute('aria-live', 'polite')
+	feedback.setAttribute('role', 'status')
+	copy.addEventListener('click', () => {
+		copy.disabled = true
+		feedback.textContent = 'Copying…'
+		const clipboard = navigator.clipboard
+		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
+		void write.then(
+			() => {
+				copy.disabled = false
+				feedback.className = 'operation-id-feedback success'
+				feedback.textContent = 'Copied'
+			},
+			() => {
+				copy.disabled = false
+				feedback.className = 'operation-id-feedback error'
+				feedback.textContent = 'Copy failed; select the ID shown'
+			},
+		)
+	})
+	wrapper.append(identifier, copy, feedback)
 	return wrapper
 }
 
@@ -822,6 +872,9 @@ function statusLabel(status: string | undefined) {
 }
 
 function obligationDetail(obligation: Obligation) {
+	if (obligation.status === 'deferred' && obligation.notBefore !== undefined && obligation.automaticRetryCount !== undefined && obligation.automaticRetryLimit !== undefined) {
+		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} finalized attempts failed · next attempt ${formatDate(obligation.notBefore)}`
+	}
 	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
 	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
 }
@@ -1071,7 +1124,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 		}
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
-		if (value.id !== undefined) nameCell.append(node('small', 'mono', value.id))
+		if (value.id !== undefined) nameCell.append(value.classification === 'selectable' ? copyableOperationId(value.id) : node('small', 'mono', value.id))
 		const description = value.description?.trim()
 		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
 			nameCell.append(node('small', 'operation-description', description))
@@ -1314,7 +1367,8 @@ function renderRecovery(value: Snapshot) {
 				copy.append(node('strong', undefined, obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'))
 				copy.append(node('small', undefined, obligationDetail(obligation)))
 				const status = node('span')
-				setBadge(status, statusLabel(obligation.status ?? 'pending'), statusTone(obligation.status ?? 'pending'))
+				const automaticRetryWaiting = obligation.status === 'deferred' && obligation.notBefore !== undefined
+				setBadge(status, automaticRetryWaiting ? 'Retry waiting' : statusLabel(obligation.status ?? 'pending'), automaticRetryWaiting ? 'warning' : statusTone(obligation.status ?? 'pending'))
 				row.append(copy, status)
 				return row
 			}),
@@ -1443,6 +1497,10 @@ function renderConfiguration(value: Configuration, force = false) {
 	executeInput.checked = value.execute === true
 	highRiskInput.checked = value.allowHighRiskOperations === true
 	irreversibleInput.checked = value.allowIrreversibleOperations === true
+	const allSelectableOperations = value.selectableOperationAllowlist === null
+	allSelectableOperationsInput.checked = allSelectableOperations
+	selectableOperationAllowlistInput.value = Array.isArray(value.selectableOperationAllowlist) ? value.selectableOperationAllowlist.join('\n') : ''
+	selectableOperationAllowlistInput.disabled = allSelectableOperations
 	minDelayInput.value = String(value.minimumDelaySeconds ?? 60)
 	maxDelayInput.value = String(value.maximumDelaySeconds ?? 3_600)
 	reserveEthInput.value = String(value.minimumEthReserve ?? '0.05')
@@ -1450,7 +1508,7 @@ function renderConfiguration(value: Configuration, force = false) {
 	maximumEthOperationInput.value = String(value.maximumEthPerOperation ?? '0.05')
 	maximumGasCostInput.value = String(value.maximumGasCostEth ?? '0.02')
 	maximumRepOperationInput.value = String(value.maximumRepPerOperation ?? '10')
-	workflowValidBlocksInput.value = String(value.workflowValidForBlocks ?? 96)
+	workflowValidBlocksInput.value = String(value.workflowValidForBlocks ?? 288)
 	for (const toggle of document.querySelectorAll('[data-ecosystem-toggle]')) {
 		if (!(toggle instanceof HTMLInputElement)) continue
 		toggle.checked = value.enabledEcosystems.includes(toggle.dataset['ecosystemToggle'] ?? '')
@@ -1597,10 +1655,22 @@ function openResumeDialog() {
 	const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 	const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
 	const signerDetail = value.signerReady === true && value.wallet !== undefined ? compactIdentifier(value.wallet, 'recovery signer address') : 'Missing'
+	const selectionPolicy = configuration?.selectableOperationAllowlist
+	let randomScope: HTMLElement | string = 'Unavailable — keep paused'
+	if (selectionPolicy === null) randomScope = 'ALL selectable operations'
+	else if (Array.isArray(selectionPolicy)) {
+		if (selectionPolicy.length === 0) randomScope = 'Lifecycle only — no random novelty'
+		else {
+			const scope = node('span', 'resume-random-scope')
+			scope.append(node('span', undefined, `${selectionPolicy.length.toString()}-ID canary`), node('small', 'mono resume-random-scope-ids', selectionPolicy.join('\n')))
+			randomScope = scope
+		}
+	}
 	const rows: [string, HTMLElement | string][] = [
 		['Mode', value.execute === true ? 'Live execution' : 'Dry run'],
 		['Signer', signerDetail],
-		['Eligible operations', `${eligible.toString()} of ${executable.length.toString()}`],
+		['Eligible executable operations', `${eligible.toString()} of ${executable.length.toString()}`],
+		['Random novelty scope', randomScope],
 		['Recovery items', recoveryItemCount(value).toString()],
 		['Safety latch', value.safetyPaused === true ? 'Active' : 'Clear'],
 	]
@@ -1613,6 +1683,14 @@ function openResumeDialog() {
 			return row
 		}),
 	)
+	const unrestricted = selectionPolicy === null
+	let randomScopeWarning = ''
+	if (unrestricted) randomScopeWarning = 'Random novelty is unrestricted. Any due eligible selectable operation may run immediately after resume.'
+	else if (selectionPolicy === undefined) randomScopeWarning = 'The current random-selection policy is unavailable. Reload configuration before resuming.'
+	resumeRandomScopeWarning.classList.toggle('hidden', !unrestricted && selectionPolicy !== undefined)
+	resumeRandomScopeWarning.textContent = randomScopeWarning
+	confirmResume.disabled = selectionPolicy === undefined
+	confirmResume.textContent = unrestricted ? 'Resume unrestricted bot' : 'Resume bot'
 	resumeDialog.showModal()
 	cancelResume.focus()
 }
@@ -1907,6 +1985,9 @@ settingsFields.addEventListener('input', () => {
 	settingsDirty = true
 	discardSettingsButton.disabled = false
 })
+allSelectableOperationsInput.addEventListener('input', () => {
+	selectableOperationAllowlistInput.disabled = allSelectableOperationsInput.checked
+})
 discardSettingsButton.addEventListener('click', () => {
 	settingsDirty = false
 	settingsConflict = false
@@ -1933,12 +2014,25 @@ settingsForm.addEventListener('submit', event => {
 			const maxDelaySeconds = parseDelay(maxDelayInput, 'Maximum delay')
 			if (minDelaySeconds >= maxDelaySeconds) throw new Error('Minimum delay must be at least one second less than maximum delay.')
 			const workflowValidForBlocks = Number(workflowValidBlocksInput.value)
-			if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks < 75 || workflowValidForBlocks > 1_000_000) throw new Error('Workflow validity must be a whole number from 75 through 1000000 blocks.')
+			if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks < 243 || workflowValidForBlocks > 1_000_000) throw new Error('Workflow validity must be a whole number from 243 through 1000000 blocks.')
 			const enabledEcosystems = [...document.querySelectorAll('[data-ecosystem-toggle]')].flatMap(toggle => {
 				if (!(toggle instanceof HTMLInputElement) || !toggle.checked || toggle.dataset['ecosystemToggle'] === undefined) return []
 				return [toggle.dataset['ecosystemToggle']]
 			})
 			if (enabledEcosystems.length === 0) throw new Error('Enable at least one ecosystem.')
+			const selectableOperationAllowlist = allSelectableOperationsInput.checked
+				? null
+				: (() => {
+						const operationIds = selectableOperationAllowlistInput.value
+							.split(/[\n,]/)
+							.map(value => value.trim())
+							.filter(value => value !== '')
+						if (new Set(operationIds).size !== operationIds.length) throw new Error('Selectable operation allowlist must not contain duplicate definition IDs.')
+						const selectableIds = new Set(snapshot?.operationEvaluations.flatMap(operation => (operation.classification === 'selectable' && operation.id !== undefined ? [operation.id] : [])) ?? [])
+						const unknown = operationIds.find(operationId => !selectableIds.has(operationId))
+						if (unknown !== undefined) throw new Error(`Unknown selectable operation definition ID ${unknown}. Copy the exact ID from Operation catalog.`)
+						return operationIds
+					})()
 			const maximumEthPerOperation = parseReserve(maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
 			const maximumGasCostEth = parseReserve(maximumGasCostInput, 'Maximum gas cost', 'positive')
 			const maximumRepPerOperation = parseReserve(maximumRepOperationInput, 'Maximum REP per operation', 'positive')
@@ -1959,6 +2053,7 @@ settingsForm.addEventListener('submit', event => {
 						maximumRepPerOperation,
 						minimumEthReserve,
 						minimumRepReserve,
+						selectableOperationAllowlist,
 						workflowValidForBlocks,
 					},
 				},

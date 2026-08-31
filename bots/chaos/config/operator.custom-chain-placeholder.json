@@ -57,7 +57,8 @@
 		"maximumRepPerOperation": "10",
 		"minimumEthReserve": "0.05",
 		"minimumRepReserve": "10",
-		"workflowValidForBlocks": 96
+		"selectableOperationAllowlist": [],
+		"workflowValidForBlocks": 288
 	},
 	"submission": {
 		"minimumBundleRelaySuccesses": 1,

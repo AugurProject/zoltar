@@ -8,9 +8,9 @@ import { createQuestion, getQuestionId } from '../../../../solidity/ts/testSuppo
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { CHAOS_FINALITY_BLOCKS } from '../../src/execution/transaction-executor.ts'
 
 export const CHAOS_TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
+export const CHAOS_TEST_FINALITY_BLOCKS = 2n
 export const ONE_TOKEN = 10n ** 18n
 
 const YEAR = 365n * 86_400n
@@ -129,7 +129,7 @@ async function deploy(client: ReturnType<typeof createWriteClient>, data: Hex, l
 }
 
 async function mineFinalityBlocks(node: AnvilNode) {
-	for (let block = 0n; block < CHAOS_FINALITY_BLOCKS; block += 1n) {
+	for (let block = 0n; block < CHAOS_TEST_FINALITY_BLOCKS; block += 1n) {
 		await node.anvilWindowEthereum.requestRaw({ method: 'evm_mine', params: [] })
 	}
 }

@@ -8,13 +8,13 @@ import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.t
 import { boundedDashboardJson } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
-import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
-import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError } from '../src/ethereum.ts'
+import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
+import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError, type Hex } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
 import { bigintToSafeNumber } from '../src/ethereum.ts'
-import { confirmCanonicalReceiptFinality } from '../src/execution/canonical-finality.ts'
+import { confirmCanonicalReceiptFinality, type CanonicalBlockReader } from '../src/execution/canonical-finality.ts'
 import { EndpointCheckFailure } from '../src/monitoring/connectivity.ts'
 import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '../src/monitoring/rpc-quorum-policy.ts'
 
@@ -257,11 +257,64 @@ describe('shared bot primitives', () => {
 		await expect(settledQuorumValue('local head', [Promise.resolve({ endpoint: 'http://anvil:8545', value: 1n })], 1)).resolves.toBe(1n)
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const
-		const reader = {
-			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: blockNumber === 100n ? receiptHash : descendantHash }),
+		const reader: CanonicalBlockReader = {
+			getBlock: async parameters => {
+				if (!('blockNumber' in parameters)) throw new Error('Expected local confirmation-depth request')
+				return { hash: parameters.blockNumber === 100n ? receiptHash : descendantHash }
+			},
 			getBlockNumber: async () => 112n,
 		}
 		await expect(confirmCanonicalReceiptFinality([reader], ['http://anvil:8545'], 'local receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 1)).resolves.toBe(true)
+	})
+
+	test('requires a quorum-agreed finalized checkpoint at or beyond the canonical receipt block', async () => {
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const finalizedHash = `0x${'22'.repeat(32)}` as const
+		const reader = (finalizedBlockNumber: bigint, canonicalReceiptHash = receiptHash, checkpointHash = finalizedHash): CanonicalBlockReader => ({
+			getBlock: async parameters => ({ hash: parameters.blockNumber === 100n ? canonicalReceiptHash : checkpointHash, number: parameters.blockNumber }),
+			getBlockNumber: async () => 200n,
+			getFinalizedBlock: async () => ({ hash: checkpointHash, number: finalizedBlockNumber }),
+		})
+		const receipt = { blockHash: receiptHash, blockNumber: 100n }
+
+		await expect(confirmCanonicalReceiptFinality([reader(99n), reader(99n)], ['one', 'two'], 'test receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).resolves.toBe(false)
+		await expect(confirmCanonicalReceiptFinality([reader(100n, receiptHash, receiptHash), reader(100n, receiptHash, receiptHash)], ['one', 'two'], 'test receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).resolves.toBe(true)
+		await expect(confirmCanonicalReceiptFinality([reader(100n), reader(100n)], ['one', 'two'], 'inconsistent checkpoint receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).rejects.toThrow('does not match its canonical block identity')
+		await expect(confirmCanonicalReceiptFinality([reader(100n, receiptHash, receiptHash), reader(100n, `0x${'33'.repeat(32)}`, `0x${'33'.repeat(32)}`)], ['one', 'two'], 'test receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).rejects.toThrow('RPC disagreement')
+		await expect(confirmCanonicalReceiptFinality([reader(100n, `0x${'44'.repeat(32)}`, `0x${'44'.repeat(32)}`), reader(100n, `0x${'44'.repeat(32)}`, `0x${'44'.repeat(32)}`)], ['one', 'two'], 'test receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).rejects.toThrow('receipt is no longer canonical')
+	})
+
+	test('accepts staggered finalized checkpoints when independently finalized readers agree on receipt ancestry', async () => {
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const reader = (finalizedBlockNumber: bigint, checkpointByte: string, canonicalReceiptHash = receiptHash): CanonicalBlockReader => ({
+			getBlock: async parameters => ({ hash: parameters.blockNumber === 100n ? canonicalReceiptHash : (`0x${checkpointByte.repeat(32)}` as Hex), number: parameters.blockNumber }),
+			getBlockNumber: async () => 200n,
+			getFinalizedBlock: async () => ({ hash: `0x${checkpointByte.repeat(32)}` as Hex, number: finalizedBlockNumber }),
+		})
+		const receipt = { blockHash: receiptHash, blockNumber: 100n }
+
+		await expect(confirmCanonicalReceiptFinality([reader(102n, '22'), reader(101n, '33'), reader(100n, '11')], ['one', 'two', 'three'], 'staggered receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).resolves.toBe(true)
+		await expect(confirmCanonicalReceiptFinality([reader(100n, '11'), reader(99n, '33'), reader(98n, '44')], ['one', 'two', 'three'], 'insufficient finalized receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).resolves.toBe(false)
+		await expect(confirmCanonicalReceiptFinality([reader(102n, '22'), reader(101n, '33', `0x${'55'.repeat(32)}`), reader(100n, '11')], ['one', 'two', 'three'], 'conflicting receipt', receipt, { blockTag: 'finalized' }, undefined, 2)).rejects.toThrow('RPC disagreement')
+	})
+
+	test('rejects a finalized checkpoint that changes while receipt identity is verified', async () => {
+		const receiptHash = `0x${'11'.repeat(32)}` as const
+		const finalizedHash = receiptHash
+		const replacementFinalizedHash = `0x${'33'.repeat(32)}` as const
+		const switchingReader = (): CanonicalBlockReader => {
+			let finalizedReads = 0
+			return {
+				getBlock: async parameters => ({ hash: receiptHash, number: parameters.blockNumber }),
+				getBlockNumber: async () => 200n,
+				getFinalizedBlock: async () => {
+					finalizedReads += 1
+					return { hash: finalizedReads === 1 ? finalizedHash : replacementFinalizedHash, number: 100n }
+				},
+			}
+		}
+
+		await expect(confirmCanonicalReceiptFinality([switchingReader(), switchingReader()], ['one', 'two'], 'switching receipt', { blockHash: receiptHash, blockNumber: 100n }, { blockTag: 'finalized' }, undefined, 2)).rejects.toThrow('finalized checkpoint changed')
 	})
 
 	test('keeps transport-only quorum loss classified as degraded connectivity', async () => {
@@ -285,8 +338,11 @@ describe('shared bot primitives', () => {
 	test('requires canonical receipt ancestry and confirmation depth across the RPC quorum', async () => {
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const
-		const reader = (head: bigint, canonicalReceiptHash = receiptHash) => ({
-			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: blockNumber === 100n ? canonicalReceiptHash : descendantHash }),
+		const reader = (head: bigint, canonicalReceiptHash = receiptHash): CanonicalBlockReader => ({
+			getBlock: async parameters => {
+				if (!('blockNumber' in parameters)) throw new Error('Expected confirmation-depth request')
+				return { hash: parameters.blockNumber === 100n ? canonicalReceiptHash : descendantHash }
+			},
 			getBlockNumber: async () => head,
 		})
 		await expect(confirmCanonicalReceiptFinality([reader(111n), reader(112n)], ['one', 'two'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).resolves.toBe(false)
@@ -299,10 +355,12 @@ describe('shared bot primitives', () => {
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const replacementReceiptHash = `0x${'33'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const
-		const switchingReader = () => {
+		const switchingReader = (): CanonicalBlockReader => {
 			let switched = false
 			return {
-				getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+				getBlock: async parameters => {
+					if (!('blockNumber' in parameters)) throw new Error('Expected confirmation-depth request')
+					const { blockNumber } = parameters
 					if (blockNumber === 112n) {
 						switched = true
 						return { hash: descendantHash }
@@ -318,8 +376,10 @@ describe('shared bot primitives', () => {
 	test('requires the same endpoint quorum to attest descendant and receipt ancestry', async () => {
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const
-		const reader = (failsAt: 100n | 112n) => ({
-			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+		const reader = (failsAt: 100n | 112n): CanonicalBlockReader => ({
+			getBlock: async parameters => {
+				if (!('blockNumber' in parameters)) throw new Error('Expected confirmation-depth request')
+				const { blockNumber } = parameters
 				if (blockNumber === failsAt) throw new ConnectivityDegradedError(`unavailable at ${blockNumber.toString()}`)
 				return { hash: blockNumber === 100n ? receiptHash : descendantHash }
 			},
@@ -331,8 +391,11 @@ describe('shared bot primitives', () => {
 	test('never omits semantic failures from canonical finality evidence', async () => {
 		const receiptHash = `0x${'11'.repeat(32)}` as const
 		const descendantHash = `0x${'22'.repeat(32)}` as const
-		const healthy = {
-			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: blockNumber === 100n ? receiptHash : descendantHash }),
+		const healthy: CanonicalBlockReader = {
+			getBlock: async parameters => {
+				if (!('blockNumber' in parameters)) throw new Error('Expected confirmation-depth request')
+				return { hash: parameters.blockNumber === 100n ? receiptHash : descendantHash }
+			},
 			getBlockNumber: async () => 112n,
 		}
 		const malformedHead = {
@@ -341,9 +404,11 @@ describe('shared bot primitives', () => {
 				throw new TypeError('Malformed block-number response')
 			},
 		}
-		const missingDescendant = {
+		const missingDescendant: CanonicalBlockReader = {
 			...healthy,
-			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+			getBlock: async parameters => {
+				if (!('blockNumber' in parameters)) throw new Error('Expected confirmation-depth request')
+				const { blockNumber } = parameters
 				if (blockNumber === 100n) return { hash: receiptHash }
 				const error = new Error('Requested canonical block is missing')
 				error.name = 'BlockNotFoundError'
@@ -1088,9 +1153,55 @@ describe('shared bot primitives', () => {
 	})
 
 	test('derives a checked EIP-1559 fee ceiling shared by planning and signing', () => {
-		expect(maximumFeePerGas(10n)).toBe(2_000_000_020n)
+		expect(maximumFeePerGas(10n, 0n)).toBe(2_000_000_010n)
+		expect(maximumFeePerGas(10n, 1n)).toBe(2_000_000_011n)
+		expect(maximumFeePerGas(10n, 2n)).toBe(2_000_000_012n)
+		expect(maximumFeePerGas(80n, 2n)).toBe(2_000_000_101n)
+		expect(maximumFeePerGas(10n)).toBeGreaterThan(maximumFeePerGas(10n, 24n))
+		expect(() => maximumFeePerGas(10n, -1n)).toThrow('validity blocks must be an unsigned integer')
+		expect(() => maximumFeePerGas(10n, 26n)).toThrow('validity blocks cannot exceed the signed transaction horizon')
 		expect(() => maximumFeePerGas(-1n)).toThrow('baseFeePerGas must be an unsigned uint256')
 		expect(() => maximumFeePerGas((1n << 256n) - 1n)).toThrow('maximum fee per gas exceeds uint256')
+	})
+
+	test('prices a signed transaction for its actual validity window', async () => {
+		const account = privateKeyToAccount(`0x${'12'.repeat(32)}`)
+		if (account.signTransaction === undefined) throw new Error('Local test account cannot sign')
+		const signed = await prepareSignedTransaction({
+			baseFeePerGas: 80n,
+			blockNumber: 100n,
+			chainId: 1,
+			data: '0x',
+			from: account.address,
+			gasEstimate: 21_000n,
+			lastValidBlockNumber: 102n,
+			nonce: 0n,
+			signTransaction: account.signTransaction,
+			to: '0x0000000000000000000000000000000000000010',
+		})
+		expect(signed.maxBlockNumber).toBe(102n)
+		expect(signed.transaction.maxFeePerGas).toBe(maximumFeePerGas(80n, 2n))
+	})
+
+	test('requires distinct relay origins for a redundant private acceptance threshold', () => {
+		expect(validateSubmissionSettings({ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.example/one', 'https://relay.example/two'] }).relayUrls).toHaveLength(2)
+		expect(() => validateSubmissionSettings({ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://relay.example/one', 'https://relay.example/two'] })).toThrow('distinct relay origins')
+		expect(validateSubmissionSettings({ minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example/one', 'https://two.example/two'] }).minimumBundleRelaySuccesses).toBe(2)
+	})
+
+	test('rejects same-origin redundant relays before transaction submission', async () => {
+		await expect(
+			submitSignedTransaction({
+				address: '0x0000000000000000000000000000000000000001',
+				hash: `0x${'44'.repeat(32)}`,
+				maxBlockNumber: 100n,
+				publicRpcUrls: [],
+				publicSubmit: async () => `0x${'44'.repeat(32)}`,
+				serializedTransaction: '0x1234',
+				settings: { minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://relay.example/one', 'https://relay.example/two'] },
+				signMessage: async () => `0x${'22'.repeat(65)}`,
+			}),
+		).rejects.toThrow('distinct relay origins')
 	})
 
 	test('does not accept an oversized private-relay response', async () => {

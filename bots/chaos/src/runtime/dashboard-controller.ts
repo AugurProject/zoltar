@@ -4,7 +4,7 @@ import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
 import { CONFIGURATION_REVISION_CONFLICT, configurationRevisionConflict, parseSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
-import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, retryLifecycleObligation } from './obligations.ts'
+import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, retryLifecycleObligation } from './obligations.ts'
 import { liveInventoryReadinessBlockers } from './live-readiness.ts'
 import { workflowNeedsContinuation } from './workflows.ts'
 import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
@@ -66,7 +66,7 @@ export function settingsPatchCandidate(current: OperatorSettings, value: unknown
 	const scheduler = record(patch['scheduler'], 'Scheduler patch')
 	exactKeys(scheduler, ['maximumDelaySeconds', 'minimumDelaySeconds'], 'Scheduler patch')
 	const strategy = record(patch['strategy'], 'Strategy patch')
-	exactKeys(strategy, ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'], 'Strategy patch')
+	exactKeys(strategy, ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'selectableOperationAllowlist', 'workflowValidForBlocks'], 'Strategy patch')
 	const serialized = serializedSettings(current)
 	return {
 		revision: body['revision'],
@@ -89,6 +89,7 @@ export function settingsPatchCandidate(current: OperatorSettings, value: unknown
 					maximumRepPerOperation: strategy['maximumRepPerOperation'],
 					minimumEthReserve: strategy['minimumEthReserve'],
 					minimumRepReserve: strategy['minimumRepReserve'],
+					selectableOperationAllowlist: strategy['selectableOperationAllowlist'],
 					workflowValidForBlocks: strategy['workflowValidForBlocks'],
 				},
 			},
@@ -254,7 +255,7 @@ function dashboardState(state: RuntimeState, configuration: ConfigurationState) 
 		execute: configuration.settings.runtime.execute,
 		inventoryAvailable: state.lastScanAt !== undefined,
 		network: configuration.settings.network.name,
-		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed'),
+		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').map(obligation => ({ ...obligation, automaticRetryLimit: MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS })),
 		operationEvaluations: groupedOperationEvaluations(state, enabled),
 		scheduler: {
 			...state.scheduler,

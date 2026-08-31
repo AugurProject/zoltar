@@ -54,6 +54,7 @@ import {
 	saveCarryProofJournal,
 	serializedCarryProofJournal,
 	validateCarryProofJournal,
+	validateCarryProofJournalSidecarIfPresent,
 	type CarryJournalPosition,
 	type CarryJournalRawAccounting,
 	type CarryProofJournal,
@@ -1349,9 +1350,13 @@ describe('compact carry-proof journal', () => {
 		try {
 			const runtimeStatePath = join(directory, 'operator.json')
 			const fixture = checkpointJournalFixture().journal
+			expect(await validateCarryProofJournalSidecarIfPresent(runtimeStatePath, identity)).toBe('absent')
+			await expect(stat(carryProofJournalSidecarPath(runtimeStatePath))).rejects.toThrow()
 			await saveCarryProofJournal(runtimeStatePath, fixture)
 			const sidecar = carryProofJournalSidecarPath(runtimeStatePath)
 			expect((await stat(sidecar)).mode & 0o777).toBe(0o600)
+			expect(await validateCarryProofJournalSidecarIfPresent(runtimeStatePath, identity)).toBe('valid')
+			await expect(validateCarryProofJournalSidecarIfPresent(runtimeStatePath, { ...identity, profileId: 'profile:other' })).rejects.toThrow('different deployment profile')
 			expect(await loadCarryProofJournal(runtimeStatePath, identity)).toEqual(fixture)
 			await expect(loadCarryProofJournal(runtimeStatePath, { ...identity, profileId: 'profile:other' })).rejects.toThrow('different deployment profile')
 		} finally {

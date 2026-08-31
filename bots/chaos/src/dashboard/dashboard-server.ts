@@ -94,6 +94,11 @@ function publicStrings(value: unknown) {
 		: []
 }
 
+function nullablePublicStrings(value: unknown) {
+	if (value === null || value === undefined) return null
+	return Array.isArray(value) ? publicStrings(value) : undefined
+}
+
 const operationClassifications = new Set(['excluded-dangerous', 'lifecycle-obligation', 'prerequisite', 'role-restricted', 'selectable'])
 
 function operationClassificationField(source: Record<string, unknown>, key: string) {
@@ -465,11 +470,15 @@ function publicObligation(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
 	return compact({
+		attemptCount: safeIntegerField(source, 'attemptCount'),
+		automaticRetryCount: safeIntegerField(source, 'automaticRetryCount'),
+		automaticRetryLimit: safeIntegerField(source, 'automaticRetryLimit'),
 		blockers: publicStrings(source['blockers']),
 		dueAt: stringField(source, 'dueAt'),
 		ecosystem: stringField(source, 'ecosystem'),
 		id: stringField(source, 'id'),
 		label: stringField(source, 'label'),
+		notBefore: isoTimestampField(source, 'notBefore'),
 		operationId: stringField(source, 'operationId'),
 		status: stringField(source, 'status'),
 		updatedAt: stringField(source, 'updatedAt'),
@@ -593,9 +602,174 @@ export function publicChaosConfiguration(value: unknown) {
 		paused: booleanField(settings, 'paused'),
 		rememberSigner: booleanField(source, 'rememberSigner'),
 		revision: scalar(source, 'revision'),
+		selectableOperationAllowlist: nullablePublicStrings(strategy['selectableOperationAllowlist']),
 		wallet: stringField(source, 'wallet') ?? stringField(source, 'signerAddress'),
 		workflowValidForBlocks: scalar(strategy, 'workflowValidForBlocks'),
 	})
+}
+
+type ChaosReadinessCheck = {
+	detail?: string | undefined
+	ready: boolean
+}
+
+function decimalAtto(value: unknown) {
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) return undefined
+	const [whole = '0', fraction = ''] = value.split('.')
+	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+}
+
+function inventoryReadyForLiveExecution(state: Record<string, unknown>, settings: Record<string, unknown>) {
+	const inventory = record(state['inventory'])
+	const strategy = record(settings['strategy'])
+	if (inventory === undefined || strategy === undefined) return false
+	const eth = typeof inventory['eth'] === 'string' && /^\d+$/.test(inventory['eth']) ? BigInt(inventory['eth']) : undefined
+	const minimumEth = decimalAtto(strategy['minimumEthReserve'])
+	const maximumGas = decimalAtto(strategy['maximumGasCostEth'])
+	const minimumRep = decimalAtto(strategy['minimumRepReserve'])
+	if (eth === undefined || minimumEth === undefined || maximumGas === undefined || minimumRep === undefined || eth < minimumEth + maximumGas) return false
+	if (!Array.isArray(inventory['rep'])) return false
+	return inventory['rep'].some(candidate => {
+		const balance = record(candidate)?.['balance']
+		return typeof balance === 'string' && /^\d+$/.test(balance) && BigInt(balance) >= minimumRep
+	})
+}
+
+function readinessCheck(ready: boolean, detail?: string): ChaosReadinessCheck {
+	return detail === undefined ? { ready } : { detail, ready }
+}
+
+export function publicChaosReadiness(stateValue: unknown, configurationValue: unknown, nowMilliseconds = Date.now()) {
+	const state = record(stateValue)
+	const configuration = record(configurationValue)
+	const settings = record(configuration?.['settings']) ?? configuration
+	if (state === undefined || settings === undefined) {
+		return {
+			blockers: ['runtime_snapshot_unavailable'],
+			checkedAt: new Date(nowMilliseconds).toISOString(),
+			checks: { storage: readinessCheck(false, 'Runtime or configuration snapshot is unavailable') },
+			ready: false,
+		}
+	}
+	const runtime = record(settings['runtime']) ?? settings
+	const network = record(settings['network']) ?? settings
+	const execute = runtime['execute'] === true
+	const configured = settings['networkConfigured'] === true
+	const paused = settings['paused'] === true || state['paused'] === true
+	const safetyPaused = state['safetyPaused'] === true
+	const signerReady = configuration?.['hasSigner'] === true || (settings['privateKey'] !== undefined && settings['privateKey'] !== null)
+	const lastScanAt = typeof state['lastScanAt'] === 'string' && Number.isFinite(Date.parse(state['lastScanAt'])) ? state['lastScanAt'] : undefined
+	const maximumBlockIntervalSeconds = typeof network['maximumBlockIntervalSeconds'] === 'number' && Number.isSafeInteger(network['maximumBlockIntervalSeconds']) ? network['maximumBlockIntervalSeconds'] : 60
+	const lifecyclePollMilliseconds = typeof runtime['lifecyclePollMilliseconds'] === 'number' && Number.isSafeInteger(runtime['lifecyclePollMilliseconds']) ? runtime['lifecyclePollMilliseconds'] : 12_000
+	const maximumScanAgeSeconds = Math.ceil((lifecyclePollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
+	const scanAgeSeconds = lastScanAt === undefined ? undefined : Math.max(0, Math.floor((nowMilliseconds - Date.parse(lastScanAt)) / 1_000))
+	const topology = record(state['topology'])
+	const scanReady = lastScanAt !== undefined && scanAgeSeconds !== undefined && scanAgeSeconds <= maximumScanAgeSeconds && topology?.['complete'] === true
+	const pendingCount = Array.isArray(state['pendingTransactions']) ? state['pendingTransactions'].length : 0
+	const activeWorkflows = Array.isArray(state['workflows'])
+		? state['workflows'].filter(candidate => {
+				const status = record(candidate)?.['status']
+				return status === 'running' || status === 'waiting-continuation' || status === 'waiting-obligation' || status === 'waiting-transaction'
+			}).length
+		: 0
+	const obligations = Array.isArray(state['obligations'])
+		? state['obligations'].flatMap(candidate => {
+				const obligation = record(candidate)
+				return obligation === undefined ? [] : [obligation]
+			})
+		: []
+	const failedObligationCount = obligations.filter(candidate => candidate['status'] === 'failed').length
+	const blockedObligationCount = obligations.filter(candidate => candidate['status'] === 'blocked').length
+	const pendingObligationCount = obligations.filter(candidate => candidate['status'] === 'pending' || candidate['status'] === 'executing').length
+	const automaticRetryObligationCount = obligations.filter(candidate => candidate['status'] === 'deferred' && typeof candidate['notBefore'] === 'string').length
+	const lifecyclePresenceBlocked = record(state['lifecyclePresenceBlocker']) !== undefined
+	const recoveryReady = pendingCount === 0 && activeWorkflows === 0 && failedObligationCount === 0 && blockedObligationCount === 0 && pendingObligationCount === 0 && automaticRetryObligationCount === 0 && !lifecyclePresenceBlocked
+	const inventoryReady = !execute || inventoryReadyForLiveExecution(state, settings)
+	const rpcHealth = publicRpcHealth(state['rpcEndpointHealth'], configurationValue)
+	const rpcReady = !configured || rpcHealth['chainReady'] === true
+	const status = stringField(state, 'status')
+	const runtimeReady = state['error'] === undefined
+	const storageReady = status !== 'error'
+	let pauseDetail: string | undefined
+	if (safetyPaused) pauseDetail = 'Durable safety pause is latched'
+	else if (paused) pauseDetail = 'Operator is intentionally paused'
+	let scanDetail: string | undefined
+	if (!scanReady) scanDetail = lastScanAt === undefined ? 'No complete canonical scan is available' : 'Canonical scan is incomplete or stale'
+	const checks: Record<string, ChaosReadinessCheck> = {
+		configuration: readinessCheck(configured, configured ? undefined : 'Network deployment and connectivity are not configured'),
+		inventory: readinessCheck(inventoryReady, inventoryReady ? undefined : 'Live inventory does not cover configured ETH/gas and REP reserves'),
+		paused: readinessCheck(!paused, pauseDetail),
+		recovery: readinessCheck(recoveryReady, recoveryReady ? undefined : 'A transaction, workflow, lifecycle obligation, or lifecycle-presence guard prevents scheduled novelty'),
+		rpc: readinessCheck(rpcReady, rpcReady ? undefined : 'Read RPC quorum is not currently healthy'),
+		runtime: readinessCheck(runtimeReady, runtimeReady ? undefined : 'Runtime reports an active error that must be reconciled'),
+		scan: readinessCheck(scanReady, scanDetail),
+		signer: readinessCheck(!execute || signerReady, !execute || signerReady ? undefined : 'Live execution has no configured signer'),
+		storage: readinessCheck(storageReady, storageReady ? 'Runtime and configuration snapshots are readable' : 'Runtime reports a storage or fatal error'),
+	}
+	const blockers = Object.entries(checks)
+		.filter(([, check]) => !check.ready)
+		.map(([name]) => name)
+	return {
+		activeWorkflowCount: activeWorkflows,
+		automaticRetryObligationCount,
+		blockers,
+		blockedObligationCount,
+		checkedAt: new Date(nowMilliseconds).toISOString(),
+		checks,
+		failedObligationCount,
+		lifecyclePresenceBlocked,
+		maximumScanAgeSeconds,
+		mode: execute ? 'live' : 'dry-run',
+		paused,
+		pendingObligationCount,
+		pendingTransactionCount: pendingCount,
+		ready: blockers.length === 0,
+		safetyPaused,
+		scanAgeSeconds,
+	}
+}
+
+function chaosReadinessMetrics(readiness: ReturnType<typeof publicChaosReadiness>) {
+	const readinessChecks = record(readiness.checks) ?? {}
+	const lines = [
+		'# HELP zoltar_chaos_ready Whether the chaos operator is ready for scheduled work.',
+		'# TYPE zoltar_chaos_ready gauge',
+		`zoltar_chaos_ready ${readiness.ready ? '1' : '0'}`,
+		'# HELP zoltar_chaos_readiness_check Whether one named readiness condition is satisfied.',
+		'# TYPE zoltar_chaos_readiness_check gauge',
+		...['configuration', 'inventory', 'paused', 'recovery', 'rpc', 'runtime', 'scan', 'signer', 'storage'].map(name => `zoltar_chaos_readiness_check{check="${name}"} ${record(readinessChecks[name])?.['ready'] === true ? '1' : '0'}`),
+		'# HELP zoltar_chaos_paused Whether the operator is intentionally paused.',
+		'# TYPE zoltar_chaos_paused gauge',
+		`zoltar_chaos_paused ${readiness.paused === true ? '1' : '0'}`,
+		'# HELP zoltar_chaos_safety_paused Whether the durable safety pause is latched.',
+		'# TYPE zoltar_chaos_safety_paused gauge',
+		`zoltar_chaos_safety_paused ${readiness.safetyPaused === true ? '1' : '0'}`,
+		'# HELP zoltar_chaos_pending_transactions Transactions awaiting recovery or finality.',
+		'# TYPE zoltar_chaos_pending_transactions gauge',
+		`zoltar_chaos_pending_transactions ${readiness.pendingTransactionCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_active_workflows Durable workflows that have not reached a terminal state.',
+		'# TYPE zoltar_chaos_active_workflows gauge',
+		`zoltar_chaos_active_workflows ${readiness.activeWorkflowCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_pending_obligations Lifecycle obligations that are pending or executing.',
+		'# TYPE zoltar_chaos_pending_obligations gauge',
+		`zoltar_chaos_pending_obligations ${readiness.pendingObligationCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_automatic_retry_obligations Lifecycle obligations waiting for bounded automatic retry.',
+		'# TYPE zoltar_chaos_automatic_retry_obligations gauge',
+		`zoltar_chaos_automatic_retry_obligations ${readiness.automaticRetryObligationCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_blocked_obligations Lifecycle obligations blocked on operator or protocol recovery.',
+		'# TYPE zoltar_chaos_blocked_obligations gauge',
+		`zoltar_chaos_blocked_obligations ${readiness.blockedObligationCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_failed_obligations Lifecycle obligations in a failed state.',
+		'# TYPE zoltar_chaos_failed_obligations gauge',
+		`zoltar_chaos_failed_obligations ${readiness.failedObligationCount?.toString() ?? '0'}`,
+		'# HELP zoltar_chaos_lifecycle_presence_blocker Whether unrepresented canonical lifecycle presence blocks novelty.',
+		'# TYPE zoltar_chaos_lifecycle_presence_blocker gauge',
+		`zoltar_chaos_lifecycle_presence_blocker ${readiness.lifecyclePresenceBlocked === true ? '1' : '0'}`,
+		'# HELP zoltar_chaos_scan_age_seconds Age of the last complete canonical scan in seconds.',
+		'# TYPE zoltar_chaos_scan_age_seconds gauge',
+		`zoltar_chaos_scan_age_seconds ${readiness.scanAgeSeconds?.toString() ?? 'NaN'}`,
+	]
+	return `${lines.join('\n')}\n`
 }
 
 function publicFailure(operation: string, error: unknown) {
@@ -689,6 +863,20 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
 			if (request.method === 'GET') {
+				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
+					try {
+						await mutationBarrier
+						const [state, configuration] = await Promise.all([controller.getState(), controller.getConfiguration()])
+						const readiness = publicChaosReadiness(state, configuration)
+						if (url.pathname === '/metrics') {
+							return new Response(chaosReadinessMetrics(readiness), { headers: securityHeaders('text/plain; version=0.0.4; charset=utf-8'), status: 200 })
+						}
+						return json(readiness, readiness.ready ? 200 : 503)
+					} catch (error) {
+						console.error(`chaosDashboardOperation=readiness-read failed=${error instanceof Error ? error.message : String(error)}`)
+						return json({ blockers: ['runtime_snapshot_unavailable'], ready: false }, 503)
+					}
+				}
 				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
 				if (dashboardPages.has(page)) {
 					const html = await Bun.file(join(directory, 'index.html')).text()

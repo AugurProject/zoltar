@@ -22,6 +22,7 @@ export async function main() {
 				chainId: loaded.settings.network.chainId,
 				execute: loaded.settings.runtime.execute,
 				privateKey: loaded.settings.privateKey,
+				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
 				stateFile: loaded.settings.runtime.stateFile,
 			},
 			shutdown,

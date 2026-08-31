@@ -107,6 +107,8 @@ export type DurableWorkflow = {
 }
 
 export type DurableObligation = {
+	/** Distinct canonically finalized retryable failures that consumed the bounded automatic retry budget. */
+	automaticRetryCount: number
 	attemptCount: number
 	blockers: string[]
 	completedAt?: string | undefined
@@ -835,7 +837,9 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 function parseObligation(value: unknown, index: number): DurableObligation {
 	const label = `obligations[${index.toString()}]`
 	const obligation = requiredRecord(value, label)
-	assertExactKeys(obligation, ['attemptCount', 'blockers', 'createdAt', 'ecosystem', 'id', 'label', 'metadata', 'operationId', 'status', 'updatedAt', 'workflowId'], ['completedAt', 'dueAt', 'expiresAt', 'lastAttemptAt', 'lastError', 'notBefore', 'resolvedAt', 'resolutionReason'], label)
+	assertExactKeys(obligation, ['attemptCount', 'blockers', 'createdAt', 'ecosystem', 'id', 'label', 'metadata', 'operationId', 'status', 'updatedAt', 'workflowId'], ['automaticRetryCount', 'completedAt', 'dueAt', 'expiresAt', 'lastAttemptAt', 'lastError', 'notBefore', 'resolvedAt', 'resolutionReason'], label)
+	const automaticRetryCount = obligation['automaticRetryCount'] ?? 0
+	if (typeof automaticRetryCount !== 'number' || !Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 0) throw new Error(`${label}.automaticRetryCount is invalid`)
 	const attemptCount = obligation['attemptCount']
 	if (typeof attemptCount !== 'number' || !Number.isSafeInteger(attemptCount) || attemptCount < 0) throw new Error(`${label}.attemptCount is invalid`)
 	const status = obligation['status']
@@ -855,6 +859,7 @@ function parseObligation(value: unknown, index: number): DurableObligation {
 		throw new Error(`${label} has resolution metadata without abandonment`)
 	}
 	return {
+		automaticRetryCount,
 		attemptCount,
 		blockers: stringArray(obligation['blockers'], `${label}.blockers`),
 		...(completedAt === undefined ? {} : { completedAt }),

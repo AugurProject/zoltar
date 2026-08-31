@@ -335,7 +335,11 @@ export async function checkSubmissionEndpoints(settings: SubmissionSettings, exp
 	if (settings.mode === 'public') return []
 	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
+	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
+	const healthyOriginCount = new Set(checks.filter(check => check.status === 'healthy').map(check => check.target)).size
+	if (safetyFailure !== undefined || healthyOriginCount < settings.minimumBundleRelaySuccesses) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'relay check failed'}`)).join('; '), checks)
+	}
 	return checks
 }
 
@@ -344,8 +348,8 @@ export async function checkPrivateTransactionSubmissionEndpoints(settings: Submi
 	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateTransactionRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
 	const safetyFailure = failed.find(check => check.failureDisposition !== 'connectivity-degraded')
-	const healthyCount = checks.length - failed.length
-	if (safetyFailure !== undefined || healthyCount < settings.minimumBundleRelaySuccesses) {
+	const healthyOriginCount = new Set(checks.filter(check => check.status === 'healthy').map(check => check.target)).size
+	if (safetyFailure !== undefined || healthyOriginCount < settings.minimumBundleRelaySuccesses) {
 		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'private transaction relay check failed'}`)).join('; '), checks)
 	}
 	return checks

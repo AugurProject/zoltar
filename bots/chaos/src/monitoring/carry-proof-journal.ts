@@ -3251,6 +3251,19 @@ async function readCarryProofJournalFile(path: string, expected?: CarryProofJour
 	return parseCarryProofJournalEnvelope(payload.toString('utf8'), expected ?? segmented.identity, Number(segmented.residentRecords))
 }
 
+/** Fully authenticates an existing carry journal without creating, resetting, archiving, or pruning any state. */
+export async function validateCarryProofJournalSidecarIfPresent(runtimeStatePath: string, identity: CarryProofJournalExpectedIdentity) {
+	const path = carryProofJournalSidecarPath(runtimeStatePath)
+	try {
+		await lstat(path)
+	} catch (error) {
+		if (errorCode(error) === 'ENOENT') return 'absent' as const
+		throw error
+	}
+	await readCarryProofJournalFile(path, identity)
+	return 'valid' as const
+}
+
 function snapshotCarryProofJournalIdentity(identity: CarryProofJournalIdentity): CarryProofJournalIdentity {
 	return {
 		chainId: identity.chainId,

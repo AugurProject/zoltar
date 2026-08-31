@@ -5,13 +5,13 @@ import { join } from 'node:path'
 import { createPublicClient, createWalletClient, getAddress, parseTransaction, privateKeyToAccount, zeroAddress } from '../support/bot-shared.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
-import { CHAOS_FINALITY_BLOCKS, TransactionAwaitingRecovery, executeOperationPlan, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { TransactionAwaitingRecovery, executeOperationPlan, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { chaosChain, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
 import { executionProfileId } from '../../src/runtime/operator.ts'
 import { initialDurableState, initialRuntimeState, loadRuntimeState } from '../../src/state/operator-state.ts'
 import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
+import { CHAOS_TEST_FINALITY_BLOCKS, CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
 
 const SCAN_SEED = 42
 const ANVIL_CLOCK = () => 2_000_000_700_000
@@ -120,7 +120,7 @@ function runtimeContext(settings: OperatorSettings) {
 	const environment: ExecutionEnvironment = {
 		chain,
 		clock: ANVIL_CLOCK,
-		finalityBlocks: CHAOS_FINALITY_BLOCKS,
+		finalityBlocks: CHAOS_TEST_FINALITY_BLOCKS,
 		pool,
 		sender: account.address,
 		settings,

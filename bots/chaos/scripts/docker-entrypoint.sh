@@ -5,6 +5,7 @@ set -eu
 settings_file='.state/operator.json'
 dashboard_password_file=${ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE:-}
 temporary_file=''
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 cleanup() {
 	if [ -n "$temporary_file" ]; then
@@ -38,6 +39,8 @@ if [ -f "$settings_file" ]; then
 	chmod 600 "$settings_file"
 fi
 
+bun "$script_directory/validate-container-paths.mts" "$settings_file"
+
 if [ -n "$dashboard_password_file" ]; then
 	if [ -L "$dashboard_password_file" ]; then
 		echo 'chaos dashboard password file must not be a symbolic link' >&2
@@ -62,6 +65,13 @@ if [ -n "$dashboard_password_file" ]; then
 		exit 1
 	fi
 	export ZOLTAR_BOT_DASHBOARD_PASSWORD
+fi
+
+if [ "$#" -eq 3 ]; then
+	if [ "$1" = 'bun' ] && [ "$2" = 'run' ] && [ "$3" = 'run' ]; then
+		echo 'Checking persisted chaos launch policy before starting the operator.'
+		bun "$script_directory/../src/cli/doctor.ts" --if-live-capable
+	fi
 fi
 
 trap - EXIT HUP INT TERM

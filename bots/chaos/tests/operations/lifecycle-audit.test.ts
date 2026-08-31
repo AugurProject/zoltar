@@ -284,7 +284,7 @@ describe('raw lifecycle identity audit', () => {
 				openOracle: snapshot.deployments.openOracle,
 				reportId: '42',
 				reportTimestamp: '1999999500',
-				settlementTime: '2500',
+				settlementTime: '4000',
 				settlementTimestamp: '0',
 				stateHash: hash(42),
 				token1: snapshot.deployments.weth,

@@ -247,8 +247,9 @@ export function pendingIntentRecoveryAction(intent: Pick<PendingTransactionInten
 	if (!Number.isSafeInteger(rpcQuorum) || rpcQuorum < 1 || rpcQuorum > heads.length) {
 		throw new Error('Pending intent recovery requires a valid RPC quorum')
 	}
-	if (pendingNonce !== intent.nonce) return 'manual-reconciliation' as const
+	if (pendingNonce < intent.nonce) return 'manual-reconciliation' as const
 	if (exactTransactionVisible) return 'wait-known-pending' as const
+	if (pendingNonce > intent.nonce) return 'manual-reconciliation' as const
 	const descendingHeads = [...heads].sort((left, right) => {
 		if (left === right) return 0
 		return left > right ? -1 : 1
@@ -713,9 +714,6 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	if (await resolveQueuedCancellation(environment, intent)) return true
 	if (await resolveQueuedReplacement(environment, intent)) return true
 	const nonce = await agreedPendingNonce(environment, intent)
-	if (nonce !== intent.nonce) {
-		await retainManualReconciliation(environment, intent, nonce)
-	}
 	const headObservations = await availableHeads(environment, intent)
 	const heads = headObservations.map(observation => observation.head)
 	const exactTransactionVisible = await exactIntentIsVisible(environment, intent)

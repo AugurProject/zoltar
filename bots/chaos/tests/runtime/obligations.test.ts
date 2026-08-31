@@ -319,6 +319,7 @@ describe('durable lifecycle obligations', () => {
 		if (obligation === undefined) throw new Error('Missing test obligation')
 		beginLifecycleObligation(obligation)
 		expect(obligation.attemptCount).toBe(1)
+		expect(obligation.automaticRetryCount).toBe(0)
 		expect(completeLifecycleObligation(state, obligation)).toBeFalse()
 		const workflow = state.workflows[0]
 		if (workflow === undefined) throw new Error('Missing test workflow')
@@ -622,10 +623,10 @@ describe('durable lifecycle obligations', () => {
 		expect(state.obligationTombstones).toHaveLength(0)
 	})
 
-	test('does not auto-reconcile a failed lifecycle item while canonical presence remains', () => {
+	test('backs off then automatically rediscovers a canonically present finalized lifecycle revert', () => {
 		const value = plan('10')
 		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, 900n)
 		const obligation = obligationForPlan(state, value)
 		const workflow = state.workflows[0]
 		const step = workflow?.steps[0]
@@ -635,11 +636,98 @@ describe('durable lifecycle obligations', () => {
 		step.status = 'failed'
 		step.failureKind = 'receipt-reverted'
 		step.transactionHash = `0x${'22'.repeat(32)}`
+		obligation.attemptCount = 1
+		obligation.automaticRetryCount = 0
 
-		synchronizeLifecycleObligations(state, [evaluation(plan('11'))], presence(value), true, 11n)
+		synchronizeLifecycleObligations(state, [evaluation(plan('11'))], presence(value), true, 11n, 1_000n)
+
+		expect(state.obligations[0]?.status).toBe('deferred')
+		expect(obligation.automaticRetryCount).toBe(1)
+		expect(obligation.notBefore).toBe(new Date(1_060_000).toISOString())
+		expect(obligation.blockers[0]).toContain('automatic retry')
+		expect(state.workflows[0]?.status).toBe('failed')
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('12'))], presence(value), true, 12n, 1_059n)
+		expect(state.obligations[0]?.status).toBe('deferred')
+		expect(obligation.automaticRetryCount).toBe(1)
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('13'))], presence(value), true, 13n, 1_060n)
+		expect(state.obligations[0]?.status).toBe('pending')
+		expect(obligation.notBefore).toBeUndefined()
+		expect(state.workflows[0]?.status).toBe('planned')
+		expect(workflow.steps[0]).toMatchObject({ status: 'planned' })
+		expect(workflow.steps[0]?.failureKind).toBeUndefined()
+		expect(workflow.steps[0]?.transactionHash).toBeUndefined()
+		expect(state.obligationTombstones).toHaveLength(0)
+	})
+
+	test('counts only the terminal finalized failure after successful prerequisite execution entries', () => {
+		const base = plan('10')
+		const terminalStep = base.steps[0]
+		if (terminalStep === undefined) throw new Error('Missing lifecycle terminal step fixture')
+		const value: OperationPlan = {
+			...base,
+			steps: [{ ...terminalStep, id: 'prepare-one', label: 'Prepare one' }, { ...terminalStep, id: 'prepare-two', label: 'Prepare two' }, terminalStep],
+		}
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, 900n)
+		const obligation = obligationForPlan(state, value)
+		const workflow = state.workflows[0]
+		const firstStep = workflow?.steps[0]
+		const secondStep = workflow?.steps[1]
+		const failedStep = workflow?.steps[2]
+		if (obligation === undefined || workflow === undefined || firstStep === undefined || secondStep === undefined || failedStep === undefined) {
+			throw new Error('Missing multi-step lifecycle fixture')
+		}
+
+		beginLifecycleObligation(obligation)
+		firstStep.status = 'confirmed'
+		firstStep.confirmedAt = new Date(910_000).toISOString()
+		beginLifecycleObligation(obligation)
+		secondStep.status = 'confirmed'
+		secondStep.confirmedAt = new Date(920_000).toISOString()
+		beginLifecycleObligation(obligation)
+		failedStep.status = 'failed'
+		failedStep.failureKind = 'receipt-reverted'
+		failedStep.transactionHash = `0x${'33'.repeat(32)}`
+		workflow.status = 'failed'
+		workflow.completedAt = new Date(930_000).toISOString()
+		failLifecycleObligation(obligation, 'terminal transaction reverted', false)
+
+		expect(obligation).toMatchObject({ attemptCount: 3, automaticRetryCount: 0, status: 'failed' })
+		synchronizeLifecycleObligations(state, [evaluation({ ...value, createdAtBlock: '11', id: 'settle:11' })], presence(value), true, 11n, 1_000n)
+
+		expect(obligation).toMatchObject({ attemptCount: 3, automaticRetryCount: 1, status: 'deferred' })
+		expect(obligation.notBefore).toBe(new Date(1_060_000).toISOString())
+		expect(obligation.blockers[0]).toContain('automatic retry')
+
+		synchronizeLifecycleObligations(state, [evaluation({ ...value, createdAtBlock: '12', id: 'settle:12' })], presence(value), true, 12n, 1_001n)
+		expect(obligation.automaticRetryCount).toBe(1)
+	})
+
+	test('requires operator reconciliation after bounded finalized lifecycle retry attempts are exhausted', () => {
+		const value = plan('10')
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, 900n)
+		const obligation = obligationForPlan(state, value)
+		const workflow = state.workflows[0]
+		const step = workflow?.steps[0]
+		if (obligation === undefined || workflow === undefined || step === undefined) throw new Error('Missing lifecycle fixture')
+		obligation.status = 'failed'
+		obligation.attemptCount = 30
+		obligation.automaticRetryCount = 2
+		workflow.status = 'failed'
+		step.status = 'failed'
+		step.failureKind = 'receipt-reverted'
+		step.transactionHash = `0x${'22'.repeat(32)}`
+
+		synchronizeLifecycleObligations(state, [evaluation(plan('11'))], presence(value), true, 11n, 1_000n)
 
 		expect(obligation.status).toBe('failed')
-		expect(state.obligationTombstones).toHaveLength(0)
+		expect(obligation.automaticRetryCount).toBe(3)
+		expect(obligation.notBefore).toBeUndefined()
+		expect(obligation.blockers[0]).toContain('automatic retry limit')
+		expect(workflow.status).toBe('failed')
 	})
 
 	test('records an abandonment tombstone that prevents rediscovery from recreating work', () => {

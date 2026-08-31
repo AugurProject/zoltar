@@ -983,7 +983,7 @@ function confirmedOracleApprovalRequirements(snapshot: EcosystemSnapshot, contex
 
 function oracleRequestContinuationIsSafe(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, context: OperationContinuationContext, persisted: ReturnType<typeof persistedOracleRequest>) {
 	try {
-		const workflowValidForBlocks = options.workflowValidForBlocks ?? 96
+		const workflowValidForBlocks = options.workflowValidForBlocks ?? 288
 		if (!Number.isSafeInteger(workflowValidForBlocks) || workflowValidForBlocks <= 0) return false
 		if (options.submissionMode === 'public') return false
 		const currentBlock = amount(snapshot.anchor.blockNumber)

@@ -14,6 +14,8 @@ import {
 	blockNovelEvaluations,
 	evaluatePolicySafeContinuation,
 	executionProfileId,
+	actionableUrgentLifecyclePlan,
+	lifecycleObstructions,
 	operatorWaitMilliseconds,
 	recordEndpointPreflightChecks,
 	rediscoverableExecutionFailure,
@@ -26,8 +28,8 @@ import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
-import { beginLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
-import type { OperationPlan } from '../../src/operations/types.ts'
+import { beginLifecycleObligation, failLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
+import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
@@ -125,6 +127,24 @@ function lifecyclePlan(): OperationPlan {
 	}
 }
 
+function evaluatedOperation(plan: OperationPlan): EvaluatedOperation {
+	return {
+		definition: {
+			classification: plan.classification,
+			contract: 'OpenOracle',
+			description: 'test operation',
+			discoveryInputs: [],
+			ecosystem: plan.ecosystem,
+			id: plan.definitionId,
+			label: plan.label,
+			method: 'test',
+			risk: plan.risk,
+		},
+		eligibility: { blockers: [], eligible: true },
+		plan,
+	}
+}
+
 function completedSelectableWorkflow(operationId: string, startedAt: string, completedAt: string) {
 	const workflow = createDurableWorkflow({
 		...lifecyclePlan(),
@@ -205,23 +225,7 @@ describe('chaos operator runtime', () => {
 			obligation: false,
 			priority: 'random',
 		}
-		const evaluated = (plan: OperationPlan) => ({
-			definition: {
-				classification: plan.classification,
-				contract: 'OpenOracle',
-				description: 'test operation',
-				discoveryInputs: [],
-				ecosystem: plan.ecosystem,
-				id: plan.definitionId,
-				label: plan.label,
-				method: 'test',
-				risk: plan.risk,
-			},
-			eligibility: { blockers: [], eligible: true },
-			plan,
-		})
-
-		const blocked = blockNovelEvaluations([evaluated(selectablePlan), evaluated(urgentPlan)], {
+		const blocked = blockNovelEvaluations([evaluatedOperation(selectablePlan), evaluatedOperation(urgentPlan)], {
 			count: 1,
 			digest: `0x${'45'.repeat(32)}`,
 			firstDefinitionId: 'statoblast.escalation.resume',
@@ -234,6 +238,41 @@ describe('chaos operator runtime', () => {
 		expect(randomOperationPlans(blocked)).toEqual([])
 		expect(urgentOperationPlans(blocked)).toEqual([urgentPlan])
 		expect(blocked[0]?.eligibility.blockers[0]).toContain('random novelty remains blocked')
+	})
+
+	test('runs independent urgent lifecycle work while a finalized failure awaits bounded retry', () => {
+		const retryPlan = lifecyclePlan()
+		const urgentPlan: OperationPlan = {
+			...lifecyclePlan(),
+			id: 'open-oracle.settle:101:report-8',
+			label: 'Settle report 8',
+			metadata: { reportId: '8', stateHash: `0x${'44'.repeat(32)}` },
+		}
+		const evaluations = [evaluatedOperation(retryPlan), evaluatedOperation(urgentPlan)]
+		const presence = evaluations.map(evaluation => {
+			const plan = evaluation.plan
+			if (plan === undefined) throw new Error('Lifecycle fixture requires an operation plan')
+			return { blocksNovelty: true, definitionId: plan.definitionId, ecosystem: plan.ecosystem, metadata: plan.metadata }
+		})
+		const state = initialRuntimeState(false, address(1), 31_337)
+		state.evaluations = evaluations
+		synchronizeLifecycleObligations(state, evaluations, presence, true, 100n, 1_000n)
+		const retryObligation = state.obligations.find(obligation => obligation.metadata['reportId'] === '7')
+		const retryWorkflow = state.workflows.find(workflow => workflow.id === retryObligation?.workflowId)
+		if (retryObligation === undefined || retryWorkflow === undefined) throw new Error('Missing retry lifecycle fixture')
+
+		beginLifecycleObligation(retryObligation)
+		beginLifecycleObligation(retryObligation)
+		beginLifecycleObligation(retryObligation)
+		markWorkflowFailed(retryWorkflow, 'approve', 'transaction reverted', 'receipt-reverted')
+		failLifecycleObligation(retryObligation, 'transaction reverted', false)
+		synchronizeLifecycleObligations(state, evaluations, presence, true, 101n, 1_000n)
+
+		expect(lifecycleObstructions(state)).toMatchObject({
+			automaticRetry: { attemptCount: 3, automaticRetryCount: 1, id: retryObligation.id, status: 'deferred' },
+			hard: undefined,
+		})
+		expect(actionableUrgentLifecyclePlan(state)).toMatchObject({ metadata: { reportId: '8' } })
 	})
 
 	test('bounds sustained backfill cadence by the configured lifecycle poll interval', () => {

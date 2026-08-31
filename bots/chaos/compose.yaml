@@ -12,6 +12,8 @@ services:
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
       # The entrypoint creates this owner-only secret in the private state volume.
       ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password
+      # flock coordinates containers on this Docker host through the shared volume.
+      ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
     ports:
       - 127.0.0.1:4193:4193
     healthcheck:
@@ -22,9 +24,14 @@ services:
       start_period: 10s
     volumes:
       - chaos-state:/app/bots/chaos/.state
+      # This fixed-name nested volume fences every shipped Compose project on the host,
+      # even when a different project name uses a separate runtime-state volume.
+      - chaos-signer-locks:/app/bots/chaos/.state/process-locks
 
 volumes:
   chaos-state:
+  chaos-signer-locks:
+    name: zoltar-chaos-signer-locks
 
 networks:
   default:

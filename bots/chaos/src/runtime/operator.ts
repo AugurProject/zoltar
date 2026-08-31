@@ -16,10 +16,10 @@ import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
+import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
@@ -316,7 +316,7 @@ export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, work
 			confirmedStepIds: workflow.steps.filter(step => step.status === 'confirmed').map(step => step.id),
 			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
 		})
-		const result = applyExecutionPolicy([evaluation], settings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth))[0]
+		const result = applyExecutionPolicy([evaluation], settings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth), 'durable-continuation')[0]
 		if (result === undefined) throw new Error('Canonical continuation evaluation returned no result')
 		return result
 	}
@@ -423,6 +423,32 @@ function recordDryRun(state: RuntimeState, plan: OperationPlan) {
 		summary: `${plan.steps.length.toString()} step${plan.steps.length === 1 ? '' : 's'}; ${plan.risk} risk; no transaction signed`,
 		type: 'operation',
 	})
+}
+
+function retryableLifecycleObligation(state: Pick<RuntimeState, 'obligations' | 'workflows'>, obligation: DurableObligation) {
+	const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
+	return workflow !== undefined && retryableOnChainWorkflowFailure(workflow) && obligation.automaticRetryCount < MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS
+}
+
+export function lifecycleObstructions(state: Pick<RuntimeState, 'obligations' | 'workflows'>) {
+	let automaticRetry: DurableObligation | undefined
+	for (const obligation of state.obligations) {
+		if (obligation.status === 'deferred' && obligation.notBefore !== undefined) {
+			automaticRetry ??= obligation
+			continue
+		}
+		if (obligation.status !== 'blocked' && obligation.status !== 'executing' && obligation.status !== 'failed') continue
+		if (obligation.status === 'failed' && retryableLifecycleObligation(state, obligation)) {
+			automaticRetry ??= obligation
+			continue
+		}
+		return { automaticRetry, hard: obligation }
+	}
+	return { automaticRetry, hard: undefined }
+}
+
+export function actionableUrgentLifecyclePlan(state: Pick<RuntimeState, 'evaluations' | 'obligations' | 'workflows'>) {
+	return urgentOperationPlans(state.evaluations).find(plan => obligationForPlan(state, plan) !== undefined)
 }
 
 async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
@@ -917,10 +943,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					}
 					return settings.runtime.once
 				}
-				const obstructingObligation = state.obligations.find(obligation => obligation.status === 'blocked' || obligation.status === 'executing' || obligation.status === 'failed')
-				if (obstructingObligation !== undefined) {
+				const obstructions = lifecycleObstructions(state)
+				if (obstructions.hard !== undefined) {
+					const obstructingObligation = obstructions.hard
 					const blocker = obstructingObligation.blockers[0]
-					const message = `Lifecycle obligation ${obstructingObligation.label} is ${obstructingObligation.status} and prevents novel work${blocker === undefined ? '' : `: ${blocker}`}. Resolve its precondition or use explicit operator reconciliation.`
+					const message = `Lifecycle obligation ${obstructingObligation.label} is ${obstructingObligation.status} and prevents all execution${blocker === undefined ? '' : `: ${blocker}`}. Resolve its precondition or use explicit operator reconciliation.`
 					if (state.error !== message) {
 						recordActivity(state, {
 							ecosystem: obstructingObligation.ecosystem,
@@ -943,14 +970,18 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (state.scheduler.status !== 'paused') await scheduler.pause()
 					return settings.runtime.once
 				}
-				const urgent = urgentOperationPlans(state.evaluations)
-				const actionableUrgent = urgent.filter(plan => obligationForPlan(state, plan) !== undefined)
-				if (actionableUrgent.length > 0 && settings.runtime.execute) {
-					const plan = actionableUrgent[0]
-					if (plan === undefined) throw new Error('Urgent operation selection returned no plan')
+				const actionableUrgent = actionableUrgentLifecyclePlan(state)
+				if (actionableUrgent !== undefined && settings.runtime.execute) {
 					await ensureSubmissionPreflight(resources, settings)
 					state.rpcEndpointHealth = resourceHealth(resources)
-					await executeLifecyclePlan(configuration, state, resources, plan, shutdown.isRequested)
+					await executeLifecyclePlan(configuration, state, resources, actionableUrgent, shutdown.isRequested)
+					return settings.runtime.once
+				}
+				if (obstructions.automaticRetry !== undefined) {
+					const retry = obstructions.automaticRetry
+					const blocker = retry.blockers[0]
+					state.error = `Lifecycle obligation ${retry.label} prevents random novelty while awaiting bounded automatic canonical retry${blocker === undefined ? '' : `: ${blocker}`}`
+					await persistState(configuration, state)
 					return settings.runtime.once
 				}
 				const pendingObligation = state.obligations.find(obligation => obligation.status === 'pending')
@@ -972,7 +1003,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				if (!scheduler.isDue() && state.scheduler.status !== 'due') {
 					return settings.runtime.once
 				}
-				const candidates = randomOperationPlans(state.evaluations)
+				const candidates = randomOperationPlans(state.evaluations, settings.strategy.selectableOperationAllowlist)
 				const plan = candidates.length === 0 ? undefined : candidates[randomInteger(0, candidates.length)]
 				if (plan === undefined) {
 					recordActivity(state, {

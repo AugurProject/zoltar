@@ -39,14 +39,15 @@ export function urgentOperationPlans(evaluations: readonly EvaluatedOperation[])
 	})
 }
 
-export function randomOperationPlans(evaluations: readonly EvaluatedOperation[]) {
-	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation)
+export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist?: readonly string[]) {
+	const allowed = selectableOperationAllowlist === undefined ? undefined : new Set(selectableOperationAllowlist)
+	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && (allowed === undefined || allowed.has(plan.definitionId)))
 }
 
-export function selectOperationPlan(evaluations: readonly EvaluatedOperation[], randomIndex: RandomIndex = cryptoRandomIndex): OperationPlan | undefined {
+export function selectOperationPlan(evaluations: readonly EvaluatedOperation[], randomIndex: RandomIndex = cryptoRandomIndex, selectableOperationAllowlist?: readonly string[]): OperationPlan | undefined {
 	const urgent = urgentOperationPlans(evaluations)
 	if (urgent.length > 0) return urgent[0]
-	const candidates = randomOperationPlans(evaluations)
+	const candidates = randomOperationPlans(evaluations, selectableOperationAllowlist)
 	if (candidates.length === 0) return undefined
 	return candidates[requireRandomIndex(randomIndex(candidates.length), candidates.length)]
 }

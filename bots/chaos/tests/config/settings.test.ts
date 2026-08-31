@@ -242,7 +242,39 @@ describe('chaos-bot settings', () => {
 		expect(settings.privateKey).toBeUndefined()
 		expect(settings.strategy.allowHighRiskOperations).toBe(false)
 		expect(settings.strategy.enabledEcosystems).toEqual(['zoltar', 'statoblast', 'open-oracle', 'trading'])
+		expect(settings.strategy.selectableOperationAllowlist).toEqual([])
 		expect(settings.scheduler).toEqual({ maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 })
+	})
+
+	test('round-trips null as all selectable operations and explicit canary allowlists as exact IDs', async () => {
+		const example = await storedExample()
+		const strategy = record(example['strategy'])
+		const allSelectable = parseSettings({ ...example, strategy: { ...strategy, selectableOperationAllowlist: null } })
+		expect(allSelectable.strategy.selectableOperationAllowlist).toBeUndefined()
+		expect(serializedSettings(allSelectable).strategy.selectableOperationAllowlist).toBeNull()
+
+		const canary = parseSettings({
+			...example,
+			strategy: { ...strategy, selectableOperationAllowlist: ['open-oracle.weth.wrap', 'zoltar.question.create-binary'] },
+		})
+		expect(canary.strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap', 'zoltar.question.create-binary'])
+		expect(serializedSettings(canary).strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap', 'zoltar.question.create-binary'])
+	})
+
+	test('fails closed on duplicate, unknown, and lifecycle-only allowlist IDs', async () => {
+		const example = await storedExample()
+		const strategy = record(example['strategy'])
+		for (const selectableOperationAllowlist of [['open-oracle.weth.wrap', 'open-oracle.weth.wrap'], ['not-a-real-operation'], ['open-oracle.settle']]) {
+			expect(() => parseSettings({ ...example, strategy: { ...strategy, selectableOperationAllowlist } })).toThrow('strategy.selectableOperationAllowlist')
+		}
+	})
+
+	test('migrates a version-one configuration that predates the allowlist to lifecycle-only mode', async () => {
+		const example = await storedExample()
+		const strategy = Object.fromEntries(Object.entries(record(example['strategy'])).filter(([key]) => key !== 'selectableOperationAllowlist'))
+		const settings = parseSettings({ ...example, strategy })
+		expect(settings.strategy.selectableOperationAllowlist).toEqual([])
+		expect(serializedSettings(settings).strategy.selectableOperationAllowlist).toEqual([])
 	})
 
 	test('bounds every canonical discovery collection', async () => {
@@ -321,8 +353,8 @@ describe('chaos-bot settings', () => {
 
 	test('keeps workflow validity open through two worst-case prerequisite finality waits', async () => {
 		const dryRun = await configuredExample()
-		expect(() => parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 74 } })).toThrow('strategy.workflowValidForBlocks')
-		expect(parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 75 } }).strategy.workflowValidForBlocks).toBe(75n)
+		expect(() => parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 242 } })).toThrow('strategy.workflowValidForBlocks')
+		expect(parseSettings({ ...dryRun, strategy: { ...record(dryRun['strategy']), workflowValidForBlocks: 243 } }).strategy.workflowValidForBlocks).toBe(243n)
 	})
 
 	test('rejects configured amounts with more than 18 decimal places', async () => {

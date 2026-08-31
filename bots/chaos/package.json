@@ -18,6 +18,7 @@
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
+		"doctor": "bun ./src/cli/doctor.ts",
 		"ensure-contract-artifacts": "bun ../../scripts/ensure-contract-artifacts.mts",
 		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
 		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",

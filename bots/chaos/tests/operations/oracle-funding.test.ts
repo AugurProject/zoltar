@@ -57,11 +57,11 @@ describe('oracle request funding bounds', () => {
 				settlementCollateralAttoEth: 100n.toString(),
 			}),
 		).toEqual({
-			maximumBaseFeePerGas: '2000000002',
-			maximumEscalationHaltAttoEth: 4_000_000_006n.toString(),
-			maximumInitialAttoRep: 4_000_000_006n.toString(),
-			maximumInitialAttoWeth: '4000000006',
-			maximumRequestPriceCostAttoEth: 40_000_000_141n.toString(),
+			maximumBaseFeePerGas: '2000000046',
+			maximumEscalationHaltAttoEth: 4_000_000_094n.toString(),
+			maximumInitialAttoRep: 4_000_000_094n.toString(),
+			maximumInitialAttoWeth: '4000000094',
+			maximumRequestPriceCostAttoEth: 40_000_001_021n.toString(),
 		})
 	})
 

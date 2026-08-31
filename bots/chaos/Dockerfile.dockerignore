@@ -18,4 +18,5 @@
 !bots/chaos/config/**
 !bots/chaos/scripts/check-runtime.mts
 !bots/chaos/scripts/docker-entrypoint.sh
+!bots/chaos/scripts/validate-container-paths.mts
 !bots/chaos/src/**

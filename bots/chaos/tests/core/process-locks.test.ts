@@ -38,6 +38,15 @@ describe('chaos-bot process locks', () => {
 		releases.push(stateWasReleased.release)
 	})
 
+	test('uses a configured durable lock root to coordinate one signer across instances', async () => {
+		const privateKey = `0x${'66'.repeat(32)}` as const
+		const lockRoot = join(await mkdtemp(join(tmpdir(), 'zoltar-chaos-signer-lock-')), 'locks')
+		directories.push(lockRoot.slice(0, -'/locks'.length))
+		const first = await acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-first.json') })
+		releases.push(first.release)
+		await expect(acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-second.json') })).rejects.toThrow('already locked')
+	})
+
 	test('acquires global signer exclusivity when a dry-run process transitions to live execution', async () => {
 		const privateKey = `0x${'55'.repeat(32)}` as const
 		const address = privateKeyToAccount(privateKey).address

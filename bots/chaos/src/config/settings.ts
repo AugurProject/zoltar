@@ -8,6 +8,7 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 
 export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
@@ -54,6 +55,8 @@ export type StrategySettings = {
 	maximumRepPerOperationAttoRep: bigint
 	minimumEthReserveAttoEth: bigint
 	minimumRepReserveAttoRep: bigint
+	/** Undefined permits every selectable definition. An explicit array permits only those definition IDs. */
+	selectableOperationAllowlist?: readonly string[] | undefined
 	workflowValidForBlocks: bigint
 }
 
@@ -336,9 +339,26 @@ function parseEcosystems(value: unknown) {
 	return ecosystems
 }
 
+const selectableOperationIds = new Set(CHAOS_OPERATION_CATALOG.filter(definition => definition.classification === 'selectable').map(definition => definition.id))
+
+function parseSelectableOperationAllowlist(value: unknown) {
+	if (value === null) return undefined
+	if (!Array.isArray(value)) throw new Error('strategy.selectableOperationAllowlist must be null or an array of selectable operation definition IDs')
+	const operationIds = value.map((candidate, index) => {
+		if (typeof candidate !== 'string' || candidate === '') {
+			throw new Error(`strategy.selectableOperationAllowlist[${index.toString()}] must be a selectable operation definition ID`)
+		}
+		if (!selectableOperationIds.has(candidate)) throw new Error(`strategy.selectableOperationAllowlist contains unknown selectable operation definition ID ${candidate}`)
+		return candidate
+	})
+	if (new Set(operationIds).size !== operationIds.length) throw new Error('strategy.selectableOperationAllowlist must not contain duplicates')
+	return operationIds
+}
+
 function parseStrategy(value: unknown): StrategySettings {
 	const strategy = requiredRecord(value, 'strategy')
-	assertExactKeys(strategy, ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'], 'strategy')
+	const requiredKeys = ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'] as const
+	assertExactKeys(strategy, 'selectableOperationAllowlist' in strategy ? [...requiredKeys, 'selectableOperationAllowlist'] : requiredKeys, 'strategy')
 	const maximumEthPerOperationAttoEth = parseDecimalAmount(strategy['maximumEthPerOperation'], 'strategy.maximumEthPerOperation')
 	const maximumGasCostAttoEth = parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth')
 	const maximumRepPerOperationAttoRep = parseDecimalAmount(strategy['maximumRepPerOperation'], 'strategy.maximumRepPerOperation')
@@ -354,6 +374,9 @@ function parseStrategy(value: unknown): StrategySettings {
 		maximumRepPerOperationAttoRep,
 		minimumEthReserveAttoEth: parseDecimalAmount(strategy['minimumEthReserve'], 'strategy.minimumEthReserve'),
 		minimumRepReserveAttoRep: parseDecimalAmount(strategy['minimumRepReserve'], 'strategy.minimumRepReserve'),
+		// Configurations written before the rollout control existed must not silently
+		// opt into every selectable operation. Only an explicit null means "all".
+		selectableOperationAllowlist: 'selectableOperationAllowlist' in strategy ? parseSelectableOperationAllowlist(strategy['selectableOperationAllowlist']) : [],
 		workflowValidForBlocks: BigInt(integer(strategy['workflowValidForBlocks'], 'strategy.workflowValidForBlocks', MINIMUM_WORKFLOW_VALIDITY_BLOCKS, 1_000_000)),
 	}
 }
@@ -423,6 +446,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			maximumRepPerOperation: formatDecimalAmount(settings.strategy.maximumRepPerOperationAttoRep),
 			minimumEthReserve: formatDecimalAmount(settings.strategy.minimumEthReserveAttoEth),
 			minimumRepReserve: formatDecimalAmount(settings.strategy.minimumRepReserveAttoRep),
+			selectableOperationAllowlist: settings.strategy.selectableOperationAllowlist ?? null,
 			workflowValidForBlocks: Number(settings.strategy.workflowValidForBlocks),
 		},
 		submission: settings.submission,

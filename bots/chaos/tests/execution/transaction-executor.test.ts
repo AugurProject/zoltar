@@ -226,7 +226,8 @@ const receiptBlockHash = `0x${'22'.repeat(32)}` as const
 const finalityBlockHash = `0x${'33'.repeat(32)}` as const
 const receiptClockTimestamp = 2_000_000n
 
-function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransactionHash = receiptTransactionHash, blockTimestamp = receiptClockTimestamp) {
+function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransactionHash = receiptTransactionHash, blockTimestamp = receiptClockTimestamp, finalizedHead = head) {
+	const requestedBlockTags: string[] = []
 	const requestedMethods: string[] = []
 	const server = Bun.serve({
 		port: 0,
@@ -273,7 +274,8 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransac
 						status: 400,
 					})
 				}
-				const blockNumber = BigInt(body.params[0])
+				requestedBlockTags.push(body.params[0])
+				const blockNumber = body.params[0] === 'finalized' ? finalizedHead : BigInt(body.params[0])
 				if (blockNumber > head) return Response.json({ id, jsonrpc: '2.0', result: null })
 				return Response.json({
 					id,
@@ -311,6 +313,7 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransac
 	servers.push(server)
 	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
 	return {
+		requestedBlockTags,
 		requestedMethods,
 		url: `http://127.0.0.1:${server.port.toString()}`,
 	}
@@ -348,6 +351,21 @@ describe('transaction receipt quorum', () => {
 		expect(lagging.requestedMethods).toContain('eth_blockNumber')
 		expect(lagging.requestedMethods).not.toContain('eth_getTransactionReceipt')
 		expect(lagging.requestedMethods).not.toContain('eth_getBlockByNumber')
+	})
+
+	test('retains an observed receipt until the finalized checkpoint reaches its canonical block', async () => {
+		const first = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
+		const second = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
+
+		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
+
+		expect(result).toEqual({ observed: true, receipt: undefined })
+		for (const rpc of [first, second]) {
+			expect(rpc.requestedBlockTags.filter(tag => tag === toHex(112n))).toHaveLength(1)
+			expect(rpc.requestedBlockTags.filter(tag => tag === 'finalized')).toHaveLength(2)
+			expect(rpc.requestedBlockTags.filter(tag => tag === toHex(99n))).toHaveLength(3)
+			expect(rpc.requestedBlockTags).not.toContain(toHex(100n))
+		}
 	})
 
 	test('rejects a receipt quorum whose agreeing latest blocks have old timestamps', async () => {
@@ -618,7 +636,7 @@ function terminalSubmissionPlan(): OperationPlan {
 			{ ...action, data: '0xabcd', id: 'approve', label: 'Approve request funding' },
 			{ ...action, id: 'request', label: 'Request price' },
 		],
-		terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '2000000002' },
+		terminalSubmission: { kind: 'private-next-block', maximumFeePerGas: '2000000046' },
 	}
 }
 
@@ -961,7 +979,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 					})
 				case 'eth_getBlockByNumber': {
 					if (!('params' in body) || !Array.isArray(body.params) || typeof body.params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
-					const blockNumber = BigInt(body.params[0])
+					const blockNumber = body.params[0] === 'finalized' ? 112n : BigInt(body.params[0])
 					return Response.json({
 						id,
 						jsonrpc: '2.0',

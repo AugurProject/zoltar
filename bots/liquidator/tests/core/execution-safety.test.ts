@@ -6,6 +6,7 @@ import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import {
 	assertExecutionActive,
 	assertGasCostLimit,
+	assertGasCostLimitForBaseFee,
 	assertMarketPriceStillAllowed,
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
@@ -417,6 +418,12 @@ describe('liquidator execution safety', () => {
 	test('applies the gas cap to the padded signed gas limit', () => {
 		expect(() => assertGasCostLimit(100_000n, 10n, 1_100_000n)).toThrow('maximumGasCostAttoEth')
 		expect(() => assertGasCostLimit(100_000n, 10n, 1_300_000n)).not.toThrow()
+	})
+
+	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {
+		const baseFeePerGas = 10n * 10n ** 9n
+		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostAttoEth')
 	})
 
 	test('does not treat a successful outer receipt as a successful failed staged operation', () => {

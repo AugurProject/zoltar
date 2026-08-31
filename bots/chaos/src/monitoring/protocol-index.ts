@@ -1,10 +1,22 @@
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { openOracleAbi } from '../contracts/abi.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
+
+type ProtocolLogQuery = {
+	address: Address | Address[]
+	fromBlock: bigint
+	toBlock: bigint
+}
+
+async function fetchProtocolLogs(client: IndexClient, query: ProtocolLogQuery) {
+	const maximumRange = query.toBlock - query.fromBlock + 1n
+	return await fetchLogsWithAdaptiveRanges({ nextBlock: query.fromBlock }, query.toBlock, maximumRange, async range => await client.getLogs({ address: query.address, fromBlock: range.fromBlock, toBlock: range.toBlock }))
+}
 
 export interface ProtocolIndexCursor {
 	blockNumber: string
@@ -494,7 +506,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	}
 	const maximumToBlock = fromBlock + span - 1n
 	const toBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
-	const oracleLogs = await context.client.getLogs({ address: context.openOracle, fromBlock, toBlock })
+	const oracleLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock }), fromBlock, toBlock, 'OpenOracle report index')
 	for (const log of oracleLogs) {
 		const topic0 = log.topics[0]
 		if (topic0 !== REPORT_SUBMITTED && topic0 !== REPORT_DISPUTED && topic0 !== REPORT_SETTLED) continue
@@ -506,7 +518,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		} else if (topic0 === REPORT_SETTLED) reports.delete(reportId.toString())
 	}
 	requireTrustedReportBounds(context, reports, trustedReport)
-	const migrationLogs = orderedCanonicalLogs(await context.client.getLogs({ address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock }), fromBlock, toBlock, 'Migration progress index')
+	const migrationLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock }), fromBlock, toBlock, 'Migration progress index')
 	for (const log of migrationLogs) {
 		if (log.address.toLowerCase() !== context.zoltar.toLowerCase() && log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) {
 			throw new Error(`Migration progress index returned unexpected emitter ${log.address}`)
@@ -567,7 +579,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	}
 	if (context.auctionAddresses.length > 0) {
 		const auctionAddressKeys = new Set(context.auctionAddresses.map(address => address.toLowerCase()))
-		const auctionLogs = orderedCanonicalLogs(await context.client.getLogs({ address: [...context.auctionAddresses], fromBlock, toBlock }), fromBlock, toBlock, 'Auction event index')
+		const auctionLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock }), fromBlock, toBlock, 'Auction event index')
 		for (const log of auctionLogs) {
 			const key = log.address.toLowerCase()
 			if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
@@ -620,7 +632,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	}
 	if (context.escalationGames.length > 0) {
 		const routeByGame = new Map(context.escalationGames.map(route => [route.escalationGame.toLowerCase(), route]))
-		const escalationLogs = await context.client.getLogs({ address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock })
+		const escalationLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock }), fromBlock, toBlock, 'Escalation deposit index')
 		const pendingLocal: Array<{ game: Address; pool: Address; vault: Address; outcome: number; amountAttoRep: CanonicalUintString; parentDepositIndex: string; cumulative: string }> = []
 		for (const log of escalationLogs) {
 			const topic0 = log.topics[0]

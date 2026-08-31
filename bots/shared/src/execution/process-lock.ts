@@ -22,8 +22,16 @@ export type ProcessLockFilesystem = {
 	tryLock: (fileDescriptor: number) => boolean
 }
 
-const nativeFlockCandidates =
-	process.platform === 'darwin' ? ['/usr/lib/libSystem.B.dylib'] : process.platform === 'linux' ? ['libc.so.6', ...(process.arch === 'x64' ? ['/lib/libc.musl-x86_64.so.1', '/lib/ld-musl-x86_64.so.1'] : []), ...(process.arch === 'arm64' ? ['/lib/libc.musl-aarch64.so.1', '/lib/ld-musl-aarch64.so.1'] : [])] : []
+function platformFlockCandidates() {
+	if (process.platform === 'darwin') return ['/usr/lib/libSystem.B.dylib']
+	if (process.platform !== 'linux') return []
+	let architectureLibraries: string[] = []
+	if (process.arch === 'x64') architectureLibraries = ['/lib/libc.musl-x86_64.so.1', '/lib/ld-musl-x86_64.so.1']
+	else if (process.arch === 'arm64') architectureLibraries = ['/lib/libc.musl-aarch64.so.1', '/lib/ld-musl-aarch64.so.1']
+	return ['libc.so.6', ...architectureLibraries]
+}
+
+const nativeFlockCandidates = platformFlockCandidates()
 
 let nativeFlock: ((fileDescriptor: number) => number) | undefined
 
@@ -143,9 +151,15 @@ export function acquireFileProcessLock(path: string, label: string, filesystem?:
 	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `${label} ${resolvedPath}`, { file: resolvedPath }, filesystem)
 }
 
-export function acquireExecutionSignerLock(chainId: number, account: Address, filesystem?: ProcessLockFilesystem) {
+export function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
 	const signer = getAddress(account)
-	const lockPath = join(tmpdir(), 'zoltar-bot-locks', `${chainId.toString()}-${signer.toLowerCase()}.lock`)
+	if (lockRoot.trim() === '') throw new Error('Execution signer lock root cannot be empty')
+	return join(resolve(lockRoot), `${chainId.toString()}-${signer.toLowerCase()}.lock`)
+}
+
+export function acquireExecutionSignerLock(chainId: number, account: Address, lockRoot?: string, filesystem?: ProcessLockFilesystem) {
+	const signer = getAddress(account)
+	const lockPath = executionSignerLockPath(chainId, signer, lockRoot)
 	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { chainId, signer }, filesystem)
 }

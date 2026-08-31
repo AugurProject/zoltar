@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { publicChaosConfiguration, publicChaosState, startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { publicChaosConfiguration, publicChaosReadiness, publicChaosState, startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/dashboard-controller.ts'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -45,6 +45,12 @@ describe('chaos dashboard server', () => {
 		expect(health.status).toBe(200)
 		expect(await health.text()).toBe('ok')
 		expect(health.headers.get('cache-control')).toBe('no-store')
+		const readiness = await authenticatedFetch(new URL('/readyz', server.url))
+		expect(readiness.status).toBe(503)
+		expect(await readiness.json()).toMatchObject({ ready: false })
+		const metrics = await authenticatedFetch(new URL('/metrics', server.url))
+		expect(metrics.status).toBe(200)
+		expect(await metrics.text()).toContain('zoltar_chaos_ready 0')
 
 		for (const route of ['overview', 'catalog', 'ecosystem', 'activity', 'settings']) {
 			const response = await authenticatedFetch(new URL(`/${route}`, server.url))
@@ -88,7 +94,7 @@ describe('chaos dashboard server', () => {
 		authenticatedController.password = undefined
 
 		expect((await fetch(new URL('/healthz', server.url))).status).toBe(200)
-		for (const path of ['/', '/overview', '/catalog', '/ecosystem', '/activity', '/settings', '/api/state', '/api/configuration']) {
+		for (const path of ['/', '/overview', '/catalog', '/ecosystem', '/activity', '/settings', '/api/state', '/api/configuration', '/readyz', '/metrics']) {
 			const rejected = await fetch(new URL(path, server.url))
 			expect(rejected.status, path).toBe(401)
 			expect(rejected.headers.get('www-authenticate'), path).toContain('Basic')
@@ -104,6 +110,120 @@ describe('chaos dashboard server', () => {
 
 		const wrongAuthority = await fetch(server.url, { headers: { authorization, host: 'attacker.example' } })
 		expect(wrongAuthority.status).toBe(403)
+	})
+
+	test('separates liveness from machine readiness and reports recovery blockers', async () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const configuration = {
+			hasSigner: true,
+			settings: {
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://one.example', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				networkConfigured: true,
+				paused: false,
+				privateKey: '__redacted__',
+				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				scheduler: { maximumDelaySeconds: 3_600 },
+				strategy: { maximumGasCostEth: '0.02', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+			},
+		}
+		const state = {
+			inventory: { eth: '70000000000000000', rep: [{ balance: '10000000000000000000' }] },
+			lastScanAt: '2026-08-31T11:59:00.000Z',
+			obligations: [],
+			paused: false,
+			pendingTransactions: [],
+			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			safetyPaused: false,
+			status: 'running',
+			topology: { complete: true },
+			workflows: [],
+		}
+		const ready = publicChaosReadiness(state, configuration, now)
+		expect(ready).toMatchObject({ blockers: [], maximumScanAgeSeconds: 156, mode: 'live', ready: true, scanAgeSeconds: 60 })
+		const server = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => ({ ...state, lastScanAt: new Date().toISOString() }) }))
+		servers.push(server)
+		const readyResponse = await authenticatedFetch(new URL('/readyz', server.url))
+		expect(readyResponse.status).toBe(200)
+		expect(await readyResponse.json()).toMatchObject({ blockers: [], ready: true })
+		const metrics = await (await authenticatedFetch(new URL('/metrics', server.url))).text()
+		expect(metrics).toContain('zoltar_chaos_ready 1')
+		expect(metrics).toContain('zoltar_chaos_readiness_check{check="rpc"} 1')
+		expect(metrics).toContain('zoltar_chaos_active_workflows 0')
+		expect(metrics).toContain('zoltar_chaos_automatic_retry_obligations 0')
+
+		const blocked = publicChaosReadiness(
+			{
+				...state,
+				obligations: [{ status: 'failed' }],
+				paused: true,
+				pendingTransactions: [{ status: 'submitted' }],
+				safetyPaused: true,
+			},
+			configuration,
+			now,
+		)
+		expect(blocked).toMatchObject({ blockers: expect.arrayContaining(['paused', 'recovery']), failedObligationCount: 1, pendingTransactionCount: 1, ready: false, safetyPaused: true })
+	})
+
+	test('fails readiness on the same lifecycle states that prevent scheduled novelty', () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const configuration = {
+			hasSigner: false,
+			settings: {
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://one.example', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				networkConfigured: true,
+				paused: false,
+				runtime: { execute: false, lifecyclePollMilliseconds: 12_000 },
+			},
+		}
+		const baseState = {
+			lastScanAt: '2026-08-31T11:59:00.000Z',
+			obligations: [],
+			paused: false,
+			pendingTransactions: [],
+			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			safetyPaused: false,
+			status: 'running',
+			topology: { complete: true },
+			workflows: [],
+		}
+
+		const pending = publicChaosReadiness({ ...baseState, obligations: [{ status: 'pending' }] }, configuration, now)
+		expect(pending).toMatchObject({ blockers: expect.arrayContaining(['recovery']), pendingObligationCount: 1, ready: false })
+		const retry = publicChaosReadiness({ ...baseState, obligations: [{ notBefore: '2026-08-31T12:01:00.000Z', status: 'deferred' }] }, configuration, now)
+		expect(retry).toMatchObject({ automaticRetryObligationCount: 1, blockers: expect.arrayContaining(['recovery']), ready: false })
+		const presence = publicChaosReadiness({ ...baseState, lifecyclePresenceBlocker: { count: 1 } }, configuration, now)
+		expect(presence).toMatchObject({ blockers: expect.arrayContaining(['recovery']), lifecyclePresenceBlocked: true, ready: false })
+		const ordinaryDeferred = publicChaosReadiness({ ...baseState, obligations: [{ status: 'deferred' }] }, configuration, now)
+		expect(ordinaryDeferred).toMatchObject({ blockers: [], ready: true })
+		const runtimeError = publicChaosReadiness({ ...baseState, error: 'Protocol-index RPC https://secret.example reorganized' }, configuration, now)
+		expect(runtimeError).toMatchObject({ blockers: expect.arrayContaining(['runtime']), checks: { runtime: { ready: false } }, ready: false })
+	})
+
+	test('bounds scan freshness by lifecycle polling rather than the random scheduler delay', () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const configuration = {
+			settings: {
+				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://one.example', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				networkConfigured: true,
+				paused: false,
+				runtime: { execute: false, lifecyclePollMilliseconds: 12_000 },
+				scheduler: { maximumDelaySeconds: 3_600 },
+			},
+		}
+		const state = {
+			lastScanAt: new Date(now - 157_000).toISOString(),
+			obligations: [],
+			paused: false,
+			pendingTransactions: [],
+			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			topology: { complete: true },
+			workflows: [],
+		}
+		expect(publicChaosReadiness(state, configuration, now)).toMatchObject({ blockers: expect.arrayContaining(['scan']), maximumScanAgeSeconds: 156, ready: false, scanAgeSeconds: 157 })
 	})
 
 	test('rejects direct non-loopback exposure and requires authentication for container publication', () => {
@@ -508,17 +628,32 @@ describe('chaos dashboard server', () => {
 	test('keeps deferred lifecycle obligations in the public recovery projection', () => {
 		const state = publicChaosState({
 			obligations: [
-				{ blockers: ['Tracked canonical lifecycle identity is not currently actionable'], ecosystem: 'statoblast', id: 'deferred', label: 'Future auction settlement', status: 'deferred', updatedAt: '2026-08-24T00:00:00.000Z' },
+				{
+					attemptCount: 1,
+					automaticRetryCount: 1,
+					automaticRetryLimit: 3,
+					blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
+					ecosystem: 'statoblast',
+					id: 'deferred',
+					label: 'Future auction settlement',
+					notBefore: '2026-08-24T00:03:00.000Z',
+					status: 'deferred',
+					updatedAt: '2026-08-24T00:00:00.000Z',
+				},
 				{ id: 'completed', label: 'Completed settlement', status: 'completed' },
 			],
 		})
 
 		expect(Reflect.get(state, 'obligations')).toEqual([
 			{
+				attemptCount: 1,
+				automaticRetryCount: 1,
+				automaticRetryLimit: 3,
 				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
 				ecosystem: 'statoblast',
 				id: 'deferred',
 				label: 'Future auction settlement',
+				notBefore: '2026-08-24T00:03:00.000Z',
 				status: 'deferred',
 				updatedAt: '2026-08-24T00:00:00.000Z',
 			},
@@ -774,7 +909,8 @@ describe('chaos dashboard server', () => {
 					maximumRepPerOperation: '10',
 					minimumEthReserve: '0.05',
 					minimumRepReserve: '10',
-					workflowValidForBlocks: 24,
+					selectableOperationAllowlist: ['open-oracle.weth.wrap'],
+					workflowValidForBlocks: 288,
 				},
 			},
 		})
@@ -799,10 +935,15 @@ describe('chaos dashboard server', () => {
 			operationControls: {},
 			paused: true,
 			revision: 'sha256:revision',
-			workflowValidForBlocks: 24,
+			selectableOperationAllowlist: ['open-oracle.weth.wrap'],
+			workflowValidForBlocks: 288,
 		})
 		expect(body).not.toContain('rpc.example')
 		expect(body).not.toContain('private/path')
 		expect(body).not.toContain('444444')
+	})
+
+	test('projects the internal all-selection sentinel as an explicit public null', () => {
+		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeNull()
 	})
 })

@@ -173,6 +173,36 @@ describe('operator connectivity', () => {
 		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(false)), 1)).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
 	})
 
+	test('counts healthy distinct relay origins toward private-transaction preflight threshold', async () => {
+		const acceptedOrigin = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'invalid params: missing transaction' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const rejectedOrigin = rpc(() => Response.json({ error: { code: -32_000, message: 'temporarily unavailable' }, id: 1, jsonrpc: '2.0' }, { status: 503 }))
+		const settings = validateSubmissionSettings({
+			minimumBundleRelaySuccesses: 2,
+			mode: 'private',
+			relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
+		})
+		await expect(checkPrivateTransactionSubmissionEndpoints(settings, 1)).rejects.toThrow()
+	})
+
+	test('counts healthy distinct relay origins toward bundle capability preflight threshold', async () => {
+		const acceptedOrigin = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const rejectedOrigin = rpc(() => Response.json({ error: { code: -32_000, message: 'temporarily unavailable' }, id: 1, jsonrpc: '2.0' }, { status: 503 }))
+		const settings = validateSubmissionSettings({
+			minimumBundleRelaySuccesses: 2,
+			mode: 'private',
+			relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
+		})
+		await expect(checkSubmissionEndpoints(settings, 1)).rejects.toThrow()
+	})
+
 	test.each([
 		{ message: 'method not found', status: 200 },
 		{ message: 'rpc method is not whitelisted', status: 403 },

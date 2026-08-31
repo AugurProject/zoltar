@@ -349,7 +349,7 @@ describe('chaos operation catalog', () => {
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '41',
 			reportTimestamp: '1999999500',
-			settlementTime: '2500',
+			settlementTime: '4000',
 			settlementTimestamp: '0',
 			stateHash: hash(41),
 			token1: snapshot.deployments.weth,
@@ -960,7 +960,7 @@ describe('chaos operation catalog', () => {
 			currentAmount2: '1000',
 			currentReporter: pool.coordinator,
 			disputeAfterTimestamp: '1999999560',
-			disputeBeforeTimestamp: '2000000400',
+			disputeBeforeTimestamp: '2000003500',
 			disputeDelay: '60',
 			escalationHalt: '100000',
 			flags: 7,
@@ -970,7 +970,7 @@ describe('chaos operation catalog', () => {
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '42',
 			reportTimestamp: '1999999500',
-			settlementTime: '2500',
+			settlementTime: '4000',
 			settlementTimestamp: '0',
 			stateHash: hash(42),
 			token1: snapshot.deployments.weth,
@@ -1037,11 +1037,11 @@ describe('chaos operation catalog', () => {
 		indexed.flags = 6
 		indexed.reportTimestamp = '95'
 		indexed.disputeDelay = '2'
-		indexed.settlementTime = '120'
+		indexed.settlementTime = '300'
 		const blockClockPlan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
 		expect(blockClockPlan?.deadlineTimestamp).toBeUndefined()
-		expect(blockClockPlan?.lastValidBlockNumber).toBe('214')
-		expect(blockClockPlan?.metadata).toMatchObject({ deadlineBlock: '214', reportId: '42' })
+		expect(blockClockPlan?.lastValidBlockNumber).toBe('394')
+		expect(blockClockPlan?.metadata).toMatchObject({ deadlineBlock: '394', reportId: '42' })
 
 		indexed.settlementTime = '31'
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')).toBeUndefined()

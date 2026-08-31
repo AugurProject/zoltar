@@ -205,7 +205,7 @@ export async function loadTopologyCacheForScan(parameters: { identity: Immutable
 	}
 }
 
-async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
+export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
 	const connectivity = requiredConnectivity(settings)
 	const indexed = index === undefined ? {} : protocolIndexDiscoveryInputs(index)
 	return await settledQuorumValue(
@@ -398,12 +398,18 @@ export function planningOptions(settings: OperatorSettings, seed: number): Plann
 	}
 }
 
-export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[], settings: OperatorSettings, indexComplete: boolean, indexedThroughBlock: string, anchorBlock: string, ethBalanceAttoEth: bigint) {
+export type ExecutionPolicyScope = 'durable-continuation' | 'novel-selection'
+
+export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[], settings: OperatorSettings, indexComplete: boolean, indexedThroughBlock: string, anchorBlock: string, ethBalanceAttoEth: bigint, scope: ExecutionPolicyScope = 'novel-selection') {
 	const enabled = new Set(settings.strategy.enabledEcosystems)
+	const selectableOperationAllowlist = settings.strategy.selectableOperationAllowlist === undefined ? undefined : new Set(settings.strategy.selectableOperationAllowlist)
 	return evaluations.map(evaluation => {
 		const blockers = [...evaluation.eligibility.blockers]
 		if (!enabled.has(evaluation.definition.ecosystem)) {
 			blockers.push(`The ${evaluation.definition.ecosystem} ecosystem is disabled by policy`)
+		}
+		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && selectableOperationAllowlist !== undefined && !selectableOperationAllowlist.has(evaluation.definition.id)) {
+			blockers.push('The selectable operation definition is not in strategy.selectableOperationAllowlist')
 		}
 		if (settings.submission.mode === 'public' && evaluation.plan?.terminalSubmission !== undefined) {
 			blockers.push('Terminal next-block operations require private submission so their persisted fee and inclusion ceilings are enforceable')

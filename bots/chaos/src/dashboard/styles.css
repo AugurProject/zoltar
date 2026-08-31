@@ -847,6 +847,53 @@ tbody tr:last-child td {
 	line-height: 1.4;
 }
 
+.operation-id-control {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem;
+	margin-top: 0.35rem;
+}
+
+.operation-id-control small {
+	margin-top: 0;
+}
+
+button.operation-id-copy {
+	min-height: 2rem;
+	padding: 0.25rem 0.5rem;
+	border-color: var(--operator-border);
+	background: var(--operator-surface-raised);
+	color: var(--operator-accent);
+	font-size: 0.7rem;
+}
+
+.operation-id-feedback.success {
+	color: var(--operator-accent);
+}
+
+.operation-id-feedback.error {
+	color: var(--operator-error);
+}
+
+.resume-random-scope {
+	display: grid;
+	justify-items: end;
+	min-width: 0;
+	max-width: 32rem;
+	gap: 0.35rem;
+}
+
+.resume-random-scope-ids {
+	display: block;
+	max-height: 8rem;
+	overflow: auto;
+	color: var(--operator-muted);
+	font-weight: 400;
+	overflow-wrap: anywhere;
+	white-space: pre-line;
+}
+
 .blocker-list {
 	max-width: 28rem;
 	padding-left: 1.1rem;
@@ -1211,6 +1258,19 @@ fieldset {
 	margin: 0;
 }
 
+.selectable-operation-allowlist-label {
+	display: grid;
+	gap: 0.45rem;
+	margin-top: 1rem;
+}
+
+.selectable-operation-allowlist-label textarea {
+	min-height: 7rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 0.82rem;
+	resize: vertical;
+}
+
 .form-actions {
 	display: flex;
 	align-items: center;
@@ -1414,6 +1474,26 @@ fieldset {
 		display: inline-flex;
 		align-items: center;
 		min-height: 2.75rem;
+	}
+
+	.resume-random-scope {
+		justify-items: start;
+	}
+
+	#resume-dialog .dialog-body {
+		gap: 0.75rem;
+		padding: 1rem;
+	}
+
+	#resume-dialog .preflight-list li {
+		gap: 0.35rem;
+		padding-block: 0.5rem;
+	}
+
+	.resume-random-scope-ids {
+		max-height: 3.25rem;
+		font-size: 0.72rem;
+		line-height: 1.25;
 	}
 
 	button.identifier-copy,

@@ -3,7 +3,16 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_SEGMENT_BYTES, immutableTopologySidecarDirectory, loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import {
+	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
+	IMMUTABLE_TOPOLOGY_SEGMENT_BYTES,
+	immutableTopologySidecarDirectory,
+	loadImmutableTopologyCache,
+	saveImmutableTopologyCache,
+	validateImmutableTopologySidecarIfPresent,
+	type CanonicalImmutableTopologyCache,
+	type ImmutableTopologyIdentity,
+} from '../../src/monitoring/topology-cache.ts'
 import { address, hash } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
@@ -322,11 +331,15 @@ describe('immutable topology sidecar', () => {
 	test('ignores an orphan generation and does not reuse a cache for another deployment identity', async () => {
 		const statePath = await temporaryStatePath()
 		const expected = cache()
+		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('absent')
+		await expect(stat(immutableTopologySidecarDirectory(statePath))).rejects.toThrow()
 		await saveImmutableTopologyCache(statePath, identity(), expected)
 		const storePath = immutableTopologySidecarDirectory(statePath)
 		await mkdir(join(storePath, '.tmp-999-deadbeef-dead-beef-dead-beefdeadbeef'), { mode: 0o700 })
 		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(expected)
 		expect(await loadImmutableTopologyCache(statePath, { ...identity(), tradingFactory: address(99) })).toBeUndefined()
+		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('valid')
+		await expect(validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).rejects.toThrow('different deployment identity')
 	})
 
 	test('prunes abandoned generation and pointer temporary files after the next commit', async () => {

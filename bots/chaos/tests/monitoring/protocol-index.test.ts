@@ -65,6 +65,7 @@ function packedReport(
 const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'))
 const childRepSplitTopic = keccak256(toHex('ChildRepSplit(address,uint256,uint256,uint256)'))
 const reportSubmittedTopic = keccak256(toHex('ReportSubmitted(uint256,bytes)'))
+const reportSettledTopic = keccak256(toHex('ReportSettled(uint256)'))
 const ethRefundDeferredTopic = keccak256(toHex('EthRefundDeferred(address,uint256,uint256)'))
 const pendingEthRefundWithdrawnTopic = keccak256(toHex('PendingEthRefundWithdrawn(address,uint256)'))
 
@@ -125,18 +126,22 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, BigInt(log.logIndex)]))
 }
 
-function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber))) {
+function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error) {
 	const implementation = {
 		async getBlock(parameters: { blockNumber?: bigint }) {
 			const number = parameters.blockNumber
 			if (number === undefined) throw new Error('Block number required')
 			return { hash: canonicalBlockHash(number), number, timestamp: 1_000n }
 		},
-		async getLogs(parameters: { address?: Address | Address[] }) {
+		async getLogs(parameters: { address?: Address | Address[]; fromBlock?: bigint; toBlock?: bigint }) {
+			if (logFailure !== undefined) throw logFailure
+			const { fromBlock, toBlock } = parameters
+			if (fromBlock === undefined || toBlock === undefined) throw new Error('Bounded log range required')
+			if (maximumLogRange !== undefined && toBlock - fromBlock + 1n > maximumLogRange) throw new Error(`eth_getLogs range is too large; maximum ${maximumLogRange.toString()} blocks`)
 			let requested: Address[] = []
 			if (Array.isArray(parameters.address)) requested = parameters.address
 			else if (parameters.address !== undefined) requested = [parameters.address]
-			return logs.filter(log => requested.some(address => address.toLowerCase() === log.address.toLowerCase()))
+			return logs.filter(log => log.blockNumber >= fromBlock && log.blockNumber <= toBlock && requested.some(address => address.toLowerCase() === log.address.toLowerCase()))
 		},
 		async readContract(parameters: { args?: readonly unknown[]; functionName: string }) {
 			if (parameters.functionName !== 'oracleGame') throw new Error(`Unexpected read ${parameters.functionName}`)
@@ -156,6 +161,39 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
+	test('subdivides provider-limited log ranges without losing or duplicating canonical history', async () => {
+		const update = await updateProtocolIndex({
+			anchorBlockNumber: 120n,
+			auctionAddresses: [],
+			chainId: 31337,
+			client: eventIndexClient([migrationRepSplitLog({ amount: 1n, blockNumber: 1n, cumulative: 1n, logIndex: 0 }), migrationRepSplitLog({ amount: 2n, blockNumber: 51n, cumulative: 3n, logIndex: 0 }), migrationRepSplitLog({ amount: 3n, blockNumber: 101n, cumulative: 6n, logIndex: 0 })], [], undefined, 50n),
+			escalationGames: [],
+			maxBlockSpan: 120n,
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 1n,
+			wallet: address(1),
+		})
+		expect(update.index.migrationRepSplits).toEqual([{ childMigrationRepAmountAttoRep: 6n.toString(), childUniverseId: deriveChildUniverseId(0n, 1n).toString(), outcomeIndex: '1', universeId: '0' }])
+	})
+
+	test('does not mask non-range log failures by subdividing', async () => {
+		await expect(
+			updateProtocolIndex({
+				anchorBlockNumber: 120n,
+				auctionAddresses: [],
+				chainId: 31337,
+				client: eventIndexClient([], [], undefined, undefined, new Error('eth_getLogs permission denied')),
+				escalationGames: [],
+				maxBlockSpan: 120n,
+				...indexDeployments,
+				...indexTrust,
+				startBlock: 1n,
+				wallet: address(1),
+			}),
+		).rejects.toThrow('Log scan failed for blocks 1 through 120: eth_getLogs permission denied')
+	})
+
 	test('keeps one refund generation across accumulation and advances it after withdrawal', async () => {
 		const firstDeferred = refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0 })
 		const accumulated = refundLog({ amount: 3n, blockNumber: 11n, logIndex: 0, pending: 8n })
@@ -429,6 +467,37 @@ describe('durable protocol index', () => {
 			weth: address(7),
 		})
 		expect(pruned.index.reports.map(candidate => candidate.reportId)).toEqual(['1'])
+	})
+
+	test('replays provider-reordered OpenOracle logs by canonical position', async () => {
+		const submitted = canonicalLog({
+			address: indexDeployments.openOracle,
+			blockNumber: 10n,
+			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
+			logIndex: 0,
+			topics: [reportSubmittedTopic, toHex(1n, { size: 32 })],
+		})
+		const settled = canonicalLog({
+			address: indexDeployments.openOracle,
+			blockNumber: 10n,
+			data: '0x',
+			logIndex: 1,
+			topics: [reportSettledTopic, toHex(1n, { size: 32 })],
+		})
+
+		const update = await updateProtocolIndex({
+			anchorBlockNumber: 10n,
+			auctionAddresses: [],
+			chainId: 31337,
+			client: eventIndexClient([settled, submitted]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+
+		expect(update.index.reports).toEqual([])
 	})
 
 	test('keeps the durable shape JSON-safe', () => {

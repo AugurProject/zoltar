@@ -17,6 +17,7 @@ RUN mkdir -p shared/js \
 FROM oven/bun:${BUN_VERSION}-alpine
 
 ENV BUN_ENV=production
+ENV ZOLTAR_BOT_CONTAINER=true
 WORKDIR /app
 
 COPY --from=shared-builder /source/shared/ ./shared/
@@ -34,9 +35,11 @@ COPY bots/chaos/README.md ./bots/chaos/README.md
 COPY bots/chaos/config/ ./bots/chaos/config/
 COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts
 COPY bots/chaos/scripts/docker-entrypoint.sh ./bots/chaos/scripts/docker-entrypoint.sh
+COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts
 COPY bots/chaos/src/ ./bots/chaos/src/
 RUN chmod 0755 bots/chaos/scripts/docker-entrypoint.sh \
-	&& install -d -m 0700 -o bun -g bun bots/chaos/.state
+	&& install -d -m 0700 -o bun -g bun bots/chaos/.state \
+	&& install -d -m 0700 -o bun -g bun bots/chaos/.state/process-locks
 
 USER bun
 WORKDIR /app/bots/chaos

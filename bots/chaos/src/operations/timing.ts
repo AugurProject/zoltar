@@ -1,7 +1,13 @@
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { PlanningOptions } from './types.ts'
 
-export const EXECUTOR_FINALITY_BLOCKS = 12n
+/** Ethereum finalizes checkpoints by epoch; three epochs leave one full epoch beyond the normal two-epoch path. */
+export const ETHEREUM_SLOTS_PER_EPOCH = 32n
+export const CONSERVATIVE_FINALITY_EPOCHS = 3n
+/** Planning horizon only. Receipt disposition uses the RPC consensus `finalized` checkpoint directly. */
+export const CONSENSUS_FINALITY_HORIZON_BLOCKS = ETHEREUM_SLOTS_PER_EPOCH * CONSERVATIVE_FINALITY_EPOCHS
+/** Retained as the execution timing name consumed by workflow planners and local confirmation-depth fixtures. */
+export const EXECUTOR_FINALITY_BLOCKS = CONSENSUS_FINALITY_HORIZON_BLOCKS
 export const MINIMUM_TIMESTAMP_SAFETY_SECONDS = 60n
 export const MAXIMUM_WORKFLOW_PREREQUISITE_COUNT = 2
 /** Leaves one block after every supported prerequisite consumes its full transport and finality horizon. */

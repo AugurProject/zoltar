@@ -395,6 +395,17 @@
 										</div>
 										<input id="allow-irreversible" name="allowIrreversibleOperations" type="checkbox" />
 									</div>
+									<div class="switch-row">
+										<div>
+											<label for="all-selectable-operations">Allow every selectable operation</label>
+											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operations page. An empty allowlist runs lifecycle obligations only; lifecycle discovery, recovery, and execution are never disabled by this control.</p>
+										</div>
+										<input id="all-selectable-operations" name="allSelectableOperations" type="checkbox" aria-describedby="selectable-operation-scope-help" />
+									</div>
+									<label class="selectable-operation-allowlist-label" for="selectable-operation-allowlist"
+										>Selectable operation allowlist
+										<textarea id="selectable-operation-allowlist" aria-describedby="selectable-operation-scope-help" placeholder="One exact definition ID per line, for example:&#10;open-oracle.weth.wrap" rows="5" spellcheck="false"></textarea>
+									</label>
 									<div class="form-grid">
 										<label
 											>Minimum random delay
@@ -411,7 +422,7 @@
 										<label>Maximum REP per operation<input id="maximum-rep-operation" inputmode="decimal" type="text" required /></label>
 										<label
 											>Workflow validity
-											<span class="input-with-unit"><input id="workflow-valid-blocks" min="75" max="1000000" inputmode="numeric" type="number" required /><span>blocks</span></span>
+											<span class="input-with-unit"><input id="workflow-valid-blocks" min="243" max="1000000" inputmode="numeric" type="number" required /><span>blocks</span></span>
 										</label>
 									</div>
 									<fieldset class="ecosystem-controls">
@@ -461,6 +472,7 @@
 				</div>
 				<p>Recovery work may run immediately. A new randomized operation runs only when its timer is due and its exact transaction passes simulation.</p>
 				<ul id="resume-preflight" class="preflight-list"></ul>
+				<p id="resume-random-scope-warning" class="notice warning hidden" role="alert"></p>
 				<div class="dialog-actions"><button id="cancel-resume" class="secondary" type="button">Keep paused</button><button id="confirm-resume" type="button">Resume bot</button></div>
 			</div>
 		</dialog>

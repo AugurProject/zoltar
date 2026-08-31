@@ -45,7 +45,8 @@ function settings() {
 			maximumRepPerOperation: '10',
 			minimumEthReserve: '0.05',
 			minimumRepReserve: '10',
-			workflowValidForBlocks: 96,
+			selectableOperationAllowlist: ['open-oracle.report', 'statoblast.vault.deposit-rep', 'trading.position.enter', 'zoltar.question.create-binary'],
+			workflowValidForBlocks: 288,
 		},
 	}
 }

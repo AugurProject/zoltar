@@ -78,7 +78,7 @@ function settings() {
 			maximumRepPerOperation: '10',
 			minimumEthReserve: '0.05',
 			minimumRepReserve: '10',
-			workflowValidForBlocks: 96,
+			workflowValidForBlocks: 288,
 		},
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 		version: 1,
@@ -277,6 +277,58 @@ describe('canonical scan policy', () => {
 		expect(result[0]?.eligibility.blockers.join(' ')).toContain('backfilling through block 5 of 10')
 	})
 
+	test('restricts only novel selectable definitions while preserving lifecycle and durable continuation work', () => {
+		const configured = serializedSettings(settings())
+		const restricted = parseSettings({
+			...configured,
+			strategy: {
+				...configured.strategy,
+				enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
+				selectableOperationAllowlist: ['zoltar.question.create-binary'],
+			},
+		})
+		const evaluation = (definitionId: string, classification: 'lifecycle-obligation' | 'selectable'): EvaluatedOperation => ({
+			definition: {
+				classification,
+				contract: 'Test',
+				description: definitionId,
+				discoveryInputs: [],
+				ecosystem: classification === 'lifecycle-obligation' ? 'open-oracle' : 'zoltar',
+				id: definitionId,
+				label: definitionId,
+				method: 'test',
+				risk: 'low',
+			},
+			eligibility: { blockers: [], eligible: true },
+			plan: {
+				classification,
+				createdAtBlock: '1',
+				definitionId,
+				ecosystem: classification === 'lifecycle-obligation' ? 'open-oracle' : 'zoltar',
+				id: `${definitionId}:1`,
+				label: definitionId,
+				metadata: {},
+				obligation: classification === 'lifecycle-obligation',
+				planningSeed: 1,
+				postconditions: [],
+				priority: classification === 'lifecycle-obligation' ? 'urgent' : 'random',
+				risk: 'low',
+				steps: [],
+			},
+		})
+		const allowed = evaluation('zoltar.question.create-binary', 'selectable')
+		const disabled = evaluation('zoltar.rep.burn', 'selectable')
+		const lifecycle = evaluation('open-oracle.settle', 'lifecycle-obligation')
+
+		const novel = applyExecutionPolicy([allowed, disabled, lifecycle], restricted, true, '10', '10', 10n ** 18n)
+		expect(novel[0]).toEqual(allowed)
+		expect(novel[1]?.eligibility).toEqual({ blockers: ['The selectable operation definition is not in strategy.selectableOperationAllowlist'], eligible: false })
+		expect(novel[2]).toEqual(lifecycle)
+
+		const continuation = applyExecutionPolicy([disabled], restricted, true, '10', '10', 10n ** 18n, 'durable-continuation')
+		expect(continuation).toEqual([disabled])
+	})
+
 	test('rechecks live ETH and canonical REP inventory after every scan without blocking lifecycle work', () => {
 		const selectable: EvaluatedOperation = {
 			definition: { classification: 'selectable', contract: 'Trading', description: 'trade', discoveryInputs: [], ecosystem: 'trading', id: 'trade', label: 'Trade', method: 'swap', risk: 'low' },
@@ -397,7 +449,7 @@ describe('canonical scan policy', () => {
 			minimumRepReserveAttoRep: (10n ** 19n).toString(),
 			seed: 42,
 			submissionMode: 'public',
-			workflowValidForBlocks: 96,
+			workflowValidForBlocks: 288,
 		})
 	})
 

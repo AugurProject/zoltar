@@ -5,11 +5,12 @@ export type ChaosLockSettings = {
 	chainId: number
 	execute: boolean
 	privateKey: Hex | undefined
+	signerLockRoot?: string | undefined
 	stateFile: string
 }
 
 export type ChaosProcessLockAcquirers = {
-	acquireSigner: (chainId: number, address: Address) => Promise<ExclusiveProcessLock>
+	acquireSigner: (chainId: number, address: Address, lockRoot?: string | undefined) => Promise<ExclusiveProcessLock>
 	acquireState: (stateFile: string) => Promise<ExclusiveProcessLock>
 }
 
@@ -39,7 +40,7 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 		if (settings.execute) {
 			if (settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 			signerAddress = privateKeyToAccount(settings.privateKey).address
-			signerLock = await acquirers.acquireSigner(settings.chainId, signerAddress)
+			signerLock = await acquirers.acquireSigner(settings.chainId, signerAddress, settings.signerLockRoot)
 		}
 	} catch (error) {
 		try {
@@ -75,7 +76,7 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 				retiredSignerLocks.delete(key)
 				return retained
 			}
-			return acquirers.acquireSigner(settings.chainId, getAddress(address))
+			return acquirers.acquireSigner(settings.chainId, getAddress(address), settings.signerLockRoot)
 		},
 		commitSigner: async (address: Address | undefined, nextLock: ExclusiveProcessLock | undefined) => {
 			const unchanged = address !== undefined && signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase()

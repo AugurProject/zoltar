@@ -431,6 +431,7 @@ describe('chaos-bot durable state', () => {
 		state.workflows = [durableWorkflow]
 		state.obligations = [
 			{
+				automaticRetryCount: 0,
 				attemptCount: 1,
 				blockers: ['A finalized transaction is waiting for complete canonical lifecycle confirmation'],
 				createdAt,
@@ -473,6 +474,7 @@ describe('chaos-bot durable state', () => {
 		durableWorkflow.obligation = true
 		state.obligations = [
 			{
+				automaticRetryCount: 0,
 				attemptCount: 0,
 				blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
 				createdAt,
@@ -489,6 +491,7 @@ describe('chaos-bot durable state', () => {
 
 		await saveDurableState(path, state)
 		expect((await loadDurableState(path, 1)).obligations[0]).toMatchObject({
+			automaticRetryCount: 0,
 			blockers: ['Tracked canonical lifecycle identity is not currently actionable'],
 			status: 'deferred',
 			workflowId: durableWorkflow.id,
@@ -497,6 +500,10 @@ describe('chaos-bot durable state', () => {
 		const stored = JSON.parse(await readFile(path, 'utf8')) as { obligations: Array<Record<string, unknown>> }
 		const storedObligation = stored.obligations[0]
 		if (storedObligation === undefined) throw new Error('Expected a persisted obligation')
+		delete storedObligation['automaticRetryCount']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).obligations[0]?.automaticRetryCount).toBe(0)
+
 		storedObligation['status'] = 'waiting'
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		await expect(loadDurableState(path, 1)).rejects.toThrow('obligations[0].status is invalid')
@@ -764,6 +771,7 @@ describe('chaos-bot durable state', () => {
 		state.workflows = [terminalWorkflow]
 		state.obligations = [
 			{
+				automaticRetryCount: 0,
 				attemptCount: 1,
 				blockers: [],
 				completedAt: createdAt,
