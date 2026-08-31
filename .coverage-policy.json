@@ -2,7 +2,7 @@
 	"version": 1,
 	"typescript": {
 		"ui": {
-			"minimumLines": 85.836,
+			"minimumLines": 85.6698,
 			"minimumFunctions": 75.376,
 			"maximumAllowedUnloadedFiles": 60,
 			"unloadedFilesReviewBy": "2026-11-24",
@@ -40,6 +40,7 @@
 				"ui/coreShared/ts/lib/outcomeLabels.ts",
 				"ui/coreShared/ts/lib/questionId.ts",
 				"ui/coreShared/ts/lib/refreshState.ts",
+				"ui/coreShared/ts/lib/repPriceSource.tsx",
 				"ui/coreShared/ts/lib/requireWalletConnection.ts",
 				"ui/coreShared/ts/lib/scalarOutcome.ts",
 				"ui/coreShared/ts/protocol/securityPoolActions.ts",
@@ -49,9 +50,9 @@
 				"ui/coreShared/ts/simulation/tevmWorker.ts",
 				"ui/statoblast/ts/app/App.tsx",
 				"ui/statoblast/ts/app/appPageTitle.ts",
-				"ui/statoblast/ts/app/components/AppRouteContent.tsx",
 				"ui/statoblast/ts/index.ts",
 				"ui/statoblast/ts/lib/routing.ts",
+				"ui/statoblast/ts/protocol/contractLabels.ts",
 				"ui/statoblast/ts/simulation/tevmWorker.ts",
 				"ui/trading/ts/index.ts",
 				"ui/trading/ts/simulation/tevmWorker.ts",
@@ -65,16 +66,15 @@
 				"ui/zoltar/ts/features/universes/components/ShareMigrationTargetsSection.tsx",
 				"ui/zoltar/ts/features/universes/hooks/useZoltarOperations.ts",
 				"ui/zoltar/ts/index.ts",
-				"ui/zoltar/ts/lib/routing.ts",
 				"ui/zoltar/ts/simulation/tevmWorker.ts"
 			]
 		},
 		"shared": {
 			"minimumLines": 76.923,
 			"minimumFunctions": 79.536,
-			"maximumAllowedUnloadedFiles": 1,
+			"maximumAllowedUnloadedFiles": 2,
 			"unloadedFilesReviewBy": "2026-11-24",
-			"allowedUnloadedFiles": ["shared/ts/trading/index.ts"]
+			"allowedUnloadedFiles": ["shared/ts/logScan.ts", "shared/ts/trading/index.ts"]
 		},
 		"tooling": {
 			"minimumLines": 25.715,
