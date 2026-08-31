@@ -97,7 +97,7 @@ function collectForbiddenProductReferences(source: string, modulePath: string) {
 		return collectStaticExpressionText(node.expression) ?? ''
 	}
 	function collect(value: string) {
-		if (/\bopen(?:\s|-)*oracle|\bstatoblast|#\/(?:security-pools?|markets?)(?:[/?#]|$)/i.test(value)) matches.add(value)
+		if (/open(?:\s|-)*oracle|statoblast|#\/(?:security-pools?|markets?)(?:[/?#]|$)/i.test(value)) matches.add(value)
 	}
 	function visit(node: ts.Node) {
 		if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) collect(node.text)
@@ -209,16 +209,18 @@ describe('Zoltar production module graph', () => {
 	})
 
 	test('recognizes forbidden product identifiers and element-access keys', () => {
-		const references = collectForbiddenProductReferences("const openOracleView = state['statoblastSecurityMultiplierBps']", 'fixture.ts')
+		const references = collectForbiddenProductReferences("const openOracleView = state['statoblastSecurityMultiplierBps']; void getOpenOracleAddress; void selectedStatoblastPool", 'fixture.ts')
 
 		expect(references).toContain('openOracleView')
 		expect(references).toContain('statoblastSecurityMultiplierBps')
+		expect(references).toContain('getOpenOracleAddress')
+		expect(references).toContain('selectedStatoblastPool')
 	})
 
 	test('does not declare forbidden product modules or copy in the application shell', () => {
 		const appShell = readFileSync(zoltarAppShell, 'utf8')
 
-		expect(appShell.match(/\bopen(?:\s|-)*oracle|\bstatoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
+		expect(appShell.match(/open(?:\s|-)*oracle|statoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
 	})
 
 	test('does not reach Statoblast-only protocol or presentation modules', () => {

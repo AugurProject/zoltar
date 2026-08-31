@@ -188,8 +188,10 @@ export function useQuestionCreation(
 						if (result !== undefined && isCurrentQuestionActionScope()) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionRequested: () => {
+						const accepted = onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						if (accepted === false) return false
 						questionCreatingScopes.value = new Set([...questionCreatingScopes.value, submittedQuestionActionScopeKey])
-						onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
+						return accepted
 					},
 					onTransactionFinished: () => {
 						const nextCreatingScopes = new Set(questionCreatingScopes.value)

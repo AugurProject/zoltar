@@ -69,7 +69,16 @@ describe('useQuestionCreation', () => {
 	})
 
 	async function renderHook(
-		options: { accountAddress?: typeof WALLET_ADDRESS; activeUniverseId?: bigint; createQuestion?: UseQuestionCreationDependencies['createQuestion']; deploymentStatuses?: DeploymentStatus[]; environmentRefreshKey?: number; loadZoltarQuestions?: () => Promise<void>; refreshState?: () => Promise<void> } = {},
+		options: {
+			accountAddress?: typeof WALLET_ADDRESS
+			activeUniverseId?: bigint
+			createQuestion?: UseQuestionCreationDependencies['createQuestion']
+			deploymentStatuses?: DeploymentStatus[]
+			environmentRefreshKey?: number
+			loadZoltarQuestions?: () => Promise<void>
+			onTransactionRequested?: () => boolean | void
+			refreshState?: () => Promise<void>
+		} = {},
 	) {
 		const loadZoltarQuestions = mock(options.loadZoltarQuestions ?? (async () => undefined))
 		const setZoltarForkQuestionId = mock(() => undefined)
@@ -82,7 +91,7 @@ describe('useQuestionCreation', () => {
 		const onTransactionFinished = mock(() => undefined)
 		const onTransactionPresented = mock(() => undefined)
 		const onTransactionPrepared = mock(() => undefined)
-		const onTransactionRequested = mock(() => undefined)
+		const onTransactionRequested = mock(options.onTransactionRequested ?? (() => undefined))
 		const onTransactionSubmitted = mock(() => undefined)
 		const refreshState = mock(options.refreshState ?? (async () => undefined))
 		let hookState: UseQuestionCreationState | undefined
@@ -158,6 +167,18 @@ describe('useQuestionCreation', () => {
 		await act(async () => await missing.hookState().createQuestion())
 		expect(missing.createQuestion).not.toHaveBeenCalled()
 		expect(missing.hookState().questionFeedback?.status.detail).toContain('Deploy ZoltarQuestionData')
+	})
+
+	test('does not execute or finish a question transaction rejected by the global admission gate', async () => {
+		const harness = await renderHook({ onTransactionRequested: () => false })
+
+		await act(async () => await harness.hookState().createQuestion())
+
+		expect(harness.createQuestion).not.toHaveBeenCalled()
+		expect(harness.onTransactionPrepared).not.toHaveBeenCalled()
+		expect(harness.onTransactionSubmitted).not.toHaveBeenCalled()
+		expect(harness.onTransactionFinished).not.toHaveBeenCalled()
+		expect(harness.hookState().questionCreating).toBe(false)
 	})
 
 	test('keeps the successful result and presents a warning when refresh fails', async () => {
