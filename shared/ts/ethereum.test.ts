@@ -1477,6 +1477,47 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
 	})
 
+	test('waitForTransactionReceipt enforces its deadline while a request or polling delay is pending', async () => {
+		const settleBeforeWatchdog = async (operation: Promise<unknown>) => {
+			let watchdog: ReturnType<typeof setTimeout> | undefined
+			try {
+				return await Promise.race([
+					operation.then(
+						() => new Error('Receipt wait unexpectedly resolved'),
+						error => (error instanceof Error ? error : new Error(String(error))),
+					),
+					new Promise<Error>(resolve => {
+						watchdog = setTimeout(() => resolve(new Error('Receipt wait exceeded its watchdog')), 100)
+					}),
+				])
+			} finally {
+				if (watchdog !== undefined) clearTimeout(watchdog)
+			}
+		}
+		const hungClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(
+					async () =>
+						await new Promise(() => {
+							// Deliberately never settles.
+						}),
+					[],
+				),
+			),
+		})
+
+		const hungRequestError = await settleBeforeWatchdog(hungClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 }))
+		expect(hungRequestError.message).toBe(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+
+		const pollingClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(createProvider(() => null, [])),
+		})
+		const pollingError = await settleBeforeWatchdog(pollingClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, pollingInterval: 1_000, timeout: 5 }))
+		expect(pollingError.message).toBe(`Transaction receipt with hash "${RECEIPT_HASH}" could not be found.`)
+	})
+
 	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
 		let receiptRequests = 0
 		const calls: { method: string; params: unknown }[] = []
@@ -1534,6 +1575,49 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(receiptRequests).toBe(1)
+	})
+
+	test('waitForTransactionReceipt preserves replacement scan rate limits at its deadline', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: RECEIPT_HASH,
+			input: '0x',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			type: '0x2',
+			value: 0n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') throw { code: 429, message: 'replacement scan rate limit' }
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 50 }) })
+		const originalDateNow = Date.now
+
+		Date.now = () => 0
+		try {
+			await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, onReplaced: () => undefined, pollingInterval: 0, timeout: 5, transaction: originalTransaction })).rejects.toThrow('replacement scan rate limit')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
+	test('waitForTransactionReceipt clears a stale rate limit when its retry request hangs', async () => {
+		let receiptRequests = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'stale rate limit' }
+			return new Promise(() => {
+				// Deliberately never settles.
+			})
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 0 }) })
+
+		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 50 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+		expect(receiptRequests).toBe(2)
 	})
 
 	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
