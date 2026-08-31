@@ -622,15 +622,10 @@ function normalizeHexData(value: string | undefined) {
 	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
 }
 
-function normalizeBoolean(value: unknown) {
-	if (typeof value === 'boolean') return value
-	if (typeof value === 'string') {
-		if (value === '0x1' || value.toLowerCase() === 'true') return true
-		if (value === '0x0' || value.toLowerCase() === 'false') return false
-	}
-	if (typeof value === 'number') return value !== 0
-	if (typeof value === 'bigint') return value !== 0n
-	return false
+function normalizeOptionalLogRemoved(value: unknown) {
+	if (value === undefined) return undefined
+	if (typeof value !== 'boolean') throw new Error('RPC returned a log with an invalid removed flag')
+	return value
 }
 
 function normalizeTransactionType(value: unknown) {
@@ -1327,14 +1322,16 @@ function toRpcError(error: unknown, fallbackMessage: string) {
 function normalizeLog(value: unknown): TransactionLog {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid log')
 	const log = value as Record<string, unknown>
+	const topics = log['topics']
+	if (!Array.isArray(topics)) throw new Error('RPC returned a log without topics')
 	return {
 		address: normalizeAddress(log['address']),
 		blockHash: log['blockHash'] === undefined || log['blockHash'] === null ? undefined : normalizeHash(log['blockHash']),
 		blockNumber: log['blockNumber'] === undefined || log['blockNumber'] === null ? undefined : normalizeRpcBigInt(log['blockNumber']),
 		data: normalizeRpcHex(log['data']),
 		logIndex: log['logIndex'] === undefined || log['logIndex'] === null ? undefined : normalizeRpcBigInt(log['logIndex']),
-		removed: normalizeBoolean(log['removed']),
-		topics: Array.isArray(log['topics']) ? log['topics'].map(topic => normalizeRpcHex(topic)) : [],
+		removed: normalizeOptionalLogRemoved(log['removed']),
+		topics: topics.map(topic => normalizeRpcHex(topic)),
 		transactionHash: log['transactionHash'] === undefined || log['transactionHash'] === null ? undefined : normalizeHash(log['transactionHash']),
 		transactionIndex: log['transactionIndex'] === undefined || log['transactionIndex'] === null ? undefined : normalizeRpcBigInt(log['transactionIndex']),
 	}
