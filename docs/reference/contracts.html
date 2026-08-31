@@ -234,7 +234,7 @@
 						<tr>
 							<td><code>depositRepToVault(attoRepAmount, targetHealthFactorBps)</code></td>
 							<td>Vault owner</td>
-							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; the transaction timestamp is no later than the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.</td>
+							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.</td>
 							<td>Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from this deposit and its selected deposit target factor.</td>
 							<td><code>RepDepositedToVault</code>, <code>VaultDepositTargetHealthFactorRecorded</code>, and accounting checkpoints</td>
 						</tr>
