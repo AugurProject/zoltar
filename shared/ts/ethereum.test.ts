@@ -817,6 +817,26 @@ describe('shared ethereum compatibility layer', () => {
 				value: 9n,
 			}),
 		).rejects.toThrow('safe integer range')
+		await expect(
+			account.signTransaction?.({
+				chainId: 1,
+				gas: 21_000n,
+				gasPrice: 5n,
+				maxFeePerGas: 20n,
+				nonce: 7n,
+				to: TOKEN_ADDRESS,
+			}),
+		).rejects.toThrow('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
+		await expect(
+			account.signTransaction?.({
+				chainId: 1,
+				gas: 21_000n,
+				gasPrice: 5n,
+				maxPriorityFeePerGas: 3n,
+				nonce: 7n,
+				to: TOKEN_ADDRESS,
+			}),
+		).rejects.toThrow('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
 		expect(hexToBytes('0x1')).toEqual(new Uint8Array([1]))
 		expect(isHex('0x1')).toBe(true)
 		expect(isHex('0x1', { strict: true })).toBe(true)
