@@ -1511,7 +1511,7 @@ describe('shared ethereum compatibility layer', () => {
 		}, [])
 		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 0 }) })
 
-		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 50 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
 		expect(receiptRequests).toBe(2)
 	})
 
