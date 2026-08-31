@@ -403,11 +403,7 @@ export function useZoltarUniverse(
 				onTransactionPresented(createChildUniverseSuccessPresentation(result))
 				refreshRequired = true
 			} catch (error) {
-				if (!environmentGuard.isCurrent()) {
-					zoltarChildUniverseError.value = undefined
-					zoltarChildUniverseFeedback.value = undefined
-					return
-				}
+				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
 				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)

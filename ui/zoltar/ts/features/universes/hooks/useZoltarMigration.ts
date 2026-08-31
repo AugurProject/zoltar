@@ -136,11 +136,7 @@ export function useZoltarMigration({
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
 				onTransactionPresented(createZoltarMigrationSuccessPresentation(result))
 			} catch (error) {
-				if (!environmentGuard.isCurrent()) {
-					zoltarMigrationError.value = undefined
-					zoltarMigrationFeedback.value = undefined
-					return
-				}
+				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, errorFallback)
 				writeFailed = true
 				if (ownsTransaction) onTransactionFailed?.(message)

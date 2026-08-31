@@ -288,11 +288,7 @@ export function useZoltarFork(
 				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
 				onTransactionPresented(createZoltarForkSuccessPresentation(result))
 			} catch (error) {
-				if (!environmentGuard.isCurrent()) {
-					zoltarForkFeedback.value = undefined
-					zoltarForkError.value = undefined
-					return
-				}
+				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, errorFallback)
 				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)

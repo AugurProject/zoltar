@@ -323,7 +323,7 @@ describe('useZoltarFork', () => {
 		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xb')
 	})
 
-	test('an earlier environment fork cannot clear a replacement environment fork pending state', async () => {
+	test('an earlier environment fork rejection cannot clear replacement environment feedback', async () => {
 		const oldFork = createDeferred<Awaited<ReturnType<UseZoltarForkDependencies['forkZoltarUniverse']>>>()
 		const newFork = createDeferred<Awaited<ReturnType<UseZoltarForkDependencies['forkZoltarUniverse']>>>()
 		let forkCallCount = 0
@@ -375,18 +375,15 @@ describe('useZoltarFork', () => {
 			newPromise = requireHookState(hookState).forkZoltar()
 		})
 		expect(requireHookState(hookState).zoltarForkPending).toBe(true)
+		const replacementFeedback = requireHookState(hookState).zoltarForkFeedback
 
 		await act(async () => {
-			oldFork.resolve({
-				action: 'forkZoltar',
-				hash: `0x${'1'.repeat(64)}` as Hash,
-				questionId: '0x1',
-				universeId: 1n,
-			})
+			oldFork.reject(new Error('old environment fork failed'))
 			await oldPromise
 		})
 		expect(requireHookState(hookState).zoltarForkPending).toBe(true)
 		expect(requireHookState(hookState).zoltarForkActiveAction).toBe('fork')
+		expect(requireHookState(hookState).zoltarForkFeedback).toBe(replacementFeedback)
 
 		await act(async () => {
 			newFork.resolve({

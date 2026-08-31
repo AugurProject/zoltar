@@ -107,11 +107,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
 			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))
 		} catch (error) {
-			if (!environmentGuard.isCurrent()) {
-				errorMessage.value = undefined
-				deploymentFeedback.value = undefined
-				return
-			}
+			if (!environmentGuard.isCurrent()) return
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
 			if (ownsTransaction) onTransactionFailed?.(message)
