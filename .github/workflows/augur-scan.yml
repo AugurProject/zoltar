@@ -39,9 +39,6 @@ jobs:
         run: bun run typecheck
       - name: Unit tests
         run: bun run test:unit
-      - name: Prepare canonical contract metadata
-        working-directory: .
-        run: bun run setup-contracts
       - name: Static checks
         run: bun run check
       - name: Build browser application
