@@ -90,6 +90,13 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' })).not.toBeNull()
 	})
 
+	test('omits the shared protocol guide when the application does not own that documentation', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false })))
+		cleanupRenderedComponent = rendered.cleanup
+
+		expect(within(document.body).queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+	})
+
 	test('keeps the first tab as the current compact route when the route is unknown', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
 		cleanupRenderedComponent = rendered.cleanup

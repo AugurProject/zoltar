@@ -7,9 +7,10 @@ type TabNavigationProps = {
 	route: string
 	tabs: readonly RouteTabDefinition[]
 	onRouteChange: (route: string) => void
+	showProtocolGuide?: boolean
 }
 
-export function TabNavigation({ route, tabs, onRouteChange }: TabNavigationProps) {
+export function TabNavigation({ route, tabs, onRouteChange, showProtocolGuide = true }: TabNavigationProps) {
 	const options = tabs.map(tab => ({
 		value: tab.route,
 		label: tab.label,
@@ -38,9 +39,11 @@ export function TabNavigation({ route, tabs, onRouteChange }: TabNavigationProps
 					{disabledReason !== undefined ? <span className='detail disabled-reason'>{disabledReason}</span> : undefined}
 				</label>
 			) : undefined}
-			<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
-				{appCopy.protocolGuide}
-			</a>
+			{showProtocolGuide ? (
+				<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
+					{appCopy.protocolGuide}
+				</a>
+			) : undefined}
 		</nav>
 	)
 }

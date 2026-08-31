@@ -236,6 +236,7 @@ export function App() {
 		route,
 		tabs: tabNavigationTabs,
 		onRouteChange: navigate,
+		showProtocolGuide: false,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
 	if (route === 'zoltar') {
