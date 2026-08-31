@@ -1,5 +1,5 @@
 import type { Address, Hex } from '../ethereum.ts'
-import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
+import { bigintToSafeNumber, getAddress, keccak256, privateKeyToAccount } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from '../execution/relay-authentication.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
@@ -280,6 +280,11 @@ function missingRelayAuthenticationEvidence(message: string) {
 	return RELAY_AUTHENTICATION_SUBJECTS.some(subject => normalized === `${subject} required` || normalized === `${subject} is required` || normalized === `missing ${subject}` || normalized === `${subject} missing` || normalized === `${subject} is missing`)
 }
 
+function invalidRelayAuthenticationEvidence(message: string) {
+	const normalized = message.replace(/[.!]+$/, '').trim()
+	return RELAY_AUTHENTICATION_SUBJECTS.some(subject => normalized === `invalid ${subject}` || normalized === `${subject} invalid` || normalized === `${subject} is invalid` || normalized === `rejected ${subject}` || normalized === `${subject} rejected` || normalized === `${subject} was rejected`)
+}
+
 async function rawCapabilityErrorResponse(url: string, body: string, headers: Readonly<Record<string, string>>, parameters: { allowClientErrorResponse: boolean; alternateExpectedId?: 1 | null | undefined; expectedId: 1 | null; label: string; timeoutMilliseconds: number }) {
 	const response = await fetch(url, {
 		body,
@@ -319,18 +324,22 @@ async function rawTransactionSubmissionCapabilityError(
 	timeoutMilliseconds: number,
 	responseParameters: { allowClientErrorResponse?: boolean | undefined; alternateExpectedId?: 1 | null | undefined; expectedId?: 1 | null | undefined; label?: string | undefined } = {},
 ) {
-	const body = JSON.stringify({
-		id: 1,
-		jsonrpc: '2.0',
-		method,
-		params: method === 'eth_sendRawTransaction' ? [TRANSACTION_SUBMISSION_CAPABILITY_PROBE] : [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }],
-	})
+	const body = transactionSubmissionCapabilityBody(method)
 	return await rawCapabilityErrorResponse(url, body, authentication === undefined ? { 'content-type': 'application/json' } : await authenticatedRelayHeaders(body, authentication), {
 		allowClientErrorResponse: responseParameters.allowClientErrorResponse ?? false,
 		alternateExpectedId: responseParameters.alternateExpectedId,
 		expectedId: responseParameters.expectedId ?? 1,
 		label: responseParameters.label ?? `Endpoint did not prove ${method} support`,
 		timeoutMilliseconds,
+	})
+}
+
+function transactionSubmissionCapabilityBody(method: TransactionSubmissionMethod) {
+	return JSON.stringify({
+		id: 1,
+		jsonrpc: '2.0',
+		method,
+		params: method === 'eth_sendRawTransaction' ? [TRANSACTION_SUBMISSION_CAPABILITY_PROBE] : [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }],
 	})
 }
 
@@ -346,6 +355,9 @@ async function assertPublicTransactionSubmissionCapability(url: string, timeoutM
 }
 
 const PRIVATE_TRANSACTION_METHOD_CONTROL = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+// Public, unfunded deterministic canaries used only to produce a recoverable
+// EIP-191 signature that intentionally does not match another canary address.
+const RELAY_AUTHENTICATION_MISMATCH_CANARY_KEYS: readonly Hex[] = [`0x${'01'.repeat(32)}`, `0x${'02'.repeat(32)}`, `0x${'03'.repeat(32)}`]
 
 function privateCapabilityControlBody(method: string, params: readonly unknown[]) {
 	return JSON.stringify({ id: 1, jsonrpc: '2.0', method, params })
@@ -412,12 +424,37 @@ async function assertUnauthenticatedPrivateTransactionIsRejected(url: string, ti
 	throw new EndpointSafetyError(`Endpoint did not prove relay authentication enforcement: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
 }
 
+async function assertInvalidRelayAuthenticationIsRejected(url: string, authentication: RelayAuthentication, timeoutMilliseconds: number) {
+	const body = transactionSubmissionCapabilityBody('eth_sendPrivateTransaction')
+	const configuredAddress = getAddress(authentication.address)
+	const [claimedCanary, signingCanary] = RELAY_AUTHENTICATION_MISMATCH_CANARY_KEYS.map(privateKeyToAccount).filter(account => account.address !== configuredAddress)
+	if (claimedCanary === undefined || signingCanary === undefined || claimedCanary.address === signingCanary.address) throw new EndpointSafetyError('Two distinct relay-authentication mismatch canaries are required')
+	const mismatchedSignature = await signingCanary.signMessage(keccak256(body))
+	const { code, message, status } = await rawCapabilityErrorResponse(
+		url,
+		body,
+		{ 'content-type': 'application/json', 'x-flashbots-signature': `${claimedCanary.address}:${mismatchedSignature}` },
+		{
+			allowClientErrorResponse: true,
+			alternateExpectedId: null,
+			expectedId: 1,
+			label: 'Invalid private relay authentication control',
+			timeoutMilliseconds,
+		},
+	)
+	const normalizedMessage = message.toLowerCase()
+	const recognizedCode = code === -32_602 || code === -32_600 || (code >= -32_099 && code <= -32_000)
+	if ((status === 401 || status === 403) && recognizedCode && invalidRelayAuthenticationEvidence(normalizedMessage) && !transactionRejectionEvidence(normalizedMessage)) return
+	throw new EndpointSafetyError(`Endpoint did not prove relay authentication signature validation: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
+}
+
 async function assertAuthenticatedPrivateTransactionSubmissionCapability(url: string, authentication: RelayAuthentication, timeoutMilliseconds = 5_000) {
 	try {
 		const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendPrivateTransaction', authentication, timeoutMilliseconds)
 		const normalizedMessage = message.toLowerCase()
 		if (status === 200 && code === -32_602 && !relayAuthenticationRejectionEvidence(normalizedMessage) && transactionRejectionEvidence(normalizedMessage)) {
 			await assertUnauthenticatedPrivateTransactionIsRejected(url, timeoutMilliseconds)
+			await assertInvalidRelayAuthenticationIsRejected(url, authentication, timeoutMilliseconds)
 			return
 		}
 		if (status === 200 && code === -32_600 && normalizedMessage === 'incorrect request') {
