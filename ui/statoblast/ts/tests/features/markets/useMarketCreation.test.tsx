@@ -210,6 +210,7 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).marketFeedback?.status.tone).toBe('error')
 		expect(requireHookState(hookState).marketFeedback?.status.detail).toContain('Wallet account is no longer connected')
+		expect(requireHookState(hookState).marketError).toContain('Wallet account is no longer connected')
 
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
@@ -305,6 +306,43 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
 		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
+	})
+
+	test('shows a rendered error source when global transaction admission rejects creation', async () => {
+		const createMarketTransaction = mock(async () => ({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary' as const, questionId: '0x0b' }))
+		const onTransactionFinished = mock(() => undefined)
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketAdmissionHarness() {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 0n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey: 0,
+					onTransactionFinished,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => false,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{ createMarket: createMarketTransaction },
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => await requireHookState(hookState).createMarket())
+
+		expect(createMarketTransaction).not.toHaveBeenCalled()
+		expect(onTransactionFinished).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).marketError).toBe('Finish the current transaction before starting another transaction.')
 	})
 
 	test('preserves an anonymous question draft when a wallet connects', async () => {
@@ -748,5 +786,188 @@ describe('useMarketCreation', () => {
 		} finally {
 			if (originalSessionStorageDescriptor !== undefined) Object.defineProperty(window, 'sessionStorage', originalSessionStorageDescriptor)
 		}
+	})
+
+	test('hides completed market creation state after the environment changes', async () => {
+		const result: MarketCreationResult & { hash: Hash } = { createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' }
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 7n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{ createMarket: async () => result },
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Environment zero question' }))
+			await requireHookState(hookState).createMarket()
+		})
+		expect(requireHookState(hookState).marketResult).toEqual(result)
+
+		await act(() => {
+			render(<Harness environmentRefreshKey={1} />, renderedComponent.container)
+		})
+		expect(requireHookState(hookState).marketResult).toBeUndefined()
+		expect(requireHookState(hookState).marketFeedback).toBeUndefined()
+		expect(requireHookState(hookState).marketError).toBeUndefined()
+	})
+
+	test('keeps a replacement environment submission locked until its own completion', async () => {
+		const firstDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
+		const secondDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
+		let requestCount = 0
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 7n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{
+					createMarket: async () => {
+						requestCount += 1
+						return await (requestCount === 1 ? firstDeferred.promise : secondDeferred.promise)
+					},
+				},
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Concurrent question' }))
+		})
+		let firstSubmission = Promise.resolve()
+		await act(async () => {
+			firstSubmission = requireHookState(hookState).createMarket()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		await act(() => {
+			render(<Harness environmentRefreshKey={1} />, renderedComponent.container)
+		})
+		let secondSubmission = Promise.resolve()
+		await act(async () => {
+			secondSubmission = requireHookState(hookState).createMarket()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		expect(requestCount).toBe(2)
+		expect(requireHookState(hookState).marketCreating).toBe(true)
+		await act(async () => {
+			firstDeferred.resolve({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' })
+			await firstSubmission
+		})
+		expect(requireHookState(hookState).marketCreating).toBe(true)
+		expect(requireHookState(hookState).marketResult).toBeUndefined()
+		await act(async () => {
+			secondDeferred.resolve({ createQuestionHash: '0xdef', hash: '0xdef', marketType: 'binary', questionId: '0x0c' })
+			await secondSubmission
+		})
+		expect(requireHookState(hookState).marketCreating).toBe(false)
+		expect(requireHookState(hookState).marketResult?.questionId).toBe('0x0c')
+	})
+
+	test('ignores deferred market completion callbacks from a replaced environment', async () => {
+		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
+		let submittedCallbacks: Parameters<UseMarketCreationDependencies['createMarket']>[1] | undefined
+		const loadZoltarQuestions = mock(async () => undefined)
+		const setZoltarForkQuestionId = mock(() => undefined)
+		const onTransactionFinished = mock(() => undefined)
+		const onTransactionPrepared = mock(() => undefined)
+		const onTransactionPresented = mock(() => undefined)
+		const onTransactionSubmitted = mock(() => undefined)
+		const refreshState = mock(async () => undefined)
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 7n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey,
+					onTransactionFinished,
+					onTransactionPrepared,
+					onTransactionPresented,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted,
+					refreshState,
+				},
+				{
+					createMarket: async (_accountAddress, callbacks) => {
+						submittedCallbacks = callbacks
+						return await deferred.promise
+					},
+				},
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Deferred question' }))
+		})
+		let submission = Promise.resolve()
+		await act(async () => {
+			submission = requireHookState(hookState).createMarket()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		await act(() => {
+			render(<Harness environmentRefreshKey={1} />, renderedComponent.container)
+		})
+		submittedCallbacks?.onTransactionPrepared?.({ account: WALLET_ADDRESS, args: [], chainName: 'replacement test', functionName: 'createMarket', value: 0n })
+		submittedCallbacks?.onTransactionSubmitted?.('0xabc')
+
+		await act(async () => {
+			deferred.resolve({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' })
+			await submission
+		})
+		expect(requireHookState(hookState).marketResult).toBeUndefined()
+		expect(requireHookState(hookState).marketFeedback).toBeUndefined()
+		expect(onTransactionPrepared).not.toHaveBeenCalled()
+		expect(onTransactionSubmitted).not.toHaveBeenCalled()
+		expect(onTransactionPresented).not.toHaveBeenCalled()
+		expect(onTransactionFinished).toHaveBeenCalledTimes(1)
+		expect(refreshState).not.toHaveBeenCalled()
+		expect(loadZoltarQuestions).not.toHaveBeenCalled()
+		expect(setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 })

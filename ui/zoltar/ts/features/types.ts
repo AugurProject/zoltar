@@ -5,6 +5,7 @@ import type {
 	DeploymentStepId,
 	MarketDetails,
 	MarketDetailsPage,
+	MarketCreationResult,
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
 	OpenOracleReportSummaryPage,
@@ -71,6 +72,7 @@ export type OverviewPanelsProps = {
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
 	onSwitchNetwork: () => void
+	showRepPrices?: boolean
 	readBackendStatus?: ReadBackendStatus
 	repPerEthFailure: RepPriceFailure | undefined
 } & RepPerEthPriceProps
@@ -114,11 +116,18 @@ export type MarketRouteContentProps = {
 	onLoadZoltarQuestions: () => Promise<void>
 	onLoadZoltarQuestion: (questionId: string) => Promise<void>
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
+	onCreateQuestion: () => void
+	onQuestionFormChange: (update: Partial<import('../types/app.js').MarketFormState>) => void
+	onResetQuestion: () => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionLookupError: string | undefined
 	zoltarQuestionLookupId: string | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
+	questionCreating: boolean
+	questionError: string | undefined
+	questionForm: import('../types/app.js').MarketFormState
+	questionResult: MarketCreationResult | undefined
 	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean

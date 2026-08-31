@@ -1,5 +1,5 @@
 {
-	"description": "Zoltar oracle operations interface",
+	"description": "Zoltar question and universe operations interface",
 	"name": "@zoltar/ui-zoltar",
 	"private": true,
 	"repository": {},

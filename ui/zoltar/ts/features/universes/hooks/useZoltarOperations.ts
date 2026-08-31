@@ -4,6 +4,7 @@ import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-sh
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
 import { useZoltarUniverse } from './useZoltarUniverse.js'
+import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 type UseZoltarOperationsParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -70,6 +71,7 @@ export function useZoltarOperations({
 	const migration = useZoltarMigration({
 		accountAddress,
 		activeUniverseId,
+		environmentRefreshKey,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransactionFailed,
 		onTransactionFinished,
@@ -86,7 +88,9 @@ export function useZoltarOperations({
 
 	const createChildUniverse = useCallback(
 		async (outcomeIndex: bigint) => {
+			const environmentGuard = createActiveEnvironmentGuard()
 			await createUniverseChildUniverse(outcomeIndex)
+			if (!environmentGuard.isCurrent()) return
 			await fork.loadZoltarForkAccess()
 		},
 		[createUniverseChildUniverse, fork.loadZoltarForkAccess],
