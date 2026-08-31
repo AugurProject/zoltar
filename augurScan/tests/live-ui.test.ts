@@ -7,6 +7,8 @@ import {
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
+	collectCursorCollections,
+	collectDualCursorCollections,
 	compactIndexerDuration,
 	compareCanonicalEventPosition,
 	contractDeploymentBlockActionLabel,
@@ -15,6 +17,12 @@ import {
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
+	demoTimelineEvidenceStatus,
+	entityHistoryContinuationPresentation,
+	evidenceStatusLabel,
+	historyInvalidationEvidencePresentation,
+	historyInvalidationNotice,
+	historyInvalidationReasonLabel,
 	indexerConnectionStatus,
 	indexerHeadFreshness,
 	indexerHeadFreshnessTransitionDelay,
@@ -23,11 +31,18 @@ import {
 	isCurrentCanonicalGeneration,
 	isCurrentContextRequest,
 	isCurrentLiveRequest,
+	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
+	operationsDetailEvidencePanelVisible,
+	operationsDetailHeaderPresentation,
 	operationsDetailRecordKey,
+	operationsDetailSummaryPresentation,
+	operationsForkChildCount,
 	operationsLoadDisposition,
+	operationsRiskPresentation,
+	operationsRouteFreshness,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -41,6 +56,9 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	showIndexerSyncDetails,
+	summarizeHistoryCollections,
+	timelineEntityTypeLabel,
+	timelineOccurrenceFields,
 	transactionRetryMode,
 } from '../browser/live-update.ts'
 
@@ -68,6 +86,253 @@ test('retains every distinct catalog record across a delayed 251-record live ref
 	expect(snapshot.nextCursor).toBeUndefined()
 })
 
+test('uses stable identities for historical operations catalogs', () => {
+	expect(operationsCatalogRecordKey('forks', { universe_identity: '7' })).toBe('7')
+	expect(operationsCatalogRecordKey('trading', { pair_address: '0xpair' })).toBe('0xpair')
+	expect(operationsCatalogRecordKey('integrity', { id: '42' })).toBe('42')
+	expect(
+		operationsCatalogRecordKey('timeline', {
+			block_hash: '0xblock',
+			tx_hash: '0xtx',
+			log_index: 2,
+			entity_type: 'vault',
+			entity_identity: '0xvault',
+		}),
+	).toBe('0xblock:0xtx:2:vault:0xvault')
+})
+
+test('uses the irregular plural for fork children', () => {
+	expect(operationsForkChildCount('1', '1')).toBe('1 child')
+	expect(operationsForkChildCount('2', '2')).toBe('2 children')
+})
+
+test('renders the complete timeline occurrence identity without shortening audit evidence', () => {
+	const blockHash = `0x${'a'.repeat(64)}`
+	const transactionHash = `0x${'b'.repeat(64)}`
+	const entityIdentity = `0x${'c'.repeat(40)}:1842`
+	expect(
+		timelineOccurrenceFields({
+			block_number: '23184712',
+			block_hash: blockHash,
+			tx_hash: transactionHash,
+			log_index: 7,
+			entity_type: 'open-oracle-report',
+			entity_identity: entityIdentity,
+		}),
+	).toEqual([
+		['Block', '23184712'],
+		['Block hash', blockHash],
+		['Transaction hash', transactionHash],
+		['Log index', 7],
+		['Entity type', 'open-oracle-report'],
+		['Entity identity', entityIdentity],
+	])
+})
+
+test('uses the production evidence-status enum in the demo timeline', () => {
+	expect(demoTimelineEvidenceStatus(false, 'chain-reorg')).toBe('chain-orphaned')
+})
+
+test('presents every timeline entity type as a human-facing label', () => {
+	const expected: Readonly<Record<string, string>> = {
+		question: 'Question',
+		deployment: 'Deployment',
+		'reputation-token': 'Reputation token',
+		'share-token': 'Share token',
+		'open-oracle-report': 'OpenOracle report',
+		'price-coordinator': 'Price coordinator',
+		escalation: 'Escalation game',
+		auction: 'Truth auction',
+		pool: 'Security pool',
+		vault: 'Vault',
+		'liquidation-approval': 'Liquidation approval',
+		amm: 'AMM market',
+		fork: 'Universe fork',
+		reporter: 'Reporter',
+	}
+	for (const [value, label] of Object.entries(expected)) expect(timelineEntityTypeLabel(value)).toBe(label)
+	expect(timelineEntityTypeLabel('future-risk-kind')).toBe('Future risk kind')
+})
+
+test('presents every evidence and invalidation enum while preserving its raw value separately', () => {
+	const evidenceLabels: Readonly<Record<string, string>> = {
+		canonical: 'Canonical evidence',
+		'chain-orphaned': 'Replaced-chain evidence',
+		'manifest-superseded': 'Superseded after manifest reset',
+		'coverage-reset': 'Outside current scanner coverage',
+		'decode-superseded': 'Superseded after ABI re-decode',
+		'projection-superseded': 'Superseded after projection rebuild',
+		'noncanonical-unknown': 'Noncanonical evidence',
+	}
+	for (const [value, label] of Object.entries(evidenceLabels)) expect(evidenceStatusLabel(value)).toBe(label)
+
+	const reasonLabels: Readonly<Record<string, string>> = {
+		'chain-reorg': 'Chain reorganization',
+		'manifest-reset': 'Manifest reset',
+		'start-boundary-advanced': 'Scanner coverage boundary advanced',
+		'abi-redecode': 'ABI re-decode',
+		'projection-rebuild': 'Projection rebuild',
+	}
+	for (const [value, label] of Object.entries(reasonLabels)) expect(historyInvalidationReasonLabel(value)).toBe(label)
+	expect(evidenceStatusLabel('future-status')).toBe('Future status')
+	expect(historyInvalidationReasonLabel('future-reset')).toBe('Future reset')
+})
+
+test('presents every live history invalidation by its actual cause', () => {
+	for (const reason of ['chain-reorg', 'manifest-reset', 'start-boundary-advanced', 'abi-redecode', 'projection-rebuild'])
+		expect(isHistoryInvalidationReason(reason)).toBeTrue()
+	expect(isHistoryInvalidationReason('unknown-reset')).toBeFalse()
+	expect(historyInvalidationNotice('chain-reorg', '1')).toEqual({
+		title: 'Chain reorganization detected',
+		detail: '1 block replaced; views are refreshing.',
+	})
+	expect(historyInvalidationNotice('manifest-reset', '2')).toEqual({
+		title: 'Manifest history reset',
+		detail: '2 indexed blocks invalidated for manifest replay; views are refreshing.',
+	})
+	expect(historyInvalidationNotice('start-boundary-advanced', '3')).toEqual({
+		title: 'History coverage reset',
+		detail: '3 indexed blocks invalidated after the retrievable history boundary advanced; views are refreshing.',
+	})
+	expect(historyInvalidationNotice('abi-redecode', '4')).toEqual({
+		title: 'Historical ABI re-decode',
+		detail: '4 indexed blocks invalidated so historical evidence can be decoded again; views are refreshing.',
+	})
+	expect(historyInvalidationNotice('projection-rebuild', '5')).toEqual({
+		title: 'Historical projection rebuild',
+		detail: '5 indexed blocks invalidated so historical views can be rebuilt; views are refreshing.',
+	})
+})
+
+test('presents complete invalidation causes and exact affected-occurrence counts', () => {
+	expect(
+		historyInvalidationEvidencePresentation(['abi-redecode', 'manifest-reset', 'projection-rebuild'], {
+			block: '1',
+			transaction: '1',
+			log: '2',
+			'entity-state': '2',
+		}),
+	).toEqual({
+		causeCodes: ['abi-redecode', 'manifest-reset', 'projection-rebuild'],
+		causeLabel: 'ABI re-decode + Manifest reset + Projection rebuild',
+		occurrenceTotal: '6',
+		occurrenceFields: [
+			['Affected blocks', '1'],
+			['Affected logs', '2'],
+			['Affected state observations', '2'],
+			['Affected transactions', '1'],
+		],
+	})
+})
+
+test('distinguishes historical Operations snapshots from the live indexed view', () => {
+	expect(
+		operationsRouteFreshness(
+			{
+				blockNumber: '23184690',
+				indexedHead: '23184712',
+				observedHead: '23184712',
+				lagBlocks: '22',
+				historyDepthBlocks: '22',
+				historical: true,
+			},
+			true,
+		),
+	).toBe('Historical snapshot at block #23,184,690 · current indexed head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence')
+	expect(
+		operationsRouteFreshness(
+			{
+				blockNumber: '23184712',
+				observedHead: '23184712',
+				lagBlocks: '0',
+				historical: false,
+			},
+			true,
+		),
+	).toBe('As of indexed block #23,184,712 · 0 blocks behind · live updates connected')
+})
+
+test('labels historical pool and vault detail headers as fixed snapshots', () => {
+	const asOf = {
+		blockNumber: '23184690',
+		indexedHead: '23184712',
+		observedHead: '23184712',
+		lagBlocks: '22',
+		historyDepthBlocks: '22',
+		historical: true,
+	}
+	for (const kind of ['pool', 'vault'] as const)
+		expect(operationsDetailHeaderPresentation(kind, asOf, true)).toEqual({
+			backLabel: '← Back to catalog',
+			catalogPath: '/operations/risk',
+			freshness: 'Historical snapshot at block #23,184,690 · current indexed head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence',
+			riskPanelTitle: 'Risk state at snapshot',
+		})
+	for (const kind of ['pool', 'vault'] as const)
+		expect(
+			operationsDetailHeaderPresentation(kind, { ...asOf, blockNumber: '23184712', historyDepthBlocks: '0', historical: false }, true).riskPanelTitle,
+		).toBe('Current risk state')
+})
+
+test('labels protocol risk state separately from scanner assessment', () => {
+	expect(operationsRiskPresentation('pool', '0', 'warning')).toEqual({
+		protocolState: 'Operational',
+		scannerAssessment: 'Warning',
+		scannerTone: 'warning',
+	})
+	expect(operationsRiskPresentation('vault', 'liquidatable', 'critical')).toEqual({
+		protocolState: 'Liquidatable',
+		scannerAssessment: 'Critical',
+		scannerTone: 'critical',
+	})
+	expect(operationsRiskPresentation('pool', 'bad-debt', 'critical')).toEqual({
+		protocolState: 'Bad debt',
+		scannerAssessment: 'Critical',
+		scannerTone: 'critical',
+	})
+	expect(operationsRiskPresentation('vault', 'unavailable', 'unavailable')).toEqual({
+		protocolState: 'Unavailable',
+		scannerAssessment: 'Unavailable',
+		scannerTone: 'unavailable',
+	})
+	expect(operationsRiskPresentation('pool', 'future-state', 'future-severity')).toEqual({
+		protocolState: 'Unrecognized pool state',
+		scannerAssessment: 'Unrecognized assessment',
+		scannerTone: 'unavailable',
+	})
+})
+
+test('uses protocol state only for detail summaries that contain semantic protocol state', () => {
+	expect(operationsDetailSummaryPresentation('pool', { protocolState: '0', scannerSeverity: 'warning' })).toEqual({
+		label: 'Protocol state',
+		value: 'Operational',
+	})
+	expect(operationsDetailSummaryPresentation('vault', { protocolState: 'healthy', scannerSeverity: 'warning' })).toEqual({
+		label: 'Protocol state',
+		value: 'Healthy',
+	})
+	expect(operationsDetailSummaryPresentation('report', { lifecycleState: 'Dispute window open', currentEvent: 'ReportDisputed' })).toEqual({
+		label: 'Report lifecycle',
+		value: 'Dispute window open',
+	})
+	for (const kind of ['auction', 'escalation', 'fork', 'trading'] as const)
+		expect(operationsDetailSummaryPresentation(kind, { snapshotReadStatus: 'success' })).toEqual({
+			label: 'Evidence state',
+			value: 'Current tagged read available',
+		})
+})
+
+test('omits an empty generic lifecycle panel when risk-specific evidence already owns the history', () => {
+	for (const kind of ['pool', 'vault'] as const) {
+		expect(operationsDetailEvidencePanelVisible(kind, 0, false, false)).toBeFalse()
+		expect(operationsDetailEvidencePanelVisible(kind, 1, false, false)).toBeTrue()
+		expect(operationsDetailEvidencePanelVisible(kind, 0, true, false)).toBeTrue()
+		expect(operationsDetailEvidencePanelVisible(kind, 0, false, true)).toBeTrue()
+	}
+	for (const kind of ['auction', 'escalation', 'fork', 'report', 'trading'] as const)
+		expect(operationsDetailEvidencePanelVisible(kind, 0, false, false)).toBeTrue()
+})
+
 test('retains detail evidence to the prior visible depth using canonical log identity', async () => {
 	const records = Array.from({ length: 151 }, (_, index) => ({
 		block_hash: '0xblock',
@@ -91,6 +356,120 @@ test('retains detail evidence to the prior visible depth using canonical log ide
 	expect(snapshot.items).toHaveLength(151)
 	expect(new Set(snapshot.items.map(operationsDetailRecordKey)).size).toBe(151)
 	expect(snapshot.nextCursor).toBeUndefined()
+})
+
+test('loads and combines snapshot-bound risk-history pages through the requested offset', async () => {
+	const requestedCursors: Array<string | undefined> = []
+	const result = await collectCursorCollections(
+		async (cursor) => {
+			requestedCursors.push(cursor)
+			if (cursor === undefined)
+				return {
+					collections: { stateSnapshots: [{ id: 'new' }], liquidations: [] },
+					offset: 0,
+					nextCursor: 'page-2',
+				}
+			return {
+				collections: { stateSnapshots: [{ id: 'old' }], liquidations: [{ id: 'liquidation' }] },
+				offset: 100,
+				nextCursor: 'page-3',
+			}
+		},
+		['stateSnapshots', 'liquidations'],
+		100,
+	)
+	expect(requestedCursors).toEqual([undefined, 'page-2'])
+	expect(result).toEqual({
+		collections: { stateSnapshots: [{ id: 'new' }, { id: 'old' }], liquidations: [{ id: 'liquidation' }] },
+		loadedOffset: 100,
+		nextCursor: 'page-3',
+	})
+})
+
+test('paginates pool and vault risk catalogs independently and restores both visible depths', async () => {
+	const pools = Array.from({ length: 351 }, (_, index) => ({ address: `pool-${index}` }))
+	const vaults = Array.from({ length: 376 }, (_, index) => ({ address: `vault-${index}` }))
+	const requests: Array<{ leftCursor?: number; rightCursor?: number; limit: number }> = []
+	const result = await collectDualCursorCollections<{ address: string }, number>(
+		async ({ leftCursor, rightCursor, limit }) => {
+			requests.push({ ...(leftCursor === undefined ? {} : { leftCursor }), ...(rightCursor === undefined ? {} : { rightCursor }), limit })
+			const leftOffset = leftCursor ?? 0
+			const rightOffset = rightCursor ?? 0
+			return {
+				left: pools.slice(leftOffset, leftOffset + limit),
+				right: vaults.slice(rightOffset, rightOffset + limit),
+				...(leftOffset + limit < pools.length ? { leftNextCursor: leftOffset + limit } : {}),
+				...(rightOffset + limit < vaults.length ? { rightNextCursor: rightOffset + limit } : {}),
+			}
+		},
+		275,
+		325,
+		(item) => item.address,
+		(item) => item.address,
+	)
+	expect(result.left.length).toBeGreaterThanOrEqual(275)
+	expect(result.right.length).toBeGreaterThanOrEqual(325)
+	expect(result.leftNextCursor).toBe(300)
+	expect(result.rightNextCursor).toBe(325)
+	expect(requests).toEqual([
+		{ limit: 100 },
+		{ leftCursor: 100, rightCursor: 100, limit: 100 },
+		{ leftCursor: 200, rightCursor: 200, limit: 100 },
+		{ rightCursor: 300, limit: 25 },
+	])
+})
+
+test('makes a state-history series larger than the API page limit fully reachable', async () => {
+	const records = Array.from({ length: 1_001 }, (_, index) => ({ block_number: String(23_000_000 + index) }))
+	const requestedCursors: Array<string | undefined> = []
+	const result = await collectCursorCollections(
+		async (cursor) => {
+			requestedCursors.push(cursor)
+			const offset = cursor === undefined ? 0 : 1_000
+			const snapshots = records.slice(offset, offset + 1_000)
+			return {
+				collections: { snapshots },
+				offset,
+				...(offset + snapshots.length < records.length ? { nextCursor: 'page-2' } : {}),
+			}
+		},
+		['snapshots'],
+		1_000,
+	)
+	expect(requestedCursors).toEqual([undefined, 'page-2'])
+	expect(result.collections['snapshots']).toHaveLength(1_001)
+	expect(result.nextCursor).toBeUndefined()
+})
+
+test('shows only one visible pending phrase while state history continues loading', () => {
+	const pending = entityHistoryContinuationPresentation('pending')
+	const visiblePendingPhrases = [pending.buttonLabel, ...(pending.statusVisuallyHidden ? [] : [pending.statusText])]
+	expect(visiblePendingPhrases).toEqual(['Showing older history…'])
+
+	const failure = entityHistoryContinuationPresentation('error')
+	expect(failure).toEqual({
+		buttonLabel: 'Retry older history',
+		statusText: 'Older historical records could not be loaded.',
+		statusVisuallyHidden: false,
+	})
+})
+
+test('summarizes loaded risk history with exact block boundaries and per-series counts', () => {
+	expect(
+		summarizeHistoryCollections(
+			{
+				stateSnapshots: [{ block_number: '23184707' }, { block_number: 23_184_207 }],
+				accountingSnapshots: [{ block_number: 23_184_707n }],
+				lifecycleEvents: [{ block_number: 'not-a-block' }],
+				liquidations: [],
+			},
+			['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'],
+		),
+	).toEqual({
+		counts: { stateSnapshots: 2, accountingSnapshots: 1, lifecycleEvents: 1, liquidations: 0 },
+		oldestBlock: 23_184_207n,
+		newestBlock: 23_184_707n,
+	})
 })
 
 test('orders lifecycle evidence by canonical block, transaction, and log position', () => {

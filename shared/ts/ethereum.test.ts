@@ -1344,6 +1344,52 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
+	test('public client rejects blocks without a required transaction list', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5' }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without transactions')
+	})
+
+	test('replacement scans reject missing block transactions instead of advancing past them', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		} satisfies BlockTransaction
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		await expect(
+			client.waitForTransactionReceipt({
+				hash: TX_HASH,
+				onReplaced: () => undefined,
+				pollingInterval: 0,
+				transaction: originalTransaction,
+				timeout: 0,
+			}),
+		).rejects.toThrow('without transactions')
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber'])
+	})
+
 	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const clockValues = [0, 120_000, 180_000]
@@ -2154,6 +2200,63 @@ describe('shared ethereum compatibility layer', () => {
 		expect(await client.getTransactionCount({ address: OWNER_ADDRESS, blockTag: 'pending' })).toBe(7n)
 		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
 	})
+
+	for (const malformed of [
+		{ kind: 'balance', label: 'negative decimal string', value: '-1' },
+		{ kind: 'blockNumber', label: 'decimal string', value: '123' },
+		{ kind: 'gasPrice', label: 'unsafe number', value: Number.MAX_SAFE_INTEGER + 1 },
+		{ kind: 'transactionCount', label: 'negative bigint', value: -1n },
+		{ kind: 'chainId', label: 'leading-zero hex string', value: '0x01' },
+	] as const) {
+		test(`public client rejects a present ${malformed.label} RPC quantity`, async () => {
+			const client = createPublicClient({ transport: custom(createProvider(() => malformed.value, [])) })
+			const result = (() => {
+				switch (malformed.kind) {
+					case 'balance':
+						return client.getBalance({ address: OWNER_ADDRESS })
+					case 'blockNumber':
+						return client.getBlockNumber()
+					case 'gasPrice':
+						return client.getGasPrice()
+					case 'transactionCount':
+						return client.getTransactionCount({ address: OWNER_ADDRESS })
+					case 'chainId':
+						return client.getChainId()
+					default:
+						throw new Error('Unknown RPC quantity test case')
+				}
+			})()
+
+			await expect(result).rejects.toThrow('RPC returned an invalid bigint value')
+		})
+	}
+
+	for (const accepted of [
+		{ expected: 42n, kind: 'balance', label: 'safe integer', value: 42 },
+		{ expected: 7n, kind: 'blockNumber', label: 'nonnegative bigint', value: 7n },
+		{ expected: 0n, kind: 'gasPrice', label: 'canonical zero quantity', value: '0x0' },
+		{ expected: 10, kind: 'chainId', label: 'uppercase-digit hex quantity', value: '0xA' },
+	] as const) {
+		test(`public client accepts ${accepted.label} RPC quantity input`, async () => {
+			const client = createPublicClient({ transport: custom(createProvider(() => accepted.value, [])) })
+			const result = await (() => {
+				switch (accepted.kind) {
+					case 'balance':
+						return client.getBalance({ address: OWNER_ADDRESS })
+					case 'blockNumber':
+						return client.getBlockNumber()
+					case 'gasPrice':
+						return client.getGasPrice()
+					case 'chainId':
+						return client.getChainId()
+					default:
+						throw new Error('Unknown RPC quantity test case')
+				}
+			})()
+
+			expect(result).toBe(accepted.expected)
+		})
+	}
 
 	test('publicActions extension preserves wallet default account behavior', async () => {
 		const calls: { method: string; params: unknown }[] = []

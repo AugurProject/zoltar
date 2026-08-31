@@ -19,7 +19,7 @@ const server = Bun.serve({
 						controller.enqueue(
 							new TextEncoder().encode(
 								emitReorg && sequence === 1
-									? `id: ${sequence}\nevent: reorg\ndata: ${JSON.stringify({ chainId: 1, depth: 1, sequence })}\n\n`
+									? `id: ${sequence}\nevent: reorg\ndata: ${JSON.stringify({ chainId: 1, depth: 1, reason: 'chain-reorg', sequence })}\n\n`
 									: `id: ${sequence}\nevent: block\ndata: ${JSON.stringify({ chainId: 1, blockNumber: 23_184_712 + sequence, sequence })}\n\n`,
 							),
 						)
