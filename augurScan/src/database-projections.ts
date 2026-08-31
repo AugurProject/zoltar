@@ -5,6 +5,13 @@ import { type Projection, projectionsFrom } from './projections.ts'
 import type { StoredLog } from './types.ts'
 import { isSupportedUniswapV4Market } from './uniswap.ts'
 
+export type ProjectionProvenance = {
+	readonly indexerRunId: string
+	readonly abiSourceHash: string
+	readonly applicationSourceHash: string
+	readonly projectionSourceHash: string
+}
+
 const unsupportedProjection = (projection: never): never => {
 	throw new Error(`Unsupported database projection: ${String(projection)}`)
 }
@@ -46,7 +53,7 @@ const storeDomainEvent = async (transaction: SQL, chainId: number, item: StoredL
 	if (projection.domain === 'trading') {
 		await transaction`
 			INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.entityIdentity}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, market_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
 		`
 		return
@@ -69,8 +76,7 @@ const storeDomainEvent = async (transaction: SQL, chainId: number, item: StoredL
 		`
 		return
 	}
-	if (projection.domain === 'oracle' || projection.domain === 'risk') return
-	return unsupportedProjection(projection.domain)
+	return
 }
 
 const storeProjection = async (transaction: SQL, chainId: number, item: StoredLog, projection: Projection): Promise<void> => {
@@ -192,6 +198,20 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	return unsupportedProjection(projection)
 }
 
-export const storeLogProjections = async (transaction: SQL, chainId: number, item: StoredLog): Promise<void> => {
-	for (const projection of projectionsFrom(item)) await storeProjection(transaction, chainId, item, projection)
+export const storeLogProjections = async (transaction: SQL, chainId: number, item: StoredLog, provenance?: ProjectionProvenance): Promise<void> => {
+	for (const projection of projectionsFrom(item)) {
+		if (provenance !== undefined) {
+			const interpretationKey = projection.type === 'domainEvent' ? `${projection.type}:${projection.entityType}:${projection.entityIdentity}` : projection.type
+			await transaction`
+				INSERT INTO log_interpretations
+					(chain_id, block_hash, tx_hash, log_index, interpretation_kind, interpretation_key,
+						indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash, interpretation)
+				VALUES (${chainId}, ${item.blockHash}, ${item.transactionHash}, ${item.logIndex}, 'projection', ${interpretationKey},
+					${provenance.indexerRunId}, ${provenance.abiSourceHash}, ${provenance.applicationSourceHash},
+					${provenance.projectionSourceHash}, (${databaseJsonText(projection)}::text)::jsonb)
+				ON CONFLICT DO NOTHING
+			`
+		}
+		await storeProjection(transaction, chainId, item, projection)
+	}
 }

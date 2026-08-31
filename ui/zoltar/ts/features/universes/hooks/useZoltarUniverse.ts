@@ -15,6 +15,7 @@ import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/lib/assertActiveWallet.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
 	const questionCount = BigInt(questions.length)
@@ -364,12 +365,17 @@ export function useZoltarUniverse(
 		zoltarChildUniverseError.value = undefined
 		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
+		let ownsTransaction = false
 		try {
 			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeIndex, universeId: activeUniverseId }))
+				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeIndex, universeId: activeUniverseId })) === false) {
+					zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment blocked', TRANSACTION_ACTION_LOCK_REASON)
+					return
+				}
+				ownsTransaction = true
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('This universe must fork before child universes can be deployed')
 				const transaction = await dependencies.createZoltarChildUniverse(dependencies.createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)
@@ -384,7 +390,7 @@ export function useZoltarUniverse(
 				refreshRequired = true
 			} catch (error) {
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
-				onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
@@ -400,7 +406,7 @@ export function useZoltarUniverse(
 			}
 		} finally {
 			zoltarChildUniversePendingOutcomeIndex.value = undefined
-			onTransactionFinished()
+			if (ownsTransaction) onTransactionFinished()
 		}
 	}
 
