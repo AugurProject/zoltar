@@ -682,9 +682,15 @@ function normalizeRpcHex(value: unknown) {
 
 function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	if (value === undefined || value === null) return fallback
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return BigInt(value)
-	if (typeof value !== 'string') throw new Error('RPC returned an invalid bigint value')
+	if (typeof value === 'bigint') {
+		if (value < 0n) throw new Error('RPC returned an invalid bigint value')
+		return value
+	}
+	if (typeof value === 'number') {
+		if (!Number.isSafeInteger(value) || value < 0) throw new Error('RPC returned an invalid bigint value')
+		return BigInt(value)
+	}
+	if (typeof value !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) throw new Error('RPC returned an invalid bigint value')
 	return BigInt(value)
 }
 
@@ -1266,6 +1272,10 @@ async function retryRateLimited<TValue>(operation: () => Promise<TValue>, option
 }
 
 async function requestTransport<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
+	return await requestTransportOnce<TValue>(transport, parameters)
+}
+
+async function requestTransportWithRateLimitRetries<TValue>(transport: Transport, parameters: ClientRequestParameters): Promise<TValue> {
 	return await retryRateLimited(async () => await requestTransportOnce<TValue>(transport, parameters), {
 		retryCount: transport.retryCount,
 		retryDelay: transport.retryDelay,
@@ -1362,13 +1372,15 @@ function normalizeBlock(value: unknown, includeTransactions: boolean) {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid block')
 	const block = value as Record<string, unknown>
 	if (block['timestamp'] === undefined || block['timestamp'] === null) throw new Error('RPC returned a block without a timestamp')
+	const transactions = block['transactions']
+	if (!Array.isArray(transactions)) throw new Error('RPC returned a block without transactions')
 	return {
 		baseFeePerGas: block['baseFeePerGas'] === undefined || block['baseFeePerGas'] === null ? undefined : normalizeRpcBigInt(block['baseFeePerGas']),
 		hash: block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash']),
 		number: block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number']),
 		parentHash: block['parentHash'] === undefined || block['parentHash'] === null ? undefined : normalizeHash(block['parentHash']),
 		timestamp: normalizeRpcBigInt(block['timestamp']),
-		transactions: Array.isArray(block['transactions']) ? block['transactions'].map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))) : [],
+		transactions: transactions.map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))),
 	} satisfies Block
 }
 
@@ -1458,7 +1470,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
 	let rpcResult: string
 	try {
-		rpcResult = await requestTransport<string>(transport, {
+		rpcResult = await requestTransportWithRateLimitRetries<string>(transport, {
 			method: 'eth_call',
 			params: [
 				buildRpcTransactionRequest({
@@ -1499,7 +1511,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
 	const getCode: PublicClientActions['getCode'] = async parameters => {
 		const result = normalizeRpcHex(
-			await requestTransport<string>(transport, {
+			await requestTransportWithRateLimitRetries<string>(transport, {
 				method: 'eth_getCode',
 				params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 			}),
@@ -1510,7 +1522,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 	return {
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [
 						buildRpcTransactionRequest({
@@ -1531,14 +1543,14 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			),
 		estimateGas: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [buildRpcTransactionRequest(parameters)],
 				}),
 			),
 		getBalance: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getBalance',
 					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
@@ -1546,20 +1558,20 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
 			const blockTag = normalizeBlockTag(parameters?.blockNumber)
-			const block = await requestTransport<unknown>(transport, {
+			const block = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
 			return normalizeBlock(block, includeTransactions)
 		},
-		getBlockNumber: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
+		getBlockNumber: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_blockNumber' })),
+		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
 		getCode,
 		getBytecode: getCode,
-		getGasPrice: async () => normalizeRpcBigInt(await requestTransport<string>(transport, { method: 'eth_gasPrice' })),
+		getGasPrice: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_gasPrice' })),
 		getTransactionCount: async parameters =>
 			normalizeRpcBigInt(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getTransactionCount',
 					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
@@ -1576,7 +1588,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							...(parameters.args === undefined ? {} : { args: parameters.args }),
 							eventName: event.name ?? 'event',
 						}))
-			const rawLogs = await requestTransport<unknown[]>(transport, {
+			const rawLogs = await requestTransportWithRateLimitRetries<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
 					{
@@ -1603,7 +1615,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}) as unknown as readonly RpcLogForEvent<TEvent>[]
 		},
 		getTransaction: async parameters => {
-			const rawTransaction = await requestTransport<unknown>(transport, {
+			const rawTransaction = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionByHash',
 				params: [parameters.hash],
 			})
@@ -1611,7 +1623,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			return normalizeTransaction(rawTransaction)
 		},
 		getTransactionReceipt: async parameters => {
-			const rawReceipt = await requestTransport<unknown>(transport, {
+			const rawReceipt = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getTransactionReceipt',
 				params: [parameters.hash],
 			})
@@ -1643,6 +1655,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 			const decoded = decodeFunctionOutput(rawResult.abiItem, rawResult.data)
 			if (!Array.isArray(decoded)) throw new Error('Unexpected multicall response')
+			if (decoded.length !== parameters.contracts.length) throw new Error(`Multicall returned ${decoded.length.toString()} results for ${parameters.contracts.length.toString()} calls`)
 
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
@@ -1855,7 +1868,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 		call: async parameters => {
 			const account = parameters.account ?? normalizedAccount
 			const data = normalizeRpcHex(
-				await requestTransport<string>(transport, {
+				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_call',
 					params: [
 						buildRpcTransactionRequest({
@@ -1884,7 +1897,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 		sendRawTransaction: async parameters => {
 			try {
 				return normalizeHash(
-					await requestTransport<string>(transport, {
+					await requestTransportWithRateLimitRetries<string>(transport, {
 						method: 'eth_sendRawTransaction',
 						params: [parameters.serializedTransaction],
 					}),

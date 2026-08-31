@@ -99,7 +99,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Only coord');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'Unauthorized');
 		_requireValidPrice();
 		_;
 	}
@@ -158,14 +158,14 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 	}
 
-	// Only parent pools with a deployed escalation game should freeze their collateralized
-	// operations once that game has resolved. Child pools inherit finalized outcomes from
-	// fork routing but must stay operational after migration/truth-auction settlement.
+	// A child with an inherited fixed outcome stays operational for settlement and redemption,
+	// but its finalized question must still freeze collateralized operations.
 	function isEscalationResolved() public view returns (bool) {
-		if (address(escalationGame) == address(0x0)) return false;
 		return
-			ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
-			BinaryOutcomes.BinaryOutcome.None;
+			hasInheritedForkOutcome ||
+			(address(escalationGame) != address(0x0) &&
+				ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) !=
+					BinaryOutcomes.BinaryOutcome.None);
 	}
 
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
@@ -314,7 +314,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
-		require(!isEscalationResolved(), 'Resolved');
+		if (isEscalationResolved()) revert();
 		updateVaultFees(vault);
 		if (address(escalationGame) != address(0x0)) {
 			require(escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Escrow');
@@ -443,7 +443,9 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
-		require(!isEscalationResolved(), 'Resolved');
+		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
+		if (ordinaryEscalationGameStarted) revert();
+		if (isEscalationResolved()) revert();
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		updateVaultFees(msg.sender);
@@ -494,7 +496,7 @@ contract SecurityPool is SecurityPoolStorage {
 	{
 		// Pool execution uses the live backing rate so the queue-time pool totals in
 		// request.snapshot remain reconstruction evidence rather than execution inputs.
-		require(!isEscalationResolved(), 'Resolved');
+		if (isEscalationResolved()) revert();
 		updateVaultFees(request.targetVault);
 		updateVaultFees(request.receiverVault);
 
@@ -525,7 +527,7 @@ contract SecurityPool is SecurityPoolStorage {
 		// Child pools mint complete sets only after migration and truth-auction
 		// accounting have restored `SystemState.Operational`.
 		require(!awaitingForkContinuation, 'Fork await');
-		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
+		if (msg.value == 0 || isEscalationResolved()) revert();
 		_requireValidPrice();
 		updateSettlementCollateral();
 		uint256 completeSetsToMintAttoShares = attoEthToAttoShares(msg.value);
@@ -577,21 +579,21 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function redeemRepFromVault(address vault) external {
+		require(msg.sender == vault, 'Unauthorized');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		uint256 disputeStakedAttoRep =
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
 		require(disputeStakedAttoRep == 0, 'Escrow locked');
 		updateVaultFees(vault);
-		uint256 vaultBackingUnits = securityVaults[vault].repBackingUnits;
-		uint256 backingUnitsToRedeem = vaultBackingUnits;
+		uint256 backingUnitsToRedeem = securityVaults[vault].repBackingUnits;
 		uint256 attoRepAmount = backingUnitsToAttoRep(backingUnitsToRedeem);
 		require(attoRepAmount > 0, 'No redeemable REP');
 		securityVaults[vault].repBackingUnits = 0;
 		totalRepBackingUnits -= backingUnitsToRedeem;
-		_registerVault(vault);
+		// A positive claim was registered when its backing units were created or transferred.
 		IERC20(address(repToken)).safeTransfer(vault, attoRepAmount);
-		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
+		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, 0, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
 	}
 
@@ -621,12 +623,13 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
-		require(!hasInheritedForkOutcome, 'Resolved');
+		if (hasInheritedForkOutcome) revert();
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question active');
 			escalationGame = escalationGameFactory.deployEscalationGame(initialEscalationGameDepositAttoRep, zoltar.getNonDecisionThresholdAttoRep(universeId));
+			ordinaryEscalationGameStarted = true;
 			emit EscalationGameSet(escalationGame);
 		} else {
 			require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork paused');
@@ -692,7 +695,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function activateForkMode() external onlyForker {
-		require(!hasInheritedForkOutcome, 'Resolved');
+		if (hasInheritedForkOutcome) revert();
 		systemState = SystemState.PoolForked;
 		updateSettlementCollateral();
 		uint256 repTransferredAttoRep = repToken.balanceOf(address(this));
