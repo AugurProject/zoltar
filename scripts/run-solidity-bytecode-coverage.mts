@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { runBunTestProcess } from './run-bun-test-process.mts'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath } from './test-discovery.mts'
 
 const coverageDirectory = join(process.cwd(), 'solidity', 'coverage')
@@ -164,15 +165,13 @@ if (import.meta.main) {
 		const shardIndex = testShards.indexOf(testShard) + 1
 		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
 		await rm(coverageDirectory, { recursive: true, force: true })
-		const shardProcess = Bun.spawn(['bun', 'test', '--timeout', '300000', ...testShard.map(toBunTestPath)], {
+		const exitCode = await runBunTestProcess({
+			cmd: [process.execPath, 'test', '--timeout', '300000', ...testShard.map(toBunTestPath)],
 			env: {
 				...Bun.env,
 				SOLIDITY_BYTECODE_COVERAGE: '1',
 			},
-			stdout: 'inherit',
-			stderr: 'inherit',
 		})
-		const exitCode = await shardProcess.exited
 		if (exitCode !== 0) globalThis.process.exit(exitCode)
 		const shardSummary = await readCoverageSummary()
 		if (shardSummary === undefined) throw new Error(`Coverage shard ${shardIndex} did not write a summary`)
