@@ -1,6 +1,7 @@
 import * as process from 'node:process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { runBunTestProcess } from './run-bun-test-process.mts'
 import { createBalancedTestShards, discoverTestFilesForDomain, isTestDomain, toBunTestPath, type TestDomain, type WeightedTestFile } from './test-discovery.mts'
 import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeights, readTestTimingHistory, writeTestTimingObservation } from './test-timings.mts'
 
@@ -143,14 +144,9 @@ if (import.meta.main) {
 	if (junitPath !== undefined) await fs.mkdir(path.dirname(junitPath), { recursive: true })
 	const startedAt = performance.now()
 	const preloadPath = domain === 'solidity' ? './bun-test-setup-solidity.ts' : './bun-test-setup-ui.ts'
-	const child = Bun.spawn({
+	const exitCode = await runBunTestProcess({
 		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
-		stderr: 'inherit',
-		stdin: 'inherit',
-		stdout: 'inherit',
 	})
-
-	const exitCode = await child.exited
 	const elapsedSeconds = (performance.now() - startedAt) / 1000
 	if (timingOutputPath !== undefined && junitPath !== undefined) {
 		await writeTestTimingObservation(timingOutputPath, junitPath, elapsedSeconds, selectedShard.files, getTimingContextPaths(domain))

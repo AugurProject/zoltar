@@ -1,5 +1,6 @@
 import { availableParallelism } from 'node:os'
 import { cleanupFoundryAnvilState } from './cleanup-foundry-anvil-state.mts'
+import { runBunTestProcess } from './run-bun-test-process.mts'
 import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, toBunTestPath } from './test-discovery.mts'
 
 const defaultParallelism = getDefaultTestParallelism(availableParallelism())
@@ -57,13 +58,9 @@ if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
 	}
 }
 
-const child = Bun.spawn({
+const exitCode = await runBunTestProcess({
 	cmd: [process.execPath, ...args],
 	env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
-	stderr: 'inherit',
-	stdin: 'inherit',
-	stdout: 'inherit',
 })
-const exitCode = await child.exited
 await cleanupStaleAnvilState('after')
 process.exit(exitCode)

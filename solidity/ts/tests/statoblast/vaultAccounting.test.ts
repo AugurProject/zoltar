@@ -591,10 +591,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame shares the binding-capital reward pool across all reward-eligible winning deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -679,10 +678,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('losing escalation deposits stay locked and reduce the losing vaults available REP claim after winner withdrawal', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -862,14 +860,13 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame gives later safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, firstWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
@@ -935,14 +932,13 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame shares the full reward pool across the actual winning principal when total winning principal stays below the reward cap', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, firstWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
@@ -1005,10 +1001,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('external fork blocks parent escalation withdrawals and preserves escrowed REP', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -1086,10 +1081,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame rejects none outcome after an external fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
@@ -1117,10 +1111,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '../../protocol/securityPools.js'
+import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '../../protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '../../protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -28,6 +28,40 @@ const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCap
 })
 
 describe('securityPools protocol client', () => {
+	test('revalidates ordinary vault admission against latest chain time while keeping genuine continuations open', async () => {
+		let currentTimestamp = 100n
+		let escalationGame = zeroAddress
+		let forkContinuation = false
+		const questionDataAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+			readContract: async request => {
+				switch (request.functionName) {
+					case 'escalationGame':
+						return escalationGame
+					case 'forkContinuation':
+						return forkContinuation
+					case 'questionData':
+						return questionDataAddress
+					case 'questionId':
+						return 1n
+					case 'getQuestionEndDate':
+						return 100n
+					default:
+						throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				}
+			},
+		})
+
+		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
+		currentTimestamp = 101n
+		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
+		escalationGame = escalationGameAddress
+		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
+		forkContinuation = true
+		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(false)
+	})
+
 	test('loads selected child deployments in bounded canonical log ranges', async () => {
 		const headHash = `0x${'11'.repeat(32)}` as const
 		const requestedRanges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
@@ -149,6 +183,7 @@ describe('securityPools protocol client', () => {
 		expect(pool.parent).toBe(zeroAddress)
 		expect(pool.minimumSecurityBondDebtAttoEth).toBe(7n * 10n ** 18n)
 		expect(pool.minimumVaultRepDepositAttoRep).toBe(30n * 10n ** 18n)
+		expect(pool.hasForkContinuationEscalationGame).toBe(false)
 		expect(pool.ordinaryEscalationGameStarted).toBe(true)
 		expect(pool.forkOutcome).toBe('none')
 		expect(pool.hasForkActivity).toBe(false)

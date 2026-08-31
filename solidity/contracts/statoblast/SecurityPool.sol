@@ -46,6 +46,7 @@ contract SecurityPool is SecurityPoolStorage {
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
 	uint256 public immutable initialEscalationGameDepositAttoRep;
+	uint256 private immutable vaultAdmissionEndTime;
 
 	Zoltar public immutable zoltar;
 	ISecurityPool public immutable parent;
@@ -129,6 +130,7 @@ contract SecurityPool is SecurityPoolStorage {
 		securityPoolForker = _securityPoolForker;
 		truthAuction = _truthAuction;
 		questionData = _questionData;
+		vaultAdmissionEndTime = _questionData.getQuestionEndDate(_questionId);
 		if (address(parent) == address(0x0)) {
 			// origin universe never does truthAuction
 			systemState = SystemState.Operational;
@@ -444,8 +446,8 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
 		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
-		if (ordinaryEscalationGameStarted) revert();
 		if (isEscalationResolved()) revert();
+		if (block.timestamp >= vaultAdmissionEndTime && !postEndVaultAdmissionAllowed) revert();
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		updateVaultFees(msg.sender);
@@ -629,7 +631,6 @@ contract SecurityPool is SecurityPoolStorage {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'Question active');
 			escalationGame = escalationGameFactory.deployEscalationGame(initialEscalationGameDepositAttoRep, zoltar.getNonDecisionThresholdAttoRep(universeId));
-			ordinaryEscalationGameStarted = true;
 			emit EscalationGameSet(escalationGame);
 		} else {
 			require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork paused');
@@ -717,8 +718,10 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external onlyForker {
-		require(address(escalationGame) == address(0x0), 'Game set');
+		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
+		if (address(escalationGame) != address(0x0)) revert();
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome);
+		postEndVaultAdmissionAllowed = true;
 		emit EscalationGameSet(escalationGame);
 	}
 

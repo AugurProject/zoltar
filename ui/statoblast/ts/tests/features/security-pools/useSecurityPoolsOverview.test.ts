@@ -59,6 +59,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(questionId),
 		migratedAttoRep: 0n,
+		hasForkContinuationEscalationGame: false,
 		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
 		questionId,

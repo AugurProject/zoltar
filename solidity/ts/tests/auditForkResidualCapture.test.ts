@@ -62,9 +62,6 @@ describe('Fork-continuation residual settlement regression', () => {
 	})
 
 	test('burns external-fork continuation residual instead of assigning it to a late depositor', async () => {
-		const questionEnd = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(questionEnd + 10_000n)
-
 		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		const nonDecisionThreshold = forkThreshold / 2n + (forkThreshold % 2n)
 		const invalidPrincipal = nonDecisionThreshold - 3n
@@ -76,6 +73,8 @@ describe('Fork-continuation residual settlement regression', () => {
 		const parentRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, parentVaultBeforeTopUp.repBackingUnits)
 		assert.ok(parentRepBeforeTopUp < totalPrincipal, 'fixture vault must fit below the audit target')
 		await approveAndDepositRepToVault(client, totalPrincipal - parentRepBeforeTopUp, questionId)
+		const questionEnd = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(questionEnd + 10_000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, invalidPrincipal)
