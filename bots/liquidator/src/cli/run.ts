@@ -5,7 +5,7 @@ import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { availableExecutionObservations } from '#monitoring/execution-quorum'
+import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -527,19 +527,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint)) }
 						}),
 					)
-					const available = availableExecutionObservations(
-						'liquidation execution snapshot',
-						settled,
-						observation => ({
-							endpoint: observation.endpoint,
-							value: {
-								pools: observation.scan.pools,
-								universes: observation.scan.universes,
-								walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
-							},
-						}),
-						settings.connectivity.rpcQuorum,
-					)
+					const available = availableExecutionObservations('liquidation execution snapshot', settled, liquidationExecutionSnapshotObservation, settings.connectivity.rpcQuorum)
 					const selected = available[0]
 					if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
 					client = selected.client
@@ -547,8 +535,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				} else {
 					primary = await scanPools(client, settings, state.wallet, poolMonitorIndexFor(settings.connectivity.readRpcUrl))
 				}
-				const scannedBlock = await client.getBlock()
-				if (scannedBlock.hash === undefined || scannedBlock.number === undefined) throw new Error('Latest block is missing canonical identity')
+				const scannedBlock = primary.block
 				const scannedBlockHash = scannedBlock.hash
 				const scannedBlockNumber = scannedBlock.number
 				const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlockHash, number: scannedBlockNumber }, state, previousBlockNumber => canonicalBlockHash(settings, previousBlockNumber, readPool))
