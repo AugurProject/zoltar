@@ -32,6 +32,7 @@ import {
 	publicActions,
 	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
+	requestRpc,
 	toHex,
 	type EIP1193Provider,
 	type BlockTransaction,
@@ -1836,6 +1837,17 @@ describe('shared ethereum compatibility layer', () => {
 		})
 
 		await expect(client.sendTransaction({ to: RECIPIENT_ADDRESS })).rejects.toThrow('rate limit exceeded')
+		expect(attempts).toBe(1)
+	})
+
+	test('raw RPC requests do not retry methods with unknown semantics', async () => {
+		let attempts = 0
+		const provider = createProvider(() => {
+			attempts += 1
+			throw { code: 429, message: 'rate limit exceeded' }
+		}, [])
+
+		await expect(requestRpc(custom(provider, { retryDelay: 0 }), { method: 'wallet_switchEthereumChain' })).rejects.toThrow('rate limit exceeded')
 		expect(attempts).toBe(1)
 	})
 
