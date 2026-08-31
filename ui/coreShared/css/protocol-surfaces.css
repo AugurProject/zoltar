@@ -1728,6 +1728,17 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 1rem;
 }
 
+.reporting-wallet-action-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	width: min(100%, 28rem);
+}
+
+.reporting-wallet-action-row > .tx-action {
+	min-width: 0;
+}
+
 .withdraw-deposit-list {
 	display: grid;
 	gap: 0.8rem;

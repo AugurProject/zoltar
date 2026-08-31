@@ -117,6 +117,18 @@ const deploymentFile = (value: unknown, source: string): DeploymentFile => {
 	}
 }
 
+const manifestEntries = (value: unknown, source: string): [string, string, string][] => {
+	if (!isRecord(value) || !Array.isArray(value['contracts'])) throw new Error(`${source} has no contracts array`)
+	return value['contracts'].map((entry, index) => {
+		if (!Array.isArray(entry) || entry.length !== 3) throw new Error(`${source}.contracts[${index}] must be an address, label, and kind tuple`)
+		return [
+			requiredString(entry[0], `${source}.contracts[${index}][0]`),
+			requiredString(entry[1], `${source}.contracts[${index}][1]`),
+			requiredString(entry[2], `${source}.contracts[${index}][2]`),
+		]
+	})
+}
+
 const deploymentKind: Readonly<Record<string, string>> = {
 	deploymentStatusOracle: 'deploymentStatusOracle',
 	escalationGameClaimDelegate: 'escalationGameClaimDelegate',
@@ -145,8 +157,11 @@ for (const networkId of ['mainnet', 'sepolia']) {
 		return kind === undefined ? [] : [[address, label, kind] as [string, string, string]]
 	})
 	configured.push([deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'], [deployment.network.wethAddress, 'Wrapped Ether', 'weth'])
-	const unique = [...new Map(configured.map((entry) => [entry[0].toLowerCase(), entry])).values()]
-	await Bun.write(path.join(manifestsRoot, `${networkId}.json`), `${JSON.stringify({ contracts: unique }, undefined, 2)}\n`)
+	const manifestPath = path.join(manifestsRoot, `${networkId}.json`)
+	const historical = manifestEntries(JSON.parse(await readFile(manifestPath, 'utf8')), manifestPath)
+	const unique = [...new Map([...historical, ...configured].map((entry) => [entry[0].toLowerCase(), entry])).values()]
+	const serializedContracts = unique.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
+	await Bun.write(manifestPath, `{\n\t"contracts": [\n${serializedContracts}\n\t]\n}\n`)
 }
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)

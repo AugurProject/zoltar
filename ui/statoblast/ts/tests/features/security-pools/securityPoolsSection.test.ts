@@ -60,6 +60,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 	return {
 		accountState: createAccountState(),
 		loadingReportingDetails: false,
+		onApproveReportingRep: () => undefined,
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,
@@ -199,6 +200,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
+		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
