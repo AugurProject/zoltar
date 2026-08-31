@@ -101,12 +101,11 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const questionId = getQuestionId()
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
@@ -213,9 +212,9 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const questionId = getQuestionId()
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
 		const repBalanceAttoRep = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		if (strayRepBeforeFork > 0n) await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRepBeforeFork)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)

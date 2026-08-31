@@ -887,7 +887,6 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
 			await driver.waitForBodyText('Open pool')
-			await driver.clickButton('+1 year')
 			const reportingPoolOpened = await driver.evaluate(
 				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
@@ -908,6 +907,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
 			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+			await driver.clickButton('+1 year')
 			await driver.clickButton('Price Oracle')
 			await driver.waitForButtonEnabled('Request new price')
 			await driver.clickButton('Request new price')
@@ -997,7 +997,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			if (captureVaultLockedQaScreenshots) {
 				await driver.clickButton('Dismiss')
 				await driver.clickButton('Vaults')
-				await driver.waitForBodyText('New vault REP backing is unavailable after ordinary escalation starts.')
+				await driver.waitForBodyText('New vault REP backing is unavailable after this question ends.')
 				await driver.waitForBodyWithoutText('Loading vault details…')
 				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
 				if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)

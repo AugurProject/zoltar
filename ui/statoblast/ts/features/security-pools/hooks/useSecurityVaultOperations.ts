@@ -8,6 +8,7 @@ import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracl
 import { approveErc20 } from '@zoltar/ui-zoltar/protocol/tokenActions.js'
 import {
 	depositRepToVaultToSecurityPool,
+	isSecurityPoolVaultAdmissionClosed,
 	loadCoordinatorInitialReportFundingRequirement,
 	loadErc20Allowance,
 	loadErc20Balance,
@@ -33,6 +34,7 @@ import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } fro
 import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/lib/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -57,6 +59,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) => Promise<SecurityVaultActionResult>
+	isSecurityPoolVaultAdmissionClosed: (securityPoolAddress: Address) => Promise<boolean>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
@@ -72,6 +75,7 @@ const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsD
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
 	depositRepToVaultToSecurityPool: async (client, securityPoolAddress, amount, targetHealthFactorBps) => await depositRepToVaultToSecurityPool(client, securityPoolAddress, amount, targetHealthFactorBps),
+	isSecurityPoolVaultAdmissionClosed: async securityPoolAddress => await isSecurityPoolVaultAdmissionClosed(createConnectedReadClient(), securityPoolAddress),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadErc20Balance: async (tokenAddress, accountAddress) => await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
@@ -388,7 +392,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
 				const approvalAmount = amount ?? parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
+				const vaultAdmissionClosed = await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
+				if (vaultAdmissionClosed) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
 			'Failed to approve REP',
@@ -416,6 +422,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
+				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
+				if (!isCurrentSelection()) return undefined
 				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',

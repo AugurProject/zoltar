@@ -17,18 +17,18 @@ function isActionEnabledForProvidedAxes({
 	actionId,
 	forkStage,
 	lifecycleState,
-	ordinaryEscalationGameStarted,
 	reportingStage,
 	universeHasForked,
+	vaultAdmissionClosed,
 }: {
 	actionId: SecurityPoolActionId
 	forkStage: SecurityPoolForkStage | undefined
 	lifecycleState: SecurityPoolLifecycleState | undefined
-	ordinaryEscalationGameStarted: boolean
 	reportingStage: SecurityPoolReportingStage | undefined
 	universeHasForked: boolean
+	vaultAdmissionClosed: boolean
 }) {
-	if (ordinaryEscalationGameStarted && actionId === 'depositRepToVault') return false
+	if (vaultAdmissionClosed && actionId === 'depositRepToVault') return false
 	if (universeHasForked && UNIVERSE_FORKED_DISABLE.includes(actionId)) return false
 	if (universeHasForked && UNIVERSE_FORKED_ENABLE.includes(actionId)) return true
 	if (lifecycleState !== undefined && isLifecycleAction(actionId) && !ENABLED_ACTIONS_BY_LIFECYCLE[lifecycleState].includes(actionId)) return false
@@ -37,8 +37,12 @@ function isActionEnabledForProvidedAxes({
 	return true
 }
 
+export function deriveVaultAdmissionClosed({ currentTimestamp, hasForkContinuationEscalationGame, questionEndTime }: { currentTimestamp: bigint | undefined; hasForkContinuationEscalationGame: boolean | undefined; questionEndTime: bigint | undefined }) {
+	return currentTimestamp !== undefined && questionEndTime !== undefined && currentTimestamp >= questionEndTime && hasForkContinuationEscalationGame !== true
+}
+
 export function evaluateSecurityPoolState(input: SecurityPoolStateInput): SecurityPoolStateModel {
-	const { forkStage, lifecycleState, ordinaryEscalationGameStarted = false, reportingStage, universeHasForked } = input
+	const { forkStage, lifecycleState, reportingStage, universeHasForked, vaultAdmissionClosed = false } = input
 
 	const actions = {} as Record<SecurityPoolActionId, SecurityPoolActionState>
 	for (const actionId of ALL_SECURITY_POOL_ACTIONS) {
@@ -47,9 +51,9 @@ export function evaluateSecurityPoolState(input: SecurityPoolStateInput): Securi
 				actionId,
 				forkStage,
 				lifecycleState,
-				ordinaryEscalationGameStarted,
 				reportingStage,
 				universeHasForked,
+				vaultAdmissionClosed,
 			}),
 		}
 	}
@@ -58,8 +62,8 @@ export function evaluateSecurityPoolState(input: SecurityPoolStateInput): Securi
 		actions,
 		forkStage,
 		lifecycleState,
-		ordinaryEscalationGameStarted,
 		reportingStage,
 		universeHasForked,
+		vaultAdmissionClosed,
 	}
 }

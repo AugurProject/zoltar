@@ -270,6 +270,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
+		hasForkContinuationEscalationGame: false,
 		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
 		questionId: '0x01',
