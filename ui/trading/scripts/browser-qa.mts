@@ -121,6 +121,13 @@ const selectSeededMarket = `(async () => {
 	return false
 })()`
 const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && !document.body.textContent?.includes('Loading...') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.brand')?.textContent?.includes('Statoblast trading') === true && document.querySelector('.network-pill')?.textContent?.includes('Deployment verified') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+const waitForRouteHeading = (heading: string) => `(async () => {
+	for (let attempt = 0; attempt < 600; attempt++) {
+		if ((${commonAssertion}) && document.querySelector('#main-content .route-header h2')?.textContent === '${heading}') return true
+		await new Promise(resolve => setTimeout(resolve, 100))
+	}
+	throw new Error('The ${heading} route did not become ready')
+})()`
 
 const scenarios = [
 	...(
@@ -159,7 +166,43 @@ const scenarios = [
 		height,
 		path: `${simulationPath}#/markets`,
 		evaluate: `(async () => { if (!(await (${selectSeededMarket}))) return false; const link = document.querySelector('a[href="#/liquidity"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); for (let attempt = 0; attempt < 100; attempt++) { if (location.hash === '#/liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')) return true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
-		assertExpression: `(${commonAssertion}) && location.hash === '#/liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+		assertExpression: `(${commonAssertion}) && location.hash === '#/liquidity' && document.title === 'Liquidity · Statoblast trading' && document.querySelector('#main-content .route-header h2')?.textContent === 'Liquidity' && document.querySelector('a[aria-current="page"]')?.textContent === 'Liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+	})),
+	...(
+		[
+			['simulation-portfolio-desktop', 1440, 900],
+			['simulation-portfolio-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/portfolio`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Portfolio')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Discovering SecurityPools') && document.querySelector('.universe-selector select')?.textContent?.includes('Genesis universe') === true) return document.title === 'Portfolio · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Portfolio' && document.querySelector('#main-content .portfolio-section > .section-heading h2')?.textContent === 'Positions' && document.querySelector('.section .portfolio-groups > .operation-block') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+	})),
+	...(
+		[
+			['simulation-help-desktop', 1440, 900],
+			['simulation-help-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/help`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('How the market works')}); return document.title === 'Help · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Help' && document.querySelectorAll('.explanation-flow article').length === 4 })()`,
+	})),
+	...(
+		[
+			['simulation-deploy-desktop', 1440, 900],
+			['simulation-deploy-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/deploy`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Deploy')}); for (let attempt = 0; attempt < 100; attempt++) { if (document.querySelector('.deployment-setup__status')?.textContent?.includes('Deployment complete') === true) { const panel = document.querySelector('.deployment-settings__panel')?.getBoundingClientRect(); const routeHeading = document.querySelector('#main-content .route-header h2')?.getBoundingClientRect(); const surfacesDoNotOverlap = panel !== undefined && routeHeading !== undefined && (panel.bottom <= routeHeading.top || panel.top >= routeHeading.bottom || panel.right <= routeHeading.left || panel.left >= routeHeading.right); return document.title === 'Deploy · Statoblast trading' && surfacesDoNotOverlap; } await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	{
 		name: 'simulation-scenario-navigation-desktop',
@@ -250,6 +293,7 @@ try {
 		if (injectedFailure === 'page-console') await command('Runtime.evaluate', { expression: `console.error('injected Trading QA page failure')` })
 		if (injectedFailure === 'worker-runtime') await command('Runtime.evaluate', { expression: `new Worker(URL.createObjectURL(new Blob(["console.error('injected Trading QA worker failure'); throw new Error('injected Trading QA worker failure')"], { type: 'text/javascript' })))` })
 		if (injectedFailure !== undefined) await Bun.sleep(500)
+		await Bun.sleep(500)
 		const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
 		if (typeof screenshot.data !== 'string') throw new Error(`Screenshot data missing for ${scenario.name}`)
 		await fs.writeFile(`${outputDirectory}/${scenario.name}.png`, Buffer.from(screenshot.data, 'base64'))
