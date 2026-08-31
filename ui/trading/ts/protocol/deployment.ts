@@ -1,4 +1,5 @@
 import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/shared/ethereum'
+import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 
@@ -30,8 +31,9 @@ export type TradingDeploymentPlan = Readonly<{
 }>
 
 type TradingDeploymentWallet = Readonly<{
+	onTransactionSubmitted?: SubmittedTransactionClient['onTransactionSubmitted']
 	sendTransaction(transaction: Readonly<{ data: Hex; to: Address }>): Promise<Hash>
-	waitForTransactionReceipt(parameters: Readonly<{ hash: Hash }>): Promise<Readonly<{ status: 'success' | 'reverted' }>>
+	waitForTransactionReceipt: SubmittedTransactionClient<Readonly<{ status: 'success' | 'reverted' }>>['waitForTransactionReceipt']
 }>
 
 const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
@@ -144,9 +146,9 @@ export async function deployTradingStep(
 	await beforeSend()
 	const hash = await walletClient.sendTransaction({ to: plan.core.proxyDeployer, data: step.data })
 	onSubmitted(hash)
-	const receipt = await walletClient.waitForTransactionReceipt({ hash })
+	const { hash: resolvedHash, receipt } = await waitForSubmittedTransactionReceipt(walletClient, hash, { allowRevertedReceipt: true, onTransactionReplaced: onSubmitted })
 	if (receipt.status !== 'success') throw new Error(`${step.label} deployment reverted`)
 	const refreshed = await waitForInstalledTradingStep(publicClient, plan, step, waitForRpcState)
 	if (!refreshed[step.id]) throw new Error(`${step.label} deployment confirmed without installing the expected contract`)
-	return hash
+	return resolvedHash
 }

@@ -64,11 +64,12 @@ function emptyVault(address: Address): VaultPosition {
 	}
 }
 
-async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
+async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
 	const root = await client.readContract({
 		abi: zoltarAbi,
 		address: settings.deployment.zoltar,
 		args: [0n],
+		blockNumber,
 		functionName: 'universes',
 	})
 	const universes: UniverseObservation[] = [
@@ -91,6 +92,7 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings) {
 				abi: zoltarAbi,
 				address: settings.deployment.zoltar,
 				args: [universe.id, start, 100n],
+				blockNumber,
 				functionName: 'getDeployedChildUniverses',
 			})
 			if (outcomeIndexes.length !== childUniverseIds.length || childUniverseIds.length !== children.length) {
@@ -257,9 +259,7 @@ export async function resolveOperatorVault(
 	return current
 }
 
-async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex) {
-	const block = await client.getBlock()
-	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
+async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex, block: Readonly<{ hash: `0x${string}`; number: bigint }>) {
 	const blockNumber = block.number
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.priceOracleManagerAndOperatorQueuer)
@@ -285,29 +285,31 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		totalAttoRep,
 	] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getVaultCount' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'currentRetentionRate' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'currentRetentionRate' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'totalRepBackingUnits' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'escalationGame' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'isPriceValid' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastPrice' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'lastSettlementTimestamp' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'minLiquidationPriceDistanceBps' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'minimumSecurityBondDebtAttoEth' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'minimumToken1ReportAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'minimumVaultRepDepositAttoRep' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'isPriceValid' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastPrice' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastSettlementTimestamp' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'minimumSecurityBondDebtAttoEth' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'minimumVaultRepDepositAttoRep' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getPoolAccountingSnapshot' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'pendingReportId' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'pendingReportSponsor' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'repToken' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getRequestPriceCostAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'securityPoolForker' }),
-		client.readContract({ abi: securityPoolAbi, address, args: [], functionName: 'systemState' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportId' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportSponsor' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'repToken' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'securityPoolForker' }),
+		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 	])
 	const settlementCollateralAttoEth = poolAccountingSnapshot.settlementCollateralAttoEth
 	const totalCapacityOwnershipAttoRep = poolAccountingSnapshot.totalCapacityOwnershipAttoRep
-	const forkData = await client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], functionName: 'forkData' })
-	const forkActivationTime = forkData[11]
+	const [forkData, forkActivationTime] = await Promise.all([
+		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
+		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'getForkActivationTime' }),
+	])
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
 	const normalizedEscalationGame = getAddress(escalationGame)
 	let vaultIndex = monitorIndex.vaultsByPool.get(address.toLowerCase())
@@ -318,13 +320,13 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, { hash: block.hash, number: blockNumber })
 	const vaults = vaultRefresh.vaults
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getActiveStagedOperationCount' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], functionName: 'getPendingSettlementOperationIds' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getActiveStagedOperationCount' }),
+		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getPendingSettlementOperationIds' }),
 	])
 	const stagedOperations: StagedOperationObservation[] = []
 	for (let start = 0n; start < stagedOperationCount; start += 100n) {
 		const pageCount = stagedOperationCount - start < 100n ? stagedOperationCount - start : 100n
-		const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: manager, args: [start, pageCount], functionName: 'getActiveStagedOperations' })
+		const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: manager, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
 		for (const [index, operation] of operations.entries()) {
 			const id = ids[index]
 			if (id === undefined) throw new Error('Coordinator returned mismatched staged operation arrays')
@@ -491,10 +493,11 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 }
 
 export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex()) {
-	const universes = await loadUniverses(client, settings)
-	const deploymentBlock = await client.getBlock()
-	if (deploymentBlock.hash === undefined || deploymentBlock.number === undefined) throw new Error('Security pool deployment scan block is missing canonical identity')
-	const deployments = await loadRelevantPoolDeployments(client, settings, { hash: deploymentBlock.hash, number: deploymentBlock.number })
+	const block = await client.getBlock()
+	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
+	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }
+	const universes = await loadUniverses(client, settings, snapshotBlock.number)
+	const deployments = await loadRelevantPoolDeployments(client, settings, snapshotBlock)
 	const relevantPoolKeys = new Set(deployments.map(deployment => deployment.securityPool.toLowerCase()))
 	for (const poolKey of monitorIndex.vaultsByPool.keys()) {
 		if (!relevantPoolKeys.has(poolKey)) monitorIndex.vaultsByPool.delete(poolKey)
@@ -504,7 +507,7 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	}
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
-		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex)
+		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex, snapshotBlock)
 		validatePoolUniverseRep(pool, universes)
 		loadedPools.push(pool)
 	}
@@ -522,11 +525,12 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 					abi: erc20Abi,
 					address: token,
 					args: [wallet],
+					blockNumber: snapshotBlock.number,
 					functionName: 'balanceOf',
 				}),
 			)
 		}
 	}
-	if ((await client.getBlock({ blockNumber: deploymentBlock.number })).hash?.toLowerCase() !== deploymentBlock.hash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
-	return { pools, universes, walletRepByToken }
+	if ((await client.getBlock({ blockNumber: snapshotBlock.number })).hash?.toLowerCase() !== snapshotBlock.hash.toLowerCase()) throw new Error('Security pool snapshot changed during discovery')
+	return { block: snapshotBlock, pools, universes, walletRepByToken }
 }
