@@ -119,11 +119,13 @@ Native loopback dashboards and the supplied host-loopback Compose setup need no
 password. Outside that Compose setup, if `runtime.uiHost` is `0.0.0.0`, set
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` to at least 16 characters before startup. For a
 custom network-bound container, remove `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED`
-and explicitly pass the password into the container. The browser's HTTP Basic prompt
-uses username `operator` and that password. Keep the listener on a trusted network
+and explicitly pass the password and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY` into the
+container. Set the public authority to the exact browser authority, including the port
+when the browser URL includes one, for example `10.0.0.4:4183`. The browser's HTTP
+Basic prompt uses username `operator` and that password. Keep the listener on a trusted network
 or behind an authenticated TLS proxy: Basic authentication protects access but does
 not encrypt the private key or settings in transit. Mutable requests also retain
-same-origin and fixed-authority checks, and JSON request bodies are capped at 1 MiB.
+same-origin and configured-authority checks, and JSON request bodies are capped at 1 MiB.
 
 Keep `runtime.execute` false until the factory, WETH, signer, selected pools, RPC
 endpoints, gas limits, and REP limits have been reviewed. When execution is
