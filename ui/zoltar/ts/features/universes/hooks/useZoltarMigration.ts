@@ -16,6 +16,7 @@ import { parseRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TransactionLifecycleParameters, WriteOperationContext, ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 type UseZoltarMigrationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -75,6 +76,7 @@ export function useZoltarMigration({
 	const runZoltarMigrationAction = useCallback(
 		async ({ actionName, action, errorFallback, refreshAfter, requiresOutcomeIndexes, resolveAmount = amount => amount }: RunZoltarMigrationActionParameters) => {
 			let writeFailed = false
+			let ownsTransaction = false
 			if (
 				!requireWallet(
 					accountAddress,
@@ -95,13 +97,20 @@ export function useZoltarMigration({
 
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(
-					createZoltarMigrationTransactionIntent(actionName, {
-						amount: submittedForm.amount,
-						outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
-						universeId: activeUniverseId,
-					}),
-				)
+				if (
+					onTransactionRequested(
+						createZoltarMigrationTransactionIntent(actionName, {
+							amount: submittedForm.amount,
+							outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
+							universeId: activeUniverseId,
+						}),
+					) === false
+				) {
+					writeFailed = true
+					zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), TRANSACTION_ACTION_LOCK_REASON)
+					return
+				}
+				ownsTransaction = true
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
@@ -115,12 +124,12 @@ export function useZoltarMigration({
 			} catch (error) {
 				const message = formatWriteErrorMessage(error, errorFallback)
 				writeFailed = true
-				onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 			} finally {
 				zoltarMigrationPending.value = false
 				zoltarMigrationActiveAction.value = undefined
-				onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished()
 			}
 
 			try {

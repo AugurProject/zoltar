@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { effectiveAbiSourceHash } from './abi-provenance.ts'
 import {
 	type Abi,
 	type AbiEvent,
@@ -70,6 +71,8 @@ const externalAbis: Readonly<Record<string, Abi>> = {
 		'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
 	]),
 }
+
+export const abiSourceHash = effectiveAbiSourceHash(catalogFile.contracts, kindToContractName, externalAbis)
 
 export const abiForKind = (kind: string): Abi | undefined => {
 	const externalAbi = externalAbis[kind]

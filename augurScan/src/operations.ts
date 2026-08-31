@@ -29,6 +29,77 @@ export type LifecycleState = {
 	readonly nextTransition?: string
 }
 
+type ReportFieldChange = {
+	readonly field: string
+	readonly kind: 'added' | 'changed' | 'removed'
+	readonly before?: unknown
+	readonly after?: unknown
+}
+
+type ReportRoundEvidence = Record<string, unknown>
+
+const reportRecord = (value: unknown): Record<string, unknown> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+
+const flattenReportFields = (value: unknown, path: string, fields: Map<string, unknown>): void => {
+	const record = reportRecord(value)
+	const entries = Object.entries(record).toSorted(([left], [right]) => left.localeCompare(right))
+	if (entries.length === 0) {
+		if (path !== '') fields.set(path, value)
+		return
+	}
+	for (const [key, item] of entries) flattenReportFields(item, path === '' ? key : `${path}.${key}`, fields)
+}
+
+const stableReportValue = (value: unknown): string => {
+	if (Array.isArray(value)) return `[${value.map(stableReportValue).join(',')}]`
+	const record = reportRecord(value)
+	if (Object.keys(record).length > 0)
+		return `{${Object.entries(record)
+			.toSorted(([left], [right]) => left.localeCompare(right))
+			.map(([key, item]) => `${JSON.stringify(key)}:${stableReportValue(item)}`)
+			.join(',')}}`
+	return JSON.stringify(value) ?? String(value)
+}
+
+const reportFieldChanges = (before: unknown, after: unknown): readonly ReportFieldChange[] => {
+	const beforeFields = new Map<string, unknown>()
+	const afterFields = new Map<string, unknown>()
+	flattenReportFields(before, '', beforeFields)
+	flattenReportFields(after, '', afterFields)
+	return [...new Set([...beforeFields.keys(), ...afterFields.keys()])]
+		.toSorted((left, right) => left.localeCompare(right))
+		.flatMap((field): readonly ReportFieldChange[] => {
+			const hadBefore = beforeFields.has(field)
+			const hasAfter = afterFields.has(field)
+			const previous = beforeFields.get(field)
+			const current = afterFields.get(field)
+			if (hadBefore && hasAfter && stableReportValue(previous) === stableReportValue(current)) return []
+			if (!hadBefore) return [{ field, kind: 'added', after: current }]
+			if (!hasAfter) return [{ field, kind: 'removed', before: previous }]
+			return [{ field, kind: 'changed', before: previous, after: current }]
+		})
+}
+
+// Evidence is newest first. The extra row fetched for keyset pagination provides
+// the comparison baseline for the last row that is returned to the client.
+export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readonly ReportRoundEvidence[] =>
+	rows.map((row, index) => {
+		const previous = rows[index + 1]
+		const currentData = reportRecord(row['report_data'])
+		const previousData = previous === undefined ? {} : reportRecord(previous['report_data'])
+		return {
+			...row,
+			report_data: currentData,
+			comparison: {
+				state: previous === undefined ? 'initial' : 'compared',
+				previousRoundNumber: previous?.['round_number'],
+				previousBlockNumber: previous?.['block_number'],
+				changes: reportFieldChanges(previousData, currentData),
+			},
+		}
+	})
+
 const nonNegative = (value: string | undefined): bigint | undefined => {
 	if (value === undefined || !/^\d+$/.test(value)) return undefined
 	return BigInt(value)
