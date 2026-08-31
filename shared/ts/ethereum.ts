@@ -1867,16 +1867,19 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				account: parameters.account ?? normalizedAccount,
 			}),
 		sendRawTransaction: async parameters => {
+			const expectedHash = keccak256(parameters.serializedTransaction)
 			try {
-				return normalizeHash(
+				const returnedHash = normalizeHash(
 					await requestTransport<string>(transport, {
 						method: 'eth_sendRawTransaction',
 						params: [parameters.serializedTransaction],
 					}),
 				)
+				if (returnedHash !== expectedHash) throw new Error(`RPC returned transaction hash ${returnedHash}, which does not match submitted transaction ${expectedHash}`)
+				return expectedHash
 			} catch (error) {
 				if (!isAlreadyKnownTransactionError(error)) throw error
-				return keccak256(parameters.serializedTransaction)
+				return expectedHash
 			}
 		},
 		simulateContract: async parameters =>
