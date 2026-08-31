@@ -1,6 +1,7 @@
-import { getAddress, keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
+import { keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
+import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
 
 export type SubmissionMode = 'private' | 'public'
 
@@ -99,6 +100,9 @@ export function validateSubmissionSettings(value: unknown): SubmissionSettings {
 	if (typeof minimumBundleRelaySuccesses !== 'number' || !Number.isSafeInteger(minimumBundleRelaySuccesses) || minimumBundleRelaySuccesses < 1 || minimumBundleRelaySuccesses > maximumRelaySuccesses) {
 		throw new Error(record['mode'] === 'private' ? 'Minimum bundle relay successes must be an integer between 1 and the configured private relay count' : 'Minimum bundle relay successes must be an integer between 1 and 8')
 	}
+	if (record['mode'] === 'private' && new Set(relayUrls.map(url => new URL(url).origin)).size < minimumBundleRelaySuccesses) {
+		throw new Error('Private relay acceptance threshold requires distinct relay origins')
+	}
 	return {
 		minimumBundleRelaySuccesses,
 		mode: record['mode'],
@@ -112,6 +116,30 @@ export function assertSubmissionWindowOpen(lastValidBlockNumber: bigint | undefi
 
 export function paddedTransactionGas(gasEstimate: bigint) {
 	return gasEstimate + gasEstimate / 5n + 10_000n
+}
+
+const MAX_UINT256 = (1n << 256n) - 1n
+const MAX_PRIORITY_FEE_PER_GAS = 2n * 10n ** 9n
+export const DEFAULT_TRANSACTION_VALIDITY_BLOCKS = 25n
+
+export function maximumBaseFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
+	if (baseFeePerGas < 0n || baseFeePerGas > MAX_UINT256) throw new Error('baseFeePerGas must be an unsigned uint256')
+	if (validityBlocks < 0n) throw new Error('validity blocks must be an unsigned integer')
+	if (validityBlocks > DEFAULT_TRANSACTION_VALIDITY_BLOCKS) throw new Error('validity blocks cannot exceed the signed transaction horizon')
+	let maximum = baseFeePerGas
+	for (let block = 0n; block < validityBlocks; block += 1n) {
+		const increase = maximum / 8n
+		const maximumIncrease = increase === 0n ? 1n : increase
+		if (maximum > MAX_UINT256 - maximumIncrease) throw new Error('maximum fee per gas exceeds uint256')
+		maximum += maximumIncrease
+	}
+	return maximum
+}
+
+export function maximumFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
+	const maximum = maximumBaseFeePerGas(baseFeePerGas, validityBlocks) + MAX_PRIORITY_FEE_PER_GAS
+	if (maximum > MAX_UINT256) throw new Error('maximum fee per gas exceeds uint256')
+	return maximum
 }
 
 export async function prepareSignedTransaction(parameters: {
@@ -128,9 +156,11 @@ export async function prepareSignedTransaction(parameters: {
 	value?: bigint | undefined
 }): Promise<SignedTransaction> {
 	assertSubmissionWindowOpen(parameters.lastValidBlockNumber, parameters.blockNumber)
-	const maxPriorityFeePerGas = 2n * 10n ** 9n
+	const maxPriorityFeePerGas = MAX_PRIORITY_FEE_PER_GAS
 	const gas = paddedTransactionGas(parameters.gasEstimate)
-	const maxFeePerGas = parameters.baseFeePerGas * 2n + maxPriorityFeePerGas
+	const defaultMaxBlockNumber = parameters.blockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
+	const maxBlockNumber = parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber
+	const maxFeePerGas = maximumFeePerGas(parameters.baseFeePerGas, maxBlockNumber - parameters.blockNumber)
 	const serializedTransaction = await parameters.signTransaction({
 		chainId: parameters.chainId,
 		data: parameters.data,
@@ -142,11 +172,10 @@ export async function prepareSignedTransaction(parameters: {
 		...(parameters.value === undefined ? {} : { value: parameters.value }),
 	})
 	const hash = keccak256(serializedTransaction)
-	const defaultMaxBlockNumber = parameters.blockNumber + 25n
 	return {
 		hash,
 		lastValidBlockNumber: parameters.lastValidBlockNumber,
-		maxBlockNumber: parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber,
+		maxBlockNumber,
 		serializedTransaction,
 		transaction: {
 			from: parameters.from,
@@ -172,6 +201,16 @@ function rejectionMessage(reason: unknown) {
 	return reason instanceof Error ? reason.message : String(reason)
 }
 
+function distinctRelayOriginCount(relayUrls: readonly string[]) {
+	return new Set(relayUrls.map(endpointLabel)).size
+}
+
+function assertRelaySuccessThreshold(minimumSuccessfulRelays: number, relayUrls: readonly string[], label: string) {
+	if (!Number.isSafeInteger(minimumSuccessfulRelays) || minimumSuccessfulRelays < 1 || minimumSuccessfulRelays > distinctRelayOriginCount(relayUrls)) {
+		throw new Error(`${label} relay threshold must be between 1 and the configured distinct relay origin count`)
+	}
+}
+
 function rpcQuantity(value: unknown, label: string) {
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
 	if (typeof value === 'string' && (/^0x[0-9a-fA-F]+$/.test(value) || /^[0-9]+$/.test(value))) return BigInt(value)
@@ -187,14 +226,10 @@ function bundleIdentity(transactions: readonly Hex[]) {
 	}
 }
 
-async function authenticatedRelayRequest(parameters: { address: Address; body: string; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; timeoutMilliseconds: number }) {
-	const signature = await parameters.signMessage(keccak256(parameters.body))
+async function authenticatedRelayRequest(parameters: RelayAuthentication & { body: string; relayUrl: string; timeoutMilliseconds: number }) {
 	const response = await fetch(parameters.relayUrl, {
 		body: parameters.body,
-		headers: {
-			'content-type': 'application/json',
-			'x-flashbots-signature': `${getAddress(parameters.address)}:${signature}`,
-		},
+		headers: await authenticatedRelayHeaders(parameters.body, parameters),
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
@@ -280,9 +315,7 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 	transactions: readonly Hex[]
 }) {
 	const minimumSuccessfulRelays = parameters.minimumSuccessfulRelays ?? 1
-	if (!Number.isSafeInteger(minimumSuccessfulRelays) || minimumSuccessfulRelays < 1 || minimumSuccessfulRelays > parameters.relayUrls.length) {
-		throw new Error('Bundle simulation relay threshold must be between 1 and the configured relay count')
-	}
+	assertRelaySuccessThreshold(minimumSuccessfulRelays, parameters.relayUrls, 'Bundle simulation')
 	const settled = await Promise.allSettled(
 		parameters.relayUrls.map(relayUrl =>
 			simulateBundle({
@@ -299,8 +332,12 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 		if (result.status === 'fulfilled') successful.push({ relayUrl, simulation: result.value })
 		else failedTargets.push({ error: rejectionMessage(result.reason), target: endpointLabel(relayUrl) })
 	}
-	if (successful.length < minimumSuccessfulRelays) {
-		throw new SubmissionFailure(`Bundle simulation required ${minimumSuccessfulRelays.toString()} successful relays but received ${successful.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	const successfulOriginCount = distinctRelayOriginCount(successful.map(result => result.relayUrl))
+	if (successfulOriginCount < minimumSuccessfulRelays) {
+		throw new SubmissionFailure(
+			`Bundle simulation required ${minimumSuccessfulRelays.toString()} successful relays from distinct origins but received ${successfulOriginCount.toString()} distinct relay origin${successfulOriginCount === 1 ? '' : 's'}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`,
+			failedTargets,
+		)
 	}
 	return { failedTargets, successful }
 }
@@ -316,9 +353,7 @@ export async function submitSignedBundle(parameters: {
 }): Promise<SubmittedBundle> {
 	if (parameters.transactions.length === 0) throw new Error('Bundle must contain at least one transaction')
 	const minimumSuccessfulRelays = parameters.minimumSuccessfulRelays ?? 1
-	if (!Number.isSafeInteger(minimumSuccessfulRelays) || minimumSuccessfulRelays < 1 || minimumSuccessfulRelays > parameters.relayUrls.length) {
-		throw new Error('Bundle submission relay threshold must be between 1 and the configured relay count')
-	}
+	assertRelaySuccessThreshold(minimumSuccessfulRelays, parameters.relayUrls, 'Bundle submission')
 	const expectedBundleHash = bundleIdentity(parameters.transactions).bundleHash
 	const body = JSON.stringify({
 		id: 1,
@@ -354,11 +389,15 @@ export async function submitSignedBundle(parameters: {
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: rejectionMessage(result.reason), target })
 	}
-	if (acceptedTargets.length < minimumSuccessfulRelays) {
+	const acceptedOriginCount = new Set(acceptedTargets).size
+	if (acceptedOriginCount < minimumSuccessfulRelays) {
 		if (acceptedTargets.length === 0 && minimumSuccessfulRelays === 1) {
 			throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
 		}
-		throw new SubmissionFailure(`Bundle submission required ${minimumSuccessfulRelays.toString()} accepting relays but received ${acceptedTargets.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+		throw new SubmissionFailure(
+			`Bundle submission required ${minimumSuccessfulRelays.toString()} accepting relays from distinct origins but received ${acceptedOriginCount.toString()} distinct relay origin${acceptedOriginCount === 1 ? '' : 's'}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`,
+			failedTargets,
+		)
 	}
 	return { acceptedTargets, failedTargets }
 }
@@ -397,7 +436,8 @@ export async function submitSignedTransaction(parameters: {
 	settings: SubmissionSettings
 	signMessage: (message: string | Uint8Array) => Promise<Hex>
 }): Promise<SubmittedTransaction> {
-	if (parameters.settings.mode === 'public') {
+	const settings = validateSubmissionSettings(parameters.settings)
+	if (settings.mode === 'public') {
 		const settled = await Promise.allSettled(parameters.publicRpcUrls.map(url => parameters.publicSubmit(url, parameters.serializedTransaction)))
 		const acceptedTargets: string[] = []
 		const failedTargets: SubmissionTargetResult[] = []
@@ -422,7 +462,7 @@ export async function submitSignedTransaction(parameters: {
 		}
 	}
 	const settled = await Promise.allSettled(
-		parameters.settings.relayUrls.map(url =>
+		settings.relayUrls.map(url =>
 			sendPrivateTransaction({
 				address: parameters.address,
 				hash: parameters.hash,
@@ -437,14 +477,21 @@ export async function submitSignedTransaction(parameters: {
 	const acceptedTargets: string[] = []
 	const failedTargets: SubmissionTargetResult[] = []
 	for (const [index, result] of settled.entries()) {
-		const relay = parameters.settings.relayUrls[index]
+		const relay = settings.relayUrls[index]
 		if (relay === undefined) throw new Error('Missing relay URL for submission result')
 		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: result.reason instanceof Error ? result.reason.message : String(result.reason), target })
 	}
-	if (acceptedTargets.length === 0) {
-		throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+	const acceptedOriginCount = new Set(acceptedTargets).size
+	if (acceptedOriginCount < settings.minimumBundleRelaySuccesses) {
+		if (acceptedTargets.length === 0 && settings.minimumBundleRelaySuccesses === 1) {
+			throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
+		}
+		throw new SubmissionFailure(
+			`Private transaction submission required ${settings.minimumBundleRelaySuccesses.toString()} accepting relays from distinct origins but received ${acceptedOriginCount.toString()} distinct relay origin${acceptedOriginCount === 1 ? '' : 's'}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`,
+			failedTargets,
+		)
 	}
 	return {
 		acceptedTargets,
