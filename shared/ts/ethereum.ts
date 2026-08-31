@@ -53,6 +53,14 @@ type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind ext
 	[TIndex in keyof TComponents]: TComponents[TIndex] extends AbiParameter ? AbiParameterValue<TComponents[TIndex], TKind> : never
 }>
 
+type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = number extends TComponents['length']
+	? Readonly<Record<string, unknown>> | readonly unknown[]
+	: TComponents extends readonly []
+		? Readonly<Record<string, never>>
+		: TupleComponentsAllNamed<TComponents> extends true
+			? TupleComponentsObject<TComponents, 'output'>
+			: TupleComponentsArray<TComponents, 'output'>
+
 type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = TKind extends 'input'
 	? TupleComponentsAllNamed<TComponents> extends true
 		? TupleComponentsArray<TComponents, TKind> | TupleComponentsObject<TComponents, TKind>
@@ -62,8 +70,6 @@ type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiVa
 		: TupleComponentsArray<TComponents, TKind>
 
 type DecodedTupleArrayValue<TComponents extends readonly AbiParameter[]> = TupleComponentsArray<TComponents, 'output'> & (TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsArrayAliases<TComponents, 'output'> : {})
-
-type DecodedEventArgsValue<TComponents extends readonly AbiParameter[]> = DecodedTupleArrayValue<TComponents>
 
 type RebasedAbiParameter<TParameter extends AbiParameter, TType extends string> = {
 	readonly anonymous?: boolean
@@ -163,7 +169,7 @@ type ContractEventDefinition<TAbi extends Abi, TEventName extends string> = [Kno
 		}
 	: Extract<KnownAbiEvents<TAbi>, { name: TEventName }>
 
-type ContractEventArgs<TAbi extends Abi, TEventName extends string> = DecodedEventArgsValue<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly []>
+type ContractEventArgs<TAbi extends Abi, TEventName extends string> = DecodedEventArguments<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly []>
 
 type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [never]
 	? {
@@ -179,7 +185,7 @@ type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [
 
 type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 	? {
-			args: DecodedEventArgsValue<readonly AbiParameter[]>
+			args: DecodedEventArguments<readonly AbiParameter[]>
 			eventName: string
 		}
 	: {
@@ -189,7 +195,7 @@ type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 			}
 		}[ContractEventName<TAbi>]
 
-type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? DecodedEventArgsValue<TEvent['inputs']> : DecodedEventArgsValue<readonly AbiParameter[]>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
+type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? DecodedEventArguments<TEvent['inputs']> : DecodedEventArguments<readonly AbiParameter[]>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
@@ -472,7 +478,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
 	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
-	getBlock: (parameters?: { blockNumber?: bigint | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
+	getBlock: (parameters?: { blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined; includeTransactions?: boolean | undefined }) => Promise<Block>
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
@@ -668,8 +674,8 @@ function requireMatchingTransactionHash(expected: Hash, actual: Hash, resultLabe
 }
 
 function normalizeRpcHex(value: unknown) {
-	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('RPC returned an invalid hex value')
-	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
+	if (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/u.test(value)) throw new Error('RPC returned an invalid hex value')
+	return ensure0x(stripHexPrefix(value).toLowerCase())
 }
 
 function normalizeRpcBigInt(value: unknown, fallback = 0n) {
@@ -684,6 +690,11 @@ function normalizeRpcBigInt(value: unknown, fallback = 0n) {
 	}
 	if (typeof value !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) throw new Error('RPC returned an invalid bigint value')
 	return BigInt(value)
+}
+
+function normalizeRequiredRpcBigInt(value: unknown, label: string) {
+	if (value === undefined || value === null) throw new Error(`RPC returned a missing required ${label}`)
+	return normalizeRpcBigInt(value)
 }
 
 function normalizeRequiredReceiptQuantity(value: unknown, field: string) {
@@ -1328,32 +1339,83 @@ function normalizeLog(value: unknown): TransactionLog {
 		data: normalizeRpcHex(log['data']),
 		logIndex: log['logIndex'] === undefined || log['logIndex'] === null ? undefined : normalizeRpcBigInt(log['logIndex']),
 		removed: normalizeOptionalLogRemoved(log['removed']),
-		topics: topics.map(topic => normalizeRpcHex(topic)),
+		topics: topics.map(topic => normalizeHash(topic)),
 		transactionHash: log['transactionHash'] === undefined || log['transactionHash'] === null ? undefined : normalizeHash(log['transactionHash']),
 		transactionIndex: log['transactionIndex'] === undefined || log['transactionIndex'] === null ? undefined : normalizeRpcBigInt(log['transactionIndex']),
 	}
+}
+
+function getLogAddressFilter(address: Address | readonly Address[] | undefined) {
+	if (address === undefined) return undefined
+	if (typeof address === 'string') return new Set([getAddress(address).toLowerCase()])
+	if (address.length === 0) return undefined
+	return new Set(address.map(item => getAddress(item).toLowerCase()))
+}
+
+function logMatchesTopicFilter(logTopics: readonly Hex[], topicFilter: readonly LogTopicFilter[]) {
+	if (topicFilter.length > logTopics.length) return false
+	for (const [index, filter] of topicFilter.entries()) {
+		if (filter === null) continue
+		const alternatives = typeof filter === 'string' ? [filter] : filter
+		if (alternatives.length === 0) continue
+		const logTopic = logTopics[index]
+		if (logTopic === undefined || !alternatives.some(topic => topic.toLowerCase() === logTopic.toLowerCase())) return false
+	}
+	return true
+}
+
+function snapshotLogTopicFilter(topicFilter: readonly LogTopicFilter[]) {
+	return topicFilter.map(filter => (typeof filter === 'string' || filter === null ? filter : [...filter]))
 }
 
 function normalizeReceipt(value: unknown): TransactionReceipt {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction receipt')
 	const receipt = value as Record<string, unknown>
 	if (!Array.isArray(receipt['logs'])) throw new Error('RPC returned a transaction receipt without required logs')
+	const blockHash = normalizeHash(receipt['blockHash'])
+	const blockNumber = normalizeRequiredReceiptQuantity(receipt['blockNumber'], 'blockNumber')
+	const transactionHash = normalizeHash(receipt['transactionHash'])
+	const transactionIndex = normalizeRequiredReceiptQuantity(receipt['transactionIndex'], 'transactionIndex')
+	const logs = receipt['logs'].map(item => normalizeLog(item))
+	for (const log of logs) {
+		if (log.blockHash !== blockHash) throw new Error('RPC returned a transaction receipt with a log whose blockHash does not match the receipt')
+		if (log.blockNumber !== blockNumber) throw new Error('RPC returned a transaction receipt with a log whose blockNumber does not match the receipt')
+		if (log.transactionHash !== transactionHash) throw new Error('RPC returned a transaction receipt with a log whose transactionHash does not match the receipt')
+		if (log.transactionIndex !== transactionIndex) throw new Error('RPC returned a transaction receipt with a log whose transactionIndex does not match the receipt')
+	}
 	return {
-		blockHash: normalizeHash(receipt['blockHash']),
-		blockNumber: normalizeRequiredReceiptQuantity(receipt['blockNumber'], 'blockNumber'),
+		blockHash,
+		blockNumber,
 		contractAddress: normalizeNullableAddress(receipt['contractAddress']) ?? null,
 		cumulativeGasUsed: normalizeRequiredReceiptQuantity(receipt['cumulativeGasUsed'], 'cumulativeGasUsed'),
 		effectiveGasPrice: receipt['effectiveGasPrice'] === undefined ? undefined : normalizeRpcBigInt(receipt['effectiveGasPrice']),
 		from: normalizeAddress(receipt['from']),
 		gasUsed: normalizeRequiredReceiptQuantity(receipt['gasUsed'], 'gasUsed'),
-		logs: receipt['logs'].map(item => normalizeLog(item)),
+		logs,
 		logsBloom: receipt['logsBloom'] === undefined ? undefined : normalizeRpcHex(receipt['logsBloom']),
 		status: normalizeReceiptStatus(receipt['status']),
 		to: normalizeNullableAddress(receipt['to']) ?? null,
-		transactionHash: normalizeHash(receipt['transactionHash']),
-		transactionIndex: normalizeRequiredReceiptQuantity(receipt['transactionIndex'], 'transactionIndex'),
+		transactionHash,
+		transactionIndex,
 		type: normalizeTransactionType(receipt['type']),
 	}
+}
+
+function normalizeRequiredTransactionQuantity(transaction: Record<string, unknown>, field: 'gas' | 'nonce' | 'value') {
+	const value = transaction[field]
+	if (value === undefined || value === null) throw new Error(`RPC returned a transaction without ${field}`)
+	return normalizeRpcBigInt(value)
+}
+
+function normalizeTransactionInput(transaction: Record<string, unknown>) {
+	const value = transaction['input'] ?? transaction['data']
+	if (value === undefined || value === null) throw new Error('RPC returned a transaction without input data')
+	return normalizeRpcHex(value)
+}
+
+function normalizeTransactionRecipient(transaction: Record<string, unknown>) {
+	if (transaction['to'] === undefined) throw new Error('RPC returned a transaction without to')
+	return normalizeNullableAddress(transaction['to']) ?? null
 }
 
 function normalizeTransaction(value: unknown): BlockTransaction {
@@ -1363,33 +1425,55 @@ function normalizeTransaction(value: unknown): BlockTransaction {
 		blockHash: transaction['blockHash'] === undefined || transaction['blockHash'] === null ? undefined : normalizeHash(transaction['blockHash']),
 		blockNumber: transaction['blockNumber'] === undefined || transaction['blockNumber'] === null ? undefined : normalizeRpcBigInt(transaction['blockNumber']),
 		from: normalizeAddress(transaction['from']),
-		gas: normalizeRpcBigInt(transaction['gas']),
+		gas: normalizeRequiredTransactionQuantity(transaction, 'gas'),
 		gasPrice: transaction['gasPrice'] === undefined || transaction['gasPrice'] === null ? undefined : normalizeRpcBigInt(transaction['gasPrice']),
 		hash: normalizeHash(transaction['hash']),
-		input: normalizeRpcHex(transaction['input'] ?? transaction['data'] ?? '0x'),
+		input: normalizeTransactionInput(transaction),
 		maxFeePerGas: transaction['maxFeePerGas'] === undefined || transaction['maxFeePerGas'] === null ? undefined : normalizeRpcBigInt(transaction['maxFeePerGas']),
 		maxPriorityFeePerGas: transaction['maxPriorityFeePerGas'] === undefined || transaction['maxPriorityFeePerGas'] === null ? undefined : normalizeRpcBigInt(transaction['maxPriorityFeePerGas']),
-		nonce: normalizeRpcBigInt(transaction['nonce']),
-		to: normalizeNullableAddress(transaction['to']) ?? null,
+		nonce: normalizeRequiredTransactionQuantity(transaction, 'nonce'),
+		to: normalizeTransactionRecipient(transaction),
 		transactionIndex: transaction['transactionIndex'] === undefined || transaction['transactionIndex'] === null ? undefined : normalizeRpcBigInt(transaction['transactionIndex']),
 		type: normalizeTransactionType(transaction['type']),
-		value: normalizeRpcBigInt(transaction['value']),
+		value: normalizeRequiredTransactionQuantity(transaction, 'value'),
 	}
 }
 
-function normalizeBlock(value: unknown, includeTransactions: boolean) {
+function normalizeBlock(value: unknown, includeTransactions: boolean, pending: boolean) {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid block')
 	const block = value as Record<string, unknown>
 	if (block['timestamp'] === undefined || block['timestamp'] === null) throw new Error('RPC returned a block without a timestamp')
-	const transactions = block['transactions']
-	if (!Array.isArray(transactions)) throw new Error('RPC returned a block without transactions')
+	const hash = block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash'])
+	const number = block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number'])
+	if (pending) {
+		if (hash !== undefined || number !== undefined) throw new Error('RPC returned a pending block with mined identifiers')
+	} else {
+		if (hash === undefined) throw new Error('RPC returned a mined block without a hash')
+		if (number === undefined) throw new Error('RPC returned a mined block without a number')
+	}
+	const rawTransactions = block['transactions']
+	if (!Array.isArray(rawTransactions)) throw new Error('RPC returned a block without transactions')
+	const transactions = (() => {
+		if (!includeTransactions) return rawTransactions.map(transaction => normalizeHash(transaction))
+		const normalizedTransactions = rawTransactions.map(transaction => normalizeTransaction(transaction))
+		for (const [index, transaction] of normalizedTransactions.entries()) {
+			if (pending) {
+				if (transaction.blockHash !== undefined || transaction.blockNumber !== undefined || transaction.transactionIndex !== undefined) throw new Error('RPC returned a pending block with a transaction containing mined metadata')
+				continue
+			}
+			if (transaction.blockHash !== hash) throw new Error('RPC returned a block with a transaction whose blockHash does not match the block')
+			if (transaction.blockNumber !== number) throw new Error('RPC returned a block with a transaction whose blockNumber does not match the block')
+			if (transaction.transactionIndex !== BigInt(index)) throw new Error('RPC returned a block with a transaction whose transactionIndex does not match the block')
+		}
+		return normalizedTransactions
+	})()
 	return {
 		baseFeePerGas: block['baseFeePerGas'] === undefined || block['baseFeePerGas'] === null ? undefined : normalizeRpcBigInt(block['baseFeePerGas']),
-		hash: block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash']),
-		number: block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number']),
+		hash,
+		number,
 		parentHash: block['parentHash'] === undefined || block['parentHash'] === null ? undefined : normalizeHash(block['parentHash']),
 		timestamp: normalizeRpcBigInt(block['timestamp']),
-		transactions: transactions.map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))),
+		transactions,
 	} satisfies Block
 }
 
@@ -1554,7 +1638,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 
 	return {
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [
@@ -1573,45 +1657,57 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}),
 					],
 				}),
+				'gas estimate',
 			),
 		estimateGas: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
 					params: [buildRpcTransactionRequest(parameters)],
 				}),
+				'gas estimate',
 			),
 		getBalance: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getBalance',
 					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
+				'balance',
 			),
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
-			const blockTag = normalizeBlockTag(parameters?.blockNumber)
+			const blockTag = parameters?.blockNumber === undefined ? (parameters?.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
 			const block = await requestTransportWithRateLimitRetries<unknown>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
-			return normalizeBlock(block, includeTransactions)
+			const normalizedBlock = normalizeBlock(block, includeTransactions, blockTag === 'pending')
+			if (parameters?.blockNumber !== undefined && normalizedBlock.number !== parameters.blockNumber) {
+				throw new Error(`RPC returned block ${normalizedBlock.number?.toString() ?? 'without a number'}, which does not match requested block ${parameters.blockNumber.toString()}`)
+			}
+			return normalizedBlock
 		},
-		getBlockNumber: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_blockNumber' })),
-		getChainId: async () => bigintToSafeNumber(normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_chainId' })), 'Chain ID'),
+		getBlockNumber: async () => normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_blockNumber' }), 'block number'),
+		getChainId: async () => bigintToSafeNumber(normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_chainId' }), 'chain ID'), 'Chain ID'),
 		getCode,
 		getBytecode: getCode,
-		getGasPrice: async () => normalizeRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_gasPrice' })),
+		getGasPrice: async () => normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_gasPrice' }), 'gas price'),
 		getTransactionCount: async parameters =>
-			normalizeRpcBigInt(
+			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getTransactionCount',
 					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
 				}),
+				'transaction count',
 			),
 		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
 			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
+			const address = typeof parameters.address === 'string' || parameters.address === undefined ? parameters.address : [...parameters.address]
+			const addressFilter = getLogAddressFilter(address)
+			const fromBlock = parameters.fromBlock
+			const toBlock = parameters.toBlock
 			const topics =
 				parameters.topics ??
 				(event === undefined
@@ -1621,19 +1717,25 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							...(parameters.args === undefined ? {} : { args: parameters.args }),
 							eventName: event.name ?? 'event',
 						}))
+			const requestedTopics = topics === undefined ? undefined : snapshotLogTopicFilter(topics)
+			const requestTopics = requestedTopics === undefined ? undefined : snapshotLogTopicFilter(requestedTopics)
 			const rawLogs = await requestTransportWithRateLimitRetries<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
 					{
-						...(parameters.address === undefined ? {} : { address: parameters.address }),
-						...(parameters.fromBlock === undefined ? {} : { fromBlock: hexQuantity(parameters.fromBlock) }),
-						...(parameters.toBlock === undefined ? {} : { toBlock: hexQuantity(parameters.toBlock) }),
-						...(topics === undefined ? {} : { topics }),
+						...(address === undefined ? {} : { address }),
+						...(fromBlock === undefined ? {} : { fromBlock: hexQuantity(fromBlock) }),
+						...(toBlock === undefined ? {} : { toBlock: hexQuantity(toBlock) }),
+						...(requestTopics === undefined ? {} : { topics: requestTopics }),
 					},
 				],
 			})
 			return rawLogs.map(rawLog => {
 				const normalizedLog = normalizeLog(rawLog)
+				if (addressFilter !== undefined && !addressFilter.has(normalizedLog.address.toLowerCase())) throw new Error('RPC returned a log outside the requested filter')
+				if (fromBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber < fromBlock)) throw new Error('RPC returned a log outside the requested filter')
+				if (toBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber > toBlock)) throw new Error('RPC returned a log outside the requested filter')
+				if (requestedTopics !== undefined && !logMatchesTopicFilter(normalizedLog.topics, requestedTopics)) throw new Error('RPC returned a log outside the requested filter')
 				if (event === undefined) return normalizedLog
 				const decodedLog = decodeEventLog({
 					abi: [event],
@@ -1996,16 +2098,19 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				account: parameters.account ?? normalizedAccount,
 			}),
 		sendRawTransaction: async parameters => {
+			const expectedHash = keccak256(parameters.serializedTransaction)
 			try {
-				return normalizeHash(
+				const returnedHash = normalizeHash(
 					await requestTransportWithRateLimitRetries<string>(transport, {
 						method: 'eth_sendRawTransaction',
 						params: [parameters.serializedTransaction],
 					}),
 				)
+				if (returnedHash !== expectedHash) throw new Error(`RPC returned transaction hash ${returnedHash}, which does not match submitted transaction ${expectedHash}`)
+				return expectedHash
 			} catch (error) {
 				if (!isAlreadyKnownTransactionError(error)) throw error
-				return keccak256(parameters.serializedTransaction)
+				return expectedHash
 			}
 		},
 		simulateContract: async parameters =>
@@ -2264,7 +2369,7 @@ export function encodeDeployData(parameters: { abi: Abi; args?: readonly unknown
 
 export function decodeEventLog<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex; topics: readonly Hex[] }): DecodedEventLog<TAbi>
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }): {
-	args: DecodedEventArgsValue<readonly AbiParameter[]>
+	args: DecodedEventArguments<readonly AbiParameter[]>
 	eventName: string
 }
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }) {
