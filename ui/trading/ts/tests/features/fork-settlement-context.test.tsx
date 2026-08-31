@@ -114,6 +114,7 @@ describe('live fork settlement context', () => {
 			account,
 			transport: custom({
 				request: async ({ method }) => {
+					if (method === 'eth_getTransactionByHash') return null
 					if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected RPC method: ${method}`)
 					return {
 						blockHash,
