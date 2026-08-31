@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x19C8F510d104e4c5c75867DC35B5C8E857b00A6D"
+			"address": "0x381ED2275fE47088b7822fAEeD72C71f286f9F03"
 		},
 		{
 			"id": "multicall3",
@@ -31,24 +31,9 @@
 			"address": "0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108"
 		},
 		{
-			"id": "uniformPriceDualCapBatchAuctionFactory",
-			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
-		},
-		{
 			"id": "scalarOutcomes",
 			"label": "ScalarOutcomes",
 			"address": "0x9AdECC476DdF3a0E89B7540302758123308B03A0"
-		},
-		{
-			"id": "securityPoolUtils",
-			"label": "SecurityPoolUtils",
-			"address": "0x0eAd9A0facAE7f9428b65D35b356aE12790022a9"
-		},
-		{
-			"id": "openOracle",
-			"label": "OpenOracle",
-			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "zoltarQuestionData",
@@ -59,16 +44,6 @@
 			"id": "zoltar",
 			"label": "Zoltar",
 			"address": "0x7e009E148B2a044f1d8351b78eaff05ac212a8D6"
-		},
-		{
-			"id": "shareTokenFactory",
-			"label": "ShareTokenFactory",
-			"address": "0xa0A15baA2d8337019c83fA0faa4cFF52dB6E4FeB"
-		},
-		{
-			"id": "priceOracleManagerAndOperatorQueuerFactory",
-			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x9cB2b09C1bd680B5CF4a821b2102D326B5c78B7e"
 		},
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
