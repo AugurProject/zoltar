@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import type { LiveEvent } from '../src/database.ts'
 import { liveStreamResponse } from '../src/http.ts'
 import { LiveBus } from '../src/live.ts'
 
@@ -102,7 +103,7 @@ test('new streams refresh the durable cursor after an idle period', async () => 
 })
 
 test('delivers a reset when a reconnect cursor is ahead of the durable event head', async () => {
-	let events = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
+	let events: LiveEvent[] = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
 	const bus = new LiveBus({
 		latestEventId: async () => 50,
 		eventsAfter: async (id) => events.filter((event) => event.event === 'reset' ? id > event.id : event.id > id),
