@@ -1,9 +1,12 @@
 import {
+	decodeOperationsResponseValue,
+	type EntityHistoryCoverageValue,
 	isAccountTransactionValue,
 	isActivityRecordValue,
 	isAddressIdentityValue,
 	isAmmPriceValue,
 	isChartRowValue,
+	isEntityHistoryCoverageValue,
 	isJsonValue,
 	isLogDetailValue,
 	isNetworkRecordValue,
@@ -18,6 +21,11 @@ import {
 	isUniverseStateEntityValue,
 	isVaultStateEntityValue,
 	type JsonValue,
+	type OperationsResponse,
+	operationRecords,
+	operationsCatalogRecords,
+	operationsRiskPagination,
+	operationsRiskRecords,
 } from './api-validation.ts'
 import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
@@ -29,12 +37,21 @@ import {
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
+	collectCursorCollections,
+	collectDualCursorCollections,
 	compareCanonicalEventPosition,
 	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
 	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
+	demoTimelineEvidenceStatus,
+	entityHistoryContinuationPresentation,
+	evidenceStatusLabel,
+	type HistoryInvalidationReason,
+	historyInvalidationEvidencePresentation,
+	historyInvalidationNotice,
+	historyInvalidationReasonLabel,
 	indexerConnectionStatus,
 	indexerHeadFreshness,
 	indexerHeadFreshnessTransitionDelay,
@@ -43,10 +60,17 @@ import {
 	isCurrentCanonicalGeneration,
 	isCurrentContextRequest,
 	isCurrentLiveRequest,
+	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
+	operationsDetailEvidencePanelVisible,
+	operationsDetailHeaderPresentation,
 	operationsDetailRecordKey,
+	operationsDetailSummaryPresentation,
+	operationsForkChildCount,
+	operationsRiskPresentation,
+	operationsRouteFreshness,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
 	queuedPaginationPresentation,
@@ -60,6 +84,9 @@ import {
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
 	showIndexerSyncDetails,
+	summarizeHistoryCollections,
+	timelineEntityTypeLabel,
+	timelineOccurrenceFields,
 	transactionRetryMode,
 } from './live-update.ts'
 
@@ -220,6 +247,7 @@ interface StateCatalog {
 	}>
 	truncated?: Record<string, boolean>
 	limit?: number
+	totals?: Record<'pools' | 'questions' | 'vaults' | 'universes', number>
 }
 
 interface AccountReference {
@@ -327,6 +355,11 @@ interface EntityHistory {
 	market?: { pair_address?: string | null; fee_bps?: string | number | null } | null
 	pools: JsonValue[]
 	forks: JsonValue[]
+	truncated?: boolean
+	limit?: number
+	offset?: number
+	loadedOffset?: number
+	coverage?: EntityHistoryCoverageValue
 }
 
 interface ItemsPage<T> {
@@ -369,6 +402,8 @@ interface LogDetail extends ActivityRecord {
 interface SelectEntityOptions {
 	preserveDetail?: boolean
 	quiet?: boolean
+	pagination?: boolean
+	historyTargetOffset?: number
 	contextVersion?: number
 	suppliedHistory?: EntityHistory
 }
@@ -391,6 +426,7 @@ interface LoadOptions {
 	replaceDepth?: number
 	contextVersion?: number
 	retainVisibleDepth?: boolean
+	portfolioTarget?: { readonly kind: 'forks' | 'lp' | 'reports'; readonly count: number }
 }
 
 interface DetailOptions {
@@ -479,8 +515,15 @@ const operationsLoadState: { promise?: Promise<boolean>; context?: string } = {}
 let operationsCatalogState:
 	| {
 			readonly chainId: string
-			readonly section: OperationsCatalogSection
+			readonly section: PagedOperationsCatalogSection
 			readonly items: readonly Record<string, unknown>[]
+	  }
+	| undefined
+let operationsRiskCatalogState:
+	| {
+			readonly chainId: string
+			readonly pools: readonly Record<string, unknown>[]
+			readonly vaults: readonly Record<string, unknown>[]
 	  }
 	| undefined
 let operationsDetailState:
@@ -488,9 +531,16 @@ let operationsDetailState:
 			readonly chainId: string
 			readonly routeKey: string
 			readonly items: readonly Record<string, unknown>[]
+			readonly decisionItems: readonly Record<string, unknown>[]
+			readonly riskHistoryOffset: number
 	  }
 	| undefined
 let demoRouteRefreshErrorConsumed = false
+let demoRiskHistoryAppendErrorConsumed = false
+let demoRiskHistoryAutoLoadConsumed = false
+let demoStateHistoryAppendErrorConsumed = false
+let demoStateHistoryAutoLoadConsumed = false
+let demoPortfolioAppendErrorConsumed = false
 let logsRequestVersion = 0
 let activityPaginationIntentVersion = 0
 let detailRequestVersion = 0
@@ -502,6 +552,7 @@ let streamHasOpened = false
 let stateData: StateCatalog | undefined
 let activeStateType: StateTab = 'pools'
 let selectedEntityKey: string | undefined
+let selectedEntityHistoryOffset = 0
 let catalogRequestVersion = 0
 let stateDetailRequestVersion = 0
 let stateDetailContextVersion = 0
@@ -536,6 +587,9 @@ let preservePendingOnDialogClose = false
 let addressProfileRequestVersion = 0
 let viewContextVersion = 0
 let currentAddressProfile: RichListRecord | undefined
+let currentAddressPortfolioDepths:
+	| { readonly chainId: string; readonly address: string; readonly forks: number; readonly lp: number; readonly reports: number }
+	| undefined
 const addressIdentityCache = new Map<string, string | false | Promise<string | undefined>>()
 let polledReorgRefreshTimer: number | undefined
 let requestRouteRefresh: (count?: number, force?: boolean) => Promise<boolean>
@@ -1193,8 +1247,41 @@ const demoSeries = (base: string, count = 12, variation = 0.32) =>
 	})
 
 const demoHistory = (path: string) => {
-	const parts = path.split('/')
+	const request = new URL(path, location.origin)
+	const parts = request.pathname.split('/')
 	const type = parts[4]
+	const offset = request.searchParams.has('cursor') ? 1000 : 0
+	const historyMore = pageUrl.searchParams.get('stateHistoryMore') === '1'
+	const pagedHistory = (history: Readonly<Record<string, unknown>>, seriesKeys: readonly string[]) => {
+		const page: Record<string, unknown> = { ...history }
+		for (const key of seriesKeys) {
+			const records = Array.isArray(history[key]) ? history[key] : []
+			const split = Math.max(1, Math.ceil(records.length / 2))
+			page[key] = historyMore ? (offset === 0 ? records.slice(split) : records.slice(0, split)) : records
+		}
+		const series = Object.fromEntries(seriesKeys.map((key) => [key, Array.isArray(page[key]) ? page[key].length : 0]))
+		const truncated = historyMore && offset === 0
+		return {
+			...page,
+			truncated,
+			limit: 1000,
+			offset,
+			coverage: {
+				requestedFromBlock: request.searchParams.get('fromBlock') ?? '23000000',
+				requestedToBlock: request.searchParams.get('toBlock') ?? '23514219',
+				indexedFromBlock: '23000000',
+				indexedThroughBlock: '23514219',
+				indexedThroughHash: demoHash,
+				limit: 1000,
+				offset,
+				series,
+				complete: !truncated,
+				rangeCovered: true,
+				hasPreviousPages: offset > 0,
+				...(truncated ? { nextCursor: 'demo-state-history-older' } : {}),
+			},
+		}
+	}
 	if (type === 'pools') {
 		const poolItem = demoPools.find((item) => item.pool_address === parts[6]) ?? requiredArrayItem(demoPools, 0, 'Default demo pool')
 		const collateral = demoSeries(poolItem.settlement_collateral_atto_eth)
@@ -1211,72 +1298,84 @@ const demoHistory = (path: string) => {
 					: priceDemo === 'constant-repeated'
 						? repEthPrices.slice(0, 3).map((price) => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 }))
 						: repEthPrices
-		return {
-			snapshots: collateral.map((value, index) => ({
-				timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
-				block_number: String(23100000 + index * 7700),
-				settlement_collateral_atto_eth: value,
-				total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
-				total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
-				current_retention_rate: poolItem.current_retention_rate,
-			})),
-			events: [],
-			market: hasAmm
-				? {
-						pair_address: demoAddress('fa'),
-						pool_address: poolItem.pool_address,
-						share_token_address: poolItem.share_token_address,
-						universe_id: poolItem.universe_id,
-						fee_bps: '30',
-					}
-				: undefined,
-			ammPrices: hasAmm ? demoAmmPriceHistory() : [],
-			repEthPrices: hasRepEthPrices ? displayedRepEthPrices : [],
-			uniswapRepEthPrices: hasRepEthPrices ? (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory()) : [],
-			openOracleHistory: hasRepEthPrices
-				? displayedRepEthPrices.slice(-3).map((price, index) => ({
-						timestamp: price.timestamp,
-						block_number: price.block_number,
-						event_name: index === 0 ? 'ReportSubmitted' : index === 1 ? 'ReportDisputed' : 'PriceReported',
-						summary: index === 0 ? 'REP/ETH report submitted' : index === 1 ? 'Replacement round accepted' : 'Coordinator accepted the settled price',
-						coordinator_address: poolItem.coordinator_address,
-					}))
-				: [],
-		}
+		return pagedHistory(
+			{
+				snapshots: collateral.map((value, index) => ({
+					timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
+					block_number: String(23100000 + index * 7700),
+					settlement_collateral_atto_eth: value,
+					total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
+					total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
+					current_retention_rate: poolItem.current_retention_rate,
+				})),
+				events: [],
+				market: hasAmm
+					? {
+							pair_address: demoAddress('fa'),
+							pool_address: poolItem.pool_address,
+							share_token_address: poolItem.share_token_address,
+							universe_id: poolItem.universe_id,
+							fee_bps: '30',
+						}
+					: undefined,
+				ammPrices: hasAmm ? demoAmmPriceHistory() : [],
+				repEthPrices: hasRepEthPrices ? displayedRepEthPrices : [],
+				uniswapRepEthPrices: hasRepEthPrices ? (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory()) : [],
+				openOracleHistory: hasRepEthPrices
+					? displayedRepEthPrices.slice(-3).map((price, index) => ({
+							timestamp: price.timestamp,
+							block_number: price.block_number,
+							event_name: index === 0 ? 'ReportSubmitted' : index === 1 ? 'ReportDisputed' : 'PriceReported',
+							summary: index === 0 ? 'REP/ETH report submitted' : index === 1 ? 'Replacement round accepted' : 'Coordinator accepted the settled price',
+							coordinator_address: poolItem.coordinator_address,
+						}))
+					: [],
+			},
+			['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory'],
+		)
 	}
 	if (type === 'vaults') {
 		const vaultItem =
 			demoVaults.find((item) => item.pool_address === parts[6] && item.vault_address === parts[7]) ?? requiredArrayItem(demoVaults, 0, 'Default demo vault')
 		const rep = demoSeries(vaultItem.rep_backing_units, 10, 0.45)
 		const capacity = demoSeries(vaultItem.capacity_ownership_atto_rep, 10, 0.5)
-		return {
-			snapshots: rep.map((value, index) => ({
-				timestamp: new Date(Date.now() - (9 - index) * 8 * 86_400_000).toISOString(),
-				block_number: String(23110000 + index * 6800),
-				rep_backing_units: value,
-				capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo vault capacity point'),
-				claimable_fees_atto_eth: String(BigInt(1 + index) * 10n ** 16n),
-			})),
-		}
+		return pagedHistory(
+			{
+				snapshots: rep.map((value, index) => ({
+					timestamp: new Date(Date.now() - (9 - index) * 8 * 86_400_000).toISOString(),
+					block_number: String(23110000 + index * 6800),
+					rep_backing_units: value,
+					capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo vault capacity point'),
+					claimable_fees_atto_eth: String(BigInt(1 + index) * 10n ** 16n),
+				})),
+			},
+			['snapshots'],
+		)
 	}
 	if (type === 'universes') {
 		const universe = demoUniverses.find((item) => item.universe_id === parts[6]) ?? requiredArrayItem(demoUniverses, 0, 'Default demo universe')
 		const supply = Array.from({ length: 9 }, (_, index) => String((BigInt(universe.theoretical_supply_atto_rep) * BigInt(108 - index)) / 100n))
-		return {
-			events: supply.map((value, index) => ({
-				timestamp: new Date(Date.now() - (8 - index) * 12 * 86_400_000).toISOString(),
-				block_number: String(23080000 + index * 11000),
-				event_name: index === 0 ? 'UniverseInitialized' : index === 4 ? 'UniverseForked' : 'MigrationRepAdded',
-				theoretical_supply_atto_rep: value,
-			})),
-		}
+		return pagedHistory(
+			{
+				events: supply.map((value, index) => ({
+					timestamp: new Date(Date.now() - (8 - index) * 12 * 86_400_000).toISOString(),
+					block_number: String(23080000 + index * 11000),
+					event_name: index === 0 ? 'UniverseInitialized' : index === 4 ? 'UniverseForked' : 'MigrationRepAdded',
+					theoretical_supply_atto_rep: value,
+				})),
+			},
+			['events'],
+		)
 	}
-	return {
-		pools: demoPools
-			.filter((item) => item.question_id === parts[6])
-			.map((item, index) => ({ ...item, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
-		forks: [],
-	}
+	return pagedHistory(
+		{
+			pools: demoPools
+				.filter((item) => item.question_id === parts[6])
+				.map((item, index) => ({ ...item, timestamp: new Date(Date.now() - (50 - index * 12) * 86_400_000).toISOString() })),
+			forks: [],
+		},
+		['pools', 'forks'],
+	)
 }
 
 let demoLiveSequence = 0
@@ -1284,6 +1383,7 @@ interface LiveEventPayload {
 	chainId: string | number
 	blockNumber?: string | number
 	depth?: string | number
+	reason?: HistoryInvalidationReason
 }
 
 const applyDemoBlock = (payload: LiveEventPayload) => {
@@ -1465,8 +1565,26 @@ const decodeStateCatalog = (value: unknown): StateCatalog => {
 	}
 	const truncated = value['truncated']
 	const limit = value['limit']
+	const totals = value['totals']
 	if (truncated !== undefined && !isBooleanRecord(truncated)) throw new Error('State catalog truncation metadata is malformed')
 	if (limit !== undefined && typeof limit !== 'number') throw new Error('State catalog limit is malformed')
+	if (
+		totals !== undefined &&
+		(!isRecord(totals) ||
+			!['pools', 'questions', 'vaults', 'universes'].every(
+				(key) => typeof totals[key] === 'number' && Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0,
+			))
+	)
+		throw new Error('State catalog totals are malformed')
+	const decodedTotals =
+		totals === undefined
+			? undefined
+			: {
+					pools: Number(totals['pools']),
+					questions: Number(totals['questions']),
+					vaults: Number(totals['vaults']),
+					universes: Number(totals['universes']),
+				}
 	return {
 		pools,
 		vaults,
@@ -1475,6 +1593,7 @@ const decodeStateCatalog = (value: unknown): StateCatalog => {
 		...(poolStates === undefined ? {} : { poolStates }),
 		...(truncated === undefined ? {} : { truncated }),
 		...(limit === undefined ? {} : { limit }),
+		...(decodedTotals === undefined ? {} : { totals: decodedTotals }),
 	}
 }
 
@@ -1502,6 +1621,14 @@ const decodeEntityHistory = (value: unknown): EntityHistory => {
 	if (!Array.isArray(pools) || !pools.every(isJsonValue)) throw new Error('Question pool history is malformed')
 	if (!Array.isArray(forks) || !forks.every(isJsonValue)) throw new Error('Question fork history is malformed')
 	const market = value['market']
+	const truncated = value['truncated']
+	const limit = value['limit']
+	const offset = value['offset']
+	const coverage = value['coverage']
+	if (truncated !== undefined && typeof truncated !== 'boolean') throw new Error('State history truncation metadata is malformed')
+	if (limit !== undefined && (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit < 0)) throw new Error('State history limit is malformed')
+	if (offset !== undefined && (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)) throw new Error('State history offset is malformed')
+	if (coverage !== undefined && !isEntityHistoryCoverageValue(coverage)) throw new Error('State history coverage is malformed')
 	if (
 		market !== undefined &&
 		market !== null &&
@@ -1510,19 +1637,46 @@ const decodeEntityHistory = (value: unknown): EntityHistory => {
 			(market['fee_bps'] !== undefined && market['fee_bps'] !== null && typeof market['fee_bps'] !== 'string' && typeof market['fee_bps'] !== 'number'))
 	)
 		throw new Error('State market history is malformed')
-	return { snapshots, events, ammPrices, repEthPrices, uniswapRepEthPrices, openOracleHistory, pools, forks, ...(market === undefined ? {} : { market }) }
+	return {
+		snapshots,
+		events,
+		ammPrices,
+		repEthPrices,
+		uniswapRepEthPrices,
+		openOracleHistory,
+		pools,
+		forks,
+		...(market === undefined ? {} : { market }),
+		...(truncated === undefined ? {} : { truncated }),
+		...(limit === undefined ? {} : { limit }),
+		...(offset === undefined ? {} : { offset }),
+		...(coverage === undefined ? {} : { coverage }),
+	}
 }
 
-const demoOperations = (chainId: string) => {
+const demoOperations = (chainId: string, atBlock?: string) => {
 	const network = demoNetworks.find((item) => item.chain_id === chainId) ?? demoNetworks[0]
+	const historicalBlock = atBlock !== undefined && /^\d+$/.test(atBlock) ? atBlock : undefined
+	const historical = historicalBlock !== undefined
+	const indexedHead = network?.indexed_block ?? '0'
+	const observedHead = network?.observed_block ?? indexedHead
+	const selectedBlock = historicalBlock ?? indexedHead
+	const nonnegativeDifference = (upper: string, lower: string) => String(BigInt(upper) > BigInt(lower) ? BigInt(upper) - BigInt(lower) : 0n)
 	const asOf = {
-		blockNumber: network?.indexed_block ?? '0',
+		blockNumber: selectedBlock,
 		blockHash: network?.indexed_hash ?? demoHash,
 		blockTimestamp: String(Math.floor(new Date(network?.indexed_timestamp ?? Date.now()).getTime() / 1_000)),
-		observedHead: network?.observed_block ?? network?.indexed_block ?? '0',
-		lagBlocks: '0',
-		phase: network?.phase ?? 'live',
+		indexedHead,
+		observedHead,
+		lagBlocks: nonnegativeDifference(observedHead, selectedBlock),
+		historyDepthBlocks: nonnegativeDifference(indexedHead, selectedBlock),
+		invalidationId: '0',
+		abiSourceHash: 'sha256:demo-abi',
+		applicationSourceHash: 'sha256:demo-application',
+		projectionSourceHash: 'sha256:demo-projection',
+		phase: historical ? 'historical' : (network?.phase ?? 'live'),
 		lastSuccessfulRefresh: network?.last_success_at ?? new Date().toISOString(),
+		historical,
 	}
 	const reports = [
 		{
@@ -1574,6 +1728,7 @@ const demoOperations = (chainId: string) => {
 				pool_address: '0x9999999999999999999999999999999999999999',
 				block_number: asOf.blockNumber,
 				read_status: 'success',
+				source_method: 'poolAccountingState()',
 				protocol_state: '0',
 				scanner_severity: 'warning',
 				scanner_reason: 'Pool is above the scanner capacity warning band',
@@ -1591,6 +1746,7 @@ const demoOperations = (chainId: string) => {
 				vault_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 				block_number: asOf.blockNumber,
 				read_status: 'success',
+				source_method: 'vaultAccountingState()',
 				protocol_state: 'healthy',
 				scanner_severity: 'warning',
 				scanner_reason: 'Health factor is below the scanner warning threshold',
@@ -1634,6 +1790,7 @@ const demoOperations = (chainId: string) => {
 				event_data: { previousNonce: '41', newNonce: '42' },
 			},
 		],
+		pagination: { poolTotal: 1, poolHasMore: false, vaultTotal: 1, vaultHasMore: false },
 	}
 	return {
 		chainId,
@@ -1644,7 +1801,18 @@ const demoOperations = (chainId: string) => {
 			auctions,
 			risk,
 			prices: [{ source_event: 'PriceReported', value: '233590000000000000000', block_number: asOf.blockNumber }],
-			forks: [{ universe_identity: '0', event_name: 'MigrationRepSplit', block_number: asOf.blockNumber }],
+			forks: [
+				{
+					universe_identity: '0',
+					event_name: 'UniverseForked',
+					block_number: asOf.blockNumber,
+					child_count: 2,
+					migrator_count: 14,
+					migrated_atto_rep: '4500000000000000000000',
+					obligation_events: 3,
+				},
+			],
+			totals: { reports: reports.length, escalations: escalations.length, auctions: auctions.length, pools: risk.pools.length, vaults: risk.vaults.length },
 			recentChanges: [
 				{ semantic_event_kind: 'ReportDisputed', entity_identity: '0x529dca…:1842', block_number: asOf.blockNumber },
 				{ semantic_event_kind: 'DepositOnOutcome', entity_identity: '0x777777…', block_number: asOf.blockNumber },
@@ -1658,7 +1826,7 @@ const demoOperationsDetail = (path: string): unknown => {
 	const parts = request.pathname.split('/').filter(Boolean)
 	const domain = parts[3]
 	const chainId = (domain === 'risk' ? parts[5] : parts[4]) ?? '1'
-	const operations = demoOperations(chainId)
+	const operations = demoOperations(chainId, request.searchParams.get('atBlock') ?? undefined)
 	const identity = parts.slice(5).map(decodeURIComponent)
 	const evidence = (eventName: string, eventData: Record<string, unknown>) => ({
 		event_name: eventName,
@@ -1685,13 +1853,48 @@ const demoOperationsDetail = (path: string): unknown => {
 		)
 		const current = {
 			...evidence('ReportDisputed', report?.report_data ?? {}),
+			round_number: '2',
 			report_data: report?.report_data ?? {},
 			lifecycle: report?.lifecycle ?? { state: 'Awaiting indexed evidence', clock: 'timestamp' },
+			comparison: {
+				state: 'compared',
+				previousRoundNumber: '1',
+				previousBlockNumber: String(BigInt(operations.asOf.blockNumber) - 12n),
+				changes: [
+					{ field: 'currentAmount2', kind: 'changed', before: '230000000000000000000', after: '233590000000000000000' },
+					{
+						field: 'currentReporter',
+						kind: 'changed',
+						before: '0x1111111111111111111111111111111111111111',
+						after: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+					},
+				],
+			},
 		}
+		const coordinatorDecision = {
+			event_name: 'PriceReportRejected',
+			summary: 'Replacement round was required',
+			arguments: { reportId: identity[1], reason: 'Report was disputed' },
+			emitter_address: '0x7777777777777777777777777777777777777777',
+			block_number: operations.asOf.blockNumber,
+		}
+		const coordinatorDecisions = request.searchParams.has('decisionCursor')
+			? { items: [{ ...coordinatorDecision, event_name: 'PendingReportRecovered' }], limit: 100, hasMore: false }
+			: {
+					items: [coordinatorDecision],
+					limit: 100,
+					hasMore: pageUrl.searchParams.get('decisionMore') === '1',
+					...(pageUrl.searchParams.get('decisionMore') === '1' ? { nextCursor: 'demo-decision-older' } : {}),
+				}
 		return {
 			chainId,
 			asOf: operations.asOf,
-			data: { identity: { openOracleAddress: identity[0], reportId: identity[1] }, current, rounds: evidencePage(current) },
+			data: {
+				identity: { openOracleAddress: identity[0], reportId: identity[1] },
+				current,
+				rounds: evidencePage(current),
+				coordinatorDecisions,
+			},
 		}
 	}
 	if (domain === 'escalations') {
@@ -1746,7 +1949,39 @@ const demoOperationsDetail = (path: string): unknown => {
 				: risk.vaults.find(
 						(item) => item.pool_address.toLowerCase() === parts[6]?.toLowerCase() && item.vault_address.toLowerCase() === parts[7]?.toLowerCase(),
 					)
-		return { chainId: parts[5] ?? chainId, asOf: operations.asOf, data: entity ?? {} }
+		const offset = request.searchParams.has('cursor') ? 100 : 0
+		const historyMore = pageUrl.searchParams.get('riskHistoryMore') === '1'
+		const historyBlock = String(BigInt(operations.asOf.blockNumber) - BigInt(offset === 0 ? 5 : 500))
+		const historyRecord = (eventName: string, logIndex: number) => ({
+			event_name: eventName,
+			block_number: historyBlock,
+			block_hash: `0x${BigInt(90_000 + offset + logIndex)
+				.toString(16)
+				.padStart(64, '0')}`,
+			tx_hash: `0x${BigInt(100_000 + offset + logIndex)
+				.toString(16)
+				.padStart(64, '0')}`,
+			log_index: logIndex,
+			canonical: true,
+		})
+		return {
+			chainId: parts[5] ?? chainId,
+			asOf: operations.asOf,
+			data: {
+				...(entity ?? {}),
+				approvalEvents: risk.approvalEvents,
+				history: {
+					stateSnapshots: [historyRecord('TaggedStateRead', 0)],
+					accountingSnapshots: [historyRecord('VaultAccountingCheckpoint', 1)],
+					lifecycleEvents: [historyRecord(offset === 0 ? 'VaultHealthChecked' : 'VaultDepositTargetHealthFactorRecorded', 2)],
+					liquidations: offset === 0 ? [] : [historyRecord('VaultLiquidated', 3)],
+					limit: 100,
+					offset,
+					truncated: historyMore && offset === 0,
+					...(historyMore && offset === 0 ? { nextCursor: 'demo-risk-history-older' } : {}),
+				},
+			},
+		}
 	}
 	if (domain === 'trading') {
 		const swap = evidence('Swap', {
@@ -1782,6 +2017,14 @@ const demoOperationsDetail = (path: string): unknown => {
 						observations: 12,
 					},
 				],
+				lpPositions: [
+					{
+						address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+						balance: '12500000000000000000',
+						received_liquidity: '15000000000000000000',
+						sent_liquidity: '2500000000000000000',
+					},
+				],
 				events: evidencePage(swap),
 			},
 		}
@@ -1798,6 +2041,15 @@ const demoOperationsDetail = (path: string): unknown => {
 		asOf: operations.asOf,
 		data: {
 			identity: identity[0],
+			summary: {
+				migrated_atto_rep: '4500000000000000000000',
+				burned_atto_rep: '500000000000000000000',
+				migrator_count: 1,
+				child_count: 1,
+				pool_migration_events: 4,
+				obligations_initialized: 2,
+				obligations_materialized: 1,
+			},
 			branches: [{ child_universe_id: '1', outcome_index: '1', migrated_atto_rep: '4500000000000000000000', migrator_count: 1, migration_count: 1 }],
 			events: evidencePage(migration),
 		},
@@ -1834,14 +2086,136 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 			if (demoState === 'error') throw new Error('Operations could not be loaded')
 			return demoOperations(new URL(path, location.origin).searchParams.get('chainId') ?? '1')
 		}
-		if (/^\/api\/v1\/state\/(reports|escalations|auctions)(?:\?|$)/.test(path)) {
+		if (/^\/api\/v1\/state\/risk(?:\?|$)/.test(path)) {
+			if (demoState === 'loading') return await new Promise(() => {})
+			if (demoState === 'error') throw new Error('Risk catalog could not be loaded')
+			const request = new URL(path, location.origin)
+			const chainId = request.searchParams.get('chainId') ?? '1'
+			const operations = demoOperations(chainId, request.searchParams.get('atBlock') ?? undefined)
+			const baseRisk = operations.data.risk
+			const more = pageUrl.searchParams.get('catalogMore') === '1'
+			const poolCursor = request.searchParams.get('poolCursor')
+			const vaultCursor = request.searchParams.get('vaultCursor')
+			if ((poolCursor !== null || vaultCursor !== null) && pageUrl.searchParams.get('catalogAppendDelay') === '1')
+				await new Promise((resolve) => setTimeout(resolve, 2_500))
+			if ((poolCursor !== null || vaultCursor !== null) && pageUrl.searchParams.get('catalogAppendError') === '1')
+				throw new Error('Additional risk records could not be loaded')
+			const pools =
+				poolCursor === null
+					? baseRisk.pools
+					: baseRisk.pools.map((pool) => ({ ...pool, pool_address: demoAddress('98'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
+			const vaults =
+				vaultCursor === null
+					? baseRisk.vaults
+					: baseRisk.vaults.map((vault) => ({ ...vault, vault_address: demoAddress('c8'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
+			return {
+				chainId,
+				asOf: operations.asOf,
+				data: {
+					...baseRisk,
+					pools,
+					vaults,
+					pagination: {
+						poolTotal: more ? 2 : pools.length,
+						vaultTotal: more ? 2 : vaults.length,
+						poolHasMore: more && poolCursor === null,
+						vaultHasMore: more && vaultCursor === null,
+						...(more && poolCursor === null ? { poolNextCursor: 'demo-pool-older' } : {}),
+						...(more && vaultCursor === null ? { vaultNextCursor: 'demo-vault-older' } : {}),
+					},
+				},
+			}
+		}
+		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|timeline|integrity)(?:\?|$)/.test(path)) {
 			if (demoState === 'loading') return await new Promise(() => {})
 			if (demoState === 'error') throw new Error('Operations catalog could not be loaded')
 			const request = new URL(path, location.origin)
 			const chainId = request.searchParams.get('chainId') ?? '1'
-			const operations = demoOperations(chainId)
+			const operations = demoOperations(chainId, request.searchParams.get('atBlock') ?? undefined)
 			const section = request.pathname.split('/').at(-1)
-			const fixtureItems = section === 'reports' ? operations.data.reports : section === 'escalations' ? operations.data.escalations : operations.data.auctions
+			const timelineFixture = [
+				{
+					entity_type: 'open-oracle-report',
+					entity_identity: '0x529dcaC57677451CBfe766d88CcC133D082500df:1842',
+					semantic_event_kind: 'ReportDisputed',
+					source_contract: '0x529dcaC57677451CBfe766d88CcC133D082500df',
+					block_number: operations.asOf.blockNumber,
+					block_hash: operations.asOf.blockHash,
+					tx_hash: demoHash,
+					log_index: 7,
+					canonical: true,
+					evidence_status: demoTimelineEvidenceStatus(true),
+				},
+				{
+					entity_type: 'reporter',
+					entity_identity: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+					semantic_event_kind: 'ReportDisputed',
+					source_contract: '0x529dcaC57677451CBfe766d88CcC133D082500df',
+					block_number: operations.asOf.blockNumber,
+					block_hash: operations.asOf.blockHash,
+					tx_hash: demoHash,
+					log_index: 7,
+					canonical: true,
+					evidence_status: demoTimelineEvidenceStatus(true),
+				},
+				{
+					entity_type: 'open-oracle-report',
+					entity_identity: '0x529dcaC57677451CBfe766d88CcC133D082500df:1842',
+					semantic_event_kind: 'ReportDisputed',
+					source_contract: '0x529dcaC57677451CBfe766d88CcC133D082500df',
+					block_number: operations.asOf.blockNumber,
+					block_hash: `0x${'4d'.repeat(32)}`,
+					tx_hash: `0x${'9b'.repeat(32)}`,
+					log_index: 7,
+					canonical: false,
+					evidence_status: demoTimelineEvidenceStatus(false, 'chain-reorg'),
+					invalidation_reason: 'chain-reorg',
+				},
+			]
+			const fixtureItems =
+				section === 'reports'
+					? operations.data.reports
+					: section === 'escalations'
+						? operations.data.escalations
+						: section === 'auctions'
+							? operations.data.auctions
+							: section === 'forks'
+								? operations.data.forks
+								: section === 'trading'
+									? [
+											{
+												pair_address: demoAddress('fa'),
+												pool_address: demoPools[0]?.pool_address,
+												question_title: demoPools[0]?.question_title,
+												conditional_yes_bps: '5100',
+												swap_count: 63,
+												lp_holder_count: 4,
+												price_block_number: operations.asOf.blockNumber,
+											},
+										]
+									: section === 'timeline'
+										? timelineFixture.filter((item) => request.searchParams.get('canonical') === 'all' || item.canonical)
+										: [
+												{
+													id: '1',
+													reason: pageUrl.searchParams.get('integrityCombinedCauses') === '1' ? 'projection-rebuild' : 'chain-reorg',
+													depth: '2',
+													previous_block: operations.asOf.blockNumber,
+													previous_hash: demoHash,
+													ancestor_block: String(BigInt(operations.asOf.blockNumber) - 2n),
+													ancestor_hash: `0x${'1834a6d2b779c501'.repeat(4)}`,
+													causes:
+														pageUrl.searchParams.get('integrityCombinedCauses') === '1'
+															? ['abi-redecode', 'manifest-reset', 'projection-rebuild']
+															: ['chain-reorg'],
+													occurrence_counts: { block: '2', transaction: '9', log: '24', 'entity-state': '6' },
+													indexer_run_id: '1',
+													abi_source_hash: demoHash.slice(2),
+													application_source_hash: `sha256:${demoHash.slice(2)}`,
+													projection_source_hash: `sha256:${demoHash.slice(2)}`,
+													detected_at: '2026-08-26T12:34:57.814Z',
+												},
+											]
 			const items = pageUrl.searchParams.get('catalogEmpty') === '1' ? [] : fixtureItems
 			const continuationFixture = pageUrl.searchParams.get('catalogMore') === '1'
 			const cursor = request.searchParams.get('cursor')
@@ -1854,6 +2228,7 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 					asOf: operations.asOf,
 					data: {
 						items: older === undefined ? [] : [{ ...older, block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }],
+						...(section === 'forks' || section === 'timeline' ? { total: items.length + 1 } : {}),
 						limit: 100,
 						hasMore: false,
 					},
@@ -1862,13 +2237,43 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 			return {
 				chainId,
 				asOf: operations.asOf,
-				data: { items, limit: 100, hasMore: continuationFixture, ...(continuationFixture ? { nextCursor: 'demo-older' } : {}) },
+				data: {
+					items,
+					...(section === 'forks' || section === 'timeline' ? { total: items.length + (continuationFixture ? 1 : 0) } : {}),
+					limit: 100,
+					hasMore: continuationFixture,
+					...(continuationFixture ? { nextCursor: 'demo-older' } : {}),
+					...(section === 'integrity'
+						? {
+								migrations: [{ schema_version: '2', description: 'Historical integrity', applied_at: '2026-08-26T12:30:01.042Z' }],
+								runs: [
+									{
+										id: '1',
+										schema_version: '2',
+										app_version: '0.1.0',
+										abi_source_hash: demoHash.slice(2),
+										application_source_hash: `sha256:${demoHash.slice(2)}`,
+										projection_source_hash: `sha256:${demoHash.slice(2)}`,
+										indexer_enabled: true,
+										started_at: '2026-08-26T12:31:04.771Z',
+										stopped_at: null,
+									},
+								],
+							}
+						: {}),
+				},
 			}
 		}
 		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|risk\/(?:pools|vaults))\//.test(path)) {
 			if (demoState === 'loading') return await new Promise(() => {})
 			if (demoState === 'error') throw new Error('Operations detail could not be loaded')
 			const request = new URL(path, location.origin)
+			const riskHistoryContinuation = request.pathname.includes('/risk/') && request.searchParams.has('cursor')
+			if (riskHistoryContinuation && pageUrl.searchParams.get('riskHistoryAppendDelay') === '1') await new Promise((resolve) => setTimeout(resolve, 2_500))
+			if (riskHistoryContinuation && pageUrl.searchParams.get('riskHistoryAppendError') === '1' && !demoRiskHistoryAppendErrorConsumed) {
+				demoRiskHistoryAppendErrorConsumed = true
+				throw new Error('Older risk history could not be loaded')
+			}
 			if (request.searchParams.has('cursor') && pageUrl.searchParams.get('detailAppendDelay') === '1')
 				await new Promise((resolve) => setTimeout(resolve, 2_500))
 			if (request.searchParams.has('cursor') && pageUrl.searchParams.get('detailAppendError') === '1')
@@ -1893,10 +2298,108 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 				vaults: demoCatalog.vaults.filter((item) => !chainId || item.chain_id === chainId),
 				questions: demoCatalog.questions.filter((item) => !chainId || item.chain_id === chainId),
 				universes: demoCatalog.universes.filter((item) => !chainId || item.chain_id === chainId),
+				totals: {
+					pools: demoCatalog.pools.filter((item) => !chainId || item.chain_id === chainId).length,
+					vaults: demoCatalog.vaults.filter((item) => !chainId || item.chain_id === chainId).length,
+					questions: demoCatalog.questions.filter((item) => !chainId || item.chain_id === chainId).length,
+					universes: demoCatalog.universes.filter((item) => !chainId || item.chain_id === chainId).length,
+				},
+			}
+		}
+		if (path.startsWith('/api/v1/state/address-portfolio')) {
+			const request = new URL(path, location.origin)
+			const chainId = request.searchParams.get('chainId') ?? '1'
+			const address = request.searchParams.get('address')?.toLowerCase()
+			const item = demoRichList.find((candidate) => candidate.chain_id === chainId && candidate.address.toLowerCase() === address)
+			const operations = demoOperations(chainId)
+			const more = pageUrl.searchParams.get('portfolioMore') === '1'
+			const lpCursor = request.searchParams.get('lpCursor')
+			const forkCursor = request.searchParams.get('forkCursor')
+			const reportCursor = request.searchParams.get('reportCursor')
+			const continuationRequested = lpCursor !== null || forkCursor !== null || reportCursor !== null
+			if (continuationRequested && pageUrl.searchParams.get('portfolioAppendDelay') === '1') await new Promise((resolve) => setTimeout(resolve, 2_500))
+			if (continuationRequested && pageUrl.searchParams.get('portfolioAppendError') === '1' && !demoPortfolioAppendErrorConsumed) {
+				demoPortfolioAppendErrorConsumed = true
+				throw new Error('Additional account evidence could not be loaded')
+			}
+			const lpPositions = [
+				{
+					market_address: lpCursor === null ? demoAddress('a7') : demoAddress('a8'),
+					pool_address: demoAddress('7'),
+					question_title: 'Will the protocol meet its launch reliability target?',
+					balance: '4250000000000000000',
+					transfer_count: 6,
+				},
+			]
+			const forkParticipation = [
+				{
+					universe_identity: forkCursor === null ? '0' : '1',
+					event_name: 'MigrationRepAdded',
+					block_number: String(BigInt(operations.asOf.blockNumber) - BigInt(forkCursor === null ? 0 : 100)),
+					block_hash: demoHash,
+					tx_hash: forkCursor === null ? `0x${'a'.repeat(64)}` : `0x${'b'.repeat(64)}`,
+					log_index: 1,
+				},
+			]
+			const reportParticipation = [
+				{
+					open_oracle_address: demoAddress('9'),
+					report_id: reportCursor === null ? '1842' : '1841',
+					event_name: 'ReportSubmitted',
+					round_number: '2',
+					block_number: String(BigInt(operations.asOf.blockNumber) - BigInt(reportCursor === null ? 0 : 100)),
+					block_hash: demoHash,
+					tx_hash: reportCursor === null ? `0x${'c'.repeat(64)}` : `0x${'d'.repeat(64)}`,
+					log_index: 2,
+				},
+			]
+			return {
+				chainId,
+				asOf: operations.asOf,
+				data: {
+					...(item ?? {
+						chain_id: chainId,
+						address: address ?? demoAddress('1'),
+						availability: 'Awaiting indexed evidence',
+					}),
+					lp_positions: lpPositions,
+					fork_participation: forkParticipation,
+					report_participation: reportParticipation,
+					portfolioPagination: {
+						lp: {
+							total: more ? 2 : 1,
+							limit: 100,
+							offset: lpCursor === null ? 0 : 1,
+							hasMore: more && lpCursor === null,
+							...(more && lpCursor === null ? { nextCursor: 'demo-lp-older' } : {}),
+						},
+						forks: {
+							total: more ? 2 : 1,
+							limit: 100,
+							offset: forkCursor === null ? 0 : 1,
+							hasMore: more && forkCursor === null,
+							...(more && forkCursor === null ? { nextCursor: 'demo-fork-older' } : {}),
+						},
+						reports: {
+							total: more ? 2 : 1,
+							limit: 100,
+							offset: reportCursor === null ? 0 : 1,
+							hasMore: more && reportCursor === null,
+							...(more && reportCursor === null ? { nextCursor: 'demo-report-older' } : {}),
+						},
+					},
+				},
 			}
 		}
 		if (path.startsWith('/api/v1/state/')) {
 			demoStateDetailRequests++
+			const stateHistoryRequest = new URL(path, location.origin)
+			const stateHistoryOffset = stateHistoryRequest.searchParams.has('cursor') ? 1000 : 0
+			if (stateHistoryOffset > 0 && pageUrl.searchParams.get('stateHistoryAppendDelay') === '1') await new Promise((resolve) => setTimeout(resolve, 2_500))
+			if (stateHistoryOffset > 0 && pageUrl.searchParams.get('stateHistoryAppendError') === '1' && !demoStateHistoryAppendErrorConsumed) {
+				demoStateHistoryAppendErrorConsumed = true
+				throw new Error('Older state history could not be loaded')
+			}
 			if (detailState === 'error' && !demoDetailErrorConsumed) {
 				demoDetailErrorConsumed = true
 				throw new Error('Historical checkpoints could not be read')
@@ -2296,7 +2799,7 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 		polledReorgRefreshTimer = window.setTimeout(() => {
 			polledReorgRefreshTimer = undefined
 			if (selectedChainId() === chainId && activeReorgRecovery === undefined)
-				void refreshCanonicalViews('Chain reorganization detected', 'Address identities and views are refreshing.')
+				void refreshCanonicalViews('Canonical history reset detected', 'Address identities and views are refreshing from the latest indexed generation.')
 		}, 0)
 	}
 	networkCards.classList.remove('empty')
@@ -2453,36 +2956,64 @@ const requiredChainId = () => {
 	return chainId
 }
 
-type OperationsResponse = {
-	readonly chainId: string | number
-	readonly asOf: Record<string, unknown>
-	readonly data: Record<string, unknown>
-}
-
-const decodeOperationsResponse = (value: unknown): OperationsResponse => {
-	if (!isRecord(value) || (!isString(value['chainId']) && typeof value['chainId'] !== 'number') || !isRecord(value['asOf']) || !isRecord(value['data']))
-		throw new Error('Operations response is malformed')
-	return { chainId: value['chainId'], asOf: value['asOf'], data: value['data'] }
-}
-
-const operationRecords = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : [])
-type OperationsCatalogSection = 'auctions' | 'escalations' | 'reports'
+const decodeOperationsResponse = decodeOperationsResponseValue
+type PagedOperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
+type OperationsCatalogSection = PagedOperationsCatalogSection | 'risk'
 const operationsCatalogSection = (): OperationsCatalogSection | undefined => {
 	const section = location.pathname.split('/')[2]
-	return section === 'reports' || section === 'escalations' || section === 'auctions' ? section : undefined
+	return section === 'reports' ||
+		section === 'escalations' ||
+		section === 'auctions' ||
+		section === 'forks' ||
+		section === 'trading' ||
+		section === 'timeline' ||
+		section === 'integrity' ||
+		section === 'risk'
+		? section
+		: undefined
 }
 
-const operationsCatalogEndpoint = (section: OperationsCatalogSection, cursor?: string, limit = 100): string => {
+const operationsCatalogEndpoint = (section: PagedOperationsCatalogSection, cursor?: string, limit = 100): string => {
 	const query = new URLSearchParams({ chainId: requiredChainId(), limit: String(limit) })
+	if (section === 'timeline')
+		for (const parameter of ['q', 'entityType', 'event', 'address', 'fromBlock', 'toBlock', 'canonical'] as const) {
+			const value = pageUrl.searchParams.get(parameter)
+			if (value !== null && value !== '') query.set(parameter, value)
+		}
 	if (cursor !== undefined) query.set('cursor', cursor)
 	return `/api/v1/state/${section}?${query.toString()}`
 }
 
+const operationsRiskCatalogEndpoint = (poolCursor?: string, vaultCursor?: string, limit = 100): string => {
+	const query = new URLSearchParams({ chainId: requiredChainId(), limit: String(limit) })
+	const atBlock = pageUrl.searchParams.get('atBlock')
+	if (atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
+	if (poolCursor !== undefined) query.set('poolCursor', poolCursor)
+	if (vaultCursor !== undefined) query.set('vaultCursor', vaultCursor)
+	return `/api/v1/state/risk?${query.toString()}`
+}
+
 const catalogOperationsResponse = (
 	response: OperationsResponse,
-	section: OperationsCatalogSection,
+	section: PagedOperationsCatalogSection,
 	items: readonly Record<string, unknown>[],
-): OperationsResponse => ({ ...response, data: { [section]: items, _catalogPage: response.data } })
+): OperationsResponse => ({ ...response, data: { ...response.data, [section]: items, _catalogPage: response.data } })
+
+const riskCatalogOperationsResponse = (
+	response: OperationsResponse,
+	pools: readonly Record<string, unknown>[],
+	vaults: readonly Record<string, unknown>[],
+): OperationsResponse => ({
+	...response,
+	data: {
+		risk: { ...response.data, pools, vaults },
+		_riskCatalogPage: response.data,
+		totals: {
+			pools: isRecord(response.data['pagination']) ? response.data['pagination']['poolTotal'] : pools.length,
+			vaults: isRecord(response.data['pagination']) ? response.data['pagination']['vaultTotal'] : vaults.length,
+		},
+	},
+})
 
 const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): string => {
 	const eventData = isRecord(item['event_data']) ? item['event_data'] : {}
@@ -2500,6 +3031,10 @@ const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): str
 type OperationsRenderContext = {
 	readonly focusHref?: string
 	readonly focusLoadMore: boolean
+	readonly focusDetailCollection?: 'decisions' | 'evidence'
+	readonly focusRiskKind?: 'pool' | 'vault'
+	readonly focusHistoryMore: boolean
+	readonly focusViewportTop?: number
 	readonly scrollY: number
 }
 
@@ -2513,34 +3048,65 @@ const captureOperationsRenderContext = (): OperationsRenderContext => {
 			(active.classList.contains('operations-catalog-more') ||
 				active.classList.contains('operations-detail-more') ||
 				active.classList.contains('operations-pagination-complete')),
+		...(active instanceof HTMLElement && (active.dataset['detailCollection'] === 'decisions' || active.dataset['detailCollection'] === 'evidence')
+			? { focusDetailCollection: active.dataset['detailCollection'] }
+			: {}),
+		...(active instanceof HTMLElement && (active.dataset['riskKind'] === 'pool' || active.dataset['riskKind'] === 'vault')
+			? { focusRiskKind: active.dataset['riskKind'] }
+			: {}),
+		focusHistoryMore:
+			active instanceof HTMLElement && (active.classList.contains('operations-history-more') || active.classList.contains('operations-history-complete')),
+		...(active instanceof HTMLElement && content.contains(active) ? { focusViewportTop: active.getBoundingClientRect().top } : {}),
 		scrollY: window.scrollY,
 	}
 }
 
 const restoreOperationsRenderContext = (snapshot: OperationsRenderContext) => {
 	const content = $('#operations-content')
-	const continuation = content.querySelector<HTMLButtonElement>('.operations-catalog-more, .operations-detail-more')
+	const continuation =
+		snapshot.focusDetailCollection === undefined
+			? content.querySelector<HTMLButtonElement>('.operations-catalog-more, .operations-detail-more')
+			: content.querySelector<HTMLButtonElement>(`[data-detail-collection="${snapshot.focusDetailCollection}"]`)
 	const completion = content.querySelector<HTMLElement>('.operations-pagination-complete')
+	const historyContinuation = content.querySelector<HTMLButtonElement>('.operations-history-more')
+	const historyCompletion = content.querySelector<HTMLElement>('.operations-history-complete')
 	const catalogRows = [...content.querySelectorAll<HTMLAnchorElement>('a.operations-row')]
+	const riskTarget = snapshot.focusRiskKind === undefined ? undefined : content.querySelector<HTMLElement>(`[data-risk-kind="${snapshot.focusRiskKind}"]`)
 	const target =
-		snapshot.focusHref === undefined
-			? snapshot.focusLoadMore
-				? (continuation ?? completion ?? catalogRows.at(-1))
-				: undefined
-			: catalogRows.find((candidate) => candidate.href === snapshot.focusHref)
-	target?.focus({ preventScroll: true })
+		riskTarget ??
+		(snapshot.focusHref === undefined
+			? snapshot.focusHistoryMore
+				? (historyContinuation ?? historyCompletion)
+				: snapshot.focusLoadMore
+					? (continuation ?? completion ?? catalogRows.at(-1))
+					: undefined
+			: catalogRows.find((candidate) => candidate.href === snapshot.focusHref))
 	window.scrollTo({ top: snapshot.scrollY, behavior: 'auto' })
+	if (target === undefined || target === null) return
+	target.focus({ preventScroll: true })
+	if (snapshot.focusViewportTop !== undefined) {
+		window.scrollBy({ top: target.getBoundingClientRect().top - snapshot.focusViewportTop, behavior: 'auto' })
+		target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+	}
 }
 const operationNumber = (value: unknown): string =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? number(value) : number(undefined)
 const operationCounted = (value: unknown, singular: string, plural?: string): string =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? counted(value, singular, plural) : counted(undefined, singular, plural)
+const operationRatio = (numerator: unknown, denominator: unknown, maximumFraction = 4): string => {
+	if (typeof numerator !== 'string' || typeof denominator !== 'string' || !/^\d+$/.test(numerator) || !/^\d+$/.test(denominator) || denominator === '0')
+		return 'Unavailable'
+	const scale = 10n ** BigInt(maximumFraction)
+	return exactUnit((BigInt(numerator) * scale) / BigInt(denominator), maximumFraction, '', maximumFraction)
+}
 
 const operationsHref = (pathname: string): string => {
 	const destination = new URL(pathname, location.origin)
 	const chainId = selectedChainId()
 	if (chainId !== '') destination.searchParams.set('chainId', chainId)
 	if (isDemo) destination.searchParams.set('demo', '1')
+	const atBlock = pageUrl.searchParams.get('atBlock')
+	if (atBlock !== null && destination.pathname.startsWith('/operations/risk')) destination.searchParams.set('atBlock', atBlock)
 	return `${destination.pathname}${destination.search}`
 }
 
@@ -2551,12 +3117,13 @@ const operationCard = (label: string, value: string, detail?: string) => {
 	return card
 }
 
-const operationRow = (title: string, status: string, identity: string, block: unknown, href?: string) => {
+const operationRow = (title: string, status: string, identity: string | undefined, block: unknown, href?: string) => {
 	const row = href === undefined ? element('div', 'operations-row') : document.createElement('a')
 	row.className = 'operations-row'
 	if (row instanceof HTMLAnchorElement && href !== undefined) row.href = href
 	const copy = element('div')
-	copy.append(element('strong', '', title), element('span', '', status), element('code', '', shortIdentifier(identity, 12, 8)))
+	copy.append(element('strong', '', title), element('span', '', status))
+	if (identity !== undefined && identity !== '') copy.append(element('code', '', shortIdentifier(identity, 12, 8)))
 	row.append(copy)
 	if (typeof block === 'string' || typeof block === 'number') {
 		const evidence = element('div', 'operations-evidence')
@@ -2566,13 +3133,111 @@ const operationRow = (title: string, status: string, identity: string, block: un
 	return row
 }
 
-const operationsPanel = (title: string, rows: HTMLElement[], empty: string) => {
+const exactEvidenceRow = (title: string, status: string, fields: ReadonlyArray<readonly [label: string, value: unknown]>, block?: unknown): HTMLElement => {
+	const row = operationRow(title, status, undefined, block)
+	const evidence = element('dl', 'operations-exact-evidence')
+	for (const [label, value] of fields) {
+		const field = element('div')
+		const rendered = value === undefined || value === null || value === '' ? 'Not recorded' : String(value)
+		field.append(element('dt', '', label), element('dd', '', rendered))
+		evidence.append(field)
+	}
+	row.append(evidence)
+	return row
+}
+
+const operationsPanel = (title: string, rows: HTMLElement[], empty: string, scope?: { readonly label: string; readonly scannerWide?: boolean }) => {
 	const panel = element('section', 'operations-panel')
+	if (scope?.scannerWide === true) panel.classList.add('operations-panel-scanner-wide')
 	panel.append(element('h3', '', title))
+	if (scope !== undefined) panel.append(element('p', 'operations-panel-scope', scope.label))
 	const list = element('div', 'operations-list')
 	list.append(...(rows.length === 0 ? [element('div', 'state-placeholder', empty)] : rows))
 	panel.append(list)
 	return panel
+}
+
+const operationsTimelineFilters = (): HTMLFormElement => {
+	const form = document.createElement('form')
+	form.className = 'filters operations-filters'
+	form.method = 'get'
+	form.action = '/operations/timeline'
+	form.setAttribute('role', 'search')
+	const field = (label: string, name: string, placeholder: string, inputMode?: 'numeric') => {
+		const wrapper = document.createElement('label')
+		const input = document.createElement('input')
+		input.type = 'search'
+		input.name = name
+		input.placeholder = placeholder
+		input.value = pageUrl.searchParams.get(name) ?? ''
+		if (inputMode !== undefined) input.inputMode = inputMode
+		wrapper.append(element('span', '', label), input)
+		return wrapper
+	}
+	const canonicalLabel = document.createElement('label')
+	const canonical = document.createElement('select')
+	canonical.name = 'canonical'
+	canonical.append(new Option('Canonical only', 'canonical'), new Option('Canonical and superseded', 'all'))
+	canonical.value = pageUrl.searchParams.get('canonical') === 'all' ? 'all' : 'canonical'
+	canonicalLabel.append(element('span', '', 'Evidence'), canonical)
+	for (const [name, value] of [['chainId', requiredChainId()], ...(isDemo ? [['demo', '1']] : [])] as const) {
+		const input = document.createElement('input')
+		input.type = 'hidden'
+		input.name = name
+		input.value = value
+		form.append(input)
+	}
+	const submit = element('button', 'primary', 'Apply filters')
+	submit.setAttribute('type', 'submit')
+	const clear = document.createElement('a')
+	clear.className = 'secondary button-link'
+	clear.href = operationsHref('/operations/timeline')
+	clear.textContent = 'Clear filters'
+	const actions = element('div', 'operations-filter-actions')
+	actions.append(submit, clear)
+	form.append(
+		field('Search', 'q', 'Event, entity, or evidence…'),
+		field('Entity type', 'entityType', 'fork, vault, amm…'),
+		field('Event', 'event', 'ReportDisputed…'),
+		field('Address', 'address', '0x…'),
+		field('From block', 'fromBlock', '0', 'numeric'),
+		field('To block', 'toBlock', 'Latest', 'numeric'),
+		canonicalLabel,
+		actions,
+	)
+	return form
+}
+
+const operationsRiskSnapshotFilter = (): HTMLFormElement => {
+	const form = document.createElement('form')
+	form.className = 'filters operations-filters operations-as-of-filter'
+	form.method = 'get'
+	form.action = '/operations/risk'
+	const label = document.createElement('label')
+	const input = document.createElement('input')
+	input.type = 'search'
+	input.inputMode = 'numeric'
+	input.name = 'atBlock'
+	input.placeholder = 'Latest indexed block'
+	input.value = pageUrl.searchParams.get('atBlock') ?? ''
+	label.append(element('span', '', 'State at block'), input)
+	for (const [name, value] of [['chainId', requiredChainId()], ...(isDemo ? [['demo', '1']] : [])] as const) {
+		const hidden = document.createElement('input')
+		hidden.type = 'hidden'
+		hidden.name = name
+		hidden.value = value
+		form.append(hidden)
+	}
+	const submit = element('button', 'primary', 'View snapshot')
+	submit.setAttribute('type', 'submit')
+	const latest = document.createElement('a')
+	latest.className = 'secondary button-link'
+	const latestDestination = new URL(operationsHref('/operations/risk'), location.origin)
+	latestDestination.searchParams.delete('atBlock')
+	latest.href = `${latestDestination.pathname}${latestDestination.search}`
+	latest.textContent = 'Latest state'
+	form.append(label, submit, latest)
+	return form
 }
 
 const renderOperations = (response: OperationsResponse, preservedContext?: OperationsRenderContext) => {
@@ -2580,16 +3245,27 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	const renderContext = preservedContext ?? captureOperationsRenderContext()
 	const { asOf, data } = response
 	const selected = location.pathname.split('/')[2] ?? 'overview'
-	const reports = operationRecords(data['reports'])
-	const escalations = operationRecords(data['escalations'])
-	const auctions = operationRecords(data['auctions'])
-	const forks = operationRecords(data['forks'])
+	const reports = operationsCatalogRecords('reports', data['reports'])
+	const escalations = operationsCatalogRecords('escalations', data['escalations'])
+	const auctions = operationsCatalogRecords('auctions', data['auctions'])
+	const forks = operationsCatalogRecords('forks', data['forks'])
 	const changes = operationRecords(data['recentChanges'])
 	const prices = operationRecords(data['prices'])
-	const risk = isRecord(data['risk']) ? data['risk'] : {}
-	const pools = operationRecords(risk['pools'])
-	const vaults = operationRecords(risk['vaults'])
+	const trading = operationsCatalogRecords('trading', data['trading'])
+	const timeline = operationsCatalogRecords('timeline', data['timeline'])
+	const integrity = operationsCatalogRecords('integrity', data['integrity'])
+	const selectedCatalogPage = isRecord(data['_catalogPage']) ? data['_catalogPage'] : undefined
+	const totals = isRecord(data['totals']) ? data['totals'] : {}
+	const selectedNetwork = latestNetworks.find((network) => String(network.chain_id) === requiredChainId())
+	const selectedNetworkScope = `Selected network · ${selectedNetwork?.name ?? `chain ${requiredChainId()}`} · chain ${requiredChainId()}`
+	const riskValue = data['risk']
+	if (riskValue !== undefined && !isRecord(riskValue)) throw new Error('Operations risk is malformed')
+	const risk = isRecord(riskValue) ? riskValue : {}
+	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
+	const pools = operationsRiskRecords('pools', risk['pools'])
+	const vaults = operationsRiskRecords('vaults', risk['vaults'])
 	const approvals = operationRecords(risk['approvalEvents']).sort(compareCanonicalEventPosition)
+	const recentLiquidations = operationRecords(risk['recentLiquidations'])
 	const freshness = element('div', 'operations-freshness')
 	freshness.append(
 		operationCard(
@@ -2609,12 +3285,20 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	metrics.append(
 		operationCard(
 			'OpenOracle reports',
-			number(reports.length),
+			operationNumber(totals['reports'] ?? reports.length),
 			counted(reports.filter((item) => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length, 'settleable'),
 		),
-		operationCard('Escalation games', number(escalations.length), 'Canonical event projections'),
-		operationCard('Truth auctions', number(auctions.length), counted(auctions.filter((item) => item['status'] === 'Open').length, 'open')),
-		operationCard('Pool / vault snapshots', `${number(pools.length)} / ${number(vaults.length)}`, 'Latest canonical accounting'),
+		operationCard('Escalation games', operationNumber(totals['escalations'] ?? escalations.length), 'Canonical event projections'),
+		operationCard(
+			'Truth auctions',
+			operationNumber(totals['auctions'] ?? auctions.length),
+			counted(auctions.filter((item) => item['status'] === 'Open').length, 'open'),
+		),
+		operationCard(
+			'Pool / vault snapshots',
+			`${operationNumber(totals['pools'] ?? pools.length)} / ${operationNumber(totals['vaults'] ?? vaults.length)}`,
+			'Latest canonical accounting',
+		),
 	)
 	const reportRows = reports.map((item) => {
 		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}
@@ -2647,30 +3331,31 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			operationsHref(`/operations/auction/${encodeURIComponent(String(item['auction_address'] ?? ''))}`),
 		),
 	)
-	const riskRows = [
-		...pools.map((item) => {
-			const capacity = isRecord(item['capacity']) ? item['capacity'] : {}
-			return operationRow(
-				'Pool accounting',
-				`${String(item['scanner_severity'] ?? 'unavailable')} · ${operationNumber(capacity['utilizationBps'])} bps utilized · ${String(item['scanner_reason'] ?? '')}`,
-				String(item['pool_address'] ?? ''),
-				item['block_number'],
-				operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
-			)
-		}),
-		...vaults.map((item) => {
-			const itemRisk = isRecord(item['risk']) ? item['risk'] : {}
-			return operationRow(
-				'Vault position',
-				`${String(item['scanner_severity'] ?? 'unavailable')} · health ${operationNumber(itemRisk['healthFactorBps'])} bps · ${String(item['scanner_reason'] ?? '')}`,
-				String(item['vault_address'] ?? ''),
-				item['block_number'],
-				operationsHref(
-					`/operations/risk/vault/${encodeURIComponent(String(item['pool_address'] ?? ''))}/${encodeURIComponent(String(item['vault_address'] ?? ''))}`,
-				),
-			)
-		}),
-	]
+	const poolRiskRows = pools.map((item) => {
+		const capacity = isRecord(item['capacity']) ? item['capacity'] : {}
+		const riskPresentation = operationsRiskPresentation('pool', item['protocol_state'], item['scanner_severity'])
+		return operationRow(
+			'Pool accounting',
+			`${riskPresentation.scannerAssessment} · ${operationNumber(capacity['utilizationBps'])} bps utilized · ${String(item['scanner_reason'] ?? '')}`,
+			String(item['pool_address'] ?? ''),
+			item['block_number'],
+			operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
+		)
+	})
+	const vaultRiskRows = vaults.map((item) => {
+		const itemRisk = isRecord(item['risk']) ? item['risk'] : {}
+		const riskPresentation = operationsRiskPresentation('vault', item['protocol_state'], item['scanner_severity'])
+		return operationRow(
+			'Vault position',
+			`${riskPresentation.scannerAssessment} · health ${operationNumber(itemRisk['healthFactorBps'])} bps · ${String(item['scanner_reason'] ?? '')}`,
+			String(item['vault_address'] ?? ''),
+			item['block_number'],
+			operationsHref(
+				`/operations/risk/vault/${encodeURIComponent(String(item['pool_address'] ?? ''))}/${encodeURIComponent(String(item['vault_address'] ?? ''))}`,
+			),
+		)
+	})
+	const riskRows = [...poolRiskRows, ...vaultRiskRows]
 	const approvalRows = approvals.map((item) =>
 		operationRow(
 			String(item['event_name'] ?? 'Liquidation approval'),
@@ -2679,11 +3364,60 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			item['block_number'],
 		),
 	)
+	const liquidationRows = recentLiquidations.map((item) =>
+		operationRow(
+			'Vault liquidation',
+			'Canonical liquidation route and resulting debt evidence',
+			String(item['entity_identity'] ?? item['source_contract'] ?? ''),
+			item['block_number'],
+		),
+	)
+	const tradingRows = trading.map((item) =>
+		operationRow(
+			String(item['question_title'] ?? 'Augur AMM market'),
+			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%', 2)} YES`} · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
+			String(item['pair_address'] ?? ''),
+			item['price_block_number'],
+			operationsHref(`/operations/trading/${encodeURIComponent(String(item['pair_address'] ?? ''))}`),
+		),
+	)
+	const timelineRows = timeline.map((item) => {
+		const rawEvidenceStatus = item['evidence_status'] ?? (item['canonical'] === false ? 'noncanonical' : 'canonical')
+		const invalidation = item['invalidation_reason'] === undefined ? '' : ` · ${historyInvalidationReasonLabel(item['invalidation_reason'])}`
+		return exactEvidenceRow(
+			String(item['semantic_event_kind'] ?? 'Protocol transition'),
+			`${timelineEntityTypeLabel(item['entity_type'])} · ${evidenceStatusLabel(rawEvidenceStatus)}${invalidation}`,
+			[...timelineOccurrenceFields(item), ['Evidence status code', rawEvidenceStatus], ['Invalidation reason code', item['invalidation_reason']]],
+		)
+	})
+	const integrityRows = integrity.map((item) => {
+		const evidence = historyInvalidationEvidencePresentation(item['causes'], item['occurrence_counts'])
+		const primaryReason = String(item['reason'] ?? '')
+		const primaryReasonLabel = historyInvalidationReasonLabel(primaryReason)
+		const causeSummary = evidence.causeCodes.length === 1 && evidence.causeCodes[0] === primaryReason ? '' : ` · ${evidence.causeLabel}`
+		return exactEvidenceRow(
+			primaryReasonLabel,
+			`${operationCounted(item['depth'], 'replaced block')} · ${operationCounted(evidence.occurrenceTotal, 'affected occurrence')}${causeSummary}`,
+			[
+				['Primary invalidation reason code', item['reason']],
+				['Complete cause set', evidence.causeCodes.join(', ')],
+				...evidence.occurrenceFields,
+				['Invalidating indexer run', item['indexer_run_id']],
+				['Invalidating ABI source hash', item['abi_source_hash']],
+				['Invalidating application source hash', item['application_source_hash']],
+				['Invalidating projection source hash', item['projection_source_hash']],
+				['Previous block hash', item['previous_hash']],
+				['Ancestor block hash', item['ancestor_hash']],
+				['Detected at', item['detected_at']],
+			],
+			item['previous_block'],
+		)
+	})
 	const forkRows = forks.map((item) =>
 		operationRow(
-			'Fork / migration',
-			String(item['event_name'] ?? 'Migration evidence'),
-			String(item['universe_identity'] ?? ''),
+			`Universe ${String(item['universe_identity'] ?? '—')} fork`,
+			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP', 3)} migrated · ${operationCounted(item['obligation_events'], 'escalation obligation')}`,
+			undefined,
 			item['block_number'],
 			operationsHref(`/operations/fork/${encodeURIComponent(String(item['universe_identity'] ?? ''))}`),
 		),
@@ -2722,6 +3456,12 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 		if (['Open', 'Awaiting finalization', 'Bid settlements outstanding'].includes(String(item['status'] ?? '')) && row !== undefined)
 			activeAuctionRows.push(row)
 	}
+	const riskPoolPanel = operationsPanel('Pool risk evidence', poolRiskRows, 'No canonical pool accounting snapshots have been indexed.', {
+		label: `${operationCounted(pools.length, 'pool')} shown · ${operationCounted(riskPagination['poolTotal'], 'pool')} indexed total`,
+	})
+	const riskVaultPanel = operationsPanel('Vault risk evidence', vaultRiskRows, 'No canonical vault accounting snapshots have been indexed.', {
+		label: `${operationCounted(vaults.length, 'vault')} shown · ${operationCounted(riskPagination['vaultTotal'], 'vault')} indexed total`,
+	})
 	const panels =
 		selected === 'reports'
 			? [operationsPanel('OpenOracle reports', reportRows, 'No canonical report evidence has been indexed.')]
@@ -2731,24 +3471,142 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 					? [operationsPanel('Truth auctions', auctionRows, 'No canonical auction evidence has been indexed.')]
 					: selected === 'risk'
 						? [
-								operationsPanel('Pool and vault risk evidence', riskRows, 'No canonical accounting snapshots have been indexed.'),
+								riskPoolPanel,
+								riskVaultPanel,
 								operationsPanel('Liquidation approval lifecycle', approvalRows, 'No liquidation approval evidence has been indexed.'),
+								operationsPanel('Recent liquidations', liquidationRows, 'No vault liquidations have been indexed.'),
 							]
-						: [
-								operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
-								operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
-								operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
-								operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
-								operationsPanel('Fork and migration progress', forkRows, 'No fork or migration evidence has been indexed.'),
-								operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
-								operationsPanel('Recent semantic changes', changeRows, 'No semantic changes have been indexed.'),
-							]
+						: selected === 'trading'
+							? [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets have been indexed.')]
+							: selected === 'timeline'
+								? [
+										operationsPanel('Cross-protocol historical timeline', timelineRows, 'No semantic evidence matches these filters.', {
+											label: `${operationCounted(selectedCatalogPage?.['total'], 'matching transition')} · canonical status and invalidation provenance included`,
+										}),
+									]
+								: selected === 'forks'
+									? [
+											operationsPanel('Zoltar forks and migration progress', forkRows, 'No universe forks have been indexed.', {
+												label: `${operationCounted(forkRows.length, 'fork')} shown · ${operationCounted(selectedCatalogPage?.['total'], 'fork')} indexed total`,
+											}),
+										]
+									: selected === 'integrity'
+										? [
+												operationsPanel('Selected-chain replacements', integrityRows, 'No chain reorganizations have been recorded.', {
+													label: selectedNetworkScope,
+												}),
+												operationsPanel(
+													'Scanner-wide schema migration history',
+													operationRecords(data['migrations']).map((item) =>
+														exactEvidenceRow(`Schema ${String(item['schema_version'] ?? '')}`, String(item['description'] ?? ''), [
+															['Applied at', item['applied_at']],
+														]),
+													),
+													'No migration records are available.',
+													{ label: 'Scanner-wide · all configured networks', scannerWide: true },
+												),
+												operationsPanel(
+													'Scanner-wide indexer provenance',
+													operationRecords(data['runs']).map((item) =>
+														exactEvidenceRow(
+															`augurScan ${String(item['app_version'] ?? '')}`,
+															`Schema ${String(item['schema_version'] ?? '')} · process run ${String(item['id'] ?? 'not recorded')}`,
+															[
+																['ABI source hash', item['abi_source_hash']],
+																['Application source hash', item['application_source_hash']],
+																['Projection source hash', item['projection_source_hash']],
+																['Indexer enabled', item['indexer_enabled']],
+																['Started at', item['started_at']],
+																['Stopped at', item['stopped_at']],
+															],
+														),
+													),
+													'No indexer-run provenance is available.',
+													{ label: 'Scanner-wide · latest 25 process runs across all networks', scannerWide: true },
+												),
+												operationsPanel(
+													'Selected-chain historical exports',
+													[
+														operationRow(
+															'Export semantic timeline',
+															'Snapshot-bound canonical NDJSON with exact event data; response headers identify an opaque continuation cursor.',
+															undefined,
+															undefined,
+															operationsHref('/api/v1/export?dataset=timeline&canonical=canonical&limit=50000'),
+														),
+														operationRow(
+															'Export canonical and orphan logs',
+															'Occurrence-level NDJSON including decoded arguments and canonical flags.',
+															undefined,
+															undefined,
+															operationsHref('/api/v1/export?dataset=logs&canonical=all&limit=50000'),
+														),
+													],
+													'',
+													{ label: selectedNetworkScope },
+												),
+											]
+										: [
+												operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
+												operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
+												operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
+												operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
+												operationsPanel('Fork and migration progress', forkRows, 'No fork or migration evidence has been indexed.'),
+												operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
+												operationsPanel('Recent semantic changes', changeRows, 'No semantic changes have been indexed.'),
+											]
 	const grid = element('div', panels.length === 1 ? 'operations-grid operations-grid-single' : 'operations-grid')
 	grid.append(...panels)
-	const catalogPage = isRecord(data['_catalogPage']) ? data['_catalogPage'] : undefined
+	const riskCatalogPage = isRecord(data['_riskCatalogPage']) ? data['_riskCatalogPage'] : undefined
+	if (selected === 'risk' && riskCatalogPage !== undefined) {
+		operationsRiskCatalogState = { chainId: requiredChainId(), pools, vaults }
+		const appendRiskPagination = (kind: 'pool' | 'vault', panel: HTMLElement, loadedCount: number, hasMore: boolean, nextCursor: unknown) => {
+			if (hasMore && typeof nextCursor === 'string') {
+				const button = element('button', 'secondary operations-catalog-more', `Show more ${kind === 'pool' ? 'pools' : 'vaults'}`)
+				button.type = 'button'
+				button.dataset['riskKind'] = kind
+				button.setAttribute('aria-label', `Show more ${kind} risk records`)
+				const status = element('p', 'activity-summary')
+				status.setAttribute('role', 'status')
+				status.setAttribute('aria-live', 'polite')
+				button.addEventListener('click', async () => {
+					const paginationContext = captureOperationsRenderContext()
+					button.disabled = true
+					button.setAttribute('aria-busy', 'true')
+					button.textContent = `Showing more ${kind === 'pool' ? 'pools' : 'vaults'}…`
+					status.textContent = `Loading older ${kind} risk records…`
+					status.classList.add('sr-only')
+					const loaded = await loadOperations({
+						live: true,
+						...(kind === 'pool' ? { riskPoolTargetCount: loadedCount + 100 } : { riskVaultTargetCount: loadedCount + 100 }),
+						preservedContext: paginationContext,
+					})
+					if (!loaded && button.isConnected) {
+						button.disabled = false
+						button.removeAttribute('aria-busy')
+						button.textContent = `Retry more ${kind === 'pool' ? 'pools' : 'vaults'}`
+						status.textContent = `Additional ${kind} risk records could not be loaded.`
+						status.classList.remove('sr-only')
+						button.focus({ preventScroll: true })
+					}
+				})
+				panel.append(button, status)
+			} else if (renderContext.focusRiskKind === kind) {
+				const complete = element('p', 'activity-summary operations-pagination-complete', `All indexed ${kind} records are shown.`)
+				complete.dataset['riskKind'] = kind
+				complete.tabIndex = -1
+				complete.setAttribute('role', 'status')
+				complete.setAttribute('aria-live', 'polite')
+				panel.append(complete)
+			}
+		}
+		appendRiskPagination('pool', riskPoolPanel, pools.length, riskPagination['poolHasMore'] === true, riskPagination['poolNextCursor'])
+		appendRiskPagination('vault', riskVaultPanel, vaults.length, riskPagination['vaultHasMore'] === true, riskPagination['vaultNextCursor'])
+	}
+	const catalogPage = selectedCatalogPage
 	const catalogSection = operationsCatalogSection()
-	if (catalogPage !== undefined && catalogSection !== undefined)
-		operationsCatalogState = { chainId: requiredChainId(), section: catalogSection, items: operationRecords(data[catalogSection]) }
+	if (catalogPage !== undefined && catalogSection !== undefined && catalogSection !== 'risk')
+		operationsCatalogState = { chainId: requiredChainId(), section: catalogSection, items: operationsCatalogRecords(catalogSection, data[catalogSection]) }
 	if (catalogPage?.['hasMore'] === true && typeof catalogPage['nextCursor'] === 'string' && selected !== 'overview') {
 		const loadMore = document.createElement('button')
 		loadMore.type = 'button'
@@ -2764,10 +3622,10 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			loadMore.setAttribute('aria-busy', 'true')
 			loadMoreStatus.textContent = 'Loading older canonical records…'
 			const section = operationsCatalogSection()
-			if (section === undefined) return
+			if (section === undefined || section === 'risk') return
 			const loaded = await loadOperations({
 				live: true,
-				catalogTargetCount: operationRecords(data[section]).length + 100,
+				catalogTargetCount: operationsCatalogRecords(section, data[section]).length + 100,
 				preservedContext: paginationContext,
 			})
 			if (!loaded && loadMore.isConnected) {
@@ -2788,10 +3646,12 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	if (selected === 'overview') content.replaceChildren(freshness, metrics, grid)
 	else {
 		const routeFreshness = element('p', 'operations-route-freshness')
-		routeFreshness.textContent = `As of indexed block #${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)} · ${number(
-			typeof asOf['lagBlocks'] === 'string' ? asOf['lagBlocks'] : undefined,
-		)} blocks behind · ${connection.classList.contains('live') ? 'live updates connected' : 'live updates reconnecting'}`
-		content.replaceChildren(routeFreshness, grid)
+		routeFreshness.textContent = operationsRouteFreshness(asOf, connection.classList.contains('live'))
+		content.replaceChildren(
+			routeFreshness,
+			...(selected === 'timeline' ? [operationsTimelineFilters()] : selected === 'risk' ? [operationsRiskSnapshotFilter()] : []),
+			grid,
+		)
 	}
 	content.setAttribute('aria-busy', 'false')
 	$('#operations-status').hidden = true
@@ -2816,7 +3676,7 @@ const operationsDetailRoute = (): OperationsDetailRoute | undefined => {
 	return undefined
 }
 
-const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string, limit = 100): string => {
+const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string, limit = 100, decisionCursor?: string, decisionLimit = 100): string => {
 	const chainId = encodeURIComponent(requiredChainId())
 	const identity = route.identity.map(encodeURIComponent).join('/')
 	const resource =
@@ -2834,11 +3694,20 @@ const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string,
 								? 'trading'
 								: 'forks'
 	const query = new URLSearchParams({ limit: String(limit) })
+	const atBlock = pageUrl.searchParams.get('atBlock')
+	if ((route.kind === 'pool' || route.kind === 'vault') && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
 	if (cursor !== undefined) query.set('cursor', cursor)
+	if (route.kind === 'report') {
+		query.set('decisionLimit', String(decisionLimit))
+		if (decisionCursor !== undefined) query.set('decisionCursor', decisionCursor)
+	}
 	return `/api/v1/state/${resource}/${chainId}/${identity}?${query.toString()}`
 }
 
 const operationsDetailRouteKey = (route: OperationsDetailRoute): string => `${route.kind}:${route.identity.join(':').toLowerCase()}`
+const operationsRiskHistoryKeys = ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'] as const
+const operationsHistoryOffset = (value: unknown): number | undefined =>
+	typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 
 const rawEvidence = (value: unknown) => {
 	const disclosure = document.createElement('details')
@@ -2859,6 +3728,68 @@ const detailEvidenceRows = (items: readonly Record<string, unknown>[]) =>
 		return row
 	})
 
+const tradingEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+	items.map((item) => {
+		const eventName = String(item['event_name'] ?? 'AMM event')
+		const data = isRecord(item['event_data']) ? item['event_data'] : {}
+		const analytics = isRecord(item['analytics']) ? item['analytics'] : {}
+		let summary = 'Canonical AMM lifecycle evidence'
+		if (eventName === 'Swap')
+			summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'), 4)} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'), 4)} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares', 6)} fee${isRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%', 2)} impact` : ''}`
+		else if (eventName === 'Sync')
+			summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES', 4)} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO', 4)} reserves`
+		else if (eventName === 'Transfer')
+			summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares', 4)} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
+		else if (eventName === 'Approval')
+			summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares', 4)} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
+		else if (eventName.startsWith('Liquidity'))
+			summary = `${exactUnit(String(data['yesAmount'] ?? '0'), 18, 'YES', 4)} · ${exactUnit(String(data['noAmount'] ?? '0'), 18, 'NO', 4)} · ${exactUnit(String(data['liquidity'] ?? '0'), 18, 'LP shares', 4)}`
+		const row = operationRow(eventName, summary, String(data['provider'] ?? data['sender'] ?? item['tx_hash'] ?? ''), item['block_number'])
+		row.append(rawEvidence(item))
+		return row
+	})
+
+const reportEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+	items.map((item) => {
+		const data = isRecord(item['report_data']) ? item['report_data'] : {}
+		const token1 = String(data['token1'] ?? 'token 1')
+		const token2 = String(data['token2'] ?? 'token 2')
+		const values =
+			data['currentAmount1'] === undefined && data['currentAmount2'] === undefined
+				? 'No round amounts'
+				: `${operationNumber(data['currentAmount1'])} ${shortIdentifier(token1)} · ${operationNumber(data['currentAmount2'])} ${shortIdentifier(token2)}`
+		const comparison = isRecord(item['comparison']) ? item['comparison'] : {}
+		const changes = operationRecords(comparison['changes'])
+		const row = operationRow(
+			`${String(item['event_name'] ?? 'Report round')} · round ${String(item['round_number'] ?? '—')}`,
+			`${values} · reporter ${shortIdentifier(String(data['currentReporter'] ?? 'unknown'))}`,
+			String(item['tx_hash'] ?? ''),
+			item['block_number'],
+		)
+		const changeDetails = document.createElement('details')
+		changeDetails.className = 'operations-round-changes'
+		changeDetails.append(
+			element(
+				'summary',
+				'',
+				comparison['state'] === 'initial'
+					? `Initial indexed values (${changes.length})`
+					: `Changes from round ${String(comparison['previousRoundNumber'] ?? '—')} (${changes.length})`,
+			),
+		)
+		const changeList = document.createElement('ul')
+		for (const change of changes) {
+			const before = change['before'] === undefined ? 'not set' : JSON.stringify(change['before'])
+			const after = change['after'] === undefined ? 'not set' : JSON.stringify(change['after'])
+			changeList.append(element('li', '', `${String(change['field'] ?? 'field')}: ${before ?? 'unavailable'} → ${after ?? 'unavailable'}`))
+		}
+		if (changes.length === 0) changeList.append(element('li', '', 'No report fields changed.'))
+		changeDetails.append(changeList)
+		row.append(changeDetails)
+		row.append(rawEvidence(item))
+		return row
+	})
+
 const detailPageRecord = (data: Record<string, unknown>, key: string): Record<string, unknown> => (isRecord(data[key]) ? data[key] : {})
 
 const renderOperationsDetail = (response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext) => {
@@ -2868,18 +3799,10 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	const asOf = response.asOf
 	const header = element('section', 'operations-detail-header')
 	const back = document.createElement('a')
-	const catalogPath =
-		route.kind === 'report'
-			? '/operations/reports'
-			: route.kind === 'escalation'
-				? '/operations/escalations'
-				: route.kind === 'auction'
-					? '/operations/auctions'
-					: route.kind === 'pool' || route.kind === 'vault'
-						? '/operations/risk'
-						: '/operations'
+	const headerPresentation = operationsDetailHeaderPresentation(route.kind, asOf, connection.classList.contains('live'))
+	const catalogPath = headerPresentation.catalogPath
 	back.href = operationsHref(catalogPath)
-	back.textContent = catalogPath === '/operations' ? '← Back to Operations' : '← Back to catalog'
+	back.textContent = headerPresentation.backLabel
 	const titleIdentity = route.kind === 'vault' ? route.identity[1] : route.identity[0]
 	const title = element(
 		'h2',
@@ -2888,36 +3811,30 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 			? `OpenOracle report ${route.identity[1]}`
 			: `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`,
 	)
-	header.append(
-		back,
-		title,
-		element(
-			'p',
-			'operations-route-freshness',
-			`As of indexed block #${number(String(asOf['blockNumber'] ?? ''))} · ${number(String(asOf['lagBlocks'] ?? ''))} blocks behind`,
-		),
-	)
+	header.append(back, title, element('p', 'operations-route-freshness', headerPresentation.freshness))
 
 	const summary = element('div', 'operations-metrics')
 	const snapshot = isRecord(data['snapshot']) ? data['snapshot'] : undefined
+	const taggedEvidence = snapshot !== undefined || typeof data['source_method'] === 'string'
 	const current = isRecord(data['current']) ? data['current'] : undefined
 	const lifecycle = current !== undefined && isRecord(current['lifecycle']) ? current['lifecycle'] : undefined
+	const summaryPresentation = operationsDetailSummaryPresentation(route.kind, {
+		currentEvent: current?.['event_name'],
+		lifecycleState: lifecycle?.['state'],
+		protocolState: data['protocol_state'],
+		scannerSeverity: data['scanner_severity'],
+		snapshotReadStatus: snapshot?.['read_status'],
+	})
 	summary.append(
-		operationCard(
-			'Protocol state',
-			String(
-				lifecycle?.['state'] ?? (snapshot?.['read_status'] === 'success' ? 'Current tagged read available' : (snapshot?.['read_status'] ?? 'Event-derived')),
-			),
-		),
-		operationCard(
-			'Calculation kind',
-			snapshot === undefined ? 'derived-from-events' : 'tagged-contract-read',
-			String(snapshot?.['source_method'] ?? 'Canonical event projection'),
-		),
+		operationCard(summaryPresentation.label, summaryPresentation.value),
+		operationCard('Evidence source', taggedEvidence ? 'Tagged contract read' : 'Canonical events'),
 		operationCard('Entity identity', route.identity.join(' · ')),
 	)
 
 	const panels: HTMLElement[] = []
+	let loadedRiskHistoryOffset = 0
+	const decisionPage = route.kind === 'report' ? detailPageRecord(data, 'coordinatorDecisions') : {}
+	const decisionItems = operationRecords(decisionPage['items'])
 	const approvalEvents = operationRecords(data['approvalEvents']).sort(compareCanonicalEventPosition)
 	if (approvalEvents.length > 0)
 		panels.push(
@@ -2961,22 +3878,19 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 				'Current report unavailable',
 			),
 		)
-	if (route.kind === 'pool' || route.kind === 'vault')
-		panels.push(
-			operationsPanel(
-				'Current risk state',
-				[
-					operationRow(
-						String(data['protocol_state'] ?? 'Unavailable'),
-						`${String(data['scanner_severity'] ?? 'unavailable')} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`,
-						route.identity.join(':'),
-						data['block_number'],
-					),
-					rawEvidence(data),
-				],
-				'Risk state unavailable',
-			),
+	if (route.kind === 'pool' || route.kind === 'vault') {
+		const riskPresentation = operationsRiskPresentation(route.kind, data['protocol_state'], data['scanner_severity'])
+		const protocolStateRow = operationRow('Protocol state', riskPresentation.protocolState, route.identity.join(':'), data['block_number'])
+		protocolStateRow.classList.add('operations-risk-protocol')
+		const scannerAssessmentRow = operationRow(
+			'Scanner assessment',
+			`${riskPresentation.scannerAssessment} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`,
+			undefined,
+			data['block_number'],
 		)
+		scannerAssessmentRow.classList.add('operations-risk-assessment', `operations-risk-${riskPresentation.scannerTone}`)
+		panels.push(operationsPanel(headerPresentation.riskPanelTitle, [protocolStateRow, scannerAssessmentRow, rawEvidence(data)], 'Risk state unavailable'))
+	}
 	if (route.kind === 'trading') {
 		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
 		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}
@@ -2987,33 +3901,221 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 				[
 					operationRow(
 						'24-hour activity',
-						`${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${operationNumber(tradingSummary['input_volume_24h'])} input units · ${operationNumber(tradingSummary['fees_24h'])} fee units`,
+						`${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_24h'] ?? '0'), 18, 'input shares', 4)} · ${exactUnit(String(tradingSummary['fees_24h'] ?? '0'), 18, 'fee shares', 6)}`,
 						route.identity[0] ?? '',
 						undefined,
 					),
 					operationRow(
 						'Seven-day activity',
-						`${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${operationNumber(tradingSummary['input_volume_7d'])} input units · ${operationNumber(tradingSummary['fees_7d'])} fee units`,
+						`${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_7d'] ?? '0'), 18, 'input shares', 4)} · ${exactUnit(String(tradingSummary['fees_7d'] ?? '0'), 18, 'fee shares', 6)}`,
 						route.identity[0] ?? '',
 						undefined,
 					),
 					operationRow(
 						'24-hour TWAP',
-						`${String(twap24h['state'] ?? 'Unavailable')} · ${String(twap24h['numerator'] ?? '—')} / ${String(twap24h['denominator'] ?? '—')}`,
+						`${String(twap24h['state'] ?? 'Unavailable')} · ${operationRatio(twap24h['numerator'], twap24h['denominator'])} NO per YES · ${operationNumber(twap24h['coverageSeconds'])} covered seconds`,
 						'NO per YES',
 						undefined,
 					),
 					operationRow(
 						'Seven-day TWAP',
-						`${String(twap7d['state'] ?? 'Unavailable')} · ${String(twap7d['numerator'] ?? '—')} / ${String(twap7d['denominator'] ?? '—')}`,
+						`${String(twap7d['state'] ?? 'Unavailable')} · ${operationRatio(twap7d['numerator'], twap7d['denominator'])} NO per YES · ${operationNumber(twap7d['coverageSeconds'])} covered seconds`,
 						'NO per YES',
 						undefined,
 					),
-					rawEvidence({ summary: tradingSummary, twap24h, twap7d, candles: data['candles'] }),
 				],
 				'No trading observations are available.',
 			),
 		)
+		const lpPositions = operationRecords(data['lpPositions'])
+		panels.push(
+			operationsPanel(
+				'Current LP-share ownership',
+				lpPositions.map((position) =>
+					operationRow(
+						'LP holder',
+						`${exactUnit(String(position['balance'] ?? '0'), 18, 'LP shares', 5)} current · ${exactUnit(String(position['received_liquidity'] ?? '0'), 18, '', 5)} received · ${exactUnit(String(position['sent_liquidity'] ?? '0'), 18, '', 5)} sent`,
+						String(position['address'] ?? ''),
+						undefined,
+					),
+				),
+				'No LP-share ownership evidence has been indexed. Transfer history begins when this scanner started indexing the pair.',
+			),
+		)
+		const candles = operationRecords(data['candles'])
+		panels.push(
+			operationsPanel(
+				'Hourly NO-per-YES candles',
+				candles.map((candle) => {
+					const open = isRecord(candle['open']) ? candle['open'] : {}
+					const high = isRecord(candle['high']) ? candle['high'] : {}
+					const low = isRecord(candle['low']) ? candle['low'] : {}
+					const close = isRecord(candle['close']) ? candle['close'] : {}
+					return operationRow(
+						new Date(Number(candle['bucketStart'] ?? 0) * 1_000).toLocaleString(),
+						`O ${operationRatio(open['numerator'], open['denominator'])} · H ${operationRatio(high['numerator'], high['denominator'])} · L ${operationRatio(low['numerator'], low['denominator'])} · C ${operationRatio(close['numerator'], close['denominator'])}`,
+						`${String(candle['observations'] ?? '0')} observations`,
+						undefined,
+					)
+				}),
+				'No reserve observations are available for candles.',
+			),
+		)
+	}
+	if (route.kind === 'report') {
+		const decisionPanel = operationsPanel(
+			'Coordinator decisions',
+			decisionItems.map((decision) => {
+				const argumentsValue = isRecord(decision['arguments']) ? decision['arguments'] : {}
+				return operationRow(
+					String(decision['event_name'] ?? 'Coordinator decision'),
+					String(argumentsValue['reason'] ?? decision['summary'] ?? 'Linked coordinator evidence'),
+					String(decision['emitter_address'] ?? ''),
+					decision['block_number'],
+				)
+			}),
+			'No coordinator decision could be linked to this report.',
+		)
+		const decisionsHaveMore = decisionPage['hasMore'] === true && typeof decisionPage['nextCursor'] === 'string'
+		if (decisionsHaveMore) {
+			const loadMore = document.createElement('button')
+			loadMore.type = 'button'
+			loadMore.className = 'secondary compact operations-detail-more'
+			loadMore.dataset['detailCollection'] = 'decisions'
+			loadMore.textContent = 'Show older decisions'
+			loadMore.setAttribute('aria-label', 'Show older coordinator decisions')
+			const loadMoreStatus = element('p', 'activity-summary')
+			loadMoreStatus.setAttribute('role', 'status')
+			loadMoreStatus.setAttribute('aria-live', 'polite')
+			loadMore.addEventListener('click', async () => {
+				const paginationContext = captureOperationsRenderContext()
+				loadMore.disabled = true
+				loadMore.setAttribute('aria-busy', 'true')
+				loadMoreStatus.textContent = 'Loading older coordinator decisions…'
+				const loaded = await loadOperations({
+					live: true,
+					decisionTargetCount: decisionItems.length + 100,
+					preservedContext: paginationContext,
+				})
+				if (!loaded && loadMore.isConnected) {
+					loadMore.disabled = false
+					loadMore.removeAttribute('aria-busy')
+					loadMore.textContent = 'Retry older decisions'
+					loadMoreStatus.textContent = 'Older coordinator decisions could not be loaded.'
+					loadMore.focus({ preventScroll: true })
+				}
+			})
+			decisionPanel.append(loadMore, loadMoreStatus)
+		} else if (renderContext.focusDetailCollection === 'decisions') {
+			const completeStatus = element('p', 'activity-summary operations-pagination-complete', 'All indexed coordinator decisions are shown.')
+			completeStatus.dataset['detailCollection'] = 'decisions'
+			completeStatus.setAttribute('role', 'status')
+			completeStatus.setAttribute('aria-live', 'polite')
+			completeStatus.tabIndex = -1
+			decisionPanel.append(completeStatus)
+		}
+		panels.push(decisionPanel)
+	}
+	if (route.kind === 'pool' || route.kind === 'vault') {
+		const history = isRecord(data['history']) ? data['history'] : {}
+		loadedRiskHistoryOffset = operationsHistoryOffset(history['loadedOffset']) ?? operationsHistoryOffset(history['offset']) ?? 0
+		const historyCollections = Object.fromEntries(operationsRiskHistoryKeys.map((key) => [key, operationRecords(history[key])]))
+		for (const [key, label] of [
+			['stateSnapshots', 'Tagged risk history'],
+			['accountingSnapshots', 'Accounting checkpoint history'],
+			['lifecycleEvents', 'Risk lifecycle events'],
+			['liquidations', 'Liquidation history'],
+		] as const) {
+			const records = historyCollections[key] ?? []
+			panels.push(operationsPanel(label, detailEvidenceRows(records), `No ${label.toLowerCase()} has been indexed.`))
+		}
+		const historySummary = summarizeHistoryCollections(historyCollections, operationsRiskHistoryKeys)
+		const historyBlockRange =
+			historySummary.oldestBlock === undefined || historySummary.newestBlock === undefined
+				? 'No block-numbered evidence is loaded'
+				: historySummary.oldestBlock === historySummary.newestBlock
+					? `Loaded block #${historySummary.oldestBlock.toLocaleString('en-US')}`
+					: `Loaded blocks #${historySummary.oldestBlock.toLocaleString('en-US')}–#${historySummary.newestBlock.toLocaleString('en-US')}`
+		const historyCounts = [
+			`tagged state ${historySummary.counts['stateSnapshots'] ?? 0}`,
+			`accounting ${historySummary.counts['accountingSnapshots'] ?? 0}`,
+			`lifecycle ${historySummary.counts['lifecycleEvents'] ?? 0}`,
+			`liquidations ${historySummary.counts['liquidations'] ?? 0}`,
+		].join(' · ')
+		const nextHistoryCursor = history['nextCursor']
+		if (history['truncated'] === true && typeof nextHistoryCursor !== 'string') throw new Error('Risk history continuation is malformed')
+		if (history['truncated'] === true && typeof nextHistoryCursor === 'string') {
+			const nextHistoryOffset = loadedRiskHistoryOffset + (operationsHistoryOffset(history['limit']) ?? 100)
+			const coveragePanel = operationsPanel(
+				'History coverage',
+				[operationRow('Older evidence remains', `${historyBlockRange} · ${historyCounts}.`, undefined, undefined)],
+				'',
+			)
+			coveragePanel.id = 'operations-risk-history-coverage'
+			const loadMore = document.createElement('button')
+			loadMore.type = 'button'
+			loadMore.className = 'secondary compact operations-history-more'
+			loadMore.textContent = 'Show older evidence'
+			loadMore.setAttribute('aria-label', 'Show older pool or vault risk history')
+			const loadMoreStatus = element('p', 'operations-history-status')
+			loadMoreStatus.setAttribute('role', 'status')
+			loadMoreStatus.setAttribute('aria-live', 'polite')
+			const pagination = element('div', 'operations-history-pagination')
+			const recordPaginationLayout = () => {
+				window.requestAnimationFrame(() => {
+					if (!pagination.isConnected) return
+					const buttonBounds = loadMore.getBoundingClientRect()
+					const statusBounds = loadMoreStatus.getBoundingClientRect()
+					const separated = buttonBounds.bottom <= statusBounds.top || statusBounds.bottom <= buttonBounds.top
+					pagination.dataset['layout'] = separated ? 'separated' : 'overlap'
+				})
+			}
+			loadMore.addEventListener('click', async () => {
+				const paginationContext = captureOperationsRenderContext()
+				loadMore.disabled = true
+				loadMore.setAttribute('aria-busy', 'true')
+				loadMoreStatus.textContent = 'Loading older pool and vault evidence…'
+				recordPaginationLayout()
+				const loaded = await loadOperations({
+					live: true,
+					historyTargetOffset: nextHistoryOffset,
+					preservedContext: paginationContext,
+				})
+				if (!loaded && loadMore.isConnected) {
+					loadMore.disabled = false
+					loadMore.removeAttribute('aria-busy')
+					loadMore.textContent = 'Retry older evidence'
+					loadMoreStatus.textContent = 'Older pool and vault evidence could not be loaded.'
+					loadMore.focus({ preventScroll: true })
+					recordPaginationLayout()
+				}
+			})
+			pagination.append(loadMore, loadMoreStatus)
+			coveragePanel.append(pagination)
+			recordPaginationLayout()
+			panels.push(coveragePanel)
+			if (isDemo && pageUrl.searchParams.get('riskHistoryAutoLoad') === '1' && !demoRiskHistoryAutoLoadConsumed) {
+				demoRiskHistoryAutoLoadConsumed = true
+				window.setTimeout(() => {
+					if (loadMore.isConnected) {
+						loadMore.focus({ preventScroll: true })
+						loadMore.click()
+					}
+				}, 0)
+			}
+		} else if (renderContext.focusHistoryMore) {
+			const complete = operationsPanel(
+				'History coverage',
+				[operationRow('All indexed risk history is shown', `${historyBlockRange} · ${historyCounts}.`, undefined, undefined)],
+				'',
+			)
+			complete.id = 'operations-risk-history-coverage'
+			complete.classList.add('operations-history-complete')
+			complete.tabIndex = -1
+			complete.setAttribute('role', 'status')
+			complete.setAttribute('aria-live', 'polite')
+			panels.push(complete)
+		}
 	}
 
 	const demand = operationRecords(data['demandCurve'])
@@ -3029,6 +4131,29 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 		panels.push(operationsPanel('Demand curve data', demandRows, 'No bids have been indexed.'))
 	}
 	const branches = operationRecords(data['branches'])
+	if (route.kind === 'fork') {
+		const forkSummary = isRecord(data['summary']) ? data['summary'] : {}
+		panels.push(
+			operationsPanel(
+				'Fork migration totals',
+				[
+					operationRow(
+						'Reputation movement',
+						`${exactUnit(String(forkSummary['migrated_atto_rep'] ?? '0'), 18, 'REP', 4)} migrated · ${exactUnit(String(forkSummary['burned_atto_rep'] ?? '0'), 18, 'REP', 4)} burned`,
+						`${operationCounted(forkSummary['migrator_count'], 'migrator')} · ${operationCounted(forkSummary['child_count'], 'child universe')}`,
+						undefined,
+					),
+					operationRow(
+						'Statoblast migration',
+						`${operationCounted(forkSummary['pool_migration_events'], 'pool migration event')} · ${operationNumber(forkSummary['obligations_materialized'])}/${operationNumber(forkSummary['obligations_initialized'])} escalation obligations materialized`,
+						route.identity[0] ?? '',
+						undefined,
+					),
+				],
+				'No fork summary evidence is available.',
+			),
+		)
+	}
 	if (branches.length > 0)
 		panels.push(
 			operationsPanel(
@@ -3046,48 +4171,63 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 		)
 	const evidencePage = detailPageRecord(data, route.kind === 'report' ? 'rounds' : 'events')
 	const evidenceItems = operationRecords(evidencePage['items'])
-	operationsDetailState = { chainId: requiredChainId(), routeKey: operationsDetailRouteKey(route), items: evidenceItems }
-	const evidencePanel = operationsPanel(
-		route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline',
-		detailEvidenceRows(evidenceItems),
-		'No canonical evidence is available.',
-	)
-	if (evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string') {
-		const loadMore = document.createElement('button')
-		loadMore.type = 'button'
-		loadMore.className = 'secondary compact operations-detail-more'
-		loadMore.textContent = 'Show older evidence'
-		loadMore.setAttribute('aria-label', 'Show older canonical evidence')
-		const loadMoreStatus = element('p', 'activity-summary')
-		loadMoreStatus.setAttribute('role', 'status')
-		loadMoreStatus.setAttribute('aria-live', 'polite')
-		loadMore.addEventListener('click', async () => {
-			const paginationContext = captureOperationsRenderContext()
-			loadMore.disabled = true
-			loadMore.setAttribute('aria-busy', 'true')
-			loadMoreStatus.textContent = 'Loading older canonical evidence…'
-			const loaded = await loadOperations({
-				live: true,
-				detailTargetCount: evidenceItems.length + 100,
-				preservedContext: paginationContext,
-			})
-			if (!loaded && loadMore.isConnected) {
-				loadMore.disabled = false
-				loadMore.removeAttribute('aria-busy')
-				loadMore.textContent = 'Retry older evidence'
-				loadMoreStatus.textContent = 'Older canonical evidence could not be loaded.'
-				loadMore.focus({ preventScroll: true })
-			}
-		})
-		evidencePanel.append(loadMore, loadMoreStatus)
-	} else if (renderContext.focusLoadMore) {
-		const completeStatus = element('p', 'activity-summary operations-pagination-complete', 'All indexed evidence is shown.')
-		completeStatus.setAttribute('role', 'status')
-		completeStatus.setAttribute('aria-live', 'polite')
-		completeStatus.tabIndex = -1
-		evidencePanel.append(completeStatus)
+	operationsDetailState = {
+		chainId: requiredChainId(),
+		routeKey: operationsDetailRouteKey(route),
+		items: evidenceItems,
+		decisionItems,
+		riskHistoryOffset: loadedRiskHistoryOffset,
 	}
-	panels.push(evidencePanel)
+	const evidenceHasMore = evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string'
+	if (operationsDetailEvidencePanelVisible(route.kind, evidenceItems.length, evidenceHasMore, renderContext.focusLoadMore)) {
+		const evidencePanel = operationsPanel(
+			route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline',
+			route.kind === 'trading'
+				? tradingEvidenceRows(evidenceItems)
+				: route.kind === 'report'
+					? reportEvidenceRows(evidenceItems)
+					: detailEvidenceRows(evidenceItems),
+			'No canonical evidence is available.',
+		)
+		if (evidenceHasMore) {
+			const loadMore = document.createElement('button')
+			loadMore.type = 'button'
+			loadMore.className = 'secondary compact operations-detail-more'
+			loadMore.dataset['detailCollection'] = 'evidence'
+			loadMore.textContent = 'Show older evidence'
+			loadMore.setAttribute('aria-label', 'Show older canonical evidence')
+			const loadMoreStatus = element('p', 'activity-summary')
+			loadMoreStatus.setAttribute('role', 'status')
+			loadMoreStatus.setAttribute('aria-live', 'polite')
+			loadMore.addEventListener('click', async () => {
+				const paginationContext = captureOperationsRenderContext()
+				loadMore.disabled = true
+				loadMore.setAttribute('aria-busy', 'true')
+				loadMoreStatus.textContent = 'Loading older canonical evidence…'
+				const loaded = await loadOperations({
+					live: true,
+					detailTargetCount: evidenceItems.length + 100,
+					preservedContext: paginationContext,
+				})
+				if (!loaded && loadMore.isConnected) {
+					loadMore.disabled = false
+					loadMore.removeAttribute('aria-busy')
+					loadMore.textContent = 'Retry older evidence'
+					loadMoreStatus.textContent = 'Older canonical evidence could not be loaded.'
+					loadMore.focus({ preventScroll: true })
+				}
+			})
+			evidencePanel.append(loadMore, loadMoreStatus)
+		} else if (renderContext.focusDetailCollection === 'evidence') {
+			const completeStatus = element('p', 'activity-summary operations-pagination-complete', 'All indexed evidence is shown.')
+			completeStatus.dataset['detailCollection'] = 'evidence'
+			completeStatus.setAttribute('role', 'status')
+			completeStatus.setAttribute('aria-live', 'polite')
+			completeStatus.tabIndex = -1
+			evidencePanel.append(completeStatus)
+		}
+		panels.push(evidencePanel)
+	}
 	const grid = element('div', 'operations-grid operations-grid-single')
 	grid.append(...panels)
 	content.replaceChildren(header, summary, grid)
@@ -3096,7 +4236,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	restoreOperationsRenderContext(renderContext)
 }
 
-const loadOperationsCatalog = async (section: OperationsCatalogSection, retainedCount: number): Promise<OperationsResponse> => {
+const loadOperationsCatalog = async (section: PagedOperationsCatalogSection, retainedCount: number): Promise<OperationsResponse> => {
 	let first: OperationsResponse | undefined
 	let last: OperationsResponse | undefined
 	const snapshot = await collectCanonicalPages(
@@ -3105,7 +4245,7 @@ const loadOperationsCatalog = async (section: OperationsCatalogSection, retained
 			first ??= response
 			last = response
 			return {
-				items: operationRecords(response.data['items']),
+				items: operationsCatalogRecords(section, response.data['items'], true),
 				...(response.data['hasMore'] === true && typeof response.data['nextCursor'] === 'string' ? { nextCursor: response.data['nextCursor'] } : {}),
 			}
 		},
@@ -3120,8 +4260,168 @@ const loadOperationsCatalog = async (section: OperationsCatalogSection, retained
 	)
 }
 
-const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount: number): Promise<OperationsResponse> => {
-	const pageKey = route.kind === 'report' ? 'rounds' : 'events'
+const loadOperationsRiskCatalog = async (poolTargetCount: number, vaultTargetCount: number): Promise<OperationsResponse> => {
+	let first: OperationsResponse | undefined
+	let last: OperationsResponse | undefined
+	let snapshotIdentity: string | undefined
+	const collected = await collectDualCursorCollections(
+		async ({ leftCursor, rightCursor, limit }) => {
+			const response = decodeOperationsResponse(await api(operationsRiskCatalogEndpoint(leftCursor, rightCursor, limit)))
+			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+			if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity)
+				throw new Error('Risk catalog changed while older evidence was loading; retry from the current indexed head')
+			snapshotIdentity ??= responseIdentity
+			first ??= response
+			last = response
+			const pagination = operationsRiskPagination(response.data['pagination'], true)
+			return {
+				left: operationsRiskRecords('pools', response.data['pools'], true),
+				right: operationsRiskRecords('vaults', response.data['vaults'], true),
+				...(pagination['poolHasMore'] === true && typeof pagination['poolNextCursor'] === 'string' ? { leftNextCursor: pagination['poolNextCursor'] } : {}),
+				...(pagination['vaultHasMore'] === true && typeof pagination['vaultNextCursor'] === 'string' ? { rightNextCursor: pagination['vaultNextCursor'] } : {}),
+			}
+		},
+		poolTargetCount,
+		vaultTargetCount,
+		(item) => String(item['pool_address'] ?? ''),
+		(item) => `${String(item['pool_address'] ?? '')}:${String(item['vault_address'] ?? '')}`,
+	)
+	if (first === undefined || last === undefined) throw new Error('Risk catalog returned no page')
+	const pagination = isRecord(last.data['pagination']) ? last.data['pagination'] : {}
+	return riskCatalogOperationsResponse(
+		{
+			...first,
+			data: {
+				...last.data,
+				pagination: {
+					...pagination,
+					poolHasMore: collected.leftNextCursor !== undefined,
+					poolNextCursor: collected.leftNextCursor,
+					vaultHasMore: collected.rightNextCursor !== undefined,
+					vaultNextCursor: collected.rightNextCursor,
+				},
+			},
+		},
+		collected.left,
+		collected.right,
+	)
+}
+
+const loadOperationsRiskDetail = async (route: OperationsDetailRoute, throughOffset: number): Promise<OperationsResponse> => {
+	let first: OperationsResponse | undefined
+	let last: OperationsResponse | undefined
+	let snapshotIdentity: string | undefined
+	const collected = await collectCursorCollections(
+		async (cursor) => {
+			const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, cursor, 100)))
+			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+			if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity)
+				throw new Error('Risk history changed while older evidence was loading; retry from the current indexed head')
+			snapshotIdentity ??= responseIdentity
+			first ??= response
+			last = response
+			const history = detailPageRecord(response.data, 'history')
+			const offset = operationsHistoryOffset(history['offset'])
+			const nextCursor = history['nextCursor']
+			if (offset === undefined) throw new Error('Risk history page offset is malformed')
+			if (history['truncated'] === true && typeof nextCursor !== 'string') throw new Error('Risk history continuation is malformed')
+			if (history['truncated'] !== true && nextCursor !== undefined) throw new Error('Risk history completion is malformed')
+			return {
+				collections: {
+					stateSnapshots: operationRecords(history['stateSnapshots']),
+					accountingSnapshots: operationRecords(history['accountingSnapshots']),
+					lifecycleEvents: operationRecords(history['lifecycleEvents']),
+					liquidations: operationRecords(history['liquidations']),
+				},
+				offset,
+				...(history['truncated'] === true && typeof nextCursor === 'string' ? { nextCursor } : {}),
+			}
+		},
+		operationsRiskHistoryKeys,
+		throughOffset,
+	)
+	if (first === undefined || last === undefined) throw new Error('Risk detail returned no page')
+	const lastHistory = detailPageRecord(last.data, 'history')
+	return {
+		...first,
+		data: {
+			...first.data,
+			history: {
+				...lastHistory,
+				...collected.collections,
+				offset: 0,
+				loadedOffset: collected.loadedOffset,
+				truncated: collected.nextCursor !== undefined,
+				nextCursor: collected.nextCursor,
+			},
+		},
+	}
+}
+
+const loadOperationsReportDetail = async (route: OperationsDetailRoute, roundTargetCount: number, decisionTargetCount: number): Promise<OperationsResponse> => {
+	let first: OperationsResponse | undefined
+	let lastRoundPage: Record<string, unknown> = {}
+	let lastDecisionPage: Record<string, unknown> = {}
+	let snapshotIdentity: string | undefined
+	const fetchPage = async (cursor: string | undefined, limit: number, collection: 'decisions' | 'rounds') => {
+		const response = decodeOperationsResponse(
+			await api(
+				operationsDetailEndpoint(
+					route,
+					collection === 'rounds' ? cursor : undefined,
+					collection === 'rounds' ? limit : 1,
+					collection === 'decisions' ? cursor : undefined,
+					collection === 'decisions' ? limit : 1,
+				),
+			),
+		)
+		const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+		if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity)
+			throw new Error('Report evidence changed while older evidence was loading; retry from the current indexed head')
+		snapshotIdentity ??= responseIdentity
+		first ??= response
+		const page = detailPageRecord(response.data, collection === 'rounds' ? 'rounds' : 'coordinatorDecisions')
+		if (collection === 'rounds') lastRoundPage = page
+		else lastDecisionPage = page
+		return {
+			items: operationRecords(page['items']),
+			...(page['hasMore'] === true && typeof page['nextCursor'] === 'string' ? { nextCursor: page['nextCursor'] } : {}),
+		}
+	}
+	const [rounds, decisions] = await Promise.all([
+		collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'rounds'), roundTargetCount, operationsDetailRecordKey),
+		collectCanonicalPages((cursor, limit = 100) => fetchPage(cursor, limit, 'decisions'), decisionTargetCount, operationsDetailRecordKey),
+	])
+	if (first === undefined) throw new Error('Report detail returned no page')
+	return {
+		...first,
+		data: {
+			...first.data,
+			rounds: {
+				...lastRoundPage,
+				items: rounds.items,
+				hasMore: rounds.nextCursor !== undefined,
+				...(rounds.nextCursor === undefined ? {} : { nextCursor: rounds.nextCursor }),
+			},
+			coordinatorDecisions: {
+				...lastDecisionPage,
+				items: decisions.items,
+				hasMore: decisions.nextCursor !== undefined,
+				...(decisions.nextCursor === undefined ? {} : { nextCursor: decisions.nextCursor }),
+			},
+		},
+	}
+}
+
+const loadOperationsDetail = async (
+	route: OperationsDetailRoute,
+	retainedCount: number,
+	riskHistoryThroughOffset = 0,
+	decisionTargetCount = 0,
+): Promise<OperationsResponse> => {
+	if (route.kind === 'pool' || route.kind === 'vault') return await loadOperationsRiskDetail(route, riskHistoryThroughOffset)
+	if (route.kind === 'report') return await loadOperationsReportDetail(route, retainedCount, decisionTargetCount)
+	const pageKey = 'events'
 	let first: OperationsResponse | undefined
 	let last: OperationsResponse | undefined
 	const snapshot = await collectCanonicalPages(
@@ -3157,12 +4457,20 @@ const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount:
 const loadOperations = async ({
 	live = false,
 	catalogTargetCount,
+	riskPoolTargetCount,
+	riskVaultTargetCount,
 	detailTargetCount,
+	decisionTargetCount,
+	historyTargetOffset,
 	preservedContext,
 }: {
 	live?: boolean
 	catalogTargetCount?: number
+	riskPoolTargetCount?: number
+	riskVaultTargetCount?: number
 	detailTargetCount?: number
+	decisionTargetCount?: number
+	historyTargetOffset?: number
 	preservedContext?: OperationsRenderContext
 } = {}): Promise<boolean> => {
 	const requestedContext = `${requiredChainId()}:${location.pathname}`
@@ -3170,7 +4478,12 @@ const loadOperations = async ({
 		operationsLoadState,
 		requestedContext,
 		live,
-		catalogTargetCount !== undefined || detailTargetCount !== undefined,
+		catalogTargetCount !== undefined ||
+			riskPoolTargetCount !== undefined ||
+			riskVaultTargetCount !== undefined ||
+			detailTargetCount !== undefined ||
+			decisionTargetCount !== undefined ||
+			historyTargetOffset !== undefined,
 		() => `${requiredChainId()}:${location.pathname}`,
 		() => operationsRequestVersion++,
 		async () => {
@@ -3186,21 +4499,48 @@ const loadOperations = async ({
 				const detailRoute = operationsDetailRoute()
 				const catalogSection = detailRoute === undefined ? operationsCatalogSection() : undefined
 				const retainedCatalogCount =
-					catalogSection !== undefined && operationsCatalogState?.chainId === requiredChainId() && operationsCatalogState.section === catalogSection
+					catalogSection !== undefined &&
+					catalogSection !== 'risk' &&
+					operationsCatalogState?.chainId === requiredChainId() &&
+					operationsCatalogState.section === catalogSection
 						? operationsCatalogState.items.length
 						: 0
+				const retainedRiskPoolCount =
+					catalogSection === 'risk' && operationsRiskCatalogState?.chainId === requiredChainId() ? operationsRiskCatalogState.pools.length : 0
+				const retainedRiskVaultCount =
+					catalogSection === 'risk' && operationsRiskCatalogState?.chainId === requiredChainId() ? operationsRiskCatalogState.vaults.length : 0
 				const retainedDetailCount =
 					detailRoute !== undefined &&
 					operationsDetailState?.chainId === requiredChainId() &&
 					operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
 						? operationsDetailState.items.length
 						: 0
+				const retainedRiskHistoryOffset =
+					detailRoute !== undefined &&
+					(detailRoute.kind === 'pool' || detailRoute.kind === 'vault') &&
+					operationsDetailState?.chainId === requiredChainId() &&
+					operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
+						? operationsDetailState.riskHistoryOffset
+						: 0
+				const retainedDecisionCount =
+					detailRoute?.kind === 'report' &&
+					operationsDetailState?.chainId === requiredChainId() &&
+					operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute)
+						? operationsDetailState.decisionItems.length
+						: 0
 				const response =
 					detailRoute !== undefined
-						? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount)
+						? await loadOperationsDetail(
+								detailRoute,
+								detailTargetCount ?? retainedDetailCount,
+								historyTargetOffset ?? retainedRiskHistoryOffset,
+								decisionTargetCount ?? retainedDecisionCount,
+							)
 						: catalogSection === undefined
 							? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
-							: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
+							: catalogSection === 'risk'
+								? await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount, riskVaultTargetCount ?? retainedRiskVaultCount)
+								: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
 				if (requestVersion !== operationsRequestVersion) return false
 				if (detailRoute === undefined) renderOperations(response, preservedContext)
 				else renderOperationsDetail(response, detailRoute, preservedContext)
@@ -3748,7 +5088,7 @@ interface DetailContextSnapshot {
 
 const captureDetailContext = (): DetailContextSnapshot => {
 	const focusable = [...detailContent.querySelectorAll<HTMLElement>('a, button, summary')]
-	const focusIndex = focusable.findIndex((candidate) => candidate === document.activeElement)
+	const focusIndex = document.activeElement instanceof HTMLElement ? focusable.indexOf(document.activeElement) : -1
 	return {
 		scrollTop: dialog.scrollTop,
 		focusIndex,
@@ -3924,7 +5264,7 @@ const captureAccountDialogSnapshot = (): DialogSnapshot | undefined => {
 		anchorKey: anchorCard?.dataset.liveKey,
 		anchorTop: anchorCard?.getBoundingClientRect().top,
 		focusKey: focusedCard?.dataset.liveKey,
-		focusIndex: focusable.findIndex((candidate) => candidate === document.activeElement),
+		focusIndex: document.activeElement instanceof HTMLElement ? focusable.indexOf(document.activeElement) : -1,
 		outsideFocus: document.activeElement instanceof HTMLElement ? document.activeElement.dataset.liveFocus : undefined,
 		scrollTop: dialog.scrollTop,
 	}
@@ -4023,7 +5363,7 @@ const performOpenAccountTransactions = async (
 		const focusedCard = document.activeElement?.closest<HTMLElement>('.account-transaction[data-live-key]')
 		const focusedTransactionKey = focusedCard?.dataset.liveKey
 		const focusedControls = focusedCard ? [...focusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
-		const focusedControlIndex = focusedControls.findIndex((candidate) => candidate === document.activeElement)
+		const focusedControlIndex = document.activeElement instanceof HTMLElement ? focusedControls.indexOf(document.activeElement) : -1
 		const outsideFocusKey = focusedCard || !(document.activeElement instanceof HTMLElement) ? undefined : document.activeElement.dataset.liveFocus
 		const visibleCards = [...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')]
 		const anchorCard = focusedCard ?? visibleCards.find((card) => card.getBoundingClientRect().bottom > dialog.getBoundingClientRect().top)
@@ -4464,6 +5804,11 @@ const metricCard = (label: string, value: string, detail?: string) => {
 const chartNumericValue = (value: unknown): string | number | bigint | null | undefined =>
 	typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' || value === null || value === undefined ? value : undefined
 
+const chartTimestamp = (value: string): number => {
+	const parsed = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value)
+	return Number.isFinite(parsed) ? parsed : 0
+}
+
 const lineChart = <T extends { timestamp: string }>(
 	rows: T[],
 	definitions: ChartDefinition<T>[],
@@ -4476,15 +5821,14 @@ const lineChart = <T extends { timestamp: string }>(
 	svg.setAttribute('class', 'time-chart')
 	svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
 	svg.setAttribute('role', 'img')
-	const normalized = definitions.length > 1 && sharedRange === undefined
-	svg.setAttribute('aria-label', `${definitions.map(({ label }) => label).join(', ')} ${normalized ? 'independently scaled trend' : 'value'} over indexed time`)
+	svg.setAttribute('aria-label', `${definitions.map(({ label }) => label).join(', ')} value over indexed time`)
 	const series = definitions.map(({ key, decimals = 18 }) => {
 		const raw = rows.map((row) => (row[key] === undefined ? Number.NaN : compactValue(chartNumericValue(row[key]), decimals)))
-		const finite = raw.filter(Number.isFinite)
-		const seriesMinimum = Math.min(...finite)
-		const seriesRange = Math.max(...finite) - seriesMinimum
-		return normalized ? raw.map((value) => (Number.isFinite(value) ? (seriesRange === 0 ? 50 : ((value - seriesMinimum) / seriesRange) * 100) : value)) : raw
+		return raw
 	})
+	const timestamps = rows.map((row) => chartTimestamp(row.timestamp))
+	const minimumTimestamp = Math.min(...timestamps)
+	const timestampRange = Math.max(...timestamps) - minimumTimestamp
 	const values = series.flat().filter(Number.isFinite)
 	const { minimum, maximum } = chartValueBounds(values, sharedRange)
 	const range = maximum - minimum
@@ -4504,9 +5848,7 @@ const lineChart = <T extends { timestamp: string }>(
 		label.setAttribute('x', '2')
 		label.setAttribute('y', String(y + 3))
 		const axisValue = maximum - (range * index) / 3
-		label.textContent = normalized
-			? requiredArrayItem(['High', '⅔', '⅓', 'Low'], index, 'Normalized chart axis label')
-			: `${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(axisValue)}${axisUnit}`
+		label.textContent = `${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(axisValue)}${axisUnit}`
 		svg.append(label)
 	}
 	definitions.forEach(({ key, label, decimals = 18, unit = '', className = '', pointShape, pointLabel }, definitionIndex) => {
@@ -4514,7 +5856,8 @@ const lineChart = <T extends { timestamp: string }>(
 			const definitionSeries = requiredArrayItem(series, definitionIndex, 'Chart definition series')
 			const value = requiredArrayItem(definitionSeries, index, 'Chart series point')
 			if (!Number.isFinite(value)) return []
-			const x = margin.left + (chartWidth * index) / Math.max(1, rows.length - 1)
+			const timestamp = requiredArrayItem(timestamps, index, 'Chart timestamp')
+			const x = margin.left + (timestampRange === 0 ? chartWidth / 2 : (chartWidth * (timestamp - minimumTimestamp)) / timestampRange)
 			const y = margin.top + chartHeight - ((value - minimum) / range) * chartHeight
 			return [{ x, y, row }]
 		})
@@ -4557,7 +5900,7 @@ const lineChart = <T extends { timestamp: string }>(
 			label.setAttribute('x', String(x))
 			label.setAttribute('y', String(height - 5))
 			label.setAttribute('text-anchor', x === margin.left ? 'start' : 'end')
-			label.textContent = new Date(row.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+			label.textContent = new Date(chartTimestamp(row.timestamp)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 			svg.append(label)
 		}
 	return svg
@@ -4606,7 +5949,13 @@ const chartCard = <T extends { timestamp: string }>(
 			card.append(currentValues)
 		}
 		const viewport = element('div', 'chart-scroll')
-		viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
+		if (independentlyScaled) {
+			for (const definition of definitions) {
+				const series = element('section', 'chart-series')
+				series.append(element('h5', '', definition.label), lineChart(rows, [definition], { axisUnit: definition.unit }))
+				viewport.append(series)
+			}
+		} else viewport.append(lineChart(rows, definitions, { sharedRange, axisUnit }))
 		const dataDisclosure = document.createElement('details')
 		dataDisclosure.className = 'chart-data-disclosure'
 		dataDisclosure.append(element('summary', '', 'View exact chart data'))
@@ -4621,7 +5970,7 @@ const chartCard = <T extends { timestamp: string }>(
 		const body = document.createElement('tbody')
 		for (const row of rows) {
 			const tableRow = document.createElement('tr')
-			const time = element('th', '', new Date(row.timestamp).toLocaleString())
+			const time = element('th', '', new Date(chartTimestamp(row.timestamp)).toLocaleString())
 			time.setAttribute('scope', 'row')
 			tableRow.append(time)
 			for (const { key, decimals = 18, unit = '' } of definitions) {
@@ -5133,7 +6482,7 @@ const renderAddressProfile = (
 	item: RichListRecord,
 	transactions: AccountTransaction[],
 	interactions: AccountTransaction[],
-	{ live = false }: { live?: boolean } = {},
+	{ live = false, portfolioFocusKind }: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' } = {},
 ) => {
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')
@@ -5255,6 +6604,100 @@ const renderAddressProfile = (
 		),
 		'No truth-auction interactions are associated with this address.',
 	)
+	const lpPositions = operationsPanel(
+		'AMM liquidity positions',
+		operationRecords(item['lp_positions']).map((position) =>
+			operationRow(
+				String(position['question_title'] ?? 'Augur AMM market'),
+				`${exactUnit(String(position['balance'] ?? '0'), 18, 'LP tokens', 4)} · ${operationCounted(position['transfer_count'], 'transfer')}`,
+				String(position['market_address'] ?? ''),
+				undefined,
+				operationsHref(`/operations/trading/${encodeURIComponent(String(position['market_address'] ?? ''))}`),
+			),
+		),
+		'No current AMM liquidity-token position has been reconstructed for this address.',
+	)
+	const forkParticipation = operationsPanel(
+		'Fork and migration participation',
+		operationRecords(item['fork_participation']).map((event) =>
+			operationRow(
+				String(event['event_name'] ?? 'Fork migration'),
+				'Canonical event evidence naming this address as migrator, vault, or recipient',
+				String(event['universe_identity'] ?? ''),
+				event['block_number'],
+				operationsHref(`/operations/fork/${encodeURIComponent(String(event['universe_identity'] ?? ''))}`),
+			),
+		),
+		'No fork or migration participation has been indexed for this address.',
+	)
+	const reportParticipation = operationsPanel(
+		'OpenOracle reporting participation',
+		operationRecords(item['report_participation']).map((event) =>
+			operationRow(
+				`${String(event['event_name'] ?? 'Report')} · report ${String(event['report_id'] ?? '—')}`,
+				`Round ${String(event['round_number'] ?? '—')} · canonical reporter evidence`,
+				String(event['open_oracle_address'] ?? ''),
+				event['block_number'],
+				operationsHref(
+					`/operations/report/${encodeURIComponent(String(event['open_oracle_address'] ?? ''))}/${encodeURIComponent(String(event['report_id'] ?? ''))}`,
+				),
+			),
+		),
+		'No OpenOracle rounds identify this address as the current reporter.',
+	)
+	const appendPortfolioPagination = (kind: 'forks' | 'lp' | 'reports', panel: HTMLElement) => {
+		const page = portfolioPage(item, kind)
+		const items = portfolioItems(item, kind)
+		const singular = kind === 'lp' ? 'position' : kind === 'forks' ? 'fork event' : 'report event'
+		const total = typeof page['total'] === 'number' ? page['total'] : undefined
+		panel
+			.querySelector('h3')
+			?.after(element('p', 'operations-panel-scope', `${operationCounted(items.length, singular)} shown · ${operationCounted(total, singular)} indexed total`))
+		if (page['hasMore'] === true && typeof page['nextCursor'] === 'string') {
+			const button = element(
+				'button',
+				'secondary compact portfolio-history-more',
+				`Show more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}`,
+			)
+			button.type = 'button'
+			button.dataset['portfolioKind'] = kind
+			const status = element('p', 'activity-summary')
+			status.setAttribute('role', 'status')
+			status.setAttribute('aria-live', 'polite')
+			button.addEventListener('click', async () => {
+				const scrollY = window.scrollY
+				button.disabled = true
+				button.setAttribute('aria-busy', 'true')
+				button.textContent = `Showing more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}…`
+				status.textContent = 'Loading older account evidence…'
+				status.classList.add('sr-only')
+				const loaded = await loadAddressProfile({ live: true, portfolioTarget: { kind, count: items.length + 100 } })
+				if (loaded) {
+					const next = $('#address-profile-content').querySelector<HTMLElement>(`[data-portfolio-kind="${kind}"]`)
+					next?.focus({ preventScroll: true })
+					window.scrollTo({ top: scrollY, behavior: 'auto' })
+				} else if (button.isConnected) {
+					button.disabled = false
+					button.removeAttribute('aria-busy')
+					button.textContent = `Retry more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}`
+					status.textContent = 'Additional account evidence could not be loaded.'
+					status.classList.remove('sr-only')
+					button.focus({ preventScroll: true })
+				}
+			})
+			panel.append(button, status)
+		} else if (portfolioFocusKind === kind) {
+			const complete = element('p', 'activity-summary operations-pagination-complete', `All indexed ${singular}${singular.endsWith('s') ? '' : 's'} are shown.`)
+			complete.dataset['portfolioKind'] = kind
+			complete.tabIndex = -1
+			complete.setAttribute('role', 'status')
+			complete.setAttribute('aria-live', 'polite')
+			panel.append(complete)
+		}
+	}
+	appendPortfolioPagination('lp', lpPositions)
+	appendPortfolioPagination('forks', forkParticipation)
+	appendPortfolioPagination('reports', reportParticipation)
 	const activity = element('section', 'address-profile-panel')
 	const activityHeader = element('div', 'address-section-heading')
 	const activityCopy = element('div')
@@ -5319,12 +6762,77 @@ const renderAddressProfile = (
 	interactionPanel.append(interactionList)
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
-	content.replaceChildren(header, metrics, balances, involvement, escalationClaims, auctionClaims, interactionPanel, activity)
+	content.replaceChildren(
+		header,
+		metrics,
+		balances,
+		involvement,
+		lpPositions,
+		forkParticipation,
+		reportParticipation,
+		escalationClaims,
+		auctionClaims,
+		interactionPanel,
+		activity,
+	)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }
 
-const performLoadAddressProfile = async ({ live = false, contextVersion }: LoadOptions = {}): Promise<boolean> => {
+const portfolioPage = (data: Record<string, unknown>, kind: 'forks' | 'lp' | 'reports'): Record<string, unknown> => {
+	const pagination = isRecord(data['portfolioPagination']) ? data['portfolioPagination'] : {}
+	return isRecord(pagination[kind]) ? pagination[kind] : {}
+}
+
+const portfolioItems = (data: Record<string, unknown>, kind: 'forks' | 'lp' | 'reports'): Record<string, unknown>[] =>
+	operationRecords(data[kind === 'lp' ? 'lp_positions' : kind === 'forks' ? 'fork_participation' : 'report_participation'])
+
+const portfolioItemKey = (kind: 'forks' | 'lp' | 'reports', item: Readonly<Record<string, unknown>>): string => {
+	if (kind === 'lp') return String(item['market_address'] ?? '')
+	return `${String(item['block_hash'] ?? '')}:${String(item['tx_hash'] ?? '')}:${String(item['log_index'] ?? '')}:${
+		kind === 'forks' ? String(item['universe_identity'] ?? '') : `${String(item['open_oracle_address'] ?? '')}:${String(item['report_id'] ?? '')}`
+	}`
+}
+
+const loadAddressPortfolioSnapshot = async (address: string, targets: Readonly<Record<'forks' | 'lp' | 'reports', number>>): Promise<OperationsResponse> => {
+	const initialQuery = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
+	const first = decodeOperationsResponse(await api(`/api/v1/state/address-portfolio?${initialQuery.toString()}`))
+	const snapshotIdentity = `${first.chainId}:${String(first.asOf['blockNumber'] ?? '')}:${String(first.asOf['blockHash'] ?? '')}`
+	const collections = {
+		forks: portfolioItems(first.data, 'forks'),
+		lp: portfolioItems(first.data, 'lp'),
+		reports: portfolioItems(first.data, 'reports'),
+	}
+	const pages = {
+		forks: portfolioPage(first.data, 'forks'),
+		lp: portfolioPage(first.data, 'lp'),
+		reports: portfolioPage(first.data, 'reports'),
+	}
+	for (const kind of ['lp', 'forks', 'reports'] as const) {
+		while (collections[kind].length < targets[kind] && pages[kind]['hasMore'] === true && typeof pages[kind]['nextCursor'] === 'string') {
+			const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
+			query.set(kind === 'lp' ? 'lpCursor' : kind === 'forks' ? 'forkCursor' : 'reportCursor', pages[kind]['nextCursor'])
+			const response = decodeOperationsResponse(await api(`/api/v1/state/address-portfolio?${query.toString()}`))
+			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+			if (responseIdentity !== snapshotIdentity)
+				throw new Error('Portfolio history changed while older evidence was loading; retry from the current indexed head')
+			collections[kind] = mergeUniqueRecords(collections[kind], portfolioItems(response.data, kind), (item) => portfolioItemKey(kind, item))
+			pages[kind] = portfolioPage(response.data, kind)
+		}
+	}
+	return {
+		...first,
+		data: {
+			...first.data,
+			lp_positions: collections.lp,
+			fork_participation: collections.forks,
+			report_participation: collections.reports,
+			portfolioPagination: pages,
+		},
+	}
+}
+
+const performLoadAddressProfile = async ({ live = false, contextVersion, portfolioTarget }: LoadOptions = {}): Promise<boolean> => {
 	if (contextVersion !== viewContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
 	const requestVersion = ++addressProfileRequestVersion
@@ -5346,9 +6854,17 @@ const performLoadAddressProfile = async ({ live = false, contextVersion }: LoadO
 	if (presentation.loadingState && !hadProfile)
 		content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 	try {
-		const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '1' })
-		const [profile, identity, transactions, interactions] = await Promise.all([
-			api(`/api/v1/richlist?${query}`).then((value) => decodeItemsPage(value, isRichListRecord, 'Address profile')),
+		const retainedPortfolioDepths =
+			currentAddressPortfolioDepths?.chainId === requiredChainId() && currentAddressPortfolioDepths.address === address
+				? currentAddressPortfolioDepths
+				: { chainId: requiredChainId(), address, forks: 0, lp: 0, reports: 0 }
+		const portfolioTargets = {
+			forks: portfolioTarget?.kind === 'forks' ? portfolioTarget.count : retainedPortfolioDepths.forks,
+			lp: portfolioTarget?.kind === 'lp' ? portfolioTarget.count : retainedPortfolioDepths.lp,
+			reports: portfolioTarget?.kind === 'reports' ? portfolioTarget.count : retainedPortfolioDepths.reports,
+		}
+		const [portfolio, identity, transactions, interactions] = await Promise.all([
+			loadAddressPortfolioSnapshot(address, portfolioTargets),
 			api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`).then((value) =>
 				decodeValue(value, isAddressIdentity, 'Address identity'),
 			),
@@ -5365,9 +6881,9 @@ const performLoadAddressProfile = async ({ live = false, contextVersion }: LoadO
 		)
 			return false
 		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === selectedChainId())
-		const profileItem = profile.items[0]
+		const profileItem = isRichListRecord(portfolio.data) ? portfolio.data : undefined
 		const item = profileItem
-			? { ...profileItem, label: profileItem.label ?? identity.label, kind: profileItem.kind ?? identity.kind }
+			? { ...profileItem, ...portfolio.data, label: profileItem.label ?? identity.label, kind: profileItem.kind ?? identity.kind }
 			: {
 					chain_id: selectedChainId(),
 					address,
@@ -5383,9 +6899,17 @@ const performLoadAddressProfile = async ({ live = false, contextVersion }: LoadO
 					native_balance_detail: { balance: '0', blockNumber: network?.indexed_block ?? '0' },
 					pool_associations: [],
 					vault_positions: [],
+					...portfolio.data,
 				}
-		renderAddressProfile(item, transactions.items, interactions.items, { live })
+		renderAddressProfile(item, transactions.items, interactions.items, { live, portfolioFocusKind: portfolioTarget?.kind })
 		currentAddressProfile = item
+		currentAddressPortfolioDepths = {
+			chainId: requiredChainId(),
+			address,
+			forks: operationRecords(portfolio.data['fork_participation']).length,
+			lp: operationRecords(portfolio.data['lp_positions']).length,
+			reports: operationRecords(portfolio.data['report_participation']).length,
+		}
 		return true
 	} catch (error) {
 		if (
@@ -5426,13 +6950,190 @@ const loadAddressProfile = (options: LoadOptions = {}): Promise<boolean> => {
 	return options.live === true ? addressProfileRefreshGate.runBackground(operation) : addressProfileRefreshGate.runForeground(operation)
 }
 
-const fetchEntityHistory = async (type: StateTab, item: StateEntity): Promise<EntityHistory> => {
-	if (type === 'pools' && 'pool_address' in item) return decodeEntityHistory(await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}`))
+const entityHistoryCollectionKeys = ['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory', 'pools', 'forks'] as const
+
+const entityHistoryCollections = (history: EntityHistory): Readonly<Record<(typeof entityHistoryCollectionKeys)[number], readonly unknown[]>> => ({
+	snapshots: history.snapshots,
+	events: history.events,
+	ammPrices: history.ammPrices,
+	repEthPrices: history.repEthPrices,
+	uniswapRepEthPrices: history.uniswapRepEthPrices,
+	openOracleHistory: history.openOracleHistory,
+	pools: history.pools,
+	forks: history.forks,
+})
+
+const fetchEntityHistoryPage = async (type: StateTab, item: StateEntity, cursor?: string): Promise<EntityHistory> => {
+	const range = new URLSearchParams()
+	for (const parameter of ['fromBlock', 'toBlock'] as const) {
+		const value = pageUrl.searchParams.get(parameter)
+		if (value !== null) range.set(parameter, value)
+	}
+	if (cursor !== undefined) range.set('cursor', cursor)
+	const suffix = range.size === 0 ? '' : `?${range}`
+	if (type === 'pools' && 'pool_address' in item) return decodeEntityHistory(await api(`/api/v1/state/pools/${item.chain_id}/${item.pool_address}${suffix}`))
 	if (type === 'vaults' && 'vault_address' in item)
-		return decodeEntityHistory(await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}`))
-	if (type === 'questions' && 'question_id' in item) return decodeEntityHistory(await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}`))
-	if ('universe_id' in item) return decodeEntityHistory(await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}`))
+		return decodeEntityHistory(await api(`/api/v1/state/vaults/${item.chain_id}/${item.pool_address}/${item.vault_address}${suffix}`))
+	if (type === 'questions' && 'question_id' in item)
+		return decodeEntityHistory(await api(`/api/v1/state/questions/${item.chain_id}/${item.question_id}${suffix}`))
+	if ('universe_id' in item) return decodeEntityHistory(await api(`/api/v1/state/universes/${item.chain_id}/${item.universe_id}${suffix}`))
 	throw new Error(`State entity does not match the selected ${type} tab`)
+}
+
+const fetchEntityHistory = async (type: StateTab, item: StateEntity, throughOffset = 0): Promise<EntityHistory> => {
+	let firstPage: EntityHistory | undefined
+	let anchor: EntityHistoryCoverageValue | undefined
+	const collected = await collectCursorCollections<unknown>(
+		async (cursor) => {
+			const page = await fetchEntityHistoryPage(type, item, cursor)
+			const coverage = page.coverage
+			if (coverage === undefined) throw new Error('State history response is missing coverage metadata')
+			if (page.truncated === true && coverage.nextCursor === undefined) throw new Error('State history continuation is malformed')
+			if (page.truncated === false && coverage.nextCursor !== undefined) throw new Error('State history completion is malformed')
+			if (anchor === undefined) anchor = coverage
+			else if (
+				coverage.requestedFromBlock !== anchor.requestedFromBlock ||
+				coverage.requestedToBlock !== anchor.requestedToBlock ||
+				coverage.indexedFromBlock !== anchor.indexedFromBlock ||
+				coverage.indexedThroughBlock !== anchor.indexedThroughBlock ||
+				coverage.indexedThroughHash !== anchor.indexedThroughHash
+			)
+				throw new Error('State history changed while loading its continuation')
+			firstPage ??= page
+			return {
+				collections: entityHistoryCollections(page),
+				offset: coverage.offset,
+				...(coverage.nextCursor === undefined ? {} : { nextCursor: coverage.nextCursor }),
+			}
+		},
+		entityHistoryCollectionKeys,
+		throughOffset,
+	)
+	if (firstPage === undefined || anchor === undefined) throw new Error('State history returned no pages')
+	const anchoredCoverage = anchor
+	const chronological = (records: readonly unknown[]) =>
+		records.toSorted((left, right) => (isRecord(left) && isRecord(right) ? compareCanonicalEventPosition(left, right) : 0))
+	const collections = Object.fromEntries(entityHistoryCollectionKeys.map((key) => [key, chronological(collected.collections[key] ?? [])]))
+	const series = Object.fromEntries(entityHistoryCollectionKeys.filter((key) => key in anchoredCoverage.series).map((key) => [key, collections[key].length]))
+	const decoded = decodeEntityHistory({
+		...firstPage,
+		...collections,
+		truncated: collected.nextCursor !== undefined,
+		offset: 0,
+		coverage: {
+			...anchoredCoverage,
+			offset: 0,
+			series,
+			complete: anchoredCoverage.rangeCovered === true && collected.nextCursor === undefined,
+			hasPreviousPages: false,
+			...(collected.nextCursor === undefined ? { nextCursor: undefined } : { nextCursor: collected.nextCursor }),
+		},
+	})
+	return { ...decoded, loadedOffset: collected.loadedOffset }
+}
+
+const historySeriesLabel = (key: string): string => {
+	if (key === 'snapshots') return 'checkpoints'
+	if (key === 'events') return 'lifecycle'
+	if (key === 'ammPrices') return 'AMM prices'
+	if (key === 'repEthPrices') return 'coordinator prices'
+	if (key === 'uniswapRepEthPrices') return 'Uniswap prices'
+	if (key === 'openOracleHistory') return 'OpenOracle'
+	return key
+}
+
+const historyCoverageNotice = (history: EntityHistory, type: StateTab, item: StateEntity): HTMLElement => {
+	const notice = element('section', `history-coverage${history.coverage?.complete === false ? ' incomplete' : ''}`)
+	const coverage = history.coverage
+	if (coverage === undefined) {
+		notice.append(element('strong', '', 'History coverage unavailable'), element('span', '', 'This response did not include an indexed range boundary.'))
+		return notice
+	}
+	const collections = entityHistoryCollections(history)
+	const recordCollections = Object.fromEntries(entityHistoryCollectionKeys.map((key) => [key, collections[key].filter(isRecord)]))
+	const summary = summarizeHistoryCollections(recordCollections, entityHistoryCollectionKeys)
+	const loadedRange =
+		summary.oldestBlock === undefined || summary.newestBlock === undefined
+			? 'No block-numbered records loaded'
+			: summary.oldestBlock === summary.newestBlock
+				? `Loaded block #${summary.oldestBlock.toLocaleString('en-US')}`
+				: `Loaded blocks #${summary.oldestBlock.toLocaleString('en-US')}–#${summary.newestBlock.toLocaleString('en-US')}`
+	const seriesCounts = Object.entries(coverage.series)
+		.map(([key, count]) => `${historySeriesLabel(key)} ${number(count)}`)
+		.join(' · ')
+	const indexedRange = `#${number(coverage.indexedFromBlock)}–${coverage.indexedThroughBlock === undefined ? 'pending' : `#${number(coverage.indexedThroughBlock)}`}`
+	const requestedRange = `#${number(coverage.requestedFromBlock)}–#${number(coverage.requestedToBlock)}`
+	notice.append(
+		element(
+			'strong',
+			'',
+			coverage.nextCursor !== undefined
+				? 'More indexed history available'
+				: coverage.rangeCovered === false
+					? 'Requested range is partially indexed'
+					: 'Indexed history loaded',
+		),
+		element(
+			'span',
+			'',
+			`${loadedRange} · ${seriesCounts || 'no historical series'}. Requested ${requestedRange}; scanner coverage ${indexedRange}.${
+				coverage.rangeCovered === false ? ' Narrow the requested range or backfill the missing blocks.' : ''
+			}`,
+		),
+	)
+	if (coverage.nextCursor !== undefined) {
+		const pagination = element('div', 'history-coverage-pagination')
+		const showOlder = element('button', 'secondary compact state-history-more', 'Show older history')
+		showOlder.type = 'button'
+		showOlder.setAttribute('aria-label', `Show older ${type.slice(0, -1)} history`)
+		const status = element('p', 'state-history-status')
+		status.setAttribute('role', 'status')
+		status.setAttribute('aria-live', 'polite')
+		showOlder.addEventListener('click', async () => {
+			const scrollY = window.scrollY
+			const pendingPresentation = entityHistoryContinuationPresentation('pending')
+			showOlder.disabled = true
+			showOlder.setAttribute('aria-busy', 'true')
+			showOlder.textContent = pendingPresentation.buttonLabel
+			status.textContent = pendingPresentation.statusText
+			status.classList.toggle('sr-only', pendingPresentation.statusVisuallyHidden)
+			const loaded = await selectEntity(item, {
+				preserveDetail: true,
+				pagination: true,
+				historyTargetOffset: (history.loadedOffset ?? 0) + coverage.limit,
+			})
+			if (loaded) {
+				const nextControl = $('#state-detail').querySelector<HTMLElement>('.state-history-more, .state-history-complete')
+				nextControl?.focus({ preventScroll: true })
+				window.scrollTo({ top: scrollY, behavior: 'auto' })
+			} else if (showOlder.isConnected) {
+				const errorPresentation = entityHistoryContinuationPresentation('error')
+				showOlder.disabled = false
+				showOlder.removeAttribute('aria-busy')
+				showOlder.textContent = errorPresentation.buttonLabel
+				status.textContent = errorPresentation.statusText
+				status.classList.toggle('sr-only', errorPresentation.statusVisuallyHidden)
+				showOlder.focus({ preventScroll: true })
+			}
+		})
+		pagination.append(showOlder, status)
+		notice.append(pagination)
+		if (isDemo && pageUrl.searchParams.get('stateHistoryAutoLoad') === '1' && !demoStateHistoryAutoLoadConsumed) {
+			demoStateHistoryAutoLoadConsumed = true
+			window.setTimeout(() => {
+				if (showOlder.isConnected) {
+					showOlder.focus({ preventScroll: true })
+					showOlder.click()
+				}
+			}, 0)
+		}
+	} else if ((history.loadedOffset ?? 0) > 0) {
+		notice.classList.add('state-history-complete')
+		notice.tabIndex = -1
+		notice.setAttribute('role', 'status')
+		notice.setAttribute('aria-live', 'polite')
+	}
+	return notice
 }
 
 const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory): Promise<void> => {
@@ -5457,6 +7158,7 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 			'Latest indexed',
 		),
 	)
+	fragment.append(historyCoverageNotice(history, 'pools', poolItem))
 	fragment.append(
 		operationsPanel(
 			'OpenOracle coordinator state and history',
@@ -5625,6 +7327,7 @@ const renderVaultDetail = async (
 	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest indexed'))
+	fragment.append(historyCoverageNotice(history, 'vaults', vaultItem))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '', 2)),
@@ -5681,6 +7384,7 @@ const renderQuestionDetail = async (
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · ${questionStatus(question)}`))
+	fragment.append(historyCoverageNotice(history, 'questions', question))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Status', questionStatus(question)),
@@ -5824,6 +7528,7 @@ const renderUniverseDetail = async (
 			universe.active_fork_time ? 'Forked' : 'Active',
 		),
 	)
+	fragment.append(historyCoverageNotice(history, 'universes', universe))
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Theoretical REP supply', exactUnit(universe.theoretical_supply_atto_rep, 18, 'REP', 1)),
@@ -5895,11 +7600,14 @@ const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
 
 const performSelectEntity = async (
 	item: StateEntity,
-	{ preserveDetail = false, quiet = false, contextVersion, suppliedHistory }: SelectEntityOptions = {},
+	{ preserveDetail = false, quiet = false, pagination = false, historyTargetOffset, contextVersion, suppliedHistory }: SelectEntityOptions = {},
 ): Promise<boolean> => {
 	if (contextVersion !== stateDetailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
-	selectedEntityKey = entityKey(activeStateType, item)
+	const nextEntityKey = entityKey(activeStateType, item)
+	if (selectedEntityKey !== nextEntityKey) selectedEntityHistoryOffset = 0
+	selectedEntityKey = nextEntityKey
+	const targetHistoryOffset = historyTargetOffset ?? selectedEntityHistoryOffset
 	for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === selectedEntityKey))
 	const requestVersion = ++stateDetailRequestVersion
 	const detail = $('#state-detail')
@@ -5910,7 +7618,7 @@ const performSelectEntity = async (
 	if (presentation.loadingState) existingRefreshStatus?.remove()
 	let refreshStatus = presentation.loadingState ? undefined : existingRefreshStatus
 	if (replaceWithLoading) detail.replaceChildren(element('div', 'state-placeholder', 'Loading historical checkpoints…'))
-	else if (!quiet) {
+	else if (!quiet && !pagination) {
 		refreshStatus = element('div', 'system-status detail-refresh-status', 'Refreshing historical checkpoints…')
 		refreshStatus.setAttribute('role', 'status')
 		detail.prepend(refreshStatus)
@@ -5920,22 +7628,26 @@ const performSelectEntity = async (
 	url.searchParams.set('entity', selectedEntityKey)
 	history.replaceState(null, '', url)
 	try {
+		const loadedHistory = suppliedHistory ?? (await fetchEntityHistory(activeStateType, item, targetHistoryOffset))
 		if (activeStateType === 'pools' && 'settlement_collateral_atto_eth' in item)
-			await renderPoolDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		if (activeStateType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		if (activeStateType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
+			await renderPoolDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+		if (activeStateType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+		if (activeStateType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 		if (activeStateType === 'universes' && 'reputation_token_address' in item)
-			await renderUniverseDetail(item, requestVersion, canonicalGeneration, suppliedHistory)
-		return (
+			await renderUniverseDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+		const current =
 			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
 			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
-		)
+		if (current) selectedEntityHistoryOffset = loadedHistory.loadedOffset ?? 0
+		return current
 	} catch (error) {
 		if (
 			isCurrentContextRequest(contextVersion, stateDetailContextVersion, requestVersion, stateDetailRequestVersion) &&
 			isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		) {
-			if (replaceWithLoading) {
+			if (pagination) {
+				// The pagination control remains mounted and presents its local retry state.
+			} else if (replaceWithLoading) {
 				const failure = element('div', 'state-error')
 				failure.append(element('span', '', `State history unavailable: ${errorMessage(error)}`))
 				const retry = element('button', '', 'Retry')
@@ -6045,15 +7757,16 @@ const renderStateStats = ({ live = false } = {}) => {
 	const stats = $('#state-stats')
 	const previousStats = liveSnapshot(stats, '.state-stat[data-live-key]')
 	stats.replaceChildren()
-	const statGroups: Array<readonly [string, readonly StateEntity[]]> = [
-		['Pools', stateData.pools],
-		['Questions', stateData.questions],
-		['Vaults', stateData.vaults],
-		['Universes', stateData.universes],
+	const statGroups: Array<readonly [string, keyof NonNullable<StateCatalog['totals']>, readonly StateEntity[]]> = [
+		['Pools', 'pools', stateData.pools],
+		['Questions', 'questions', stateData.questions],
+		['Vaults', 'vaults', stateData.vaults],
+		['Universes', 'universes', stateData.universes],
 	]
-	for (const [label, items] of statGroups) {
-		const card = setLiveRecord(element('div', 'state-stat'), label.toLowerCase(), String(items.length))
-		card.append(element('span', '', label), element('strong', '', number(items.length)))
+	for (const [label, key, items] of statGroups) {
+		const total = stateData.totals?.[key] ?? items.length
+		const card = setLiveRecord(element('div', 'state-stat'), label.toLowerCase(), String(total))
+		card.append(element('span', '', label), element('strong', '', number(total)))
 		stats.append(card)
 	}
 	applyLiveChanges(stats, previousStats, { live, selector: '.state-stat[data-live-key]' })
@@ -6109,7 +7822,7 @@ const performLoadSystemState = async ({ live = false, contextVersion }: LoadOpti
 		)
 		const selectedItem = visibleItems.find((item) => entityKey(stagedStateType, item) === selectedEntityKey) ?? visibleItems[0]
 		const stagedSelectedKey = selectedItem === undefined ? undefined : entityKey(stagedStateType, selectedItem)
-		const selectedHistory = selectedItem === undefined ? undefined : await fetchEntityHistory(stagedStateType, selectedItem)
+		const selectedHistory = selectedItem === undefined ? undefined : await fetchEntityHistory(stagedStateType, selectedItem, selectedEntityHistoryOffset)
 		const currentQuery = $('#entity-search').value.trim().toLowerCase()
 		const currentVisibleItems = stateItems(nextStateData, stagedStateType).filter(
 			(item) => !currentQuery || entityCopy(stagedStateType, item).join(' ').toLowerCase().includes(currentQuery),
@@ -6211,6 +7924,7 @@ const setStateTab = (type: StateTab) => {
 	stateDetailRequestVersion++
 	activeStateType = type
 	selectedEntityKey = undefined
+	selectedEntityHistoryOffset = 0
 	$('#state-detail').setAttribute('aria-busy', 'false')
 	for (const tab of document.querySelectorAll<HTMLElement>('[data-state-tab]')) {
 		const selected = tab.dataset.stateTab === type
@@ -6314,6 +8028,53 @@ dialog.addEventListener('close', () => {
 const isStateTab = (value: string | undefined | null): value is StateTab =>
 	value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
 
+const historyRangeForm = document.querySelector<HTMLFormElement>('#history-range')
+const historyFromBlock = document.querySelector<HTMLInputElement>('#history-from-block')
+const historyToBlock = document.querySelector<HTMLInputElement>('#history-to-block')
+const historyRangeClear = document.querySelector<HTMLButtonElement>('#history-range-clear')
+if (historyRangeForm === null || historyFromBlock === null || historyToBlock === null || historyRangeClear === null)
+	throw new Error('History range controls are missing')
+historyFromBlock.value = pageUrl.searchParams.get('fromBlock') ?? ''
+historyToBlock.value = pageUrl.searchParams.get('toBlock') ?? ''
+historyRangeForm.addEventListener('submit', (event) => {
+	event.preventDefault()
+	historyFromBlock.setCustomValidity('')
+	historyToBlock.setCustomValidity('')
+	for (const input of [historyFromBlock, historyToBlock]) {
+		if (input.value !== '' && !/^\d+$/.test(input.value)) {
+			input.setCustomValidity('Enter a whole non-negative block number')
+			input.reportValidity()
+			return
+		}
+	}
+	if (historyFromBlock.value !== '' && historyToBlock.value !== '' && BigInt(historyFromBlock.value) > BigInt(historyToBlock.value)) {
+		historyToBlock.setCustomValidity('To block must be at or after from block')
+		historyToBlock.reportValidity()
+		return
+	}
+	for (const [name, input] of [
+		['fromBlock', historyFromBlock],
+		['toBlock', historyToBlock],
+	] as const) {
+		if (input.value === '') pageUrl.searchParams.delete(name)
+		else pageUrl.searchParams.set(name, input.value)
+	}
+	history.replaceState(null, '', pageUrl)
+	selectedEntityHistoryOffset = 0
+	void loadSystemState()
+})
+historyRangeClear.addEventListener('click', () => {
+	historyFromBlock.value = ''
+	historyToBlock.value = ''
+	historyFromBlock.setCustomValidity('')
+	historyToBlock.setCustomValidity('')
+	pageUrl.searchParams.delete('fromBlock')
+	pageUrl.searchParams.delete('toBlock')
+	history.replaceState(null, '', pageUrl)
+	selectedEntityHistoryOffset = 0
+	void loadSystemState()
+})
+
 const stateTabs = [...document.querySelectorAll<HTMLButtonElement>('[data-state-tab]')]
 for (const tab of stateTabs) {
 	tab.addEventListener('click', () => {
@@ -6392,6 +8153,7 @@ const resetSelectedNetworkContext = () => {
 		stateDetailRequestVersion++
 		stateData = undefined
 		selectedEntityKey = undefined
+		selectedEntityHistoryOffset = 0
 		$('#state-stats').replaceChildren()
 		$('#entity-list').replaceChildren()
 		$('#entity-count').textContent = '—'
@@ -6409,12 +8171,14 @@ const resetSelectedNetworkContext = () => {
 		$('#richlist-more').hidden = true
 	} else if (isAddress) {
 		currentAddressProfile = undefined
+		currentAddressPortfolioDepths = undefined
 		$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
 	} else if (isOperations) {
 		operationsRequestVersion++
 		operationsLoadState.promise = undefined
 		operationsLoadState.context = undefined
 		operationsCatalogState = undefined
+		operationsRiskCatalogState = undefined
 		$('#operations-content').replaceChildren()
 		$('#operations-content').setAttribute('aria-busy', 'true')
 	}
@@ -6667,9 +8431,16 @@ const connectStream = () => {
 			if (!isRecord(value) || (typeof value['chainId'] !== 'string' && typeof value['chainId'] !== 'number')) throw new Error('Missing chainId')
 			const blockNumber = value['blockNumber']
 			const depth = value['depth']
+			const reason = value['reason']
 			if (blockNumber !== undefined && typeof blockNumber !== 'string' && typeof blockNumber !== 'number') throw new Error('Invalid blockNumber')
 			if (depth !== undefined && typeof depth !== 'string' && typeof depth !== 'number') throw new Error('Invalid depth')
-			return { chainId: value['chainId'], ...(blockNumber === undefined ? {} : { blockNumber }), ...(depth === undefined ? {} : { depth }) }
+			if (reason !== undefined && !isHistoryInvalidationReason(reason)) throw new Error('Invalid history invalidation reason')
+			return {
+				chainId: value['chainId'],
+				...(blockNumber === undefined ? {} : { blockNumber }),
+				...(depth === undefined ? {} : { depth }),
+				...(reason === undefined ? {} : { reason }),
+			}
 		} catch (error) {
 			console.error(`${label} notification could not be decoded (${error instanceof Error ? error.name : typeof error})`)
 			return undefined
@@ -6694,6 +8465,10 @@ const connectStream = () => {
 	nextStream.addEventListener('reorg', async (event) => {
 		const payload = eventPayload(event, 'Reorganization')
 		if (payload === undefined) return
+		if (payload.reason === undefined) {
+			console.error('Reorganization notification could not be decoded (missing history invalidation reason)')
+			return
+		}
 		if (isDemo) {
 			demoReorgObserved = true
 			demoEvictedAddress = activeAccount?.address.toLowerCase()
@@ -6701,7 +8476,8 @@ const connectStream = () => {
 		invalidateAddressIdentityCache(String(payload.chainId))
 		if (String(payload.chainId) !== selectedChainId()) return
 		const depth = String(payload.depth ?? 'unknown')
-		await refreshCanonicalViews('Chain reorganization detected', `${depth} block${depth === '1' ? '' : 's'} replaced; views are refreshing.`)
+		const notice = historyInvalidationNotice(payload.reason, depth)
+		await refreshCanonicalViews(notice.title, notice.detail)
 	})
 	nextStream.addEventListener('reset', async () => {
 		addressIdentityCache.clear()
