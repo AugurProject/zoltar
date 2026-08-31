@@ -12,6 +12,11 @@ const outputPath = path.join(configOutputRoot, 'abis.json')
 const manifestsRoot = path.join(configOutputRoot, 'manifests')
 await mkdir(manifestsRoot, { recursive: true })
 
+const serializeManifest = (contracts: readonly (readonly [string, string, string])[]): string => {
+	const entries = contracts.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
+	return `{\n\t"contracts": [\n${entries}\n\t]\n}\n`
+}
+
 const sources = await contractSources(projectRoot)
 const vendorPrefix = 'contracts/statoblast/openOracle/openzeppelin/contracts/'
 for (const [name, source] of Object.entries(sources)) {
@@ -148,7 +153,12 @@ const deploymentKind: Readonly<Record<string, string>> = {
 	zoltarQuestionData: 'zoltarQuestionData',
 }
 
-for (const networkId of ['mainnet', 'sepolia']) {
+const usdcAddress = {
+	mainnet: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+	sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+} as const
+
+for (const networkId of ['mainnet', 'sepolia'] as const) {
 	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
 	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
@@ -156,12 +166,15 @@ for (const networkId of ['mainnet', 'sepolia']) {
 		const kind = deploymentKind[id]
 		return kind === undefined ? [] : [[address, label, kind] as [string, string, string]]
 	})
-	configured.push([deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'], [deployment.network.wethAddress, 'Wrapped Ether', 'weth'])
+	configured.push(
+		[deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'],
+		[deployment.network.wethAddress, 'Wrapped Ether', 'weth'],
+		[usdcAddress[networkId], 'USD Coin', 'usdc'],
+	)
 	const manifestPath = path.join(manifestsRoot, `${networkId}.json`)
 	const historical = manifestEntries(JSON.parse(await readFile(manifestPath, 'utf8')), manifestPath)
 	const unique = [...new Map([...historical, ...configured].map((entry) => [entry[0].toLowerCase(), entry])).values()]
-	const serializedContracts = unique.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
-	await Bun.write(manifestPath, `{\n\t"contracts": [\n${serializedContracts}\n\t]\n}\n`)
+	await Bun.write(manifestPath, serializeManifest(unique))
 }
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)
