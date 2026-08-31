@@ -94,6 +94,16 @@ describe('operator connectivity', () => {
 		await expect(sendRawTransactionToRpc(`http://127.0.0.1:${server.port.toString()}`, serialized)).resolves.toBe(keccak256(serialized))
 	})
 
+	test('rejects a broadcast hash for a different raw transaction', async () => {
+		const returnedHash = `0x${'12'.repeat(32)}` as Hex
+		const url = rpc(method => {
+			if (method === 'eth_sendRawTransaction') return returnedHash
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(sendRawTransactionToRpc(url, '0x1234')).rejects.toThrow('does not match submitted transaction')
+	})
+
 	test('does not mistake an unknown transaction type for an accepted transaction', async () => {
 		const server = Bun.serve({
 			port: 0,
@@ -137,12 +147,13 @@ describe('operator connectivity', () => {
 	})
 
 	test('checks the configured chain and sends raw transactions', async () => {
-		const hash = `0x${'12'.repeat(32)}` as Hex
+		const hash = keccak256('0x1234')
+		const uppercaseHash = `0x${hash.slice(2).toUpperCase()}`
 		const url = rpc((method, params) => {
 			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_sendRawTransaction') {
 				expect(params).toEqual(['0x1234'])
-				return hash
+				return uppercaseHash
 			}
 			throw new Error(`Unexpected method: ${method}`)
 		})
