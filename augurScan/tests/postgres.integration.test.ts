@@ -20,6 +20,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../src/ethereum.ts'
+import { LiveBus } from '../src/live.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
 import { uniswapV4PoolId } from '../src/uniswap.ts'
@@ -2166,8 +2167,25 @@ postgresTest(
 			await database.sql.unsafe('TRUNCATE TABLE live_events RESTART IDENTITY')
 			await database.sql`INSERT INTO live_events (event, payload, created_at) VALUES ('status', '{}'::jsonb, now() - interval '8 days')`
 			await database.pruneLiveEvents()
+			expect(await database.latestEventId()).toBe(1)
 			expect(await database.eventsAfter(0)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'replay-window-expired', refreshRequired: true } }])
 			expect(await database.eventsAfter(2)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }])
+			const requestedLiveCursors: number[] = []
+			const liveBus = new LiveBus({
+				latestEventId: async () => await database.latestEventId(),
+				eventsAfter: async (id) => {
+					requestedLiveCursors.push(id)
+					return await database.eventsAfter(id)
+				},
+			})
+			const liveStream = liveBus.stream()
+			if (liveStream === undefined) throw new Error('Expected live stream capacity')
+			const liveReader = liveStream.getReader()
+			await liveReader.read()
+			await liveBus.poll()
+			expect(requestedLiveCursors).toEqual([1])
+			await liveBus.close()
+			expect(await liveReader.read()).toEqual({ done: true, value: undefined })
 			const network: NetworkConfig = {
 				id: 'integration',
 				name: 'Integration chain',

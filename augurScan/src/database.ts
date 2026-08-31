@@ -663,7 +663,10 @@ export class ScannerDatabase {
 
 	async latestEventId(): Promise<number> {
 		return await this.read(async (sql) => {
-			const rows = await sql`SELECT COALESCE(max(id), 0) AS id FROM live_events`
+			const rows = await sql`
+				SELECT GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS id
+				FROM live_event_state state WHERE singleton
+			`
 			return Number(rows[0]?.['id'] ?? 0)
 		}, 3_000)
 	}
