@@ -35,7 +35,9 @@ type PaintTarget = {
 }
 
 const outputDirectory = resolve(import.meta.dir, '..', '.state', 'qa')
-const expectedCatalogEntryCount = new Set(unavailableOperationCatalog('visual fixture').map(evaluation => evaluation.definition.id)).size
+const unavailableCatalog = unavailableOperationCatalog('visual fixture')
+const expectedCatalogEntryCount = new Set(unavailableCatalog.map(evaluation => evaluation.definition.id)).size
+const expectedCopyableOperationCount = new Set(unavailableCatalog.filter(evaluation => evaluation.definition.classification === 'selectable').map(evaluation => evaluation.definition.id)).size
 await mkdir(outputDirectory, { recursive: true })
 const requestedCaptureSource = process.argv[2]
 if (requestedCaptureSource === undefined) {
@@ -45,6 +47,8 @@ if (requestedCaptureSource === undefined) {
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop-topology', route: 'ecosystem', verticalScroll: 'topology', width: 1_440 },
+		{ height: 900, name: 'chaos-activity-desktop', route: 'activity', width: 1_440 },
+		{ height: 900, name: 'chaos-settings-desktop', route: 'settings', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-resume-mobile', resumeDialog: true, route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-overview-mobile-rpc-health', route: 'overview', stateRefreshFailure: true, verticalScroll: 'rpc-health', width: 390 },
@@ -470,6 +474,12 @@ try {
 		const brandLeft = Reflect.get(layout, 'brandLeft')
 		if (typeof brandLeft !== 'number' || brandLeft < 0) throw new Error(`Dashboard route /${route} shifted the operator header: ${JSON.stringify(layout)}`)
 		if (Reflect.get(layout, 'currentNavigationVisible') !== true || Reflect.get(layout, 'scrollY') !== 0) throw new Error(`Dashboard route /${route} did not preserve a visible current navigation target at the top of the document: ${JSON.stringify(layout)}`)
+		if (route === 'catalog' && width <= 672) {
+			const copyTargetHeights = await evaluate(`[...document.querySelectorAll('#catalog-rows .operation-id-copy')].map(button => button.getBoundingClientRect().height)`)
+			if (!Array.isArray(copyTargetHeights) || copyTargetHeights.length !== expectedCopyableOperationCount || copyTargetHeights.some(height => typeof height !== 'number' || height < 44)) {
+				throw new Error(`Mobile catalog Copy ID controls did not retain 44px touch targets: ${JSON.stringify(copyTargetHeights)}`)
+			}
+		}
 		if (route === 'catalog' && width >= 1_440) {
 			const catalogLayout = await evaluate(`(() => {
 				const shell = document.querySelector('.table-shell')
@@ -736,6 +746,11 @@ try {
 			) {
 				throw new Error(`Dashboard route /${route} was not complete in its full-document viewport: ${JSON.stringify(fullDocumentLayout)}`)
 			}
+		}
+		if (fullDocument !== true && catalogDetail !== true && verticalScroll === undefined && recoveryRefreshFailure === undefined) {
+			await evaluate('window.scrollTo(0, 0)')
+			await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+			if ((await evaluate('window.scrollY')) !== 0) throw new Error(`Dashboard route /${route} did not return to the top before capture`)
 		}
 		const paintTargets: PaintTarget[] = []
 		if (resumeDialog === true) {

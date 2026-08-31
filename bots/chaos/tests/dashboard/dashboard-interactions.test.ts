@@ -889,6 +889,11 @@ browserTest(
 							shellOverflow: shell.scrollWidth > shell.clientWidth,
 						}
 					})()`)
+					const copyTargetHeights = await cdp.evaluate(`[...document.querySelectorAll('#catalog-rows .operation-id-copy')].map(button => button.getBoundingClientRect().height)`)
+					expect(Array.isArray(copyTargetHeights)).toBe(true)
+					if (!Array.isArray(copyTargetHeights)) throw new Error('Mobile catalog Copy ID controls did not render')
+					expect(copyTargetHeights.length).toBeGreaterThan(0)
+					for (const height of copyTargetHeights) expect(height).toBeGreaterThanOrEqual(44)
 					expect(mobileCatalog).toEqual({
 						blocker: longCatalogBlocker,
 						candidateCount: '0',

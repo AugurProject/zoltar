@@ -1510,6 +1510,10 @@ fieldset {
 		min-height: 2.75rem;
 	}
 
+	button.operation-id-copy {
+		min-height: 2.75rem;
+	}
+
 	.panel {
 		padding: 1rem;
 	}
