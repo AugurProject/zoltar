@@ -239,17 +239,19 @@ export async function createDevToolsSession(
 		devToolsPortAttempts,
 		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
 		pollMilliseconds = 50,
+		profileParentPath = os.tmpdir(),
 		targetAttempts,
 		targetListRequest = async (url, signal) => (await (await fetch(url, { signal })).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>,
 	}: {
 		readonly devToolsPortAttempts?: number
 		readonly initializationTimeoutMilliseconds?: number
 		readonly pollMilliseconds?: number
+		readonly profileParentPath?: string
 		readonly targetAttempts?: number
 		readonly targetListRequest?: (url: string, signal: AbortSignal) => Promise<Array<{ type: string; webSocketDebuggerUrl: string }>>
 	} = {},
 ) {
-	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
+	const profilePath = await fs.mkdtemp(path.join(profileParentPath, 'zoltar-browser-smoke-'))
 	let browser: ChildProcess | undefined
 	let socket: WebSocket | undefined
 	let cleanedUp = false
