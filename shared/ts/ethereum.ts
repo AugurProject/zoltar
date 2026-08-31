@@ -655,8 +655,8 @@ function normalizeHash(value: unknown) {
 }
 
 function normalizeRpcHex(value: unknown) {
-	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('RPC returned an invalid hex value')
-	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
+	if (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/u.test(value)) throw new Error('RPC returned an invalid hex value')
+	return ensure0x(stripHexPrefix(value).toLowerCase())
 }
 
 function normalizeRpcBigInt(value: unknown, fallback = 0n) {

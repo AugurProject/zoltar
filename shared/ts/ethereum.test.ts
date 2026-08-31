@@ -1182,6 +1182,75 @@ describe('shared ethereum compatibility layer', () => {
 		expect((await contractCreationClient.getTransaction({ hash: TX_HASH })).to).toBeNull()
 	})
 
+	for (const rpcData of ['code', 'call result', 'transaction input', 'log data'] as const) {
+		test(`clients reject odd-length ${rpcData} returned by RPC`, async () => {
+			const transport = custom(
+				createProvider(() => {
+					switch (rpcData) {
+						case 'code':
+						case 'call result':
+							return '0x1'
+						case 'transaction input':
+							return {
+								from: OWNER_ADDRESS,
+								gas: '0x5208',
+								gasPrice: '0x1',
+								hash: TX_HASH,
+								input: '0x1',
+								nonce: '0x0',
+								to: RECIPIENT_ADDRESS,
+								transactionIndex: '0x0',
+								type: '0x2',
+								value: '0x0',
+							}
+						case 'log data':
+							return [
+								{
+									address: TOKEN_ADDRESS,
+									blockHash: BLOCK_HASH,
+									blockNumber: '0x1',
+									data: '0x1',
+									logIndex: '0x0',
+									removed: false,
+									topics: [],
+									transactionHash: TX_HASH,
+									transactionIndex: '0x0',
+								},
+							]
+						default:
+							throw new Error('Unknown RPC data test case')
+					}
+				}, []),
+			)
+			const publicClient = createPublicClient({ transport })
+			const walletClient = createWalletClient({ account: OWNER_ADDRESS, transport })
+			const result = (() => {
+				switch (rpcData) {
+					case 'code':
+						return publicClient.getCode({ address: TOKEN_ADDRESS })
+					case 'call result':
+						return walletClient.call({ to: TOKEN_ADDRESS })
+					case 'transaction input':
+						return publicClient.getTransaction({ hash: TX_HASH })
+					case 'log data':
+						return publicClient.getLogs({})
+					default:
+						throw new Error('Unknown RPC data test case')
+				}
+			})()
+
+			await expect(result).rejects.toThrow('RPC returned an invalid hex value')
+		})
+	}
+
+	test('clients preserve valid even-length and empty RPC data', async () => {
+		const publicClient = createPublicClient({ transport: custom(createProvider(() => '0xABcd', [])) })
+		const walletClient = createWalletClient({ account: OWNER_ADDRESS, transport: custom(createProvider(() => '0x', [])) })
+
+		expect(await publicClient.getCode({ address: TOKEN_ADDRESS })).toBe('0xabcd')
+		expect(await walletClient.call({ to: TOKEN_ADDRESS })).toEqual({ data: '0x' })
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
