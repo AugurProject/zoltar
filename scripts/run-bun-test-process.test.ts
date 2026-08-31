@@ -8,7 +8,7 @@ import { runBunTestProcess } from './run-bun-test-process.mts'
 const repositoryRoot = join(import.meta.dir, '..')
 
 test('test entrypoints protect Bun isolate workers from piped Linux stdio', async () => {
-	for (const relativePath of ['scripts/run-tests.mts', 'scripts/run-balanced-test-shard.mts']) {
+	for (const relativePath of ['scripts/run-tests.mts', 'scripts/run-balanced-test-shard.mts', 'scripts/run-solidity-bytecode-coverage.mts']) {
 		const source = await readFile(join(repositoryRoot, relativePath), 'utf8')
 		expect(source).toContain("from './run-bun-test-process.mts'")
 		expect(source).toContain('runBunTestProcess(')
