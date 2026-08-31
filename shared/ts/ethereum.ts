@@ -1696,10 +1696,11 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
+			let lastRateLimitError: Error | undefined
 			let lastRequestError: Error | undefined
 			let lastReceiptNotFoundError: Error | undefined
 			return await runWithDeadline({
-				getTimeoutError: () => lastReceiptNotFoundError ?? lastRequestError ?? new Error(`Timed out while waiting for transaction receipt "${parameters.hash}".`),
+				getTimeoutError: () => lastRateLimitError ?? lastReceiptNotFoundError ?? lastRequestError ?? new Error(`Timed out while waiting for transaction receipt "${parameters.hash}".`),
 				operation: async runBeforeDeadline => {
 					const waitForNextPoll = async () => {
 						let pollingTimer: ReturnType<typeof setTimeout> | undefined
@@ -1715,15 +1716,21 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}
 					}
 					const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
+						lastRateLimitError = undefined
 						lastRequestError = undefined
 						return await runBeforeDeadline(
 							async () =>
 								await retryRateLimited(
 									async () => {
 										try {
-											return await operation()
+											const result = await operation()
+											lastRateLimitError = undefined
+											return result
 										} catch (error) {
-											if (error instanceof Error) lastRequestError = error
+											if (error instanceof Error) {
+												lastRateLimitError = isRateLimitError(error) ? error : undefined
+												lastRequestError = error
+											}
 											throw error
 										}
 									},

@@ -1435,6 +1435,33 @@ describe('shared ethereum compatibility layer', () => {
 		expect(receiptRequests).toBe(1)
 	})
 
+	test('waitForTransactionReceipt preserves replacement scan rate limits at its deadline', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: RECEIPT_HASH,
+			input: '0x',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			type: '0x2',
+			value: 0n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') throw { code: 429, message: 'replacement scan rate limit' }
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 50 }) })
+		const originalDateNow = Date.now
+
+		Date.now = () => 0
+		try {
+			await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, onReplaced: () => undefined, pollingInterval: 0, timeout: 5, transaction: originalTransaction })).rejects.toThrow('replacement scan rate limit')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
 	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
 		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
