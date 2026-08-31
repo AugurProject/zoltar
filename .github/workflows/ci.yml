@@ -129,6 +129,13 @@ jobs:
           if [[ "${build_status}" -ne 0 ]]; then
             exit "${build_status}"
           fi
+          # Refresh the built local packages before preflight so the deployment
+          # manifest check does not emit declarations while tsc:app reads them.
+          bun ./scripts/install-frozen.mts ui/statoblast
+          refresh_status="$?"
+          if [[ "${refresh_status}" -ne 0 ]]; then
+            exit "${refresh_status}"
+          fi
           bun run ci:preflight:current
           status="$?"
           set -e
