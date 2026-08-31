@@ -7,7 +7,8 @@ import { marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type Liv
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
 import * as appCopy from '../copy/app.js'
-import { getTradingRouteHref } from '../lib/routing.js'
+import * as liquidityCopy from '../copy/liquidity.js'
+import { getTradingRouteHref, type TradingRoute } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { useLiveTradingController } from './liveTradingController.js'
 import { livePairInitialized, liveTradingControllerServices } from './liveTradingControllerHelpers.js'
@@ -23,6 +24,11 @@ const ignoreWalletSummaryChange = () => undefined
 
 export function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
 	return simulationActive ? commonCopy.conditionalPricesOnly : commonCopy.formatNetworkConditionalPrices(chainName)
+}
+
+export function liveWorkflowRoutePresentation(route: TradingRoute, chainName: string, simulationActive: boolean) {
+	if (route === 'liquidity') return { description: liquidityCopy.routeDescription, title: appCopy.liquidity }
+	return { description: marketRouteSubtitle(chainName, simulationActive), title: appCopy.markets }
 }
 
 export function portfolioRouteSubtitle(chainName: string, simulationActive: boolean) {
@@ -253,7 +259,7 @@ export function LiveTrading({
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
 }: {
-	route: string
+	route: TradingRoute
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId?: string | undefined
@@ -398,7 +404,7 @@ export function LiveTrading({
 						{message}
 					</p>
 				)}
-				<section class='section' aria-busy={discoveryState === 'loading'}>
+				<section class='portfolio-section' aria-busy={discoveryState === 'loading'}>
 					<div class='section-heading'>
 						<h2>Positions</h2>
 						<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
@@ -417,11 +423,12 @@ export function LiveTrading({
 			</main>
 		)
 	}
+	const routePresentation = liveWorkflowRoutePresentation(route, configuration.chainName, getActiveSimulationController() !== undefined)
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader
-				title={appCopy.markets}
-				description={marketRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)}
+				title={routePresentation.title}
+				description={routePresentation.description}
 				actions={
 					walletConnectRequestNonce === undefined ? (
 						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
@@ -501,7 +508,7 @@ export function LiveTrading({
 								</div>
 								<Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>
 							</div>
-							{route !== 'liquidity' && route !== 'portfolio' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} onSelect={selectMarket} /> : null}
+							{route !== 'liquidity' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} onSelect={selectMarket} /> : null}
 							<dl class='fact-list'>
 								<div>
 									<dt>Security pool</dt>
@@ -565,7 +572,7 @@ export function LiveTrading({
 									services={liquidityServices}
 								/>
 							) : null}
-							{route !== 'liquidity' && route !== 'portfolio' && selectedPairInitialized ? (
+							{route !== 'liquidity' && selectedPairInitialized ? (
 								<LivePositionControls
 									market={selected}
 									balances={selectedBalances}

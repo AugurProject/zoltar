@@ -5,6 +5,7 @@ import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
+import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -20,6 +21,7 @@ import {
 interface IEscalationGameDepositContext {
 	function getQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
 	function hasReachedNonDecision() external view returns (bool);
+	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
 	function repToken() external view returns (address);
 	function securityPool() external view returns (address);
 	function getBindingCapitalAttoRep() external view returns (uint256);
@@ -28,7 +30,15 @@ interface IEscalationGameDepositContext {
 }
 
 interface IEscalationGameSecurityPoolContext {
+	function escalationGame() external view returns (address);
 	function securityPoolForker() external view returns (address);
+	function systemState() external view returns (SystemState);
+	function universeId() external view returns (uint248);
+	function zoltar() external view returns (address);
+}
+
+interface IEscalationGameZoltarContext {
+	function getForkTime(uint248 universeId) external view returns (uint256);
 }
 
 contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGameEvents {
@@ -40,6 +50,23 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 
 	function recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) external returns (uint256 parentDepositIndex) {
+		return _recordDeposit(depositor, outcome, attoRepAmount, expectedCumulativeRepAmountAttoRep);
+	}
+
+	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		require(!forkContinuation, 'Fork game');
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		address poolAddress = game.securityPool();
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
+		require(pool.escalationGame() == address(this), 'Game inactive');
+		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
+		require(IEscalationGameZoltarContext(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		IERC20(game.repToken()).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
+		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, attoRepAmount, expectedCumulativeRepAmountAttoRep);

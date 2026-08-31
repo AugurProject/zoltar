@@ -153,7 +153,7 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		const headings = Array.from(document.querySelectorAll('h3')).map(heading => heading.textContent?.trim())
 
-		expect(headings).toContain('Create Pool')
+		expect(headings).not.toContain('Create Pool')
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')

@@ -32,6 +32,7 @@ import {
 	publicActions,
 	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
+	requestRpc,
 	toHex,
 	type EIP1193Provider,
 	type BlockTransaction,
@@ -179,6 +180,36 @@ function getArrayEntry(value: unknown, index: number, context: string) {
 function getObjectEntry(value: unknown, key: string, context: string) {
 	if (typeof value !== 'object' || value === null) throw new Error(`${context} must be an object`)
 	return Reflect.get(value, key)
+}
+
+function createRawLog(overrides: Readonly<Record<string, unknown>> = {}) {
+	return {
+		address: TOKEN_ADDRESS,
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		data: '0x',
+		logIndex: '0x0',
+		removed: false,
+		topics: [],
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+		...overrides,
+	}
+}
+
+function createRawReceipt(logs: readonly unknown[]) {
+	return {
+		blockHash: BLOCK_HASH,
+		blockNumber: '0x1',
+		cumulativeGasUsed: '0x5208',
+		from: OWNER_ADDRESS,
+		gasUsed: '0x5208',
+		logs,
+		status: '0x1',
+		to: RECIPIENT_ADDRESS,
+		transactionHash: TX_HASH,
+		transactionIndex: '0x0',
+	}
 }
 
 function getDecodedEntry(value: unknown, index: number, key: string, context: string) {
@@ -1129,6 +1160,34 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
 	})
 
+	test('public client rejects logs without the required topics array', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => [log], [])) })
+
+		await expect(client.getLogs({})).rejects.toThrow('without topics')
+	})
+
+	test('public client preserves an omitted removed flag and rejects invalid flag values', async () => {
+		const logWithoutRemoved = createRawLog()
+		Reflect.deleteProperty(logWithoutRemoved, 'removed')
+		let result: unknown = [logWithoutRemoved]
+		const client = createPublicClient({ transport: custom(createProvider(() => result, [])) })
+
+		expect((await client.getLogs({}))[0]?.removed).toBeUndefined()
+
+		result = [createRawLog({ removed: '0x0' })]
+		await expect(client.getLogs({})).rejects.toThrow('invalid removed flag')
+	})
+
+	test('transaction receipt normalization rejects embedded logs without topics', async () => {
+		const log = createRawLog()
+		Reflect.deleteProperty(log, 'topics')
+		const client = createPublicClient({ transport: custom(createProvider(() => createRawReceipt([log]), [])) })
+
+		await expect(client.getTransactionReceipt({ hash: TX_HASH })).rejects.toThrow('without topics')
+	})
+
 	test('waitForTransactionReceipt resolves same-nonce replacements and reports the replacement reason', async () => {
 		const originalHash = `0x${'55'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'66'.repeat(32)}` satisfies Hash
@@ -1319,6 +1378,44 @@ describe('shared ethereum compatibility layer', () => {
 		).rejects.toThrow('RPC returned an invalid hash')
 	})
 
+	test('public client rejects transaction lookups whose response hash differs from the request', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionByHash') {
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					from: OWNER_ADDRESS,
+					gas: '0x5208',
+					hash: TX_HASH,
+					input: '0x',
+					nonce: '0x0',
+					to: RECIPIENT_ADDRESS,
+					transactionIndex: '0x0',
+					value: '0x0',
+				}
+			}
+			if (method === 'eth_getTransactionReceipt') {
+				return {
+					blockHash: BLOCK_HASH,
+					blockNumber: '0x1',
+					cumulativeGasUsed: '0x5208',
+					from: OWNER_ADDRESS,
+					gasUsed: '0x5208',
+					logs: [],
+					status: '0x1',
+					to: RECIPIENT_ADDRESS,
+					transactionHash: TX_HASH,
+					transactionIndex: '0x0',
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ transport: custom(provider) })
+
+		await expect(client.getTransaction({ hash: RECEIPT_HASH })).rejects.toThrow('different hash')
+		await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow('different hash')
+	})
+
 	test('public client rejects transaction receipts without required mined fields', async () => {
 		const validReceipt = {
 			blockHash: BLOCK_HASH,
@@ -1364,6 +1461,52 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
+	test('public client rejects blocks without a required transaction list', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5' }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without transactions')
+	})
+
+	test('replacement scans reject missing block transactions instead of advancing past them', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		} satisfies BlockTransaction
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		await expect(
+			client.waitForTransactionReceipt({
+				hash: TX_HASH,
+				onReplaced: () => undefined,
+				pollingInterval: 0,
+				transaction: originalTransaction,
+				timeout: 0,
+			}),
+		).rejects.toThrow('without transactions')
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber'])
+	})
+
 	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const clockValues = [0, 120_000, 180_000]
@@ -1390,6 +1533,47 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionReceipt'])
+	})
+
+	test('waitForTransactionReceipt enforces its deadline while a request or polling delay is pending', async () => {
+		const settleBeforeWatchdog = async (operation: Promise<unknown>) => {
+			let watchdog: ReturnType<typeof setTimeout> | undefined
+			try {
+				return await Promise.race([
+					operation.then(
+						() => new Error('Receipt wait unexpectedly resolved'),
+						error => (error instanceof Error ? error : new Error(String(error))),
+					),
+					new Promise<Error>(resolve => {
+						watchdog = setTimeout(() => resolve(new Error('Receipt wait exceeded its watchdog')), 100)
+					}),
+				])
+			} finally {
+				if (watchdog !== undefined) clearTimeout(watchdog)
+			}
+		}
+		const hungClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(
+				createProvider(
+					async () =>
+						await new Promise(() => {
+							// Deliberately never settles.
+						}),
+					[],
+				),
+			),
+		})
+
+		const hungRequestError = await settleBeforeWatchdog(hungClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 }))
+		expect(hungRequestError.message).toBe(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+
+		const pollingClient = createPublicClient({
+			chain: mainnet,
+			transport: custom(createProvider(() => null, [])),
+		})
+		const pollingError = await settleBeforeWatchdog(pollingClient.waitForTransactionReceipt({ hash: RECEIPT_HASH, pollingInterval: 1_000, timeout: 5 }))
+		expect(pollingError.message).toBe(`Transaction receipt with hash "${RECEIPT_HASH}" could not be found.`)
 	})
 
 	test('waitForTransactionReceipt retries rate-limited receipt requests', async () => {
@@ -1449,6 +1633,49 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		expect(receiptRequests).toBe(1)
+	})
+
+	test('waitForTransactionReceipt preserves replacement scan rate limits at its deadline', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: RECEIPT_HASH,
+			input: '0x',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			type: '0x2',
+			value: 0n,
+		} satisfies BlockTransaction
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') throw { code: 429, message: 'replacement scan rate limit' }
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 50 }) })
+		const originalDateNow = Date.now
+
+		Date.now = () => 0
+		try {
+			await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, onReplaced: () => undefined, pollingInterval: 0, timeout: 5, transaction: originalTransaction })).rejects.toThrow('replacement scan rate limit')
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
+	test('waitForTransactionReceipt clears a stale rate limit when its retry request hangs', async () => {
+		let receiptRequests = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'stale rate limit' }
+			return new Promise(() => {
+				// Deliberately never settles.
+			})
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 0 }) })
+
+		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 50 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+		expect(receiptRequests).toBe(2)
 	})
 
 	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
@@ -1814,6 +2041,43 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	for (const allowFailure of [true, false] as const) {
+		test(`public client rejects truncated multicall responses when allowFailure is ${allowFailure.toString()}`, async () => {
+			const provider = createProvider(({ method }) => {
+				if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+				return encodeAbiParameters(
+					[
+						{
+							components: [
+								{ name: 'success', type: 'bool' },
+								{ name: 'returnData', type: 'bytes' },
+							],
+							name: 'returnData',
+							type: 'tuple[]',
+						},
+					],
+					[[]],
+				)
+			}, [])
+			const client = createPublicClient({ transport: custom(provider) })
+
+			await expect(
+				client.multicall({
+					allowFailure,
+					contracts: [
+						{
+							abi: BALANCE_OF_ABI,
+							address: TOKEN_ADDRESS,
+							args: [OWNER_ADDRESS],
+							functionName: 'balanceOf',
+						},
+					],
+					multicallAddress: MULTICALL_ADDRESS,
+				}),
+			).rejects.toThrow('Multicall returned 0 results for 1 calls')
+		})
+	}
+
 	test('wallet client uses rpc sendTransaction for json-rpc accounts and raw signing for local accounts', async () => {
 		const remoteCalls: { method: string; params: unknown }[] = []
 		const remoteProvider = createProvider(({ method, params }) => {
@@ -1877,6 +2141,34 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('wallet client never retries rpc-managed transaction submissions', async () => {
+		let attempts = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_sendTransaction') throw new Error(`Unexpected rpc method: ${method}`)
+			attempts += 1
+			throw { code: 429, message: 'rate limit exceeded' }
+		}, [])
+		const client = createWalletClient({
+			account: OWNER_ADDRESS,
+			chain: mainnet,
+			transport: custom(provider, { retryDelay: 0 }),
+		})
+
+		await expect(client.sendTransaction({ to: RECIPIENT_ADDRESS })).rejects.toThrow('rate limit exceeded')
+		expect(attempts).toBe(1)
+	})
+
+	test('raw RPC requests do not retry methods with unknown semantics', async () => {
+		let attempts = 0
+		const provider = createProvider(() => {
+			attempts += 1
+			throw { code: 429, message: 'rate limit exceeded' }
+		}, [])
+
+		await expect(requestRpc(custom(provider, { retryDelay: 0 }), { method: 'wallet_switchEthereumChain' })).rejects.toThrow('rate limit exceeded')
+		expect(attempts).toBe(1)
 	})
 
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
@@ -2090,6 +2382,63 @@ describe('shared ethereum compatibility layer', () => {
 		expect(await client.getTransactionCount({ address: OWNER_ADDRESS, blockTag: 'pending' })).toBe(7n)
 		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
 	})
+
+	for (const malformed of [
+		{ kind: 'balance', label: 'negative decimal string', value: '-1' },
+		{ kind: 'blockNumber', label: 'decimal string', value: '123' },
+		{ kind: 'gasPrice', label: 'unsafe number', value: Number.MAX_SAFE_INTEGER + 1 },
+		{ kind: 'transactionCount', label: 'negative bigint', value: -1n },
+		{ kind: 'chainId', label: 'leading-zero hex string', value: '0x01' },
+	] as const) {
+		test(`public client rejects a present ${malformed.label} RPC quantity`, async () => {
+			const client = createPublicClient({ transport: custom(createProvider(() => malformed.value, [])) })
+			const result = (() => {
+				switch (malformed.kind) {
+					case 'balance':
+						return client.getBalance({ address: OWNER_ADDRESS })
+					case 'blockNumber':
+						return client.getBlockNumber()
+					case 'gasPrice':
+						return client.getGasPrice()
+					case 'transactionCount':
+						return client.getTransactionCount({ address: OWNER_ADDRESS })
+					case 'chainId':
+						return client.getChainId()
+					default:
+						throw new Error('Unknown RPC quantity test case')
+				}
+			})()
+
+			await expect(result).rejects.toThrow('RPC returned an invalid bigint value')
+		})
+	}
+
+	for (const accepted of [
+		{ expected: 42n, kind: 'balance', label: 'safe integer', value: 42 },
+		{ expected: 7n, kind: 'blockNumber', label: 'nonnegative bigint', value: 7n },
+		{ expected: 0n, kind: 'gasPrice', label: 'canonical zero quantity', value: '0x0' },
+		{ expected: 10, kind: 'chainId', label: 'uppercase-digit hex quantity', value: '0xA' },
+	] as const) {
+		test(`public client accepts ${accepted.label} RPC quantity input`, async () => {
+			const client = createPublicClient({ transport: custom(createProvider(() => accepted.value, [])) })
+			const result = await (() => {
+				switch (accepted.kind) {
+					case 'balance':
+						return client.getBalance({ address: OWNER_ADDRESS })
+					case 'blockNumber':
+						return client.getBlockNumber()
+					case 'gasPrice':
+						return client.getGasPrice()
+					case 'chainId':
+						return client.getChainId()
+					default:
+						throw new Error('Unknown RPC quantity test case')
+				}
+			})()
+
+			expect(result).toBe(accepted.expected)
+		})
+	}
 
 	test('publicActions extension preserves wallet default account behavior', async () => {
 		const calls: { method: string; params: unknown }[] = []

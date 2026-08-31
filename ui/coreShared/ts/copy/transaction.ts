@@ -41,6 +41,7 @@ export const parentPoolSharesMigratedDetail = 'Child-universe shares were materi
 export const shareOutcome = 'Share Outcome'
 export const targetOutcomeIndexes = 'Target Outcome Indexes'
 export const reportingContributionSuccessDetail = 'Your selected REP was committed to the chosen escalation side.'
+export const reportingRepApprovalSuccessDetail = 'The escalation game can now transfer the approved REP from your wallet.'
 export const escalationDepositsSettledDetail = 'Selected escalation deposits were settled against the current finalized outcome.'
 export const submittingLiquidation = 'Submitting Liquidation'
 export const liquidationRequestSubmittedDetail = 'The liquidation request was submitted successfully.'

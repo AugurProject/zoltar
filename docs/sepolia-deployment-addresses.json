@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x69D8570a9F64CD7a703f295D440658764Dae2381"
+			"address": "0x19138180CFb059b5695789e73c79bA300db03A3c"
 		},
 		{
 			"id": "weth",
@@ -41,24 +41,9 @@
 			"address": "0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108"
 		},
 		{
-			"id": "uniformPriceDualCapBatchAuctionFactory",
-			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
-		},
-		{
 			"id": "scalarOutcomes",
 			"label": "ScalarOutcomes",
 			"address": "0x9AdECC476DdF3a0E89B7540302758123308B03A0"
-		},
-		{
-			"id": "securityPoolUtils",
-			"label": "SecurityPoolUtils",
-			"address": "0x0eAd9A0facAE7f9428b65D35b356aE12790022a9"
-		},
-		{
-			"id": "openOracle",
-			"label": "OpenOracle",
-			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "zoltarQuestionData",
@@ -69,6 +54,21 @@
 			"id": "zoltar",
 			"label": "Zoltar",
 			"address": "0x132bE08534a074242Be03FD46558f97AC8891048"
+		},
+		{
+			"id": "uniformPriceDualCapBatchAuctionFactory",
+			"label": "UniformPriceDualCapBatchAuctionFactory",
+			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
+		},
+		{
+			"id": "securityPoolUtils",
+			"label": "SecurityPoolUtils",
+			"address": "0x0eAd9A0facAE7f9428b65D35b356aE12790022a9"
+		},
+		{
+			"id": "openOracle",
+			"label": "OpenOracle",
+			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "shareTokenFactory",
@@ -93,12 +93,12 @@
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+			"address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x49De932c947343ADb87508280f99251A3b326283"
+			"address": "0xb3929faea19B9d5A3464e62A996E489404D6Cce9"
 		}
 	],
 	"derivedContracts": [
@@ -115,17 +115,17 @@
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249"
+			"address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x49De932c947343ADb87508280f99251A3b326283"
+			"address": "0xb3929faea19B9d5A3464e62A996E489404D6Cce9"
 		},
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505"
+			"address": "0x8C648789566Ae350f147228e46aBE8bB63540Ffd"
 		}
 	]
 }

@@ -9,7 +9,30 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	const fixture = createVaultControlsFixture()
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
 
-	test('shows an explicit vault-refresh blocker while the selected vault auto-loads', async () => {
+	test('blocks vault deposits from a direct vault view when an ordinary escalation already started', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ ordinaryEscalationGameStarted: true, securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
+		const disabledReason = document.getElementById(depositButton.getAttribute('aria-describedby') ?? '')
+		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.')
+	})
+
+	test('auto-loads the selected vault without presenting manual refresh guidance', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -43,9 +66,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		expect(depositLauncherButton.hasAttribute('disabled')).toBe(true)
 		expect(depositLauncherButton.getAttribute('title')).toBeNull()
-		const refreshReason = documentQueries.getByText('Refresh the vault to use these actions.')
-		expect(documentQueries.getAllByText('Refresh the vault to use these actions.')).toHaveLength(1)
-		expect(depositLauncherButton.getAttribute('aria-describedby')).toBe(refreshReason.getAttribute('id'))
+		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
+		expect(depositLauncherButton.getAttribute('aria-describedby')).toBeNull()
 		expect(loadSecurityVaultCalls).toContain(undefined)
 
 		await act(() => {
@@ -53,6 +75,66 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		})
 
 		expect(documentQueries.queryByRole('dialog', { name: 'Deposit REP' })).toBeNull()
+	})
+
+	test('announces automatic vault loading once without rendering manual refresh blockers', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					securityVault: createSecurityVaultProps({
+						loadingSecurityVault: true,
+						securityVaultDetails: undefined,
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('status').textContent).toContain('Loading vault details…')
+		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
+	})
+
+	test('offers an explicit retry after automatic vault loading fails', async () => {
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
+						securityVaultDetails: undefined,
+						securityVaultError: 'Failed to load security vault',
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		const retryReason = documentQueries.getByText('Retry loading the vault to use these actions.')
+		expect(documentQueries.getAllByText('Retry loading the vault to use these actions.')).toHaveLength(1)
+		expect(documentQueries.getByText('Failed to load security vault')).toBeTruthy()
+		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		})
+
+		expect(loadSecurityVaultCalls).toEqual([undefined])
 	})
 
 	test('does not auto-load a vault when no vault is selected and the wallet is disconnected', async () => {
