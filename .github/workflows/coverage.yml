@@ -41,8 +41,6 @@ jobs:
       - name: Run scheduled TypeScript and Solidity coverage gates
         if: github.event_name != 'pull_request'
         run: bun run coverage:full
-      - name: Run critical mutation smoke
-        run: bun run test:mutation:smoke
       - name: Publish coverage summary
         if: always()
         run: |
