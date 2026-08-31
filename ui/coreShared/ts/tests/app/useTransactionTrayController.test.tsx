@@ -49,4 +49,27 @@ describe('useTransactionTrayController', () => {
 		expect(controller.transactionState.value.inFlightCount).toBe(0)
 		expect(finishedCount).toBe(1)
 	})
+
+	test('rejects a second transaction without replacing the admitted intent', async () => {
+		let controller: ReturnType<typeof useTransactionTrayController> | undefined
+		function Harness() {
+			controller = useTransactionTrayController({ onFinished: () => undefined })
+			return null
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+
+		let firstAccepted: boolean | void
+		let secondAccepted: boolean | void
+		await act(() => {
+			firstAccepted = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			secondAccepted = controller?.onTransactionRequested({ action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
+		})
+
+		expect(firstAccepted).toBe(true)
+		expect(secondAccepted).toBe(false)
+		expect(controller.transactionState.value.inFlightCount).toBe(1)
+		expect(controller.transactionState.value.pendingIntent?.action).toBe('createMarket')
+	})
 })

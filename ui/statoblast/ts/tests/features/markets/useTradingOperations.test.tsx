@@ -689,7 +689,8 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).tradingFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again')
 		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()
 		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()
@@ -769,7 +770,8 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).tradingFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again')
 		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()
 		expect(loadZoltarUniverseSummary).not.toHaveBeenCalled()

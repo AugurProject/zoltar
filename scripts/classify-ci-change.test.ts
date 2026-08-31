@@ -36,11 +36,15 @@ test('empty input and explicit full mode use the full matrix', () => {
 	expect(classifyCiChange(['README.md'], { full: true }).expandedScopes).toEqual(ciScopes)
 })
 
-test('keeps the unreliable augurScan integration route disabled', () => {
+test('requires PostgreSQL integration for augurScan behavior and safe full runs', () => {
 	expect(classifyCiChange(['augurScan/README.md']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(false)
-	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(false)
+	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/migrations/002.sql']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/config/abis.json']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/config/manifests/mainnet.json']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['shared/ts/ethereum.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(true)
 })
 
 test('matrices are valid, deterministic JSON for empty and non-empty selections', () => {
