@@ -1144,9 +1144,8 @@ async function discoverPools(
 			totalPoolHeldAttoRep,
 			vaultCount,
 			questionOutcome,
-			forkActivationTime,
-			parentForkActivationTime,
 			forkDataResult,
+			parentForkDataResult,
 			ownForkMigrationStatusResult,
 			entitlementStatusResult,
 			currentMintingCapacity,
@@ -1193,9 +1192,8 @@ async function discoverPools(
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getVaultCount' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getForkActivationTime' }),
-			deployment.parent === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'getForkActivationTime' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
+			deployment.parent === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'forkData' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getOwnForkMigrationStatus' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
@@ -1236,7 +1234,8 @@ async function discoverPools(
 			settlementCollateralAttoEth: accounting.settlementCollateralAttoEth.toString(),
 			subject: `Coordinator ${coordinator}`,
 		})
-		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex] = forkDataResult
+		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex, forkActivationTime] = forkDataResult
+		const parentForkActivationTime = parentForkDataResult?.[11] ?? 0n
 		const [statusOwnFork, statusAuctionableAttoRepAtFork, vaultRepAtForkAttoRep] = ownForkMigrationStatusResult
 		const [, , materializedByOutcome] = entitlementStatusResult
 		const forkData = { auctionableAttoRepAtFork, migratedAttoRep, outcomeIndex, ownFork, unresolvedEscalationAtFork }
@@ -1439,7 +1438,7 @@ async function discoverPools(
 			shareToken: getAddress(shareToken),
 			systemState: bigintToSafeNumber(systemState),
 			truthAuction: getAddress(truthAuction),
-			unassignedBadDebtAttoEth: unassignedPosition[2].toString(),
+			unassignedBadDebtAttoEth: (unassignedPosition[3] === accounting.badDebtGeneration ? unassignedPosition[2] : 0n).toString(),
 			unassignedCapacityOwnershipAttoRep: unassignedPosition[1].toString(),
 			unassignedRepBackingAttoRep: unassignedRepBackingAttoRep.toString(),
 			unresolvedEscalationMigrationReadyOutcomes,

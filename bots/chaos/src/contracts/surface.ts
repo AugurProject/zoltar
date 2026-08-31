@@ -135,6 +135,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, truth auction, or parent pool may send ETH directly.', undefined, 'receive'),
 	entry('SecurityPoolLiquidationDelegate', 'performBundledLiquidation', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall; a direct call uses isolated delegate storage.'),
 	entry('SecurityPoolLiquidationDelegate', 'resumeForkedEscalationGame', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool resumption entrypoint.'),
+	entry('SecurityPoolLiquidationDelegate', 'setValidatedSettlementCollateral', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall after validating the attached settlement collateral.'),
 	entry('SecurityPoolLiquidationDelegate', 'setVaultCapacity', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall during a checked vault deposit.'),
 	entry('SecurityPoolEventEmitter', 'emitForkSnapshotEvents', 'excluded-dangerous', undefined, 'Direct calls can emit unauthenticated lookalike protocol events; only a canonical forker delegatecall is meaningful.'),
 	entry('SecurityPoolEventEmitter', 'emitPoolAccountingCheckpoint', 'excluded-dangerous', undefined, 'Direct calls can emit unauthenticated lookalike protocol events; only a canonical pool delegatecall is meaningful.'),
