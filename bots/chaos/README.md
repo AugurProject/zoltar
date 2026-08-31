@@ -83,7 +83,13 @@ Keep `paused: true` and `runtime.execute: false`, then validate and run:
 )
 ```
 
-Open <http://127.0.0.1:4193> and sign in as `operator`. Load the private key through the write-only Settings control. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
+Leave that command running. In a second terminal, return to `bots/chaos` and read the owner-only dashboard password:
+
+```sh
+cat .state/dashboard-password
+```
+
+Open <http://127.0.0.1:4193> and sign in as `operator` with that password. Load the private key through the write-only Settings control. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
 
 While paused and dry, verify that the displayed wallet address exactly matches the independently derived address. Only then fund it within the budget from step 2. Confirm the ETH, WETH, and universe-specific REP inventory on Overview. If the address differs, clear it, stop, preserve the old state unit, select a new unused state path, and restart with the intended signer; never delete state to work around signer scoping.
 
