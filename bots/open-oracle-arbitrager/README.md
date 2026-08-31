@@ -623,7 +623,7 @@ The dashboard shows:
   P&amp;L.
 - Confirmed dispute transactions and their older quote-time accounting. The table
   and trend are bounded to the latest 500 records; durable position totals use the
-  complete position journal.
+  retained recovery records plus the journal's compacted accounting summary.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
 - A read-only active risk envelope showing configured position, locked-capital,
@@ -923,7 +923,9 @@ discovered venues; the bot pins their reserve reads and every executable quote
 to the scanned canonical block. Repeated polls of the same block retain the same
 native observation identity and cannot build temporal persistence. The bot
 rechecks the block hash after each market-read batch and discards DEX history if
-the canonical hash changes.
+the canonical hash changes. Immediately before submission it also rereads every
+retained configured constant-product source at its exact evidence block and
+requires all available configured RPC responses to agree with that snapshot.
 
 The two groups must agree within `maximumGroupDeviationBps` when both are
 reliable. Single-group fallback is disabled by default and is used only when
@@ -1072,6 +1074,16 @@ sync the parent directory. A malformed journal stops startup rather than discard
 recovery state. Back it up with the configuration and history files, never share one
 path across networks or execution signers, and preserve it until every position
 is closed and reconciled.
+
+The journal retains every position that can still consume risk, every expired
+transaction hash that still requires late-inclusion monitoring, every unsent history
+outbox, and the 500 newest fully terminal recovery records. Older closed records,
+and expired-not-included records only after every retained hash is reconciled or
+proved impossible, are compacted into durable position-count, hedged-profit, and
+realized-profit totals plus the newest 32 UTC-day gas buckets. The retained gas
+buckets continue to feed the current-day gas guard and dashboard; the append-only
+execution history remains the audit record for older confirmed entries and their
+dated gas costs.
 
 Execute mode holds `<position-file>.lock` for the process lifetime to prevent
 concurrent writers. While a signer is active or queued, it also holds an

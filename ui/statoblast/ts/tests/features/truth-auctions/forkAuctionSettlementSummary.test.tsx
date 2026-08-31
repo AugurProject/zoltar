@@ -36,7 +36,7 @@ let mockedTruthAuctionSettlementState: TruthAuctionSettlementHookState
 
 mock.module('../../../protocol/index.js', () => ({
 	...actualContracts,
-	loadAllSecurityPools: mock(async () => mockedSecurityPools),
+	loadSecurityPoolChildren: mock(async () => mockedSecurityPools),
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
 }))
 

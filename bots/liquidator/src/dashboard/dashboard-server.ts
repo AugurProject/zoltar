@@ -141,7 +141,7 @@ function publicMarketConsensus(value: unknown) {
 }
 
 function publicPool(value: unknown) {
-	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep', 'truncatedVaults'])
+	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep'])
 	const source = record(value)
 	if (source === undefined) return pool
 	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipRep', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])

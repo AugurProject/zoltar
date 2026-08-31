@@ -1,10 +1,11 @@
 # Statoblast liquidator
 
-The liquidator discovers every security pool registered by a configured
-`SecurityPoolFactory`, shows pool and vault statistics in a local dashboard, and
-evaluates unsafe vaults in operator-selected pools. Dry-run is the default. Live
-execution requires an explicit signer, the configured read RPC quorum, the
-execution flag, and non-zero deployment addresses.
+The liquidator monitors configured security pools, their direct child pools, and
+resolved desired pools from a configured `SecurityPoolFactory`. It shows pool and
+vault statistics in a local dashboard and evaluates unsafe vaults in
+operator-selected pools. Dry-run is the default. Live execution requires an
+explicit signer, the configured read RPC quorum, the execution flag, and non-zero
+deployment addresses.
 
 The bot owns an ordinary vault under its signer address in each selected pool. A
 liquidation moves ETH-denominated open-interest debt, the proportional attoREP
@@ -147,16 +148,19 @@ enabled:
 
 The universe browser walks Zoltar's deployed child-universe tree from universe
 zero, including deployed universes that do not have a security pool yet. The
-pool table is loaded automatically from
-`securityPoolDeploymentCount()` and `securityPoolDeploymentsRange()`. Selecting a
-pool enables candidate evaluation and execution only while its universe is also
-approved and its system state is operational. For an undeployed origin pool,
-add its universe, question, multiplier, and priority-fee tuple to `desiredPools`.
-The bot resolves the canonical factory address and selects it when present; when
+pool table is bounded to the chain profile's `selectedPools`, the direct child
+deployments of those pools, and deployed pools resolved from `desiredPools`; the
+bot does not enumerate unrelated factory deployments. To monitor an existing pool
+by address, add it to `selectedPools` in the paused chain profile. For an existing
+or undeployed origin pool, you can instead add its universe, question, multiplier,
+and priority-fee tuple to `desiredPools` in **Market and pool configuration**. The
+bot resolves the canonical factory address and selects it when present; when
 `allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before
-continuing liquidation. The universe table shows parent and fork-outcome lineage,
-operational and forked pool counts, pool selection, and whether a bot vault can
-migrate into that universe.
+continuing liquidation. Selecting a pool enables candidate evaluation and
+execution only while its universe is also approved and its system state is
+operational. The universe table shows parent and fork-outcome lineage, operational
+and forked pool counts, pool selection, and whether a bot vault can migrate into
+that universe.
 
 `deployment.zoltar` identifies the universe registry, and
 `approvedUniverses` is the operator's explicit truth policy. A root universe or
@@ -192,12 +196,19 @@ Pool-selection inheritance is a configuration reconciliation and remains active
 in dry-run mode and when automatic vault migrations are disabled. Only the
 on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
 
-Current-position results are capped by `runtime.maxVaultsPerPool`. Anyone can
-register a nonzero address, and the bot scans the 1,000 newest-registered
-addresses first. Empty registrations consume scan capacity without consuming
-the result cap, so older current positions may be omitted. Either limit marks
-the scan as capped in the dashboard; a capped scan is not a complete opportunity
-view.
+The bot bootstraps every registered vault, then keeps an incremental index of
+vaults with REP backing or REP committed to a dispute. In steady state, later
+scans reread only newest registry entries and vaults named by
+`VaultAccountingCheckpoint` or `VaultEscrowUpdated`. A
+`TruthAuctionHaircutApplied` event refreshes every retained dispute-staked
+vault; reorg recovery rebuilds the full registry. An adaptive bounded log scan
+catches up after long outages.
+Current pool totals and price recompute backing, open interest, health, and
+liquidation candidates locally for every retained vault. Vaults whose pool-held
+and dispute-staked REP both reach zero are evicted until a later event
+reactivates them.
+Empty registrations are discarded after inspection, so they do not consume
+steady-state memory or hide older liquidation opportunities.
 
 ## Independent market consensus
 
@@ -318,7 +329,10 @@ Example DEX source entries (addresses are intentionally placeholders):
 
 Configured DEX reserve reads are pinned to the scanned canonical block. Polling
 the same block again cannot build price persistence; a changed canonical hash
-discards accumulated DEX history. Single-group fallback is
+discards accumulated DEX history. Immediately before a price-dependent action,
+the bot rereads the retained constant-product evidence at its exact block hash
+and requires every available configured RPC response to agree with the retained
+snapshot. Single-group fallback is
 opt-in; when enabled, only sources in the selected reliable group count toward
 the total-source quorum.
 

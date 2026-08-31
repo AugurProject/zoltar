@@ -1,5 +1,5 @@
-import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { discardDexMarketObservations, marketConsensusAllowsExecution, requireCanonicalDexEvidence } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { discardDexMarketObservations, marketConsensusAllowsExecution, requireCanonicalDexEvidence, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OperatorSettings } from '#config/settings'
 import { initialRuntimeState, type PoolObservation } from '#state/operator-state'
 import { selectAllowedCandidate } from '#core/strategy'
@@ -43,11 +43,20 @@ export function marketPriceAllowsExecution(pool: PoolObservation, settings: Oper
 	)
 }
 
-export async function canonicalMarketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {
+export async function canonicalMarketPriceAllowsExecution(
+	pool: PoolObservation,
+	settings: OperatorSettings,
+	state: ReturnType<typeof initialRuntimeState>,
+	readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>,
+	requireCurrentDexEvidence: (configuration: CentralizedMarketSettings, estimate: MarketConsensusEstimate | undefined) => Promise<void>,
+) {
 	if (!marketPriceAllowsExecution(pool, settings, state)) return false
+	const configuration = marketConfigurationForPool(pool, settings)
+	if (configuration === undefined) return false
 	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
 	try {
 		await requireCanonicalDexEvidence(marketConsensus, readCanonicalHash)
+		await requireCurrentDexEvidence(configuration, marketConsensus)
 		return true
 	} catch (error) {
 		void error
