@@ -1,17 +1,14 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../../lib/routing.js'
+import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../../lib/openOracleUrlParams.js'
 import {
-	readOpenOracleViewQueryParam,
-	readOpenOracleReportIdQueryParam,
 	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQuestionIdQueryParam,
 	readSecurityPoolQueryParam,
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
 	readZoltarViewQueryParam,
-	writeOpenOracleViewQueryParam,
-	writeOpenOracleReportIdQueryParam,
 	writeSecurityPoolsViewQueryParam,
 	writeSecurityPoolQuestionIdQueryParam,
 	writeSecurityPoolQueryParam,

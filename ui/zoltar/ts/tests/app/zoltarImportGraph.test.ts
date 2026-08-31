@@ -76,7 +76,7 @@ function collectRuntimeImportSpecifiers(source: string, modulePath: string) {
 	return specifiers
 }
 
-function collectForbiddenProductCopy(source: string, modulePath: string) {
+function collectForbiddenProductReferences(source: string, modulePath: string) {
 	const matches = new Set<string>()
 	function collectStaticExpressionText(node: ts.Expression): string | undefined {
 		if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
@@ -97,10 +97,10 @@ function collectForbiddenProductCopy(source: string, modulePath: string) {
 		return collectStaticExpressionText(node.expression) ?? ''
 	}
 	function collect(value: string) {
-		if (/\bopen(?:\s|-)*oracle\b|\bstatoblast\b|#\/(?:security-pools?|markets?)(?:[/?#]|$)/i.test(value)) matches.add(value)
+		if (/\bopen(?:\s|-)*oracle|\bstatoblast|#\/(?:security-pools?|markets?)(?:[/?#]|$)/i.test(value)) matches.add(value)
 	}
 	function visit(node: ts.Node) {
-		if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) collect(node.text)
+		if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) collect(node.text)
 		else if (ts.isTemplateExpression(node)) collect(collectTemplateStaticText(node))
 		else if (ts.isBinaryExpression(node)) {
 			const staticText = collectStaticExpressionText(node)
@@ -113,7 +113,10 @@ function collectForbiddenProductCopy(source: string, modulePath: string) {
 }
 
 function isAllowedTechnicalProductString(modulePath: string, value: string) {
-	return value === 'statoblast' && (modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts'))
+	if (value === 'statoblast') return modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts')
+	if (value === 'statoblast_Multicall3_Multicall3') return modulePath.endsWith('/protocol/deployment.ts') || modulePath.endsWith('/protocol/zoltarDeploymentHelpers.ts')
+	if (value === 'statoblast_WETH9_WETH9') return modulePath.endsWith('/lib/sepoliaDeploymentConfig.ts') || modulePath.endsWith('/simulation/bootstrap.ts') || modulePath.endsWith('/protocol/deployment.ts')
+	return false
 }
 
 function collectProductionModules(entryPoint: string) {
@@ -156,7 +159,7 @@ describe('Zoltar production module graph', () => {
 
 	test('recognizes forbidden product copy across branding, casing, and multiline variants', () => {
 		expect(
-			collectForbiddenProductCopy(
+			collectForbiddenProductReferences(
 				`
 					const spaced = 'Open Oracle'
 					const compact = 'OpenOracle report'
@@ -181,7 +184,7 @@ describe('Zoltar production module graph', () => {
 		`
 
 		expect(collectRuntimeImportSpecifiers(source, 'fixture.ts')).toEqual(['./after-generic.js'])
-		expect(collectForbiddenProductCopy(source, 'fixture.ts')).toEqual(['Open Oracle'])
+		expect(collectForbiddenProductReferences(source, 'fixture.ts')).toEqual(['Open Oracle'])
 	})
 
 	test('rejects dynamic imports whose target cannot be resolved statically', () => {
@@ -190,8 +193,8 @@ describe('Zoltar production module graph', () => {
 	})
 
 	test('recognizes forbidden product copy composed across templates and nested JSX', () => {
-		expect(collectForbiddenProductCopy('const copy = `Open Oracle ${suffix}`', 'fixture.ts')).toContain('Open Oracle ')
-		expect(collectForbiddenProductCopy('const copy = <span>Open <em>Oracle</em></span>', 'fixture.tsx')).toContain('Open Oracle')
+		expect(collectForbiddenProductReferences('const copy = `Open Oracle ${suffix}`', 'fixture.ts')).toContain('Open Oracle ')
+		expect(collectForbiddenProductReferences('const copy = <span>Open <em>Oracle</em></span>', 'fixture.tsx')).toContain('Open Oracle')
 	})
 
 	test('rejects runtime imports owned by another internal UI application', () => {
@@ -201,14 +204,21 @@ describe('Zoltar production module graph', () => {
 	})
 
 	test('recognizes statically concatenated branding and cross-product link destinations', () => {
-		expect(collectForbiddenProductCopy("const copy = 'Open ' + 'Oracle'", 'fixture.ts')).toContain('Open Oracle')
-		expect(collectForbiddenProductCopy("const link = <a href='#/security-pools'>Pools</a>", 'fixture.tsx')).toContain('#/security-pools')
+		expect(collectForbiddenProductReferences("const copy = 'Open ' + 'Oracle'", 'fixture.ts')).toContain('Open Oracle')
+		expect(collectForbiddenProductReferences("const link = <a href='#/security-pools'>Pools</a>", 'fixture.tsx')).toContain('#/security-pools')
+	})
+
+	test('recognizes forbidden product identifiers and element-access keys', () => {
+		const references = collectForbiddenProductReferences("const openOracleView = state['statoblastSecurityMultiplierBps']", 'fixture.ts')
+
+		expect(references).toContain('openOracleView')
+		expect(references).toContain('statoblastSecurityMultiplierBps')
 	})
 
 	test('does not declare forbidden product modules or copy in the application shell', () => {
 		const appShell = readFileSync(zoltarAppShell, 'utf8')
 
-		expect(appShell.match(/\bopen(?:\s|-)*oracle\b|\bstatoblast\b|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
+		expect(appShell.match(/\bopen(?:\s|-)*oracle|\bstatoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
 	})
 
 	test('does not reach Statoblast-only protocol or presentation modules', () => {
@@ -228,7 +238,7 @@ describe('Zoltar production module graph', () => {
 		const productionEntryPoints = [resolve(zoltarSourceRoot, 'index.ts'), resolve(zoltarSourceRoot, 'simulation/tevmWorker.ts')]
 		const modules = [...new Set(productionEntryPoints.flatMap(collectProductionModules))].filter(modulePath => !modulePath.endsWith('/contractArtifact.ts'))
 		const forbiddenCopy = modules.flatMap(modulePath =>
-			collectForbiddenProductCopy(readFileSync(modulePath, 'utf8'), modulePath)
+			collectForbiddenProductReferences(readFileSync(modulePath, 'utf8'), modulePath)
 				.filter(copy => !isAllowedTechnicalProductString(modulePath, copy))
 				.map(copy => ({ copy, modulePath })),
 		)
