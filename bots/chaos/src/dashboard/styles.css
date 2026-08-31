@@ -359,7 +359,8 @@ main {
 	gap: 1rem;
 }
 
-.rpc-health-panel {
+.rpc-health-panel,
+.submission-health-panel {
 	grid-column: 1 / -1;
 }
 
@@ -381,6 +382,10 @@ main {
 	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 0.65rem;
 	margin: 0;
+}
+
+.submission-health-panel .rpc-health-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .rpc-health-grid div {
@@ -1290,6 +1295,10 @@ fieldset {
 
 	.coverage-grid,
 	.rpc-health-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.submission-health-panel .rpc-health-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 

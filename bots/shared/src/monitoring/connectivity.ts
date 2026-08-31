@@ -273,7 +273,14 @@ function relayAuthenticationRejectionEvidence(message: string) {
 	)
 }
 
-async function rawCapabilityErrorResponse(url: string, body: string, headers: Readonly<Record<string, string>>, parameters: { allowClientErrorResponse: boolean; expectedId: 1 | null; label: string; timeoutMilliseconds: number }) {
+const RELAY_AUTHENTICATION_SUBJECTS = ['x-flashbots-signature', 'x-flashbots-signature header', 'flashbots signature', 'flashbots authentication', 'relay authentication', 'request authentication', 'authentication', 'authentication header', 'authorization header'] as const
+
+function missingRelayAuthenticationEvidence(message: string) {
+	const normalized = message.replace(/[.!]+$/, '').trim()
+	return RELAY_AUTHENTICATION_SUBJECTS.some(subject => normalized === `${subject} required` || normalized === `${subject} is required` || normalized === `missing ${subject}` || normalized === `${subject} missing` || normalized === `${subject} is missing`)
+}
+
+async function rawCapabilityErrorResponse(url: string, body: string, headers: Readonly<Record<string, string>>, parameters: { allowClientErrorResponse: boolean; alternateExpectedId?: 1 | null | undefined; expectedId: 1 | null; label: string; timeoutMilliseconds: number }) {
 	const response = await fetch(url, {
 		body,
 		headers,
@@ -294,7 +301,8 @@ async function rawCapabilityErrorResponse(url: string, body: string, headers: Re
 		if (error instanceof SyntaxError) throw new EndpointSafetyError(`${parameters.label} returned a non-JSON response`)
 		throw error
 	}
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || value.id !== parameters.expectedId || !('error' in value) || 'result' in value) {
+	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value.id === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value.id === parameters.alternateExpectedId))
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
 		throw new EndpointSafetyError(`${parameters.label} did not return the expected matching JSON-RPC 2.0 error`)
 	}
 	const error = value.error
@@ -304,7 +312,13 @@ async function rawCapabilityErrorResponse(url: string, body: string, headers: Re
 	return { code: error.code, message: error.message.trim(), status: response.status }
 }
 
-async function rawTransactionSubmissionCapabilityError(url: string, method: TransactionSubmissionMethod, authentication: RelayAuthentication | undefined, timeoutMilliseconds: number) {
+async function rawTransactionSubmissionCapabilityError(
+	url: string,
+	method: TransactionSubmissionMethod,
+	authentication: RelayAuthentication | undefined,
+	timeoutMilliseconds: number,
+	responseParameters: { allowClientErrorResponse?: boolean | undefined; alternateExpectedId?: 1 | null | undefined; expectedId?: 1 | null | undefined; label?: string | undefined } = {},
+) {
 	const body = JSON.stringify({
 		id: 1,
 		jsonrpc: '2.0',
@@ -312,9 +326,10 @@ async function rawTransactionSubmissionCapabilityError(url: string, method: Tran
 		params: method === 'eth_sendRawTransaction' ? [TRANSACTION_SUBMISSION_CAPABILITY_PROBE] : [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }],
 	})
 	return await rawCapabilityErrorResponse(url, body, authentication === undefined ? { 'content-type': 'application/json' } : await authenticatedRelayHeaders(body, authentication), {
-		allowClientErrorResponse: false,
-		expectedId: 1,
-		label: `Endpoint did not prove ${method} support`,
+		allowClientErrorResponse: responseParameters.allowClientErrorResponse ?? false,
+		alternateExpectedId: responseParameters.alternateExpectedId,
+		expectedId: responseParameters.expectedId ?? 1,
+		label: responseParameters.label ?? `Endpoint did not prove ${method} support`,
 		timeoutMilliseconds,
 	})
 }
@@ -383,11 +398,28 @@ async function assertFlashbotsPrivateTransactionControls(url: string, authentica
 	}
 }
 
+async function assertUnauthenticatedPrivateTransactionIsRejected(url: string, timeoutMilliseconds: number) {
+	const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendPrivateTransaction', undefined, timeoutMilliseconds, {
+		allowClientErrorResponse: true,
+		alternateExpectedId: null,
+		expectedId: 1,
+		label: 'Unauthenticated private transaction control',
+	})
+	const normalizedMessage = message.toLowerCase()
+	const recognizedStatus = status === 200 || status === 401 || status === 403
+	const recognizedCode = code === -32_602 || code === -32_600 || (code >= -32_099 && code <= -32_000)
+	if (recognizedStatus && recognizedCode && missingRelayAuthenticationEvidence(normalizedMessage) && !transactionRejectionEvidence(normalizedMessage)) return
+	throw new EndpointSafetyError(`Endpoint did not prove relay authentication enforcement: HTTP ${status.toString()} RPC ${code.toString()}: ${message}`)
+}
+
 async function assertAuthenticatedPrivateTransactionSubmissionCapability(url: string, authentication: RelayAuthentication, timeoutMilliseconds = 5_000) {
 	try {
 		const { code, message, status } = await rawTransactionSubmissionCapabilityError(url, 'eth_sendPrivateTransaction', authentication, timeoutMilliseconds)
 		const normalizedMessage = message.toLowerCase()
-		if (status === 200 && code === -32_602 && !relayAuthenticationRejectionEvidence(normalizedMessage) && transactionRejectionEvidence(normalizedMessage)) return
+		if (status === 200 && code === -32_602 && !relayAuthenticationRejectionEvidence(normalizedMessage) && transactionRejectionEvidence(normalizedMessage)) {
+			await assertUnauthenticatedPrivateTransactionIsRejected(url, timeoutMilliseconds)
+			return
+		}
 		if (status === 200 && code === -32_600 && normalizedMessage === 'incorrect request') {
 			await assertFlashbotsPrivateTransactionControls(url, authentication, timeoutMilliseconds)
 			return

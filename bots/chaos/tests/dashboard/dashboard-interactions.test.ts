@@ -57,6 +57,14 @@ const readRpcHealth = [
 	{ lastSuccessAt: '2026-08-24T00:03:04.000Z', status: 'healthy', target: 'https://read-two.example/?api_key=private' },
 ] as const
 const degradedReadRpcHealth = [...readRpcHealth.slice(0, 4), { error: `RPC read-two.example rejected api_key=${rpcSecret}`, lastFailureAt: '2026-08-24T00:05:00.000Z', status: 'degraded', target: 'https://read-two.example/?api_key=private' }] as const
+const dashboardCheckTime = new Date().toISOString()
+const privateSubmissionHealth = [
+	{ authenticatedAddress: walletAddress, chainId: 11_155_111, checkedAt: dashboardCheckTime, kind: 'private-relay', status: 'healthy', target: `https://relay-one.example/private?token=${rpcSecret}` },
+	{ authenticatedAddress: walletAddress, chainId: 11_155_111, checkedAt: dashboardCheckTime, kind: 'private-relay', status: 'healthy', target: 'https://relay-two.example/private' },
+	{ authenticatedAddress: walletAddress, chainId: undefined, checkedAt: dashboardCheckTime, failureDisposition: 'connectivity-degraded', kind: 'private-relay', status: 'failed', target: 'https://relay-three.example/private' },
+] as const
+const degradedPrivateSubmissionHealth = [privateSubmissionHealth[0], { ...privateSubmissionHealth[1], authenticatedAddress: '0x0000000000000000000000000000000000000002', status: 'failed' }, privateSubmissionHealth[2]] as const
+const stalePrivateSubmissionHealth = privateSubmissionHealth.map(check => ({ ...check, checkedAt: '2020-08-24T00:00:00.000Z' }))
 const workflowSteps = [
 	{ label: 'Confirmed step', status: 'confirmed', transactionHash: `0x${'11'.repeat(32)}` },
 	{ label: 'Complete step', status: 'complete', transactionHash: `0x${'22'.repeat(32)}` },
@@ -166,7 +174,7 @@ const workflowRenderingState = state({
 			status: 'waiting-transaction',
 		},
 	],
-	rpcEndpointHealth: readRpcHealth,
+	rpcEndpointHealth: [...readRpcHealth, ...privateSubmissionHealth],
 	scheduler: { lastDelaySeconds: 60, nextRunAt: '2020-08-24T00:01:00.000Z', selectedOperationId: 'open-oracle.settle', status: 'running' },
 	topology: {
 		anchor: { blockNumber: '4242', timestamp: '1000' },
@@ -201,7 +209,8 @@ const partialRecoveryDashboardState = state({
 })
 
 const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
-const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: degradedReadRpcHealth }
+const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...degradedReadRpcHealth, ...degradedPrivateSubmissionHealth] }
+const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
 async function availablePort() {
 	const listener = createServer()
@@ -279,6 +288,7 @@ browserTest(
 		let recoveredDashboardState = firstScenario.recoveredState
 		let failSecondStateRead = true
 		let failNextStateRead = false
+		let submissionConfigured = true
 		let selectableOperationAllowlist: string[] | null = null
 		const settingsMutations: unknown[] = []
 		let stateRequests = 0
@@ -296,6 +306,13 @@ browserTest(
 					network: { chainId: 11_155_111, name: 'sepolia' },
 					paused: Reflect.get(initialDashboardState, 'paused') === true,
 					runtime: { execute: false },
+					submission: submissionConfigured
+						? {
+								minimumBundleRelaySuccesses: 2,
+								mode: 'private',
+								relayUrls: [`https://relay-one.example/private?token=${rpcSecret}`, 'https://relay-two.example/private', 'https://relay-three.example/private'],
+							}
+						: undefined,
 					scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
 					strategy: {
 						allowHighRiskOperations: false,
@@ -580,6 +597,17 @@ browserTest(
 				expect(Reflect.get(health, 'lastCheck')).not.toBe('No completed check')
 				expect(
 					await cdp.evaluate(`({
+						freshness: document.querySelector('#submission-freshness')?.textContent,
+						healthy: document.querySelector('#submission-healthy-count')?.textContent,
+						mode: document.querySelector('#submission-mode')?.textContent,
+						proof: document.querySelector('#submission-signer-proof')?.textContent,
+						required: document.querySelector('#submission-required-threshold')?.textContent,
+						secretVisible: document.documentElement.textContent?.includes(${JSON.stringify(rpcSecret)}),
+						status: document.querySelector('#submission-health-status')?.textContent,
+					})`),
+				).toEqual({ freshness: '3 fresh of 3 checked', healthy: '2 of 3 origins', mode: 'Private relay', proof: 'Matches current signer', required: '2 origins', secretVisible: false, status: 'Path ready' })
+				expect(
+					await cdp.evaluate(`({
 						eth: document.querySelector('#balance-eth')?.textContent,
 						rep: document.querySelector('#rep-balances .token-row > strong')?.textContent,
 						weth: document.querySelector('#balance-weth')?.textContent,
@@ -626,6 +654,12 @@ browserTest(
 					required: '—',
 					status: 'Health unavailable',
 				})
+				expect(
+					await cdp.evaluate(`({
+						freshness: document.querySelector('#submission-freshness')?.textContent,
+						status: document.querySelector('#submission-health-status')?.textContent,
+					})`),
+				).toEqual({ freshness: 'Previous readiness is stale', status: 'Path unavailable' })
 				if (viewport.label === 'mobile') {
 					const bounds = await cdp.evaluate(`new Promise(resolve => {
 						const panel = document.querySelector('.rpc-health-panel')
@@ -1321,7 +1355,41 @@ browserTest(
 						status: document.querySelector('#rpc-health-status')?.textContent,
 					})`),
 				).toEqual({ chain: 'Not ready for chain 11155111', healthy: '1 of 3', secretVisible: false, status: 'Quorum blocked' })
+				expect(
+					await cdp.evaluate(`({
+						healthy: document.querySelector('#submission-healthy-count')?.textContent,
+						proof: document.querySelector('#submission-signer-proof')?.textContent,
+						status: document.querySelector('#submission-health-status')?.textContent,
+					})`),
+				).toEqual({ healthy: '1 of 3 origins', proof: 'Does not match current signer', status: 'Path blocked' })
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+
+				initialDashboardState = staleSubmissionWorkflowRenderingState
+				recoveredDashboardState = staleSubmissionWorkflowRenderingState
+				stateRequests = 0
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#submission-health-status')?.textContent === 'Evidence stale'", `${viewport.label} stale submission evidence did not render`)
+				expect(
+					await cdp.evaluate(`({
+						freshness: document.querySelector('#submission-freshness')?.textContent,
+						healthy: document.querySelector('#submission-healthy-count')?.textContent,
+						proof: document.querySelector('#submission-signer-proof')?.textContent,
+						status: document.querySelector('#submission-health-status')?.textContent,
+					})`),
+				).toEqual({ freshness: '0 fresh of 3 checked', healthy: '0 of 3 origins', proof: 'Not yet proven', status: 'Evidence stale' })
+
+				submissionConfigured = false
+				stateRequests = 0
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#submission-health-status')?.textContent === 'Path not configured'", `${viewport.label} unconfigured submission path did not render`)
+				expect(
+					await cdp.evaluate(`({
+						freshness: document.querySelector('#submission-freshness')?.textContent,
+						mode: document.querySelector('#submission-mode')?.textContent,
+						status: document.querySelector('#submission-health-status')?.textContent,
+					})`),
+				).toEqual({ freshness: 'Not yet verified', mode: '—', status: 'Path not configured' })
+				submissionConfigured = true
 
 				initialDashboardState = pausedWorkflowRenderingState
 				recoveredDashboardState = pausedWorkflowRenderingState

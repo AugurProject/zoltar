@@ -78,7 +78,11 @@ function createPrivateRelay(node: AnvilNode, expectedSigner: Address): ChaosPriv
 			if (body.method === 'eth_chainId') {
 				return await fetch(node.rpcUrl, { body: requestText, headers: { 'content-type': 'application/json' }, method: 'POST' })
 			}
-			if (!relayAuthenticationMatches(request.headers.get('x-flashbots-signature'), expectedSigner)) {
+			const relayAuthentication = request.headers.get('x-flashbots-signature')
+			if (relayAuthentication === null) {
+				return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }, { status: 401 })
+			}
+			if (!relayAuthenticationMatches(relayAuthentication, expectedSigner)) {
 				return Response.json({ error: { code: -32_600, message: 'Invalid relay authentication' }, id: body.id, jsonrpc: '2.0' }, { status: 401 })
 			}
 			if (body.method !== 'eth_sendPrivateTransaction' || body.params.length !== 1) {

@@ -246,6 +246,7 @@ describe('operator connectivity', () => {
 			rpc((method, params, request) => {
 				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_sendPrivateTransaction') {
+					if (request.headers.get('x-flashbots-signature') === null) return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' })
 					expect(request.headers.get('x-flashbots-signature')).toBe(`${authentication.address}:0x${'22'.repeat(65)}`)
 					expect(params).toEqual([{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }])
 					return Response.json({
@@ -261,6 +262,33 @@ describe('operator connectivity', () => {
 		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(false)), 1, authentication)).rejects.toThrow('did not prove authenticated eth_sendPrivateTransaction support')
 		const expectedBody = JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }] })
 		expect(signedMessages).toEqual([keccak256(expectedBody), keccak256(expectedBody)])
+	})
+
+	test('rejects transaction parsing evidence when the target method does not enforce relay authentication', async () => {
+		const requestedAuthenticationHeaders: Array<string | null> = []
+		const endpoint = rpc((method, _params, request) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') {
+				requestedAuthenticationHeaders.push(request.headers.get('x-flashbots-signature'))
+				return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('authentication')
+		expect(requestedAuthenticationHeaders).toEqual([expect.any(String), null])
+	})
+
+	test.each(['invalid signature', 'x-flashbots-signature is not required', 'authentication header is optional', 'missing signature'])('rejects ambiguous or negative unauthenticated target evidence: %s', async unauthenticatedMessage => {
+		const endpoint = rpc((method, _params, request) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') {
+				return request.headers.get('x-flashbots-signature') === null ? Response.json({ error: { code: -32_600, message: unauthenticatedMessage }, id: null, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('authentication')
 	})
 
 	test('accepts the strict authenticated control sequence used by the official Sepolia Flashbots relay', async () => {
@@ -329,9 +357,11 @@ describe('operator connectivity', () => {
 	})
 
 	test('counts healthy distinct relay origins toward private-transaction preflight threshold', async () => {
-		const acceptedOrigin = rpc(method => {
+		const acceptedOrigin = rpc((method, _params, request) => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			if (method === 'eth_sendPrivateTransaction') {
+				return request.headers.get('x-flashbots-signature') === null ? Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			}
 			throw new Error(`Unexpected method: ${method}`)
 		})
 		const rejectedOrigin = rpc(() => Response.json({ error: { code: -32_000, message: 'temporarily unavailable' }, id: 1, jsonrpc: '2.0' }, { status: 503 }))
@@ -345,9 +375,11 @@ describe('operator connectivity', () => {
 
 	test('tolerates private transport degradation at threshold but fails closed on authentication rejection', async () => {
 		const capableRelay = () =>
-			rpc(method => {
+			rpc((method, _params, request) => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_sendPrivateTransaction') {
+					return request.headers.get('x-flashbots-signature') === null ? Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+				}
 				throw new Error(`Unexpected method: ${method}`)
 			})
 		const firstCapableRelay = capableRelay()

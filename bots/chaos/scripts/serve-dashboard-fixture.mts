@@ -4,13 +4,21 @@ import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
 const now = Date.now()
 const dashboardPassword = 'dashboard visual fixture password'
 const scenario = process.argv[2] ?? 'baseline'
-if (scenario !== 'baseline' && scenario !== 'safety-recovery') {
-	throw new Error('Dashboard fixture scenario must be baseline or safety-recovery')
+if (scenario !== 'baseline' && scenario !== 'safety-recovery' && scenario !== 'private-relay-ready' && scenario !== 'private-relay-blocked') {
+	throw new Error('Dashboard fixture scenario must be baseline, safety-recovery, private-relay-ready, or private-relay-blocked')
 }
 const safetyRecovery = scenario === 'safety-recovery'
+const privateRelayScenario = scenario === 'private-relay-ready' || scenario === 'private-relay-blocked'
+const privateRelayReady = scenario === 'private-relay-ready'
 let paused = safetyRecovery
 let revisionNumber = 7
 let hasSigner = true
+
+function executionStatus() {
+	if (paused) return 'paused'
+	if (privateRelayScenario) return 'running'
+	return 'dry-run'
+}
 
 function evaluations() {
 	const eligibleIds = new Set(['open-oracle.report', 'statoblast.vault.deposit-rep', 'trading.position.enter', 'zoltar.question.create-binary'])
@@ -34,7 +42,7 @@ function settings() {
 		networkConfigured: true,
 		paused,
 		privateKey: hasSigner ? '__PRESERVE_SAVED_PRIVATE_KEY__' : null,
-		runtime: { execute: false },
+		runtime: { execute: privateRelayScenario, lifecyclePollMilliseconds: 12_000 },
 		scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
 		strategy: {
 			allowHighRiskOperations: false,
@@ -48,6 +56,13 @@ function settings() {
 			selectableOperationAllowlist: ['open-oracle.report', 'statoblast.vault.deposit-rep', 'trading.position.enter', 'zoltar.question.create-binary'],
 			workflowValidForBlocks: 288,
 		},
+		submission: privateRelayScenario
+			? {
+					minimumBundleRelaySuccesses: 2,
+					mode: 'private',
+					relayUrls: ['https://relay-one.invalid', 'https://relay-two.invalid', 'https://relay-three.invalid'],
+				}
+			: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	}
 }
 
@@ -64,6 +79,7 @@ function state() {
 		chainId: 11_155_111,
 		error: undefined,
 		evaluations: evaluations(),
+		execute: privateRelayScenario,
 		inventory: {
 			eth: '1842100000000000000',
 			rep: [
@@ -98,6 +114,31 @@ function state() {
 			{ chainId: 11_155_111, checkedAt: new Date(now - 7_100).toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://quorum-one.invalid' },
 			{ chainId: undefined, checkedAt: new Date(now - 7_200).toISOString(), error: 'RPC https://quorum-two.invalid failed with dashboard-secret', kind: 'read-rpc', status: 'failed', target: 'https://quorum-two.invalid' },
 			{ chainId: 11_155_111, checkedAt: new Date(now - 6_900).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://fixture-user:fixture-password@rpc.invalid' },
+			...(privateRelayScenario
+				? [
+						{ authenticatedAddress: '0x9999999999999999999999999999999999999999', chainId: 11_155_111, checkedAt: new Date(now - 6_800).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.invalid' },
+						{
+							authenticatedAddress: '0x9999999999999999999999999999999999999999',
+							chainId: privateRelayReady ? 11_155_111 : undefined,
+							checkedAt: new Date(now - 6_700).toISOString(),
+							error: privateRelayReady ? undefined : 'Relay rejected fixture request',
+							failureDisposition: privateRelayReady ? undefined : 'connectivity-degraded',
+							kind: 'private-relay',
+							status: privateRelayReady ? 'healthy' : 'failed',
+							target: 'https://relay-two.invalid',
+						},
+						{
+							authenticatedAddress: '0x9999999999999999999999999999999999999999',
+							chainId: undefined,
+							checkedAt: new Date(now - 6_600).toISOString(),
+							error: 'Relay temporarily unavailable',
+							failureDisposition: 'connectivity-degraded',
+							kind: 'private-relay',
+							status: 'failed',
+							target: 'https://relay-three.invalid',
+						},
+					]
+				: []),
 			{ lastSuccessAt: new Date(now - 6_000).toISOString(), status: 'healthy', target: 'https://rpc.invalid' },
 			{ lastSuccessAt: new Date(now - 6_100).toISOString(), status: 'healthy', target: 'https://quorum-one.invalid' },
 			{ error: 'api_key=dashboard-secret', lastFailureAt: new Date(now - 5_900).toISOString(), status: 'degraded', target: 'https://quorum-two.invalid' },
@@ -110,7 +151,7 @@ function state() {
 			selectedOperationId: undefined,
 			status: paused ? 'paused' : 'scheduled',
 		},
-		status: paused ? 'paused' : 'dry-run',
+		status: executionStatus(),
 		topology: {
 			anchor: { blockNumber: '8842011', timestamp: Math.floor(now / 1_000).toString() },
 			auctions: [{ address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', bids: [{}, {}], endTime: Math.floor((now + 3_600_000) / 1_000).toString(), finalized: false, pool: '0xdddddddddddddddddddddddddddddddddddddddd', startTime: Math.floor((now - 3_600_000) / 1_000).toString() }],

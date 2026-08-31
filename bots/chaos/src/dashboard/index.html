@@ -134,6 +134,43 @@
 						</dl>
 						<p class="rpc-health-note muted">Endpoint identities and error details remain in protected bot logs.</p>
 					</article>
+
+					<article class="panel submission-health-panel" aria-labelledby="submission-health-title">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Sanitized submission</p>
+								<h3 id="submission-health-title">Transaction path</h3>
+							</div>
+							<span id="submission-health-status" class="badge neutral" role="status" aria-live="polite">Readiness loading</span>
+						</div>
+						<dl class="rpc-health-grid">
+							<div>
+								<dt>Submission mode</dt>
+								<dd id="submission-mode">—</dd>
+							</div>
+							<div>
+								<dt>Healthy origins</dt>
+								<dd id="submission-healthy-count">—</dd>
+							</div>
+							<div>
+								<dt>Required threshold</dt>
+								<dd id="submission-required-threshold">—</dd>
+							</div>
+							<div>
+								<dt>Current evidence</dt>
+								<dd id="submission-freshness">Not yet verified</dd>
+							</div>
+							<div>
+								<dt>Signer proof</dt>
+								<dd id="submission-signer-proof">Not required</dd>
+							</div>
+							<div class="rpc-last-check">
+								<dt>Last path check</dt>
+								<dd id="submission-last-check">No completed check</dd>
+							</div>
+						</dl>
+						<p class="rpc-health-note muted">Only origin counts and proof state are shown. Relay and RPC identities remain in protected bot logs.</p>
+					</article>
 				</div>
 
 				<div class="two-column">

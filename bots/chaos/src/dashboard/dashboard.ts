@@ -100,6 +100,19 @@ type RpcHealth = {
 	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | undefined
 }
 
+type SubmissionHealth = {
+	checkedOriginCount?: number | undefined
+	configuredOriginCount?: number | undefined
+	freshOriginCount?: number | undefined
+	healthyOriginCount?: number | undefined
+	lastCheckedAt?: string | undefined
+	mode?: 'private' | 'public' | undefined
+	proofMatchesSigner?: boolean | undefined
+	ready?: boolean | undefined
+	requiredHealthyOriginCount?: number | undefined
+	status?: 'degraded' | 'not-checked' | 'not-configured' | 'ready' | 'stale' | undefined
+}
+
 type Snapshot = {
 	activities: Activity[]
 	alerts: { message?: string | undefined; severity?: string | undefined }[]
@@ -116,6 +129,7 @@ type Snapshot = {
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
 	rpcHealth: RpcHealth
+	submissionHealth: SubmissionHealth
 	safetyPaused?: boolean | undefined
 	scheduler: {
 		due?: boolean | undefined
@@ -203,6 +217,13 @@ const rpcRequiredQuorum = element('rpc-required-quorum', HTMLElement)
 const rpcChainReadiness = element('rpc-chain-readiness', HTMLElement)
 const rpcLastCheck = element('rpc-last-check', HTMLElement)
 const rpcHealthRetryButton = element('rpc-health-retry-button', HTMLButtonElement)
+const submissionHealthStatus = element('submission-health-status', HTMLSpanElement)
+const submissionMode = element('submission-mode', HTMLElement)
+const submissionHealthyCount = element('submission-healthy-count', HTMLElement)
+const submissionRequiredThreshold = element('submission-required-threshold', HTMLElement)
+const submissionFreshness = element('submission-freshness', HTMLElement)
+const submissionSignerProof = element('submission-signer-proof', HTMLElement)
+const submissionLastCheck = element('submission-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
@@ -402,6 +423,10 @@ function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
 	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' ? value : undefined
 }
 
+function submissionHealthStatusValue(value: unknown): SubmissionHealth['status'] {
+	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' || value === 'stale' ? value : undefined
+}
+
 function strings(value: unknown) {
 	return Array.isArray(value) ? value.flatMap(entry => (typeof entry === 'string' ? [entry] : [])) : []
 }
@@ -508,6 +533,7 @@ function parseSnapshot(value: unknown): Snapshot {
 	const source = record(value) ?? {}
 	const inventory = record(source['inventory']) ?? {}
 	const rpcHealth = record(source['rpcHealth']) ?? {}
+	const submissionHealth = record(source['submissionHealth']) ?? {}
 	const scheduler = record(source['scheduler']) ?? {}
 	return {
 		activities: list(source['activities'], entry => ({
@@ -585,6 +611,18 @@ function parseSnapshot(value: unknown): Snapshot {
 			lastCheckedAt: stringValue(rpcHealth['lastCheckedAt']),
 			requiredReadQuorum: nonnegativeIntegerValue(rpcHealth['requiredReadQuorum']),
 			status: rpcHealthStatusValue(rpcHealth['status']),
+		},
+		submissionHealth: {
+			checkedOriginCount: nonnegativeIntegerValue(submissionHealth['checkedOriginCount']),
+			configuredOriginCount: nonnegativeIntegerValue(submissionHealth['configuredOriginCount']),
+			freshOriginCount: nonnegativeIntegerValue(submissionHealth['freshOriginCount']),
+			healthyOriginCount: nonnegativeIntegerValue(submissionHealth['healthyOriginCount']),
+			lastCheckedAt: stringValue(submissionHealth['lastCheckedAt']),
+			mode: submissionHealth['mode'] === 'private' || submissionHealth['mode'] === 'public' ? submissionHealth['mode'] : undefined,
+			proofMatchesSigner: booleanValue(submissionHealth['proofMatchesSigner']),
+			ready: booleanValue(submissionHealth['ready']),
+			requiredHealthyOriginCount: nonnegativeIntegerValue(submissionHealth['requiredHealthyOriginCount']),
+			status: submissionHealthStatusValue(submissionHealth['status']),
 		},
 		safetyPaused: booleanValue(source['safetyPaused']),
 		scheduler: {
@@ -982,6 +1020,7 @@ function renderOverview(value: Snapshot) {
 		repBalances.textContent = 'Inventory unavailable until the first canonical scan.'
 	}
 	renderRpcHealth(value)
+	renderSubmissionHealth(value.submissionHealth)
 	renderWorkflow(value.currentWorkflow)
 	renderCoverage(value.operationEvaluations)
 }
@@ -1015,6 +1054,45 @@ function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
 	rpcRequiredQuorum.textContent = '—'
 	rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
 	rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
+}
+
+function originCount(value: number | undefined) {
+	return value === undefined ? '—' : `${value.toString()} origin${value === 1 ? '' : 's'}`
+}
+
+function renderSubmissionHealth(health: SubmissionHealth) {
+	if (health.status === 'ready') setBadge(submissionHealthStatus, 'Path ready', 'success')
+	else if (health.status === 'degraded') setBadge(submissionHealthStatus, 'Path blocked', 'error')
+	else if (health.status === 'stale') setBadge(submissionHealthStatus, 'Evidence stale', 'warning')
+	else if (health.status === 'not-checked') setBadge(submissionHealthStatus, 'Awaiting path check', 'warning')
+	else setBadge(submissionHealthStatus, 'Path not configured', 'neutral')
+	if (health.mode === 'private') submissionMode.textContent = 'Private relay'
+	else if (health.mode === 'public') submissionMode.textContent = 'Public RPC'
+	else submissionMode.textContent = '—'
+	const configured = health.configuredOriginCount
+	const healthy = health.healthyOriginCount
+	if (healthy === undefined) submissionHealthyCount.textContent = '—'
+	else if (configured === undefined) submissionHealthyCount.textContent = originCount(healthy)
+	else submissionHealthyCount.textContent = `${healthy.toString()} of ${configured.toString()} origins`
+	submissionRequiredThreshold.textContent = originCount(health.requiredHealthyOriginCount)
+	const checked = health.checkedOriginCount
+	const fresh = health.freshOriginCount
+	submissionFreshness.textContent = checked === undefined || fresh === undefined ? 'Not yet verified' : `${fresh.toString()} fresh of ${checked.toString()} checked`
+	if (health.mode !== 'private') submissionSignerProof.textContent = 'Not required'
+	else if (health.proofMatchesSigner === true) submissionSignerProof.textContent = 'Matches current signer'
+	else if (health.proofMatchesSigner === false) submissionSignerProof.textContent = 'Does not match current signer'
+	else submissionSignerProof.textContent = 'Not yet proven'
+	submissionLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
+}
+
+function renderUnavailableSubmissionHealth(previousResultIsStale: boolean) {
+	setBadge(submissionHealthStatus, 'Path unavailable', 'warning')
+	submissionMode.textContent = '—'
+	submissionHealthyCount.textContent = '—'
+	submissionRequiredThreshold.textContent = '—'
+	submissionFreshness.textContent = previousResultIsStale ? 'Previous readiness is stale' : 'Unavailable until state refresh succeeds'
+	submissionSignerProof.textContent = 'Not yet proven'
+	submissionLastCheck.textContent = 'No current path result'
 }
 
 function renderRepBalances(values: RepBalance[]) {
@@ -1574,6 +1652,7 @@ function refresh() {
 			settleRecoveryContextRefreshes(snapshot)
 		} else {
 			renderUnavailableRpcHealth(snapshot !== undefined)
+			renderUnavailableSubmissionHealth(snapshot !== undefined)
 			globalError.textContent = stateResult.reason instanceof Error ? stateResult.reason.message : 'Dashboard state is unavailable.'
 			globalError.classList.remove('hidden')
 			settleRecoveryContextRefreshes(undefined)

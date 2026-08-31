@@ -22,7 +22,8 @@ type CaptureRequest = {
 	resumeDialog?: true | undefined
 	route: string
 	stateRefreshFailure?: true | undefined
-	verticalScroll?: 'rpc-health' | 'topology' | undefined
+	submissionReadiness?: 'blocked' | 'ready' | undefined
+	verticalScroll?: 'rpc-health' | 'submission-health' | 'topology' | undefined
 	width: number
 }
 
@@ -94,6 +95,7 @@ function parseCaptureRequest(value: string): CaptureRequest {
 	const resumeDialog = Reflect.get(parsed, 'resumeDialog')
 	const route = Reflect.get(parsed, 'route')
 	const stateRefreshFailure = Reflect.get(parsed, 'stateRefreshFailure')
+	const submissionReadiness = Reflect.get(parsed, 'submissionReadiness')
 	const verticalScroll = Reflect.get(parsed, 'verticalScroll')
 	const width = Reflect.get(parsed, 'width')
 	if (
@@ -108,11 +110,13 @@ function parseCaptureRequest(value: string): CaptureRequest {
 		(resumeDialog !== undefined && resumeDialog !== true) ||
 		typeof route !== 'string' ||
 		(stateRefreshFailure !== undefined && stateRefreshFailure !== true) ||
-		(verticalScroll !== undefined && verticalScroll !== 'rpc-health' && verticalScroll !== 'topology') ||
+		(submissionReadiness !== undefined && submissionReadiness !== 'blocked' && submissionReadiness !== 'ready') ||
+		(submissionReadiness !== undefined && route !== 'overview') ||
+		(verticalScroll !== undefined && verticalScroll !== 'rpc-health' && verticalScroll !== 'submission-health' && verticalScroll !== 'topology') ||
 		typeof width !== 'number'
 	)
 		throw new Error('Capture request fields are invalid')
-	return { catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }
+	return { catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, submissionReadiness, verticalScroll, width }
 }
 
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
@@ -218,7 +222,7 @@ try {
 		return Reflect.get(result, 'value')
 	}
 
-	const capture = async ({ catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, verticalScroll, width }: CaptureRequest) => {
+	const capture = async ({ catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, submissionReadiness, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
 		await command('Page.navigate', { url: `http://127.0.0.1:4193/${route}` })
 		let ready = false
@@ -300,6 +304,33 @@ try {
 				Reflect.get(renderedState, 'workflowValidityUnit') === 'blocks' &&
 				Reflect.get(renderedState, 'workflowValidityUnitVisible') === true
 			if (!settingsMatchFixture) throw new Error(`Settings controls did not match the visual fixture before capture: ${JSON.stringify(renderedState)}`)
+		}
+		if (submissionReadiness !== undefined) {
+			const expectedStatus = submissionReadiness === 'ready' ? 'Path ready' : 'Path blocked'
+			const expectedHealthy = submissionReadiness === 'ready' ? '2 of 3 origins' : '1 of 3 origins'
+			const submissionState = await evaluate(`({
+				executionMode: document.querySelector('#mode-badge')?.textContent,
+				freshness: document.querySelector('#submission-freshness')?.textContent,
+				healthy: document.querySelector('#submission-healthy-count')?.textContent,
+				mode: document.querySelector('#submission-mode')?.textContent,
+				proof: document.querySelector('#submission-signer-proof')?.textContent,
+				required: document.querySelector('#submission-required-threshold')?.textContent,
+				status: document.querySelector('#submission-health-status')?.textContent,
+			})`)
+			if (
+				typeof submissionState !== 'object' ||
+				submissionState === null ||
+				Array.isArray(submissionState) ||
+				Reflect.get(submissionState, 'executionMode') !== 'Live execution' ||
+				Reflect.get(submissionState, 'freshness') !== '3 fresh of 3 checked' ||
+				Reflect.get(submissionState, 'healthy') !== expectedHealthy ||
+				Reflect.get(submissionState, 'mode') !== 'Private relay' ||
+				Reflect.get(submissionState, 'proof') !== 'Matches current signer' ||
+				Reflect.get(submissionState, 'required') !== '2 origins' ||
+				Reflect.get(submissionState, 'status') !== expectedStatus
+			) {
+				throw new Error(`Private submission fixture did not render ${submissionReadiness} readiness: ${JSON.stringify(submissionState)}`)
+			}
 		}
 		if (stateRefreshFailure === true) {
 			await command('Network.setBlockedURLs', { urls: ['*://127.0.0.1:4193/api/state*'] })
@@ -579,6 +610,24 @@ try {
 			const top = Reflect.get(rpcPanel, 'top')
 			if (typeof bottom !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1) throw new Error(`RPC health panel did not fit the requested viewport: ${JSON.stringify(rpcPanel)}`)
 		}
+		if (verticalScroll === 'submission-health') {
+			const submissionPanel = await evaluate(`new Promise(resolve => {
+				const panel = document.querySelector('.submission-health-panel')
+				if (!(panel instanceof HTMLElement)) {
+					resolve(undefined)
+					return
+				}
+				panel.scrollIntoView({ block: 'start' })
+				requestAnimationFrame(() => requestAnimationFrame(() => {
+					const bounds = panel.getBoundingClientRect()
+					resolve({ bottom: bounds.bottom, top: bounds.top })
+				}))
+			})`)
+			if (typeof submissionPanel !== 'object' || submissionPanel === null) throw new Error('Submission health panel was not available for vertical-scroll capture')
+			const bottom = Reflect.get(submissionPanel, 'bottom')
+			const top = Reflect.get(submissionPanel, 'top')
+			if (typeof bottom !== 'number' || typeof top !== 'number' || top < -1 || bottom > height + 1) throw new Error(`Submission health panel did not fit the requested viewport: ${JSON.stringify(submissionPanel)}`)
+		}
 		if (verticalScroll === 'topology') {
 			const topology = await evaluate(`new Promise(resolve => {
 				const panel = document.querySelector('.topology-panel')
@@ -707,6 +756,8 @@ try {
 			)
 		} else if (verticalScroll === 'rpc-health') {
 			paintTargets.push({ label: 'RPC health panel', minimumDistinctColors: 12, selector: '.rpc-health-panel' }, { label: 'RPC health Retry', minimumDistinctColors: 8, selector: '#rpc-health-retry-button' })
+		} else if (verticalScroll === 'submission-health') {
+			paintTargets.push({ label: 'transaction submission health panel', minimumDistinctColors: 12, selector: '.submission-health-panel' }, { label: 'transaction submission readiness', minimumDistinctColors: 8, selector: '#submission-health-status' })
 		} else if (verticalScroll === 'topology') {
 			paintTargets.push(
 				{ label: 'topology heading', minimumDistinctColors: 12, selector: '.topology-panel .panel-heading' },

@@ -889,10 +889,13 @@ describe('chaos dashboard server', () => {
 
 	test('serves only aggregate RPC quorum health from the authenticated state API', async () => {
 		const secret = 'rpc-dashboard-secret'
+		const submissionCheckedAt = new Date().toISOString()
+		const signerAddress = '0x0000000000000000000000000000000000000001'
 		const server = startDashboardServer(
 			0,
 			controller({
 				getConfiguration: () => ({
+					signerAddress,
 					settings: {
 						connectivity: {
 							publicRpcUrls: [`https://submit.example/?api_key=${secret}`],
@@ -901,6 +904,11 @@ describe('chaos dashboard server', () => {
 							rpcQuorum: 2,
 						},
 						network: { chainId: 11_155_111, name: 'sepolia' },
+						submission: {
+							minimumBundleRelaySuccesses: 2,
+							mode: 'private',
+							relayUrls: [`https://relay-one.example/private?api_key=${secret}`, `https://relay-two.example/private?api_key=${secret}`],
+						},
 					},
 				}),
 				getState: () => ({
@@ -910,6 +918,8 @@ describe('chaos dashboard server', () => {
 						{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:01.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://read-two.example/private' },
 						{ lastSuccessAt: '2026-08-24T00:00:02.000Z', status: 'healthy', target: `https://operator:${secret}@read-one.example/private` },
 						{ error: `token=${secret}`, lastSuccessAt: '2026-08-24T00:00:03.000Z', status: 'healthy', target: 'https://read-two.example/private' },
+						{ authenticatedAddress: signerAddress, chainId: 11_155_111, checkedAt: submissionCheckedAt, kind: 'private-relay', status: 'healthy', target: `https://relay-one.example/private?api_key=${secret}` },
+						{ authenticatedAddress: signerAddress, chainId: 11_155_111, checkedAt: submissionCheckedAt, kind: 'private-relay', status: 'healthy', target: `https://relay-two.example/private?api_key=${secret}` },
 					],
 				}),
 			}),
@@ -927,12 +937,87 @@ describe('chaos dashboard server', () => {
 			requiredReadQuorum: 2,
 			status: 'ready',
 		})
+		expect(Reflect.get(body, 'submissionHealth')).toEqual({
+			checkedOriginCount: 2,
+			configuredOriginCount: 2,
+			freshOriginCount: 2,
+			healthyOriginCount: 2,
+			lastCheckedAt: submissionCheckedAt,
+			mode: 'private',
+			proofMatchesSigner: true,
+			ready: true,
+			requiredHealthyOriginCount: 2,
+			status: 'ready',
+		})
 		const serialized = JSON.stringify(body)
 		expect(serialized).not.toContain(secret)
 		expect(serialized).not.toContain('read-one.example')
 		expect(serialized).not.toContain('read-two.example')
 		expect(serialized).not.toContain('stale-')
 		expect(serialized).not.toContain('submit.example')
+		expect(serialized).not.toContain('relay-one.example')
+		expect(serialized).not.toContain('relay-two.example')
+		expect(serialized).not.toContain('target')
+		expect(serialized).not.toContain('error')
+	})
+
+	test('projects sanitized transaction-path readiness states without endpoint or signer identity', () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const secret = 'submission-readiness-secret'
+		const signerAddress = '0x0000000000000000000000000000000000000001'
+		const configuration = {
+			signerAddress,
+			settings: {
+				connectivity: { publicRpcUrls: [`https://public.example/private?token=${secret}`] },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				runtime: { lifecyclePollMilliseconds: 12_000 },
+				submission: { minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: [`https://relay-one.example/private?token=${secret}`, `https://relay-two.example/private?token=${secret}`] },
+			},
+		}
+		const healthyChecks = [
+			{ authenticatedAddress: signerAddress, chainId: 11_155_111, checkedAt: new Date(now - 1_000).toISOString(), error: `token=${secret}`, kind: 'private-relay', status: 'healthy', target: `https://relay-one.example/private?token=${secret}` },
+			{ authenticatedAddress: signerAddress, chainId: 11_155_111, checkedAt: new Date(now - 2_000).toISOString(), kind: 'private-relay', status: 'healthy', target: `https://relay-two.example/private?token=${secret}` },
+		]
+		const projected = (rpcEndpointHealth: readonly unknown[], candidateConfiguration: unknown = configuration) => Reflect.get(publicChaosState({ rpcEndpointHealth }, candidateConfiguration, now), 'submissionHealth')
+
+		expect(projected(healthyChecks)).toEqual({
+			checkedOriginCount: 2,
+			configuredOriginCount: 2,
+			freshOriginCount: 2,
+			healthyOriginCount: 2,
+			lastCheckedAt: new Date(now - 1_000).toISOString(),
+			mode: 'private',
+			proofMatchesSigner: true,
+			ready: true,
+			requiredHealthyOriginCount: 2,
+			status: 'ready',
+		})
+		const degraded = projected([healthyChecks[0], { ...healthyChecks[1], authenticatedAddress: '0x0000000000000000000000000000000000000002', status: 'failed' }])
+		expect(degraded).toMatchObject({ healthyOriginCount: 1, mode: 'private', proofMatchesSigner: false, ready: false, status: 'degraded' })
+		const stale = projected(healthyChecks.map(check => ({ ...check, checkedAt: new Date(now - 157_000).toISOString() })))
+		expect(stale).toMatchObject({ freshOriginCount: 0, healthyOriginCount: 0, mode: 'private', ready: false, status: 'stale' })
+		const publicConfiguration = {
+			settings: {
+				connectivity: { publicRpcUrls: [`https://public.example/private?token=${secret}`] },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				runtime: { lifecyclePollMilliseconds: 12_000 },
+				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+			},
+		}
+		expect(projected([{ chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'public-rpc', status: 'healthy', target: `https://public.example/private?token=${secret}` }], publicConfiguration)).toMatchObject({
+			configuredOriginCount: 1,
+			healthyOriginCount: 1,
+			mode: 'public',
+			ready: true,
+			requiredHealthyOriginCount: 1,
+			status: 'ready',
+		})
+		expect(projected([], { settings: { connectivity: {}, network: { chainId: 11_155_111 } } })).toEqual({ ready: false, status: 'not-configured' })
+		const serialized = JSON.stringify({ degraded, ready: projected(healthyChecks), stale })
+		expect(serialized).not.toContain(secret)
+		expect(serialized).not.toContain(signerAddress)
+		expect(serialized).not.toContain('relay-one.example')
+		expect(serialized).not.toContain('relay-two.example')
 		expect(serialized).not.toContain('target')
 		expect(serialized).not.toContain('error')
 	})

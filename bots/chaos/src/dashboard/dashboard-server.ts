@@ -368,6 +368,16 @@ function publicRpcHealth(value: unknown, configurationValue: unknown) {
 	})
 }
 
+function publicSubmissionHealthMaximumAgeSeconds(configurationValue: unknown) {
+	const configuration = record(configurationValue)
+	const settings = record(configuration?.['settings']) ?? configuration
+	const runtime = record(settings?.['runtime']) ?? settings
+	const network = record(settings?.['network']) ?? settings
+	const maximumBlockIntervalSeconds = typeof network?.['maximumBlockIntervalSeconds'] === 'number' && Number.isSafeInteger(network['maximumBlockIntervalSeconds']) ? network['maximumBlockIntervalSeconds'] : 60
+	const lifecyclePollMilliseconds = typeof runtime?.['lifecyclePollMilliseconds'] === 'number' && Number.isSafeInteger(runtime['lifecyclePollMilliseconds']) ? runtime['lifecyclePollMilliseconds'] : 12_000
+	return Math.ceil((lifecyclePollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
+}
+
 function publicSubmissionHealth(value: unknown, configurationValue: unknown, nowMilliseconds: number, maximumAgeSeconds: number) {
 	const configuration = record(configurationValue)
 	const settings = record(configuration?.['settings']) ?? configuration
@@ -377,57 +387,64 @@ function publicSubmissionHealth(value: unknown, configurationValue: unknown, now
 	const expectedChainId = safeIntegerField(network ?? {}, 'chainId')
 	if (connectivity === undefined || submission === undefined || expectedChainId === undefined || !Number.isSafeInteger(maximumAgeSeconds) || maximumAgeSeconds < 1) return { ready: false, status: 'not-configured' as const }
 	const mode = submission['mode']
-	let expectedKind: 'private-relay' | 'public-rpc'
+	if (mode !== 'public' && mode !== 'private') return { ready: false, status: 'not-configured' as const }
+	const base = { mode, ready: false }
+	let expectedKind: 'private-relay' | 'public-rpc' = 'public-rpc'
 	let expectedAuthenticationAddress: string | undefined
-	let requiredHealthyOriginCount: number
-	let urls: unknown
-	if (mode === 'public') {
-		expectedKind = 'public-rpc'
-		requiredHealthyOriginCount = 1
-		urls = connectivity['publicRpcUrls']
-	} else if (mode === 'private') {
+	let requiredHealthyOriginCount = 1
+	let urls: unknown = connectivity['publicRpcUrls']
+	if (mode === 'private') {
 		expectedKind = 'private-relay'
-		const wallet = stringField(configuration ?? {}, 'wallet')
-		if (wallet === undefined || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return { ready: false, status: 'not-configured' as const }
+		const wallet = stringField(configuration ?? {}, 'wallet') ?? stringField(configuration ?? {}, 'signerAddress')
+		if (wallet === undefined || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return { ...base, status: 'not-configured' as const }
 		expectedAuthenticationAddress = wallet.toLowerCase()
 		const required = safeIntegerField(submission, 'minimumBundleRelaySuccesses')
-		if (required === undefined || required < 1) return { ready: false, status: 'not-configured' as const }
+		if (required === undefined || required < 1) return { ...base, status: 'not-configured' as const }
 		requiredHealthyOriginCount = required
 		urls = submission['relayUrls']
-	} else {
-		return { ready: false, status: 'not-configured' as const }
 	}
-	if (!Array.isArray(urls) || urls.length === 0 || urls.some(url => typeof url !== 'string')) return { ready: false, status: 'not-configured' as const }
+	if (!Array.isArray(urls) || urls.length === 0 || urls.some(url => typeof url !== 'string')) return { ...base, status: 'not-configured' as const }
 	const configuredOrigins = urls.flatMap(url => {
 		const origin = endpointOrigin(url)
 		return origin === undefined ? [] : [origin]
 	})
 	const configuredTargets = new Set(configuredOrigins)
-	if (configuredOrigins.length !== urls.length || configuredTargets.size < requiredHealthyOriginCount) return { ready: false, status: 'not-configured' as const }
-	const matchingChecks = Array.isArray(value)
-		? value.flatMap(candidate => {
-				const check = record(candidate)
-				if (check?.['kind'] !== expectedKind) return []
-				if (expectedAuthenticationAddress !== undefined && stringField(check, 'authenticatedAddress')?.toLowerCase() !== expectedAuthenticationAddress) return []
-				const target = endpointOrigin(check['target'])
-				return target !== undefined && configuredTargets.has(target) ? [{ check, target }] : []
-			})
-		: []
-	if (matchingChecks.length === 0) return { ready: false, status: 'not-checked' as const }
-	const expectedTargets = [...configuredOrigins].sort()
-	const observedTargets = matchingChecks.map(({ target }) => target).sort()
-	if (observedTargets.length !== expectedTargets.length || observedTargets.some((target, index) => target !== expectedTargets[index])) return { ready: false, status: 'not-checked' as const }
-	const freshChecks = matchingChecks.filter(({ check }) => {
-		const checkedAt = isoTimestampField(check, 'checkedAt')
-		if (checkedAt === undefined) return false
+	if (configuredOrigins.length !== urls.length || configuredTargets.size < requiredHealthyOriginCount) return { ...base, status: 'not-configured' as const }
+	const configuredOriginCount = configuredTargets.size
+	const checksByTarget = new Map<string, { check: Record<string, unknown>; checkedAt: string; target: string }>()
+	if (Array.isArray(value)) {
+		for (const candidate of value) {
+			const check = record(candidate)
+			if (check?.['kind'] !== expectedKind) continue
+			const target = endpointOrigin(check['target'])
+			const checkedAt = isoTimestampField(check, 'checkedAt')
+			if (target === undefined || checkedAt === undefined || !configuredTargets.has(target)) continue
+			const current = checksByTarget.get(target)
+			if (current === undefined || Date.parse(checkedAt) > Date.parse(current.checkedAt)) checksByTarget.set(target, { check, checkedAt, target })
+		}
+	}
+	const currentChecks = [...checksByTarget.values()]
+	const checkedOriginCount = currentChecks.length
+	const lastCheckedAt = currentChecks.map(({ checkedAt }) => checkedAt).sort((left, right) => Date.parse(right) - Date.parse(left))[0]
+	if (currentChecks.length === 0) {
+		return { ...base, checkedOriginCount, configuredOriginCount, freshOriginCount: 0, healthyOriginCount: 0, requiredHealthyOriginCount, status: 'not-checked' as const }
+	}
+	const freshChecks = currentChecks.filter(({ checkedAt }) => {
 		const ageMilliseconds = nowMilliseconds - Date.parse(checkedAt)
 		return ageMilliseconds >= 0 && ageMilliseconds <= maximumAgeSeconds * 1_000
 	})
-	if (freshChecks.length !== matchingChecks.length) return { ready: false, status: 'stale' as const }
+	const freshOriginCount = freshChecks.length
+	const common = { ...base, checkedOriginCount, configuredOriginCount, freshOriginCount, lastCheckedAt, requiredHealthyOriginCount }
+	const healthyOrigins = new Set(
+		freshChecks.flatMap(({ check, target }) => (check['status'] === 'healthy' && safeIntegerField(check, 'chainId') === expectedChainId && (expectedAuthenticationAddress === undefined || stringField(check, 'authenticatedAddress')?.toLowerCase() === expectedAuthenticationAddress) ? [target] : [])),
+	)
+	const healthyOriginCount = healthyOrigins.size
+	if (checkedOriginCount !== configuredOriginCount) return { ...common, healthyOriginCount, status: 'not-checked' as const }
+	if (freshOriginCount !== configuredOriginCount) return { ...common, healthyOriginCount, status: 'stale' as const }
+	const proofMatchesSigner = expectedAuthenticationAddress === undefined ? undefined : freshChecks.every(({ check }) => stringField(check, 'authenticatedAddress')?.toLowerCase() === expectedAuthenticationAddress)
 	const safetyFailure = freshChecks.some(({ check }) => check['status'] === 'failed' && check['failureDisposition'] !== 'connectivity-degraded')
-	const healthyOrigins = new Set(freshChecks.flatMap(({ check, target }) => (check['status'] === 'healthy' && safeIntegerField(check, 'chainId') === expectedChainId ? [target] : [])))
-	const ready = !safetyFailure && healthyOrigins.size >= requiredHealthyOriginCount
-	return { ready, status: ready ? ('ready' as const) : ('degraded' as const) }
+	const ready = !safetyFailure && proofMatchesSigner !== false && healthyOriginCount >= requiredHealthyOriginCount
+	return compact({ ...common, healthyOriginCount, proofMatchesSigner, ready, status: ready ? ('ready' as const) : ('degraded' as const) })
 }
 
 function publicEvaluation(value: unknown) {
@@ -568,7 +585,7 @@ function publicAlert(value: unknown) {
 	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
 }
 
-export function publicChaosState(value: unknown, configurationValue?: unknown) {
+export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
 	const rpcHealthPolicy = publicRpcHealthPolicy(configurationValue)
@@ -618,6 +635,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown) {
 				})
 			: [],
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
+		submissionHealth: publicSubmissionHealth(source['rpcEndpointHealth'], configurationValue, nowMilliseconds, publicSubmissionHealthMaximumAgeSeconds(configurationValue)),
 		safetyPaused: booleanField(source, 'safetyPaused'),
 		scheduler: publicScheduler(source['scheduler']),
 		signerReady: booleanField(source, 'signerReady') ?? booleanField(source, 'operatorCapable') ?? (stringField(source, 'wallet') === undefined ? undefined : true),
@@ -721,16 +739,13 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 		}
 	}
 	const runtime = record(settings['runtime']) ?? settings
-	const network = record(settings['network']) ?? settings
 	const execute = runtime['execute'] === true
 	const configured = settings['networkConfigured'] === true
 	const paused = settings['paused'] === true || state['paused'] === true
 	const safetyPaused = state['safetyPaused'] === true
 	const signerReady = configuration?.['hasSigner'] === true || (settings['privateKey'] !== undefined && settings['privateKey'] !== null)
 	const lastScanAt = typeof state['lastScanAt'] === 'string' && Number.isFinite(Date.parse(state['lastScanAt'])) ? state['lastScanAt'] : undefined
-	const maximumBlockIntervalSeconds = typeof network['maximumBlockIntervalSeconds'] === 'number' && Number.isSafeInteger(network['maximumBlockIntervalSeconds']) ? network['maximumBlockIntervalSeconds'] : 60
-	const lifecyclePollMilliseconds = typeof runtime['lifecyclePollMilliseconds'] === 'number' && Number.isSafeInteger(runtime['lifecyclePollMilliseconds']) ? runtime['lifecyclePollMilliseconds'] : 12_000
-	const maximumScanAgeSeconds = Math.ceil((lifecyclePollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
+	const maximumScanAgeSeconds = publicSubmissionHealthMaximumAgeSeconds(configurationValue)
 	const scanAgeSeconds = lastScanAt === undefined ? undefined : Math.max(0, Math.floor((nowMilliseconds - Date.parse(lastScanAt)) / 1_000))
 	const topology = record(state['topology'])
 	const scanReady = lastScanAt !== undefined && scanAgeSeconds !== undefined && scanAgeSeconds <= maximumScanAgeSeconds && topology?.['complete'] === true
@@ -757,7 +772,7 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	const rpcHealth = publicRpcHealth(state['rpcEndpointHealth'], configurationValue)
 	const rpcReady = !configured || rpcHealth['chainReady'] === true
 	const submissionHealth = publicSubmissionHealth(state['rpcEndpointHealth'], configurationValue, nowMilliseconds, maximumScanAgeSeconds)
-	const submissionReady = !execute || submissionHealth.ready
+	const submissionReady = !execute || submissionHealth['ready'] === true
 	const status = stringField(state, 'status')
 	const runtimeReady = state['error'] === undefined
 	const storageReady = status !== 'error'
