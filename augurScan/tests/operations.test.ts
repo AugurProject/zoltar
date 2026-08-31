@@ -9,6 +9,7 @@ import {
 	priceFreshness,
 	quoteDecimalsFallback,
 	reportLifecycle,
+	reportRoundChanges,
 	swapAnalytics,
 	vaultRisk,
 } from '../src/operations.ts'
@@ -62,6 +63,39 @@ test('derives OpenOracle boundaries with the report clock selected by flags', ()
 test('keeps settlement and unavailable evidence explicit', () => {
 	expect(reportLifecycle({ eventName: 'ReportSettled', indexedBlock: '1', indexedTimestamp: '1' })).toEqual({ state: 'Settled', clock: 'block' })
 	expect(reportLifecycle({ eventName: 'ReportSubmitted', indexedBlock: '1', indexedTimestamp: '1' }).state).toBe('Awaiting indexed evidence')
+})
+
+test('describes report round changes against the next older evidence row', () => {
+	const rows = reportRoundChanges([
+		{
+			round_number: '2',
+			block_number: '12',
+			report_data: { currentAmount1: '11', currentAmount2: '20', nested: { reporter: '0x2' }, removedLater: true },
+		},
+		{
+			round_number: '1',
+			block_number: '10',
+			report_data: { currentAmount1: '10', currentAmount2: '20', nested: { reporter: '0x1' }, oldField: 'old' },
+		},
+	])
+	expect(rows[0]?.['comparison']).toEqual({
+		state: 'compared',
+		previousRoundNumber: '1',
+		previousBlockNumber: '10',
+		changes: [
+			{ field: 'currentAmount1', kind: 'changed', before: '10', after: '11' },
+			{ field: 'nested.reporter', kind: 'changed', before: '0x1', after: '0x2' },
+			{ field: 'oldField', kind: 'removed', before: 'old' },
+			{ field: 'removedLater', kind: 'added', after: true },
+		],
+	})
+	expect(rows[1]?.['comparison']).toMatchObject({
+		state: 'initial',
+		changes: expect.arrayContaining([
+			{ field: 'currentAmount1', kind: 'added', after: '10' },
+			{ field: 'nested.reporter', kind: 'added', after: '0x1' },
+		]),
+	})
 })
 
 test('derives auction lifecycle and price freshness at exact boundaries', () => {

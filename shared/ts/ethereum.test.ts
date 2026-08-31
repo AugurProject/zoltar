@@ -1300,6 +1300,43 @@ describe('shared ethereum compatibility layer', () => {
 		).rejects.toThrow('RPC returned an invalid hash')
 	})
 
+	test('public client rejects transaction receipts without required mined fields', async () => {
+		const validReceipt = {
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x1',
+			cumulativeGasUsed: '0x5208',
+			from: OWNER_ADDRESS,
+			gasUsed: '0x5208',
+			logs: [],
+			status: '0x1',
+			to: RECIPIENT_ADDRESS,
+			transactionHash: RECEIPT_HASH,
+			transactionIndex: '0x0',
+		}
+		const malformedReceipts = [
+			{ expectedError: 'blockNumber', receipt: { ...validReceipt, blockNumber: undefined } },
+			{ expectedError: 'cumulativeGasUsed', receipt: { ...validReceipt, cumulativeGasUsed: null } },
+			{ expectedError: 'gasUsed', receipt: { ...validReceipt, gasUsed: undefined } },
+			{ expectedError: 'logs', receipt: { ...validReceipt, logs: undefined } },
+			{ expectedError: 'status', receipt: { ...validReceipt, status: undefined } },
+			{ expectedError: 'status', receipt: { ...validReceipt, status: '0x2' } },
+			{ expectedError: 'transactionIndex', receipt: { ...validReceipt, transactionIndex: null } },
+		] as const
+
+		for (const malformedReceipt of malformedReceipts) {
+			const client = createPublicClient({
+				transport: custom(
+					createProvider(({ method }) => {
+						if (method === 'eth_getTransactionReceipt') return malformedReceipt.receipt
+						throw new Error(`Unexpected rpc method: ${method}`)
+					}, []),
+				),
+			})
+
+			await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow(malformedReceipt.expectedError)
+		}
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
