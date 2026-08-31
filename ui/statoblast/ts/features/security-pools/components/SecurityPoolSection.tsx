@@ -1,5 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -157,7 +158,7 @@ export function SecurityPoolSection({
 							</strong>
 						</li>
 						<li>
-							<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
+							<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
 							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</strong>
 						</li>
 						<li>
@@ -184,7 +185,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock description={securityPoolCopy.marketHierarchyDetail} title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
+					<SectionBlock description={securityPoolCopy.marketHierarchyDetail} variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
 								<label htmlFor='security-pool-question-picker'>
@@ -225,7 +226,7 @@ export function SecurityPoolSection({
 
 							<div className='field'>
 								<label htmlFor='security-pool-security-multiplier'>
-									<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
+									<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
 								</label>
 								<FormInput
 									id='security-pool-security-multiplier'

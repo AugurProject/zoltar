@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
@@ -27,7 +28,7 @@ import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailur
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getOracleRequestEthGuardMessage } from '@zoltar/ui-zoltar/features/open-oracle/lib/oracleRequestEth.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-zoltar/features/open-oracle/lib/repPriceSource.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
@@ -453,11 +454,11 @@ export function LiquidationModal({
 				<ErrorNotice message={securityPoolLiquidationError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
-					<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
+					<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
 					<MetricField label={liquidationCopy.operator}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
 					<MetricField label={liquidationCopy.receiverVault}>{trimmedLiquidationReceiverVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationReceiverVault} />}</MetricField>
 					<MetricField label={commonCopy.targetVault}>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
-					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
+					<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
 					<MetricField label={liquidationCopy.targetCapacityOwnershipAttoRep}>

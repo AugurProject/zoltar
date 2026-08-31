@@ -10,7 +10,7 @@ type DeploymentSectionDefinition = {
 	stepIds: DeploymentStatus['id'][]
 }
 
-const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
+const ZOLTAR_DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	{
 		title: 'Utilities',
 		stepIds: ['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'weth'],
@@ -18,10 +18,6 @@ const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	{
 		title: 'Zoltar',
 		stepIds: ['reputationToken', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'],
-	},
-	{
-		title: 'Augur Statoblast',
-		stepIds: ['uniformPriceDualCapBatchAuctionFactory', 'securityPoolUtils', 'openOracle', 'shareTokenFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolForker', 'escalationGameFactory', 'securityPoolFactory'],
 	},
 ]
 
@@ -85,8 +81,5 @@ export function getDeployNextMissingAvailability({
 }
 
 export function getDeploymentSections(steps: DeploymentStatus[]) {
-	return DEPLOYMENT_SECTIONS.map(section => ({
-		title: section.title,
-		steps: steps.filter(step => section.stepIds.includes(step.id)),
-	}))
+	return ZOLTAR_DEPLOYMENT_SECTIONS.map(section => ({ title: section.title, steps: steps.filter(step => section.stepIds.includes(step.id)) })).filter(section => section.steps.length > 0)
 }

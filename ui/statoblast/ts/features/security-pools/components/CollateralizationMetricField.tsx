@@ -3,7 +3,7 @@ import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-zoltar/features/open-oracle/lib/repPriceSource.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import { getCollateralizationDisplayState, getCollateralizationTone } from '../../markets/lib/trading.js'
 type CollateralizationMetricFieldProps = {
 	className?: string | undefined
