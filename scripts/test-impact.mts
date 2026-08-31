@@ -59,9 +59,14 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
-		matches: filePath => filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts' || filePath === 'ui/coreShared/build/browserSmoke.mts',
+		matches: filePath =>
+			filePath === 'ui/coreShared/build/production.mts' ||
+			filePath === 'ui/coreShared/build/appPaths.mts' ||
+			filePath === 'ui/coreShared/build/browserSmoke.mts' ||
+			filePath === 'ui/coreShared/css/application-surfaces.css' ||
+			filePath === 'ui/statoblast/ts/features/security-pools/components/CollateralizationCircle.tsx',
 		ownedTestOptions: { timeout: 300_000 },
-		ownedTestPaths: ['ui/coreShared/build/browserSmoke.test.ts', 'ui/coreShared/build/productionBuild.test.ts'],
+		ownedTestPaths: ['ui/coreShared/build/browserSmoke.test.ts', 'ui/coreShared/build/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'],
 	},
 	{
 		command: 'bun run test:browser:workflow',

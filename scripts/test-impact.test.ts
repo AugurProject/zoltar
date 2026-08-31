@@ -17,6 +17,8 @@ describe('test impact recommendations', () => {
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
 		expect(commandsFor(['ui/coreShared/build/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts'])
 		expect(commandsFor(['ui/coreShared/build/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
+		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
+		expect(commandsFor(['ui/statoblast/ts/features/security-pools/components/CollateralizationCircle.tsx'])).toContain('bun run test:browser:smoke')
 		expect(commandsFor(['ui/coreShared/build/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 

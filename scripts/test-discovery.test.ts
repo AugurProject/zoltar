@@ -34,6 +34,7 @@ describe('canonical test discovery', () => {
 		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
 		expect(canonicalFiles).not.toContain('ui/coreShared/build/browserSmoke.test.ts')
 		expect(canonicalFiles).not.toContain('ui/coreShared/build/productionBuild.test.ts')
+		expect(canonicalFiles).not.toContain('ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
 		expect(new Set(canonicalFiles).size).toBe(canonicalFiles.length)
 		for (const weightedPath of KNOWN_FILE_WEIGHTS.keys()) expect(canonicalFiles).toContain(weightedPath)
@@ -46,8 +47,24 @@ describe('canonical test discovery', () => {
 		if (typeof smokeCommand !== 'string') throw new Error('package.json must define test:browser:smoke')
 
 		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun test '))
-		expect(smokeTestCommands).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/browserSmoke.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts'])
+		expect(smokeTestCommands).toEqual([
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/browserSmoke.test.ts',
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts',
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts',
+		])
 		expect(smokeTestCommands.map(command => command.split(' ').at(-1)).sort()).toEqual([...EXPLICIT_TEST_TIER_FILES].sort())
+	})
+
+	test('canonical root tests do not launch the shared Chromium binary', async () => {
+		const canonicalFiles = await discoverTestFiles()
+		const chromiumLaunchers: string[] = []
+		const chromiumResolver = ['const chromiumPath', ' = getChromiumPath()'].join('')
+		const chromiumSpawn = ['Bun.spawn([', 'chromiumPath'].join('')
+		for (const filePath of canonicalFiles) {
+			const source = await readFile(filePath, 'utf8')
+			if (source.includes(chromiumResolver) && source.includes(chromiumSpawn)) chromiumLaunchers.push(filePath)
+		}
+		expect(chromiumLaunchers).toEqual([])
 	})
 
 	test('Bun default discovery ignores every generated UI test tree', async () => {
