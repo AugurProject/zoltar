@@ -188,7 +188,7 @@ describe('reporting guards', () => {
 				viewerPoolHeldVaultRepBackingAttoRep: 0n,
 				viewerVaultExists: false,
 			}),
-		).toBe('Reporting moves pool-held REP backing from your security vault into dispute-staked REP. Deposit REP into your vault before reporting.')
+		).toBe('This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.')
 	})
 
 	test('blocks reporting when the contribution would exceed the remaining selected-side threshold capacity', () => {

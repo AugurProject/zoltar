@@ -618,6 +618,7 @@ function readEvaluationString(response: unknown) {
 }
 
 type ProductionBrowserDriver = {
+	captureScreenshot: (screenshotPath: string) => Promise<void>
 	clickButton: (label: string, occurrence?: number) => Promise<void>
 	evaluate: (expression: string) => Promise<unknown>
 	navigate: (url: string) => Promise<void>
@@ -700,6 +701,12 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		}
 		if (!applicationReady) throw new Error(`Production application did not finish loading: ${state}`)
 		const driver: ProductionBrowserDriver = {
+			captureScreenshot: async screenshotPath => {
+				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
+				if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
+				await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
+				await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
+			},
 			clickButton: async (label, occurrence = 0) => {
 				const clicked = await evaluate(
 					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => button.textContent?.trim() === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
@@ -850,7 +857,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
 			await driver.waitForBodyText('Open pool')
 			await driver.clickButton('Open pool')
-			await driver.waitForBodyWithoutText('Loading vault…')
+			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
 			await driver.waitForBodyText('REP BACKING')
@@ -885,7 +892,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
-			await driver.waitForBodyWithoutText('Loading vault…')
+			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
 			await driver.waitForBodyText('REP BACKING')
@@ -942,6 +949,41 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				await driver.waitForButtonEnabled('Max')
 				await driver.clickButton('Max')
+				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Approve REP' && !button.disabled)`)
+				if (approvalRequired === true) {
+					const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
+					const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
+					const captureQaScreenshots = (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') || (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '')
+					if (captureQaScreenshots) {
+						const dismissAvailable = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Dismiss' && !button.disabled)`)
+						if (dismissAvailable === true) await driver.clickButton('Dismiss')
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+					}
+					if (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') await driver.captureScreenshot(desktopScreenshotPath)
+					if (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '') {
+						await driver.resize({ height: 844, width: 390 })
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Approve REP'))?.scrollIntoView({ block: 'center' })`)
+						await driver.captureScreenshot(mobileScreenshotPath)
+						await driver.resize({ height: 900, width: 1440 })
+					}
+					await driver.clickButton('Approve REP')
+					await driver.waitForTransactionStatus('Confirmed', 'Approve Reporting REP')
+					await driver.waitForBodyText('REP approved')
+					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
+					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
+					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
+					if (captureApprovedQaScreenshots) {
+						await driver.clickButton('Dismiss')
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+					}
+					if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
+					if (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '') {
+						await driver.resize({ height: 844, width: 390 })
+						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'REP approved'))?.scrollIntoView({ block: 'center' })`)
+						await driver.captureScreenshot(approvedMobileScreenshotPath)
+						await driver.resize({ height: 900, width: 1440 })
+					}
+				}
 				await driver.waitForButtonEnabled(`Report ${outcome}`)
 				await driver.clickButton(`Report ${outcome}`)
 			}
@@ -949,6 +991,27 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await selectReportingOutcome('Yes')
 			await driver.waitForBodyText('Your selected REP was committed to the chosen escalation side.')
 			await driver.waitForBodyWithoutText('Submitting report…')
+			const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
+			const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
+			const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
+			if (captureVaultLockedQaScreenshots) {
+				await driver.clickButton('Dismiss')
+				await driver.clickButton('Vaults')
+				await driver.waitForBodyText('New vault REP backing is unavailable after ordinary escalation starts.')
+				await driver.waitForBodyWithoutText('Loading vault details…')
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
+				if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
+				if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
+					await driver.resize({ height: 844, width: 390 })
+					await driver.evaluate(
+						`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const reasonId = button?.getAttribute('aria-describedby'); if (reasonId === null || reasonId === undefined) return; document.getElementById(reasonId)?.scrollIntoView({ block: 'center' }) })()`,
+					)
+					await driver.captureScreenshot(vaultLockedMobileScreenshotPath)
+					await driver.resize({ height: 900, width: 1440 })
+				}
+				await driver.clickButton('Reporting')
+				await driver.waitForBodyText('Report Outcome')
+			}
 			await selectReportingOutcome('No')
 			await driver.waitForButtonEnabled('Trigger universe fork')
 			await driver.clickButton('Trigger universe fork')

@@ -119,6 +119,9 @@ function requireHookState(state: UseReportingOperationsState | undefined) {
 
 function createReportingOperationsDependencies(overrides: Partial<UseReportingOperationsDependencies>): UseReportingOperationsDependencies {
 	return {
+		approveReportingRep: async () => {
+			throw new Error('approveReportingRep should not be called in this test')
+		},
 		loadReportingDetails: async () => {
 			throw new Error('loadReportingDetails should not be called in this test')
 		},
@@ -350,6 +353,106 @@ describe('useReportingOperations', () => {
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
 		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational')
+	})
+
+	test('reportOutcome lets an active ordinary-game participant report from wallet REP without a vault', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
+			viewerPoolHeldVaultRepBackingAttoRep: 0n,
+			viewerVaultExists: false,
+			viewerVaultRepBackingAttoRep: 0n,
+		} as Partial<ReportingDetails> & {
+			contributionFunding: 'wallet'
+			viewerWalletRepAllowanceAttoRep: bigint
+			viewerWalletRepBalanceAttoRep: bigint
+		})
+		Object.assign(walletFundingDetails, {
+			contributionFunding: 'wallet',
+			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
+			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+		})
+		const loadReportingDetails = mock(async () => walletFundingDetails)
+		const reportOutcomeInSecurityPool = mock(async () => ({
+			action: 'reportOutcome' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
+			outcome: 'yes' as const,
+			securityPoolAddress,
+			universeId: 1n,
+		}))
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				reportAmount: '5',
+				securityPoolAddress,
+				selectedOutcome: 'yes',
+			}))
+		})
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+
+		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
+	})
+
+	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
+			contributionFunding: 'wallet',
+			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
+			sides: [
+				{ balance: 1n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 5n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 8n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			viewerPoolHeldVaultRepBackingAttoRep: 0n,
+			viewerVaultExists: false,
+			viewerVaultRepBackingAttoRep: 0n,
+			viewerWalletRepAllowanceAttoRep: 0n,
+			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+		})
+		const loadReportingDetails = mock(async () => walletFundingDetails)
+		const approveReportingRep = mock(async (_accountAddress: Address, _callbacks: unknown, _pool: Address, outcome: 'invalid' | 'yes' | 'no', _amount: bigint) => ({
+			action: 'approveReportingRep' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const,
+			outcome,
+			securityPoolAddress,
+			universeId: 1n,
+		}))
+
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails }),
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).onApproveReportingRep()
+		})
+
+		expect(approveReportingRep).toHaveBeenCalledTimes(1)
+		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(5n * ATTO_REP)
+		expect(requireHookState(hookState).reportingResult?.action).toBe('approveReportingRep')
 	})
 
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {
