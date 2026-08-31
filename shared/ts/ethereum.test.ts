@@ -504,6 +504,20 @@ describe('shared ethereum compatibility layer', () => {
 		expect(decoded.eventName).toBe('AnonymousDeposit')
 		expect(getDecodedEntry(decoded.args, 0, 'owner', 'anonymous event args')).toBe(getAddress(OWNER_ADDRESS))
 		expect(getDecodedEntry(decoded.args, 1, 'amount', 'anonymous event args')).toBe(25n)
+
+		let ambiguityError: unknown
+		try {
+			decodeEventLog({
+				abi: [anonymousEventAbi[0], { ...anonymousEventAbi[0], name: 'AnonymousWithdrawal' }],
+				data: encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [25n]),
+				topics,
+			})
+		} catch (error) {
+			ambiguityError = error
+		}
+		expect(ambiguityError).toBeInstanceOf(Error)
+		if (!(ambiguityError instanceof Error)) throw new Error('Expected anonymous event ambiguity error')
+		expect(ambiguityError.name).toBe('AbiEventSignatureAmbiguousError')
 	})
 
 	test('named multi-output results support positional and property access', () => {
@@ -1859,6 +1873,77 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.filter(call => call.method === 'eth_getBlockByNumber').map(call => getArrayEntry(call.params, 0, 'block params'))).toContain('0x7')
 	})
 
+	test('waitForTransactionReceipt scans older blocks when historical nonce state is unavailable', async () => {
+		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash
+		const replacementBlockNumber = 7n
+		const calls: { method: string; params: unknown }[] = []
+		const originalTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: originalHash,
+			input: '0xabcd',
+			nonce: '0x9',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: null,
+			type: '0x2',
+			value: '0x7',
+		}
+		const replacementTransaction = {
+			...originalTransaction,
+			hash: replacementHash,
+			transactionIndex: '0x0',
+		}
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') return originalTransaction
+			if (method === 'eth_getTransactionReceipt') {
+				const hash = getArrayEntry(params, 0, 'receipt params')
+				if (hash === originalHash) return null
+				if (hash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: `0x${replacementBlockNumber.toString(16)}`,
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x14'
+			if (method === 'eth_getTransactionCount') throw { code: -32_000, message: 'historical state is unavailable' }
+			if (method === 'eth_getBlockByNumber') {
+				const blockNumber = getArrayEntry(params, 0, 'replacement block params')
+				return {
+					hash: BLOCK_HASH,
+					number: blockNumber,
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: blockNumber === `0x${replacementBlockNumber.toString(16)}` ? [replacementTransaction] : [],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const receipt = await client.waitForTransactionReceipt({ hash: originalHash, onReplaced: () => undefined, pollingInterval: 0, timeout: 100 })
+
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(calls.filter(call => call.method === 'eth_getTransactionCount')).toHaveLength(1)
+		expect(
+			calls
+				.filter(call => call.method === 'eth_getBlockByNumber')
+				.map(call => getArrayEntry(call.params, 0, 'block params'))
+				.at(-1),
+		).toBe('0x7')
+	})
+
 	test('waitForTransactionReceipt retries original transaction lookup before replacement scanning', async () => {
 		const originalHash = `0x${'99'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'aa'.repeat(32)}` satisfies Hash
@@ -2229,6 +2314,7 @@ describe('shared ethereum compatibility layer', () => {
 		if (account.signTransaction === undefined) throw new Error('local signer missing')
 
 		await expect(account.signTransaction({ maxFeePerGas: 20n, to: RECIPIENT_ADDRESS })).rejects.toThrow('requires chainId, gas, and nonce')
+		await expect(account.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 20n, nonce: 0n, to: RECIPIENT_ADDRESS })).rejects.toThrow('requires maxFeePerGas and maxPriorityFeePerGas')
 	})
 
 	test('wallet client never retries rpc-managed transaction submissions', async () => {

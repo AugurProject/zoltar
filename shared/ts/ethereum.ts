@@ -1432,6 +1432,14 @@ async function findReplacementTransaction(actions: PublicClientActions, original
 	return undefined
 }
 
+async function findReplacementTransactionBackwards(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
+	for (let blockNumber = parameters.fromBlock; blockNumber >= parameters.toBlock; blockNumber -= 1n) {
+		const replacementTransaction = await findReplacementTransaction(actions, originalTransaction, { fromBlock: blockNumber, toBlock: blockNumber }, blockReader)
+		if (replacementTransaction !== undefined) return replacementTransaction
+	}
+	return undefined
+}
+
 async function findMinedNonceBlock(actions: Pick<PublicClientActions, 'getTransactionCount'>, originalTransaction: Pick<BlockTransaction, 'from' | 'nonce'>, toBlock: bigint) {
 	if ((await actions.getTransactionCount({ address: originalTransaction.from, blockNumber: toBlock })) <= originalTransaction.nonce) return undefined
 	let lowerBlock = 0n
@@ -1820,18 +1828,26 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 								if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
 									firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 								}
-								let replacementTransaction =
-									firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
+								const replacementBlockReader: Pick<PublicClientActions, 'getBlock'> = {
+									getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)),
+								}
+								let replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, replacementBlockReader)
 								if (replacementTransaction === undefined && initialReplacementScan && firstScanBlock > 0n) {
-									const replacementBlock = await findMinedNonceBlock(
-										{
-											getTransactionCount: async parameters => await retryReceiptRateLimited(async () => await actions.getTransactionCount(parameters)),
-										},
-										transactionToReplace,
-										firstScanBlock - 1n,
-									)
-									if (replacementBlock !== undefined) {
-										replacementTransaction = await findReplacementTransaction(actions, transactionToReplace, { fromBlock: replacementBlock, toBlock: replacementBlock }, { getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)) })
+									const historicalScanEnd = firstScanBlock - 1n
+									try {
+										const replacementBlock = await findMinedNonceBlock(
+											{
+												getTransactionCount: async parameters => await retryReceiptRateLimited(async () => await actions.getTransactionCount(parameters)),
+											},
+											transactionToReplace,
+											historicalScanEnd,
+										)
+										if (replacementBlock !== undefined) {
+											replacementTransaction = await findReplacementTransaction(actions, transactionToReplace, { fromBlock: replacementBlock, toBlock: replacementBlock }, replacementBlockReader)
+										}
+									} catch (error) {
+										if (Date.now() - startTime >= timeoutMilliseconds) throw error
+										replacementTransaction = await findReplacementTransactionBackwards(actions, transactionToReplace, { fromBlock: historicalScanEnd, toBlock: 0n }, replacementBlockReader)
 									}
 								}
 								lastScannedReplacementBlock = latestBlockNumber
