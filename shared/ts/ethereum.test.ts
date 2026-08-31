@@ -513,6 +513,33 @@ describe('shared ethereum compatibility layer', () => {
 		expect(Array.isArray(widenedLogArgs)).toBe(false)
 	})
 
+	test('zero-input events expose empty named argument objects', async () => {
+		const event = [{ inputs: [], name: 'Finished', type: 'event' }] as const
+		const topics = encodeEventTopics({ abi: event, eventName: 'Finished' }).filter((topic): topic is Hex => topic !== null)
+		const decoded = decodeEventLog({ abi: event, data: '0x', topics })
+		type DecodedArgsAreArray = typeof decoded.args extends readonly unknown[] ? true : false
+		const decodedArgsAreArray: DecodedArgsAreArray = false
+		expect(decodedArgsAreArray).toBe(false)
+		expect(decoded.args).toEqual({})
+		expect(Array.isArray(decoded.args)).toBe(false)
+
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_getLogs') throw new Error(`Unexpected rpc method: ${method}`)
+					return [{ address: TOKEN_ADDRESS, blockHash: BLOCK_HASH, blockNumber: '0x1', data: '0x', logIndex: '0x0', removed: false, topics, transactionHash: TX_HASH, transactionIndex: '0x0' }]
+				}, []),
+			),
+		})
+		const [log] = await client.getLogs({ event: event[0] })
+		if (log?.args === undefined) throw new Error('zero-input event log args missing')
+		type LogArgsAreArray = typeof log.args extends readonly unknown[] ? true : false
+		const logArgsAreArray: LogArgsAreArray = false
+		expect(logArgsAreArray).toBe(false)
+		expect(log.args).toEqual({})
+		expect(Array.isArray(log.args)).toBe(false)
+	})
+
 	test('ABI formatting preserves mutability and named tuple components', () => {
 		expect(
 			formatAbiItem({

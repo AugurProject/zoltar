@@ -53,7 +53,13 @@ type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind ext
 	[TIndex in keyof TComponents]: TComponents[TIndex] extends AbiParameter ? AbiParameterValue<TComponents[TIndex], TKind> : never
 }>
 
-type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = number extends TComponents['length'] ? Readonly<Record<string, unknown>> | readonly unknown[] : TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsObject<TComponents, 'output'> : TupleComponentsArray<TComponents, 'output'>
+type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = number extends TComponents['length']
+	? Readonly<Record<string, unknown>> | readonly unknown[]
+	: TComponents extends readonly []
+		? Readonly<Record<string, never>>
+		: TupleComponentsAllNamed<TComponents> extends true
+			? TupleComponentsObject<TComponents, 'output'>
+			: TupleComponentsArray<TComponents, 'output'>
 
 type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = TKind extends 'input'
 	? TupleComponentsAllNamed<TComponents> extends true
