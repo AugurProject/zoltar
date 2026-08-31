@@ -227,6 +227,7 @@ describe('chaos dashboard server', () => {
 
 	test('requires current submission-path threshold evidence for live readiness', () => {
 		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const wallet = '0x0000000000000000000000000000000000000001'
 		const publicConfiguration = {
 			hasSigner: true,
 			settings: {
@@ -238,6 +239,7 @@ describe('chaos dashboard server', () => {
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
 				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
+			wallet,
 		}
 		const readCheck = { chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }
 		const state = {
@@ -279,16 +281,18 @@ describe('chaos dashboard server', () => {
 			},
 		}
 		const privateChecks = [
-			{ chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
-			{ chainId: undefined, checkedAt: new Date(now).toISOString(), failureDisposition: 'connectivity-degraded', kind: 'private-relay', status: 'failed', target: 'https://relay-two.example' },
+			{ authenticatedAddress: wallet, chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
+			{ authenticatedAddress: wallet, chainId: undefined, checkedAt: new Date(now).toISOString(), failureDisposition: 'connectivity-degraded', kind: 'private-relay', status: 'failed', target: 'https://relay-two.example' },
 		]
 		const firstPrivateCheck = privateChecks[0]
 		if (firstPrivateCheck === undefined) throw new Error('Submission-readiness fixture requires one healthy private relay')
 		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...privateChecks] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
 		const duplicateRelayOriginChecks = [firstPrivateCheck, { ...firstPrivateCheck, target: 'https://relay-one.example' }]
 		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...duplicateRelayOriginChecks] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
-		const enoughDistinctRelayOrigins = [...privateChecks, { chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-three.example' }]
+		const enoughDistinctRelayOrigins = [...privateChecks, { authenticatedAddress: wallet, chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-three.example' }]
 		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...enoughDistinctRelayOrigins] }, privateConfiguration, now)).toMatchObject({ blockers: [], checks: { submission: { ready: true } }, ready: true })
+		const oldSignerRelayBatch = enoughDistinctRelayOrigins.map(check => ({ ...check, authenticatedAddress: '0x0000000000000000000000000000000000000002' }))
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...oldSignerRelayBatch] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
 		const partiallyStaleRelayBatch = enoughDistinctRelayOrigins.map(check => (check.target === 'https://relay-two.example' ? { ...check, checkedAt: new Date(now - 157_000).toISOString() } : check))
 		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...partiallyStaleRelayBatch] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
 		const safetyFailedRelayThreshold = enoughDistinctRelayOrigins.map(check => (check.target === 'https://relay-two.example' ? { ...check, failureDisposition: 'safety-paused' } : check))

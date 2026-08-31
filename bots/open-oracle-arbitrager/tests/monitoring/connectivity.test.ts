@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { keccak256, type Hex } from '#ethereum'
+import { keccak256, recoverTransactionAddress, type Hex } from '#ethereum'
 import {
 	checkConnectivity,
 	checkPrivateTransactionSubmissionEndpoints,
+	checkPublicTransactionSubmissionEndpoints,
 	checkSubmissionEndpoints,
 	endpointLabel,
 	readRpcChainId,
 	sendRawTransactionToRpc,
+	TRANSACTION_SUBMISSION_CAPABILITY_PROBE,
 	updateConnectivityEndpointChecks,
 	updateSubmissionEndpointChecks,
 	validateConnectivitySettings,
@@ -20,18 +22,22 @@ import {
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []
+const relayAuthentication = {
+	address: '0x0000000000000000000000000000000000000001' as const,
+	signMessage: async () => `0x${'22'.repeat(65)}` as const,
+}
 
 afterEach(() => {
 	for (const server of servers.splice(0)) server.stop(true)
 })
 
-function rpc(handler: (method: string, params: readonly unknown[]) => unknown | Promise<unknown>) {
+function rpc(handler: (method: string, params: readonly unknown[], request: Request) => unknown | Promise<unknown>) {
 	const server = Bun.serve({
 		fetch: async request => {
-			const value = await request.json()
+			const value: unknown = JSON.parse(await request.text())
 			if (typeof value !== 'object' || value === null || !('id' in value) || !('jsonrpc' in value) || !('method' in value) || !('params' in value) || typeof value['id'] !== 'number' || typeof value['jsonrpc'] !== 'string' || typeof value['method'] !== 'string' || !Array.isArray(value['params']))
 				throw new Error('Invalid test RPC request')
-			const response = await handler(value['method'], value['params'])
+			const response = await handler(value['method'], value['params'], request)
 			return response instanceof Response ? response : Response.json({ id: value['id'], jsonrpc: value['jsonrpc'], result: response })
 		},
 		hostname: '127.0.0.1',
@@ -126,6 +132,78 @@ describe('operator connectivity', () => {
 		expect(malformedMessage.match(new RegExp(new URL(malformed).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 	})
 
+	test('does not mark a read-only public RPC as transaction-submission healthy', async () => {
+		const requestedMethods: string[] = []
+		const readOnlyRpc = rpc(method => {
+			requestedMethods.push(method)
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendRawTransaction') return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const credentialedPath = `${readOnlyRpc}/private/provider-key?token=query-secret`
+		let failure: unknown
+		try {
+			await checkPublicTransactionSubmissionEndpoints([credentialedPath], 1)
+		} catch (error) {
+			failure = error
+		}
+
+		const message = failure instanceof Error ? failure.message : String(failure)
+		expect(message).toContain('eth_sendRawTransaction')
+		expect(message).not.toContain('provider-key')
+		expect(message).not.toContain('query-secret')
+		expect(requestedMethods).toEqual(['eth_chainId', 'eth_sendRawTransaction'])
+	})
+
+	test('proves public transaction dispatch with one fixed non-broadcastable envelope', async () => {
+		const capableRpc = rpc((method, params) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendRawTransaction') {
+				expect(params).toEqual([TRANSACTION_SUBMISSION_CAPABILITY_PROBE])
+				return Response.json({ error: { code: -32_602, message: 'signature error' }, id: 1, jsonrpc: '2.0' })
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(recoverTransactionAddress({ serializedTransaction: TRANSACTION_SUBMISSION_CAPABILITY_PROBE })).rejects.toThrow()
+		await expect(checkPublicTransactionSubmissionEndpoints([capableRpc], 1)).resolves.toMatchObject([{ chainId: 1, kind: 'public-rpc', status: 'healthy' }])
+	})
+
+	test.each([
+		{ code: -32_000, message: 'invalid signature' },
+		{ code: -32_000, message: 'invalid argument' },
+		{ code: -32_602, message: 'invalid params' },
+	])('rejects generic public write-gateway errors as transaction-submission evidence %#', async ({ code, message }) => {
+		const endpoint = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendRawTransaction') return Response.json({ error: { code, message }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPublicTransactionSubmissionEndpoints([endpoint], 1)).rejects.toThrow(message)
+	})
+
+	test('tolerates public transport degradation but fails closed on safety evidence', async () => {
+		const capableRpc = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendRawTransaction') return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const unavailableRpc = rpc(() => new Response('temporarily unavailable', { status: 503 }))
+		const readOnlyRpc = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendRawTransaction') return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPublicTransactionSubmissionEndpoints([capableRpc, unavailableRpc], 1)).resolves.toMatchObject([
+			{ chainId: 1, status: 'healthy' },
+			{ failureDisposition: 'connectivity-degraded', status: 'failed' },
+		])
+		await expect(checkPublicTransactionSubmissionEndpoints([capableRpc, readOnlyRpc], 1)).rejects.toThrow('method not found')
+		await expect(checkPublicTransactionSubmissionEndpoints([unavailableRpc], 1)).rejects.toThrow('HTTP 503')
+	})
+
 	test('fails closed on wrong-chain private relays and clears checks for public mode', async () => {
 		const relay = (chainId: string) =>
 			rpc(method => {
@@ -156,12 +234,22 @@ describe('operator connectivity', () => {
 	})
 
 	test('proves the exact private-transaction method used by single-transaction submission', async () => {
+		const signedMessages: (string | Uint8Array)[] = []
+		const authentication = {
+			...relayAuthentication,
+			signMessage: async (message: string | Uint8Array) => {
+				signedMessages.push(message)
+				return `0x${'22'.repeat(65)}` as const
+			},
+		}
 		const relay = (supportsPrivateTransactions: boolean) =>
-			rpc(method => {
+			rpc((method, params, request) => {
 				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_sendPrivateTransaction') {
+					expect(request.headers.get('x-flashbots-signature')).toBe(`${authentication.address}:0x${'22'.repeat(65)}`)
+					expect(params).toEqual([{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }])
 					return Response.json({
-						error: supportsPrivateTransactions ? { code: -32_602, message: 'invalid params: missing transaction' } : { code: -32_601, message: 'method not found' },
+						error: supportsPrivateTransactions ? { code: -32_602, message: 'failed to recover the signer' } : { code: -32_601, message: 'method not found' },
 						id: 1,
 						jsonrpc: '2.0',
 					})
@@ -169,14 +257,81 @@ describe('operator connectivity', () => {
 				throw new Error(`Unexpected method: ${method}`)
 			})
 		const settings = (url: string) => validateSubmissionSettings({ mode: 'private', relayUrls: [url] })
-		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(true)), 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
-		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(false)), 1)).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
+		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(true)), 1, authentication)).resolves.toMatchObject([{ authenticatedAddress: authentication.address, chainId: 1, status: 'healthy' }])
+		await expect(checkPrivateTransactionSubmissionEndpoints(settings(relay(false)), 1, authentication)).rejects.toThrow('did not prove authenticated eth_sendPrivateTransaction support')
+		const expectedBody = JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }] })
+		expect(signedMessages).toEqual([keccak256(expectedBody), keccak256(expectedBody)])
+	})
+
+	test('accepts the strict authenticated control sequence used by the official Sepolia Flashbots relay', async () => {
+		const unsupportedMethod = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+		const cancellationHash = keccak256(TRANSACTION_SUBMISSION_CAPABILITY_PROBE)
+		const signedMessages: (string | Uint8Array)[] = []
+		const authentication = {
+			...relayAuthentication,
+			signMessage: async (message: string | Uint8Array) => {
+				signedMessages.push(message)
+				return `0x${'22'.repeat(65)}` as const
+			},
+		}
+		const requestedMethods: string[] = []
+		const relay = rpc((method, params, request) => {
+			requestedMethods.push(method)
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') {
+				expect(request.headers.get('x-flashbots-signature')).not.toBeNull()
+				expect(params).toEqual([{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }])
+				return Response.json({ error: { code: -32_600, data: null, message: 'incorrect request' }, id: 1, jsonrpc: '2.0' })
+			}
+			if (method === unsupportedMethod) {
+				expect(request.headers.get('x-flashbots-signature')).not.toBeNull()
+				expect(params).toEqual([])
+				return Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }, { status: 403 })
+			}
+			if (method === 'eth_cancelPrivateTransaction') {
+				expect(params).toEqual([{ txHash: cancellationHash }])
+				return request.headers.get('x-flashbots-signature') === null ? Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' })
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [relay] })
+		await expect(checkPrivateTransactionSubmissionEndpoints(settings, 1, authentication)).resolves.toMatchObject([{ authenticatedAddress: authentication.address, chainId: 1, status: 'healthy' }])
+		expect(requestedMethods).toEqual(['eth_chainId', 'eth_sendPrivateTransaction', unsupportedMethod, 'eth_cancelPrivateTransaction', 'eth_cancelPrivateTransaction'])
+		const authenticatedBodies = [
+			{ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [{ tx: TRANSACTION_SUBMISSION_CAPABILITY_PROBE }] },
+			{ id: 1, jsonrpc: '2.0', method: unsupportedMethod, params: [] },
+			{ id: 1, jsonrpc: '2.0', method: 'eth_cancelPrivateTransaction', params: [{ txHash: cancellationHash }] },
+		]
+		expect(signedMessages).toEqual(authenticatedBodies.map(body => keccak256(JSON.stringify(body))))
+	})
+
+	test.each(['unsupported-method', 'authenticated-cancellation', 'unauthenticated-cancellation'] as const)('fails closed when the Flashbots private capability %s control is inconclusive', async brokenControl => {
+		const unsupportedMethod = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
+		const cancellationHash = keccak256(TRANSACTION_SUBMISSION_CAPABILITY_PROBE)
+		const relay = rpc((method, params, request) => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, data: null, message: 'incorrect request' }, id: 1, jsonrpc: '2.0' })
+			if (method === unsupportedMethod) {
+				return brokenControl === 'unsupported-method' ? Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }) : Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: 1, jsonrpc: '2.0' }, { status: 403 })
+			}
+			if (method === 'eth_cancelPrivateTransaction') {
+				expect(params).toEqual([{ txHash: cancellationHash }])
+				if (request.headers.get('x-flashbots-signature') !== null) {
+					return brokenControl === 'authenticated-cancellation' ? Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' }, { status: 201 }) : Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: 1, jsonrpc: '2.0' })
+				}
+				return brokenControl === 'unauthenticated-cancellation' ? Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' }, { status: 403 }) : Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
+			}
+			throw new Error(`Unexpected method: ${method}`)
+		})
+
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [relay] }), 1, relayAuthentication)).rejects.toThrow('control')
 	})
 
 	test('counts healthy distinct relay origins toward private-transaction preflight threshold', async () => {
 		const acceptedOrigin = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'invalid params: missing transaction' }, id: 1, jsonrpc: '2.0' })
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
 			throw new Error(`Unexpected method: ${method}`)
 		})
 		const rejectedOrigin = rpc(() => Response.json({ error: { code: -32_000, message: 'temporarily unavailable' }, id: 1, jsonrpc: '2.0' }, { status: 503 }))
@@ -185,7 +340,33 @@ describe('operator connectivity', () => {
 			mode: 'private',
 			relayUrls: [`${acceptedOrigin}/one`, `${acceptedOrigin}/two`, rejectedOrigin],
 		})
-		await expect(checkPrivateTransactionSubmissionEndpoints(settings, 1)).rejects.toThrow()
+		await expect(checkPrivateTransactionSubmissionEndpoints(settings, 1, relayAuthentication)).rejects.toThrow()
+	})
+
+	test('tolerates private transport degradation at threshold but fails closed on authentication rejection', async () => {
+		const capableRelay = () =>
+			rpc(method => {
+				if (method === 'eth_chainId') return '0x1'
+				if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+				throw new Error(`Unexpected method: ${method}`)
+			})
+		const firstCapableRelay = capableRelay()
+		const secondCapableRelay = capableRelay()
+		const unavailableRelay = rpc(() => new Response('temporarily unavailable', { status: 503 }))
+		const authenticationRejectingRelay = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'invalid flashbots signature' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const submissionSettings = (thirdRelay: string) =>
+			validateSubmissionSettings({
+				minimumBundleRelaySuccesses: 2,
+				mode: 'private',
+				relayUrls: [firstCapableRelay, secondCapableRelay, thirdRelay],
+			})
+
+		await expect(checkPrivateTransactionSubmissionEndpoints(submissionSettings(unavailableRelay), 1, relayAuthentication)).resolves.toMatchObject([{ status: 'healthy' }, { status: 'healthy' }, { failureDisposition: 'connectivity-degraded', status: 'failed' }])
+		await expect(checkPrivateTransactionSubmissionEndpoints(submissionSettings(authenticationRejectingRelay), 1, relayAuthentication)).rejects.toThrow('invalid flashbots signature')
 	})
 
 	test('counts healthy distinct relay origins toward bundle capability preflight threshold', async () => {
@@ -203,64 +384,52 @@ describe('operator connectivity', () => {
 		await expect(checkSubmissionEndpoints(settings, 1)).rejects.toThrow()
 	})
 
-	test.each([
-		{ message: 'method not found', status: 200 },
-		{ message: 'rpc method is not whitelisted', status: 403 },
-	])('accepts private-transaction authentication evidence when an unsupported sentinel proves method dispatch %#', async ({ message, status }) => {
+	test('rejects a relay that advertises the method but rejects the configured authentication', async () => {
 		const requestedMethods: string[] = []
-		const dispatchingRelay = rpc(method => {
+		const authenticationRejectingRelay = rpc((method, _params, request) => {
 			requestedMethods.push(method)
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' })
-			return Response.json({ error: { code: -32_601, message }, id: 1, jsonrpc: '2.0' }, { status })
-		})
-		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [dispatchingRelay] })
-		await expect(checkPrivateTransactionSubmissionEndpoints(settings, 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
-		expect(requestedMethods).toHaveLength(3)
-		expect(requestedMethods.slice(0, 2)).toEqual(['eth_chainId', 'eth_sendPrivateTransaction'])
-		expect(requestedMethods[2]).not.toBe('eth_sendPrivateTransaction')
-	})
-
-	test('rejects generic authentication evidence when an unsupported sentinel cannot reach method dispatch', async () => {
-		const requestedMethods: string[] = []
-		const authenticationFirstRelay = rpc(method => {
-			requestedMethods.push(method)
-			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') {
+				expect(request.headers.get('x-flashbots-signature')).not.toBeNull()
+				return Response.json({ error: { code: -32_600, message: 'invalid flashbots signature' }, id: 1, jsonrpc: '2.0' })
+			}
+			expect(request.headers.get('x-flashbots-signature')).toBeNull()
 			return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' })
 		})
-		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [authenticationFirstRelay] })
+		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [authenticationRejectingRelay] })
 		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
-		await expect(updateSubmissionEndpointChecks(state, () => checkPrivateTransactionSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
-		expect(requestedMethods).toHaveLength(3)
-		expect(requestedMethods.slice(0, 2)).toEqual(['eth_chainId', 'eth_sendPrivateTransaction'])
-		expect(requestedMethods[2]).not.toBe('eth_sendPrivateTransaction')
-		expect(state.endpointChecks).toMatchObject([{ chainId: 1, failureDisposition: 'safety-paused', kind: 'private-relay', status: 'failed' }])
+		await expect(updateSubmissionEndpointChecks(state, () => checkPrivateTransactionSubmissionEndpoints(settings, 1, relayAuthentication))).rejects.toThrow('authenticated eth_sendPrivateTransaction')
+		expect(requestedMethods).toEqual(['eth_chainId', 'eth_sendPrivateTransaction'])
+		expect(state.endpointChecks).toMatchObject([{ authenticatedAddress: relayAuthentication.address, chainId: 1, failureDisposition: 'safety-paused', kind: 'private-relay', status: 'failed' }])
 		await expect(checkSubmissionEndpoints(settings, 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
 	})
 
 	test('does not decode a non-success target-method response as capability evidence', async () => {
 		const endpoint = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_602, message: 'invalid params: missing transaction' }, id: 1, jsonrpc: '2.0' }, { status: 403 })
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_025, message: 'invalid flashbots signature' }, id: null, jsonrpc: '2.0' }, { status: 403 })
 			throw new Error(`Unexpected method: ${method}`)
 		})
-		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('RPC returned HTTP 403')
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('RPC returned HTTP 403')
 	})
 
 	test.each([
-		{ response: () => new Response('<html>forbidden</html>', { status: 403 }) },
-		{ response: () => Response.json({ error: { code: -32_601, message: 'method not found' }, id: 2, jsonrpc: '2.0' }, { status: 403 }) },
-		{ response: () => Response.json({ error: { code: -32_600, message: 'method not found' }, id: 1, jsonrpc: '2.0' }, { status: 403 }) },
-		{ response: () => Response.json({ id: 1, jsonrpc: '2.0', result: null }, { status: 403 }) },
-		{ response: () => Response.json({ error: { code: -32_601, message: 'access denied' }, id: 1, jsonrpc: '2.0' }, { status: 403 }) },
-		{ response: () => new Response('x'.repeat(4 * 1024 * 1024 + 1), { status: 403 }) },
-	])('rejects malformed or inconclusive unsupported-sentinel responses %#', async ({ response }) => {
+		{ response: () => new Response('<html>forbidden</html>') },
+		{ response: () => Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 2, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ error: { code: -32_602, message: 'invalid signature' }, id: 1, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ error: { code: -32_602, message: 'access denied: invalid sender' }, id: 1, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ error: { code: -32_602, message: 'invalid argument: X-Flashbots-Signature verification failed' }, id: 1, jsonrpc: '2.0' }) },
+		{ response: () => Response.json({ id: 1, jsonrpc: '2.0', result: `0x${'11'.repeat(32)}` }) },
+		{ response: () => new Response('x'.repeat(4 * 1024 * 1024 + 1)) },
+	])('rejects malformed or inconclusive authenticated capability responses %#', async ({ response }) => {
 		const endpoint = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' })
-			return response()
+			if (method === 'eth_sendPrivateTransaction') return response()
+			throw new Error(`Unexpected method: ${method}`)
 		})
-		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('eth_sendPrivateTransaction')
+		await expect(checkPrivateTransactionSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1, relayAuthentication)).rejects.toThrow('eth_sendPrivateTransaction')
 	})
 
 	test('identifies the RPC origin and method once for a wrong-chain connectivity probe', async () => {

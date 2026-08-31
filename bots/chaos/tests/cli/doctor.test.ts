@@ -21,6 +21,7 @@ import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS, parseSettings } from '../../src/confi
 import { carryProofJournalSidecarPath } from '../../src/monitoring/carry-proof-journal.ts'
 import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
 import { immutableTopologySidecarDirectory } from '../../src/monitoring/topology-cache.ts'
+import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, loadDurableState, serializedDurableState } from '../../src/state/operator-state.ts'
 
 const temporaryDirectories: string[] = []
@@ -41,7 +42,6 @@ async function settingsFixture(name: 'operator.configured-placeholder.json' | 'o
 const probeResult: ChaosDoctorProbeResult = {
 	anchor: { blockHash: `0x${'11'.repeat(32)}`, blockNumber: 100n },
 	readerResults: [{ codeRoots: 8, endpoint: 'https://reader.example', finalizedBlock: '90', logChunkCount: 1, logCount: 3, logFromBlock: '50', logToBlock: '100' }],
-	relayChecks: 0,
 	snapshot: {
 		auctions: [],
 		pairs: [],
@@ -60,6 +60,7 @@ function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsF
 		assertProfileIsolation: async () => undefined,
 		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
 		loadState: async (_path, chainId) => initialDurableState(chainId, true, carryProofDeploymentProfileId(settings)),
+		preflightSubmission: async () => [],
 		probe: async () => probeResult,
 		validateCompanionState: async () => ({ carryProofJournal: 'absent', immutableTopology: 'absent' }),
 		verifyStateParent: async () => undefined,
@@ -204,6 +205,7 @@ describe('chaos launch doctor', () => {
 		let stateParentChecked = false
 		let locksReleased = false
 		let probedWallet = ''
+		let submissionChecked = false
 		const dependencies = passiveDoctorDependencies(settings, {
 			acquireLocks: async () => ({
 				release: async () => {
@@ -212,6 +214,13 @@ describe('chaos launch doctor', () => {
 			}),
 			assertProfileIsolation: async () => {
 				profileChecked = true
+			},
+			preflightSubmission: async () => {
+				submissionChecked = true
+				return [
+					{ chainId: settings.network.chainId, checkedAt: new Date().toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://one.example' },
+					{ chainId: settings.network.chainId, checkedAt: new Date().toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://two.example' },
+				]
 			},
 			probe: async (_settings, wallet) => {
 				probedWallet = wallet
@@ -227,12 +236,70 @@ describe('chaos launch doctor', () => {
 		expect(stateParentChecked).toBe(true)
 		expect(locksReleased).toBe(true)
 		expect(probedWallet).toBe('0x0000000000000000000000000000000000000000')
+		expect(submissionChecked).toBe(true)
 		expect(report).toMatchObject({
-			checks: { configuration: 'passed', deploymentCodeAndGraph: 'passed', finalizedTag: 'passed', protocolLogSpan: 'passed' },
+			checks: { configuration: 'passed', deploymentCodeAndGraph: 'passed', finalizedTag: 'passed', protocolLogSpan: 'passed', submission: 'passed' },
 			inventory: { ethAttoEth: 123n.toString(), signer: 'not-configured' },
+			submissionCapabilityChecks: 2,
 			topology: { universes: 1 },
 		})
 		expect(Object.keys(report.operationFamilies).sort()).toEqual(['open-oracle', 'statoblast', 'trading', 'zoltar'])
+	})
+
+	test('fails the doctor before discovery when a public RPC cannot dispatch transactions', async () => {
+		const baseline = await settingsFixture('operator.configured-placeholder.json')
+		if (baseline.connectivity === undefined) throw new Error('Configured doctor fixture requires connectivity')
+		const requestedMethods: string[] = []
+		const server = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new Error('Doctor capability probe body must be an object')
+				const method = Reflect.get(body, 'method')
+				if (typeof method !== 'string') throw new Error('Doctor capability probe requires a method')
+				requestedMethods.push(method)
+				if (method === 'eth_chainId') return Response.json({ id: 1, jsonrpc: '2.0', result: `0x${baseline.network.chainId.toString(16)}` })
+				return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
+			},
+		})
+		try {
+			if (server.port === undefined) throw new Error('Doctor capability fixture did not expose a port')
+			const endpoint = `http://127.0.0.1:${server.port.toString()}`
+			const settings = { ...baseline, connectivity: { ...baseline.connectivity, publicRpcUrls: [endpoint] } }
+			let discovered = false
+			const dependencies = passiveDoctorDependencies(settings, {
+				preflightSubmission: preflightTransactionSubmissionNetwork,
+				probe: async () => {
+					discovered = true
+					return probeResult
+				},
+			})
+
+			await expect(runChaosDoctor(dependencies)).rejects.toThrow('eth_sendRawTransaction')
+			expect(requestedMethods).toEqual(['eth_chainId', 'eth_sendRawTransaction'])
+			expect(discovered).toBeFalse()
+		} finally {
+			server.stop(true)
+		}
+	})
+
+	test('requires the configured signer for private submission capability proof', async () => {
+		const baseline = await settingsFixture('operator.configured-placeholder.json')
+		const settings = {
+			...baseline,
+			submission: { minimumBundleRelaySuccesses: 1, mode: 'private' as const, relayUrls: ['https://relay.example'] },
+		}
+		let discovered = false
+		const dependencies = passiveDoctorDependencies(settings, {
+			preflightSubmission: preflightTransactionSubmissionNetwork,
+			probe: async () => {
+				discovered = true
+				return probeResult
+			},
+		})
+
+		await expect(runChaosDoctor(dependencies)).rejects.toThrow('configured transaction signer')
+		expect(discovered).toBeFalse()
 	})
 
 	test('fails before network probes when configuration is still a placeholder', async () => {

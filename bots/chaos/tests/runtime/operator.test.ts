@@ -23,10 +23,9 @@ import {
 	runChaosOperator,
 	runtimeTopologySummary,
 	scheduleAfterRecoveredTransaction,
-	submissionPreflightConfigurationIdentity,
-	submissionPreflightIsDue,
 } from '../../src/runtime/operator.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
+import { submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
@@ -407,8 +406,8 @@ describe('chaos operator runtime', () => {
 			runtime: { ...base.runtime, execute: true },
 		}
 		const publicChecks: EndpointCheck[] = [
-			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 35_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-one.example' },
-			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 35_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-two.example' },
+			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 119_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-one.example' },
+			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 119_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-two.example' },
 		]
 		const firstPublicCheck = publicChecks[0]
 		const secondPublicCheck = publicChecks[1]
@@ -437,19 +436,30 @@ describe('chaos operator runtime', () => {
 		}
 		expect(submissionPreflightConfigurationIdentity(sameOriginRotatedPath)).not.toBe(submissionPreflightConfigurationIdentity(publicSettings))
 
+		const privateKey = `0x${'11'.repeat(32)}` as const
 		const privateSettings: OperatorSettings = {
 			...publicSettings,
+			privateKey,
 			submission: {
 				minimumBundleRelaySuccesses: 2,
 				mode: 'private',
 				relayUrls: ['https://relay-one.example/path', 'https://relay-two.example/path'],
 			},
 		}
+		const privateWallet = privateKeyToAccount(privateKey).address
 		const privateChecks: EndpointCheck[] = [
-			{ chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-two.example' },
-			{ chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
+			{ authenticatedAddress: privateWallet, chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-two.example' },
+			{ authenticatedAddress: privateWallet, chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
 		]
 		expect(submissionPreflightIsDue(privateChecks, privateSettings, now)).toBeFalse()
+		expect(
+			submissionPreflightIsDue(
+				privateChecks.map(check => ({ ...check, authenticatedAddress: privateKeyToAccount(`0x${'22'.repeat(32)}`).address })),
+				privateSettings,
+				now,
+			),
+		).toBeTrue()
+		expect(submissionPreflightConfigurationIdentity({ ...privateSettings, privateKey: `0x${'22'.repeat(32)}` })).not.toBe(submissionPreflightConfigurationIdentity(privateSettings))
 	})
 
 	test('isolates durable state by deployment without coupling it to key persistence or index tuning', () => {

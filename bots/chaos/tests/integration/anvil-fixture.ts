@@ -1,4 +1,4 @@
-import { encodeDeployData, getAddress, privateKeyToAccount, type Address, type Hex } from '../support/bot-shared.ts'
+import { encodeDeployData, getAddress, privateKeyToAccount, TRANSACTION_SUBMISSION_CAPABILITY_PROBE, type Address, type Hex } from '../support/bot-shared.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
@@ -61,13 +61,26 @@ function privateTransaction(value: unknown): Hex {
 	return value.tx
 }
 
-function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
+function relayAuthenticationMatches(value: string | null, expectedSigner: Address) {
+	if (value === null) return false
+	const [address, signature, extra] = value.split(':')
+	if (address === undefined || signature === undefined || extra !== undefined || !/^0x[0-9a-fA-F]{40}$/.test(address) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return false
+	return getAddress(address).toLowerCase() === expectedSigner.toLowerCase()
+}
+
+function createPrivateRelay(node: AnvilNode, expectedSigner: Address): ChaosPrivateRelay {
 	const rawTransactions: Hex[] = []
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
-			if (request.headers.get('x-flashbots-signature') === null) return Response.json({ error: { code: -32_600, message: 'Missing relay authentication' }, id: 1, jsonrpc: '2.0' }, { status: 401 })
-			const body = jsonRpcRequest(JSON.parse(await request.text()))
+			const requestText = await request.text()
+			const body = jsonRpcRequest(JSON.parse(requestText))
+			if (body.method === 'eth_chainId') {
+				return await fetch(node.rpcUrl, { body: requestText, headers: { 'content-type': 'application/json' }, method: 'POST' })
+			}
+			if (!relayAuthenticationMatches(request.headers.get('x-flashbots-signature'), expectedSigner)) {
+				return Response.json({ error: { code: -32_600, message: 'Invalid relay authentication' }, id: body.id, jsonrpc: '2.0' }, { status: 401 })
+			}
 			if (body.method !== 'eth_sendPrivateTransaction' || body.params.length !== 1) {
 				return Response.json({ error: { code: -32_601, message: 'Unsupported private relay method' }, id: body.id, jsonrpc: '2.0' })
 			}
@@ -79,6 +92,9 @@ function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
 			})
 			const upstreamText = await upstream.text()
 			const upstreamBody: unknown = JSON.parse(upstreamText)
+			if (rawTransaction === TRANSACTION_SUBMISSION_CAPABILITY_PROBE && !successfulJsonRpcResult(upstreamBody)) {
+				return Response.json({ error: { code: -32_602, message: 'failed to recover the signer from transaction' }, id: body.id, jsonrpc: '2.0' })
+			}
 			if (!upstream.ok || !successfulJsonRpcResult(upstreamBody)) return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
 			rawTransactions.push(rawTransaction)
 			await mineFinalityBlocks(node)
@@ -261,7 +277,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,
-			createPrivateRelay: () => createPrivateRelay(node),
+			createPrivateRelay: () => createPrivateRelay(node, signer),
 			createRpcProxy: options => createRpcProxy(node, options),
 			dispose: node.dispose,
 			infra,

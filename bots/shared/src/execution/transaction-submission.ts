@@ -1,6 +1,7 @@
-import { getAddress, keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
+import { keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
+import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
 
 export type SubmissionMode = 'private' | 'public'
 
@@ -225,14 +226,10 @@ function bundleIdentity(transactions: readonly Hex[]) {
 	}
 }
 
-async function authenticatedRelayRequest(parameters: { address: Address; body: string; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; timeoutMilliseconds: number }) {
-	const signature = await parameters.signMessage(keccak256(parameters.body))
+async function authenticatedRelayRequest(parameters: RelayAuthentication & { body: string; relayUrl: string; timeoutMilliseconds: number }) {
 	const response = await fetch(parameters.relayUrl, {
 		body: parameters.body,
-		headers: {
-			'content-type': 'application/json',
-			'x-flashbots-signature': `${getAddress(parameters.address)}:${signature}`,
-		},
+		headers: await authenticatedRelayHeaders(parameters.body, parameters),
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),

@@ -9,6 +9,7 @@ import { TransactionAwaitingRecovery, executeOperationPlan, type ExecutionEnviro
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { chaosChain, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
 import { executionProfileId } from '../../src/runtime/operator.ts'
+import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadRuntimeState } from '../../src/state/operator-state.ts'
 import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { CHAOS_TEST_FINALITY_BLOCKS, CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
@@ -164,6 +165,30 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('proves public and authenticated private submission methods without broadcasting a transaction', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const relay = current.createPrivateRelay()
+		const stateFile = await temporaryStateFile()
+		try {
+			const settings = settingsFor(current, proxy, stateFile.path)
+			const publicChecks = await preflightTransactionSubmissionNetwork(settings)
+			expect(publicChecks).toMatchObject([{ chainId: 1, kind: 'public-rpc', status: 'healthy' }])
+			expect(proxy.successfulSendRawTransactionParams).toEqual([])
+			expect(proxy.rawTransactions).toEqual([])
+
+			settings.submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relay.relayUrl] }
+			const privateChecks = await preflightTransactionSubmissionNetwork(settings)
+			expect(privateChecks).toMatchObject([{ authenticatedAddress: current.signer, chainId: 1, kind: 'private-relay', status: 'healthy' }])
+			expect(relay.rawTransactions).toEqual([])
+		} finally {
+			relay.dispose()
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('scans and executes Zoltar, OpenOracle, Trading, and Statoblast plans as EIP-1559 transactions', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()

@@ -32,10 +32,7 @@ async function confirmFinalizedCheckpointReceipt(readers: readonly CanonicalBloc
 			if (reader.getFinalizedBlock === undefined) throw new Error(`${label} reader does not support the finalized block tag`)
 			const finalized = await reader.getFinalizedBlock()
 			if (finalized.hash == null || finalized.number == null) throw new Error(`${label} finalized checkpoint is unavailable`)
-			const [finalizedBlockBefore, receiptBlockBefore] = await Promise.all([
-				reader.getBlock({ blockNumber: finalized.number }),
-				finalized.number < receipt.blockNumber ? undefined : reader.getBlock({ blockNumber: receipt.blockNumber }),
-			])
+			const [finalizedBlockBefore, receiptBlockBefore] = await Promise.all([reader.getBlock({ blockNumber: finalized.number }), finalized.number < receipt.blockNumber ? undefined : reader.getBlock({ blockNumber: receipt.blockNumber })])
 			const finalizedHash = finalized.hash.toLowerCase()
 			if (canonicalBlockHash(finalizedBlockBefore, finalized.number, `${label} finalized checkpoint`).toLowerCase() !== finalizedHash) {
 				throw new Error(`${label} finalized checkpoint does not match its canonical block identity`)
@@ -45,11 +42,7 @@ async function confirmFinalizedCheckpointReceipt(readers: readonly CanonicalBloc
 			if (repeatedFinalized.number < finalized.number || (repeatedFinalized.number === finalized.number && repeatedFinalized.hash.toLowerCase() !== finalizedHash)) {
 				throw new Error(`${label} finalized checkpoint changed during receipt verification`)
 			}
-			const [finalizedBlockAfter, repeatedFinalizedBlock, receiptBlockAfter] = await Promise.all([
-				reader.getBlock({ blockNumber: finalized.number }),
-				reader.getBlock({ blockNumber: repeatedFinalized.number }),
-				finalized.number < receipt.blockNumber ? undefined : reader.getBlock({ blockNumber: receipt.blockNumber }),
-			])
+			const [finalizedBlockAfter, repeatedFinalizedBlock, receiptBlockAfter] = await Promise.all([reader.getBlock({ blockNumber: finalized.number }), reader.getBlock({ blockNumber: repeatedFinalized.number }), finalized.number < receipt.blockNumber ? undefined : reader.getBlock({ blockNumber: receipt.blockNumber })])
 			if (canonicalBlockHash(finalizedBlockAfter, finalized.number, `${label} finalized-checkpoint stability`).toLowerCase() !== finalizedHash) {
 				throw new Error(`${label} finalized checkpoint changed during receipt verification`)
 			}

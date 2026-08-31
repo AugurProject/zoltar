@@ -378,6 +378,7 @@ function publicSubmissionHealth(value: unknown, configurationValue: unknown, now
 	if (connectivity === undefined || submission === undefined || expectedChainId === undefined || !Number.isSafeInteger(maximumAgeSeconds) || maximumAgeSeconds < 1) return { ready: false, status: 'not-configured' as const }
 	const mode = submission['mode']
 	let expectedKind: 'private-relay' | 'public-rpc'
+	let expectedAuthenticationAddress: string | undefined
 	let requiredHealthyOriginCount: number
 	let urls: unknown
 	if (mode === 'public') {
@@ -386,6 +387,9 @@ function publicSubmissionHealth(value: unknown, configurationValue: unknown, now
 		urls = connectivity['publicRpcUrls']
 	} else if (mode === 'private') {
 		expectedKind = 'private-relay'
+		const wallet = stringField(configuration ?? {}, 'wallet')
+		if (wallet === undefined || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return { ready: false, status: 'not-configured' as const }
+		expectedAuthenticationAddress = wallet.toLowerCase()
 		const required = safeIntegerField(submission, 'minimumBundleRelaySuccesses')
 		if (required === undefined || required < 1) return { ready: false, status: 'not-configured' as const }
 		requiredHealthyOriginCount = required
@@ -404,6 +408,7 @@ function publicSubmissionHealth(value: unknown, configurationValue: unknown, now
 		? value.flatMap(candidate => {
 				const check = record(candidate)
 				if (check?.['kind'] !== expectedKind) return []
+				if (expectedAuthenticationAddress !== undefined && stringField(check, 'authenticatedAddress')?.toLowerCase() !== expectedAuthenticationAddress) return []
 				const target = endpointOrigin(check['target'])
 				return target !== undefined && configuredTargets.has(target) ? [{ check, target }] : []
 			})

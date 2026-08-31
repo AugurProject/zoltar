@@ -4,7 +4,6 @@ import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname } from 'node:path'
 import { privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { checkPrivateTransactionSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connectivity'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
 import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError, type ChaosProcessLocks } from '../core/process-locks.ts'
@@ -17,6 +16,7 @@ import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
 import type { ChaosReadClient } from '../monitoring/discovery.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
+import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
 
 type DoctorReaderResult = {
@@ -34,7 +34,6 @@ type DeploymentRoot = { address: Address; name: string }
 export type ChaosDoctorProbeResult = {
 	anchor: { blockHash: string; blockNumber: bigint }
 	readerResults: DoctorReaderResult[]
-	relayChecks: number
 	snapshot: {
 		auctions: readonly unknown[]
 		pairs: readonly unknown[]
@@ -52,6 +51,7 @@ export type ChaosDoctorDependencies = {
 	assertProfileIsolation: typeof assertSettingsProfileIsolation
 	load: typeof loadSettings
 	loadState: typeof loadDurableState
+	preflightSubmission: typeof preflightTransactionSubmissionNetwork
 	probe: (settings: OperatorSettings, wallet: `0x${string}`) => Promise<ChaosDoctorProbeResult>
 	validateCompanionState: (settings: OperatorSettings) => Promise<{ carryProofJournal: 'absent' | 'valid'; immutableTopology: 'absent' | 'valid' }>
 	verifyStateParent: (stateFile: string) => Promise<void>
@@ -300,11 +300,9 @@ async function defaultProbe(settings: OperatorSettings, wallet: `0x${string}`): 
 		recheckedBlocks,
 	)
 	const readerResults = probedReaders.map(reader => reader.result)
-	const relayChecks = settings.submission.mode === 'private' ? (await checkPrivateTransactionSubmissionEndpoints(settings.submission, settings.network.chainId)).length : 0
 	return {
 		anchor: { blockHash: anchor.blockHash, blockNumber: anchor.blockNumber },
 		readerResults,
-		relayChecks,
 		snapshot: discovery.snapshot,
 	}
 }
@@ -352,6 +350,7 @@ const defaultDependencies: ChaosDoctorDependencies = {
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,
 	loadState: loadDurableState,
+	preflightSubmission: preflightTransactionSubmissionNetwork,
 	probe: defaultProbe,
 	validateCompanionState: validateDoctorCompanionState,
 	verifyStateParent,
@@ -462,6 +461,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 		const durableState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
+		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
 		const probeWallet = configuredSigner ?? zeroAddress
 		const result = await dependencies.probe(loaded.settings, probeWallet)
 		const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)
@@ -477,7 +477,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 				processExclusivity: 'passed',
 				profileIsolation: 'passed',
 				protocolLogSpan: 'passed',
-				relays: loaded.settings.submission.mode === 'private' ? 'passed' : 'not-required-for-public-mode',
+				submission: 'passed',
 				stateParentAccess: 'passed',
 			},
 			companionState,
@@ -489,7 +489,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 			},
 			operationFamilies: familyReachability(loaded.settings, result),
 			readers: result.readerResults,
-			relayCapabilityChecks: result.relayChecks,
+			submissionCapabilityChecks: submissionChecks.length,
 			topology: {
 				auctions: result.snapshot.auctions.length,
 				pairs: result.snapshot.pairs.length,
