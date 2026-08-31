@@ -654,7 +654,9 @@ loopback; this supplied Compose path does not require a password. Outside that
 explicit host-loopback setup, binding to `0.0.0.0` requires a
 `ZOLTAR_BOT_DASHBOARD_PASSWORD` of at least 16 characters. For a custom network-bound
 container, remove `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and explicitly pass the
-password into the container. Authenticate as `operator` in the browser's HTTP Basic
+password and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY` into the container. Set the
+public authority to the exact browser authority, including the port when the browser
+URL includes one, for example `10.0.0.4:4173`. Authenticate as `operator` in the browser's HTTP Basic
 prompt. Basic authentication protects access but does not encrypt traffic, so keep
 that network free of untrusted peers or terminate TLS at an authenticated proxy.
 JSON API bodies are capped at 1 MiB. The key is kept in memory unless
@@ -666,8 +668,8 @@ signer & saved key** removes both. The status names the active address and, when
 different, the saved address. Setting a different memory-only key preserves an
 existing saved key until **Forget saved key** or **Clear signer & saved key** is
 used. Mutable API
-requests require authentication when network-bound, same-origin JSON, and the fixed
-loopback host authority. Do not expose the dashboard to a network without transport
+requests require authentication when network-bound, same-origin JSON, and either the
+loopback or explicitly configured host authority. Do not expose the dashboard to a network without transport
 security.
 
 ## Persistent operator settings

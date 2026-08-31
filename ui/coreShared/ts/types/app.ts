@@ -17,7 +17,7 @@ export type WriteOperationsParameters = {
 	onTransactionFinished: () => void
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
 	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
-	onTransactionRequested: (intent: TransactionIntent) => void
+	onTransactionRequested: (intent: TransactionIntent) => boolean | void
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: RefreshState
 }

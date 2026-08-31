@@ -1,10 +1,35 @@
 # augurScan state model
 
-The state dashboard is an event-derived view of the canonical chain through the selected network's indexed block. It never overwrites raw log evidence. Every projection row retains its block-hash occurrence and canonical flag, so a reorganization preserves the orphaned observation while removing it from the current view.
+augurScan separates retained evidence from the current view so an operator can tell what the chain emitted, how a scanner run understood it, what the scanner read directly, and which values are only the latest projection.
 
-## Operations evidence model
+## Four evidence layers
 
-The fresh-install schema stores replayable domain projections for OpenOracle reports, escalation games, truth auctions, AMM activity, forks, and protocol migrations. The same decoded event also produces a `protocol_timeline_entries` row with entity identity, semantic event kind, source contract, source event, related addresses, transaction/log position, and canonical block occurrence. Reorg rewind marks affected projection and timeline rows noncanonical; replay uses the source log position as its idempotency key. Raw logs remain the retained evidence layer within the current database. augurScan does not upgrade old database layouts. Wiping an incompatible database deletes that evidence; the indexer then retrieves canonical chain evidence from RPC, starting at the configured or automatically discovered effective boundary, and builds only the current projections.
+1. **Occurrences** are the block, transaction, action, receipt, and raw log records selected by the indexer's declared coverage model. A log retains its topics, data, block hash, transaction hash, and position even when decoding fails. A reorganization changes its canonical status instead of deleting the displaced occurrence.
+2. **Interpretations** record how one indexer run decoded an action or log and which semantic projections it produced. Each interpretation carries run and ABI/application/projection source provenance. A later replay appends another interpretation, so operators can compare meanings without changing the raw occurrence.
+3. **Observations** are contract values read at a tagged canonical block. From schema version 2 onward, every pool, vault, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes. Migration keeps the version 1 materialized rows that still exist, but cannot reconstruct attempts already overwritten or invent their run/source provenance.
+4. **Current materializations** are replaceable registries, domain projections, and latest state rows used by the UI and ordinary canonical APIs. They are convenient views of the first three layers, not independent historical evidence.
+
+OpenOracle reports, escalation games, truth auctions, AMM activity, registrations, forks, and migrations use this same model. One decoded occurrence can create several semantic timeline entries because it can affect several entities. Current views keep stable entity and occurrence identities so replay remains idempotent.
+
+## What a replacement changes
+
+A chain reorganization marks occurrences and direct observations from displaced blocks noncanonical, preserves them as orphan evidence, and rebuilds the current canonical view from the common ancestor. Advancing the stored coverage floor similarly marks evidence below the new boundary noncanonical.
+
+A manifest, ABI, application, or projection change replays retained canonical history. It preserves raw occurrences, prior interpretations, and direct observations on retained blocks while removing obsolete derived materializations and rebuilding them with the new source hashes. Later tagged reads carry the new run and source provenance.
+
+Every replacement has an audit record. `chain_reorganizations` stores its boundary, primary reason, detection time, invalidating indexer run, and the ABI/application/projection hashes used by that run. `history_invalidation_causes` stores the complete cause set when one startup discovers several reasons, and `history_invalidation_occurrences` identifies affected blocks, transactions, logs, sampled states, address balances, and token metadata. A chain reorganization, manifest rewind, or coverage-floor change marks only observations outside the retained canonical boundary noncanonical and associates those displaced observations with the replacement. An ABI, application, or projection replay associates affected sampled entity-state observations with the replacement while leaving them canonical. Balance and token-metadata observations also remain canonical across a source replay, but receive replacement provenance only if a later reorganization, manifest rewind, or coverage reset displaces them. No path rewrites a recorded outcome or failure. Canonical APIs exclude evidence displaced from the chain or coverage boundary by default; audit surfaces return the invalidation provenance that exists for displaced or replay-associated evidence.
+
+From schema version 2 onward, `indexer_runs` identifies the schema/application versions, source hashes, configuration, whether indexing was enabled, and process lifetime. The lease-owning indexer compares the source markers already applied to each network and records any replay plus new markers atomically. A standby cannot suppress a replay merely by starting. Migrated version 1 evidence has no invented run or interpretation provenance.
+
+## Reading an Operations snapshot
+
+Every Operations response after indexing begins is anchored to one fully indexed canonical block. The overview and risk surfaces accept `atBlock` for a retained canonical boundary. Their `asOf` envelope distinguishes that selected block from the current indexed and observed heads and includes the latest invalidation and applied source hashes. Before the first indexed block, Operations returns empty evidence with an explicit availability message; its zero block is only a loading anchor.
+
+At the live head, the indexer samples bounded sets of least-recently observed pools, vaults, escalation games, and truth auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
+
+The [API reference](API_REFERENCE.md) is the canonical source for collection ordering, limits, point-in-time filters, opaque cursors, completeness fields, and invalidated-continuation behavior. The browser refetches the visible depth of paged Operations views after a committed update so it does not mix materialization generations.
+
+### Direct, derived, and presentation values
 
 | Value | Source classification |
 | --- | --- |
@@ -12,113 +37,31 @@ The fresh-install schema stores replayable domain projections for OpenOracle rep
 | Report dispute and settlement boundaries | Deterministic calculation from event fields using the indexed block or indexed timestamp selected by the report flag |
 | Escalation deposits and per-outcome totals | Direct event fields plus deterministic canonical aggregation |
 | Auction schedule, bids, clearing result, settlements, and refunds | Direct event fields plus deterministic canonical aggregation |
-| Current values absent from events | Current contract read at the latest fully indexed canonical block, stored in `entity_state_snapshots` with method, success/failure, block hash, and observation time |
+| Current values absent from events | Current contract read at the latest fully indexed canonical block. `entity_state_snapshots` is the replaceable latest materialization. From schema version 2 onward, every sampling attempt is appended to `entity_state_observations` with method, success/failure, block hash, observation time, run, and source hashes. Migration preserves each version 1 snapshot row that still exists, but cannot reconstruct attempts that version 1 already overwrote or invent their run/source provenance. |
 | Related addresses carried by one timeline event | Direct event fields; timeline entries do not claim cross-record inferred relationships. Risk summaries may associate approval transitions that share both an approval ID and registry, and expose that association as inferred evidence. |
 | Warning or urgency | Scanner presentation state, separate from protocol state |
 
-After indexing begins, every Operations response is anchored to the network's latest fully indexed canonical block. Its `asOf` object includes the indexed block/hash/timestamp, observed provider head, lag, phase, and last successful refresh. Before the first block is indexed, Operations endpoints return empty evidence with a synthetic zero block/timestamp boundary and `availability: "Awaiting indexed evidence"`; zero is only the loading anchor, not a claimed deployment or protocol value. A value absent from indexed events or a failed tagged read is unavailable evidence, never numeric zero.
+## One report through the four layers
 
-When the indexer is caught up, it samples at most 25 least-recently observed pools, vaults, escalation games, and truth auctions per polling cycle, with four concurrent entity-snapshot jobs using the shared five-operation RPC queue. Every call is tagged to the same indexed block. The canonical block hash is checked before and after the reads and again inside the database transaction. Repeated cycles at a static head continue through unsampled entities; once every entity has a snapshot at that block, the sampler stops until the indexed boundary advances. Failed reads are retained as bounded availability evidence. A reorg marks snapshots tied to displaced blocks stale and noncanonical. A manifest-history reset marks every snapshot for that chain stale and noncanonical before canonical logs and current reads are replayed.
+An OpenOracle submission is first a raw log occurrence. The indexer then appends the decoded report interpretation and creates semantic report and timeline rows. A report detail page reads the current materialization, while its round history retains every submitted or disputed occurrence. If the decoder changes, replay adds a new interpretation and rebuilds the materialization without changing the raw log.
 
-### OpenOracle reports
+The same separation applies across the indexed domains:
 
-A report is identified by `(chain_id, open_oracle_address, report_id)`. `ReportSubmitted` and every `ReportDisputed` event preserve a separate round. `ReportSettled` closes the lifecycle without overwriting the last round. Flag bit 0 selects timestamp time when set and block time when clear:
+| Surface | Retained evidence | Current materialization |
+| --- | --- | --- |
+| OpenOracle reports | Submitted, disputed, settled, rejected, and recovery occurrences plus coordinator decisions | Latest report round and lifecycle state |
+| Escalations and auctions | Deposits, claims, bids, settlements, refunds, and lifecycle events | Current totals, outcome state, and clearing summary |
+| Statoblast risk | Accounting checkpoints, liquidation approvals, and tagged pool/vault reads | Latest coherent risk snapshot and scanner assessment |
+| Trading | Pair identity, reserve synchronization, swaps, liquidity events, and LP transfers | Current market summary, positions, and bounded analytics |
+| Zoltar forks | Universe lineage, migration, REP burn, pool checkpoints, and escalation obligations | Current branch and migration summary |
+| Addresses and tokens | Participation occurrences plus tagged balance and metadata read outcomes | Latest successful balance and metadata values |
 
-```text
-dispute boundary  = reportTimestamp + disputeDelay
-settlement boundary = reportTimestamp + settlementTime
-```
+Exact domain calculations, filters, response fields, limits, and continuation rules belong to the [API reference](API_REFERENCE.md). This page owns only the evidence model.
 
-The exact boundary is inclusive for the new state: at the dispute boundary the dispute window is open, and at the settlement boundary the report is settleable. Settlement evidence takes precedence over clock-derived state.
+## Completeness and absence
 
-### Auctions and escalations
+History is complete only inside the selected network's configured and retrievable coverage boundary. The API exposes that boundary, the indexed block and hash, the current materialization generation, and collection-specific truncation or continuation fields. A missing row outside coverage is unknown, not zero or proof that an event never happened.
 
-Auction state uses the canonical indexed timestamp and exact `AuctionStarted`, `AuctionFinalized`, `BidSubmitted`, and `BidSettled` evidence. A finalized auction remains “bid settlements outstanding” while fewer bid settlements than submitted bids are observed. Escalation stake totals sum exact canonical `DepositOnOutcome.attoRepAmount` values by INVALID, NO, and YES; no floating-point arithmetic enters the projection.
+Balance and token-metadata failures are observation records, not numeric values. A successful attempt can update the current materialization; a failed attempt leaves the last successful materialization unchanged. Each balance target is recorded independently, so one failed native or token read does not erase the other outcomes from the same batch.
 
-Report, escalation, auction, fork, trading, and timeline catalog or detail pagination is newest first and stable on `(block_number, log_index, tx_hash)`. The block-global log index preserves EVM execution order; the transaction hash is only a final deterministic tie-breaker. Each opaque cursor is bound to the chain, domain, entity, indexed block, and indexed hash. Risk catalogs instead use independent pool-address and vault-address keysets at the same indexed boundary. A head change invalidates either cursor form instead of silently mixing evidence boundaries. Live refreshes refetch the currently visible depth for paged Operations views, and append requests are serialized with refresh work so a stale continuation cannot replace canonical evidence.
-
-### Risk and trading calculations
-
-Liquidation approval events are retained as a separate chain-scoped lifecycle keyed by the registry and approval ID (or receiver-vault nonce identity for nonce invalidations). Set, reserve, release, consume, revoke, and nonce-invalidation transitions remain canonical evidence and are linked into risk responses and semantic timelines. `consumedDebtAttoEth` is the debt moved by a consumed reservation. `releasedDebtAttoEth` is the unused part of that same reservation returned to the approval's available balance; it is not a separate release action. The resulting available, reserved, and consumed balances remain direct fields from that event. Approval events describe authorization state; they are not inferred liquidation executions.
-
-Pool capacity remains visible as an exact tagged value, but it is marked unusable for risk decisions when `protocolValid` is false and either settlement collateral or current minting capacity is nonzero. Vault health is unavailable when its open interest is nonzero and the coherent pool snapshot has the same invalid price. These invalid-price responses expose price provenance and remain unavailable until the protocol price becomes valid. Directly observed pool or vault bad debt takes precedence and remains a critical protocol state because it is not derived from price. Separately, vault risk is unavailable when the pool and vault snapshots have different block hashes; that response exposes both snapshot boundaries until coherent sampling catches up. Scanner severity does not reinterpret an expired protocol price as healthy or liquidatable.
-
-Pool capacity is the exact current minting capacity less settlement collateral, floored at zero; utilization retains the exact basis-point integer. Vault health reproduces both `SecurityPoolUtils.isVaultHealthyAtFactor` constraints: associated backing includes dispute-staked REP, while the migration-safety constraint uses only pool-held backing and the greater of the half-excess security multiplier or liquidation-bonus multiplier. Protocol state (`healthy`, `liquidatable`, or `bad-debt`) is stored separately from the scanner's named 12,000-bps warning band.
-
-For an AMM `Swap`, pre-swap reserves are reconstructed from emitted post-swap reserves and exact input/output amounts. Spot, execution price, and price impact remain numerator/denominator pairs; basis points are a display derivative. The 24-hour and seven-day volume and fee summaries aggregate exact event integers. TWAP integrates exact reserve ratios over the selected wall-clock window and reports covered seconds separately; the observation immediately before the window supplies its opening price. A partial window is labeled partial rather than extrapolated. Hourly candles retain exact rational OHLC values and observation counts.
-
-One trading response reads at most 10,001 newest price candidates and calculates TWAP and candles from at most 10,000. The candidates include one optional observation before the seven-day window so TWAP can establish its opening price. `observationsTruncated: true` means that oldest candidate was omitted; it does not by itself prove that an in-window observation was omitted. Consumers should inspect `observationRange` and the TWAP coverage state, while candles describe every retained in-window observation. Volume, fee, swap-count, and liquidity-event summaries use independent SQL aggregates over every canonical event in their stated window and remain complete even when price candidates are truncated.
-
-## Questions
-
-`ZoltarQuestionData.QuestionCreated` contains the complete question definition. The question ID is the hash of this definition and its outcome options, and none of these fields changes afterward.
-
-| Immutable                                                                                                     | Derived at viewing time   | Historical usage                                                         |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| ID, title, description, creation/start/end timestamps, ticks, scalar display range/unit, categorical outcomes | Scheduled, open, or ended | Security-pool deployments and universe forks that reference the question |
-
-Question pages therefore use a lifecycle timeline rather than presenting immutable metadata as a changing metric.
-
-## Security pools
-
-`SecurityPoolFactory.DeploySecurityPool` establishes the pool's immutable lineage and dependencies. `PoolAccountingCheckpoint` is the authoritative complete accounting snapshot after mutations. Smaller lifecycle events supply state that is not part of the accounting snapshot.
-
-| Immutable deployment data                                                                                                                                                         | Changes over time                                                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pool, parent, question and universe IDs; truth auction, price coordinator, and share-token addresses; security multiplier; initial priority fee; initial retention and collateral | Settlement collateral, total and fee-eligible capacity ownership, claimable and unallocated fees, fee index and remainders, retention rate, total REP backing units, share supply, system/fork state, escalation game, child pools, vault count |
-
-Pool charts plot the bounded checkpoint history returned by the state API for collateral, REP-denominated capacity ownership, and claimable fees. The history response defaults to 1,000 records, is capped at 2,000, and reports when it is truncated; the database retains the full canonical series. Exact attoETH and attoREP values remain stored and the UI displays them in ETH and REP respectively. Because the series have different magnitudes, each chart line is independently scaled from its minimum to maximum observed checkpoint; the graph compares trend shapes, not absolute heights or percentage returns. Points are spaced by checkpoint order rather than elapsed time, while their endpoint labels show actual dates.
-
-## Price histories
-
-Each pool's `OpenOraclePriceCoordinator` emits `RepEthPriceSet` when its initial price is seeded and `PriceReported` after an accepted report settles. augurScan stores both as a 1e18-scaled REP-per-ETH coordinator-state series. An origin pool seeds zero, while a child pool inherits its parent's current value; neither seed has a settlement timestamp or establishes the coordinator's timestamp-based price validity. `PriceReported` observations are accepted settlements and carry that coordinator's settlement timestamp. Rejected reports are retained in the activity log but do not create price observations. The chart does not reconstruct prices from raw OpenOracle reports.
-
-When a network config supplies its deployed Augur `TwoWayConstantProductFactory`, `PairCreated` establishes a one-pair-per-pool market identity and each pair `Sync` event supplies exact YES and NO reserves. A `Sync` with a nonzero total creates a price observation, while a zero-total event remains available only as raw activity evidence. augurScan derives the same conditional spot values as the AMM:
-
-```text
-conditional_yes_bps = floor(10,000 * NO reserve / (YES reserve + NO reserve))
-conditional_no_bps  = 10,000 - conditional_yes_bps
-```
-
-The first calculation floors integer division and the second is its exact complement, so the stored values always total 10,000 basis points. Conceptually, the two ratios are NO reserve / total reserve for conditional YES and YES reserve / total reserve for conditional NO. The database retains the exact reserves and basis-point observations. The chart uses a shared 0–100% axis because the two conditional values are complementary. These values are conditional on a valid resolution and remain manipulable spot prices; historical display does not turn them into a TWAP or manipulation-resistant oracle. A configured AMM factory must be indexed from at or before its deployment to provide complete pair and reserve history.
-
-Configured Uniswap venues add a separate universe-scoped spot-price history. V2 and V3 markets must pair the pool's exact universe REP ERC-20 with a configured WETH or USDC contract. V4 markets must pair that REP with native ETH or configured USDC, use no hook, and use one of the repository's four standard fee/tick-spacing configurations. V4 ERC-20 currencies are ordered by address when deriving the pool ID; native ETH uses the zero-address currency. This identity check prevents a parent REP pool or a sibling child-universe REP pool from supplying the displayed series, and the configured USDC identity supplies its fixed 6-decimal quote scale.
-
-For quote-token base-unit scale `D = 10^quoteDecimals`, `Q = 2^96`, and V3/V4 `x = sqrtPriceX96`, augurScan derives a 1e18-scaled REP-per-quote value as follows. `D` is `10^18` for WETH or native ETH and `10^6` for USDC:
-
-```text
-V2, REP is token0: floor(reserve0 * D / reserve1)
-V2, REP is token1: floor(reserve1 * D / reserve0)
-V3/V4, REP is token0: floor(Q^2 * D / x^2)
-V3/V4, REP is token1: floor(x^2 * D / Q^2)
-```
-
-Only positive reserve or square-root-price inputs create returned chart points, and every division uses positive integer arithmetic that floors the result. Each pool and fee tier remains a distinct line. When every returned line has the same quote symbol, the lines share one numeric range. When the result mixes quote symbols, the renderer scales every line independently; labels and exact point values carry the WETH, native ETH, or USDC unit, so line height is not a cross-quote comparison.
-
-The observations are event-time marginal prices used only for historical display. They are not inputs to the Open Oracle, the coordinator, or protocol settlement. They do not use V2 cumulative-price fields, calculate a TWAP, enforce minimum liquidity, or prove resistance to same-block manipulation. REP/WETH, REP/native ETH, and REP/USDC are explicitly labeled and are not placed on one shared numeric axis. Quote-token decimals are applied before producing the 1e18-scaled REP-per-quote ratio. The indexer retains raw reserves or square-root prices, exact emitted liquidity, event and transaction identity, token order, pool ID/address, fee, tick spacing, and hook address.
-
-## Vaults
-
-A vault is identified by its owner address within one security pool. `VaultAccountingCheckpoint` contains the resulting state after each vault mutation.
-
-| Identity                         | Changes over time                                                                                                                |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Network, pool, and vault address | REP backing units, REP-denominated capacity ownership, claimable fees, fee index, fee remainder, and resulting pool denominators |
-
-Vault charts plot REP backing units, capacity ownership, and claimable fees. REP backing units are protocol accounting units and are not mislabeled as an ERC-20 balance; capacity ownership is an attoREP-denominated accounting amount. Each line is independently scaled to its observed range and points are spaced by checkpoint order, so slopes are not rates and line heights cannot be compared as absolute quantities.
-
-## Known addresses and balances
-
-The rich list records transaction senders plus ABI-typed addresses referenced by protocol calls and events. Address-shaped text in titles, descriptions, or other string fields is not participant evidence. Each observation retains its transaction, canonical block occurrence, and role. A pool association means only that the address and pool occurred in the same indexed protocol transaction; it does not prove ownership of the pool or a vault position. Vault positions are reported separately from the latest canonical accounting checkpoint for that vault address and pool. Reorganizations preserve orphaned observations but remove them from current counts.
-
-When a polling cycle begins with no block left to index, augurScan refreshes a bounded batch of addresses, prioritizing addresses that are missing a known asset. Block ingestion takes priority, so a cycle that starts behind advances canonical history without also refreshing balances. A caught-up refresh reads ETH (SepoliaETH on Sepolia), WETH, genesis REP, and every discovered child REP token at one canonical block and stores the exact balance snapshot. REP balances remain separate because tokens from different universes do not share interchangeable semantics. A newly discovered token remains absent until that address rotates through the queue, and an address with no snapshot is pending rather than known to hold zero. The API returns sampled and known token counts with bounded per-token REP and WETH records plus the network's native balance; a response reports when a 100-record asset detail is truncated, and the UI marks incomplete rows as partial. Rows can have different balance blocks, and the UI reports the oldest represented block instead of implying one atomic global snapshot.
-
-## Zoltar universes
-
-`UniverseInitialized` establishes genesis identity and `DeployChild` establishes a child universe's deterministic lineage. Fork and supply events update the live state.
-
-| Immutable lineage                                        | Changes over time                                                                                                                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Universe ID, parent universe, forking outcome, REP token | Fork time/question/initiator, fork threshold, fork initiator's migration balance immediately after the fork, theoretical REP supply, child count, linked pool count |
-
-The supply chart uses `UniverseInitialized`, `DeployChild`, `UniverseForked`, `MigrationRepAdded`, and `RepBurned`. Unlike multi-series pool and vault charts, its y-axis is the absolute theoretical REP amount; points remain spaced by checkpoint order. The displayed migration balance belongs only to the fork initiator at the moment `UniverseForked` was emitted. augurScan does not currently aggregate later caller-specific migration balances. The lineage graph connects each returned canonical universe to its returned parent. The catalog defaults to 500 universes and caps requests at 1,000; the global network selector keeps the graph scoped to one chain and the UI reports when that chain's result is truncated.
+Use `canonical=all` when auditing replacements. A noncanonical observation identifies the replacement that displaced it and reports chain reorganization, manifest supersession, or coverage reset as its evidence status. Follow every documented cursor until completion; do not infer completeness from the first page.

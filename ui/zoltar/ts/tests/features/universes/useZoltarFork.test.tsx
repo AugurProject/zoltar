@@ -9,6 +9,7 @@ import { useZoltarFork, type UseZoltarForkDependencies } from '../../../features
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UseZoltarForkState = ReturnType<typeof useZoltarFork>
@@ -115,7 +116,13 @@ describe('useZoltarFork', () => {
 	test('does not request a fork transaction when the active wallet account changed', async () => {
 		const ensureZoltarUniverse = mock(async () => createUniverse())
 		const onTransactionRequested = mock(() => undefined)
-		const onTransactionFailed = mock(() => undefined)
+		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
+		const admittedIntent = transactionState.pendingIntent
+		const admittedRequestKey = transactionState.pendingRequestKey
+		const admittedPresentation = transactionState.active
+		const onTransactionFailed = mock((message: string) => {
+			transactionState = markTransactionFailed(transactionState, message)
+		})
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness() {
 			hookState = useZoltarFork(
@@ -148,7 +155,55 @@ describe('useZoltarFork', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(transactionState.inFlightCount).toBe(1)
+		expect(transactionState.pendingIntent).toBe(admittedIntent)
+		expect(transactionState.pendingRequestKey).toBe(admittedRequestKey)
+		expect(transactionState.active).toBe(admittedPresentation)
+	})
+
+	test('does not execute or finish a fork transaction rejected by the global admission gate', async () => {
+		resetEnvironment?.()
+		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		const ensureZoltarUniverse = mock(async () => createUniverse())
+		const forkZoltarUniverse = mock(async () => {
+			throw new Error('forkZoltarUniverse should not be called when admission is rejected')
+		})
+		const onTransactionFinished = mock(() => undefined)
+		let hookState: UseZoltarForkState | undefined
+		const Harness = function ZoltarForkHarness() {
+			hookState = useZoltarFork(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					environmentRefreshKey: 0,
+					ensureZoltarUniverse,
+					onTransactionFinished,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => false,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: false,
+					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
+				},
+				createZoltarForkDependencies({ forkZoltarUniverse }),
+			)
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).forkZoltar()
+		})
+
+		expect(forkZoltarUniverse).not.toHaveBeenCalled()
+		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
+		expect(onTransactionFinished).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).zoltarForkFeedback?.status.detail).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
 	})
 
 	test('scopes mutable pre-fork question selection by account, environment, and universe', async () => {

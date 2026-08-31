@@ -1,5 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import type { ComponentChild } from 'preact'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
@@ -200,6 +201,7 @@ export function ReportingSection({
 	forkAlreadyTriggered = false,
 	loadingReportingDetails,
 	lockedReason,
+	onApproveReportingRep,
 	onLoadReporting,
 	onOpenForkWorkflow,
 	onOpenPriceOracle,
@@ -221,6 +223,7 @@ export function ReportingSection({
 }: ReportingSectionProps) {
 	const presetBlockerId = useId()
 	const reportingStageDetailId = useId()
+	const reportDisabledReasonId = useId()
 	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const [pendingWithdrawOutcome, setPendingWithdrawOutcome] = useState<ReportingOutcomeKey | undefined>(undefined)
@@ -228,6 +231,7 @@ export function ReportingSection({
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
+	const usesWalletFunding = effectiveReportingDetails?.contributionFunding === 'wallet'
 	const escalationPhase = activeReportingDetails === undefined ? undefined : getEscalationPhase(activeReportingDetails)
 	const escalationGameStartTimestamp = getEscalationGameStartTimestamp(activeReportingDetails?.activationTime)
 	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
@@ -317,10 +321,8 @@ export function ReportingSection({
 		return reportingCopy.noTimerChange
 	})()
 	const reportingRecheckTimestamp = rewardWindowFillTimestamp !== undefined && effectiveCurrentTimestamp !== undefined && rewardWindowFillTimestamp > effectiveCurrentTimestamp ? rewardWindowFillTimestamp : projectedFinalizationTimestamp
-	const resultingAvailableReportingRep =
-		effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
-			? undefined
-			: effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep - actualReportDepositAmount
+	const availableReportingRep = usesWalletFunding ? effectiveReportingDetails?.viewerWalletRepBalanceAttoRep : effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep
+	const resultingAvailableReportingRep = availableReportingRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > availableReportingRep ? undefined : availableReportingRep - actualReportDepositAmount
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
@@ -329,11 +331,11 @@ export function ReportingSection({
 	const maxContributionAmount = (() => {
 		if (selectedOutcome === undefined) return { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
 		if (effectiveReportingDetails === undefined) return { amountAttoRep: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
-		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep === undefined) return { amountAttoRep: undefined, reason: reportingCopy.loadingPoolHeldVaultRepBacking }
-		if (effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep <= 0n) return { amountAttoRep: undefined, reason: reportingCopy.poolHeldVaultRepBackingEmpty }
+		if (availableReportingRep === undefined) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.loadingWalletRepBalance : reportingCopy.loadingPoolHeldVaultRepBacking }
+		if (availableReportingRep <= 0n) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.walletRepBalanceEmpty : reportingCopy.poolHeldVaultRepBackingEmpty }
 		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amountAttoRep: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
 		if (effectiveReportingDetails.status === 'not-started') {
-			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep < remainingSelectedOutcomeCapacity ? effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep : remainingSelectedOutcomeCapacity
+			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || availableReportingRep < remainingSelectedOutcomeCapacity ? availableReportingRep : remainingSelectedOutcomeCapacity
 			if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 			return {
 				amountAttoRep: cappedAmount,
@@ -345,7 +347,7 @@ export function ReportingSection({
 		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThresholdAttoRep - selectedSide.balance)
 		if (maxContributionPreview.actualDepositAmount === undefined) return { amountAttoRep: undefined, reason: maxContributionPreview.reason }
 		let cappedAmount = maxContributionPreview.actualDepositAmount
-		if (cappedAmount > effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep) cappedAmount = effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep
+		if (cappedAmount > availableReportingRep) cappedAmount = availableReportingRep
 		if (remainingSelectedOutcomeCapacity !== undefined && cappedAmount > remainingSelectedOutcomeCapacity) cappedAmount = remainingSelectedOutcomeCapacity
 		if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
 		return {
@@ -361,6 +363,7 @@ export function ReportingSection({
 		getReportingReportGuardMessage({
 			actualDepositAmount: actualReportDepositAmount,
 			accountAddress: accountState.address,
+			contributionFunding: effectiveReportingDetails?.contributionFunding,
 			contributionPreviewReason: reportContributionPreview?.reason,
 			isOnActiveAppChain,
 			remainingSelectedOutcomeCapacity,
@@ -370,7 +373,27 @@ export function ReportingSection({
 			selectedAmount,
 			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
+			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
 		})
+	const reportingApprovalGuardMessage = getReportingReportGuardMessage({
+		actualDepositAmount: actualReportDepositAmount,
+		accountAddress: accountState.address,
+		contributionFunding: effectiveReportingDetails?.contributionFunding,
+		contributionPreviewReason: reportContributionPreview?.reason,
+		isOnActiveAppChain,
+		remainingSelectedOutcomeCapacity,
+		reportAmount: reportingForm.reportAmount,
+		reportingStatus,
+		selectedOutcome,
+		selectedAmount,
+		requireAllowance: false,
+		viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
+		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+		viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
+		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
+	})
+	const reportingRepApprovalRequired = usesWalletFunding && actualReportDepositAmount !== undefined && actualReportDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
 	const withdrawGuardMessage =
@@ -406,6 +429,20 @@ export function ReportingSection({
 				) : undefined}
 			</div>
 		)
+	let reportingRepApprovalAction: ComponentChild
+	if (usesWalletFunding) {
+		reportingRepApprovalAction = reportingRepApprovalRequired ? (
+			<TransactionActionButton
+				idleLabel={reportingCopy.approveReportingRep}
+				pendingLabel={reportingCopy.approvingReportingRep}
+				onClick={onApproveReportingRep}
+				pending={reportingActiveAction === 'approveReportingRep'}
+				availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined, reason: !isOnActiveAppChain ? getWrongNetworkReason() : reportingApprovalGuardMessage }}
+			/>
+		) : (
+			<TransactionActionButton idleLabel={reportingCopy.reportingRepApproved} pendingLabel={reportingCopy.reportingRepApproved} onClick={() => undefined} disabled showDisabledReason={false} tone='secondary' />
+		)
+	}
 
 	const handleWithdrawEscalation = (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => {
 		setPendingWithdrawOutcome(outcome)
@@ -442,6 +479,8 @@ export function ReportingSection({
 	}
 	const shouldRenderSharedReportSettlementDisabledReason = sharedReportSettlementDisabledReason !== undefined && sharedReportSettlementDisabledReasonId === settlementDisabledReasonId
 	const reportDisabledReasonElementId = sharedReportSettlementDisabledReasonId ?? (reportingStageBanner?.detail === reportActionDisabledReason ? reportingStageDetailId : undefined)
+	const standaloneReportDisabledReason = reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
+	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined ? undefined : reportDisabledReasonId)
 	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
@@ -529,9 +568,9 @@ export function ReportingSection({
 						</div>
 					</div>
 					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
-					{effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep === undefined ? undefined : (
+					{availableReportingRep === undefined ? undefined : (
 						<p className='detail'>
-							{reportingCopy.availablePoolHeldVaultRepBackingForReporting} <CurrencyValue value={effectiveReportingDetails.viewerPoolHeldVaultRepBackingAttoRep} suffix={commonCopy.rep} />.
+							{usesWalletFunding ? reportingCopy.availableWalletRepForReporting : reportingCopy.availablePoolHeldVaultRepBackingForReporting} <CurrencyValue value={availableReportingRep} suffix={commonCopy.rep} />.
 						</p>
 					)}
 					<div className='field'>
@@ -594,7 +633,7 @@ export function ReportingSection({
 						<p className='detail'>
 							{reportingCopy.currentEscalationDisputeStakeLead}
 							<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
-							{reportingCopy.acceptedAmountTail}
+							{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
 						</p>
 					)}
 					<TransactionReview
@@ -610,7 +649,7 @@ export function ReportingSection({
 								label: reportingCopy.recheckBy,
 								value: reportingRecheckTimestamp === undefined ? commonCopy.metricUnavailablePlaceholder : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingRecheckTimestamp} />,
 							},
-							{ label: reportingCopy.poolHeldVaultRepBackingAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+							{ label: usesWalletFunding ? reportingCopy.walletRepAfterReport : reportingCopy.poolHeldVaultRepBackingAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
 						]}
 						risks={[reportingCopy.reportingDisputeStakeRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
@@ -621,17 +660,23 @@ export function ReportingSection({
 								<LoadingAwareText>{sharedReportSettlementDisabledReason}</LoadingAwareText>
 							</p>
 						) : undefined}
-						<div className='actions'>
+						<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
+							{reportingRepApprovalAction}
 							<TransactionActionButton
 								idleLabel={reportButtonLabel}
 								pendingLabel={reportingCopy.submittingReport}
 								onClick={onReportOutcome}
 								pending={reportingActiveAction === 'reportOutcome'}
 								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
-								disabledReasonElementId={reportDisabledReasonElementId}
-								showDisabledReason={reportDisabledReasonElementId === undefined}
+								disabledReasonElementId={effectiveReportDisabledReasonElementId}
+								showDisabledReason={false}
 							/>
 						</div>
+						{standaloneReportDisabledReason === undefined ? undefined : (
+							<p className='detail disabled-reason' id={reportDisabledReasonId}>
+								<LoadingAwareText>{standaloneReportDisabledReason}</LoadingAwareText>
+							</p>
+						)}
 					</div>
 				</SectionBlock>
 			) : undefined}
