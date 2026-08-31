@@ -5,18 +5,12 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '../../../features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
-import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../../../protocol/index.js'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '../../../protocol/deploymentHelpers.js'
+import { getDeploymentSteps, getMulticall3Address, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../../../protocol/index.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import {
-	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE as SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
-	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS as SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
-	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE as SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-} from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
@@ -126,7 +120,7 @@ void describe('deployment helpers', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'uniformPriceDualCapBatchAuctionFactory', 'scalarOutcomes', 'securityPoolUtils', 'openOracle', 'zoltarQuestionData', 'zoltar', 'shareTokenFactory', 'priceOracleManagerAndOperatorQueuerFactory'])
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
 	})
@@ -189,22 +183,10 @@ void describe('deployment helpers', () => {
 		}
 	})
 
-	void test('getOpenOracleAddress matches the deterministic OpenOracle deployment step', () => {
-		const openOracleStep = getDeploymentSteps().find(step => step.id === 'openOracle')
-
-		expect(openOracleStep?.address).toBe(getOpenOracleAddress())
-	})
-
 	void test('getMulticall3Address matches the deterministic Multicall3 deployment step', () => {
 		const multicall3Step = getDeploymentSteps().find(step => step.id === 'multicall3')
 
 		expect(multicall3Step?.address).toBe(getMulticall3Address())
-	})
-
-	void test('oracle dispute gas and profitability parameters match simulator deployment helpers', () => {
-		expect(SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE).toBe(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE)
-		expect(SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE).toBe(ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE)
-		expect(SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS).toBe(OPEN_ORACLE_SECURITY_MULTIPLIER_BPS)
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {

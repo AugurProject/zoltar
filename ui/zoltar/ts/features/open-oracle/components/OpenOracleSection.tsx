@@ -13,6 +13,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, formatOpenOracleMultiplier, getOpenOracleReportStatus, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
@@ -21,7 +22,7 @@ import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { OpenOracleSectionProps } from '../../types.js'
+import type { OpenOracleSectionProps, OpenOracleView } from '../../types.js'
 import {
 	BROWSE_PAGE_SIZE,
 	type BrowseLoadState,
@@ -38,6 +39,13 @@ import {
 	type SelectedReportModal,
 } from './OpenOracleReportContent.js'
 import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
+
+function getOpenOracleRouteHeader(view: OpenOracleView) {
+	if (view === 'browse') return { description: openOracleCopy.browseReportsDescription, title: openOracleCopy.browseReports }
+	if (view === 'create') return { description: openOracleCopy.createReportDescription, title: openOracleCopy.createReport }
+	return { description: openOracleCopy.selectedReportDescription, title: openOracleCopy.openOracleReportDetails }
+}
+
 export function OpenOracleSection({
 	activeView,
 	accountState,
@@ -74,6 +82,7 @@ export function OpenOracleSection({
 	onActiveViewChange,
 }: OpenOracleSectionProps) {
 	const view = activeView
+	const routeHeader = getOpenOracleRouteHeader(view)
 	const chainCurrentTimestamp = useChainTimestamp()
 	const chainCurrentBlockNumber = useChainBlockNumber()
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
@@ -200,6 +209,7 @@ export function OpenOracleSection({
 	}
 	return (
 		<div className='route-view-flow'>
+			<RouteHeader description={routeHeader.description} eyebrow={openOracleCopy.openOracleGame} title={routeHeader.title} />
 			{view === 'browse' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					<SectionBlock
@@ -214,7 +224,7 @@ export function OpenOracleSection({
 							/>
 						}
 						density='compact'
-						title={openOracleCopy.browseReports}
+						title={openOracleCopy.reportDirectory}
 						variant='plain'
 					>
 						<div className='filter-toolbar'>

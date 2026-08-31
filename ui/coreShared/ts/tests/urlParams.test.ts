@@ -1,17 +1,14 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../lib/openOracleUrlParams.js'
 import {
-	readOpenOracleReportIdQueryParam,
-	readOpenOracleViewQueryParam,
 	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQuestionIdQueryParam,
 	readSecurityPoolQueryParam,
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
 	readZoltarViewQueryParam,
-	writeOpenOracleReportIdQueryParam,
-	writeOpenOracleViewQueryParam,
 	writeSecurityPoolsViewQueryParam,
 	writeSecurityPoolQuestionIdQueryParam,
 	writeSecurityPoolQueryParam,

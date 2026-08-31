@@ -5,6 +5,14 @@ import { OpenOracleSection } from '@zoltar/ui-zoltar/features/open-oracle/compon
 import { SecurityPoolsSection } from '../../features/security-pools/components/SecurityPoolsSection.js'
 import type { Route } from '../../types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../copy/app.js'
+
+export const STATOBLAST_NOT_FOUND_LINKS = [
+	{ href: '#/deploy', label: commonCopy.deploy },
+	{ href: '#/security-pools', label: commonCopy.securityPools },
+	{ href: '#/open-oracle', label: statoblastAppCopy.openOracle },
+] as const
 
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
@@ -29,8 +37,8 @@ export function AppRouteContent({ deploy, openOracle, readBackendMessage, route,
 		case 'open-oracle':
 			return <OpenOracleSection {...openOracle} />
 		case 'not-found':
-			return <NotFoundSection />
+			return <NotFoundSection links={STATOBLAST_NOT_FOUND_LINKS} />
 		default:
-			return <NotFoundSection />
+			return <NotFoundSection links={STATOBLAST_NOT_FOUND_LINKS} />
 	}
 }
