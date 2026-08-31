@@ -1,4 +1,5 @@
 import {
+	decodeOperationsResponseValue,
 	type EntityHistoryCoverageValue,
 	isAccountTransactionValue,
 	isActivityRecordValue,
@@ -20,6 +21,11 @@ import {
 	isUniverseStateEntityValue,
 	isVaultStateEntityValue,
 	type JsonValue,
+	type OperationsResponse,
+	operationRecords,
+	operationsCatalogRecords,
+	operationsRiskPagination,
+	operationsRiskRecords,
 } from './api-validation.ts'
 import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
@@ -1664,6 +1670,10 @@ const demoOperations = (chainId: string, atBlock?: string) => {
 		observedHead,
 		lagBlocks: nonnegativeDifference(observedHead, selectedBlock),
 		historyDepthBlocks: nonnegativeDifference(indexedHead, selectedBlock),
+		invalidationId: '0',
+		abiSourceHash: 'sha256:demo-abi',
+		applicationSourceHash: 'sha256:demo-application',
+		projectionSourceHash: 'sha256:demo-projection',
 		phase: historical ? 'historical' : (network?.phase ?? 'live'),
 		lastSuccessfulRefresh: network?.last_success_at ?? new Date().toISOString(),
 		historical,
@@ -1780,6 +1790,7 @@ const demoOperations = (chainId: string, atBlock?: string) => {
 				event_data: { previousNonce: '41', newNonce: '42' },
 			},
 		],
+		pagination: { poolTotal: 1, poolHasMore: false, vaultTotal: 1, vaultHasMore: false },
 	}
 	return {
 		chainId,
@@ -2945,19 +2956,7 @@ const requiredChainId = () => {
 	return chainId
 }
 
-type OperationsResponse = {
-	readonly chainId: string | number
-	readonly asOf: Record<string, unknown>
-	readonly data: Record<string, unknown>
-}
-
-const decodeOperationsResponse = (value: unknown): OperationsResponse => {
-	if (!isRecord(value) || (!isString(value['chainId']) && typeof value['chainId'] !== 'number') || !isRecord(value['asOf']) || !isRecord(value['data']))
-		throw new Error('Operations response is malformed')
-	return { chainId: value['chainId'], asOf: value['asOf'], data: value['data'] }
-}
-
-const operationRecords = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : [])
+const decodeOperationsResponse = decodeOperationsResponseValue
 type PagedOperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
 type OperationsCatalogSection = PagedOperationsCatalogSection | 'risk'
 const operationsCatalogSection = (): OperationsCatalogSection | undefined => {
@@ -3246,23 +3245,25 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	const renderContext = preservedContext ?? captureOperationsRenderContext()
 	const { asOf, data } = response
 	const selected = location.pathname.split('/')[2] ?? 'overview'
-	const reports = operationRecords(data['reports'])
-	const escalations = operationRecords(data['escalations'])
-	const auctions = operationRecords(data['auctions'])
-	const forks = operationRecords(data['forks'])
+	const reports = operationsCatalogRecords('reports', data['reports'])
+	const escalations = operationsCatalogRecords('escalations', data['escalations'])
+	const auctions = operationsCatalogRecords('auctions', data['auctions'])
+	const forks = operationsCatalogRecords('forks', data['forks'])
 	const changes = operationRecords(data['recentChanges'])
 	const prices = operationRecords(data['prices'])
-	const trading = operationRecords(data['trading'])
-	const timeline = operationRecords(data['timeline'])
-	const integrity = operationRecords(data['integrity'])
+	const trading = operationsCatalogRecords('trading', data['trading'])
+	const timeline = operationsCatalogRecords('timeline', data['timeline'])
+	const integrity = operationsCatalogRecords('integrity', data['integrity'])
 	const selectedCatalogPage = isRecord(data['_catalogPage']) ? data['_catalogPage'] : undefined
 	const totals = isRecord(data['totals']) ? data['totals'] : {}
 	const selectedNetwork = latestNetworks.find((network) => String(network.chain_id) === requiredChainId())
 	const selectedNetworkScope = `Selected network · ${selectedNetwork?.name ?? `chain ${requiredChainId()}`} · chain ${requiredChainId()}`
-	const risk = isRecord(data['risk']) ? data['risk'] : {}
-	const riskPagination = isRecord(risk['pagination']) ? risk['pagination'] : {}
-	const pools = operationRecords(risk['pools'])
-	const vaults = operationRecords(risk['vaults'])
+	const riskValue = data['risk']
+	if (riskValue !== undefined && !isRecord(riskValue)) throw new Error('Operations risk is malformed')
+	const risk = isRecord(riskValue) ? riskValue : {}
+	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
+	const pools = operationsRiskRecords('pools', risk['pools'])
+	const vaults = operationsRiskRecords('vaults', risk['vaults'])
 	const approvals = operationRecords(risk['approvalEvents']).sort(compareCanonicalEventPosition)
 	const recentLiquidations = operationRecords(risk['recentLiquidations'])
 	const freshness = element('div', 'operations-freshness')
@@ -3605,7 +3606,7 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	const catalogPage = selectedCatalogPage
 	const catalogSection = operationsCatalogSection()
 	if (catalogPage !== undefined && catalogSection !== undefined && catalogSection !== 'risk')
-		operationsCatalogState = { chainId: requiredChainId(), section: catalogSection, items: operationRecords(data[catalogSection]) }
+		operationsCatalogState = { chainId: requiredChainId(), section: catalogSection, items: operationsCatalogRecords(catalogSection, data[catalogSection]) }
 	if (catalogPage?.['hasMore'] === true && typeof catalogPage['nextCursor'] === 'string' && selected !== 'overview') {
 		const loadMore = document.createElement('button')
 		loadMore.type = 'button'
@@ -3621,10 +3622,10 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			loadMore.setAttribute('aria-busy', 'true')
 			loadMoreStatus.textContent = 'Loading older canonical records…'
 			const section = operationsCatalogSection()
-			if (section === undefined) return
+			if (section === undefined || section === 'risk') return
 			const loaded = await loadOperations({
 				live: true,
-				catalogTargetCount: operationRecords(data[section]).length + 100,
+				catalogTargetCount: operationsCatalogRecords(section, data[section]).length + 100,
 				preservedContext: paginationContext,
 			})
 			if (!loaded && loadMore.isConnected) {
@@ -4244,7 +4245,7 @@ const loadOperationsCatalog = async (section: PagedOperationsCatalogSection, ret
 			first ??= response
 			last = response
 			return {
-				items: operationRecords(response.data['items']),
+				items: operationsCatalogRecords(section, response.data['items'], true),
 				...(response.data['hasMore'] === true && typeof response.data['nextCursor'] === 'string' ? { nextCursor: response.data['nextCursor'] } : {}),
 			}
 		},
@@ -4272,10 +4273,10 @@ const loadOperationsRiskCatalog = async (poolTargetCount: number, vaultTargetCou
 			snapshotIdentity ??= responseIdentity
 			first ??= response
 			last = response
-			const pagination = isRecord(response.data['pagination']) ? response.data['pagination'] : {}
+			const pagination = operationsRiskPagination(response.data['pagination'], true)
 			return {
-				left: operationRecords(response.data['pools']),
-				right: operationRecords(response.data['vaults']),
+				left: operationsRiskRecords('pools', response.data['pools'], true),
+				right: operationsRiskRecords('vaults', response.data['vaults'], true),
 				...(pagination['poolHasMore'] === true && typeof pagination['poolNextCursor'] === 'string' ? { leftNextCursor: pagination['poolNextCursor'] } : {}),
 				...(pagination['vaultHasMore'] === true && typeof pagination['vaultNextCursor'] === 'string' ? { rightNextCursor: pagination['vaultNextCursor'] } : {}),
 			}

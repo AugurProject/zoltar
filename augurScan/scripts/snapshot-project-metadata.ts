@@ -1,12 +1,17 @@
 import { createHash } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const projectRoot = path.resolve(import.meta.dir, '../..')
 const contractsRoot = path.join(projectRoot, 'solidity/contracts')
 const compiledArtifactPath = path.join(projectRoot, 'solidity/artifacts/Contracts.json')
-const outputPath = path.resolve(import.meta.dir, '../config/abis.json')
-const manifestsRoot = path.resolve(import.meta.dir, '../config/manifests')
+const outputRootIndex = process.argv.indexOf('--output-root')
+const configuredOutputRoot = outputRootIndex < 0 ? undefined : process.argv[outputRootIndex + 1]
+if (outputRootIndex >= 0 && (configuredOutputRoot === undefined || configuredOutputRoot === '')) throw new Error('--output-root requires a directory')
+const configOutputRoot = configuredOutputRoot === undefined ? path.resolve(import.meta.dir, '../config') : path.resolve(configuredOutputRoot)
+const outputPath = path.join(configOutputRoot, 'abis.json')
+const manifestsRoot = path.join(configOutputRoot, 'manifests')
+await mkdir(manifestsRoot, { recursive: true })
 
 const collectSources = async (directory: string, relativeRoot = path.join(projectRoot, 'solidity')): Promise<Record<string, { content: string }>> => {
 	const sources: Record<string, { content: string }> = {}

@@ -101,6 +101,7 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 					filePath.startsWith('shared/') ||
 					filePath === 'augurScan/schema.sql' ||
 					filePath.startsWith('augurScan/migrations/') ||
+					filePath.startsWith('augurScan/config/') ||
 					filePath.startsWith('augurScan/src/') ||
 					filePath.startsWith('augurScan/tests/') ||
 					filePath.startsWith('augurScan/scripts/') ||

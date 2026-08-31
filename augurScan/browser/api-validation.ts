@@ -13,6 +13,113 @@ export const isJsonValue = (value: unknown): value is JsonValue => {
 export const isJsonRecord = (value: unknown): value is Record<string, JsonValue> => isRecord(value) && Object.values(value).every(isJsonValue)
 export const isNullableJsonRecord = (value: unknown): value is Record<string, JsonValue> | null => value === null || isJsonRecord(value)
 
+export type OperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
+export type OperationsResponse = {
+	readonly chainId: string | number
+	readonly asOf: Record<string, unknown>
+	readonly data: Record<string, unknown>
+}
+
+const isUnsignedIntegerString = (value: unknown): value is string => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
+const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+const isHash = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{64}$/.test(value)
+const isAddress = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value)
+
+const isOperationsAsOf = (value: unknown): value is Record<string, unknown> =>
+	isRecord(value) &&
+	isUnsignedIntegerString(value['blockNumber']) &&
+	isHash(value['blockHash']) &&
+	isUnsignedIntegerString(value['blockTimestamp']) &&
+	isUnsignedIntegerString(value['indexedHead']) &&
+	isUnsignedIntegerString(value['invalidationId']) &&
+	isString(value['abiSourceHash']) &&
+	isString(value['applicationSourceHash']) &&
+	isString(value['projectionSourceHash']) &&
+	isString(value['phase']) &&
+	typeof value['historical'] === 'boolean'
+
+const validateOperationsPagination = (data: Record<string, unknown>): void => {
+	const total = data['total']
+	if (total !== undefined && !isNonNegativeSafeInteger(total) && !isUnsignedIntegerString(total)) throw new Error('Operations total is malformed')
+	for (const [name, value] of [
+		['limit', data['limit']],
+		['offset', data['offset']],
+	] as const)
+		if (value !== undefined && !isNonNegativeSafeInteger(value)) throw new Error(`Operations ${name} is malformed`)
+	if (data['hasMore'] !== undefined && typeof data['hasMore'] !== 'boolean') throw new Error('Operations hasMore is malformed')
+	if (data['nextCursor'] !== undefined && !isString(data['nextCursor'])) throw new Error('Operations nextCursor is malformed')
+}
+
+export const decodeOperationsResponseValue = (value: unknown): OperationsResponse => {
+	if (
+		!isRecord(value) ||
+		(!isUnsignedIntegerString(value['chainId']) && !isNonNegativeSafeInteger(value['chainId'])) ||
+		!isOperationsAsOf(value['asOf']) ||
+		!isRecord(value['data'])
+	)
+		throw new Error('Operations response is malformed')
+	validateOperationsPagination(value['data'])
+	return { chainId: value['chainId'], asOf: value['asOf'], data: value['data'] }
+}
+
+export const operationRecords = (value: unknown, label = 'Operations records', required = false): Record<string, unknown>[] => {
+	if (value === undefined && !required) return []
+	if (!Array.isArray(value) || !value.every(isRecord)) throw new Error(`${label} are malformed`)
+	return value
+}
+
+const isCatalogRecord = (section: OperationsCatalogSection, value: Record<string, unknown>): boolean => {
+	if (section === 'reports') return isAddress(value['open_oracle_address']) && isUnsignedIntegerString(value['report_id'])
+	if (section === 'trading') return isAddress(value['pair_address'])
+	if (section === 'integrity')
+		return (
+			isUnsignedIntegerString(value['id']) &&
+			isString(value['reason']) &&
+			Array.isArray(value['causes']) &&
+			value['causes'].every(isString) &&
+			isRecord(value['occurrence_counts']) &&
+			Object.values(value['occurrence_counts']).every(isUnsignedIntegerString)
+		)
+	if (section === 'timeline')
+		return (
+			isHash(value['block_hash']) &&
+			isHash(value['tx_hash']) &&
+			isNonNegativeSafeInteger(value['log_index']) &&
+			isString(value['entity_type']) &&
+			isString(value['entity_identity'])
+		)
+	if (section === 'forks') return isString(value['universe_identity'])
+	return isAddress(value[section === 'auctions' ? 'auction_address' : 'game_address'])
+}
+
+export const operationsCatalogRecords = (section: OperationsCatalogSection, value: unknown, required = false): Record<string, unknown>[] => {
+	const records = operationRecords(value, `Operations ${section}`, required)
+	if (!records.every((record) => isCatalogRecord(section, record))) throw new Error(`Operations ${section} records are malformed`)
+	return records
+}
+
+export const operationsRiskRecords = (kind: 'pools' | 'vaults', value: unknown, required = false): Record<string, unknown>[] => {
+	const records = operationRecords(value, `Operations risk ${kind}`, required)
+	if (!records.every((record) => isAddress(record['pool_address']) && (kind === 'pools' || isAddress(record['vault_address']))))
+		throw new Error(`Operations risk ${kind} records are malformed`)
+	return records
+}
+
+export const operationsRiskPagination = (value: unknown, required = false): Record<string, unknown> => {
+	if (value === undefined && !required) return {}
+	if (!isRecord(value)) throw new Error('Operations risk pagination is malformed')
+	for (const name of ['poolTotal', 'vaultTotal'] as const) if (!isNonNegativeSafeInteger(value[name])) throw new Error(`Operations risk ${name} is malformed`)
+	for (const name of ['poolHasMore', 'vaultHasMore'] as const) if (typeof value[name] !== 'boolean') throw new Error(`Operations risk ${name} is malformed`)
+	for (const [hasMoreName, cursorName] of [
+		['poolHasMore', 'poolNextCursor'],
+		['vaultHasMore', 'vaultNextCursor'],
+	] as const) {
+		const cursor = value[cursorName]
+		if (value[hasMoreName] === true ? !isString(cursor) : cursor !== undefined) throw new Error(`Operations risk ${cursorName} is malformed`)
+	}
+	return value
+}
+
 export interface EntityHistoryCoverageValue {
 	requestedFromBlock: string
 	requestedToBlock: string

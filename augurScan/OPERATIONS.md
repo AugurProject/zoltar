@@ -262,49 +262,6 @@ if test "$AUGURSCAN_DATABASE_MODE" = bundled; then
 fi
 ```
 
-```bash
-set -euo pipefail
-export AUGURSCAN_EXPORT_CONTAINER="augurscan-export-$$"
-: "${AUGURSCAN_RESTORE_URL:?Set the direct, container-reachable restore URL}"
-source scripts/export-container-cleanup.sh
-case "$AUGURSCAN_DATABASE_MODE" in
-  bundled)
-    test "$(printf '%s\n' "$AUGURSCAN_RESTORE_URL" | sed -n 's#^[^:]*://[^@]*@\([^/:]*\).*#\1#p')" = postgres || {
-      echo 'Bundled AUGURSCAN_RESTORE_URL must use the postgres service hostname.' >&2
-      exit 2
-    }
-    test "$(printf '%s\n' "$AUGURSCAN_RESTORE_URL" | sed -n 's#^[^:]*://[^@]*@[^/]*/\([^?]*\).*$#\1#p')" = "$AUGURSCAN_RESTORE_DATABASE" || {
-      echo 'Bundled AUGURSCAN_RESTORE_URL must name the verified restore database.' >&2
-      exit 2
-    }
-    ;;
-  external) ;;
-  *) echo 'AUGURSCAN_DATABASE_MODE must be bundled or external.' >&2; exit 2 ;;
-esac
-docker compose run --detach --rm --no-deps \
-  --name "$AUGURSCAN_EXPORT_CONTAINER" \
-  --publish 127.0.0.1:3002:3000 \
-  --env "POSTGRES_URL=$AUGURSCAN_RESTORE_URL" \
-  --env DISABLE_INDEXER=1 \
-  app
-augurscan_install_export_cleanup
-export AUGURSCAN_EXPORT_URL=http://localhost:3002
-AUGURSCAN_EXPORT_READY=0
-for _ in {1..30}; do
-  if curl --fail --silent --show-error "$AUGURSCAN_EXPORT_URL/health/ready"; then
-    AUGURSCAN_EXPORT_READY=1
-    break
-  fi
-  sleep 2
-done
-if test "$AUGURSCAN_EXPORT_READY" != 1; then
-  docker logs "$AUGURSCAN_EXPORT_CONTAINER" >&2
-  exit 1
-fi
-```
-
-The installed `EXIT` trap force-removes only the exact named export container after a readiness, transport, HTTP, or verifier failure. It does not delete the restore database or any pending, failed, invalidated, or validated evidence directory, so those remain available for diagnosis. A successful explicit stop disarms the trap before database cleanup.
-
 Export one dataset at a time from Bash. Supported datasets are `logs`, `reorgs`, and `timeline`. Logs and timeline accept `canonical`, `orphaned`, or `all`; reorganization exports require `all` because replacements have no canonical classification. The [API reference](API_REFERENCE.md#evidence-and-export) owns the full filter contract. The continuation cursor belongs to the response header, not the NDJSON body.
 
 ```bash
@@ -313,83 +270,12 @@ export AUGURSCAN_EXPORT_CANONICAL=all
 export AUGURSCAN_EXPORT_FROM_BLOCK=0
 export AUGURSCAN_EXPORT_TO_BLOCK=9223372036854775807
 export AUGURSCAN_EXPORT_DIRECTORY="$(pwd)/augurscan-export-$(date -u +%Y%m%dT%H%M%SZ)-$$/$AUGURSCAN_EXPORT_DATASET"
-mkdir -p "$AUGURSCAN_EXPORT_DIRECTORY"
-AUGURSCAN_EXPORT_CURSOR=
-AUGURSCAN_EXPORT_VALIDATION=
-AUGURSCAN_EXPORT_PAGE=0
-while :; do
-  AUGURSCAN_PAGE_DIRECTORY="$AUGURSCAN_EXPORT_DIRECTORY/page-$AUGURSCAN_EXPORT_PAGE"
-  test ! -e "$AUGURSCAN_PAGE_DIRECTORY" || {
-    echo "Refusing to overwrite $AUGURSCAN_PAGE_DIRECTORY" >&2
-    exit 1
-  }
-  AUGURSCAN_PENDING=$(mktemp -d "$AUGURSCAN_EXPORT_DIRECTORY/.page-$AUGURSCAN_EXPORT_PAGE.pending.XXXXXX")
-  AUGURSCAN_BODY="$AUGURSCAN_PENDING/evidence.ndjson"
-  AUGURSCAN_HEADERS="$AUGURSCAN_PENDING/headers"
-  AUGURSCAN_ARGS=(
-    --silent --show-error --dump-header "$AUGURSCAN_HEADERS" --output "$AUGURSCAN_BODY"
-    --write-out '%{http_code}' --get "$AUGURSCAN_EXPORT_URL/api/v1/export"
-    --data-urlencode "chainId=$AUGURSCAN_CHAIN_ID"
-    --data-urlencode "dataset=$AUGURSCAN_EXPORT_DATASET"
-    --data-urlencode "canonical=$AUGURSCAN_EXPORT_CANONICAL"
-    --data-urlencode "fromBlock=$AUGURSCAN_EXPORT_FROM_BLOCK"
-    --data-urlencode "toBlock=$AUGURSCAN_EXPORT_TO_BLOCK"
-    --data-urlencode 'limit=50000'
-  )
-  if test -n "$AUGURSCAN_EXPORT_CURSOR"; then
-    AUGURSCAN_ARGS+=(--data-urlencode "cursor=$AUGURSCAN_EXPORT_CURSOR")
-  fi
-  if AUGURSCAN_STATUS=$(augurscan_curl "${AUGURSCAN_ARGS[@]}"); then
-    case "$AUGURSCAN_STATUS" in
-      2??) ;;
-      409)
-        mv "$AUGURSCAN_PENDING" "$AUGURSCAN_EXPORT_DIRECTORY/INVALIDATED-page-$AUGURSCAN_EXPORT_PAGE"
-        echo 'The export boundary changed. Quarantine this attempt and restart at page zero.' >&2
-        exit 1
-        ;;
-      *)
-        mv "$AUGURSCAN_PENDING" "$AUGURSCAN_EXPORT_DIRECTORY/FAILED-page-$AUGURSCAN_EXPORT_PAGE"
-        echo "Export failed with HTTP $AUGURSCAN_STATUS; inspect the saved response." >&2
-        exit 1
-        ;;
-    esac
-  else
-    mv "$AUGURSCAN_PENDING" "$AUGURSCAN_EXPORT_DIRECTORY/FAILED-page-$AUGURSCAN_EXPORT_PAGE"
-    echo 'Export transport failed; inspect the saved response and retry in a new attempt.' >&2
-    exit 1
-  fi
-  AUGURSCAN_PENDING_NAME=$(basename "$AUGURSCAN_PENDING")
-  AUGURSCAN_VALIDATION_ARGS=(
-    "/evidence/$AUGURSCAN_PENDING_NAME/headers"
-    "/evidence/$AUGURSCAN_PENDING_NAME/evidence.ndjson"
-    "$AUGURSCAN_EXPORT_DATASET"
-    "$AUGURSCAN_CHAIN_ID"
-    "$AUGURSCAN_EXPORT_CANONICAL"
-    "$AUGURSCAN_EXPORT_FROM_BLOCK"
-    "$AUGURSCAN_EXPORT_TO_BLOCK"
-  )
-  if test -n "$AUGURSCAN_EXPORT_VALIDATION"; then
-    AUGURSCAN_VALIDATION_ARGS+=("$AUGURSCAN_EXPORT_VALIDATION" "$AUGURSCAN_EXPORT_CURSOR")
-  fi
-  if ! docker compose run --rm --no-deps \
-    --user "$(id -u):$(id -g)" \
-    --volume "$AUGURSCAN_EXPORT_DIRECTORY:/evidence:ro" \
-    --entrypoint bun \
-    app augurScan/scripts/verify-export-page.ts "${AUGURSCAN_VALIDATION_ARGS[@]}" \
-    > "$AUGURSCAN_PENDING/validation.json"; then
-    mv "$AUGURSCAN_PENDING" "$AUGURSCAN_EXPORT_DIRECTORY/INVALID-page-$AUGURSCAN_EXPORT_PAGE"
-    echo 'Export proof failed; inspect the quarantined headers, body, and validation output.' >&2
-    exit 1
-  fi
-  AUGURSCAN_EXPORT_CURSOR=$(tr -d '\r' < "$AUGURSCAN_HEADERS" | awk 'tolower($1) == "x-augurscan-next-cursor:" { print $2 }')
-  mv "$AUGURSCAN_PENDING" "$AUGURSCAN_PAGE_DIRECTORY"
-  AUGURSCAN_EXPORT_VALIDATION="/evidence/page-$AUGURSCAN_EXPORT_PAGE/validation.json"
-  test -n "$AUGURSCAN_EXPORT_CURSOR" || break
-  AUGURSCAN_EXPORT_PAGE=$((AUGURSCAN_EXPORT_PAGE + 1))
-done
+scripts/export-history.sh
 ```
 
-Each successful response is atomically renamed from a hidden pending directory to a numbered page containing `evidence.ndjson`, `headers`, and `validation.json`; the loop refuses to overwrite one. The pinned image validates one complete set of snapshot and source headers, valid non-empty JSON objects on every NDJSON line, an exact line count, a cursor exactly when `truncated=true`, and the exact prior continuation cursor on every later request. It also requires every row to match the requested dataset, chain, canonical scope, and range; requires dataset-specific row identities to increase strictly across page boundaries; binds each response cursor to the final row; keeps the snapshot boundary fixed; and requires the final cumulative count to equal the first page's exact total. A cursor binds the dataset, chain, canonical scope, requested range, indexed block/hash, invalidation ID, exact total, applied source hashes, and last-row identity. HTTP 409 means that boundary changed: quarantine every page from that attempt and restart from page zero. Do not concatenate pages across attempts. Change `AUGURSCAN_EXPORT_FROM_BLOCK` and `AUGURSCAN_EXPORT_TO_BLOCK` to constrain the interval. For a replacement range, compare `canonical=orphaned` and `canonical=canonical` log exports by block hash.
+The script validates the restore target and request scope, starts the isolated process, follows every continuation, verifies each page with the pinned app image, and stops the container after success. Its `EXIT` trap force-removes only the exact named export container after a readiness, transport, HTTP, or verifier failure. It does not delete the restore database or any pending, failed, invalidated, or validated evidence directory, so those remain available for diagnosis.
+
+Each successful response is atomically renamed from a hidden pending directory to a numbered page containing `evidence.ndjson`, `headers`, and `validation.json`; the script refuses to overwrite one. The pinned image validates one complete set of snapshot and source headers, valid non-empty JSON objects on every NDJSON line, an exact line count, a cursor exactly when `truncated=true`, and the exact prior continuation cursor on every later request. It also requires every row to match the requested dataset, chain, canonical scope, and range; requires dataset-specific row identities to increase strictly across page boundaries; binds each response cursor to the final row; keeps the snapshot boundary fixed; and requires the final cumulative count to equal the first page's exact total. A cursor binds the dataset, chain, canonical scope, requested range, indexed block/hash, invalidation ID, exact total, applied source hashes, and last-row identity. HTTP 409 means that boundary changed: quarantine every page from that attempt and restart from page zero. Do not concatenate pages across attempts. Change `AUGURSCAN_EXPORT_FROM_BLOCK` and `AUGURSCAN_EXPORT_TO_BLOCK` to constrain the interval. For a replacement range, compare `canonical=orphaned` and `canonical=canonical` log exports by block hash.
 
 For unattended exports, also persist the current cursor after each page. An interrupted request remains in a hidden pending directory; do not treat it as committed evidence. Keep the restore database until every dataset is complete.
 
@@ -397,8 +283,6 @@ Stop the isolated process and remove the temporary restore only after checking t
 
 ```bash
 set -euo pipefail
-docker stop "$AUGURSCAN_EXPORT_CONTAINER"
-augurscan_disarm_export_cleanup
 case "$AUGURSCAN_DATABASE_MODE" in
   bundled)
     test "$(docker compose exec -T postgres psql -X -v ON_ERROR_STOP=1 -U augurscan -d "$AUGURSCAN_RESTORE_DATABASE" -Atc 'SELECT current_database()')" = "$AUGURSCAN_RESTORE_DATABASE"

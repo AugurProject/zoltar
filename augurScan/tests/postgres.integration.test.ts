@@ -421,6 +421,9 @@ postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identitie
 			'ALTER TABLE public.networks DROP COLUMN applied_abi_source_hash, DROP COLUMN applied_application_source_hash, DROP COLUMN applied_projection_source_hash',
 		)
 		await database.sql.unsafe('ALTER TABLE public.contracts DROP COLUMN configured_deployment_block')
+		await database.sql.unsafe(
+			'DROP INDEX public.pool_snapshots_detail_page, public.protocol_timeline_entity_history_page, public.protocol_timeline_history_page, public.vault_snapshots_detail_page',
+		)
 		await database.sql`UPDATE augurscan_schema SET schema_version = '1' WHERE singleton`
 		await database.sql.unsafe('DROP INDEX public.protocol_timeline_recent')
 		try {
@@ -1092,6 +1095,17 @@ postgresTest(
 			}
 			expect(firstObservationPage.data.total).toBe(7)
 			expect(firstObservationPage.data.items).toHaveLength(4)
+			const observationCursorParts = decodeOpaqueCursor(firstObservationPage.data.nextCursor)
+			if (!Array.isArray(observationCursorParts) || observationCursorParts.length !== 14) throw new Error('direct observation cursor is malformed')
+			const overflowingObservationCursor = [...observationCursorParts]
+			overflowingObservationCursor[10] = firstObservationPage.data.total + 1
+			const overflowingObservationResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingObservationCursor)))}`,
+				),
+				database.sql,
+			)
+			expect(overflowingObservationResponse?.status).toBe(400)
 			const secondObservationResponse = await handleApi(
 				new Request(
 					`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(firstObservationPage.data.nextCursor)}`,
@@ -2556,16 +2570,43 @@ postgresTest(
 				database.sql,
 			)
 			expect(mismatchedLogFilterResponse?.status).toBe(400)
+			const advancedHeadHash = blockHash('cursor-head-advance')
+			await database.sql`
+				INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical)
+				VALUES (${chainId}, 4, ${advancedHeadHash}, ${third.hash}, '2026-01-04T00:00:00Z', true)
+			`
+			await database.sql`
+				UPDATE networks SET indexed_block = 4, indexed_hash = ${advancedHeadHash},
+					indexed_timestamp = '2026-01-04T00:00:00Z', observed_block = 4
+				WHERE chain_id = ${chainId}
+			`
 			const secondLogPageResponse = await handleApi(
 				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
 				database.sql,
 			)
-			const secondLogPage = (await secondLogPageResponse?.json()) as { items: Array<Record<string, unknown>> }
+			const secondLogPage = (await secondLogPageResponse?.json()) as {
+				items: Array<Record<string, unknown>>
+				asOf: { blockNumber: string; blockHash: string; indexedHead: string; historical: boolean }
+			}
 			expect(secondLogPage.items).toHaveLength(1)
+			expect(secondLogPage.asOf).toMatchObject({ blockNumber: '3', blockHash: third.hash, indexedHead: '4', historical: true })
 			expect(secondLogPage.items[0]).not.toMatchObject({
 				block_hash: firstLogPage.items[0]?.['block_hash'],
 				log_index: firstLogPage.items[0]?.['log_index'],
 			})
+			await database.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+			const displacedSnapshotResponse = await handleApi(
+				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
+				database.sql,
+			)
+			expect(displacedSnapshotResponse?.status).toBe(409)
+			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${chainId} AND hash = ${third.hash}`
+			await database.sql`
+				UPDATE networks SET indexed_block = 3, indexed_hash = ${third.hash},
+					indexed_timestamp = '2026-01-03T00:00:00Z', observed_block = 3
+				WHERE chain_id = ${chainId}
+			`
+			await database.sql`DELETE FROM blocks WHERE chain_id = ${chainId} AND hash = ${advancedHeadHash}`
 			const reorganizationResponse = await handleApi(new Request(`http://localhost/api/v1/reorgs?chainId=${chainId}`), database.sql)
 			expect(await reorganizationResponse?.json()).toMatchObject({
 				items: [expect.objectContaining({ previous_hash: orphan.hash, ancestor_hash: first.hash, depth: '1', reason: 'chain-reorg' })],
@@ -2663,16 +2704,25 @@ postgresTest(
 			const integrityCursor = refreshedIntegrityPage.data.nextCursor
 			if (integrityCursor === undefined) throw new Error('integrity catalog did not return a continuation')
 			const integrityCursorParts = decodeOpaqueCursor(integrityCursor)
-			if (!Array.isArray(integrityCursorParts) || integrityCursorParts.length !== 10) throw new Error('integrity cursor is malformed')
-			for (const offset of [100_000, 100_250]) {
-				const cursor = btoa(JSON.stringify([...integrityCursorParts.slice(0, 9), offset]))
-				const boundaryResponse = await handleApi(
-					new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=250&cursor=${encodeURIComponent(cursor)}`),
-					database.sql,
-				)
-				expect(boundaryResponse?.status).toBe(200)
-				expect(await boundaryResponse?.json()).toMatchObject({ data: { items: [], offset, hasMore: false } })
-			}
+			if (!Array.isArray(integrityCursorParts) || integrityCursorParts.length !== 14) throw new Error('integrity cursor is malformed')
+			const continuedIntegrityResponse = await handleApi(
+				new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(integrityCursor)}`),
+				database.sql,
+			)
+			expect(continuedIntegrityResponse?.status).toBe(200)
+			const continuedIntegrity = (await continuedIntegrityResponse?.json()) as { data: { items: Array<{ id: string }>; offset: number } }
+			expect(continuedIntegrity.data.offset).toBe(1)
+			expect(continuedIntegrity.data.items).toHaveLength(1)
+			expect(continuedIntegrity.data.items[0]?.id).not.toBe(insertedReorganization[0]?.['id'])
+			const overflowingIntegrityCursor = [...integrityCursorParts]
+			overflowingIntegrityCursor[11] = Number(integrityCursorParts[4]) + 1
+			const overflowingIntegrityResponse = await handleApi(
+				new Request(
+					`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=250&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingIntegrityCursor)))}`,
+				),
+				database.sql,
+			)
+			expect(overflowingIntegrityResponse?.status).toBe(400)
 			const tradingCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}`), database.sql)
 			const tradingCatalog = (await tradingCatalogResponse?.json()) as {
 				asOf: {
@@ -4362,7 +4412,7 @@ postgresTest(
 			)
 			if (firstRiskHistoryResponse === undefined) throw new Error('vault risk history did not return a response')
 			const firstRiskHistory = (await firstRiskHistoryResponse.json()) as {
-				data: { history: { stateSnapshots: unknown[]; nextCursor: string } }
+				data: { history: { stateSnapshots: Array<{ id: string }>; nextCursor: string } }
 			}
 			expect(firstRiskHistory.data.history.stateSnapshots).toHaveLength(1)
 			expect(firstRiskHistory.data.history.nextCursor).toBeString()
@@ -4373,6 +4423,11 @@ postgresTest(
 				database.sql,
 			)
 			expect(secondRiskHistoryResponse?.status).toBe(200)
+			const secondRiskHistory = (await secondRiskHistoryResponse?.json()) as {
+				data: { history: { stateSnapshots: Array<{ id: string }> } }
+			}
+			expect(secondRiskHistory.data.history.stateSnapshots).toHaveLength(1)
+			expect(secondRiskHistory.data.history.stateSnapshots[0]?.id).not.toBe(firstRiskHistory.data.history.stateSnapshots[0]?.id)
 			const riskHistoryGeneration = await database.sql`
 				INSERT INTO chain_reorganizations
 					(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
@@ -4447,6 +4502,31 @@ postgresTest(
 			const plans = await Promise.all(explainQueries)
 			expect(plans).toHaveLength(7)
 			for (const plan of plans) expect(JSON.stringify(plan)).toContain('Plan')
+			const paginationPlans = await database.sql.begin(async (transaction) => {
+				await transaction.unsafe('SET LOCAL enable_seqscan = off')
+				return {
+					balance: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM address_balance_observations
+						WHERE chain_id = ${operationsChainId} ORDER BY observed_at DESC, id DESC LIMIT 100`,
+					metadata: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM token_metadata_observations
+						WHERE chain_id = ${operationsChainId} ORDER BY observed_at DESC, id DESC LIMIT 100`,
+					pool: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM pool_snapshots
+						WHERE chain_id = ${operationsChainId} AND pool_address = ${oracle.toLowerCase()} AND canonical
+						ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 100`,
+					vault: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM vault_snapshots
+						WHERE chain_id = ${operationsChainId} AND pool_address = ${oracle.toLowerCase()}
+							AND vault_address = ${address.toLowerCase()} AND canonical
+						ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 100`,
+					timeline: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries
+						WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+							AND entity_identity = ${`${oracle.toLowerCase()}:${address.toLowerCase()}`} AND canonical
+						ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 100`,
+				}
+			})
+			expect(JSON.stringify(paginationPlans.balance)).toContain('address_balance_observation_page')
+			expect(JSON.stringify(paginationPlans.metadata)).toContain('token_metadata_observation_page')
+			expect(JSON.stringify(paginationPlans.pool)).toContain('pool_snapshots_detail_page')
+			expect(JSON.stringify(paginationPlans.vault)).toContain('vault_snapshots_detail_page')
+			expect(JSON.stringify(paginationPlans.timeline)).toMatch(/protocol_timeline_(entity_)?history_page/)
 
 			const resetLease = await database.tryAcquireIndexerLock(operationsChainId)
 			if (resetLease === undefined) throw new Error('operations manifest-reset writer did not acquire its lock')

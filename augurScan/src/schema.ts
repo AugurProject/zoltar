@@ -40,6 +40,12 @@ const historicalIntegrityColumns = new Set([
 	'entity_state_snapshots.application_source_hash',
 	'entity_state_snapshots.projection_source_hash',
 ])
+const historicalIntegrityIndexes = new Set([
+	'pool_snapshots_detail_page',
+	'protocol_timeline_entity_history_page',
+	'protocol_timeline_history_page',
+	'vault_snapshots_detail_page',
+])
 const normalizeDefinition = (value: string): string => value.replaceAll('public.', '').replace(/\s+/g, ' ').trim().replace(/;$/, '')
 const sorted = (values: Iterable<string>): string[] => [...values].sort()
 
@@ -100,7 +106,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	for (const match of schema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
 		const [, unique, name, table, definition] = match
 		if (name === undefined || table === undefined || definition === undefined) continue
-		if (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
+		if (version === PREVIOUS_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
 		indexes.add(`${name}|${normalizeDefinition(`CREATE ${unique ?? ''}INDEX ${name} ON public.${table} ${definition}`)}`)
 	}
 	for (const match of schema.matchAll(/CREATE SEQUENCE public\.([a-z_][a-z0-9_]*)/g)) {

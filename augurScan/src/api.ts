@@ -89,9 +89,19 @@ const isExactIsoTimestamp = (value: string): boolean => {
 	return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value
 }
 
+const isCursorTimestamp = (value: string): boolean => {
+	const match = /^((?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{3,6})Z$/.exec(value)
+	if (match === null) return false
+	const [, prefix, fraction] = match
+	if (prefix === undefined || fraction === undefined) return false
+	const millisecondTimestamp = `${prefix}.${fraction.slice(0, 3)}Z`
+	const parsed = new Date(millisecondTimestamp)
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === millisecondTimestamp
+}
+
 const cursorTimestamp = (value: unknown): string => {
 	const result = value instanceof Date ? value.toISOString() : value
-	if (typeof result !== 'string' || !isExactIsoTimestamp(result)) throw new Error('Database returned an invalid cursor timestamp')
+	if (typeof result !== 'string' || !isCursorTimestamp(result)) throw new Error('Database returned an invalid cursor timestamp')
 	return result
 }
 
@@ -311,7 +321,7 @@ const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
 	isPostgresBigint(parts[4]) &&
 	parts.slice(5, 8).every((part) => typeof part === 'string') &&
 	typeof parts[8] === 'string' &&
-	isExactIsoTimestamp(parts[8]) &&
+	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9]) &&
 	isPostgresInteger(parts[10]) &&
 	typeof parts[11] === 'string' &&
@@ -366,8 +376,7 @@ const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 	const canonical = canonicalHistoryFilter(url)
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	const cursor = parseLogCursor(url.searchParams.get('cursor'), chainId, event, address, decodedFilter, canonical)
-	const asOf = await operationsAsOf(sql, chainId)
-	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 6, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 6 }])
 	const values: Array<string | number> = []
 	const clauses = canonical === 'all' ? ['true'] : [`l.canonical = ${canonical === 'canonical' ? 'true' : 'false'}`]
 	const bind = (value: string | number): string => {
@@ -554,7 +563,7 @@ const isReorganizationCursor = (parts: readonly unknown[]): parts is Reorganizat
 	isPostgresBigint(parts[4]) &&
 	parts.slice(5, 8).every((part) => typeof part === 'string') &&
 	typeof parts[8] === 'string' &&
-	isExactIsoTimestamp(parts[8]) &&
+	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9])
 
 const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
@@ -572,7 +581,7 @@ const parseReorganizationCursor = (value: string | null, chainId: number): Reorg
 }
 
 const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['detected_at']), String(row['id'])] satisfies ReorganizationCursor)
+	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['cursor_detected_at']), String(row['id'])] satisfies ReorganizationCursor)
 
 const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -581,8 +590,7 @@ const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
 	const cursor = parseReorganizationCursor(url.searchParams.get('cursor'), chainId)
-	const asOf = await operationsAsOf(sql, chainId)
-	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 2 }])
 	const snapshotInvalidationId = String(asOf['invalidationId'])
 	const cursorClause = cursor === undefined ? sql`` : sql`AND (reorganization.detected_at, reorganization.id) < (${cursor[8]}, ${cursor[9]})`
 	const rows = await sql`
@@ -596,7 +604,8 @@ const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
 					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
 					GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
-			reorganization.detected_at
+			reorganization.detected_at,
+			to_char(reorganization.detected_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_detected_at
 		FROM chain_reorganizations reorganization
 		WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotInvalidationId} ${cursorClause}
 		ORDER BY reorganization.detected_at DESC, reorganization.id DESC
@@ -608,8 +617,9 @@ const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 	`
 	const total = directObservationTotal(totalRows[0]?.['total'] ?? '0')
 	const hasMore = rows.length > limit
-	const items = rows.slice(0, limit)
-	const last = items[items.length - 1]
+	const pageRows = rows.slice(0, limit)
+	const items = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'cursor_detected_at')))
+	const last = pageRows[pageRows.length - 1]
 	return json({
 		items,
 		total,
@@ -626,7 +636,7 @@ const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefin
 	try {
 		const parsed = decodeOpaqueCursor(value)
 		const parts = Array.isArray(parsed) ? parsed : []
-		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isExactIsoTimestamp(parts[1]) || !isPostgresBigint(parts[2]))
+		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2]))
 			throw new Error('shape')
 		return [1, parts[1], parts[2]]
 	} catch (error) {
@@ -652,16 +662,18 @@ const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> => {
 		sql.unsafe(
 			`SELECT id::text, schema_version, app_version, abi_source_hash, application_source_hash,
 				projection_source_hash, indexer_enabled, network_configuration, started_at, stopped_at,
+				to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_started_at,
 				count(*) OVER ()::integer AS remaining_total
 			FROM indexer_runs ${cursorClause} ORDER BY started_at DESC, id DESC LIMIT $${values.length}`,
 			values,
 		),
 	])
-	const runs = runRows
-		.slice(0, limit)
-		.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'remaining_total')))
+	const pageRows = runRows.slice(0, limit)
+	const runs = pageRows.map((row: Record<string, unknown>) =>
+		Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'remaining_total' && key !== 'cursor_started_at')),
+	)
 	const hasMore = runRows.length > limit
-	const last = runs[runs.length - 1]
+	const last = pageRows[pageRows.length - 1]
 	return json({
 		migrations,
 		runs,
@@ -669,7 +681,9 @@ const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> => {
 		runsTruncated: hasMore,
 		remainingTotal: Number(runRows[0]?.['remaining_total'] ?? 0),
 		nextCursor:
-			hasMore && last !== undefined ? encodeOpaqueCursor([1, String(normalize(last['started_at'])), String(last['id'])] satisfies ProvenanceCursor) : undefined,
+			hasMore && last !== undefined
+				? encodeOpaqueCursor([1, cursorTimestamp(last['cursor_started_at']), String(last['id'])] satisfies ProvenanceCursor)
+				: undefined,
 	})
 }
 
@@ -1063,6 +1077,32 @@ const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Prom
 
 const operationsAsOfFromUrl = async (sql: SQL, chainId: number, url: URL): Promise<Record<string, unknown>> =>
 	await operationsAsOf(sql, chainId, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+
+type SnapshotCursorReference = { readonly parts: readonly unknown[]; readonly offset: number }
+
+const operationsAsOfForContinuations = async (
+	sql: SQL,
+	chainId: number,
+	cursors: readonly SnapshotCursorReference[],
+	requestedAtBlock?: string,
+): Promise<Record<string, unknown>> => {
+	const first = cursors[0]
+	const cursorBlock = first === undefined ? undefined : first.parts[first.offset]
+	if (cursorBlock !== undefined && typeof cursorBlock !== 'string') throw new ApiRequestError('cursor snapshot block is invalid')
+	if (requestedAtBlock !== undefined && cursorBlock !== undefined && requestedAtBlock !== cursorBlock)
+		throw new ApiRequestError('cursor does not match the requested snapshot block')
+	let asOf: Record<string, unknown>
+	try {
+		asOf = await operationsAsOf(sql, chainId, requestedAtBlock ?? cursorBlock)
+	} catch (error) {
+		if (cursorBlock !== undefined && error instanceof ApiRequestError && error.message === 'atBlock is outside retained canonical coverage')
+			throw new ApiConflictError('Indexed state changed; restart pagination')
+		throw error
+	}
+	for (const cursor of cursors)
+		if (!snapshotBoundaryMatches(cursor.parts, cursor.offset, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	return asOf
+}
 
 const reportCatalogData = async (
 	sql: SQL,
@@ -1521,12 +1561,15 @@ const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'escalations' | 'auctions' | 'risk' | 'forks'): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	const asOf = domain === 'risk' ? await operationsAsOfFromUrl(sql, chainId, url) : await operationsAsOf(sql, chainId)
 	if (domain === 'risk') {
 		const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 		const limit = Math.min(Math.max(requestedLimit, 1), 250)
-		const poolAfter = parseRiskCursor(url.searchParams.get('poolCursor'), chainId, 'pool', asOf)
-		const vaultAfter = parseRiskCursor(url.searchParams.get('vaultCursor'), chainId, 'vault', asOf)
+		const poolCursor = parseRiskCursor(url.searchParams.get('poolCursor'), chainId, 'pool')
+		const vaultCursor = parseRiskCursor(url.searchParams.get('vaultCursor'), chainId, 'vault')
+		const cursors = [poolCursor, vaultCursor].flatMap((cursor) => (cursor === undefined ? [] : [{ parts: cursor, offset: 2 }]))
+		const asOf = await operationsAsOfForContinuations(sql, chainId, cursors, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+		const poolAfter = poolCursor?.[8]
+		const vaultAfter = vaultCursor?.[8]
 		const data = await riskCatalogData(sql, chainId, { limit, poolAfter, vaultAfter, snapshotBlock: String(asOf['blockNumber']) })
 		const pagination = jsonRecord(data.pagination)
 		return json({
@@ -1542,7 +1585,9 @@ const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'es
 			},
 		})
 	}
-	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf)
+	const cursor = protocolCursorForRequest(url, chainId, `${domain}-catalog`, 'catalog')
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -1582,7 +1627,7 @@ const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, stri
 type ProtocolCursor = readonly [number, string, string, string, string, string, string, string, string, string, string, number]
 
 type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string, string, string, string, string]
-const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>): string | undefined => {
+const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault'): RiskCursor | undefined => {
 	if (value === null) return undefined
 	let parts: unknown[]
 	try {
@@ -1605,8 +1650,7 @@ const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | '
 		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
 	}
 	if (parts[0] !== chainId || parts[1] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
-	if (!snapshotBoundaryMatches(parts, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	return String(parts[8])
+	return parts as [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 }
 
 const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string =>
@@ -1640,6 +1684,13 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 	}
 }
 
+const protocolCursorForRequest = (url: URL, chainId: number, domain: string, identity: string): ProtocolCursor | undefined => {
+	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
+	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity))
+		throw new ApiRequestError('cursor does not match the requested entity')
+	return cursor
+}
+
 const protocolCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
 	encodeOpaqueCursor([
 		chainId,
@@ -1651,25 +1702,23 @@ const protocolCursorFor = (chainId: number, domain: string, identity: string, as
 		Number(row['log_index']),
 	] satisfies ProtocolCursor)
 
-const detailPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>) => {
+const detailPage = (
+	url: URL,
+	chainId: number,
+	domain: string,
+	identity: string,
+	asOf: Record<string, unknown>,
+	cursor = protocolCursorForRequest(url, chainId, domain, identity),
+) => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
-	if (cursor !== undefined) {
-		if (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity) throw new ApiRequestError('cursor does not match the requested entity')
-		if (!snapshotBoundaryMatches(cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	}
+	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	return { limit, queryLimit: limit + 1, cursor }
 }
 
 type TimelineCatalogCursor = readonly [number, string, string, string, string, string, string, string, string, number, string, string, string, string, 'v2']
 
-const parseTimelineCatalogCursor = (
-	value: string | null,
-	chainId: number,
-	filterIdentity: string,
-	asOf: Record<string, unknown>,
-): TimelineCatalogCursor | undefined => {
+const parseTimelineCatalogCursor = (value: string | null, chainId: number, filterIdentity: string): TimelineCatalogCursor | undefined => {
 	if (value === null) return undefined
 	let parts: unknown[]
 	try {
@@ -1699,7 +1748,6 @@ const parseTimelineCatalogCursor = (
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 	if (parts[0] !== chainId || parts[1] !== filterIdentity) throw new ApiRequestError('cursor does not match the requested timeline filters')
-	if (!snapshotBoundaryMatches(parts, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	return [
 		Number(parts[0]),
 		String(parts[1]),
@@ -1764,8 +1812,7 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 	)
 		return json({ error: 'Invalid report identifier' }, 400)
 	const identity = `${openOracleAddress}:${reportId}`
-	const asOf = await operationsAsOf(sql, chainId)
-	const page = detailPage(url, chainId, 'report', identity, asOf)
+	const cursor = protocolCursorForRequest(url, chainId, 'report', identity)
 	const decisionUrl = new URL(url)
 	decisionUrl.searchParams.delete('cursor')
 	decisionUrl.searchParams.delete('limit')
@@ -1773,7 +1820,14 @@ const reportDetailResponse = async (sql: SQL, parts: readonly string[], url: URL
 	const decisionLimitValue = url.searchParams.get('decisionLimit')
 	if (decisionCursorValue !== null) decisionUrl.searchParams.set('cursor', decisionCursorValue)
 	if (decisionLimitValue !== null) decisionUrl.searchParams.set('limit', decisionLimitValue)
-	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf)
+	const decisionCursor = protocolCursorForRequest(decisionUrl, chainId, 'report-decisions', identity)
+	const asOf = await operationsAsOfForContinuations(
+		sql,
+		chainId,
+		[cursor, decisionCursor].flatMap((item) => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+	)
+	const page = detailPage(url, chainId, 'report', identity, asOf, cursor)
+	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf, decisionCursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -1848,8 +1902,9 @@ const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const address = parts[1]?.toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address))
 		return json({ error: `Invalid ${domain} identifier` }, 400)
-	const asOf = await operationsAsOf(sql, chainId)
-	const page = detailPage(url, chainId, domain, address, asOf)
+	const cursor = protocolCursorForRequest(url, chainId, domain, address)
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const page = detailPage(url, chainId, domain, address, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -1892,8 +1947,9 @@ const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 	const identity = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]).toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128)
 		return json({ error: 'Invalid fork identifier' }, 400)
-	const asOf = await operationsAsOf(sql, chainId)
-	const page = detailPage(url, chainId, 'fork', identity, asOf)
+	const cursor = protocolCursorForRequest(url, chainId, 'fork', identity)
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const page = detailPage(url, chainId, 'fork', identity, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -1955,9 +2011,9 @@ const rejectRawSnapshotOffset = (url: URL): void => {
 	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
 }
 
-const offsetPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>) => {
+const offsetPage = (url: URL, chainId: number, domain: string, identity: string) => {
 	const cursorValue = url.searchParams.get('cursor')
-	if (cursorValue === null) return { identity, offset: 0 }
+	if (cursorValue === null) return { identity, offset: 0, cursor: undefined }
 	let parsed: unknown
 	try {
 		parsed = decodeOpaqueCursor(cursorValue)
@@ -1979,8 +2035,7 @@ const offsetPage = (url: URL, chainId: number, domain: string, identity: string,
 	)
 		throw new ApiRequestError('cursor is invalid')
 	if (parts[0] !== chainId || parts[1] !== domain) throw new ApiRequestError('cursor does not match filters')
-	if (!snapshotBoundaryMatches(parts, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	return { identity: parts[2], offset: parts[9] }
+	return { identity: parts[2], offset: parts[9], cursor: parts as [number, string, string, string, string, string, string, string, string, number] }
 }
 
 const offsetCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, offset: number): string =>
@@ -1994,10 +2049,10 @@ const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => 
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const query = url.searchParams.get('q')?.trim().toLowerCase()
 	if (query !== undefined && query.length > 128) throw new ApiRequestError('q must not exceed 128 characters')
-	const asOf = await operationsAsOf(sql, chainId)
 	const cursorIdentity = query ?? ''
-	const page = offsetPage(url, chainId, 'trading-catalog', cursorIdentity, asOf)
+	const page = offsetPage(url, chainId, 'trading-catalog', cursorIdentity)
 	if (page.identity !== cursorIdentity) throw new ApiRequestError('cursor does not match filters')
+	const asOf = await operationsAsOfForContinuations(sql, chainId, page.cursor === undefined ? [] : [{ parts: page.cursor, offset: 3 }])
 	const offset = page.offset
 	const rows = await sql`
 		WITH markets AS (
@@ -2073,23 +2128,105 @@ const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => 
 	})
 }
 
+type IntegrityCursor = readonly [
+	version: 1,
+	chainId: number,
+	domain: 'integrity-catalog',
+	snapshotId: string,
+	total: number,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	offset: number,
+	detectedAt: string,
+	id: string,
+]
+
+const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const decoded = decodeOpaqueCursor(value)
+		const parts = Array.isArray(decoded) ? decoded : []
+		if (
+			parts.length !== 14 ||
+			parts[0] !== 1 ||
+			parts[1] !== chainId ||
+			parts[2] !== 'integrity-catalog' ||
+			!isPostgresBigint(parts[3]) ||
+			!isNonNegativeSafeInteger(parts[4]) ||
+			!isPostgresBigint(parts[5]) ||
+			typeof parts[6] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
+			!isPostgresBigint(parts[7]) ||
+			!parts.slice(8, 11).every((part) => typeof part === 'string') ||
+			!isNonNegativeSafeInteger(parts[11]) ||
+			Number(parts[11]) > Number(parts[4]) ||
+			typeof parts[12] !== 'string' ||
+			!isCursorTimestamp(parts[12]) ||
+			!isPostgresBigint(parts[13])
+		)
+			throw new Error('shape')
+		return [
+			1,
+			chainId,
+			'integrity-catalog',
+			String(parts[3]),
+			Number(parts[4]),
+			String(parts[5]),
+			String(parts[6]),
+			String(parts[7]),
+			String(parts[8]),
+			String(parts[9]),
+			String(parts[10]),
+			Number(parts[11]),
+			String(parts[12]),
+			String(parts[13]),
+		]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const integrityCursorFor = (
+	chainId: number,
+	snapshotId: string,
+	total: number,
+	asOf: Record<string, unknown>,
+	offset: number,
+	row: Record<string, unknown>,
+): string =>
+	encodeOpaqueCursor([
+		1,
+		chainId,
+		'integrity-catalog',
+		snapshotId,
+		total,
+		...snapshotBoundary(asOf),
+		offset,
+		cursorTimestamp(row['cursor_detected_at']),
+		String(row['id']),
+	] satisfies IntegrityCursor)
+
 const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	rejectRawSnapshotOffset(url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	const asOf = await operationsAsOf(sql, chainId)
+	const cursor = parseIntegrityCursor(url.searchParams.get('cursor'), chainId)
 	const snapshotRows = await sql`
 		SELECT COALESCE(max(id), 0)::text AS id
 		FROM chain_reorganizations WHERE chain_id = ${chainId}
 	`
 	const currentSnapshotId = snapshotRows[0]?.['id']
 	if (!isPostgresBigint(currentSnapshotId)) throw new Error('Integrity snapshot boundary is unavailable')
-	const page = offsetPage(url, chainId, 'integrity-catalog', currentSnapshotId, asOf)
-	if (!isPostgresBigint(page.identity) || BigInt(page.identity) > BigInt(currentSnapshotId)) throw new ApiRequestError('cursor is invalid')
-	const snapshotId = page.identity
-	const offset = page.offset
+	if (cursor !== undefined && BigInt(cursor[3]) > BigInt(currentSnapshotId)) throw new ApiRequestError('cursor is invalid')
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 5 }])
+	const snapshotId = cursor?.[3] ?? currentSnapshotId
+	const offset = cursor?.[11] ?? 0
 	const [reorganizations, migrations, runs] = await Promise.all([
 		sql`SELECT reorganization.id::text, reorganization.previous_block::text, reorganization.previous_hash,
 			reorganization.ancestor_block::text, reorganization.ancestor_hash, reorganization.depth::text,
@@ -2101,17 +2238,26 @@ const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> =
 				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
 					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
 					GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
-			reorganization.detected_at, count(*) OVER ()::integer AS total
+			reorganization.detected_at,
+			to_char(reorganization.detected_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_detected_at,
+			count(*) OVER ()::integer AS total
 			FROM chain_reorganizations reorganization WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotId}
-			ORDER BY reorganization.detected_at DESC, reorganization.id DESC LIMIT ${limit} OFFSET ${offset}`,
+				AND (${cursor === undefined} OR (reorganization.detected_at, reorganization.id) <
+					(${cursor?.[12] ?? '9999-12-31T23:59:59.999Z'}::timestamptz, ${cursor?.[13] ?? '0'}::bigint))
+			ORDER BY reorganization.detected_at DESC, reorganization.id DESC LIMIT ${limit + 1}`,
 		sql`SELECT schema_version, description, applied_at FROM augurscan_schema_migrations ORDER BY applied_at, schema_version`,
 		sql`SELECT id::text, schema_version, app_version, abi_source_hash, application_source_hash,
 			projection_source_hash, indexer_enabled, network_configuration, started_at, stopped_at
 			FROM indexer_runs ORDER BY started_at DESC, id DESC LIMIT 25`,
 	])
-	const total = Number(reorganizations[0]?.['total'] ?? 0)
-	const items = reorganizations.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
-	const hasMore = offset + items.length < total
+	const total = cursor?.[4] ?? Number(reorganizations[0]?.['total'] ?? 0)
+	const pageRows = reorganizations.slice(0, limit)
+	const items = pageRows.map((row: Record<string, unknown>) =>
+		Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total' && key !== 'cursor_detected_at')),
+	)
+	const hasMore = reorganizations.length > limit
+	const returnedOffset = offset + items.length
+	const last = pageRows[pageRows.length - 1]
 	return json({
 		chainId,
 		asOf,
@@ -2121,7 +2267,7 @@ const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> =
 			limit,
 			offset,
 			hasMore,
-			nextCursor: hasMore ? offsetCursorFor(chainId, 'integrity-catalog', snapshotId, asOf, offset + limit) : undefined,
+			nextCursor: hasMore && last !== undefined ? integrityCursorFor(chainId, snapshotId, total, asOf, returnedOffset, last) : undefined,
 			migrations,
 			runs,
 		},
@@ -2137,6 +2283,89 @@ type DirectObservationSnapshot = {
 	readonly maxBalanceId: string
 	readonly maxMetadataId: string
 	readonly total: string
+}
+
+type DirectObservationCursor = readonly [
+	version: 1,
+	chainId: number,
+	domain: 'direct-observations',
+	snapshot: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	offset: number,
+	observedAt: string,
+	kind: 'address-balance' | 'token-metadata',
+	id: string,
+]
+
+const parseDirectObservationCursor = (value: string | null, chainId: number): DirectObservationCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const decoded = decodeOpaqueCursor(value)
+		const parts = Array.isArray(decoded) ? decoded : []
+		if (
+			parts.length !== 14 ||
+			parts[0] !== 1 ||
+			parts[1] !== chainId ||
+			parts[2] !== 'direct-observations' ||
+			typeof parts[3] !== 'string' ||
+			!isPostgresBigint(parts[4]) ||
+			typeof parts[5] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+			!isPostgresBigint(parts[6]) ||
+			!parts.slice(7, 10).every((part) => typeof part === 'string') ||
+			!isNonNegativeSafeInteger(parts[10]) ||
+			typeof parts[11] !== 'string' ||
+			!isCursorTimestamp(parts[11]) ||
+			(parts[12] !== 'address-balance' && parts[12] !== 'token-metadata') ||
+			!isPostgresBigint(parts[13])
+		)
+			throw new Error('shape')
+		return [
+			1,
+			chainId,
+			'direct-observations',
+			String(parts[3]),
+			String(parts[4]),
+			String(parts[5]),
+			String(parts[6]),
+			String(parts[7]),
+			String(parts[8]),
+			String(parts[9]),
+			Number(parts[10]),
+			String(parts[11]),
+			parts[12],
+			String(parts[13]),
+		]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const directObservationCursorFor = (
+	chainId: number,
+	snapshot: DirectObservationSnapshot,
+	asOf: Record<string, unknown>,
+	offset: number,
+	row: Record<string, unknown>,
+): string => {
+	const observationKind = row['observation_kind']
+	if (observationKind !== 'address-balance' && observationKind !== 'token-metadata') throw new Error('Direct observation kind is unavailable')
+	return encodeOpaqueCursor([
+		1,
+		chainId,
+		'direct-observations',
+		JSON.stringify(snapshot),
+		...snapshotBoundary(asOf),
+		offset,
+		cursorTimestamp(row['cursor_observed_at']),
+		observationKind,
+		String(row['observation_id']),
+	] satisfies DirectObservationCursor)
 }
 
 const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
@@ -2177,11 +2406,9 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 		throw new ApiRequestError('kind must be all, address-balance, or token-metadata')
 	const address = evmAddress(url.searchParams.get('address'), 'address')
 	const canonical = canonicalHistoryFilter(url)
-	const asOf = await operationsAsOf(sql, chainId)
-	const cursorValue = url.searchParams.get('cursor')
+	const cursor = parseDirectObservationCursor(url.searchParams.get('cursor'), chainId)
 	let snapshot: DirectObservationSnapshot
-	let offset = 0
-	if (cursorValue === null) {
+	if (cursor === undefined) {
 		const maxima = await sql`
 			SELECT
 				COALESCE((SELECT max(id) FROM address_balance_observations WHERE chain_id = ${chainId}), 0)::text AS max_balance_id,
@@ -2196,12 +2423,12 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 			total: '0',
 		}
 	} else {
-		const page = offsetPage(url, chainId, 'direct-observations', '', asOf)
-		offset = page.offset
-		snapshot = directObservationSnapshot(page.identity)
+		snapshot = directObservationSnapshot(cursor[3])
 		if (snapshot.kind !== requestedKind || snapshot.address !== address || snapshot.canonical !== canonical)
 			throw new ApiRequestError('cursor does not match filters')
+		if (cursor[10] > Number(snapshot.total)) throw new ApiRequestError('cursor is invalid')
 	}
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 4 }])
 	const rows = await sql`
 		WITH observations AS (
 			SELECT 'address-balance'::text AS observation_kind, observation.id,
@@ -2231,7 +2458,7 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 			WHERE observation.chain_id = ${chainId} AND observation.id <= ${snapshot.maxMetadataId}
 				AND ${snapshot.kind === 'address-balance'} = false
 				AND (${snapshot.address ?? null}::text IS NULL OR observation.address = ${snapshot.address ?? null})
-				AND (${snapshot.canonical} = 'all' OR observation.canonical = (${snapshot.canonical} = 'canonical'))
+			AND (${snapshot.canonical} = 'all' OR observation.canonical = (${snapshot.canonical} = 'canonical'))
 		)
 		SELECT observation.observation_kind, observation.id::text AS observation_id,
 			observation.chain_id::text AS chain_id, observation.block_hash,
@@ -2239,6 +2466,7 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 			observation.address, observation.asset_address, observation.asset_kind,
 			observation.read_status, observation.read_failure_reason, observation.result,
 			observation.canonical, observation.observed_at, observation.indexer_run_id::text AS indexer_run_id,
+			to_char(observation.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_observed_at,
 			observation.abi_source_hash, observation.application_source_hash, observation.projection_source_hash,
 			CASE WHEN observation.canonical THEN 'canonical'
 				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
@@ -2262,14 +2490,21 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 				AND occurrence.occurrence_id = observation.id::text
 			ORDER BY replacement.id DESC LIMIT 1
 		) invalidation ON true
+		WHERE (${cursor === undefined} OR (observation.observed_at, observation.observation_kind, observation.id) <
+			(${cursor?.[11] ?? '9999-12-31T23:59:59.999Z'}::timestamptz, ${cursor?.[12] ?? 'token-metadata'}, ${cursor?.[13] ?? '0'}::bigint))
 		ORDER BY observation.observed_at DESC, observation.observation_kind DESC, observation.id DESC
-		LIMIT ${limit + 1} OFFSET ${offset}
+		LIMIT ${limit + 1}
 	`
-	if (cursorValue === null) snapshot = { ...snapshot, total: String(rows[0]?.['total'] ?? '0') }
+	if (cursor === undefined) snapshot = { ...snapshot, total: String(rows[0]?.['total'] ?? '0') }
 	const total = directObservationTotal(snapshot.total)
-	const items = rows.slice(0, limit).map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
-	const hasMore = offset + items.length < total
-	const snapshotIdentity = JSON.stringify(snapshot)
+	const pageRows = rows.slice(0, limit)
+	const items = pageRows.map((row: Record<string, unknown>) =>
+		Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total' && key !== 'cursor_observed_at')),
+	)
+	const offset = cursor?.[10] ?? 0
+	const returnedOffset = offset + items.length
+	const hasMore = rows.length > limit
+	const last = pageRows[pageRows.length - 1]
 	return json({
 		chainId,
 		asOf,
@@ -2279,7 +2514,7 @@ const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response>
 			limit,
 			offset,
 			hasMore,
-			...(hasMore ? { nextCursor: offsetCursorFor(chainId, 'direct-observations', snapshotIdentity, asOf, offset + limit) } : {}),
+			...(hasMore && last !== undefined ? { nextCursor: directObservationCursorFor(chainId, snapshot, asOf, returnedOffset, last) } : {}),
 		},
 	})
 }
@@ -2289,8 +2524,9 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 	const market = parts[1]?.toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || market === undefined || !/^0x[0-9a-f]{40}$/.test(market))
 		return json({ error: 'Invalid AMM identifier' }, 400)
-	const asOf = await operationsAsOf(sql, chainId)
-	const page = detailPage(url, chainId, 'trading', market, asOf)
+	const cursor = protocolCursorForRequest(url, chainId, 'trading', market)
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const page = detailPage(url, chainId, 'trading', market, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -2417,6 +2653,120 @@ const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: UR
 	})
 }
 
+type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]
+type RiskEventPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string]
+type RiskLiquidationPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string, entityType: string, entityIdentity: string]
+type RiskHistoryPositions = {
+	readonly state?: RiskStatePosition
+	readonly accounting?: RiskEventPosition
+	readonly lifecycle?: RiskEventPosition
+	readonly liquidations?: RiskLiquidationPosition
+}
+type RiskHistoryCursor = readonly [
+	version: 1,
+	chainId: number,
+	domain: 'risk-history',
+	identity: string,
+	snapshotBlock: string,
+	snapshotHash: string,
+	invalidationId: string,
+	abiSourceHash: string,
+	applicationSourceHash: string,
+	projectionSourceHash: string,
+	offset: number,
+	positions: RiskHistoryPositions,
+]
+
+const riskEventPosition = (value: unknown): RiskEventPosition | undefined => {
+	if (!Array.isArray(value) || value.length !== 4 || !isPostgresBigint(value[0]) || !isPostgresInteger(value[1])) return undefined
+	if (typeof value[2] !== 'string' || !/^0x[0-9a-f]{64}$/.test(value[2]) || typeof value[3] !== 'string' || !/^0x[0-9a-f]{64}$/.test(value[3])) return undefined
+	return [value[0], value[1], value[2], value[3]]
+}
+
+const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined => {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+	const fields = jsonRecord(value)
+	const stateValue = fields['state']
+	const state =
+		stateValue === undefined
+			? undefined
+			: Array.isArray(stateValue) &&
+					stateValue.length === 3 &&
+					isPostgresBigint(stateValue[0]) &&
+					typeof stateValue[1] === 'string' &&
+					isCursorTimestamp(stateValue[1]) &&
+					isPostgresBigint(stateValue[2])
+				? ([stateValue[0], stateValue[1], stateValue[2]] as const)
+				: undefined
+	if (stateValue !== undefined && state === undefined) return undefined
+	const accounting = riskEventPosition(fields['accounting'])
+	if (fields['accounting'] !== undefined && accounting === undefined) return undefined
+	const lifecycle = riskEventPosition(fields['lifecycle'])
+	if (fields['lifecycle'] !== undefined && lifecycle === undefined) return undefined
+	const liquidationValue = fields['liquidations']
+	const liquidationBase = riskEventPosition(Array.isArray(liquidationValue) ? liquidationValue.slice(0, 4) : undefined)
+	const liquidations =
+		liquidationValue === undefined
+			? undefined
+			: Array.isArray(liquidationValue) &&
+					liquidationValue.length === 6 &&
+					liquidationBase !== undefined &&
+					typeof liquidationValue[4] === 'string' &&
+					typeof liquidationValue[5] === 'string'
+				? ([...liquidationBase, liquidationValue[4], liquidationValue[5]] as const)
+				: undefined
+	if (liquidationValue !== undefined && liquidations === undefined) return undefined
+	return {
+		...(state === undefined ? {} : { state }),
+		...(accounting === undefined ? {} : { accounting }),
+		...(lifecycle === undefined ? {} : { lifecycle }),
+		...(liquidations === undefined ? {} : { liquidations }),
+	}
+}
+
+const parseRiskHistoryCursor = (value: string | null, chainId: number, identity: string): RiskHistoryCursor | undefined => {
+	if (value === null) return undefined
+	try {
+		const decoded = decodeOpaqueCursor(value)
+		const parts = Array.isArray(decoded) ? decoded : []
+		const positions = riskHistoryPositions(parts[11])
+		if (
+			parts.length !== 12 ||
+			parts[0] !== 1 ||
+			parts[1] !== chainId ||
+			parts[2] !== 'risk-history' ||
+			parts[3] !== identity ||
+			!isPostgresBigint(parts[4]) ||
+			typeof parts[5] !== 'string' ||
+			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+			!isPostgresBigint(parts[6]) ||
+			!parts.slice(7, 10).every((part) => typeof part === 'string') ||
+			!isNonNegativeSafeInteger(parts[10]) ||
+			positions === undefined
+		)
+			throw new Error('shape')
+		return [
+			1,
+			chainId,
+			'risk-history',
+			identity,
+			String(parts[4]),
+			String(parts[5]),
+			String(parts[6]),
+			String(parts[7]),
+			String(parts[8]),
+			String(parts[9]),
+			Number(parts[10]),
+			positions,
+		]
+	} catch (error) {
+		throw new ApiRequestError('cursor is invalid', { cause: error })
+	}
+}
+
+const riskHistoryCursorFor = (chainId: number, identity: string, asOf: Record<string, unknown>, offset: number, positions: RiskHistoryPositions): string =>
+	encodeOpaqueCursor([1, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions] satisfies RiskHistoryCursor)
+
 const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const kind = parts[0]
 	const chainId = routeInteger(parts[1])
@@ -2431,14 +2781,19 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 	)
 		return json({ error: 'Invalid risk entity identifier' }, 400)
 	rejectRawSnapshotOffset(url)
-	const asOf = await operationsAsOfFromUrl(sql, chainId, url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 250
 	const limit = Math.min(Math.max(requestedLimit, 1), 1_000)
 	const entityIdentity = kind === 'pools' ? poolAddress : `${poolAddress}:${vaultAddress}`
 	const historyIdentity = `${kind}:${entityIdentity}`
-	const page = offsetPage(url, chainId, 'risk-history', historyIdentity, asOf)
-	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
-	const offset = page.offset
+	const cursor = parseRiskHistoryCursor(url.searchParams.get('cursor'), chainId, historyIdentity)
+	const asOf = await operationsAsOfForContinuations(
+		sql,
+		chainId,
+		cursor === undefined ? [] : [{ parts: cursor, offset: 4 }],
+		postgresBigint(url.searchParams.get('atBlock'), 'atBlock'),
+	)
+	const offset = cursor?.[10] ?? 0
+	const positions = cursor?.[11] ?? {}
 	const risk = await riskCatalogData(sql, chainId, {
 		poolAddress,
 		...(kind === 'vaults' && vaultAddress !== undefined ? { vaultAddress } : {}),
@@ -2454,6 +2809,7 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 	const [stateSnapshots, accountingSnapshots, lifecycleEvents, liquidations] = await Promise.all([
 		sql`
 			SELECT observation.*, observation.id::text AS id, observation.indexer_run_id::text AS indexer_run_id,
+				to_char(observation.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_observed_at,
 				block.timestamp AS block_timestamp, invalidation.id::text AS invalidation_id,
 				invalidation.reason AS invalidation_reason, invalidation.causes AS invalidation_causes
 			FROM entity_state_observations observation
@@ -2471,31 +2827,43 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 			WHERE observation.chain_id = ${chainId} AND observation.entity_type = ${entityType}
 				AND observation.entity_identity = ${entityIdentity} AND observation.canonical
 				AND observation.block_number <= ${String(asOf['blockNumber'])}
+				AND (${positions.state === undefined} OR (observation.block_number, observation.observed_at, observation.id) <
+					(${positions.state?.[0] ?? '0'}::bigint, ${positions.state?.[1] ?? '1970-01-01T00:00:00.000Z'}::timestamptz,
+						${positions.state?.[2] ?? '0'}::bigint))
 			ORDER BY observation.block_number DESC, observation.observed_at DESC, observation.id DESC
-			LIMIT ${limit + 1} OFFSET ${offset}
+			LIMIT ${limit + 1}
 		`,
 		kind === 'pools'
 			? sql`SELECT snapshot.*, block.timestamp AS block_timestamp FROM pool_snapshots snapshot
 				JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash
 				WHERE snapshot.chain_id = ${chainId} AND snapshot.pool_address = ${poolAddress} AND snapshot.canonical
 					AND snapshot.block_number <= ${String(asOf['blockNumber'])}
+					AND (${positions.accounting === undefined} OR (snapshot.block_number, snapshot.log_index, snapshot.tx_hash, snapshot.block_hash) <
+						(${positions.accounting?.[0] ?? '0'}::bigint, ${positions.accounting?.[1] ?? 0}::integer,
+							${positions.accounting?.[2] ?? `0x${'0'.repeat(64)}`}, ${positions.accounting?.[3] ?? `0x${'0'.repeat(64)}`}))
 				ORDER BY snapshot.block_number DESC, snapshot.log_index DESC, snapshot.tx_hash DESC, snapshot.block_hash DESC
-				LIMIT ${limit + 1} OFFSET ${offset}`
+				LIMIT ${limit + 1}`
 			: sql`SELECT snapshot.*, block.timestamp AS block_timestamp FROM vault_snapshots snapshot
 				JOIN blocks block ON block.chain_id = snapshot.chain_id AND block.hash = snapshot.block_hash
 				WHERE snapshot.chain_id = ${chainId} AND snapshot.pool_address = ${poolAddress}
 					AND snapshot.vault_address = ${vaultAddress ?? ''} AND snapshot.canonical
 					AND snapshot.block_number <= ${String(asOf['blockNumber'])}
+					AND (${positions.accounting === undefined} OR (snapshot.block_number, snapshot.log_index, snapshot.tx_hash, snapshot.block_hash) <
+						(${positions.accounting?.[0] ?? '0'}::bigint, ${positions.accounting?.[1] ?? 0}::integer,
+							${positions.accounting?.[2] ?? `0x${'0'.repeat(64)}`}, ${positions.accounting?.[3] ?? `0x${'0'.repeat(64)}`}))
 				ORDER BY snapshot.block_number DESC, snapshot.log_index DESC, snapshot.tx_hash DESC, snapshot.block_hash DESC
-				LIMIT ${limit + 1} OFFSET ${offset}`,
+				LIMIT ${limit + 1}`,
 		sql`
 			SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
 			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
 			WHERE timeline.chain_id = ${chainId} AND timeline.entity_type = ${entityType}
 				AND timeline.entity_identity = ${entityIdentity} AND timeline.canonical
 				AND timeline.block_number <= ${String(asOf['blockNumber'])}
+				AND (${positions.lifecycle === undefined} OR (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash) <
+					(${positions.lifecycle?.[0] ?? '0'}::bigint, ${positions.lifecycle?.[1] ?? 0}::integer,
+						${positions.lifecycle?.[2] ?? `0x${'0'.repeat(64)}`}, ${positions.lifecycle?.[3] ?? `0x${'0'.repeat(64)}`}))
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC
-			LIMIT ${limit + 1} OFFSET ${offset}
+			LIMIT ${limit + 1}
 		`,
 		sql`
 			SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
@@ -2504,12 +2872,67 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 				AND timeline.block_number <= ${String(asOf['blockNumber'])}
 				AND (timeline.summary_data->>'targetVault' = ${vaultAddress ?? ''} OR timeline.summary_data->>'vault' = ${vaultAddress ?? ''}
 					OR (timeline.source_contract = ${poolAddress} AND ${kind === 'pools'}))
+				AND (${positions.liquidations === undefined} OR (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash,
+					timeline.entity_type, timeline.entity_identity) < (${positions.liquidations?.[0] ?? '0'}::bigint,
+						${positions.liquidations?.[1] ?? 0}::integer, ${positions.liquidations?.[2] ?? `0x${'0'.repeat(64)}`},
+						${positions.liquidations?.[3] ?? `0x${'0'.repeat(64)}`}, ${positions.liquidations?.[4] ?? ''}, ${positions.liquidations?.[5] ?? ''}))
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC, timeline.block_hash DESC,
 				timeline.entity_type DESC, timeline.entity_identity DESC
-			LIMIT ${limit + 1} OFFSET ${offset}
+			LIMIT ${limit + 1}
 		`,
 	])
 	const historyTruncated = [stateSnapshots, accountingSnapshots, lifecycleEvents, liquidations].some((rows) => rows.length > limit)
+	const statePageRows = stateSnapshots.slice(0, limit)
+	const pageRows = {
+		stateSnapshots: statePageRows.map((row: Record<string, unknown>) =>
+			Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'cursor_observed_at')),
+		),
+		accountingSnapshots: accountingSnapshots.slice(0, limit),
+		lifecycleEvents: lifecycleEvents.slice(0, limit),
+		liquidations: liquidations.slice(0, limit),
+	}
+	const lastState = statePageRows.at(-1)
+	const lastAccounting = pageRows.accountingSnapshots.at(-1)
+	const lastLifecycle = pageRows.lifecycleEvents.at(-1)
+	const lastLiquidation = pageRows.liquidations.at(-1)
+	const nextPositions: RiskHistoryPositions = {
+		...positions,
+		...(lastState === undefined
+			? {}
+			: { state: [String(lastState['block_number']), cursorTimestamp(lastState['cursor_observed_at']), String(lastState['id'])] as const }),
+		...(lastAccounting === undefined
+			? {}
+			: {
+					accounting: [
+						String(lastAccounting['block_number']),
+						Number(lastAccounting['log_index']),
+						String(lastAccounting['tx_hash']),
+						String(lastAccounting['block_hash']),
+					] as const,
+				}),
+		...(lastLifecycle === undefined
+			? {}
+			: {
+					lifecycle: [
+						String(lastLifecycle['block_number']),
+						Number(lastLifecycle['log_index']),
+						String(lastLifecycle['tx_hash']),
+						String(lastLifecycle['block_hash']),
+					] as const,
+				}),
+		...(lastLiquidation === undefined
+			? {}
+			: {
+					liquidations: [
+						String(lastLiquidation['block_number']),
+						Number(lastLiquidation['log_index']),
+						String(lastLiquidation['tx_hash']),
+						String(lastLiquidation['block_hash']),
+						String(lastLiquidation['entity_type']),
+						String(lastLiquidation['entity_identity']),
+					] as const,
+				}),
+	}
 	return json({
 		chainId,
 		asOf,
@@ -2517,14 +2940,11 @@ const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL):
 			...entity,
 			approvalEvents: risk.approvalEvents,
 			history: {
-				stateSnapshots: stateSnapshots.slice(0, limit),
-				accountingSnapshots: accountingSnapshots.slice(0, limit),
-				lifecycleEvents: lifecycleEvents.slice(0, limit),
-				liquidations: liquidations.slice(0, limit),
+				...pageRows,
 				limit,
 				offset,
 				truncated: historyTruncated,
-				nextCursor: historyTruncated ? offsetCursorFor(chainId, 'risk-history', historyIdentity, asOf, offset + limit) : undefined,
+				nextCursor: historyTruncated ? riskHistoryCursorFor(chainId, historyIdentity, asOf, offset + limit, nextPositions) : undefined,
 			},
 		},
 	})
@@ -2545,11 +2965,11 @@ const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Response> =>
 	const toBlock = postgresBigint(url.searchParams.get('toBlock'), 'toBlock') ?? POSTGRES_BIGINT_MAX.toString()
 	if (BigInt(fromBlock) > BigInt(toBlock)) throw new ApiRequestError('fromBlock must not exceed toBlock')
 	const canonical = canonicalHistoryFilter(url)
-	const asOf = await operationsAsOf(sql, chainId)
 	const filterIdentity = JSON.stringify({ entityType, event, address, query, fromBlock, toBlock, canonical })
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	const cursor = parseTimelineCatalogCursor(url.searchParams.get('cursor'), chainId, filterIdentity, asOf)
+	const cursor = parseTimelineCatalogCursor(url.searchParams.get('cursor'), chainId, filterIdentity)
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 2 }])
 	const cursorBlock = cursor?.[8] ?? String(asOf['blockNumber'])
 	const cursorLog = cursor?.[9] ?? 2_147_483_647
 	const cursorTx = cursor?.[10] ?? `0x${'f'.repeat(64)}`
@@ -2639,10 +3059,11 @@ const timelineResponse = async (sql: SQL, parts: readonly string[], url: URL): P
 	)
 		return json({ error: 'Invalid timeline identifier' }, 400)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
-	const asOf = await operationsAsOf(sql, chainId)
 	url.searchParams.set('limit', String(requestedLimit))
 	const identity = `${entityType}:${entityIdentity}`
-	const page = detailPage(url, chainId, 'timeline', identity, asOf)
+	const cursor = protocolCursorForRequest(url, chainId, 'timeline', identity)
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const page = detailPage(url, chainId, 'timeline', identity, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
@@ -2786,8 +3207,9 @@ const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promi
 	const requestedFromBlock = url.searchParams.has('fromBlock') ? fromBlock : indexedFromBlock
 	const requestedToBlock = url.searchParams.has('toBlock') ? toBlock : indexedThroughBlock
 	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map((part) => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
-	const page = offsetPage(url, chainId, 'state-history', historyIdentity, asOf)
+	const page = offsetPage(url, chainId, 'state-history', historyIdentity)
 	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
+	if (page.cursor !== undefined && !snapshotBoundaryMatches(page.cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	const offset = page.offset
 	const rangeCovered =
 		indexedThroughBlock !== undefined &&
@@ -3426,8 +3848,7 @@ const parsePortfolioCursor = (
 	chainId: number,
 	address: string,
 	kind: PortfolioCollection,
-	asOf: Record<string, unknown>,
-): { readonly total: number; readonly offset: number } => {
+): { readonly total: number; readonly offset: number; readonly cursor?: PortfolioCursor } => {
 	if (value === null) return { total: 0, offset: 0 }
 	let parts: unknown[]
 	try {
@@ -3452,8 +3873,11 @@ const parsePortfolioCursor = (
 	)
 		throw new ApiRequestError(`${kind}Cursor is invalid`)
 	if (parts[0] !== chainId || parts[1] !== address || parts[2] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
-	if (!snapshotBoundaryMatches(parts, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	return { total: parts[9], offset: parts[10] }
+	return {
+		total: parts[9],
+		offset: parts[10],
+		cursor: parts as [number, string, PortfolioCollection, string, string, string, string, string, string, number, number],
+	}
 }
 
 const portfolioCursorFor = (
@@ -3472,11 +3896,15 @@ const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Response> =
 	if (address === undefined) throw new ApiRequestError('address is required')
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
-	const asOf = await operationsAsOf(sql, chainId)
+	const lpPage = parsePortfolioCursor(url.searchParams.get('lpCursor'), chainId, address, 'lp')
+	const forkPage = parsePortfolioCursor(url.searchParams.get('forkCursor'), chainId, address, 'forks')
+	const reportPage = parsePortfolioCursor(url.searchParams.get('reportCursor'), chainId, address, 'reports')
+	const asOf = await operationsAsOfForContinuations(
+		sql,
+		chainId,
+		[lpPage.cursor, forkPage.cursor, reportPage.cursor].flatMap((cursor) => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
+	)
 	const snapshotBlock = String(asOf['blockNumber'])
-	const lpPage = parsePortfolioCursor(url.searchParams.get('lpCursor'), chainId, address, 'lp', asOf)
-	const forkPage = parsePortfolioCursor(url.searchParams.get('forkCursor'), chainId, address, 'forks', asOf)
-	const reportPage = parsePortfolioCursor(url.searchParams.get('reportCursor'), chainId, address, 'reports', asOf)
 	const requestUrl = new URL(url)
 	requestUrl.pathname = '/api/v1/richlist'
 	requestUrl.search = new URLSearchParams({ chainId: String(chainId), address, limit: '1' }).toString()
@@ -3654,8 +4082,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			const limit = Math.min(Math.max(requestedLimit, 1), 250)
 			if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
 			const cursor = parseActionCursor(url.searchParams.get('cursor'), chainId)
-			const asOf = await operationsAsOf(sql, chainId)
-			if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 2, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+			const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 2 }])
 			const values: Array<string | number> = []
 			const clauses = ['t.canonical', 'block.canonical']
 			const bind = (value: string | number): string => {

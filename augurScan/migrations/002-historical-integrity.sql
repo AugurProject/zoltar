@@ -6,6 +6,18 @@ ALTER TABLE public.networks
 ALTER TABLE public.contracts
     ADD COLUMN configured_deployment_block bigint;
 
+CREATE INDEX pool_snapshots_detail_page
+    ON public.pool_snapshots USING btree (chain_id, pool_address, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
+
+CREATE INDEX vault_snapshots_detail_page
+    ON public.vault_snapshots USING btree (chain_id, pool_address, vault_address, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
+
+CREATE INDEX protocol_timeline_entity_history_page
+    ON public.protocol_timeline_entries USING btree (chain_id, entity_type, entity_identity, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
+
+CREATE INDEX protocol_timeline_history_page
+    ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC, entity_type DESC, entity_identity DESC) WHERE canonical;
+
 CREATE TABLE public.augurscan_schema_migrations (
     schema_version text NOT NULL,
     description text NOT NULL,
@@ -134,6 +146,15 @@ CREATE TABLE public.address_balance_observations (
 CREATE INDEX address_balance_observation_history
     ON public.address_balance_observations USING btree (chain_id, address, asset_address, block_number DESC, observed_at DESC, id DESC);
 
+CREATE INDEX address_balance_observation_page
+    ON public.address_balance_observations USING btree (chain_id, observed_at DESC, id DESC);
+
+CREATE INDEX address_balance_observation_address_page
+    ON public.address_balance_observations USING btree (chain_id, address, observed_at DESC, id DESC);
+
+CREATE INDEX address_balance_observation_asset_page
+    ON public.address_balance_observations USING btree (chain_id, asset_address, observed_at DESC, id DESC);
+
 INSERT INTO public.address_balance_observations (
     chain_id, block_hash, block_number, address, asset_address, asset_kind,
     read_status, balance, canonical, observed_at
@@ -168,6 +189,12 @@ CREATE TABLE public.token_metadata_observations (
 
 CREATE INDEX token_metadata_observation_history
     ON public.token_metadata_observations USING btree (chain_id, address, read_block DESC, observed_at DESC, id DESC);
+
+CREATE INDEX token_metadata_observation_page
+    ON public.token_metadata_observations USING btree (chain_id, observed_at DESC, id DESC);
+
+CREATE INDEX token_metadata_observation_address_page
+    ON public.token_metadata_observations USING btree (chain_id, address, observed_at DESC, id DESC);
 
 INSERT INTO public.token_metadata_observations (
     chain_id, address, block_hash, name, symbol, decimals, read_status, read_error, read_block, canonical, observed_at

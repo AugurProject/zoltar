@@ -1177,6 +1177,13 @@ CREATE INDEX pool_snapshots_history ON public.pool_snapshots USING btree (chain_
 
 
 --
+-- Name: pool_snapshots_detail_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pool_snapshots_detail_page ON public.pool_snapshots USING btree (chain_id, pool_address, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
+
+
+--
 -- Name: pool_state_events_history; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1223,6 +1230,20 @@ CREATE INDEX protocol_timeline_page ON public.protocol_timeline_entries USING bt
 --
 
 CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical;
+
+
+--
+-- Name: protocol_timeline_entity_history_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX protocol_timeline_entity_history_page ON public.protocol_timeline_entries USING btree (chain_id, entity_type, entity_identity, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
+
+
+--
+-- Name: protocol_timeline_history_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX protocol_timeline_history_page ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC, entity_type DESC, entity_identity DESC) WHERE canonical;
 
 
 --
@@ -1307,6 +1328,13 @@ CREATE INDEX universe_events_history ON public.universe_events USING btree (chai
 --
 
 CREATE INDEX vault_snapshots_history ON public.vault_snapshots USING btree (chain_id, vault_address, pool_address, block_number DESC, log_index DESC) WHERE canonical;
+
+
+--
+-- Name: vault_snapshots_detail_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX vault_snapshots_detail_page ON public.vault_snapshots USING btree (chain_id, pool_address, vault_address, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
 
 
 --
@@ -1683,6 +1711,15 @@ CREATE TABLE public.address_balance_observations (
 CREATE INDEX address_balance_observation_history
     ON public.address_balance_observations USING btree (chain_id, address, asset_address, block_number DESC, observed_at DESC, id DESC);
 
+CREATE INDEX address_balance_observation_page
+    ON public.address_balance_observations USING btree (chain_id, observed_at DESC, id DESC);
+
+CREATE INDEX address_balance_observation_address_page
+    ON public.address_balance_observations USING btree (chain_id, address, observed_at DESC, id DESC);
+
+CREATE INDEX address_balance_observation_asset_page
+    ON public.address_balance_observations USING btree (chain_id, asset_address, observed_at DESC, id DESC);
+
 CREATE TABLE public.token_metadata_observations (
     id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
     chain_id bigint NOT NULL,
@@ -1709,6 +1746,12 @@ CREATE TABLE public.token_metadata_observations (
 
 CREATE INDEX token_metadata_observation_history
     ON public.token_metadata_observations USING btree (chain_id, address, read_block DESC, observed_at DESC, id DESC);
+
+CREATE INDEX token_metadata_observation_page
+    ON public.token_metadata_observations USING btree (chain_id, observed_at DESC, id DESC);
+
+CREATE INDEX token_metadata_observation_address_page
+    ON public.token_metadata_observations USING btree (chain_id, address, observed_at DESC, id DESC);
 
 CREATE TABLE public.action_interpretations (
     chain_id bigint NOT NULL,
