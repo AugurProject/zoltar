@@ -192,7 +192,7 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(liquidation[2], targetVaultRepBackingAttoRep - 1n, 'the funded award should consume pool-held vault REP backing only up to atomic rounding')
 	})
 
-	test('capacity ownership', async () => {
+	test('partial liquidation moves proportional capacity ownership up to the requested debt', async () => {
 		const targetCapacityOwnershipAttoRep = PRICE_PRECISION / 2n
 		const partialLiquidation = await client.readContract({
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,

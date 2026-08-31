@@ -97,7 +97,7 @@ export async function terminateBrowserProcess(
 	}
 }
 
-const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline: number, description: string, action: Promise<TValue>, cancel: () => void): Promise<TValue> => {
+const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline: number, description: string, action: () => Promise<TValue>, cancel: () => void): Promise<TValue> => {
 	const remainingMilliseconds = deadline - Date.now()
 	if (remainingMilliseconds <= 0) {
 		cancel()
@@ -121,7 +121,7 @@ const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline:
 			const timeoutId = setTimeout(() => finish({ error: new Error(`Chromium initialization timed out while ${description}`) }), remainingMilliseconds)
 			browser.once('error', handleError)
 			browser.once('exit', handleExit)
-			action.then(
+			action().then(
 				value => finish({ value }),
 				error => finish({ error: error instanceof Error ? error : new Error(String(error)) }),
 			)
@@ -239,17 +239,19 @@ export async function createDevToolsSession(
 		devToolsPortAttempts,
 		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
 		pollMilliseconds = 50,
+		profileParentPath = os.tmpdir(),
 		targetAttempts,
 		targetListRequest = async (url, signal) => (await (await fetch(url, { signal })).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>,
 	}: {
 		readonly devToolsPortAttempts?: number
 		readonly initializationTimeoutMilliseconds?: number
 		readonly pollMilliseconds?: number
+		readonly profileParentPath?: string
 		readonly targetAttempts?: number
 		readonly targetListRequest?: (url: string, signal: AbortSignal) => Promise<Array<{ type: string; webSocketDebuggerUrl: string }>>
 	} = {},
 ) {
-	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
+	const profilePath = await fs.mkdtemp(path.join(profileParentPath, 'zoltar-browser-smoke-'))
 	let browser: ChildProcess | undefined
 	let socket: WebSocket | undefined
 	let cleanedUp = false
@@ -303,7 +305,13 @@ export async function createDevToolsSession(
 				const fetchController = new AbortController()
 				let targets: Array<{ type: string; webSocketDebuggerUrl: string }>
 				try {
-					targets = await awaitInitializationStep(browser, initializationDeadline, 'requesting the DevTools target list', targetListRequest(`http://127.0.0.1:${devToolsPort}/json/list`, fetchController.signal), () => fetchController.abort())
+					targets = await awaitInitializationStep(
+						browser,
+						initializationDeadline,
+						'requesting the DevTools target list',
+						() => targetListRequest(`http://127.0.0.1:${devToolsPort}/json/list`, fetchController.signal),
+						() => fetchController.abort(),
+					)
 				} catch (error) {
 					if (!isTransientDevToolsConnectionError(error)) throw error
 					// Chromium target list not ready yet.
@@ -317,10 +325,11 @@ export async function createDevToolsSession(
 						browser,
 						initializationDeadline,
 						'opening the DevTools WebSocket',
-						new Promise<void>((resolve, reject) => {
-							ws.addEventListener('open', () => resolve(), { once: true })
-							ws.addEventListener('error', () => reject(new Error('Could not open the Chromium DevTools WebSocket')), { once: true })
-						}),
+						() =>
+							new Promise<void>((resolve, reject) => {
+								ws.addEventListener('open', () => resolve(), { once: true })
+								ws.addEventListener('error', () => reject(new Error('Could not open the Chromium DevTools WebSocket')), { once: true })
+							}),
 						() => ws.close(),
 					)
 					return ws

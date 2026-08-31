@@ -29,7 +29,7 @@
 		["0x8C648789566Ae350f147228e46aBE8bB63540Ffd", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x8B4Bbd3bEC7E1F65eE0435d3b8D8d1e312b0b359", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x58CFc60a3978E4a86EE1c0175E07759645d18532", "Security Pool Factory", "securityPoolFactory"],
-		["0x9201310a45456BA6dC2D33E8F42806a67F04203f", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x19138180CFb059b5695789e73c79bA300db03A3c", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0xb3929faea19B9d5A3464e62A996E489404D6Cce9", "Security Pool Factory", "securityPoolFactory"]
 	]
 }

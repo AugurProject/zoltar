@@ -1,6 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { buildRouteHref } from '@zoltar/ui-core-shared/lib/routing.js'
-import { writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/lib/openOracleUrlParams.js'
 import type { ViewTabOption } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleView } from '../../types.js'
 

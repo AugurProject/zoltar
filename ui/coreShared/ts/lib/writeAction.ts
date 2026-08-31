@@ -3,6 +3,7 @@ import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from './assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
+import { createActiveEnvironmentGuard } from './activeEnvironment.js'
 import { TRANSACTION_ACTION_LOCK_REASON } from './transactionTray.js'
 
 type RunWriteActionParameters = {
@@ -61,9 +62,11 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 
 	let ownsTransaction = false
 	try {
+		const environmentGuard = createActiveEnvironmentGuard()
 		let result: TResult | undefined
 		try {
 			const activeWallet = await assertActiveWallet(parameters.accountAddress)
+			if (!environmentGuard.isCurrent()) return
 			if (parameters.onTransactionRequested() === false) {
 				if (parameters.onWriteError === undefined) {
 					parameters.setErrorMessage(TRANSACTION_ACTION_LOCK_REASON)
@@ -75,12 +78,14 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			ownsTransaction = true
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress, activeWallet)
+			if (!environmentGuard.isCurrent()) return
 			if (result === undefined) {
 				parameters.onWriteCanceled?.()
 				parameters.onTransactionCanceled?.()
 				return
 			}
 		} catch (error) {
+			if (!environmentGuard.isCurrent()) return
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
 			if (ownsTransaction) parameters.onTransactionFailed?.(message)
 			if (parameters.onWriteError === undefined) {
@@ -93,8 +98,11 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 
 		try {
 			await onSuccess?.(result, parameters.accountAddress)
+			if (!environmentGuard.isCurrent()) return
 			await parameters.refreshState()
+			if (!environmentGuard.isCurrent()) return
 		} catch (error) {
+			if (!environmentGuard.isCurrent()) return
 			const message = formatRefreshErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the UI failed')
 			if (parameters.onRefreshError === undefined) {
 				parameters.setErrorMessage(message)

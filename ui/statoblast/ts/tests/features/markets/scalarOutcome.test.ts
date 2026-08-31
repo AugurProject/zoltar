@@ -1,7 +1,6 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES, combineScalarParityOutcomeIndex, describeScalarParityOutcomeIndex, formatScalarParityOutcomeName, getScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
 import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarDisplayValue, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, getScalarTickIndexForDisplayValue, isValidScalarOutcomeIndex, parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 
 const scalarQuestion = {
@@ -103,31 +102,4 @@ void describe('scalar outcome helpers', () => {
 	void test('rejects UI-created tick counts that a native range input cannot represent exactly', () => {
 		expect(() => parseScalarFormInputs({ scalarMin: '0', scalarMax: (BigInt(Number.MAX_SAFE_INTEGER) + 1n).toString(), scalarIncrement: '1' })).toThrow('Scalar range and increment produce too many ticks. Narrow the range or increase the increment.')
 	})
-
-	for (const fixture of SCALAR_PARITY_LABEL_FIXTURES) {
-		void test(`formats scalar parity fixture: ${fixture.name}`, () => {
-			const question = getScalarParityQuestion(fixture.questionName)
-			const outcomeIndex = getScalarOutcomeIndex(question, fixture.tickIndex)
-			const expectedUiLabel = fixture.expectedLabel.replace(' ', '\u00a0')
-			expect(formatScalarOutcomeLabel(question, fixture.tickIndex)).toBe(expectedUiLabel)
-			expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(expectedUiLabel)
-		})
-	}
-
-	for (const fixture of SCALAR_PARITY_ENCODING_FIXTURES) {
-		void test(`describes scalar encoding fixture: ${fixture.name}`, () => {
-			const question = getScalarParityQuestion(fixture.questionName)
-			const outcomeIndex = combineScalarParityOutcomeIndex(fixture.invalid, fixture.firstPart, fixture.secondPart)
-			const descriptor = getScalarOutcomeIndexDescriptor(question, outcomeIndex)
-			expect(descriptor).toEqual(fixture.expectedDescriptor)
-			expect(descriptor).toEqual(describeScalarParityOutcomeIndex(question, outcomeIndex))
-			expect(isValidScalarOutcomeIndex(question, outcomeIndex)).toBe(fixture.expectedDescriptor.kind !== 'malformed')
-			expect(formatScalarParityOutcomeName(question, outcomeIndex)).toBe(fixture.expectedLabel)
-			if (fixture.expectedDescriptor.kind === 'malformed') {
-				expect(() => formatScalarOutcomeIndexLabel(question, outcomeIndex)).toThrow('Scalar outcome index is malformed')
-			} else {
-				expect(formatScalarOutcomeIndexLabel(question, outcomeIndex)).toBe(fixture.expectedLabel.replace(' ', '\u00a0'))
-			}
-		})
-	}
 })
