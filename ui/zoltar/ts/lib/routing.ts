@@ -8,11 +8,14 @@ const ZOLTAR_ROUTING_CONFIG: RoutingConfig<ZoltarRoute> = {
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },
 		{ hash: '#/zoltar', name: 'zoltar', queryParameters: new Set(['universe', 'zoltarView']) },
-		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(['openOracleView', 'openOracleReportId']) },
 	],
 }
 
 export const zoltarRouting = createRouting(ZOLTAR_ROUTING_CONFIG)
+
+export function isUniverseIndependentZoltarView(view: 'create' | 'fork' | 'migrate' | 'questions') {
+	return view === 'questions' || view === 'create'
+}
 
 export function installZoltarRouting() {
 	installRouting(ZOLTAR_ROUTING_CONFIG)

@@ -1,20 +1,20 @@
 import * as appCopy from '../../copy/app.js'
-import * as commonCopy from '../../copy/common.js'
 import { SectionBlock } from '../../components/SectionBlock.js'
 
-export function NotFoundSection() {
+export type NotFoundLink = {
+	href: string
+	label: string
+}
+
+export function NotFoundSection({ links }: { links: readonly NotFoundLink[] }) {
 	return (
 		<SectionBlock className='not-found-shell' title={appCopy.pageNotFoundTitle}>
 			<div className='actions'>
-				<a className='button-link' href='#/deploy'>
-					{commonCopy.deploy}
-				</a>
-				<a className='button-link secondary-link' href='#/zoltar'>
-					{commonCopy.zoltar}
-				</a>
-				<a className='button-link secondary-link' href='#/security-pools'>
-					{commonCopy.securityPools}
-				</a>
+				{links.map((link, index) => (
+					<a className={index === 0 ? 'button-link' : 'button-link secondary-link'} href={link.href} key={link.href}>
+						{link.label}
+					</a>
+				))}
 			</div>
 		</SectionBlock>
 	)

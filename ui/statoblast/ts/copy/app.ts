@@ -1,0 +1,7 @@
+export const openOracle = 'Open Oracle'
+export const openOraclePrice = 'Open Oracle Price'
+export const oracleReports = 'Open Oracle'
+export const createOracleReport = 'Create Open Oracle Report'
+export const oracleReportDetails = 'Open Oracle Report Details'
+export const oracleReportViews = 'Open Oracle views'
+export const statoblastSecurityMultiplierBps = 'Statoblast Security Multiplier'

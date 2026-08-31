@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { createMarket as createMarketTransaction } from '../../../protocol/index.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -109,6 +109,11 @@ function clearQuestionDraft(storageKey: string | undefined) {
 	}
 }
 
+function clearQuestionDraftIfUnchanged(storageKey: string | undefined, submittedForm: MarketFormState) {
+	const storedForm = readStoredQuestionDraft(storageKey)
+	if (storedForm !== undefined && JSON.stringify(storedForm) === JSON.stringify(submittedForm)) clearQuestionDraft(storageKey)
+}
+
 function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storageKey: string | undefined) {
 	if (keyedValue === undefined || keyedValue.storageKey !== storageKey) return undefined
 	return keyedValue.value
@@ -120,10 +125,13 @@ export function useMarketCreation(
 ) {
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, activeUniverseId)
+	const marketActionScopeKey = `${questionDraftStorageKey}:${environmentRefreshKey}`
+	const currentMarketActionScopeKeyRef = useRef(marketActionScopeKey)
+	currentMarketActionScopeKeyRef.current = marketActionScopeKey
 	const anonymousQuestionDraftStorageKey = getQuestionDraftStorageKey(undefined, activeUniverseId)
 	const marketFormState = useSignal<{ form: MarketFormState; storageKey: string | undefined }>({ form: readQuestionDraft(questionDraftStorageKey), storageKey: questionDraftStorageKey })
-	const marketCreating = useSignal<KeyedValue<boolean> | undefined>(undefined)
-	const marketSubmissionInProgress = useSignal(false)
+	const marketCreatingScopes = useSignal<ReadonlySet<string>>(new Set())
+	const marketSubmissionScopesRef = useRef(new Set<string>())
 	const marketResult = useSignal<KeyedValue<MarketCreationResult> | undefined>(undefined)
 	const marketError = useSignal<KeyedValue<string | undefined> | undefined>(undefined)
 	const marketFeedback = useSignal<KeyedValue<ActionFeedback<'createMarket'>> | undefined>(undefined)
@@ -154,67 +162,88 @@ export function useMarketCreation(
 	}
 
 	const createMarket = async () => {
-		if (marketSubmissionInProgress.value) {
-			marketError.value = { storageKey: questionDraftStorageKey, value: 'Question creation already in progress' }
+		if (marketSubmissionScopesRef.current.has(marketActionScopeKey)) {
+			marketError.value = { storageKey: marketActionScopeKey, value: 'Question creation already in progress' }
 			return
 		}
 		const submittedQuestionDraftStorageKey = questionDraftStorageKey
+		const submittedMarketActionScopeKey = marketActionScopeKey
+		const isCurrentMarketActionScope = () => currentMarketActionScopeKeyRef.current === submittedMarketActionScopeKey
 		const submittedMarketForm = getMarketForm()
 		const transactionContext = {
 			marketType: submittedMarketForm.marketType,
 			title: submittedMarketForm.title,
 			universeId: activeUniverseId,
 		}
-		marketSubmissionInProgress.value = true
+		marketSubmissionScopesRef.current.add(submittedMarketActionScopeKey)
 		marketResult.value = undefined
-		marketFeedback.value = { storageKey: submittedQuestionDraftStorageKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
+		marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
 		try {
 			await runWriteAction(
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before creating a question',
 					onRefreshError: (message, hash) => {
-						marketFeedback.value = { storageKey: submittedQuestionDraftStorageKey, value: createWarningActionFeedback('createMarket', 'Question created', message, hash) }
-						const result = getValueForStorageKey(marketResult.value, submittedQuestionDraftStorageKey)
-						if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
+						marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createWarningActionFeedback('createMarket', 'Question created', message, hash) }
+						const result = getValueForStorageKey(marketResult.value, submittedMarketActionScopeKey)
+						if (result !== undefined && isCurrentMarketActionScope()) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionRequested: () => {
 						const accepted = onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
 						if (accepted === false) return false
-						marketCreating.value = { storageKey: submittedQuestionDraftStorageKey, value: true }
+						marketCreatingScopes.value = new Set([...marketCreatingScopes.value, submittedMarketActionScopeKey])
 						return accepted
 					},
 					onTransactionFinished: () => {
-						marketCreating.value = undefined
+						const nextCreatingScopes = new Set(marketCreatingScopes.value)
+						nextCreatingScopes.delete(submittedMarketActionScopeKey)
+						marketCreatingScopes.value = nextCreatingScopes
 						onTransactionFinished()
 					},
-					onTransactionFailed,
+					onTransactionFailed: message => {
+						if (isCurrentMarketActionScope()) onTransactionFailed?.(message)
+					},
 					onWriteError: message => {
-						marketFeedback.value = { storageKey: submittedQuestionDraftStorageKey, value: createErrorActionFeedback('createMarket', 'Question creation failed', message) }
+						marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createErrorActionFeedback('createMarket', 'Question creation failed', message) }
+						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }
 					},
 					refreshState: async () => {
+						if (!isCurrentMarketActionScope()) return
 						await refreshWalletStateOnly(refreshState)
 						await zoltar.loadZoltarQuestions()
 					},
 					setErrorMessage: message => {
-						marketError.value = { storageKey: submittedQuestionDraftStorageKey, value: message }
+						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }
 					},
 				},
 				async walletAddress => {
 					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
-					return await dependencies.createMarket(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, createMarketParameters(submittedMarketForm))
+					return await dependencies.createMarket(
+						walletAddress,
+						{
+							onTransactionPrepared: preview => {
+								if (isCurrentMarketActionScope()) onTransactionPrepared?.(preview)
+							},
+							onTransactionSubmitted: hash => {
+								if (isCurrentMarketActionScope()) onTransactionSubmitted(hash)
+							},
+						},
+						createMarketParameters(submittedMarketForm),
+					)
 				},
 				'Failed to create question',
 				result => {
-					clearQuestionDraft(submittedQuestionDraftStorageKey)
-					marketResult.value = { storageKey: submittedQuestionDraftStorageKey, value: result }
-					marketFeedback.value = { storageKey: submittedQuestionDraftStorageKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
-					onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
-					zoltar.setZoltarForkQuestionId(result.questionId)
+					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm)
+					marketResult.value = { storageKey: submittedMarketActionScopeKey, value: result }
+					marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
+					if (isCurrentMarketActionScope()) {
+						onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
+						zoltar.setZoltarForkQuestionId(result.questionId)
+					}
 				},
 			)
 		} finally {
-			marketSubmissionInProgress.value = false
+			marketSubmissionScopesRef.current.delete(submittedMarketActionScopeKey)
 		}
 	}
 
@@ -228,11 +257,11 @@ export function useMarketCreation(
 	return {
 		...zoltar,
 		createMarket,
-		marketFeedback: getValueForStorageKey(marketFeedback.value, questionDraftStorageKey),
-		marketCreating: getValueForStorageKey(marketCreating.value, questionDraftStorageKey) ?? false,
-		marketError: getValueForStorageKey(marketError.value, questionDraftStorageKey),
+		marketFeedback: getValueForStorageKey(marketFeedback.value, marketActionScopeKey),
+		marketCreating: marketCreatingScopes.value.has(marketActionScopeKey),
+		marketError: getValueForStorageKey(marketError.value, marketActionScopeKey),
 		marketForm: getMarketForm(),
-		marketResult: getValueForStorageKey(marketResult.value, questionDraftStorageKey),
+		marketResult: getValueForStorageKey(marketResult.value, marketActionScopeKey),
 		resetMarket,
 		setMarketForm,
 	}
