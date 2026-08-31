@@ -87,6 +87,7 @@ describe('QuestionCreateSection', () => {
 		})
 		expect(updates).toContainEqual({ title: 'Updated question' })
 		expect(documentQueries.getByText('Previous creation failed')).not.toBeNull()
+		expect(documentQueries.getByRole('alert').textContent).toContain('Previous creation failed')
 		expectTransactionButtonDisabled(document.body, 'Review question', 'Connect a wallet before creating a question.')
 	})
 

@@ -204,6 +204,7 @@ export function useQuestionCreation(
 					},
 					onWriteError: message => {
 						questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createErrorActionFeedback('createMarket', 'Question creation failed', message) }
+						questionError.value = { storageKey: submittedQuestionActionScopeKey, value: message }
 					},
 					refreshState: async () => {
 						if (!isCurrentQuestionActionScope()) return

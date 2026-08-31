@@ -179,6 +179,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.onTransactionSubmitted).not.toHaveBeenCalled()
 		expect(harness.onTransactionFinished).not.toHaveBeenCalled()
 		expect(harness.hookState().questionCreating).toBe(false)
+		expect(harness.hookState().questionError).toBe('Finish the current transaction before starting another transaction.')
 	})
 
 	test('keeps the successful result and presents a warning when refresh fails', async () => {
