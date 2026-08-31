@@ -368,6 +368,63 @@ function publicRpcHealth(value: unknown, configurationValue: unknown) {
 	})
 }
 
+function publicSubmissionHealth(value: unknown, configurationValue: unknown, nowMilliseconds: number, maximumAgeSeconds: number) {
+	const configuration = record(configurationValue)
+	const settings = record(configuration?.['settings']) ?? configuration
+	const connectivity = record(settings?.['connectivity'])
+	const network = record(settings?.['network'])
+	const submission = record(settings?.['submission'])
+	const expectedChainId = safeIntegerField(network ?? {}, 'chainId')
+	if (connectivity === undefined || submission === undefined || expectedChainId === undefined || !Number.isSafeInteger(maximumAgeSeconds) || maximumAgeSeconds < 1) return { ready: false, status: 'not-configured' as const }
+	const mode = submission['mode']
+	let expectedKind: 'private-relay' | 'public-rpc'
+	let requiredHealthyOriginCount: number
+	let urls: unknown
+	if (mode === 'public') {
+		expectedKind = 'public-rpc'
+		requiredHealthyOriginCount = 1
+		urls = connectivity['publicRpcUrls']
+	} else if (mode === 'private') {
+		expectedKind = 'private-relay'
+		const required = safeIntegerField(submission, 'minimumBundleRelaySuccesses')
+		if (required === undefined || required < 1) return { ready: false, status: 'not-configured' as const }
+		requiredHealthyOriginCount = required
+		urls = submission['relayUrls']
+	} else {
+		return { ready: false, status: 'not-configured' as const }
+	}
+	if (!Array.isArray(urls) || urls.length === 0 || urls.some(url => typeof url !== 'string')) return { ready: false, status: 'not-configured' as const }
+	const configuredOrigins = urls.flatMap(url => {
+		const origin = endpointOrigin(url)
+		return origin === undefined ? [] : [origin]
+	})
+	const configuredTargets = new Set(configuredOrigins)
+	if (configuredOrigins.length !== urls.length || configuredTargets.size < requiredHealthyOriginCount) return { ready: false, status: 'not-configured' as const }
+	const matchingChecks = Array.isArray(value)
+		? value.flatMap(candidate => {
+				const check = record(candidate)
+				if (check?.['kind'] !== expectedKind) return []
+				const target = endpointOrigin(check['target'])
+				return target !== undefined && configuredTargets.has(target) ? [{ check, target }] : []
+			})
+		: []
+	if (matchingChecks.length === 0) return { ready: false, status: 'not-checked' as const }
+	const expectedTargets = [...configuredOrigins].sort()
+	const observedTargets = matchingChecks.map(({ target }) => target).sort()
+	if (observedTargets.length !== expectedTargets.length || observedTargets.some((target, index) => target !== expectedTargets[index])) return { ready: false, status: 'not-checked' as const }
+	const freshChecks = matchingChecks.filter(({ check }) => {
+		const checkedAt = isoTimestampField(check, 'checkedAt')
+		if (checkedAt === undefined) return false
+		const ageMilliseconds = nowMilliseconds - Date.parse(checkedAt)
+		return ageMilliseconds >= 0 && ageMilliseconds <= maximumAgeSeconds * 1_000
+	})
+	if (freshChecks.length !== matchingChecks.length) return { ready: false, status: 'stale' as const }
+	const safetyFailure = freshChecks.some(({ check }) => check['status'] === 'failed' && check['failureDisposition'] !== 'connectivity-degraded')
+	const healthyOrigins = new Set(freshChecks.flatMap(({ check, target }) => (check['status'] === 'healthy' && safeIntegerField(check, 'chainId') === expectedChainId ? [target] : [])))
+	const ready = !safetyFailure && healthyOrigins.size >= requiredHealthyOriginCount
+	return { ready, status: ready ? ('ready' as const) : ('degraded' as const) }
+}
+
 function publicEvaluation(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
@@ -694,6 +751,8 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	const inventoryReady = !execute || inventoryReadyForLiveExecution(state, settings)
 	const rpcHealth = publicRpcHealth(state['rpcEndpointHealth'], configurationValue)
 	const rpcReady = !configured || rpcHealth['chainReady'] === true
+	const submissionHealth = publicSubmissionHealth(state['rpcEndpointHealth'], configurationValue, nowMilliseconds, maximumScanAgeSeconds)
+	const submissionReady = !execute || submissionHealth.ready
 	const status = stringField(state, 'status')
 	const runtimeReady = state['error'] === undefined
 	const storageReady = status !== 'error'
@@ -712,6 +771,7 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 		scan: readinessCheck(scanReady, scanDetail),
 		signer: readinessCheck(!execute || signerReady, !execute || signerReady ? undefined : 'Live execution has no configured signer'),
 		storage: readinessCheck(storageReady, storageReady ? 'Runtime and configuration snapshots are readable' : 'Runtime reports a storage or fatal error'),
+		submission: readinessCheck(submissionReady, submissionReady ? undefined : 'Live submission endpoint evidence is missing, stale, failed, or below its required healthy-origin threshold'),
 	}
 	const blockers = Object.entries(checks)
 		.filter(([, check]) => !check.ready)
@@ -744,7 +804,7 @@ function chaosReadinessMetrics(readiness: ReturnType<typeof publicChaosReadiness
 		`zoltar_chaos_ready ${readiness.ready ? '1' : '0'}`,
 		'# HELP zoltar_chaos_readiness_check Whether one named readiness condition is satisfied.',
 		'# TYPE zoltar_chaos_readiness_check gauge',
-		...['configuration', 'inventory', 'paused', 'recovery', 'rpc', 'runtime', 'scan', 'signer', 'storage'].map(name => `zoltar_chaos_readiness_check{check="${name}"} ${record(readinessChecks[name])?.['ready'] === true ? '1' : '0'}`),
+		...['configuration', 'inventory', 'paused', 'recovery', 'rpc', 'runtime', 'scan', 'signer', 'storage', 'submission'].map(name => `zoltar_chaos_readiness_check{check="${name}"} ${record(readinessChecks[name])?.['ready'] === true ? '1' : '0'}`),
 		'# HELP zoltar_chaos_paused Whether the operator is intentionally paused.',
 		'# TYPE zoltar_chaos_paused gauge',
 		`zoltar_chaos_paused ${readiness.paused === true ? '1' : '0'}`,

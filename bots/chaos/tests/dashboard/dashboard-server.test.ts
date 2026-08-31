@@ -125,6 +125,7 @@ describe('chaos dashboard server', () => {
 				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
 				scheduler: { maximumDelaySeconds: 3_600 },
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
 		}
 		const state = {
@@ -133,7 +134,10 @@ describe('chaos dashboard server', () => {
 			obligations: [],
 			paused: false,
 			pendingTransactions: [],
-			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			rpcEndpointHealth: [
+				{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' },
+				{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'public-rpc', status: 'healthy', target: 'https://submit.example' },
+			],
 			safetyPaused: false,
 			status: 'running',
 			topology: { complete: true },
@@ -141,7 +145,9 @@ describe('chaos dashboard server', () => {
 		}
 		const ready = publicChaosReadiness(state, configuration, now)
 		expect(ready).toMatchObject({ blockers: [], maximumScanAgeSeconds: 156, mode: 'live', ready: true, scanAgeSeconds: 60 })
-		const server = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => ({ ...state, lastScanAt: new Date().toISOString() }) }))
+		const currentTimestamp = new Date().toISOString()
+		const currentState = { ...state, lastScanAt: currentTimestamp, rpcEndpointHealth: state.rpcEndpointHealth.map(check => ({ ...check, checkedAt: currentTimestamp })) }
+		const server = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => currentState }))
 		servers.push(server)
 		const readyResponse = await authenticatedFetch(new URL('/readyz', server.url))
 		expect(readyResponse.status).toBe(200)
@@ -149,8 +155,14 @@ describe('chaos dashboard server', () => {
 		const metrics = await (await authenticatedFetch(new URL('/metrics', server.url))).text()
 		expect(metrics).toContain('zoltar_chaos_ready 1')
 		expect(metrics).toContain('zoltar_chaos_readiness_check{check="rpc"} 1')
+		expect(metrics).toContain('zoltar_chaos_readiness_check{check="submission"} 1')
 		expect(metrics).toContain('zoltar_chaos_active_workflows 0')
 		expect(metrics).toContain('zoltar_chaos_automatic_retry_obligations 0')
+		const missingSubmissionState = { ...currentState, rpcEndpointHealth: currentState.rpcEndpointHealth.filter(check => check.kind === 'read-rpc') }
+		const missingSubmissionServer = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => missingSubmissionState }))
+		servers.push(missingSubmissionServer)
+		expect((await authenticatedFetch(new URL('/readyz', missingSubmissionServer.url))).status).toBe(503)
+		expect(await (await authenticatedFetch(new URL('/metrics', missingSubmissionServer.url))).text()).toContain('zoltar_chaos_readiness_check{check="submission"} 0')
 
 		const blocked = publicChaosReadiness(
 			{
@@ -178,6 +190,7 @@ describe('chaos dashboard server', () => {
 				privateKey: '__redacted__',
 				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
 		}
 		const exactEth = '100000000000000000'
@@ -188,7 +201,10 @@ describe('chaos dashboard server', () => {
 			obligations: [],
 			paused: false,
 			pendingTransactions: [],
-			rpcEndpointHealth: [{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }],
+			rpcEndpointHealth: [
+				{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' },
+				{ chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'public-rpc', status: 'healthy', target: 'https://submit.example' },
+			],
 			safetyPaused: false,
 			status: 'running',
 			topology: { complete: true },
@@ -207,6 +223,78 @@ describe('chaos dashboard server', () => {
 			checks: { inventory: { detail: underfundedDetail, ready: false } },
 			ready: false,
 		})
+	})
+
+	test('requires current submission-path threshold evidence for live readiness', () => {
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const publicConfiguration = {
+			hasSigner: true,
+			settings: {
+				connectivity: { publicRpcUrls: ['https://submit.example/path'], quorumRpcUrls: [], readRpcUrl: 'https://one.example', rpcQuorum: 1 },
+				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
+				networkConfigured: true,
+				paused: false,
+				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
+				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+			},
+		}
+		const readCheck = { chainId: 11_155_111, checkedAt: '2026-08-31T11:59:30.000Z', kind: 'read-rpc', status: 'healthy', target: 'https://one.example' }
+		const state = {
+			inventory: { eth: '100000000000000000', rep: [{ balance: '15000000000000000000' }] },
+			lastScanAt: '2026-08-31T11:59:30.000Z',
+			obligations: [],
+			paused: false,
+			pendingTransactions: [],
+			rpcEndpointHealth: [readCheck],
+			safetyPaused: false,
+			status: 'running',
+			topology: { complete: true },
+			workflows: [],
+		}
+		const submissionDetail = 'Live submission endpoint evidence is missing, stale, failed, or below its required healthy-origin threshold'
+
+		expect(publicChaosReadiness(state, publicConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { detail: submissionDetail, ready: false } }, ready: false })
+		const stalePublicCheck = { chainId: 11_155_111, checkedAt: new Date(now - 157_000).toISOString(), kind: 'public-rpc', status: 'healthy', target: 'https://submit.example' }
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, stalePublicCheck] }, publicConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		const failedPublicCheck = { chainId: undefined, checkedAt: new Date(now).toISOString(), failureDisposition: 'connectivity-degraded', kind: 'public-rpc', status: 'failed', target: 'https://submit.example' }
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, failedPublicCheck] }, publicConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		const healthyPublicCheck = { chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'public-rpc', status: 'healthy', target: 'https://submit.example' }
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, healthyPublicCheck] }, publicConfiguration, now)).toMatchObject({ blockers: [], checks: { submission: { ready: true } }, ready: true })
+		for (const invalidPublicCheck of [
+			{ ...healthyPublicCheck, chainId: 1 },
+			{ ...healthyPublicCheck, checkedAt: 'not-a-timestamp' },
+			{ ...healthyPublicCheck, checkedAt: new Date(now + 1).toISOString() },
+			{ ...healthyPublicCheck, kind: 'read-rpc' },
+			{ ...healthyPublicCheck, target: 'https://unexpected.example' },
+		]) {
+			expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, invalidPublicCheck] }, publicConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		}
+
+		const privateConfiguration = {
+			...publicConfiguration,
+			settings: {
+				...publicConfiguration.settings,
+				submission: { minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: ['https://relay-one.example/path', 'https://relay-two.example/path', 'https://relay-three.example/path'] },
+			},
+		}
+		const privateChecks = [
+			{ chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
+			{ chainId: undefined, checkedAt: new Date(now).toISOString(), failureDisposition: 'connectivity-degraded', kind: 'private-relay', status: 'failed', target: 'https://relay-two.example' },
+		]
+		const firstPrivateCheck = privateChecks[0]
+		if (firstPrivateCheck === undefined) throw new Error('Submission-readiness fixture requires one healthy private relay')
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...privateChecks] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		const duplicateRelayOriginChecks = [firstPrivateCheck, { ...firstPrivateCheck, target: 'https://relay-one.example' }]
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...duplicateRelayOriginChecks] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		const enoughDistinctRelayOrigins = [...privateChecks, { chainId: 11_155_111, checkedAt: new Date(now).toISOString(), kind: 'private-relay', status: 'healthy', target: 'https://relay-three.example' }]
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...enoughDistinctRelayOrigins] }, privateConfiguration, now)).toMatchObject({ blockers: [], checks: { submission: { ready: true } }, ready: true })
+		const partiallyStaleRelayBatch = enoughDistinctRelayOrigins.map(check => (check.target === 'https://relay-two.example' ? { ...check, checkedAt: new Date(now - 157_000).toISOString() } : check))
+		expect(publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...partiallyStaleRelayBatch] }, privateConfiguration, now)).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		const safetyFailedRelayThreshold = enoughDistinctRelayOrigins.map(check => (check.target === 'https://relay-two.example' ? { ...check, failureDisposition: 'safety-paused' } : check))
+		const safetyBlocked = publicChaosReadiness({ ...state, rpcEndpointHealth: [readCheck, ...safetyFailedRelayThreshold.map(check => ({ ...check, error: 'https://relay-two.example/private?api_key=secret' }))] }, privateConfiguration, now)
+		expect(safetyBlocked).toMatchObject({ blockers: expect.arrayContaining(['submission']), checks: { submission: { ready: false } } })
+		expect(JSON.stringify(safetyBlocked)).not.toContain('secret')
 	})
 
 	test('fails readiness on the same lifecycle states that prevent scheduled novelty', () => {

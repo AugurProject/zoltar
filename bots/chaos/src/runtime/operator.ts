@@ -32,6 +32,7 @@ type LoadedConfiguration = {
 type RuntimeResources = {
 	pool: ReturnType<typeof createChaosReadPool>
 	readPreflightChecks: readonly EndpointCheck[]
+	submissionPreflightConfigurationIdentity: string | undefined
 	submissionPreflightChecks: readonly EndpointCheck[]
 }
 
@@ -235,6 +236,27 @@ async function preflightSubmissionNetwork(settings: OperatorSettings) {
 	return await preflightRpcSet(connectivity.publicRpcUrls, settings.network.chainId, 'public-rpc', 1)
 }
 
+export function submissionPreflightConfigurationIdentity(settings: OperatorSettings) {
+	const connectivity = settings.connectivity
+	const targets = settings.submission.mode === 'private' ? settings.submission.relayUrls : (connectivity?.publicRpcUrls ?? [])
+	return JSON.stringify([settings.network.chainId, settings.submission.mode, settings.submission.minimumBundleRelaySuccesses, ...targets])
+}
+
+export function submissionPreflightIsDue(checks: readonly EndpointCheck[], settings: OperatorSettings, nowMilliseconds = Date.now()) {
+	const connectivity = settings.connectivity
+	if (connectivity === undefined) return true
+	const privateMode = settings.submission.mode === 'private'
+	const expectedKind = privateMode ? 'private-relay' : 'public-rpc'
+	const expectedTargets = (privateMode ? settings.submission.relayUrls : connectivity.publicRpcUrls).map(url => new URL(url).origin).sort()
+	const actualTargets = checks.map(check => check.target).sort()
+	if (expectedTargets.length === 0 || actualTargets.length !== expectedTargets.length || actualTargets.some((target, index) => target !== expectedTargets[index])) return true
+	const refreshMilliseconds = Math.min(settings.runtime.lifecyclePollMilliseconds * 3, settings.network.maximumBlockIntervalSeconds * 1_000)
+	return checks.some(check => {
+		const checkedAt = Date.parse(check.checkedAt)
+		return check.kind !== expectedKind || check.status !== 'healthy' || check.chainId !== settings.network.chainId || !Number.isFinite(checkedAt) || checkedAt > nowMilliseconds || nowMilliseconds - checkedAt >= refreshMilliseconds
+	})
+}
+
 export async function recordEndpointPreflightChecks(run: () => Promise<readonly EndpointCheck[]>, recordChecks: (checks: readonly EndpointCheck[]) => void) {
 	try {
 		const checks = await run()
@@ -247,9 +269,11 @@ export async function recordEndpointPreflightChecks(run: () => Promise<readonly 
 }
 
 async function ensureSubmissionPreflight(resources: RuntimeResources, settings: OperatorSettings) {
+	const configurationIdentity = submissionPreflightConfigurationIdentity(settings)
 	await recordEndpointPreflightChecks(
 		async () => await preflightSubmissionNetwork(settings),
 		checks => {
+			resources.submissionPreflightConfigurationIdentity = configurationIdentity
 			resources.submissionPreflightChecks = checks
 		},
 	)
@@ -786,6 +810,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		resources = {
 			pool: createChaosReadPool(loaded.settings),
 			readPreflightChecks: [],
+			submissionPreflightConfigurationIdentity: undefined,
 			submissionPreflightChecks: [],
 		}
 	}
@@ -905,6 +930,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				if (!scan.indexComplete || !scan.carryProofJournalComplete) {
 					backfillIncomplete = true
 					return settings.runtime.once
+				}
+				if (settings.runtime.execute && (resources.submissionPreflightConfigurationIdentity !== submissionPreflightConfigurationIdentity(settings) || submissionPreflightIsDue(resources.submissionPreflightChecks, settings))) {
+					await ensureSubmissionPreflight(resources, settings)
+					state.rpcEndpointHealth = resourceHealth(resources)
 				}
 				const continuationWorkflows = state.workflows.filter(workflowNeedsContinuation)
 				if (continuationWorkflows.length > 1) {

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
 import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
-import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
+import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
@@ -23,6 +23,8 @@ import {
 	runChaosOperator,
 	runtimeTopologySummary,
 	scheduleAfterRecoveredTransaction,
+	submissionPreflightConfigurationIdentity,
+	submissionPreflightIsDue,
 } from '../../src/runtime/operator.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
@@ -388,6 +390,66 @@ describe('chaos operator runtime', () => {
 			},
 		)
 		expect(storedChecks).toEqual(recoveredChecks)
+	})
+
+	test('periodically refreshes exact live submission endpoint evidence', () => {
+		const base = parseSettings(example)
+		const now = Date.parse('2026-08-31T12:00:00.000Z')
+		const publicSettings: OperatorSettings = {
+			...base,
+			connectivity: {
+				publicRpcUrls: ['https://submit-one.example/path', 'https://submit-two.example/path'],
+				quorumRpcUrls: [],
+				readRpcUrl: 'https://read.example/path',
+				rpcQuorum: 1,
+			},
+			networkConfigured: true,
+			runtime: { ...base.runtime, execute: true },
+		}
+		const publicChecks: EndpointCheck[] = [
+			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 35_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-one.example' },
+			{ chainId: publicSettings.network.chainId, checkedAt: new Date(now - 35_999).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-two.example' },
+		]
+		const firstPublicCheck = publicChecks[0]
+		const secondPublicCheck = publicChecks[1]
+		if (firstPublicCheck === undefined || secondPublicCheck === undefined) throw new Error('Submission preflight fixture requires two public RPC checks')
+
+		expect(submissionPreflightIsDue([], publicSettings, now)).toBeTrue()
+		expect(submissionPreflightIsDue(publicChecks, publicSettings, now)).toBeFalse()
+		expect(submissionPreflightIsDue(publicChecks, publicSettings, now + 1)).toBeTrue()
+		expect(submissionPreflightIsDue([{ ...firstPublicCheck, status: 'failed' }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(submissionPreflightIsDue([{ ...firstPublicCheck, chainId: 1 }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(submissionPreflightIsDue([{ ...firstPublicCheck, checkedAt: new Date(now + 1).toISOString() }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(submissionPreflightIsDue([{ ...firstPublicCheck, kind: 'read-rpc' }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(
+			submissionPreflightIsDue(
+				publicChecks,
+				{
+					...publicSettings,
+					connectivity: { publicRpcUrls: ['https://replacement.example/path'], quorumRpcUrls: [], readRpcUrl: 'https://read.example/path', rpcQuorum: 1 },
+				},
+				now,
+			),
+		).toBeTrue()
+		const sameOriginRotatedPath: OperatorSettings = {
+			...publicSettings,
+			connectivity: { publicRpcUrls: ['https://submit-one.example/replacement', 'https://submit-two.example/path'], quorumRpcUrls: [], readRpcUrl: 'https://read.example/path', rpcQuorum: 1 },
+		}
+		expect(submissionPreflightConfigurationIdentity(sameOriginRotatedPath)).not.toBe(submissionPreflightConfigurationIdentity(publicSettings))
+
+		const privateSettings: OperatorSettings = {
+			...publicSettings,
+			submission: {
+				minimumBundleRelaySuccesses: 2,
+				mode: 'private',
+				relayUrls: ['https://relay-one.example/path', 'https://relay-two.example/path'],
+			},
+		}
+		const privateChecks: EndpointCheck[] = [
+			{ chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-two.example' },
+			{ chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
+		]
+		expect(submissionPreflightIsDue(privateChecks, privateSettings, now)).toBeFalse()
 	})
 
 	test('isolates durable state by deployment without coupling it to key persistence or index tuning', () => {
