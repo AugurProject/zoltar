@@ -1031,6 +1031,8 @@ describe('shared ethereum compatibility layer', () => {
 					timestamp: '0x5',
 					transactions: [
 						{
+							blockHash: BLOCK_HASH,
+							blockNumber: '0xa',
 							from: OWNER_ADDRESS,
 							gas: '0x5208',
 							hash: TX_HASH,
@@ -1179,6 +1181,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x0',
 			gasPrice: '0x9',
 			hash: replacementHash,
 			transactionIndex: '0x0',
@@ -1295,6 +1299,8 @@ describe('shared ethereum compatibility layer', () => {
 					timestamp: '0x5',
 					transactions: [
 						{
+							blockHash: BLOCK_HASH,
+							blockNumber: '0x0',
 							from: OWNER_ADDRESS,
 							gas: '0x5208',
 							hash: replacementHash,
@@ -1590,6 +1596,64 @@ describe('shared ethereum compatibility layer', () => {
 		}
 	})
 
+	test('public client rejects mined block transactions that are not bound to their block position', async () => {
+		const foreignBlockHash = `0x${'55'.repeat(32)}` satisfies Hash
+		const validTransaction = {
+			blockHash: BLOCK_HASH,
+			blockNumber: '0xa',
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: TX_HASH,
+			input: '0x',
+			nonce: '0x0',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: '0x0',
+			type: '0x2',
+			value: '0x5',
+		}
+		let returnedBlock: Record<string, unknown> = {
+			hash: BLOCK_HASH,
+			number: '0xa',
+			parentHash: `0x${'44'.repeat(32)}`,
+			timestamp: '0x5',
+			transactions: [validTransaction],
+		}
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getBlockByNumber') throw new Error(`Unexpected rpc method: ${method}`)
+			return returnedBlock
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		const block = await client.getBlock({ blockNumber: 10n, includeTransactions: true })
+		expect(block.transactions[0]).toMatchObject({
+			blockHash: block.hash,
+			blockNumber: block.number,
+			transactionIndex: 0n,
+		})
+
+		const mismatches = {
+			blockHash: foreignBlockHash,
+			blockNumber: '0xb',
+			transactionIndex: '0x1',
+		}
+		for (const [field, mismatchedValue] of Object.entries(mismatches)) {
+			for (const value of [mismatchedValue, undefined]) {
+				returnedBlock = { ...returnedBlock, transactions: [{ ...validTransaction, [field]: value }] }
+				await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow(`RPC returned a block with a transaction whose ${field} does not match the block`)
+			}
+		}
+
+		returnedBlock = {
+			hash: null,
+			number: null,
+			parentHash: BLOCK_HASH,
+			timestamp: '0x5',
+			transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: null }],
+		}
+		const pendingBlock = await client.getBlock({ includeTransactions: true })
+		expect(pendingBlock.transactions[0]).toMatchObject({ blockHash: undefined, blockNumber: undefined, transactionIndex: undefined })
+	})
+
 	test('public client rejects blocks without a required timestamp', async () => {
 		const client = createPublicClient({
 			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, transactions: [] }), [])),
@@ -1763,6 +1827,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x1',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -1829,6 +1895,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x1',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
@@ -1905,6 +1973,8 @@ describe('shared ethereum compatibility layer', () => {
 		}
 		const replacementTransaction = {
 			...originalTransaction,
+			blockHash: BLOCK_HASH,
+			blockNumber: '0x0',
 			hash: replacementHash,
 			transactionIndex: '0x0',
 		}
