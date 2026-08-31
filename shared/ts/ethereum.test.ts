@@ -1402,6 +1402,52 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without a timestamp')
 	})
 
+	test('public client rejects blocks without a required transaction list', async () => {
+		const client = createPublicClient({
+			transport: custom(createProvider(() => ({ hash: BLOCK_HASH, number: '0x1', parentHash: `0x${'44'.repeat(32)}`, timestamp: '0x5' }), [])),
+		})
+
+		await expect(client.getBlock({ blockNumber: 1n })).rejects.toThrow('without transactions')
+	})
+
+	test('replacement scans reject missing block transactions instead of advancing past them', async () => {
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: TX_HASH,
+			input: '0x1234',
+			nonce: 7n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			value: 5n,
+		} satisfies BlockTransaction
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method }) => {
+			if (method === 'eth_getTransactionReceipt') return null
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+
+		await expect(
+			client.waitForTransactionReceipt({
+				hash: TX_HASH,
+				onReplaced: () => undefined,
+				pollingInterval: 0,
+				transaction: originalTransaction,
+				timeout: 0,
+			}),
+		).rejects.toThrow('without transactions')
+		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber'])
+	})
+
 	test('waitForTransactionReceipt keeps the viem-compatible default timeout window', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const clockValues = [0, 120_000, 180_000]
