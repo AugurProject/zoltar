@@ -6,7 +6,7 @@ import {
 	LiquidationApprovalRegistry
 } from '../../statoblast/LiquidationApprovalRegistry.sol';
 import { IERC1271 } from '../../statoblast/SignatureValidation.sol';
-import { SecurityPoolLiquidationDelegate } from '../../statoblast/SecurityPoolLiquidationDelegate.sol';
+import { SecurityPoolOperationsDelegate } from '../../statoblast/SecurityPoolOperationsDelegate.sol';
 import { SecurityPoolUtils } from '../../statoblast/SecurityPoolUtils.sol';
 
 contract LiquidationApprovalCoordinatorMock {
@@ -51,7 +51,7 @@ contract Erc1271LiquidationReceiverMock is IERC1271 {
 	}
 }
 
-contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
+contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 	function configure(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 1;
 		feeEligibleCapacityOwnershipAttoRep = 2;

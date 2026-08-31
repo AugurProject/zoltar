@@ -6,7 +6,7 @@ import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './inter
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 
-contract SecurityPoolLiquidationDelegate is SecurityPoolSettlementDelegate {
+contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);

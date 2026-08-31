@@ -29,7 +29,7 @@ import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
-import { SecurityPoolLiquidationDelegate } from './SecurityPoolLiquidationDelegate.sol';
+import { SecurityPoolOperationsDelegate } from './SecurityPoolOperationsDelegate.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -37,7 +37,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 interface ISecurityPoolDeploymentWorkerConfiguration {
 	function factory() external view returns (ISecurityPoolFactory);
 	function eventEmitter() external view returns (SecurityPoolEventEmitter);
-	function liquidationDelegate() external view returns (address);
+	function operationsDelegate() external view returns (address);
 }
 
 // Security pool for one question, one universe, one denomination (ETH)
@@ -63,7 +63,7 @@ contract SecurityPool is SecurityPoolStorage {
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
 	SecurityPoolEventEmitter private immutable eventEmitter;
-	address private immutable liquidationDelegate;
+	address private immutable operationsDelegate;
 	// settlementCollateralAttoEth is protocol-accounted ETH backing complete sets;
 	// the raw balance can also contain fees or unsolicited surplus.
 	// Remaining per-outcome economic claims. After a fork this includes both
@@ -117,7 +117,7 @@ contract SecurityPool is SecurityPoolStorage {
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
 		eventEmitter = worker.eventEmitter();
-		liquidationDelegate = worker.liquidationDelegate();
+		operationsDelegate = worker.operationsDelegate();
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		repToken = _zoltar.getRepToken(_universeId);
@@ -445,7 +445,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
-		DelegateCallForwarder.invoke(liquidationDelegate, abi.encodeCall(SecurityPoolLiquidationDelegate.setVaultCapacity, (vault, nextCapacityOwnershipAttoRep, depositTargetHealthFactorBps)));
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.setVaultCapacity, (vault, nextCapacityOwnershipAttoRep, depositTargetHealthFactorBps)));
 	}
 
 	////////////////////////////////////////
@@ -471,7 +471,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
 		LiquidationExecutionRequest memory executionRequest = LiquidationExecutionRequest({receiverVault: request.receiverVault, targetVault: request.targetVault, requestedDebtAttoEth: request.requestedDebtAttoEth, snapshotTargetBackingUnits: request.snapshot.targetBackingUnits, snapshotTargetCapacityOwnershipAttoRep: request.snapshot.targetCapacityOwnershipAttoRep, repEthPrice: repEthPrice, minimumReceiverHealthFactorBps: request.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: request.minLiquidationPriceDistanceBps});
-		bytes memory result = DelegateCallForwarder.invoke(liquidationDelegate, abi.encodeCall(SecurityPoolLiquidationDelegate.performBundledLiquidation, (executionRequest)));
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.performBundledLiquidation, (executionRequest)));
 		(debtMovedAttoEth, capacityOwnershipMovedAttoRep, badDebtAttoEth) = abi.decode(result, (uint256, uint256, uint256));
 
 		_registerVault(request.targetVault);
@@ -488,7 +488,7 @@ contract SecurityPool is SecurityPoolStorage {
 	// Complete Sets
 	////////////////////////////////////////
 	function createCompleteSet() external payable isOperational {
-		bytes memory result = DelegateCallForwarder.invoke(liquidationDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, ()));
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, ()));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
@@ -667,7 +667,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function resumeForkedEscalationGame() external {
-		DelegateCallForwarder.invoke(liquidationDelegate, abi.encodeCall(SecurityPoolLiquidationDelegate.resumeForkedEscalationGame, ()));
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.resumeForkedEscalationGame, ()));
 	}
 
 	function setAwaitingForkContinuation(bool shouldAwait) external onlyForker {
@@ -754,7 +754,7 @@ contract SecurityPool is SecurityPoolStorage {
 		totalCapacityOwnershipAttoRep = newTotalCapacityOwnershipAttoRep;
 		feeEligibleCapacityOwnershipAttoRep = newFeeEligibleCapacityOwnershipAttoRep;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
-		DelegateCallForwarder.invoke(liquidationDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setValidatedSettlementCollateral, (newSettlementCollateralAttoEth)));
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setValidatedSettlementCollateral, (newSettlementCollateralAttoEth)));
 		lastUpdatedFeeAccumulator = block.timestamp;
 		_clearFeeIndexRemainder();
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));

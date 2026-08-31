@@ -16,7 +16,7 @@ import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
-import { SecurityPoolLiquidationDelegate } from '../SecurityPoolLiquidationDelegate.sol';
+import { SecurityPoolOperationsDelegate } from '../SecurityPoolOperationsDelegate.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -54,8 +54,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(_minimumSecurityBondDebtAttoEth > 0, 'Minimum security bond debt zero');
 		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
-		address operationsDelegate = address(new SecurityPoolLiquidationDelegate());
-		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate);
+		securityPoolDeployer = new SecurityPoolDeployer(address(new SecurityPoolOperationsDelegate()));
 	}
 
 	function securityPoolDeploymentCount() external view returns (uint256) {
@@ -84,8 +83,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments) {
-		require(startIndex <= securityPoolDeployments.length, 'Security pool deployment range start index is out of bounds');
-		require(count <= securityPoolDeployments.length - startIndex, 'Security pool deployment range count exceeds available entries');
+		require(startIndex <= securityPoolDeployments.length, 'Pool range start out of bounds');
+		require(count <= securityPoolDeployments.length - startIndex, 'Pool range count too large');
 		deployments = new SecurityPoolDeployment[](count);
 		for (uint256 index = 0; index < count; index++) {
 			deployments[index] = securityPoolDeployments[startIndex + index];

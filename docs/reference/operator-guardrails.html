@@ -632,7 +632,7 @@
 						<tr>
 							<td>Liquidation distance</td>
 							<td>A staged liquidation must remain at least <code>minLiquidationPriceDistanceBps</code> beyond the liquidation threshold when it executes.</td>
-							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolLiquidationDelegate.sol">SecurityPoolLiquidationDelegate.sol</a></td>
+							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol">SecurityPoolOperationsDelegate.sol</a></td>
 						</tr>
 					</tbody>
 				</table>
@@ -672,7 +672,7 @@
 						<tr>
 							<td><code>SecurityPoolDeployer</code> and <code>SecurityPoolDeploymentWorker</code></td>
 							<td>Only the configured <code>SecurityPoolFactory</code> may call the deployer; only that deployer may call its worker.</td>
-							<td>They are code-size deployment plumbing. The factory deploys one <code>SecurityPoolLiquidationDelegate</code>, which inherits <code>SecurityPoolSettlementDelegate</code>, and shares that operations delegate with every pool deployed through its deployer and worker. It handles complete-set and fork-finalization collateral validation as well as liquidation; delegatecalls still mutate only the calling pool's storage. Its deterministic address is published as <code>securityPoolOperationsDelegate</code>. Pools become canonical only when the factory emits <code>SecurityPoolRegistered</code> and <code>DeploySecurityPool</code>.</td>
+							<td>They are code-size deployment plumbing. The factory deploys one <code>SecurityPoolOperationsDelegate</code>, which inherits <code>SecurityPoolSettlementDelegate</code>, and shares it with every pool deployed through its deployer and worker. It handles complete-set and fork-finalization collateral validation as well as liquidation; delegatecalls still mutate only the calling pool's storage. Its deterministic address is published as <code>securityPoolOperationsDelegate</code>. Pools become canonical only when the factory emits <code>SecurityPoolRegistered</code> and <code>DeploySecurityPool</code>.</td>
 						</tr>
 						<tr>
 							<td><code>SecurityPoolMigrationProxy</code></td>
@@ -680,8 +680,8 @@
 							<td>Its deterministic per-parent address is exposed by <code>getMigrationProxyAddress</code> and recorded in fork snapshot events; users do not call it.</td>
 						</tr>
 						<tr>
-							<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolLiquidationDelegate</code></td>
-							<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set and fork-finalization collateral validation to the single deployed <code>SecurityPoolLiquidationDelegate</code>. That operations delegate also implements funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting while isolating fees and claims, plus permissionless continuation resume. Direct calls operate on isolated or uninitialized helper storage and normally revert; they are not protocol actions.</td>
+							<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
+							<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set and fork-finalization collateral validation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate also implements funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting while isolating fees and claims, plus permissionless continuation resume. Direct calls operate on isolated or uninitialized helper storage and normally revert; they are not protocol actions.</td>
 							<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through <code>SecurityPool.performLiquidation</code>; continuation progress enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
 						</tr>
 						<tr>
@@ -836,7 +836,7 @@
 								<a href="../../solidity/contracts/statoblast/SecurityPoolStorage.sol"><code>SecurityPoolStorage.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
-								>, <a href="../../solidity/contracts/statoblast/SecurityPoolLiquidationDelegate.sol"><code>SecurityPoolLiquidationDelegate.sol</code></a
+								>, <a href="../../solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/SecurityPoolMigrationProxy.sol"><code>SecurityPoolMigrationProxy.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>SecurityPoolForkerAuctionSettlementBase.sol</code></a

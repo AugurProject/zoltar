@@ -35,15 +35,15 @@ contract SecurityPoolDeploymentWorker {
 	address immutable deployer;
 	ISecurityPoolFactory public immutable factory;
 	SecurityPoolEventEmitter public immutable eventEmitter;
-	address public immutable liquidationDelegate;
+	address public immutable operationsDelegate;
 	address private immutable creationCodeFirstChunk;
 	address private immutable creationCodeSecondChunk;
 
-	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter, address _liquidationDelegate) {
+	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter, address _operationsDelegate) {
 		deployer = msg.sender;
 		factory = _factory;
 		eventEmitter = _eventEmitter;
-		liquidationDelegate = _liquidationDelegate;
+		operationsDelegate = _operationsDelegate;
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SecurityPool).creationCode);
 	}
 

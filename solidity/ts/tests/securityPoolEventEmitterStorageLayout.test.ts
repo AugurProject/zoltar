@@ -68,7 +68,7 @@ test('SecurityPool stateful delegates retain the exact host storage sequence', (
 		}))
 	for (const [sourcePath, contractName] of [
 		['contracts/statoblast/SecurityPoolSettlementDelegate.sol', 'SecurityPoolSettlementDelegate'],
-		['contracts/statoblast/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate'],
+		['contracts/statoblast/SecurityPoolOperationsDelegate.sol', 'SecurityPoolOperationsDelegate'],
 	] as const) {
 		const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, sourcePath, contractName))
 		assert.deepStrictEqual(summarize(delegateLayout), summarize(hostLayout), `${contractName} storage layout diverged`)

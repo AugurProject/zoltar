@@ -71,7 +71,7 @@ test('liquidation boundaries expose one typed request with one nested snapshot',
 	const artifacts = loadContractsJson(import.meta.dir)
 	const boundaries: Array<[string, string, string, number]> = [
 		['contracts/statoblast/SecurityPool.sol', 'SecurityPool', 'performLiquidation', 8],
-		['contracts/statoblast/SecurityPoolLiquidationDelegate.sol', 'SecurityPoolLiquidationDelegate', 'performBundledLiquidation', 8],
+		['contracts/statoblast/SecurityPoolOperationsDelegate.sol', 'SecurityPoolOperationsDelegate', 'performBundledLiquidation', 8],
 	]
 	for (const [source, contract, functionName, expectedTopLevelComponents] of boundaries) {
 		const output = getContractOutput(artifacts, source, contract)

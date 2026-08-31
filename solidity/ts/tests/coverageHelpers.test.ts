@@ -324,7 +324,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'securityPoolDeploymentsRange',
 				args: [1n, 0n],
 			}),
-			/Security pool deployment range start index is out of bounds/,
+			/Pool range start out of bounds/,
 		)
 		await assert.rejects(
 			client.readContract({
@@ -333,7 +333,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'securityPoolDeploymentsRange',
 				args: [0n, 1n],
 			}),
-			/Security pool deployment range count exceeds available entries/,
+			/Pool range count too large/,
 		)
 		await assert.rejects(
 			client.writeContract({

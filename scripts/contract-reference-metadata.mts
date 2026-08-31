@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '6a3db0f24c3151a141fa0c089ee9bceb5a144203563ee8bb65a837a95cf3ddc6'
+export const expectedProductionSoliditySourceFingerprint = 'b9e444c5e0d77fd640d4f47bd0cff6c85b784dcadac7133222c60791d644ec62'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -505,7 +505,7 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': ['securityPool'],
-	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'liquidationDelegate'],
+	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': [],
 }
 

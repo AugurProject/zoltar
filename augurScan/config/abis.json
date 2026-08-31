@@ -1,5 +1,5 @@
 {
-  "sourceHash": "a2fe37de491c06f1e3329b113b800ff3300a5ce1435eb1c9bc1bc5a4b8b4b025",
+  "sourceHash": "9bd78af3360bc4f29fef327c1fea8e81e7c97c0d8d92a19ed77a5fdf0cf17611",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -16438,6 +16438,19 @@
           ],
           "stateMutability": "view",
           "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "operationsDelegate",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
         }
       ]
     },
@@ -22864,8 +22877,158 @@
         }
       ]
     },
-    "SecurityPoolLiquidationDelegate": {
-      "source": "contracts/statoblast/SecurityPoolLiquidationDelegate.sol",
+    "SecurityPoolMigrationProxy": {
+      "source": "contracts/statoblast/SecurityPoolMigrationProxy.sol",
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "contract Zoltar",
+              "name": "_zoltar",
+              "type": "address"
+            },
+            {
+              "internalType": "contract ReputationToken",
+              "name": "_parentRepToken",
+              "type": "address"
+            },
+            {
+              "internalType": "uint248",
+              "name": "_universeId",
+              "type": "uint248"
+            },
+            {
+              "internalType": "address",
+              "name": "_owner",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "questionId",
+              "type": "uint256"
+            }
+          ],
+          "name": "forkUniverse",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "lockRep",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "owner",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "parentRepToken",
+          "outputs": [
+            {
+              "internalType": "contract ReputationToken",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "outcomeIndices",
+              "type": "uint256[]"
+            }
+          ],
+          "name": "splitToChild",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "receiver",
+              "type": "address"
+            },
+            {
+              "internalType": "contract ReputationToken",
+              "name": "childRepToken",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "sweepChildRep",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "universeId",
+          "outputs": [
+            {
+              "internalType": "uint248",
+              "name": "",
+              "type": "uint248"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "zoltar",
+          "outputs": [
+            {
+              "internalType": "contract Zoltar",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ]
+    },
+    "SecurityPoolOperationsDelegate": {
+      "source": "contracts/statoblast/SecurityPoolOperationsDelegate.sol",
       "abi": [
         {
           "anonymous": false,
@@ -22878,6 +23041,43 @@
             }
           ],
           "name": "AwaitingForkContinuationSet",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "creator",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "settlementCollateralProvidedAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "completeSetsMintedAttoShares",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingShareTokenSupplyAttoShares",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingSettlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "CompleteSetCreated",
           "type": "event"
         },
         {
@@ -22953,6 +23153,19 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "createCompleteSet",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "completeSetsToMintAttoShares",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "payable",
           "type": "function"
         },
         {
@@ -23167,6 +23380,19 @@
         {
           "inputs": [
             {
+              "internalType": "uint256",
+              "name": "nextSettlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "setValidatedSettlementCollateral",
+          "outputs": [],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "address",
               "name": "vault",
               "type": "address"
@@ -23312,67 +23538,91 @@
         }
       ]
     },
-    "SecurityPoolMigrationProxy": {
-      "source": "contracts/statoblast/SecurityPoolMigrationProxy.sol",
+    "SecurityPoolSettlementDelegate": {
+      "source": "contracts/statoblast/SecurityPoolSettlementDelegate.sol",
       "abi": [
         {
+          "anonymous": false,
           "inputs": [
             {
-              "internalType": "contract Zoltar",
-              "name": "_zoltar",
-              "type": "address"
-            },
-            {
-              "internalType": "contract ReputationToken",
-              "name": "_parentRepToken",
-              "type": "address"
-            },
-            {
-              "internalType": "uint248",
-              "name": "_universeId",
-              "type": "uint248"
-            },
-            {
+              "indexed": true,
               "internalType": "address",
-              "name": "_owner",
+              "name": "creator",
               "type": "address"
-            }
-          ],
-          "stateMutability": "nonpayable",
-          "type": "constructor"
-        },
-        {
-          "inputs": [
+            },
             {
+              "indexed": false,
               "internalType": "uint256",
-              "name": "questionId",
+              "name": "settlementCollateralProvidedAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "completeSetsMintedAttoShares",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingShareTokenSupplyAttoShares",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingSettlementCollateralAttoEth",
               "type": "uint256"
             }
           ],
-          "name": "forkUniverse",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
+          "name": "CompleteSetCreated",
+          "type": "event"
         },
         {
-          "inputs": [
+          "inputs": [],
+          "name": "awaitingForkContinuation",
+          "outputs": [
             {
-              "internalType": "uint256",
-              "name": "amountAttoRep",
-              "type": "uint256"
+              "internalType": "bool",
+              "name": "",
+              "type": "bool"
             }
           ],
-          "name": "lockRep",
-          "outputs": [],
-          "stateMutability": "nonpayable",
+          "stateMutability": "view",
           "type": "function"
         },
         {
           "inputs": [],
-          "name": "owner",
+          "name": "createCompleteSet",
           "outputs": [
             {
-              "internalType": "address",
+              "internalType": "uint256",
+              "name": "completeSetsToMintAttoShares",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "currentRetentionRate",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "escalationGame",
+          "outputs": [
+            {
+              "internalType": "contract EscalationGame",
               "name": "",
               "type": "address"
             }
@@ -23382,66 +23632,31 @@
         },
         {
           "inputs": [],
-          "name": "parentRepToken",
+          "name": "feeIndex",
           "outputs": [
             {
-              "internalType": "contract ReputationToken",
+              "internalType": "uint256",
               "name": "",
-              "type": "address"
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
-              "name": "amountAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256[]",
-              "name": "outcomeIndices",
-              "type": "uint256[]"
-            }
-          ],
-          "name": "splitToChild",
-          "outputs": [],
-          "stateMutability": "nonpayable",
           "type": "function"
         },
         {
           "inputs": [
             {
               "internalType": "address",
-              "name": "receiver",
+              "name": "",
               "type": "address"
-            },
-            {
-              "internalType": "contract ReputationToken",
-              "name": "childRepToken",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amountAttoRep",
-              "type": "uint256"
             }
           ],
-          "name": "sweepChildRep",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        },
-        {
-          "inputs": [],
-          "name": "universeId",
+          "name": "lastDepositTargetHealthFactorBpsByVault",
           "outputs": [
             {
-              "internalType": "uint248",
+              "internalType": "uint256",
               "name": "",
-              "type": "uint248"
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -23449,12 +23664,208 @@
         },
         {
           "inputs": [],
-          "name": "zoltar",
+          "name": "lastUpdatedFeeAccumulator",
           "outputs": [
             {
-              "internalType": "contract Zoltar",
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
               "name": "",
               "type": "address"
+            }
+          ],
+          "name": "securityVaults",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "claimableFeesAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "feeIndex",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "nextSettlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "setValidatedSettlementCollateral",
+          "outputs": [],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "settlementCollateralAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "shareTokenSupplyAttoShares",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "statoblastSecurityMultiplierBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "systemState",
+          "outputs": [
+            {
+              "internalType": "enum SystemState",
+              "name": "",
+              "type": "uint8"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalCapacityOwnershipAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalClaimableVaultFeesAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalRepBackingUnits",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -26102,7 +26513,13 @@
       "source": "contracts/statoblast/factories/SecurityPoolDeployer.sol",
       "abi": [
         {
-          "inputs": [],
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "operationsDelegate",
+              "type": "address"
+            }
+          ],
           "stateMutability": "nonpayable",
           "type": "constructor"
         },
@@ -26200,6 +26617,11 @@
             {
               "internalType": "contract SecurityPoolEventEmitter",
               "name": "_eventEmitter",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_operationsDelegate",
               "type": "address"
             }
           ],
@@ -26304,6 +26726,19 @@
           "outputs": [
             {
               "internalType": "contract ISecurityPoolFactory",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "operationsDelegate",
+          "outputs": [
+            {
+              "internalType": "address",
               "name": "",
               "type": "address"
             }
