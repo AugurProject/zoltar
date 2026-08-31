@@ -1372,13 +1372,15 @@ function normalizeBlock(value: unknown, includeTransactions: boolean) {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid block')
 	const block = value as Record<string, unknown>
 	if (block['timestamp'] === undefined || block['timestamp'] === null) throw new Error('RPC returned a block without a timestamp')
+	const transactions = block['transactions']
+	if (!Array.isArray(transactions)) throw new Error('RPC returned a block without transactions')
 	return {
 		baseFeePerGas: block['baseFeePerGas'] === undefined || block['baseFeePerGas'] === null ? undefined : normalizeRpcBigInt(block['baseFeePerGas']),
 		hash: block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash']),
 		number: block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number']),
 		parentHash: block['parentHash'] === undefined || block['parentHash'] === null ? undefined : normalizeHash(block['parentHash']),
 		timestamp: normalizeRpcBigInt(block['timestamp']),
-		transactions: Array.isArray(block['transactions']) ? block['transactions'].map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))) : [],
+		transactions: transactions.map(transaction => (includeTransactions ? normalizeTransaction(transaction) : normalizeHash(transaction))),
 	} satisfies Block
 }
 
