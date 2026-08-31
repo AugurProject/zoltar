@@ -2321,6 +2321,9 @@ export function privateKeyToAccount(privateKey: Hex) {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
 		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
+			if (parameters.gasPrice !== undefined && (parameters.maxFeePerGas !== undefined || parameters.maxPriorityFeePerGas !== undefined)) {
+				throw new Error('Transaction fee fields must use either gasPrice or EIP-1559 fee caps, not both.')
+			}
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
 			const transaction = MicroTransaction.prepare({
 				chainId: hexToBigInt(parameters.chainId) ?? 1n,
