@@ -1234,16 +1234,12 @@
 	}
 
 	.route-subnav-shell {
-		display: block;
+		display: grid;
 		padding: 0;
 	}
 
 	.route-subnav-mobile-select {
-		display: grid;
-		gap: var(--space-1);
-		width: 100%;
-		color: var(--text-subtle);
-		font-size: var(--font-caption);
+		display: none;
 	}
 
 	.route-subnav-mobile-select select {
@@ -1253,7 +1249,7 @@
 
 	.route-subnav-shell > .route-subtab-nav,
 	.route-subnav-shell > .route-subnav-overflow-control {
-		display: none;
+		display: flex;
 	}
 
 	.mobile-route-select {

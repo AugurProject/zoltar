@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { resolveRpcLogPath } from '../src/config.ts'
 import { runSerializedIndexerLeaseOperation } from '../src/database.ts'
+import { databaseJsonText } from '../src/database-json.ts'
 import { safeIndexerFailureReason } from '../src/indexer-runtime.ts'
 import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog, timestampedLogArguments } from '../src/logging.ts'
 import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
@@ -226,5 +227,31 @@ describe('AugurScan runtime logging', () => {
 			runSerializedIndexerLeaseOperation(lease, operation),
 		])
 		expect(maximumActive).toBe(1)
+	})
+
+	test('continues serializing lease operations after one rejects', async () => {
+		const lease = {}
+		await expect(
+			runSerializedIndexerLeaseOperation(lease, async () => {
+				throw new Error('expected operation failure')
+			}),
+		).rejects.toThrow('expected operation failure')
+		await expect(runSerializedIndexerLeaseOperation(lease, async () => 'recovered')).resolves.toBe('recovered')
+	})
+
+	test('serializes nested bigints for PostgreSQL JSON columns', () => {
+		expect(JSON.parse(databaseJsonText({ blockNumber: 2n, receipt: { gasUsed: 21_000n }, values: [1n, undefined] }))).toEqual({
+			blockNumber: '2',
+			receipt: { gasUsed: '21000' },
+			values: ['1', null],
+		})
+	})
+
+	test('preserves JSON absence and non-finite number behavior', () => {
+		expect(JSON.parse(databaseJsonText({ omitted: undefined, invalid: Number.POSITIVE_INFINITY, timestamp: new Date('2026-01-02T00:00:00Z') }))).toEqual({
+			invalid: null,
+			timestamp: '2026-01-02T00:00:00.000Z',
+		})
+		expect(() => databaseJsonText(undefined)).toThrow('Database JSON value cannot be serialized')
 	})
 })

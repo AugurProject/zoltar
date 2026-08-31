@@ -4,8 +4,10 @@ import { registerStatoblastSimulationScenarios } from './simulation/index.js'
 import { App } from './app/App.js'
 import { initializeStatoblastActiveEnvironment } from './app/activeEnvironment.js'
 import { installStatoblastRouting } from './lib/routing.js'
+import { installStatoblastContractLabels } from './protocol/contractLabels.js'
 
 installStatoblastRouting()
+installStatoblastContractLabels()
 
 registerStatoblastSimulationScenarios()
 

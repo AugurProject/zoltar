@@ -785,7 +785,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const hash = await writeContractAndWait(client, () => ({
 		address: useWalletFunding ? escalationGameAddress : securityPoolAddress,
 		abi: useWalletFunding ? statoblast_EscalationGame_EscalationGame.abi : statoblast_SecurityPool_SecurityPool.abi,
-		functionName: useWalletFunding ? 'depositRepFromWallet' : 'depositToEscalationGame',
+		functionName: useWalletFunding ? 'depositRepOnOutcome' : 'depositToEscalationGame',
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}))
 	return {

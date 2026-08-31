@@ -6,6 +6,7 @@ import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import {
 	assertExecutionActive,
 	assertGasCostLimit,
+	assertGasCostLimitForBaseFee,
 	assertMarketPriceStillAllowed,
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
@@ -19,7 +20,7 @@ import {
 } from '../../src/execution/liquidation-executor.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedOperationRecoveryRanges, stagedRecoveryAnchorMatches } from '../../src/execution/recovery.ts'
-import { availableExecutionObservations } from '../../src/monitoring/execution-quorum.ts'
+import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
@@ -144,6 +145,11 @@ describe('liquidator execution safety', () => {
 	test('fails closed when an available execution reader disagrees on wallet REP balance', async () => {
 		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] })])
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }), 2)).toThrow('RPC disagreement')
+	})
+	test('fails closed when execution readers observe matching pool data at different blocks', async () => {
+		const scan = { block: { hash: `0x${'11'.repeat(32)}`, number: 1n, timestamp: 1n }, pools: [], universes: [], walletRepByToken: new Map<string, bigint>() }
+		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', scan }), Promise.resolve({ endpoint: 'rpc-b', scan: { ...scan, block: { ...scan.block, hash: `0x${'22'.repeat(32)}`, number: 2n } } })])
+		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, liquidationExecutionSnapshotObservation, 2)).toThrow('RPC disagreement')
 	})
 	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
 		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([{ fromBlock: 24_750n, toBlock: 25_005n }])
@@ -417,6 +423,12 @@ describe('liquidator execution safety', () => {
 	test('applies the gas cap to the padded signed gas limit', () => {
 		expect(() => assertGasCostLimit(100_000n, 10n, 1_100_000n)).toThrow('maximumGasCostAttoEth')
 		expect(() => assertGasCostLimit(100_000n, 10n, 1_300_000n)).not.toThrow()
+	})
+
+	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {
+		const baseFeePerGas = 10n * 10n ** 9n
+		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostAttoEth')
 	})
 
 	test('does not treat a successful outer receipt as a successful failed staged operation', () => {

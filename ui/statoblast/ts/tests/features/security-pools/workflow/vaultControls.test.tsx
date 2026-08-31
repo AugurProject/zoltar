@@ -38,7 +38,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
 	})
 
-	test('keeps origin vault deposits available at the exact question end timestamp', async () => {
+	test('blocks origin vault deposits at the exact question end timestamp', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={2n}>
@@ -57,7 +57,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expect(within(document.body).queryByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
+		expect(within(document.body).getByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeTruthy()
 	})
 
 	test('disables an open deposit approval flow when origin vault admission closes', async () => {
@@ -90,7 +91,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 				/>
 			</ChainTimestampContext.Provider>
 		)
-		const renderedComponent = await renderIntoDocument(renderWorkflow(2n))
+		const renderedComponent = await renderIntoDocument(renderWorkflow(1n))
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
@@ -100,7 +101,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expectTransactionButtonEnabled(document.body, 'Approve 1 REP')
 
 		await act(() => {
-			render(renderWorkflow(3n), renderedComponent.container)
+			render(renderWorkflow(2n), renderedComponent.container)
 		})
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })

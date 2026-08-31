@@ -1,7 +1,7 @@
 {
 	"contracts": [
 		["0x7A0D94F55792C434d74a40883C6ed8545E406D12", "Proxy Deployer", "proxyDeployer"],
-		["0xA85D7B273Bc320fa4A284b2A2d6127c90Cab6257", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x667Dc70843F79CFacf1b0454D73552AdEbf7bBFd", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108", "Multicall3", "multicall3"],
 		["0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314", "UniformPriceDualCapBatchAuctionFactory", "truthAuctionFactory"],
 		["0x9AdECC476DdF3a0E89B7540302758123308B03A0", "ScalarOutcomes", "scalarOutcomes"],
@@ -14,9 +14,7 @@
 		["0x51cf207A931e76C837441dA3b70c57d71C62fF77", "Security Pool Forker", "securityPoolForker"],
 		["0x26CA07838f50Fd03d9b586f8780F42De9877286f", "Escalation Claim Checkpoint Delegate", "escalationGameClaimDelegate"],
 		["0xEc0d2a449F6Ec70998043b18F680bC42Cf2f3249", "Escalation Game Factory", "escalationGameFactory"],
-		["0x3A7b70613E86908a4494D3cBf627C62342c96990", "Security Pool Factory", "securityPoolFactory"],
-		["0xdCC03cc07Ec0c633079446Be13b52371104ff0d7", "Security Pool Forker", "securityPoolForker"],
-		["0x5dae4d3F03A59a51F01e52920a76Cb4013D15c70", "Security Pool Factory", "securityPoolFactory"],
+		["0xB1f1027d00F540b59AF1Ab2766E29d703Da02863", "Security Pool Factory", "securityPoolFactory"],
 		["0xb077F2f7a41d52a0dBe03d1d3Ff7fa1ad7816505", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x221657776846890989a759ba2973e427dff5c9bb", "Genesis REP", "reputationToken"],
 		["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "Wrapped Ether", "weth"],
@@ -24,6 +22,18 @@
 		["0xAcE7Fde809DEaE38A751E1Cc2d1a694e6A5aE1a9", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x20c9Dd90dD4b5548c27850C42B0D83748D1C9920", "Escalation Game Factory", "escalationGameFactory"],
 		["0x3815b29F356CD7F6bd2edE6eEf790A09eE3EC200", "Security Pool Factory", "securityPoolFactory"],
-		["0x526186B90D97bb6bB9A44228a7373189507850D5", "Escalation Game Proof Verifier", "escalationProofVerifier"]
+		["0x526186B90D97bb6bB9A44228a7373189507850D5", "Escalation Game Proof Verifier", "escalationProofVerifier"],
+		["0x6218EAF73D613B7040a886865f114467adf9fE30", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x594Baa70146fBB9c29d9cBaE51102a699a10707c", "Escalation Game Factory", "escalationGameFactory"],
+		["0x1e4DAA01d811333e493c1Fe82429f64622FD63Db", "Security Pool Factory", "securityPoolFactory"],
+		["0x8C648789566Ae350f147228e46aBE8bB63540Ffd", "Escalation Game Proof Verifier", "escalationProofVerifier"],
+		["0x7C5A168f9e4C6517CE3b3157248907b336eE04Ed", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x3a7c97fa90E97777E79dB9055e685Fd50096E917", "Security Pool Factory", "securityPoolFactory"],
+		["0x13f99E75B6011fe5cf1F4C53Cfa47D55217dE0Ec", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x7D6f603599b13F43a52588965f7650A772DE2726", "Security Pool Factory", "securityPoolFactory"],
+		["0x2BA90891589f443d1f146c3D25866f0c6871191C", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x1E720f00d7Bb5D848513CCc1C18eCF4389E5f671", "Security Pool Factory", "securityPoolFactory"],
+		["0xf8f6eA0f2149b59CD56C4370Ab4ec4De8bb6BFd2", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x13022CB4d0B53bCFF07B0EaaEC34c1969A81aa6C", "Deployment Status Oracle", "deploymentStatusOracle"]
 	]
 }

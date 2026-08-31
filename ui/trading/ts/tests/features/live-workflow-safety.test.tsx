@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
@@ -25,6 +25,7 @@ const factory = `0x${'55'.repeat(20)}` as Address
 const router = `0x${'66'.repeat(20)}` as Address
 const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
+const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
 const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready', 'Gwei']
 
 function deferred<T>() {
@@ -86,6 +87,7 @@ describe('live workflow safety boundary', () => {
 		let waitForContextApprovalReceipt = false
 		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		let waitForPositionReceipt = false
+		let repricePositionReceipt = false
 		let positionBroadcast = deferred<undefined>()
 		let positionWalletWrite = deferred<undefined>()
 		let deferPositionBroadcast = false
@@ -117,8 +119,19 @@ describe('live workflow safety boundary', () => {
 		}
 		Reflect.set(window, 'ethereum', injectedProvider)
 		const walletClient = {
-			waitForTransactionReceipt: async () => {
-				if (waitForPositionReceipt) return await positionReceipt.promise
+			waitForTransactionReceipt: async (parameters: Parameters<WalletClient['waitForTransactionReceipt']>[0]) => {
+				if (waitForPositionReceipt) {
+					const receipt = await positionReceipt.promise
+					if (repricePositionReceipt) {
+						parameters.onReplaced?.({
+							reason: 'repriced',
+							replacedTransaction: { hash: transactionHash } as never,
+							transaction: { hash: replacementTransactionHash } as never,
+							transactionReceipt: receipt as never,
+						})
+					}
+					return receipt
+				}
 				if (waitForContextApprovalReceipt) return await contextApprovalReceipt.promise
 				return { status: 'success' as const }
 			},
@@ -520,6 +533,7 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-review-primary')).not.toBeNull()
 		deferPositionBroadcast = true
 		waitForPositionReceipt = true
+		repricePositionReceipt = true
 		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		positionBroadcast = deferred<undefined>()
 		positionWalletWrite = deferred<undefined>()
@@ -539,9 +553,10 @@ describe('live workflow safety boundary', () => {
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
+		repricePositionReceipt = false
 		const protectionInputs = document.querySelectorAll<HTMLInputElement>('.operation-block .execution-settings input')
 		if (protectionInputs.length !== 2) throw new Error('Missing position transaction protection fields')
 		await act(() => {

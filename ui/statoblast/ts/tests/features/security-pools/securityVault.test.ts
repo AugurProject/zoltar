@@ -267,7 +267,7 @@ void describe('security vault helpers', () => {
 		).toBe(5n * 10n ** 18n)
 	})
 
-	void test('capacity ownership', () => {
+	void test('floors maximum capacity ownership to the greatest fully backed atomic amount', () => {
 		const vaultAttoRepBacking = 10n * 10n ** 18n
 		const repPerEthPrice = 3n * 10n ** 18n
 		const statoblastSecurityMultiplierBps = 20_000n
@@ -284,7 +284,7 @@ void describe('security vault helpers', () => {
 		expect((maxCapacityOwnershipAttoRep + 1n) * repPerEthPrice * statoblastSecurityMultiplierBps > vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
 	})
 
-	void test('capacity ownership', () => {
+	void test('caps maximum capacity ownership against both local and pool-wide backing', () => {
 		expect(
 			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
 				currentCapacityOwnershipAttoRep: 15n * 10n ** 18n,
@@ -320,7 +320,7 @@ void describe('security vault helpers', () => {
 		).toBe(2_000_000_000_000_000_000n)
 	})
 
-	void test('capacity ownership', () => {
+	void test('withdrawable REP retains the backing required by active capacity ownership', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,

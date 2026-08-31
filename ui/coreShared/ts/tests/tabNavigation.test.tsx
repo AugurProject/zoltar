@@ -73,6 +73,37 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual(['security-pools'])
 	})
 
+	test('omits route controls when only one application section is available', async () => {
+		const rendered = await renderIntoDocument(
+			h(
+				TabNavigation,
+				createProps({
+					tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }],
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('link', { name: 'Questions' })).toBeNull()
+		expect(documentQueries.queryByRole('combobox', { name: 'Current application section' })).toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' })).not.toBeNull()
+	})
+
+	test('omits the shared protocol guide when the application does not own that documentation', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false })))
+		cleanupRenderedComponent = rendered.cleanup
+
+		expect(within(document.body).queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+	})
+
+	test('omits an empty navigation landmark when no route chooser or guide is available', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }] })))
+		cleanupRenderedComponent = rendered.cleanup
+
+		expect(within(document.body).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
+	})
+
 	test('keeps the first tab as the current compact route when the route is unknown', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
 		cleanupRenderedComponent = rendered.cleanup

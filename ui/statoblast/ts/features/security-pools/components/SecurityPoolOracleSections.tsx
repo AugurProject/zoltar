@@ -14,6 +14,7 @@ import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/Trans
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import type { OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 import { OpenOraclePriceValue } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOraclePriceValue.js'
@@ -212,7 +213,7 @@ export function SecurityPoolPriceOracleSection({
 	return (
 		<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
-				<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
+				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
 					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
 				</MetricField>
 				{managerDetails === undefined ? undefined : (

@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMulticall } from '../../../protocol/index.js'
+import { readOptionalMulticall } from '../../../protocol/core.js'
+import { approveErc20 } from '../../../protocol/tokenActions.js'
+import { forkZoltarUniverse } from '../../../protocol/zoltarForks.js'
+import { getZoltarAddress } from '../../../protocol/zoltarDeploymentHelpers.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { requireWallet } from '@zoltar/ui-core-shared/lib/requireWalletConnection.js'
@@ -11,7 +14,7 @@ import { assertActiveWallet } from '@zoltar/ui-core-shared/lib/assertActiveWalle
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
-import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../../transactionPresentations.js'
+import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../../zoltarTransactionPresentations.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
@@ -20,6 +23,8 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import type { TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
 
 type UseZoltarForkParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -159,7 +164,7 @@ export function useZoltarFork(
 	const zoltarMigrationPreparedRepBalanceAttoRep = useSignal<bigint | undefined>(undefined)
 	const zoltarMigrationChildRepBalancesAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const nextForkAccessLoad = useRequestGuard()
-	const forkAccessScopeKey = `${accountAddress ?? 'disconnected'}:${activeUniverseId.toString()}:${zoltarUniverse?.universeId.toString() ?? 'missing'}:${zoltarUniverse?.reputationToken ?? 'missing'}`
+	const forkAccessScopeKey = `${accountAddress ?? 'disconnected'}:${environmentRefreshKey}:${activeUniverseId.toString()}:${zoltarUniverse?.universeId.toString() ?? 'missing'}:${zoltarUniverse?.reputationToken ?? 'missing'}`
 	const currentForkAccessScope = useRef({ generation: 0, key: forkAccessScopeKey })
 	if (currentForkAccessScope.current.key !== forkAccessScopeKey) currentForkAccessScope.current = { generation: currentForkAccessScope.current.generation + 1, key: forkAccessScopeKey }
 	const forkAccessScopeGeneration = currentForkAccessScope.current.generation
@@ -247,6 +252,7 @@ export function useZoltarFork(
 			)
 		)
 			return
+		const environmentGuard = createActiveEnvironmentGuard()
 
 		zoltarForkPending.value = true
 		zoltarForkActiveAction.value = actionName
@@ -254,26 +260,37 @@ export function useZoltarFork(
 		zoltarForkFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 		zoltarForkResult.value = undefined
 		const submittedQuestionId = zoltarForkQuestionId
+		let ownsTransaction = false
 
 		try {
 			let result: ZoltarForkActionResult | undefined
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(
-					createZoltarForkTransactionIntent(actionName, {
-						questionId: submittedQuestionId,
-						universeId: activeUniverseId,
-					}),
-				)
+				if (!environmentGuard.isCurrent()) return
+				if (
+					onTransactionRequested(
+						createZoltarForkTransactionIntent(actionName, {
+							questionId: submittedQuestionId,
+							universeId: activeUniverseId,
+						}),
+					) === false
+				) {
+					zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), TRANSACTION_ACTION_LOCK_REASON)
+					return
+				}
+				ownsTransaction = true
 				const universe = await ensureZoltarUniverse()
+				if (!environmentGuard.isCurrent()) return
 				const questionId = resolveForkQuestionId(submittedQuestionId, universe)
 				result = await action(accountAddress, universe, questionId)
+				if (!environmentGuard.isCurrent()) return
 				zoltarForkResult.value = result
 				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
 				onTransactionPresented(createZoltarForkSuccessPresentation(result))
 			} catch (error) {
+				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, errorFallback)
-				onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message)
 				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 				return
 			}
@@ -282,20 +299,33 @@ export function useZoltarFork(
 				let refreshedUniverse: ZoltarUniverseSummary | undefined
 				if (refreshAfter) {
 					await refreshWalletStateOnly(refreshState)
+					if (!environmentGuard.isCurrent()) return
 					refreshedUniverse = await refreshZoltarUniverse()
+					if (!environmentGuard.isCurrent()) return
 				}
 				await loadZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
+				if (!environmentGuard.isCurrent()) return
 				const message = formatRefreshErrorMessage(error, 'Universe fork transaction succeeded, but refreshing the UI failed')
 				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
 				onTransactionPresented(createZoltarForkWarningPresentation(result, message))
 			}
 		} finally {
-			zoltarForkPending.value = false
-			zoltarForkActiveAction.value = undefined
-			onTransactionFinished()
+			if (environmentGuard.isCurrent()) {
+				zoltarForkPending.value = false
+				zoltarForkActiveAction.value = undefined
+				if (ownsTransaction) onTransactionFinished()
+			}
 		}
 	}
+
+	useEffect(() => {
+		zoltarForkError.value = undefined
+		zoltarForkPending.value = false
+		zoltarForkResult.value = undefined
+		zoltarForkFeedback.value = undefined
+		zoltarForkActiveAction.value = undefined
+	}, [environmentRefreshKey])
 
 	const approveZoltarForkRep = useCallback(
 		async (amount?: bigint) =>
@@ -328,7 +358,7 @@ export function useZoltarFork(
 			zoltarForkError.value = getErrorMessage(error, 'Failed to load universe fork access')
 			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
-	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])
+	}, [accountAddress, activeUniverseId, environmentRefreshKey, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])
 
 	const hasCurrentForkAccess = loadedForkAccessScopeGeneration.current === forkAccessScopeGeneration
 	return {
