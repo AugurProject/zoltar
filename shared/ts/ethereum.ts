@@ -1272,20 +1272,31 @@ function normalizeLog(value: unknown): TransactionLog {
 function normalizeReceipt(value: unknown): TransactionReceipt {
 	if (typeof value !== 'object' || value === null) throw new Error('RPC returned an invalid transaction receipt')
 	const receipt = value as Record<string, unknown>
+	const blockHash = normalizeHash(receipt['blockHash'])
+	const blockNumber = normalizeRpcBigInt(receipt['blockNumber'])
+	const transactionHash = normalizeHash(receipt['transactionHash'])
+	const transactionIndex = normalizeRpcBigInt(receipt['transactionIndex'])
+	const logs = Array.isArray(receipt['logs']) ? receipt['logs'].map(item => normalizeLog(item)) : []
+	for (const log of logs) {
+		if (log.blockHash !== blockHash) throw new Error('RPC returned a transaction receipt with a log whose blockHash does not match the receipt')
+		if (log.blockNumber !== blockNumber) throw new Error('RPC returned a transaction receipt with a log whose blockNumber does not match the receipt')
+		if (log.transactionHash !== transactionHash) throw new Error('RPC returned a transaction receipt with a log whose transactionHash does not match the receipt')
+		if (log.transactionIndex !== transactionIndex) throw new Error('RPC returned a transaction receipt with a log whose transactionIndex does not match the receipt')
+	}
 	return {
-		blockHash: normalizeHash(receipt['blockHash']),
-		blockNumber: normalizeRpcBigInt(receipt['blockNumber']),
+		blockHash,
+		blockNumber,
 		contractAddress: normalizeNullableAddress(receipt['contractAddress']) ?? null,
 		cumulativeGasUsed: normalizeRpcBigInt(receipt['cumulativeGasUsed']),
 		effectiveGasPrice: receipt['effectiveGasPrice'] === undefined ? undefined : normalizeRpcBigInt(receipt['effectiveGasPrice']),
 		from: normalizeAddress(receipt['from']),
 		gasUsed: normalizeRpcBigInt(receipt['gasUsed']),
-		logs: Array.isArray(receipt['logs']) ? receipt['logs'].map(item => normalizeLog(item)) : [],
+		logs,
 		logsBloom: receipt['logsBloom'] === undefined ? undefined : normalizeRpcHex(receipt['logsBloom']),
 		status: normalizeBoolean(receipt['status']) ? 'success' : 'reverted',
 		to: normalizeNullableAddress(receipt['to']) ?? null,
-		transactionHash: normalizeHash(receipt['transactionHash']),
-		transactionIndex: normalizeRpcBigInt(receipt['transactionIndex']),
+		transactionHash,
+		transactionIndex,
 		type: normalizeTransactionType(receipt['type']),
 	}
 }
