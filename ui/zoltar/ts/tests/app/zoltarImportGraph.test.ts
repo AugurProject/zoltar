@@ -8,6 +8,7 @@ import * as ts from 'typescript'
 
 const zoltarSourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const coreSharedSourceRoot = resolve(zoltarSourceRoot, '../../coreShared/ts')
+const zoltarAppShell = resolve(zoltarSourceRoot, '../index.html')
 
 function resolveZoltarImport(importer: string, specifier: string) {
 	let unresolved: string
@@ -202,6 +203,12 @@ describe('Zoltar production module graph', () => {
 	test('recognizes statically concatenated branding and cross-product link destinations', () => {
 		expect(collectForbiddenProductCopy("const copy = 'Open ' + 'Oracle'", 'fixture.ts')).toContain('Open Oracle')
 		expect(collectForbiddenProductCopy("const link = <a href='#/security-pools'>Pools</a>", 'fixture.tsx')).toContain('#/security-pools')
+	})
+
+	test('does not declare forbidden product modules or copy in the application shell', () => {
+		const appShell = readFileSync(zoltarAppShell, 'utf8')
+
+		expect(appShell.match(/\bopen(?:\s|-)*oracle\b|\bstatoblast\b|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
 	})
 
 	test('does not reach Statoblast-only protocol or presentation modules', () => {
