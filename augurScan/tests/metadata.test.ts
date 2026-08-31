@@ -28,16 +28,16 @@ describe('ABI metadata', () => {
 		expect(abiForKind('liquidationApprovalRegistry')).toBeDefined()
 	})
 
-	test('decodes direct wallet REP deposits into escalation games', () => {
+	test('decodes caller-funded REP deposits into escalation games', () => {
 		const abi = abiForKind('escalationGame')
 		if (abi === undefined) throw new Error('EscalationGame ABI missing')
 		const contract = { address: account as Address, label: 'Escalation game', kind: 'escalationGame', provenance: 'test' }
-		const input = encodeFunctionData({ abi, functionName: 'depositRepFromWallet', args: [1, 5_000_000_000_000_000_000n] })
+		const input = encodeFunctionData({ abi, functionName: 'depositRepOnOutcome', args: [1, 5_000_000_000_000_000_000n] })
 
 		const decoded = decodeAction(contract, input, new Map())
 
 		expect(decoded.status).toBe('decoded')
-		expect(decoded.name).toBe('depositRepFromWallet')
+		expect(decoded.name).toBe('depositRepOnOutcome')
 		expect(decoded.arguments?.['outcome']).toBe('1')
 		expect(decoded.arguments?.['maximumDepositAttoRep']).toBe('5000000000000000000')
 		expect(decoded.displayArguments?.['maximumDepositAttoRep']).toBe('5 REP')
