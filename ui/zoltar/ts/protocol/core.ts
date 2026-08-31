@@ -1,8 +1,11 @@
-import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getMulticall3Address } from './zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { getContractLabel } from './contractLabels.js'
+
+export { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 
 const RPC_STATE_RETRY_DELAYS_MILLISECONDS = [250, 500, 1_000, 2_000, 4_000] as const
 
@@ -43,11 +46,6 @@ export type ContractRevertReasonParams = {
 
 type ContractCallClient = {
 	call?: WriteClient['call']
-}
-
-type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {
-	onTransactionSubmitted?: ((hash: Hash) => void) | undefined
-	waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
 }
 
 export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<WriteClient, 'sendTransaction'> &
@@ -106,37 +104,9 @@ function getOriginalErrorMessage(error: unknown) {
 	return undefined
 }
 
-function getReplacementFailureMessage(reason: ReplacementReason) {
-	if (reason === 'cancelled') return 'Transaction was cancelled in the wallet before confirmation.'
-	return 'Transaction was replaced in the wallet before confirmation.'
-}
-
 export async function writeContractAndWait<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams) {
 	const { hash } = await writeContractAndWaitForReceipt(client, getCallParams)
 	return hash
-}
-
-export async function waitForSubmittedTransactionReceipt<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: SubmittedTransactionClient<TReceipt>, hash: Hash, { allowRevertedReceipt = false }: { allowRevertedReceipt?: boolean } = {}): Promise<{ hash: Hash; receipt: TReceipt }> {
-	let resolvedHash = hash
-	let replacementReason: ReplacementReason | undefined
-	const receipt = await client.waitForTransactionReceipt({
-		hash,
-		onReplaced: replacement => {
-			resolvedHash = replacement.transaction.hash
-			replacementReason = replacement.reason
-			client.onTransactionSubmitted?.(resolvedHash)
-		},
-	})
-	if (replacementReason === 'cancelled' || replacementReason === 'replaced') {
-		throw new Error(getReplacementFailureMessage(replacementReason))
-	}
-	if (!allowRevertedReceipt && receipt.status === 'reverted') {
-		throw new Error('Transaction reverted')
-	}
-	return {
-		hash: resolvedHash,
-		receipt,
-	}
 }
 
 export async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TReceipt }> {
