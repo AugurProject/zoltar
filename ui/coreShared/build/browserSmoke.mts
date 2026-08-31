@@ -29,6 +29,12 @@ type BrowserSmokeState = {
 	width: number
 }
 
+const isTransientDevToolsConnectionError = (error: unknown): boolean => {
+	if (error instanceof TypeError) return true
+	if (typeof error !== 'object' || error === null || !('code' in error) || typeof error.code !== 'string') return false
+	return ['ConnectionRefused', 'ConnectionReset', 'ECONNREFUSED', 'ECONNRESET'].includes(error.code)
+}
+
 export async function waitForBrowserExit(browser: ChildProcess): Promise<void> {
 	if (browser.exitCode !== null || browser.signalCode !== null) return
 	await new Promise<void>((resolve, reject) => {
@@ -222,7 +228,19 @@ export async function createDevToolsSession(
 	chromiumPath: string,
 	pageUrl: string,
 	viewport: { readonly height: number; readonly width: number },
-	{ devToolsPortAttempts, initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS, pollMilliseconds = 50, targetAttempts }: { readonly devToolsPortAttempts?: number; readonly initializationTimeoutMilliseconds?: number; readonly pollMilliseconds?: number; readonly targetAttempts?: number } = {},
+	{
+		devToolsPortAttempts,
+		initializationTimeoutMilliseconds = DEVTOOLS_INITIALIZATION_TIMEOUT_MILLISECONDS,
+		pollMilliseconds = 50,
+		targetAttempts,
+		targetListRequest = async (url, signal) => (await (await fetch(url, { signal })).json()) as Array<{ type: string; webSocketDebuggerUrl: string }>,
+	}: {
+		readonly devToolsPortAttempts?: number
+		readonly initializationTimeoutMilliseconds?: number
+		readonly pollMilliseconds?: number
+		readonly targetAttempts?: number
+		readonly targetListRequest?: (url: string, signal: AbortSignal) => Promise<Array<{ type: string; webSocketDebuggerUrl: string }>>
+	} = {},
 ) {
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-browser-smoke-'))
 	let browser: ChildProcess | undefined
@@ -277,13 +295,7 @@ export async function createDevToolsSession(
 				try {
 					assertBrowserAvailable('waiting for the Chromium page target')
 					const fetchController = new AbortController()
-					const targets = (await awaitInitializationStep(
-						browser,
-						initializationDeadline,
-						'requesting the DevTools target list',
-						fetch(`http://127.0.0.1:${devToolsPort}/json/list`, { signal: fetchController.signal }).then(async response => (await response.json()) as Array<{ type: string; webSocketDebuggerUrl: string }>),
-						() => fetchController.abort(),
-					)) as Array<{ type: string; webSocketDebuggerUrl: string }>
+					const targets = (await awaitInitializationStep(browser, initializationDeadline, 'requesting the DevTools target list', targetListRequest(`http://127.0.0.1:${devToolsPort}/json/list`, fetchController.signal), () => fetchController.abort())) as Array<{ type: string; webSocketDebuggerUrl: string }>
 					const page = targets.find(target => target.type === 'page')
 					if (page !== undefined) {
 						const ws = new WebSocket(page.webSocketDebuggerUrl)
@@ -300,7 +312,7 @@ export async function createDevToolsSession(
 						return ws
 					}
 				} catch (error) {
-					if (!(error instanceof TypeError)) throw error
+					if (!isTransientDevToolsConnectionError(error)) throw error
 					// Chromium target list not ready yet.
 				}
 				await Bun.sleep(pollMilliseconds)

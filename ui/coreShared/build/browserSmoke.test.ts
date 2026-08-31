@@ -213,6 +213,30 @@ test.skipIf(process.platform === 'win32')('default initialization waits beyond t
 	}
 })
 
+test.skipIf(process.platform === 'win32')('page target discovery retries a transient refused connection', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-transient-connection-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const server = createFakeDevToolsServer(0)
+	let targetListRequests = 0
+	await writeFakeChromium(executablePath, server.port, '0')
+	try {
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, {
+			initializationTimeoutMilliseconds: 5_000,
+			pollMilliseconds: 1,
+			targetListRequest: async () => {
+				targetListRequests += 1
+				if (targetListRequests === 1) throw Object.assign(new Error('Unable to connect. Is the computer able to access the url?'), { code: 'ConnectionRefused' })
+				return [{ type: 'page', webSocketDebuggerUrl: `ws://127.0.0.1:${server.port.toString()}/ws` }]
+			},
+		})
+		await session.close()
+		expect(targetListRequests).toBe(2)
+	} finally {
+		server.stop(true)
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
 test.skipIf(process.platform === 'win32')('page target discovery deadline identifies the phase that timed out', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-target-timeout-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
