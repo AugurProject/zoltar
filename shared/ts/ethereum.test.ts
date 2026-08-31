@@ -1917,6 +1917,25 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_estimateGas', 'eth_gasPrice', 'eth_getTransactionCount'])
 	})
 
+	test('public client rejects missing required rpc quantities', async () => {
+		const client = createPublicClient({ transport: custom(createProvider(() => null, [])) })
+
+		await expect(
+			client.estimateContractGas({
+				abi: BALANCE_OF_ABI,
+				address: TOKEN_ADDRESS,
+				args: [OWNER_ADDRESS],
+				functionName: 'balanceOf',
+			}),
+		).rejects.toThrow('missing required gas estimate')
+		await expect(client.estimateGas({ account: OWNER_ADDRESS, to: RECIPIENT_ADDRESS })).rejects.toThrow('missing required gas estimate')
+		await expect(client.getBalance({ address: OWNER_ADDRESS })).rejects.toThrow('missing required balance')
+		await expect(client.getBlockNumber()).rejects.toThrow('missing required block number')
+		await expect(client.getChainId()).rejects.toThrow('missing required chain ID')
+		await expect(client.getGasPrice()).rejects.toThrow('missing required gas price')
+		await expect(client.getTransactionCount({ address: OWNER_ADDRESS })).rejects.toThrow('missing required transaction count')
+	})
+
 	test('publicActions extension preserves wallet default account behavior', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const walletClient = createWalletClient({
