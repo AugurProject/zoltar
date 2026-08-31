@@ -1,0 +1,155 @@
+name: Test Domains
+
+on:
+  workflow_call:
+    inputs:
+      invocation:
+        description: Identifies the caller in concurrency groups.
+        required: false
+        type: string
+        default: reusable
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-domains-${{ inputs.invocation || 'direct' }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.3.14
+  FOUNDRY_VERSION: v1.5.1
+
+jobs:
+  prepare:
+    name: Prepare domain test inputs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - name: TypeScript checks and production UI build
+        run: |
+          bun run ui:build:apps
+          bun ./scripts/install-frozen.mts ui/statoblast
+          bun run ci:preflight:current
+      - uses: actions/upload-artifact@v4
+        with:
+          name: domain-production-ui
+          path: |
+            ui/coreShared/js
+            ui/zoltar/js
+            ui/statoblast/js
+            ui/trading/js
+            ui/zoltar/dist
+            ui/statoblast/dist
+            ui/trading/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  application-tests:
+    name: Application tests (${{ matrix.shard }}/4)
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - uses: actions/download-artifact@v5
+        with:
+          name: domain-production-ui
+          path: ui
+      - name: Refresh split UI package installs
+        run: |
+          bun ./scripts/install-frozen.mts ui/coreShared
+          bun ./scripts/install-frozen.mts ui/zoltar
+          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./scripts/install-frozen.mts ui/trading
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings-application.json
+          key: ${{ runner.os }}-test-timings-v2-application-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v2-application-
+      - name: Run balanced application shard
+        env:
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+          ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-application.json
+          ZOLTAR_TEST_TIMING_OUTPUT: test-results/application-${{ matrix.shard }}.timing.json
+        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=application --shard="${{ matrix.shard }}/4"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: application-test-timing-${{ matrix.shard }}
+          path: test-results/application-${{ matrix.shard }}.timing.json
+          if-no-files-found: error
+          retention-days: 1
+
+  solidity-tests:
+    name: Solidity tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings-solidity.json
+          key: ${{ runner.os }}-test-timings-v2-solidity-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v2-solidity-
+      - name: Run balanced Solidity shard
+        env:
+          ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
+          ZOLTAR_TEST_TIMING_OUTPUT: test-results/solidity-${{ matrix.shard }}.timing.json
+        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=solidity --shard="${{ matrix.shard }}/4"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: solidity-test-timing-${{ matrix.shard }}
+          path: test-results/solidity-${{ matrix.shard }}.timing.json
+          if-no-files-found: error
+          retention-days: 1
+
+  timing-history:
+    name: Update ${{ matrix.domain }} timing history
+    needs: [application-tests, solidity-tests]
+    if: always() && needs.application-tests.result == 'success' && needs.solidity-tests.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        domain: [application, solidity]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: ${{ matrix.domain }}-test-timing-*
+          path: test-results
+          merge-multiple: true
+      - run: bun ./scripts/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
+      - uses: actions/cache/save@v5
+        with:
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
+
+  mutation-smoke:
+    name: Critical mutation smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - run: bun run test:mutation:smoke

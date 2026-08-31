@@ -1699,7 +1699,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(totalFeesOwed, totalCreditedVaultFees, 'capacity ownerships')
 		})
 
-		test('capacity ownership', async () => {
+		test('a newly eligible vault cannot claim settlement collateral accrued before it joined', async () => {
 			const firstVaultCapacityOwnershipAttoRep = repDeposit / 4n + 1n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, firstVaultCapacityOwnershipAttoRep)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -1730,7 +1730,7 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(secondVault.claimableFeesAttoEth <= expectedNextSecondDelta, 'capacity ownership')
 		})
 
-		test('capacity ownership', async () => {
+		test('settlement collateral pauses without eligible capacity and resumes for a new owner', async () => {
 			const firstVaultCapacityOwnershipAttoRep = repDeposit / 4n + 1n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, firstVaultCapacityOwnershipAttoRep)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -2863,7 +2863,7 @@ describe('Statoblast: fork migration', () => {
 	})
 
 	describe('vault and REP migration', () => {
-		test('capacity ownership', async () => {
+		test('own-fork vault migration preserves checkpointed parent fees', async () => {
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 			const migratingVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(migratingVaultClient, repDeposit, questionId)
@@ -2884,7 +2884,7 @@ describe('Statoblast: fork migration', () => {
 			})
 		})
 
-		test('capacity ownership', async () => {
+		test('external-fork vault migration preserves checkpointed parent fees', async () => {
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 			const migratingVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(migratingVaultClient, repDeposit, questionId)
