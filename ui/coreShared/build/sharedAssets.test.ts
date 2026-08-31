@@ -28,7 +28,6 @@ const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePa
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
 	'@zoltar/shared/logScan': '../shared/js/logScan.js',
-	'@zoltar/shared/openOracle': '../shared/js/openOracle.js',
 	'@zoltar/shared/scalarOutcome': '../shared/js/scalarOutcome.js',
 	'@zoltar/shared/sepoliaRepAllocations': '../shared/js/sepoliaRepAllocations.js',
 	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
@@ -339,7 +338,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	const deploymentHelpersSource = fs.readFileSync(uiDeploymentHelpersPath, 'utf8')
 	const sepoliaDeploymentConfigSource = fs.readFileSync(uiSepoliaDeploymentConfigPath, 'utf8')
 	const simulationBootstrapSource = fs.readFileSync(uiSimulationBootstrapPath, 'utf8')
-	const appIndexHtmlSources = [...uiIndexHtmlPaths.values()].map(indexPath => fs.readFileSync(indexPath, 'utf8'))
+	const appIndexHtmlSources = [...uiIndexHtmlPaths].map(([appId, indexPath]) => ({ appId, source: fs.readFileSync(indexPath, 'utf8') }))
 
 	expect(protocolSource).toContain("from './helpers.js'")
 	expect(protocolSource).toContain("from './deploymentHelpers.js'")
@@ -354,7 +353,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
-	for (const uiIndexHtml of appIndexHtmlSources) {
+	for (const { appId, source: uiIndexHtml } of appIndexHtmlSources) {
 		expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
@@ -362,8 +361,13 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 		expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/logScan": "../shared/js/logScan.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+		if (appId === 'zoltar') {
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+		} else {
+			expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
+			expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+		}
 		expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
@@ -395,6 +399,11 @@ test('development import map maps browser dependency subpaths', () => {
 		const imports = readDevelopmentImportMap(appId)
 		for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 			expect(imports[specifier], `${appId} import map entry for ${specifier}`).toBe(mappedPath)
+		}
+		if (appId === 'zoltar') {
+			expect(imports['@zoltar/shared/openOracle']).toBeUndefined()
+		} else {
+			expect(imports['@zoltar/shared/openOracle']).toBe('../shared/js/openOracle.js')
 		}
 	}
 	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('build/watch.mts zoltar')

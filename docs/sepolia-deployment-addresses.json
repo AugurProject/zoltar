@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x1CA744A2e1cEbF9bE4CA523867abf7853540800d"
+			"address": "0xDBb5c179E5cfa6814c5dDFC53a7D165D71782f8e"
 		},
 		{
 			"id": "weth",
@@ -69,6 +69,31 @@
 			"id": "zoltar",
 			"label": "Zoltar",
 			"address": "0x132bE08534a074242Be03FD46558f97AC8891048"
+		},
+		{
+			"id": "shareTokenFactory",
+			"label": "ShareTokenFactory",
+			"address": "0x3d4D0c4cACbbae0E3d4B885ce21360158Fa501C9"
+		},
+		{
+			"id": "priceOracleManagerAndOperatorQueuerFactory",
+			"label": "OpenOracle Price Coordinator Factory",
+			"address": "0x88e96EB2118Df7F11C7FdeC6aCFc52e4c1D94626"
+		},
+		{
+			"id": "uniformPriceDualCapBatchAuctionFactory",
+			"label": "UniformPriceDualCapBatchAuctionFactory",
+			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
+		},
+		{
+			"id": "securityPoolUtils",
+			"label": "SecurityPoolUtils",
+			"address": "0x0eAd9A0facAE7f9428b65D35b356aE12790022a9"
+		},
+		{
+			"id": "openOracle",
+			"label": "OpenOracle",
+			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
 		},
 		{
 			"id": "shareTokenFactory",

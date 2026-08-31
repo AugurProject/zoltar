@@ -13,8 +13,8 @@ import { createInitialTransactionTrayState, markTransactionPrepared, markTransac
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '../../protocol/deployment.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '../../protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
@@ -69,14 +69,14 @@ function createMockReadClient({ getCode, readContract }: { getCode: MockReadClie
 
 describe('contract deployment internals', () => {
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(Object.keys(STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID).sort()).toEqual(['deploymentStatusOracle', 'multicall3', 'openOracle', 'scalarOutcomes', 'uniformPriceDualCapBatchAuctionFactory', 'weth', 'zoltarQuestionData'])
+		expect(Object.keys(STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID).sort()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
 		expect(() => assertStaticDeploymentArtifactRuntimeCodeHashes()).not.toThrow()
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
-				expectedRuntimeCodeHashes: { openOracle: keccak256('0x01') },
-				runtimeCodeByStepId: { openOracle: '0x02' },
+				expectedRuntimeCodeHashes: { scalarOutcomes: keccak256('0x01') },
+				runtimeCodeByStepId: { scalarOutcomes: '0x02' },
 			}),
-		).toThrow('Local runtime code for openOracle does not match its pinned expected hash')
+		).toThrow('Local runtime code for scalarOutcomes does not match its pinned expected hash')
 	})
 
 	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', () => {
@@ -113,12 +113,10 @@ describe('contract deployment internals', () => {
 			const wethStep = steps.find(step => step.id === 'weth')
 			const repStep = steps.find(step => step.id === 'reputationToken')
 			const zoltarStep = steps.find(step => step.id === 'zoltar')
-			const priceFactoryStep = steps.find(step => step.id === 'priceOracleManagerAndOperatorQueuerFactory')
 
 			expect(wethStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.wethAddress)
 			expect(repStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
 			expect(zoltarStep?.dependencies).toContain('reputationToken')
-			expect(priceFactoryStep?.dependencies).toContain('weth')
 			expect(SEPOLIA_WETH_INIT_CODE).toStartWith('0x')
 			expect(SEPOLIA_GENESIS_REP_INIT_CODE).toStartWith('0x')
 		} finally {
@@ -155,15 +153,6 @@ describe('contract deployment internals', () => {
 	test('provides exact runtime verification for every mainnet deployment step', () => {
 		const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
 		expect(steps.filter(step => step.expectedRuntimeCodeHash === undefined).map(step => step.id)).toEqual([])
-	})
-
-	test('pins the compiled auction factory runtime code for every public network', () => {
-		const runtimeCode = `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}` as Hex
-		expect(EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.uniformPriceDualCapBatchAuctionFactory).toBe(keccak256(runtimeCode))
-		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
-			const factoryStep = getDeploymentSteps(profile).find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')
-			expect(factoryStep?.expectedRuntimeCodeHash).toBe(keccak256(runtimeCode))
-		}
 	})
 
 	test('loads mainnet status with exact code verification and deploys a non-proxy step', async () => {
@@ -213,7 +202,7 @@ describe('contract deployment internals', () => {
 	})
 
 	test('explicit public profiles produce isolated addresses and init code when runtime uses the opposite network', async () => {
-		const captureDeployData = async (steps: ReturnType<typeof getDeploymentSteps>, stepId: 'priceOracleManagerAndOperatorQueuerFactory' | 'zoltar') => {
+		const captureDeployData = async (steps: ReturnType<typeof getDeploymentSteps>, stepId: 'zoltar') => {
 			const step = steps.find(candidate => candidate.id === stepId)
 			if (step === undefined) throw new Error(`Expected ${stepId} deployment step`)
 			let deployData: `0x${string}` | undefined
@@ -261,9 +250,7 @@ describe('contract deployment internals', () => {
 				}),
 			)
 
-			for (const stepId of ['zoltar', 'priceOracleManagerAndOperatorQueuerFactory'] as const) {
-				expect(await captureDeployData(oppositeRuntimeSteps, stepId)).toBe(await captureDeployData(alignedRuntimeSteps, stepId))
-			}
+			expect(await captureDeployData(oppositeRuntimeSteps, 'zoltar')).toBe(await captureDeployData(alignedRuntimeSteps, 'zoltar'))
 		}
 	})
 
@@ -292,7 +279,7 @@ describe('contract deployment internals', () => {
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'scalarOutcomes')?.deployed).toBe(true)
 		} finally {
 			resetEnvironment()
 		}
@@ -317,8 +304,8 @@ describe('contract deployment internals', () => {
 		const steps = createDeploymentSteps()
 		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
-		const factoryStep = steps.find(step => step.id === 'openOracle')
-		if (factoryStep === undefined) throw new Error('Expected openOracle step')
+		const questionDataStep = steps.find(step => step.id === 'zoltarQuestionData')
+		if (questionDataStep === undefined) throw new Error('Expected zoltarQuestionData step')
 
 		let capturedProxyDeployData: `0x${string}` | undefined
 		let capturedFactoryData: `0x${string}` | undefined
@@ -344,12 +331,12 @@ describe('contract deployment internals', () => {
 		})
 
 		const oracleHash = await oracleStep.deploy(client)
-		const factoryHash = await factoryStep.deploy(client)
+		const questionDataHash = await questionDataStep.deploy(client)
 
 		expect(capturedProxyDeployData).toBeDefined()
 		expect(capturedFactoryData).toBeDefined()
 		expect(oracleHash).toBe(txHash)
-		expect(factoryHash).toBe(txHash)
+		expect(questionDataHash).toBe(txHash)
 		expect(preparedFunctions).toEqual(['Deploy contract through deterministic proxy', 'Deploy contract through deterministic proxy'])
 	})
 

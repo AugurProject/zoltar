@@ -16,6 +16,7 @@ type AppHeaderShellProps = {
 		route: string
 		tabs: readonly RouteTabDefinition[]
 		onRouteChange: (route: string) => void
+		showProtocolGuide?: boolean
 	}
 	onEnvironmentChanged?: () => Promise<void>
 	onRefresh: () => Promise<void>
