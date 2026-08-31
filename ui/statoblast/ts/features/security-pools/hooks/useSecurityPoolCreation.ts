@@ -161,8 +161,10 @@ export function useSecurityPoolCreation({
 						if (result !== undefined) onTransactionPresented(createSecurityPoolCreationWarningPresentation(result, message))
 					},
 					onTransactionRequested: () => {
+						const accepted = onTransactionRequested(createSecurityPoolCreationTransactionIntent(transactionContext))
+						if (accepted === false) return false
 						securityPoolCreating.value = true
-						onTransactionRequested(createSecurityPoolCreationTransactionIntent(transactionContext))
+						return accepted
 					},
 					onTransactionFinished: () => {
 						securityPoolCreating.value = false
