@@ -106,7 +106,7 @@ test('delivers a reset when a reconnect cursor is ahead of the durable event hea
 	let events: LiveEvent[] = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
 	const bus = new LiveBus({
 		latestEventId: async () => 50,
-		eventsAfter: async (id) => events.filter((event) => event.event === 'reset' ? id > event.id : event.id > id),
+		eventsAfter: async (id) => events.filter((event) => (event.event === 'reset' ? id > event.id : event.id > id)),
 	})
 	const reader = streamFrom(bus, 1_000).getReader()
 	expect(decoder.decode((await reader.read()).value)).toContain('connected')
