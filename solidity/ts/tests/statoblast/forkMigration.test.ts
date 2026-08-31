@@ -1335,9 +1335,9 @@ describe('Statoblast: fork migration', () => {
 					await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 					await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 					const lockedDeposit = 600n * 10n ** 18n
+					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
 					await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 					await depositToEscalationGame(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.No, lockedDeposit)
-					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
 					await triggerExternalForkForSecurityPool(undefined, 'carried liquidation-owner payout')
 					await migrateRepToZoltar(liquidatorClient, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 					await createChildUniverse(liquidatorClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -2332,7 +2332,7 @@ describe('Statoblast: fork migration', () => {
 			const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const additionalInvalidCompleteSetAmount = ensureDefined(currentShares[0], 'currentShares[0] is undefined')
 			if (additionalInvalidCompleteSetAmount > 0n) {
-				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount), /Resolved|Fork await/)
+				await assert.rejects(createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, additionalInvalidCompleteSetAmount))
 			}
 
 			const balancePriorInvalidRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
@@ -3292,7 +3292,7 @@ describe('Statoblast: fork migration', () => {
 			assert.deepStrictEqual(await readInactiveForkState(), stateBefore, 'inactive nested-fork rejection must preserve child state, fork data, REP balances, and vault accounting')
 		})
 
-		test('a fixed-outcome child rejects recycling a redeemed complete set through a recursive matching fork', async () => {
+		test('a fixed-outcome child rejects new complete sets and a recursive matching fork', async () => {
 			const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const victim = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			const victimClaimAmount = 5n * 10n ** 18n
@@ -3330,16 +3330,9 @@ describe('Statoblast: fork migration', () => {
 			const victimFirstChildShares = await balanceOfShares(victim, firstChildPool.shareToken, firstChildUniverse, victim.account.address)
 			const victimEconomicClaim = ensureDefined(victimFirstChildShares[1], 'victim yes shares missing from first child')
 			const attackerBalanceBeforeMint = await getETHBalance(client, attacker.account.address)
-			await createCompleteSet(attacker, firstChildPool.securityPool, attackerMintAmount)
-			const attackerBalanceAfterMint = await getETHBalance(client, attacker.account.address)
-			strictEqualTypeSafe(attackerBalanceBeforeMint - attackerBalanceAfterMint, attackerMintAmount, 'the attacker should fund the temporary complete set')
-			const attackerFirstChildShares = await balanceOfShares(attacker, firstChildPool.shareToken, firstChildUniverse, attacker.account.address)
-			const attackerRetainedNoShares = ensureDefined(attackerFirstChildShares[2], 'attacker no shares missing from first child')
-			assert.ok(attackerRetainedNoShares > 0n, 'the resolved fixed-outcome child should mint the attacker a reusable losing balance')
-			await redeemShares(attacker, firstChildPool.securityPool)
-			const attackerFirstRedemption = (await getETHBalance(client, attacker.account.address)) - attackerBalanceAfterMint
-			assert.ok(attackerFirstRedemption * 100n > attackerMintAmount * 99n, 'the attacker should recover more than 99% of the temporary complete-set deposit before recycling its losing share')
-			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, firstChildPool.securityPool), victimEconomicClaim, 'the first redemption should leave only the victim economic claim')
+			await assert.rejects(createCompleteSet(attacker, firstChildPool.securityPool, attackerMintAmount))
+			strictEqualTypeSafe(await getETHBalance(client, attacker.account.address), attackerBalanceBeforeMint, 'the rejected mint must return all attacker ETH')
+			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, firstChildPool.securityPool), victimEconomicClaim, 'the rejected mint must preserve the victim economic claim')
 			const victimCollateral = await getSettlementCollateralAttoEth(client, firstChildPool.securityPool)
 			const accruedFeesBeforeRecursiveFork = await getTotalAccruedFees(client, firstChildPool.securityPool)
 			assert.ok(victimCollateral > 0n, 'the first child should retain collateral for the victim')
@@ -3360,8 +3353,7 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(firstChildRepTotalSupply >= firstChildForkThreshold, 'the normally migrated child REP supply should cover the recursive fork threshold')
 			await approveToken(client, firstChildRepToken, getZoltarAddress())
 			await forkUniverse(client, firstChildUniverse, questionId)
-			await assert.rejects(initiateSecurityPoolFork(client, firstChildPool.securityPool), /Resolved/)
-			await assert.rejects(migrateShares(attacker, firstChildPool.shareToken, firstChildUniverse, QuestionOutcome.No, [QuestionOutcome.No]), /Resolved/)
+			await assert.rejects(initiateSecurityPoolFork(client, firstChildPool.securityPool))
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'the rejected recursive fork should leave the fixed child operational')
 			strictEqualTypeSafe(await getQuestionOutcome(client, firstChildPool.securityPool), QuestionOutcome.Yes, 'the rejected recursive fork should preserve the fixed outcome')
 

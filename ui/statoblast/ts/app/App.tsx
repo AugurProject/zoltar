@@ -162,7 +162,10 @@ export function App() {
 			if (poolOracleManagerDetails?.managerAddress !== undefined) await loadPoolOracleManager(poolOracleManagerDetails.managerAddress)
 		},
 	})
-	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
+	const { loadingReportingDetails, loadReporting, onApproveReportingRep, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
+		...walletScopedHookConfig,
+		selectedSecurityPoolAddress: securityPoolAddress,
+	})
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
 	}
@@ -527,6 +530,7 @@ export function App() {
 			reporting: {
 				accountState,
 				loadingReportingDetails,
+				onApproveReportingRep: () => void onApproveReportingRep(),
 				onLoadReporting: () => void loadReporting(),
 				onReportOutcome: () => void onReportOutcome(),
 				onReportingFormChange: update => updateReportingForm(update),

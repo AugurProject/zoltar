@@ -163,6 +163,7 @@ export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 export type ReportingRouteContentProps = {
 	accountState: AccountState
 	loadingReportingDetails: boolean
+	onApproveReportingRep: () => void
 	onLoadReporting: () => void
 	onReportOutcome: () => void
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void

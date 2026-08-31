@@ -191,7 +191,9 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 }
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
-	const detail = result.action === 'reportOutcome' ? transactionCopy.reportingContributionSuccessDetail : transactionCopy.escalationDepositsSettledDetail
+	let detail = transactionCopy.escalationDepositsSettledDetail
+	if (result.action === 'approveReportingRep') detail = transactionCopy.reportingRepApprovalSuccessDetail
+	if (result.action === 'reportOutcome') detail = transactionCopy.reportingContributionSuccessDetail
 	return buildPresentation({
 		detail,
 		hash: result.hash,
