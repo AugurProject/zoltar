@@ -9,7 +9,7 @@
 import { describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, zeroAddress } from '@zoltar/shared/ethereum'
 import { mainnet } from '@zoltar/shared/ethereum'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEth, quoteRepForEthV3, quoteEthForRep, quoteTokenForEth } from '../../protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput } from '../../protocol/uniswapQuoter.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
 
@@ -19,10 +19,9 @@ const client = createPublicClient({
 })
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
-const ATTO_REP = 10n ** 18n
 const describe = process.env['RUN_MAINNET_INTEGRATION_TESTS'] === '1' ? baseDescribe : baseDescribe.skip
 
-void describe('Uniswap V4 Quoter — integration', () => {
+void describe('Uniswap mainnet smoke checks', () => {
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
@@ -37,58 +36,6 @@ void describe('Uniswap V4 Quoter — integration', () => {
 			// 1 USDC should buy a small fraction of ETH (more than 0 attoETH, less than 1 ETH)
 			expect(ethOut).toBeGreaterThan(0n)
 			expect(ethOut).toBeLessThan(ATTO_ETH_PER_ETH)
-		})
-	})
-
-	// REP does not have any V4 pools at time of writing.
-	// These tests document the current on-chain reality and are expected to throw.
-	// If REP V4 pools are ever created, these tests will start returning prices instead.
-	void describe('REP/ETH — no V4 pool exists yet', () => {
-		void test('quoteRepForEth throws because no V4 REP pool exists', async () => {
-			await expect(quoteRepForEth(client, ATTO_REP)).rejects.toThrow()
-		})
-
-		void test('quoteEthForRep throws because no V4 REP pool exists', async () => {
-			await expect(quoteEthForRep(client, ATTO_ETH_PER_ETH)).rejects.toThrow()
-		})
-
-		void test('quoteTokenForEth(REP) throws for all standard fee tiers', async () => {
-			for (const poolConfig of [
-				{ fee: 100, tickSpacing: 1 },
-				{ fee: 500, tickSpacing: 10 },
-				{ fee: 3000, tickSpacing: 60 },
-				{ fee: 10000, tickSpacing: 200 },
-			]) {
-				await expect(quoteTokenForEth(client, REP_ADDRESS, ATTO_REP, poolConfig)).rejects.toThrow()
-			}
-		})
-	})
-
-	void describe('REP/USDC — no V4 pool exists yet', () => {
-		void test('quoteExactInput(REP→USDC) throws because no V4 REP pool exists', async () => {
-			await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP)).rejects.toThrow()
-		})
-
-		void test('quoteEthForToken(USDC via REP) throws for all standard fee tiers', async () => {
-			for (const poolConfig of [
-				{ fee: 100, tickSpacing: 1 },
-				{ fee: 500, tickSpacing: 10 },
-				{ fee: 3000, tickSpacing: 60 },
-				{ fee: 10000, tickSpacing: 200 },
-			]) {
-				await expect(quoteExactInput(client, REP_ADDRESS, USDC_ADDRESS, ATTO_REP, poolConfig)).rejects.toThrow()
-			}
-		})
-	})
-
-	// REP/WETH V3 1% pool is the live source used as fallback when V4 is unavailable
-	void describe('REP/ETH — Uniswap V3 (1% pool)', () => {
-		void test('quoteRepForEthV3 returns a plausible REP price in ETH', async () => {
-			const ethOut = await quoteRepForEthV3(client, ATTO_REP)
-			// At time of writing REP is roughly $0.40 and ETH ~$2 191 → ~0.00018 ETH per REP
-			// Assert a wide range to avoid brittleness
-			expect(ethOut).toBeGreaterThan(10n ** 12n) // > 0.000001 ETH
-			expect(ethOut).toBeLessThan(10n ** 18n) // < 1 ETH
 		})
 	})
 

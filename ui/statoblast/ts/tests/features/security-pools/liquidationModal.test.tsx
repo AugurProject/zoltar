@@ -816,7 +816,7 @@ describe('LiquidationModal', () => {
 		expect(queueButton.disabled).toBe(false)
 	})
 
-	test('capacity ownership', async () => {
+	test('Max selects the executable liquidation debt supplied by the caller', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -1499,7 +1499,7 @@ describe('LiquidationModal', () => {
 		).toThrow('Vault live open interest is still loading')
 	})
 
-	test('capacity ownership', () => {
+	test('partial liquidation moves proportional capacity ownership and caps debt at funded backing', () => {
 		const targetVaultSummary = createTargetVaultSummary({
 			vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
 			capacityOwnershipAttoRep: ATTO_ETH_PER_ETH / 2n,
@@ -2242,7 +2242,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
 	})
 
-	test('capacity ownership', async () => {
+	test('healthy vault details distinguish capacity ownership, REP backing, and dispute stake', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
