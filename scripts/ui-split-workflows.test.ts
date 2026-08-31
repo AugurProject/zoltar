@@ -68,6 +68,7 @@ describe('split UI workflow paths', () => {
 		const workflow = await readWorkflow(proposedBrowserWorkflowPath)
 		expect(workflow['name']).toBe('Production Browser Workflow')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 	})
 

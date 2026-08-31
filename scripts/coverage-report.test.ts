@@ -189,16 +189,19 @@ describe('coverage policy', () => {
 			},
 			changedLines: metric(100),
 		}
-		const result = evaluateCoveragePolicy(report, {
+		const expiredPolicy = {
 			...policy,
 			typescript: {
 				...policy.typescript,
 				shared: { ...policy.typescript.shared, maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2020-01-01' },
 			},
-		})
+		}
+		const result = evaluateCoveragePolicy(report, expiredPolicy, '2020-01-02')
 
 		expect(result.failures).toContain('TypeScript shared allows 1 unloaded files, exceeding its cap of 0')
 		expect(result.failures).toContain('TypeScript shared unloaded-file exceptions require review by 2020-01-01')
+		expect(evaluateCoveragePolicy(report, expiredPolicy, '2019-12-31').failures).not.toContain('TypeScript shared unloaded-file exceptions require review by 2020-01-01')
+		expect(evaluateCoveragePolicy(report, expiredPolicy, '2020-01-01').failures).not.toContain('TypeScript shared unloaded-file exceptions require review by 2020-01-01')
 	})
 
 	test('compares exact ratios instead of rounded display percentages', () => {

@@ -7,6 +7,7 @@ export const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as
 export const TEST_DOMAINS = ['all', 'application', 'solidity'] as const
 export type TestDomain = (typeof TEST_DOMAINS)[number]
 export const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
+export const EXPLICIT_TEST_TIER_FILES = new Set(['ui/coreShared/build/productionBuild.test.ts'])
 export const MAXIMUM_TEST_PARALLELISM = 2
 
 export function getDefaultTestParallelism(availableParallelism: number) {
@@ -48,7 +49,7 @@ async function collectTestFiles(repositoryRoot: string, directoryPath: string): 
 
 export async function discoverTestFiles(repositoryRoot = process.cwd(), testRoots: readonly string[] = TEST_ROOTS) {
 	const files = (await Promise.all(testRoots.map(testRoot => collectTestFiles(repositoryRoot, path.join(repositoryRoot, testRoot))))).flat()
-	return [...new Set(files)].sort((left, right) => left.localeCompare(right))
+	return [...new Set(files)].filter(filePath => !EXPLICIT_TEST_TIER_FILES.has(filePath)).sort((left, right) => left.localeCompare(right))
 }
 
 export function isTestDomain(value: string): value is TestDomain {

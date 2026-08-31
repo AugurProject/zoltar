@@ -26,7 +26,6 @@ export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['solidity/ts/tests/auction.test.ts', 81],
 	['solidity/ts/tests/statoblastInvariant.test.ts', 78],
 	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 71],
-	['ui/coreShared/build/productionBuild.test.ts', 55],
 	['solidity/ts/tests/statoblast/vaultAccounting.test.ts', 37],
 	['solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts', 33],
 	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],

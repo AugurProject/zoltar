@@ -399,7 +399,7 @@ export function summarizeSolidityCoverage(summary: SolidityCoverageInput, reposi
 	}
 }
 
-export function evaluateCoveragePolicy(report: CompleteCoverage, policy: CoveragePolicy) {
+export function evaluateCoveragePolicy(report: CompleteCoverage, policy: CoveragePolicy, currentUtcDate = new Date().toISOString().slice(0, 10)) {
 	const failures: string[] = []
 	const belowMinimum = (value: CoverageMetric, minimum: number) => exactPercentage(value) < minimum
 	const formatExact = (value: CoverageMetric) => exactPercentage(value).toFixed(4)
@@ -418,8 +418,7 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 		if (newlyUnloadedFiles.length > 0) failures.push(`TypeScript ${surfaceName} has newly unloaded executable source: ${newlyUnloadedFiles.join(', ')}`)
 		if (staleAllowedFiles.length > 0) failures.push(`TypeScript ${surfaceName} policy still allows source that is no longer unloaded: ${staleAllowedFiles.join(', ')}`)
 		if (surfacePolicy.allowedUnloadedFiles.length > surfacePolicy.maximumAllowedUnloadedFiles) failures.push(`TypeScript ${surfaceName} allows ${surfacePolicy.allowedUnloadedFiles.length.toString()} unloaded files, exceeding its cap of ${surfacePolicy.maximumAllowedUnloadedFiles.toString()}`)
-		const reviewDeadline = Date.parse(`${surfacePolicy.unloadedFilesReviewBy}T00:00:00Z`)
-		if (!Number.isFinite(reviewDeadline) || reviewDeadline < Date.now()) failures.push(`TypeScript ${surfaceName} unloaded-file exceptions require review by ${surfacePolicy.unloadedFilesReviewBy}`)
+		if (surfacePolicy.unloadedFilesReviewBy < currentUtcDate) failures.push(`TypeScript ${surfaceName} unloaded-file exceptions require review by ${surfacePolicy.unloadedFilesReviewBy}`)
 	}
 	if (report.solidity !== undefined && belowMinimum(report.solidity.firstParty, policy.solidity.minimumFirstPartyLines)) {
 		failures.push(`First-party Solidity line coverage ${formatExact(report.solidity.firstParty)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(3)}%`)

@@ -19,6 +19,16 @@ env:
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
+  browser-smoke:
+    name: Production browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - name: Run production browser smoke tier
+        run: bun run test:browser:smoke
+
   browser-workflow:
     name: Production browser workflow
     runs-on: ubuntu-latest
