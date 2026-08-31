@@ -1462,6 +1462,22 @@ describe('shared ethereum compatibility layer', () => {
 		}
 	})
 
+	test('waitForTransactionReceipt clears a stale rate limit when its retry request hangs', async () => {
+		let receiptRequests = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected rpc method: ${method}`)
+			receiptRequests += 1
+			if (receiptRequests === 1) throw { code: 429, message: 'stale rate limit' }
+			return new Promise(() => {
+				// Deliberately never settles.
+			})
+		}, [])
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider, { retryDelay: 0 }) })
+
+		await expect(client.waitForTransactionReceipt({ hash: RECEIPT_HASH, timeout: 5 })).rejects.toThrow(`Timed out while waiting for transaction receipt "${RECEIPT_HASH}".`)
+		expect(receiptRequests).toBe(2)
+	})
+
 	test('waitForTransactionReceipt preserves replacement scan progress across rate limits', async () => {
 		const originalHash = `0x${'77'.repeat(32)}` satisfies Hash
 		const replacementHash = `0x${'88'.repeat(32)}` satisfies Hash

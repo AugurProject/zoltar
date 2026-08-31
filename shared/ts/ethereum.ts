@@ -1722,6 +1722,8 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							async () =>
 								await retryRateLimited(
 									async () => {
+										lastRateLimitError = undefined
+										lastRequestError = undefined
 										try {
 											const result = await operation()
 											lastRateLimitError = undefined
