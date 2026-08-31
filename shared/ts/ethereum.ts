@@ -622,17 +622,6 @@ function normalizeHexData(value: string | undefined) {
 	return ensure0x(ensureEvenHex(stripHexPrefix(value).toLowerCase()))
 }
 
-function normalizeBoolean(value: unknown) {
-	if (typeof value === 'boolean') return value
-	if (typeof value === 'string') {
-		if (value === '0x1' || value.toLowerCase() === 'true') return true
-		if (value === '0x0' || value.toLowerCase() === 'false') return false
-	}
-	if (typeof value === 'number') return value !== 0
-	if (typeof value === 'bigint') return value !== 0n
-	return false
-}
-
 function normalizeOptionalLogRemoved(value: unknown) {
 	if (value === undefined) return undefined
 	if (typeof value !== 'boolean') throw new Error('RPC returned a log with an invalid removed flag')
