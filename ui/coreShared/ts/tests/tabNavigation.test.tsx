@@ -97,6 +97,13 @@ describe('TabNavigation', () => {
 		expect(within(document.body).queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
 	})
 
+	test('omits an empty navigation landmark when no route chooser or guide is available', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }] })))
+		cleanupRenderedComponent = rendered.cleanup
+
+		expect(within(document.body).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
+	})
+
 	test('keeps the first tab as the current compact route when the route is unknown', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
 		cleanupRenderedComponent = rendered.cleanup

@@ -22,6 +22,7 @@ export function TabNavigation({ route, tabs, onRouteChange, showProtocolGuide = 
 	const fallbackRoute = tabs[0]?.route ?? route
 	const effectiveRoute = route === 'not-found' ? fallbackRoute : route
 	const showRouteChooser = tabs.length > 1
+	if (!showRouteChooser && !showProtocolGuide) return null
 
 	return (
 		<nav className='tab-nav' aria-label={appCopy.applicationSections} role='navigation'>
