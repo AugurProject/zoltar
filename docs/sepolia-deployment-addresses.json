@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x9201310a45456BA6dC2D33E8F42806a67F04203f"
+			"address": "0x19138180CFb059b5695789e73c79bA300db03A3c"
 		},
 		{
 			"id": "weth",

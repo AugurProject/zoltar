@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x13f99E75B6011fe5cf1F4C53Cfa47D55217dE0Ec"
+			"address": "0xf8f6eA0f2149b59CD56C4370Ab4ec4De8bb6BFd2"
 		},
 		{
 			"id": "multicall3",
