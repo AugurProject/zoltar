@@ -32,6 +32,7 @@ import {
 	publicActions,
 	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
+	requestRpc,
 	toHex,
 	type EIP1193Provider,
 	type BlockTransaction,
@@ -2024,6 +2025,34 @@ describe('shared ethereum compatibility layer', () => {
 		)
 		expect(await recoverTransactionAddress({ serializedTransaction: capturedRawTransaction })).toBe(ACCOUNT_ADDRESS)
 		expect(localCalls).toHaveLength(1)
+	})
+
+	test('wallet client never retries rpc-managed transaction submissions', async () => {
+		let attempts = 0
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_sendTransaction') throw new Error(`Unexpected rpc method: ${method}`)
+			attempts += 1
+			throw { code: 429, message: 'rate limit exceeded' }
+		}, [])
+		const client = createWalletClient({
+			account: OWNER_ADDRESS,
+			chain: mainnet,
+			transport: custom(provider, { retryDelay: 0 }),
+		})
+
+		await expect(client.sendTransaction({ to: RECIPIENT_ADDRESS })).rejects.toThrow('rate limit exceeded')
+		expect(attempts).toBe(1)
+	})
+
+	test('raw RPC requests do not retry methods with unknown semantics', async () => {
+		let attempts = 0
+		const provider = createProvider(() => {
+			attempts += 1
+			throw { code: 429, message: 'rate limit exceeded' }
+		}, [])
+
+		await expect(requestRpc(custom(provider, { retryDelay: 0 }), { method: 'wallet_switchEthereumChain' })).rejects.toThrow('rate limit exceeded')
+		expect(attempts).toBe(1)
 	})
 
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
