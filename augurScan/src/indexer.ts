@@ -690,7 +690,12 @@ class NetworkIndexer {
 		let retainedBoundary = checkpoint?.number ?? storedBlockTip
 		if (storedStartBlock !== undefined) {
 			if (this.#configuredStartBlock > storedStartBlock) {
-				await this.#database.seedNetwork(this.#network, lease, true, true, undefined, this.#provenance)
+				await this.#database.seedNetwork(this.#network, {
+					lease,
+					resetCanonicalHistoryOnManifestChange: true,
+					preserveStoredStart: true,
+					appliedSourceHashes: this.#provenance,
+				})
 				throw new Error('Stored history boundary validation unexpectedly succeeded')
 			}
 			this.#network = { ...this.#network, startBlock: storedStartBlock }
@@ -720,7 +725,13 @@ class NetworkIndexer {
 
 	async #seedNetwork(lease: IndexerLease): Promise<boolean> {
 		const replayPlan = this.#provenance === undefined ? undefined : await this.#database.sourceReplayPlan(this.#network.chainId, this.#provenance, lease)
-		const changed = await this.#database.seedNetwork(this.#network, lease, true, true, replayPlan, this.#provenance)
+		const changed = await this.#database.seedNetwork(this.#network, {
+			lease,
+			resetCanonicalHistoryOnManifestChange: true,
+			preserveStoredStart: true,
+			sourceReplayPlan: replayPlan,
+			appliedSourceHashes: this.#provenance,
+		})
 		this.#lastSeedReplayReason = changed ? replayPlan?.reason : undefined
 		return changed
 	}
