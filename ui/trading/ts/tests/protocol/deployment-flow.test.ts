@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash, type WalletClient } from '@zoltar/shared/ethereum'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep } from '../../protocol/deployment.js'
 
 function examplePlan() {
@@ -81,6 +81,7 @@ describe('wallet trading deployment plan', () => {
 	test('submits the factory init code through the canonical proxy and verifies the installed contract', async () => {
 		const plan = examplePlan()
 		const hash = `0x${'ab'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'ac'.repeat(32)}` satisfies Hash
 		let factoryDeployed = false
 		let delayedFactoryCodeReads = 2
 		let contractReadCount = 0
@@ -116,13 +117,31 @@ describe('wallet trading deployment plan', () => {
 				transactions.push({ data: transaction.data, to: transaction.to })
 				return hash
 			},
-			waitForTransactionReceipt: async () => {
+			waitForTransactionReceipt: async (parameters: Parameters<WalletClient['waitForTransactionReceipt']>[0]) => {
 				factoryDeployed = true
+				parameters.onReplaced?.({
+					reason: 'repriced',
+					replacedTransaction: { hash } as never,
+					transaction: { hash: replacementHash } as never,
+					transactionReceipt: { status: 'success' } as never,
+				})
 				return { status: 'success' as const }
 			},
 		}
+		const submittedHashes: Hash[] = []
 
-		expect(await deployTradingStep(walletClient, publicClient, plan, plan.factory, undefined, undefined, async () => undefined)).toBe(hash)
+		expect(
+			await deployTradingStep(
+				walletClient,
+				publicClient,
+				plan,
+				plan.factory,
+				submittedHash => submittedHashes.push(submittedHash),
+				undefined,
+				async () => undefined,
+			),
+		).toBe(replacementHash)
+		expect(submittedHashes).toEqual([hash, replacementHash])
 		expect(transactions).toEqual([{ data: plan.factory.data, to: plan.core.proxyDeployer }])
 	})
 
