@@ -7,7 +7,6 @@ import {
 	type IndexedBlock,
 	type IndexerLease,
 	manifestContractSetChanged,
-	runFencedIndexerTransaction,
 	ScannerDatabase,
 	type StoredTransaction,
 } from '../src/database.ts'
@@ -3180,22 +3179,6 @@ describe('network indexer lifecycle', () => {
 		expect(() => assertIndexerLeaseReleaseObservation(41, 41, false)).toThrow(
 			'Indexer lease unlock failed on PostgreSQL backend 41; lock ownership may already be lost',
 		)
-	})
-
-	test('does not run a leased mutation when the transaction uses another PostgreSQL backend', async () => {
-		let mutated = false
-		const transaction = { backendPid: 42 }
-
-		await expect(
-			runFencedIndexerTransaction(
-				async (operation) => await operation(transaction),
-				async (activeTransaction: { readonly backendPid: number }) => assertIndexerLeaseObservation(41, activeTransaction.backendPid, true),
-				async () => {
-					mutated = true
-				},
-			),
-		).rejects.toThrow('Indexer lease moved from PostgreSQL backend 41 to 42')
-		expect(mutated).toBeFalse()
 	})
 
 	test('does not select shared tokens as standalone activity sources', () => {

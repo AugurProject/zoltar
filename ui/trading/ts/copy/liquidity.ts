@@ -1,4 +1,5 @@
 export const sectionTitle = 'Live liquidity'
+export const routeDescription = 'Manage YES and NO liquidity for the selected SecurityPool.'
 export const disconnectedGuidance = 'Connect a wallet to load balances and simulate liquidity transactions.'
 export const loadingBalancesStatus = 'Refreshing wallet balances and LP allowance…'
 export const balanceRefreshFallback = 'balance refresh failed'

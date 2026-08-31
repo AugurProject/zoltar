@@ -3,7 +3,8 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const repositoryRoot = join(import.meta.dir, '..')
-const ciWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const proposedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
 const coverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
 const proposedBrowserWorkflowPath = join(repositoryRoot, 'ci-proposals', 'workflows', 'browser-workflow.yml')
@@ -35,10 +36,39 @@ const workflowSteps = (job: unknown) => {
 	if (!Array.isArray(steps)) throw new Error('workflow job steps must be a sequence')
 	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
 }
+const deploymentRuntimeRefresh = `          # Refresh the built local packages before preflight so the deployment
+          # manifest check does not emit declarations while tsc:app reads them.
+          bun ./scripts/install-frozen.mts ui/statoblast
+          refresh_status="$?"
+          if [[ "\${refresh_status}" -ne 0 ]]; then
+            exit "\${refresh_status}"
+          fi
+`
+
+const getCiWorkflowPath = async () => {
+	try {
+		await access(proposedCiWorkflowPath)
+		return proposedCiWorkflowPath
+	} catch (error) {
+		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return activeCiWorkflowPath
+		throw error
+	}
+}
 
 describe('split UI workflow paths', () => {
+	test('the proposed CI workflow contains only the staged runtime refresh', async () => {
+		try {
+			await access(proposedCiWorkflowPath)
+		} catch (error) {
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
+			throw error
+		}
+		const [activeWorkflow, proposedWorkflow] = await Promise.all([readFile(activeCiWorkflowPath, 'utf8'), readFile(proposedCiWorkflowPath, 'utf8')])
+		expect(proposedWorkflow.replace(deploymentRuntimeRefresh, '')).toBe(activeWorkflow)
+	})
+
 	test('split CI remains callable by the version release workflow', async () => {
-		const workflow = await readWorkflow(ciWorkflowPath)
+		const workflow = await readWorkflow(await getCiWorkflowPath())
 		expect(requireRecord(workflow['on'], 'CI triggers')).toHaveProperty('workflow_call')
 		const releaseWorkflow = await readWorkflow(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'))
 		const releaseJobs = workflowJobs(releaseWorkflow)
@@ -46,7 +76,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
-		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		const workflow = await readFile(await getCiWorkflowPath(), 'utf8')
 		expect(workflow).toContain('ui/coreShared/js\n            ui/zoltar/js\n            ui/statoblast/js\n            ui/trading/js\n            ui/zoltar/dist\n            ui/statoblast/dist\n            ui/trading/dist')
 		expect(workflow).toContain('uses: actions/download-artifact@v5\n        with:\n          name: production-ui\n          path: ui')
 		const downloadIndex = workflow.indexOf('name: production-ui\n          path: ui')
@@ -125,12 +155,12 @@ describe('split UI workflow paths', () => {
 		const setupAction = await readFile(setupActionPath, 'utf8')
 		expect(setupAction).toContain('ui/trading/ts/generated/contractArtifact.ts')
 
-		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		const workflow = await readFile(await getCiWorkflowPath(), 'utf8')
 		expect(workflow.match(/ui\/trading\/ts\/generated\/contractArtifact\.ts/g)).toHaveLength(2)
 	})
 
 	test('clean CI and testnet jobs emit the complete UI dependency DAG', async () => {
-		const ciWorkflow = await readFile(ciWorkflowPath, 'utf8')
+		const ciWorkflow = await readFile(await getCiWorkflowPath(), 'utf8')
 		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
 		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current')
 		expect(buildIndex).toBeGreaterThan(0)
@@ -142,6 +172,16 @@ describe('split UI workflow paths', () => {
 		}
 		expect(deployWorkflow).toContain('bun run ui:build:apps')
 		expect(deployWorkflow).toContain('bun ./scripts/deploy-testnet.mts --help')
+	})
+
+	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
+		const ciWorkflow = await readFile(await getCiWorkflowPath(), 'utf8')
+		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
+		const refreshIndex = ciWorkflow.indexOf('bun ./scripts/install-frozen.mts ui/statoblast', buildIndex)
+		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current', buildIndex)
+		expect(buildIndex).toBeGreaterThan(0)
+		expect(refreshIndex).toBeGreaterThan(buildIndex)
+		expect(preflightIndex).toBeGreaterThan(refreshIndex)
 	})
 
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
@@ -160,7 +200,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
-		const workflow = await readFile(ciWorkflowPath, 'utf8')
+		const workflow = await readFile(await getCiWorkflowPath(), 'utf8')
 		const deadCodeJobStart = workflow.indexOf('  knip:\n')
 		const auditJobStart = workflow.indexOf('  audit:\n', deadCodeJobStart)
 		expect(deadCodeJobStart).toBeGreaterThan(0)
@@ -199,8 +239,8 @@ describe('split UI workflow paths', () => {
 		}
 	})
 
-	test('active workflows replace every stale monolithic UI setup command', async () => {
-		const activeSources = await Promise.all([readFile(ciWorkflowPath, 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
+	test('activatable workflows replace every stale monolithic UI setup command', async () => {
+		const activeSources = await Promise.all([readFile(await getCiWorkflowPath(), 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
 		for (const source of activeSources) {
 			expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
 		}
