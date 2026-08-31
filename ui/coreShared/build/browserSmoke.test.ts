@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,12 +88,18 @@ test('browser commands bound a stalled DevTools response', async () => {
 	await waitForBrowserExit(browser)
 })
 
-const listBrowserProfiles = async () => (await readdir(tmpdir())).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
+const listBrowserProfiles = async (profileParentPath: string) => (await readdir(profileParentPath)).filter(entry => entry.startsWith('zoltar-browser-smoke-'))
 
 test('browser launch failure removes the temporary profile', async () => {
-	const profilesBefore = new Set(await listBrowserProfiles())
-	await expect(createDevToolsSession(join(tmpdir(), `missing-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, { pollMilliseconds: 1 })).rejects.toThrow(/launch Chromium|ENOENT/)
-	expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-launch-failure-'))
+	const unrelatedProfilePath = await mkdtemp(join(tmpdir(), 'zoltar-browser-smoke-'))
+	try {
+		await expect(createDevToolsSession(join(tmpdir(), `missing-chromium-${crypto.randomUUID()}`), 'http://127.0.0.1', viewport, { pollMilliseconds: 1, profileParentPath: fixtureRoot })).rejects.toThrow(/launch Chromium|ENOENT/)
+		expect(await listBrowserProfiles(fixtureRoot)).toEqual([])
+		await access(unrelatedProfilePath)
+	} finally {
+		await Promise.all([rm(fixtureRoot, { force: true, recursive: true }), rm(unrelatedProfilePath, { force: true, recursive: true })])
+	}
 })
 
 test.skipIf(process.platform === 'win32')('browser cleanup escalates when Chromium ignores SIGTERM', async () => {
@@ -148,14 +154,13 @@ test.skipIf(process.platform === 'win32')('stalled DevTools discovery times out 
 	})
 	const address = server.address()
 	if (address === null || typeof address === 'string') throw new Error('Expected the DevTools stall fixture to use a TCP port')
-	const profilesBefore = new Set(await listBrowserProfiles())
 	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '${address.port.toString()}\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
-		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1 })).rejects.toThrow(/timed out/)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 2_000, pollMilliseconds: 1, profileParentPath: fixtureRoot })).rejects.toThrow(/timed out/)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
-		expect((await listBrowserProfiles()).filter(entry => !profilesBefore.has(entry))).toEqual([])
+		expect(await listBrowserProfiles(fixtureRoot)).toEqual([])
 	} finally {
 		for (const socket of sockets) socket.destroy()
 		await new Promise<void>((resolve, reject) => server.close(error => (error === undefined ? resolve() : reject(error))))
@@ -301,15 +306,13 @@ test.skipIf(process.platform === 'win32')('browser initialization failure reaps 
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-fixture-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
 	const pidPath = join(fixtureRoot, 'pid')
-	const profilesBefore = new Set(await listBrowserProfiles())
 	await writeFile(executablePath, `#!/bin/sh\nprofile=''\nfor argument in "$@"; do\n  case "$argument" in\n    --user-data-dir=*) profile="${'${argument#*=}'}" ;;\n  esac\ndone\nprintf '9\\n' > "$profile/DevToolsActivePort"\nprintf '%s\\n' "$$" > ${JSON.stringify(pidPath)}\nexec sleep 60\n`)
 	await chmod(executablePath, 0o755)
 	try {
-		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { pollMilliseconds: 1, targetAttempts: 1 })).rejects.toThrow(/connect/i)
+		await expect(createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { pollMilliseconds: 1, profileParentPath: fixtureRoot, targetAttempts: 1 })).rejects.toThrow(/connect/i)
 		const pid = Number((await readFile(pidPath, 'utf8')).trim())
 		expect(() => process.kill(pid, 0)).toThrow()
-		const profilesAfter = await listBrowserProfiles()
-		expect(profilesAfter.filter(entry => !profilesBefore.has(entry))).toEqual([])
+		expect(await listBrowserProfiles(fixtureRoot)).toEqual([])
 	} finally {
 		await rm(fixtureRoot, { force: true, recursive: true })
 	}
