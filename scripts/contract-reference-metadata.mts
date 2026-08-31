@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '4550577ee15951cd226b0017b3377fded2cc6405409ac0b4fd889ed1fda8f21e'
+export const expectedProductionSoliditySourceFingerprint = '036a74c8b8abc75329aa8d5d21e76bd470419f399679b45819455974b7aaf944'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -796,7 +796,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
+					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; actual pool-held REP satisfies both live backing constraints for resulting collateral net of recorded bad debt, with dispute-staked REP counting only toward the associated-REP constraint; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -995,7 +995,8 @@ export const contractReferences: ContractReference[] = [
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setPoolFinancials' }],
 				effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
-				preconditions: 'Fee-eligible capacity ownership does not exceed total capacity ownership, and the supplied settlement collateral does not exceed the current price-converted minting capacity; no lifecycle or value-change guard.',
+				preconditions:
+					'Fee-eligible capacity ownership does not exceed total capacity ownership; supplied settlement collateral does not exceed the current price-converted minting capacity; actual pool-held REP satisfies both live backing constraints for supplied collateral net of supplied aggregate bad debt, with dispute-staked REP counting only toward the associated-REP constraint; no lifecycle or value-change guard.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{
@@ -1146,7 +1147,7 @@ export const contractReferences: ContractReference[] = [
 					'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, capacity unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child, fixes bidder REP-backing-unit and capacity-ownership rates, and saves the fee index. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions:
-					'Truth auction started, its one-week window has passed, `msg.value` is zero, and migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
+					'Truth auction started, its one-week window has passed, and `msg.value` is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity, and actual pool-held REP satisfies both live backing constraints for that collateral net of aggregate bad debt; dispute-staked REP counts only toward the associated-REP constraint. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints; `TruthAuctionHaircutApplied` when purchased REP removes a positive escalation allocation; `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{

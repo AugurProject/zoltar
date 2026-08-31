@@ -248,7 +248,7 @@
 						<tr>
 							<td><code>createCompleteSet()</code> with ETH</td>
 							<td>Trader</td>
-							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; any explicit unassigned auction position remains healthy after the mint; under <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract trader accepts <code>onERC1155BatchReceived</code>.</td>
+							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; actual pool-held REP satisfies both live backing constraints for resulting collateral net of recorded bad debt, with dispute-staked REP counting only toward the associated-REP constraint; any explicit unassigned auction position remains healthy after the mint; under <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract trader accepts <code>onERC1155BatchReceived</code>.</td>
 							<td>Adds collateral and mints one <code>Invalid</code>, <code>Yes</code>, and <code>No</code> share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.</td>
 							<td><code>CompleteSetCreated</code>, <code>PoolAccountingCheckpoint</code>, then ERC-1155 <code>TransferBatch</code> on a successful callback</td>
 						</tr>
@@ -409,7 +409,7 @@
 						<tr>
 							<td><code>setPoolFinancials(newSettlementCollateralAttoEth, newTotalCapacityOwnershipAttoRep, newFeeEligibleCapacityOwnershipAttoRep, newTotalBadDebtAttoEth)</code></td>
 							<td><code>SecurityPoolForker</code> only</td>
-							<td>Fee-eligible capacity ownership does not exceed total capacity ownership, and the supplied settlement collateral does not exceed the current price-converted minting capacity; no lifecycle or value-change guard.</td>
+							<td>Fee-eligible capacity ownership does not exceed total capacity ownership; supplied settlement collateral does not exceed the current price-converted minting capacity; actual pool-held REP satisfies both live backing constraints for supplied collateral net of supplied aggregate bad debt, with dispute-staked REP counting only toward the associated-REP constraint; no lifecycle or value-change guard.</td>
 							<td>Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, and clears fee-index rounding carry.</td>
 							<td><code>PoolAccountingCheckpoint</code>, including for repeated financial values</td>
 						</tr>
@@ -520,7 +520,7 @@
 						<tr>
 							<td><code>finalizeTruthAuction(securityPool)</code></td>
 							<td>Anyone</td>
-							<td>Truth auction started, its one-week window has passed, <code>msg.value</code> is zero, and migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity. If unresolved escalation existed at fork, the game reported at completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
+							<td>Truth auction started, its one-week window has passed, and <code>msg.value</code> is zero. Migrated collateral plus accepted bid ETH does not exceed current price-converted minting capacity, and actual pool-held REP satisfies both live backing constraints for that collateral net of aggregate bad debt; dispute-staked REP counts only toward the associated-REP constraint. If unresolved escalation existed at fork, the game reported at completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, capacity unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child, fixes bidder REP-backing-unit and capacity-ownership rates, and saves the fee index. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.</td>
 							<td><code>TruthAuctionFinalized</code>, auction <code>AuctionFinalized</code>, and pool accounting checkpoints; <code>TruthAuctionHaircutApplied</code> when purchased REP removes a positive escalation allocation; <code>ForkContinuationResumed</code> for an unresolved continuation</td>
 						</tr>

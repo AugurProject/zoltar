@@ -448,12 +448,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _startTruthAuctionOrFinalize(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData, uint256 parentSettlementCollateralAttoEth) private {
-		if (_isAllRepMigrated(data, parentData)) {
+		if (_isAllRepMigrated(data, parentData, parentSettlementCollateralAttoEth)) {
 			// we have acquired all the ETH already, no need for truthAuction
 			_finalizeTruthAuction(securityPool);
 			return;
 		}
-		uint256 settlementCollateralToRaiseAttoEth = _computeSettlementCollateralToRaiseAttoEth(parentSettlementCollateralAttoEth, data, parentData);
+		uint256 settlementCollateralToRaiseAttoEth = _computeSettlementCollateralToRaiseAttoEth(parentSettlementCollateralAttoEth, data);
 		if (settlementCollateralToRaiseAttoEth == 0) {
 			_finalizeTruthAuction(securityPool);
 			return;
@@ -465,13 +465,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.truthAuction.startAuction(settlementCollateralToRaiseAttoEth, _getTruthAuctionCap(securityPool, data, parentData));
 	}
 
-	function _isAllRepMigrated(SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData) private view returns (bool) {
-		return data.migratedAttoRep >= _getPoolAuctionableRepAtFork(parentData);
+	function _isAllRepMigrated(SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData, uint256 parentSettlementCollateralAttoEth) private view returns (bool) {
+		return
+			data.migratedAttoRep >= _getPoolAuctionableRepAtFork(parentData) &&
+			data.forkSettlementCollateralReceivedAttoEth >= parentSettlementCollateralAttoEth;
 	}
 
-	function _computeSettlementCollateralToRaiseAttoEth(uint256 parentSettlementCollateralAttoEth, SecurityPoolForkerForkData storage data, SecurityPoolForkerForkData storage parentData) private view returns (uint256 settlementCollateralToRaiseAttoEth) {
-		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		if (poolAuctionableRepAtForkAttoRep == 0 || data.migratedAttoRep >= poolAuctionableRepAtForkAttoRep) return 0;
+	function _computeSettlementCollateralToRaiseAttoEth(uint256 parentSettlementCollateralAttoEth, SecurityPoolForkerForkData storage data) private view returns (uint256 settlementCollateralToRaiseAttoEth) {
 		if (data.forkSettlementCollateralReceivedAttoEth >= parentSettlementCollateralAttoEth) return 0;
 		// Migration rounds each branch's cumulative collateral target up. Auction only
 		// the exact unfilled snapshot remainder so final collateral cannot exceed it.

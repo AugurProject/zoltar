@@ -11,6 +11,19 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
 
+	function setValidatedSettlementCollateral(uint256 nextSettlementCollateralAttoEth) external payable {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(pool.getCurrentMintingCapacityAttoEth() >= nextSettlementCollateralAttoEth, 'Over capacity');
+		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
+		uint256 activeOpenInterestAttoEth =
+			nextSettlementCollateralAttoEth > totalBadDebtAttoEth
+				? nextSettlementCollateralAttoEth - totalBadDebtAttoEth
+				: 0;
+		uint256 disputeStakedAttoRep =
+			address(escalationGame) == address(0x0) ? 0 : escalationGame.totalDisputeStakedAttoRep();
+		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), disputeStakedAttoRep, activeOpenInterestAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Pool backing insufficient');
+	}
+
 	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
 		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
 		// Reducing the denominator would reallocate live settlement collateral to every remaining vault.
