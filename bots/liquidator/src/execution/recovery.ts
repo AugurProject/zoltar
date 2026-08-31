@@ -1,4 +1,4 @@
-import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges, latestLogRange, newestFirstScanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
@@ -78,52 +78,45 @@ function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transp
 
 export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
 	const readers = recoveryReaders(settings, wallet, pool)
-	const result = await settledQuorumValue<{
-		evidence:
-			| {
-					blockHash: Hex
-					blockNumber: bigint
-					hash: Hex
-					logs: { address: `0x${string}`; data: Hex; topics: readonly Hex[] }[]
-					status: 'reverted' | 'success'
-			  }
-			| undefined
-		receipt: TransactionReceipt | undefined
-	}>(
-		`receipt ${hash}`,
-		readers.clients.map(async ({ client, endpoint }) => {
-			try {
-				const receipt = await client.getTransactionReceipt({ hash })
+	const observations = readers.clients.map(async ({ client, endpoint }) => {
+		try {
+			const receipt = await client.getTransactionReceipt({ hash })
+			return {
+				endpoint,
+				evidence: {
+					blockHash: receipt.blockHash,
+					blockNumber: receipt.blockNumber,
+					hash: receipt.transactionHash,
+					logs: receipt.logs.map(log => ({
+						address: log.address,
+						data: log.data,
+						topics: log.topics,
+					})),
+					status: receipt.status,
+				},
+				receipt,
+			}
+		} catch (error) {
+			if (missingReceipt(error))
 				return {
 					endpoint,
-					value: {
-						evidence: {
-							blockHash: receipt.blockHash,
-							blockNumber: receipt.blockNumber,
-							hash: receipt.transactionHash,
-							logs: receipt.logs.map(log => ({
-								address: log.address,
-								data: log.data,
-								topics: log.topics,
-							})),
-							status: receipt.status,
-						},
-						receipt,
-					},
+					evidence: undefined,
+					receipt: undefined,
 				}
-			} catch (error) {
-				if (missingReceipt(error))
-					return {
-						endpoint,
-						value: { evidence: undefined, receipt: undefined },
-					}
-				throw error
-			}
+			throw error
+		}
+	})
+	const evidence = await settledQuorumValue(
+		`receipt ${hash}`,
+		observations.map(async observation => {
+			const { endpoint, evidence: value } = await observation
+			return { endpoint, value }
 		}),
 		settings.connectivity.rpcQuorum,
 	)
-	if (result.evidence === undefined || result.receipt === undefined) return { observed: false as const, receipt: undefined }
-	const receipt = result.receipt
+	if (evidence === undefined) return { observed: false as const, receipt: undefined }
+	const receipt = availableSettledValues(await Promise.allSettled(observations)).find(observation => observation.receipt !== undefined)?.receipt
+	if (receipt === undefined) throw new Error(`Receipt ${hash} quorum did not retain its matching transaction receipt`)
 	if (
 		!(await confirmCanonicalReceiptFinality(
 			readers.clients.map(reader => reader.client),
