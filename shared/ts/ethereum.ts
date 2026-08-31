@@ -36,6 +36,8 @@ type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind ext
 	[TIndex in keyof TComponents]: TComponents[TIndex] extends AbiParameter ? AbiParameterValue<TComponents[TIndex], TKind> : never
 }>
 
+type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsObject<TComponents, 'output'> : TupleComponentsArray<TComponents, 'output'>
+
 type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiValueKind> = TKind extends 'input'
 	? TupleComponentsAllNamed<TComponents> extends true
 		? TupleComponentsArray<TComponents, TKind> | TupleComponentsObject<TComponents, TKind>
@@ -140,7 +142,7 @@ type ContractEventDefinition<TAbi extends Abi, TEventName extends string> = [Kno
 		}
 	: Extract<KnownAbiEvents<TAbi>, { name: TEventName }>
 
-type ContractEventArgs<TAbi extends Abi, TEventName extends string> = TupleValue<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly [], 'output'>
+type ContractEventArgs<TAbi extends Abi, TEventName extends string> = DecodedEventArguments<ContractEventDefinition<TAbi, TEventName>['inputs'] extends readonly AbiParameter[] ? ContractEventDefinition<TAbi, TEventName>['inputs'] : readonly []>
 
 type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [never]
 	? {
@@ -156,7 +158,7 @@ type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [
 
 type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 	? {
-			args: TupleValue<readonly AbiParameter[], 'output'>
+			args: DecodedEventArguments<readonly AbiParameter[]>
 			eventName: string
 		}
 	: {
@@ -166,7 +168,7 @@ type DecodedEventLog<TAbi extends Abi> = [KnownAbiEvents<TAbi>] extends [never]
 			}
 		}[ContractEventName<TAbi>]
 
-type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? TupleValue<TEvent['inputs'], 'output'> : TupleValue<readonly AbiParameter[], 'output'>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
+type RpcLogForEvent<TEvent extends AbiParameter | undefined> = TEvent extends AbiParameter ? RpcLog<TEvent['inputs'] extends readonly AbiParameter[] ? DecodedEventArguments<TEvent['inputs']> : DecodedEventArguments<readonly AbiParameter[]>, TEvent['name'] extends string ? TEvent['name'] : string> : RpcLog
 
 type ContractReadParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
 	account?: Account | Address | undefined
@@ -2084,7 +2086,7 @@ export function encodeDeployData(parameters: { abi: Abi; args?: readonly unknown
 
 export function decodeEventLog<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex; topics: readonly Hex[] }): DecodedEventLog<TAbi>
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }): {
-	args: TupleValue<readonly AbiParameter[], 'output'>
+	args: DecodedEventArguments<readonly AbiParameter[]>
 	eventName: string
 }
 export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readonly Hex[] }) {
