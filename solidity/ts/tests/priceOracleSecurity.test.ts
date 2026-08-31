@@ -346,7 +346,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const replayLogs: ReplayLog[] = []
 		for (const log of logs) {
 			if (log.address.toLowerCase() !== priceOracle.toLowerCase()) continue
-			let decoded: ReturnType<typeof decodeEventLog>
+			let decoded: { args: Readonly<Record<string, unknown>>; eventName: string }
 			try {
 				decoded = decodeEventLog({
 					abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1711,6 +1711,8 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'minimumVaultRepDepositAttoRep',
 			args: [],
 		})
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRepToVault(counterpartyClient, securityPool, minimumVaultRepDepositAttoRep + repDeposit - 2n)
 		await mockWindow.setTime(questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit)
@@ -1726,8 +1728,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'previewDepositOnOutcome',
 			args: [QuestionOutcome.No, repDeposit],
 		})
-		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
-		await depositRepToVault(counterpartyClient, securityPool, minimumVaultRepDepositAttoRep + requiredDepositAttoRep - 1n)
+		assert.strictEqual(requiredDepositAttoRep, repDeposit - 1n, 'the fixture must leave exactly one attoREP below the post-escalation minimum')
 
 		const guardedVaults = [client.account.address, counterpartyClient.account.address]
 		const stateBefore = await readPoolGuardState(guardedVaults)

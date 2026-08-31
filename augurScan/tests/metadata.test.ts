@@ -28,6 +28,21 @@ describe('ABI metadata', () => {
 		expect(abiForKind('liquidationApprovalRegistry')).toBeDefined()
 	})
 
+	test('decodes caller-funded REP deposits into escalation games', () => {
+		const abi = abiForKind('escalationGame')
+		if (abi === undefined) throw new Error('EscalationGame ABI missing')
+		const contract = { address: account as Address, label: 'Escalation game', kind: 'escalationGame', provenance: 'test' }
+		const input = encodeFunctionData({ abi, functionName: 'depositRepOnOutcome', args: [1, 5_000_000_000_000_000_000n] })
+
+		const decoded = decodeAction(contract, input, new Map())
+
+		expect(decoded.status).toBe('decoded')
+		expect(decoded.name).toBe('depositRepOnOutcome')
+		expect(decoded.arguments?.['outcome']).toBe('1')
+		expect(decoded.arguments?.['maximumDepositAttoRep']).toBe('5000000000000000000')
+		expect(decoded.displayArguments?.['maximumDepositAttoRep']).toBe('5 REP')
+	})
+
 	test('formats semantic REP amounts exactly and labels addresses', () => {
 		const abi = parseAbi(['event RepBurned(address indexed burner,uint248 indexed universeId,uint256 amountAttoRep,uint256 universeTheoreticalSupplyAttoRep)'])
 		const topics = encodeEventTopics({ abi, eventName: 'RepBurned', args: { burner: account, universeId: 4n } })

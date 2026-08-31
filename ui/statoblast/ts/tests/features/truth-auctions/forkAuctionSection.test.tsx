@@ -169,6 +169,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 1n,
+		ordinaryEscalationGameStarted: false,
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',

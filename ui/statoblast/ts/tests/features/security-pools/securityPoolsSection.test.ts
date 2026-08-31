@@ -60,6 +60,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 	return {
 		accountState: createAccountState(),
 		loadingReportingDetails: false,
+		onApproveReportingRep: () => undefined,
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,
@@ -199,6 +200,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
+		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
@@ -614,6 +616,18 @@ void describe('SecurityPoolsSection', () => {
 
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
+	})
+
+	void test('renders one route heading in create and empty manage modes', async () => {
+		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
+		cleanupRenderedComponent = createRender.cleanup
+		expect(within(document.body).getAllByRole('heading', { name: 'Create Pool' })).toHaveLength(1)
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+
+		const manageRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'operate' })))
+		cleanupRenderedComponent = manageRender.cleanup
+		expect(within(document.body).getAllByRole('heading', { name: 'Manage Pool' })).toHaveLength(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {

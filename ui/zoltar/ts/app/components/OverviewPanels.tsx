@@ -11,10 +11,17 @@ import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
+import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
+
+function omitPresentationActionHint(presentation: UserMessagePresentation) {
+	const { actionHint, ...presentationWithoutActionHint } = presentation
+	void actionHint
+	return presentationWithoutActionHint
+}
 
 function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainId === undefined) return appCopy.unknownNetwork
@@ -51,6 +58,7 @@ export function OverviewPanels({
 	onRefreshRepPrices,
 	onSwitchNetwork,
 	readBackendStatus,
+	showRepPrices = true,
 	repPerEthFailure,
 	repPerEthPrice,
 	repPerEthSource,
@@ -193,33 +201,37 @@ export function OverviewPanels({
 							</MetricField>
 						</>
 					) : undefined}
-					<MetricField
-						className='overview-metric-secondary'
-						label={
-							<span className='metric-label-with-action'>
-								<span>
-									{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+					{showRepPrices ? (
+						<MetricField
+							className='overview-metric-secondary'
+							label={
+								<span className='metric-label-with-action'>
+									<span>
+										{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+									</span>
+									{isRepPricingUnavailable ? undefined : (
+										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+											↻
+										</button>
+									)}
 								</span>
-								{isRepPricingUnavailable ? undefined : (
-									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-										↻
-									</button>
-								)}
-							</span>
-						}
-					>
-						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
-					</MetricField>
-					<MetricField
-						className='overview-metric-secondary'
-						label={
-							<>
-								{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
-							</>
-						}
-					>
-						{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
-					</MetricField>
+							}
+						>
+							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
+						</MetricField>
+					) : undefined}
+					{showRepPrices ? (
+						<MetricField
+							className='overview-metric-secondary'
+							label={
+								<>
+									{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
+								</>
+							}
+						>
+							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
+						</MetricField>
+					) : undefined}
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}
 					</MetricField>
@@ -230,7 +242,8 @@ export function OverviewPanels({
 				{universePresentation === undefined ? undefined : (
 					<StateHint
 						className='overview-universe-state'
-						presentation={universePresentation}
+						presentation={omitPresentationActionHint(universePresentation)}
+						title={universePresentation.badgeLabel}
 						actions={
 							<button className='secondary' onClick={onGoToGenesisUniverse}>
 								{commonCopy.goToGenesisUniverse}

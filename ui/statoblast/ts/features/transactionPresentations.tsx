@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '../copy/app.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -24,7 +25,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 	return [
 		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeGwei.trim(), commonCopy.gwei) }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
+		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
 	]
 }
 
@@ -45,7 +46,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
+			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
 			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9) },
 		],
 		title: transactionCopy.securityPoolCreated,

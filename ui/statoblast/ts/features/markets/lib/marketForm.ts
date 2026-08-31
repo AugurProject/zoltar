@@ -1,24 +1,11 @@
-import type { ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../../../types/app.js'
+import type { ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../../../types/app.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const STATOBLAST_SECURITY_MULTIPLIER_DECIMALS = 4
 
-export function getDefaultMarketFormState(): MarketFormState {
-	return {
-		answerUnit: '',
-		categoricalOutcomes: ['Yes', 'No'],
-		description: '',
-		endTime: '',
-		marketType: 'binary',
-		scalarIncrement: '1',
-		scalarMax: '100',
-		scalarMin: '0',
-		title: '',
-		startTime: '',
-	}
-}
+export { getDefaultMarketFormState } from '@zoltar/ui-zoltar/features/questions/lib/questionForm.js'
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {

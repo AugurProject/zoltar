@@ -68,6 +68,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
+		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',

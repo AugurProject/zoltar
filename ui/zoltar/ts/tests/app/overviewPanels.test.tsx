@@ -10,6 +10,7 @@ import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 
 installTestRouting()
 describe('OverviewPanels', () => {
@@ -153,6 +154,21 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels()
 		expect(documentQueries.getByRole('heading', { level: 2, name: 'Zoltar' })).toBeDefined()
 		expect(document.body.textContent).not.toContain('Augur Statoblast')
+	})
+
+	test('shows one concise missing-universe recovery action', async () => {
+		const onGoToGenesisUniverse = mock(() => undefined)
+		const documentQueries = await renderOverviewPanels({
+			onGoToGenesisUniverse,
+			universeLabel: 'Universe 0x7',
+			universePresentation: getUniversePresentation('missing'),
+		})
+
+		expect(documentQueries.getAllByText('Choose another universe.')).toHaveLength(1)
+		expect(documentQueries.getAllByRole('button', { name: 'Go to Genesis universe' })).toHaveLength(1)
+		expect(documentQueries.queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to Genesis universe' }))
+		expect(onGoToGenesisUniverse).toHaveBeenCalledTimes(1)
 	})
 
 	test('uses the application-owned title supplied by a dependent app', async () => {

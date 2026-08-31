@@ -85,7 +85,8 @@ describe('useDeploymentFlow', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(deploy).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account changed. Review the action with the connected account and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
 	})
 
 	test('does not request a deployment transaction when the wallet disconnects after selection', async () => {
@@ -130,7 +131,8 @@ describe('useDeploymentFlow', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(deploy).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Wallet account is no longer connected. Reconnect your wallet and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).errorMessage).toBe('Wallet account is no longer connected. Reconnect your wallet and try again')
 	})
 
 	test('does not request a deployment transaction when the wallet network changed', async () => {
@@ -177,7 +179,8 @@ describe('useDeploymentFlow', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(deploy).not.toHaveBeenCalled()
-		expect(onTransactionFailed).toHaveBeenCalledWith('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).errorMessage).toBe('Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
 	})
 
 	test('does not mark a deployment successful when the target code remains absent', async () => {

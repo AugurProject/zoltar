@@ -19,7 +19,7 @@ import {
 } from '../lib/openOracle.js'
 import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
 import { parseAddressInput, parseReportIdInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../lib/formDefaults.js'
+import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/formDefaults.js'
 import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'

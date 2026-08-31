@@ -74,6 +74,22 @@ describe('security pool state engine', () => {
 		expectActionBlocked(model, 'executeStagedOperation')
 	})
 
+	test('blocks new vault backing after an ordinary game starts but preserves continuation-child deposits', () => {
+		const ordinaryGame = evaluateSecurityPoolState({
+			lifecycleState: 'operational',
+			ordinaryEscalationGameStarted: true,
+			universeHasForked: false,
+		} as Parameters<typeof evaluateSecurityPoolState>[0] & { ordinaryEscalationGameStarted: boolean })
+		const continuation = evaluateSecurityPoolState({
+			lifecycleState: 'operational',
+			ordinaryEscalationGameStarted: false,
+			universeHasForked: false,
+		} as Parameters<typeof evaluateSecurityPoolState>[0] & { ordinaryEscalationGameStarted: boolean })
+
+		expectActionBlocked(ordinaryGame, 'depositRepToVault')
+		expectActionEnabled(continuation, 'depositRepToVault')
+	})
+
 	test('applies the universe-forked overlay with higher precedence than lifecycle rules', () => {
 		const model = evaluateSecurityPoolState({
 			lifecycleState: 'ended',

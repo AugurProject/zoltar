@@ -1352,6 +1352,15 @@ summary {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 1rem;
 }
+.portfolio-section > .section-heading {
+	margin-bottom: 1.35rem;
+}
+.portfolio-section h2 {
+	margin: 0.25rem 0 0;
+	font:
+		500 20px / 1.2 Georgia,
+		serif;
+}
 .portfolio-groups > p {
 	grid-column: 1 / -1;
 	margin: 0;
@@ -1360,6 +1369,7 @@ summary {
 	margin: 0;
 	padding: 1rem;
 	border: 1px solid var(--line);
+	background: var(--surface);
 }
 .portfolio-pool .balance-strip {
 	margin-top: 1rem;
@@ -1635,12 +1645,37 @@ summary {
 		grid-column: 2;
 		justify-self: end;
 	}
+	.header-actions--deployment .deployment-settings-host:has(.deployment-settings[open]) {
+		grid-row: 3;
+		grid-column: 1 / -1;
+		width: 100%;
+	}
+	.header-actions--deployment .deployment-settings-host:has(.deployment-settings[open]) .deployment-settings {
+		width: 100%;
+	}
+	.header-actions--deployment .deployment-settings-host:has(.deployment-settings[open]) .deployment-settings summary {
+		width: fit-content;
+		margin-left: auto;
+	}
+	.header-actions--deployment .deployment-settings-host:has(.deployment-settings[open]) .deployment-settings__panel {
+		position: static;
+		box-sizing: border-box;
+		width: 100%;
+		margin-top: 0.5rem;
+		box-shadow: none;
+	}
 	.site-header .header-actions--deployment .network-pill {
 		grid-row: 3;
 		grid-column: 1 / -1;
 	}
+	.site-header:has(.deployment-settings[open]) .header-actions--deployment .network-pill {
+		grid-row: 4;
+	}
 	.site-header--deployment nav {
 		grid-row: 4;
+	}
+	.site-header--deployment:has(.deployment-settings[open]) nav {
+		grid-row: 5;
 	}
 	.header-actions {
 		display: contents;
