@@ -786,6 +786,10 @@ function directEscalationCandidates(snapshot: EcosystemSnapshot, options: Planni
 	const reserve = optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN)
 	return operationalPools(snapshot).flatMap(pool => {
 		if (pool.escalationGame === zeroAddress) return []
+		// Direct deposits create a claim whose eventual settlement needs a wallet
+		// vault. Require that durable registration up front; a currently free slot is
+		// not a reservation and may disappear before the claim can be settled.
+		if (!pool.walletVaultRegistered) return []
 		const inventory = tokenInventory(snapshot, pool.repToken)
 		if (inventory === undefined) return []
 		return pool.directEscalationDepositQuotes.flatMap((quote, outcome) => {
@@ -793,7 +797,7 @@ function directEscalationCandidates(snapshot: EcosystemSnapshot, options: Planni
 			const maximum = amount(quote.maximumDepositAttoRep)
 			const resultingCumulative = amount(quote.resultingCumulativeAmountAttoRep)
 			const currentBalance = amount(pool.escalationOutcomeBalancesAttoRep[outcome] ?? '0')
-			if (accepted === 0n || maximum !== accepted || maximum > maximumSpend || resultingCumulative !== currentBalance + accepted || amount(inventory.balance) < accepted + reserve) return []
+			if (accepted === 0n || maximum !== accepted || maximum > maximumSpend || resultingCumulative !== currentBalance + accepted || resultingCumulative !== amount(pool.escalationNonDecisionThresholdAttoRep) || amount(inventory.balance) < accepted + reserve) return []
 			const approvalRequired = allowance(inventory, pool.escalationGame) < accepted
 			if (!approvalRequired && !quote.mutationExpectedSuccess) return []
 			return [{ accepted, approvalRequired, maximum, outcome, pool, resultingCumulative }]
@@ -858,11 +862,13 @@ const directEscalationDeposit: OperationDefinition = {
 			game !== zeroAddress &&
 			pool.repToken.toLowerCase() === repToken.toLowerCase() &&
 			pool.escalationGame.toLowerCase() === game.toLowerCase() &&
+			pool.walletVaultRegistered &&
 			quote !== undefined &&
 			amount(quote.acceptedAmountAttoRep) === accepted &&
 			amount(quote.maximumDepositAttoRep) === maximum &&
 			amount(quote.resultingCumulativeAmountAttoRep) === resultingCumulative &&
 			resultingCumulative === amount(pool.escalationOutcomeBalancesAttoRep[outcome] ?? '0') + accepted &&
+			resultingCumulative === amount(pool.escalationNonDecisionThresholdAttoRep) &&
 			(!simulationRequired || quote.mutationExpectedSuccess) &&
 			accepted > 0n &&
 			maximum === accepted &&
@@ -889,11 +895,14 @@ const directEscalationDeposit: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'EscalationGame',
-	description: 'Deposits an exact, bounded wallet REP amount directly into a canonical escalation game after an anchored quote, approval, and mutation simulation.',
-	discoveryInputs: ['canonical escalation game', 'anchored direct deposit preview and mutation simulation', 'wallet REP balance and dynamic game allowance'],
+	description: 'Deposits exactly one full start bond from an already registered wallet when its anchored quote fills the canonical non-decision threshold.',
+	discoveryInputs: ['canonical escalation game and non-decision threshold', 'anchored direct deposit preview and mutation simulation', 'wallet vault registration, REP balance, and dynamic game allowance'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
-		return eligible(options.allowHighRisk === true ? undefined : 'High-risk operations are disabled', directEscalationCandidates(snapshot, options).length > 0 ? undefined : 'No direct escalation deposit has an affordable anchored quote and safe approval or mutation path')
+		return eligible(
+			options.allowHighRisk === true ? undefined : 'High-risk operations are disabled',
+			directEscalationCandidates(snapshot, options).length > 0 ? undefined : 'No registered-wallet direct deposit has an affordable full-start-bond quote that exactly fills the threshold and a safe approval or mutation path',
+		)
 	},
 	id: 'statoblast.escalation.deposit-wallet-rep',
 	label: 'Deposit wallet REP to escalation game',
@@ -2232,6 +2241,15 @@ function escalationWithdrawalCandidates(snapshot: EcosystemSnapshot) {
 	})
 }
 
+function escalationWithdrawalCapacityBlocker(pool: PoolSnapshot, options: PlanningOptions) {
+	const blocker = walletVaultRegistrationCapacityBlocker(pool, options, 'Escalation withdrawal beneficiary-vault registration')
+	return blocker === undefined ? undefined : `${blocker}; raise discovery.maxVaultsPerPool before withdrawing`
+}
+
+function actionableEscalationWithdrawalCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return escalationWithdrawalCandidates(snapshot).filter(candidate => escalationWithdrawalCapacityBlocker(candidate.pool, options) === undefined)
+}
+
 function escalationWithdrawalIndexes(candidate: ReturnType<typeof escalationWithdrawalCandidates>[number]) {
 	return [...candidate.deposits].sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex)).map(deposit => BigInt(deposit.depositIndex))
 }
@@ -2260,11 +2278,11 @@ function buildEscalationWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: R
 
 const withdrawEscalation: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(escalationWithdrawalCandidates(snapshot), mixSeed(options.seed, withdrawEscalation.id))
+		const candidate = choose(actionableEscalationWithdrawalCandidates(snapshot, options), mixSeed(options.seed, withdrawEscalation.id))
 		return candidate === undefined ? undefined : buildEscalationWithdrawalPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot) {
-		return escalationWithdrawalCandidates(snapshot).map(candidate => buildEscalationWithdrawalPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot, options) {
+		return actionableEscalationWithdrawalCandidates(snapshot, options).map(candidate => buildEscalationWithdrawalPlan(snapshot, candidate))
 	},
 	enumerateLifecycleObstructingPresence(snapshot) {
 		return escalationWithdrawalCandidates(snapshot).map(escalationWithdrawalMetadata)
@@ -2277,11 +2295,11 @@ const withdrawEscalation: OperationDefinition = {
 	description: 'Withdraws indexed wallet escalation deposits after the pool question resolves.',
 	discoveryInputs: ['canonical escalation deposit index', 'pool question outcome and lifecycle'],
 	ecosystem: 'statoblast',
-	evaluate(snapshot) {
-		const found = snapshot.escalationDeposits.some(
-			deposit => !deposit.claimed && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase() && snapshot.pools.some(pool => pool.address.toLowerCase() === deposit.pool.toLowerCase() && pool.systemState === 0 && pool.questionOutcome !== BINARY_OUTCOME_NONE && escalationWithdrawalSafe(snapshot, pool)),
-		)
-		return eligible(found ? undefined : 'No resolved wallet escalation deposit is withdrawable')
+	evaluate(snapshot, options) {
+		const candidates = escalationWithdrawalCandidates(snapshot)
+		const actionable = actionableEscalationWithdrawalCandidates(snapshot, options)
+		const capacityBlocker = candidates[0] === undefined || actionable.length > 0 ? undefined : escalationWithdrawalCapacityBlocker(candidates[0].pool, options)
+		return eligible(capacityBlocker, candidates.length > 0 ? undefined : 'No resolved wallet escalation deposit is withdrawable')
 	},
 	id: 'statoblast.escalation.withdraw',
 	label: 'Withdraw escalation deposits',

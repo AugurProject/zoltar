@@ -21,7 +21,7 @@ import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createCha
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
-import { preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
+import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
 type LoadedConfiguration = {
@@ -263,7 +263,7 @@ function resourceHealth(resources: RuntimeResources) {
 	return [...resources.readPreflightChecks, ...resources.submissionPreflightChecks, ...resources.pool.snapshot()]
 }
 
-function executionEnvironment(settings: OperatorSettings, state: RuntimeState, pool: RuntimeResources['pool'], recoverySender?: Address | undefined, beforeSign?: (() => Promise<void>) | undefined, executionCancelled?: (() => boolean) | undefined): ExecutionEnvironment {
+function executionEnvironment(settings: OperatorSettings, state: RuntimeState, resources: RuntimeResources, recoverySender?: Address | undefined, refreshSubmissionPreflight?: (() => Promise<void>) | undefined, executionCancelled?: (() => boolean) | undefined): ExecutionEnvironment {
 	const account = settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey)
 	const sender = recoverySender ?? account?.address
 	if (sender === undefined) throw new Error('Transaction execution requires the configured signer')
@@ -271,10 +271,11 @@ function executionEnvironment(settings: OperatorSettings, state: RuntimeState, p
 		throw new Error('The configured signer does not match the pending transaction recovery signer')
 	}
 	return {
-		...(beforeSign === undefined ? {} : { beforeSign }),
+		assertSubmissionReady: () => assertSubmissionPreflightFresh(resources.submissionPreflightChecks, settings),
+		...(refreshSubmissionPreflight === undefined ? {} : { beforeBroadcast: refreshSubmissionPreflight, beforeSign: refreshSubmissionPreflight }),
 		chain: chaosChain(settings),
 		...(executionCancelled === undefined ? {} : { executionCancelled }),
-		pool,
+		pool: resources.pool,
 		sender,
 		settings,
 		state,
@@ -284,7 +285,7 @@ function executionEnvironment(settings: OperatorSettings, state: RuntimeState, p
 					wallet: createWalletClient({
 						account,
 						chain: chaosChain(settings),
-						transport: pool.transport,
+						transport: resources.pool.transport,
 					}),
 				}),
 	}
@@ -456,7 +457,7 @@ async function executeLifecyclePlan(configuration: ConfigurationState, state: Ru
 			executionEnvironment(
 				configuration.settings,
 				state,
-				resources.pool,
+				resources,
 				undefined,
 				async () => {
 					await ensureSubmissionPreflight(resources, configuration.settings)
@@ -529,7 +530,7 @@ async function executeRandomPlan(configuration: ConfigurationState, state: Runti
 			executionEnvironment(
 				configuration.settings,
 				state,
-				resources.pool,
+				resources,
 				undefined,
 				async () => {
 					await ensureSubmissionPreflight(resources, configuration.settings)
@@ -569,7 +570,7 @@ async function executeRandomContinuation(configuration: ConfigurationState, stat
 			executionEnvironment(
 				configuration.settings,
 				state,
-				resources.pool,
+				resources,
 				undefined,
 				async () => {
 					await ensureSubmissionPreflight(resources, configuration.settings)
@@ -614,15 +615,16 @@ async function reconcilePendingWork(configuration: ConfigurationState, state: Ru
 	const workflowId = pending.workflowId
 	const operationId = pending.operationId
 	let recoveryFailure: unknown
+	const refreshSubmissionPreflight = async () => {
+		if (state.paused || configuration.settings.paused || !configuration.settings.runtime.execute) {
+			throw new Error('Chaos bot paused before pending transaction resubmission')
+		}
+		await ensureSubmissionPreflight(resources, settings)
+		state.rpcEndpointHealth = resourceHealth(resources)
+	}
 	try {
-		await recoverPendingTransactions(executionEnvironment(settings, state, resources.pool, pending.sender, undefined, executionCancelled), {
-			beforeResubmit: async () => {
-				if (state.paused || configuration.settings.paused || !configuration.settings.runtime.execute) {
-					throw new Error('Chaos bot paused before pending transaction resubmission')
-				}
-				await ensureSubmissionPreflight(resources, settings)
-				state.rpcEndpointHealth = resourceHealth(resources)
-			},
+		await recoverPendingTransactions(executionEnvironment(settings, state, resources, pending.sender, refreshSubmissionPreflight, executionCancelled), {
+			beforeResubmit: refreshSubmissionPreflight,
 			resubmit: wallet !== undefined && profileMatches && settings.runtime.execute && !settings.paused && !state.paused,
 		})
 	} catch (error) {

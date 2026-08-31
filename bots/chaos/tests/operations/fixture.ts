@@ -42,7 +42,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				escalationGameEndTime: '2000001000',
 				escalationHasReachedNonDecision: false,
 				escalationNonDecisionState: 0,
-				escalationNonDecisionThresholdAttoRep: (10n ** 20n).toString(),
+				escalationNonDecisionThresholdAttoRep: 1_000n.toString(),
 				escalationOutcomeBalancesAttoRep: ['0', '0', '0'],
 				directEscalationDepositQuotes: [
 					{ acceptedAmountAttoRep: 1_000n.toString(), maximumDepositAttoRep: 1_000n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 1_000n.toString() },

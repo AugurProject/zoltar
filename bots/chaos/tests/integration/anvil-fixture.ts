@@ -21,6 +21,7 @@ const TEST_REP_BALANCE = 1_000n * ONE_TOKEN
 const ORIGIN_UNIVERSE = 0n
 const STATOBLAST_SECURITY_MULTIPLIER_BPS = 20_000n
 const TRADING_FEE_BPS = 30n
+const PRIVATE_TRANSACTION_METHOD_CONTROL = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
 
 type JsonRpcRequest = {
 	id: number | string
@@ -81,15 +82,25 @@ function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
 			}
 			const relayAuthentication = request.headers.get('x-flashbots-signature')
 			if (relayAuthentication === null) {
-				return Response.json({ error: { code: -32_600, message: 'x-flashbots-signature is required' }, id: null, jsonrpc: '2.0' }, { status: 401 })
+				const message = body.method === 'eth_cancelPrivateTransaction' ? 'signature is required' : 'x-flashbots-signature is required'
+				return Response.json({ error: { code: -32_600, message }, id: null, jsonrpc: '2.0' }, body.method === 'eth_cancelPrivateTransaction' ? undefined : { status: 401 })
 			}
 			if (!relayAuthenticationMatches(relayAuthentication, requestText)) {
 				return Response.json({ error: { code: -32_600, message: 'Invalid relay authentication' }, id: body.id, jsonrpc: '2.0' }, { status: 401 })
+			}
+			if (body.method === PRIVATE_TRANSACTION_METHOD_CONTROL && body.params.length === 0) {
+				return Response.json({ error: { code: -32_601, message: 'rpc method is not whitelisted' }, id: body.id, jsonrpc: '2.0' }, { status: 403 })
+			}
+			if (body.method === 'eth_cancelPrivateTransaction' && body.params.length === 1) {
+				return Response.json({ error: { code: -32_700, data: null, message: 'tx not found' }, id: body.id, jsonrpc: '2.0' })
 			}
 			if (body.method !== 'eth_sendPrivateTransaction' || body.params.length !== 1) {
 				return Response.json({ error: { code: -32_601, message: 'Unsupported private relay method' }, id: body.id, jsonrpc: '2.0' })
 			}
 			const rawTransaction = privateTransaction(body.params[0])
+			if (rawTransaction === TRANSACTION_SUBMISSION_CAPABILITY_PROBE) {
+				return Response.json({ error: { code: -32_600, data: null, message: 'incorrect request' }, id: body.id, jsonrpc: '2.0' })
+			}
 			const upstream = await fetch(node.rpcUrl, {
 				body: JSON.stringify({ id: body.id, jsonrpc: '2.0', method: 'eth_sendRawTransaction', params: [rawTransaction] }),
 				headers: { 'content-type': 'application/json' },
@@ -97,9 +108,6 @@ function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
 			})
 			const upstreamText = await upstream.text()
 			const upstreamBody: unknown = JSON.parse(upstreamText)
-			if (rawTransaction === TRANSACTION_SUBMISSION_CAPABILITY_PROBE && !successfulJsonRpcResult(upstreamBody)) {
-				return Response.json({ error: { code: -32_602, message: 'failed to recover the signer from transaction' }, id: body.id, jsonrpc: '2.0' })
-			}
 			if (!upstream.ok || !successfulJsonRpcResult(upstreamBody)) return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
 			rawTransactions.push(rawTransaction)
 			await mineFinalityBlocks(node)

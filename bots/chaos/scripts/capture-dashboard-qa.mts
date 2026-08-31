@@ -539,6 +539,7 @@ try {
 			throw new Error(`Dashboard route /${route} exposed an illegible disabled button: ${JSON.stringify(disabledButtonContrast)}`)
 		}
 		if (catalogDetail === true) {
+			const expectedCatalogRowDisplay = width <= 768 ? 'grid' : 'table-row'
 			const detail = await evaluate(`new Promise(resolve => {
 				const shell = document.querySelector('.table-shell')
 				const requestedExplanation = ${JSON.stringify(catalogExpectedExplanation)}
@@ -585,11 +586,11 @@ try {
 				String(Reflect.get(detail, 'identity')).length === 0 ||
 				(catalogOperationId !== undefined && Reflect.get(detail, 'operationId') !== catalogOperationId) ||
 				Reflect.get(detail, 'maximumHorizontalScroll') !== 0 ||
-				Reflect.get(detail, 'rowDisplay') !== 'grid' ||
+				Reflect.get(detail, 'rowDisplay') !== expectedCatalogRowDisplay ||
 				Reflect.get(detail, 'rowOverflow') !== false ||
 				Reflect.get(detail, 'rowViewportContained') !== true
 			) {
-				throw new Error(`Mobile catalog detail did not retain a complete non-overflowing operation card: ${JSON.stringify(detail)}`)
+				throw new Error(`Catalog detail did not retain a complete non-overflowing operation row: ${JSON.stringify(detail)}`)
 			}
 		}
 		if (verticalScroll === 'rpc-health') {

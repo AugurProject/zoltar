@@ -511,6 +511,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 			}
 		}
 		assertExecutionActive(environment)
+		if (deferral === undefined) environment.assertSubmissionReady?.()
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
 		deferral =

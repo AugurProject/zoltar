@@ -54,6 +54,7 @@ export class OperationRediscoveryRequired extends Error {
 }
 
 export type ExecutionEnvironment = {
+	assertSubmissionReady?: (() => void) | undefined
 	beforeBroadcast?: (() => Promise<void>) | undefined
 	beforeSign?: (() => Promise<void>) | undefined
 	chain: Chain
@@ -1028,8 +1029,6 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
 		throw new Error('Execution signer cannot sign and authenticate transactions')
 	}
-	await environment.beforeSign?.()
-	assertExecutionActive(environment)
 	const block = await agreedLatestBlock(environment, `${step.label} signing block`)
 	try {
 		assertOperationPlanFresh(plan, block.number, environment.settings.strategy.workflowValidForBlocks, new Set(workflow.steps.filter(candidate => candidate.status === 'confirmed').map(candidate => candidate.id)))
@@ -1060,6 +1059,8 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		throw error
 	}
 	assertExecutionActive(environment)
+	await environment.beforeSign?.()
+	assertExecutionActive(environment)
 	const confirmedNonce = await agreedConfirmedNonce(environment, account.address, block.number)
 	const pendingNonce = await agreedPendingNonce(environment, account.address)
 	assertExecutionActive(environment)
@@ -1083,6 +1084,8 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	} catch (error) {
 		throw new OperationRediscoveryRequired(error instanceof Error ? error.message : String(error), error)
 	}
+	assertExecutionActive(environment)
+	environment.assertSubmissionReady?.()
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: signingAnchor.baseFeePerGas,
 		blockNumber: signingAnchor.number,
@@ -1120,6 +1123,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		assertExecutionActive(environment)
 		await assertSignedIntentBroadcastReadiness(environment, intent, block)
 		assertExecutionActive(environment)
+		environment.assertSubmissionReady?.()
 	} catch (error) {
 		restoreWorkflowIntentSubmissionJournal(workflow, intent, broadcastJournal)
 		recordActivity(environment.state, {

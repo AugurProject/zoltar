@@ -25,7 +25,7 @@ import {
 	scheduleAfterRecoveredTransaction,
 } from '../../src/runtime/operator.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
-import { submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
+import { assertSubmissionPreflightFresh, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
@@ -416,7 +416,31 @@ describe('chaos operator runtime', () => {
 		expect(submissionPreflightIsDue([], publicSettings, now)).toBeTrue()
 		expect(submissionPreflightIsDue(publicChecks, publicSettings, now)).toBeFalse()
 		expect(submissionPreflightIsDue(publicChecks, publicSettings, now + 1)).toBeTrue()
-		expect(submissionPreflightIsDue([{ ...firstPublicCheck, status: 'failed' }, secondPublicCheck], publicSettings, now)).toBeTrue()
+		expect(() => assertSubmissionPreflightFresh(publicChecks, publicSettings, now)).not.toThrow()
+		let staleEvidenceFailure: unknown
+		try {
+			assertSubmissionPreflightFresh(publicChecks, publicSettings, now + 1)
+		} catch (error) {
+			staleEvidenceFailure = error
+		}
+		expect(staleEvidenceFailure).toBeInstanceOf(EndpointCheckFailure)
+		if (!(staleEvidenceFailure instanceof EndpointCheckFailure)) throw new Error('Expected stale submission evidence to retain its endpoint checks')
+		expect(staleEvidenceFailure.message).toContain('completed with stale endpoint evidence')
+		expect(staleEvidenceFailure.checks).toBe(publicChecks)
+		const degradedPublicChecks: EndpointCheck[] = [firstPublicCheck, { ...secondPublicCheck, chainId: undefined, checkedAt: new Date(now).toISOString(), error: 'RPC temporarily unavailable', failureDisposition: 'connectivity-degraded', status: 'failed' }]
+		expect(submissionPreflightIsDue(degradedPublicChecks, publicSettings, now)).toBeTrue()
+		expect(assertSubmissionPreflightFresh(degradedPublicChecks, publicSettings, now)).toBe(degradedPublicChecks)
+		expect(() =>
+			assertSubmissionPreflightFresh(
+				[
+					{ ...firstPublicCheck, error: 'unsafe response', failureDisposition: 'safety-paused', status: 'failed' },
+					{ ...secondPublicCheck, chainId: undefined, error: 'RPC temporarily unavailable', failureDisposition: 'connectivity-degraded', status: 'failed' },
+				],
+				publicSettings,
+				now,
+			),
+		).toThrow('unsafe endpoint evidence')
+		expect(submissionPreflightIsDue([{ ...firstPublicCheck, error: 'failed', status: 'failed' }, secondPublicCheck], publicSettings, now)).toBeTrue()
 		expect(submissionPreflightIsDue([{ ...firstPublicCheck, chainId: 1 }, secondPublicCheck], publicSettings, now)).toBeTrue()
 		expect(submissionPreflightIsDue([{ ...firstPublicCheck, checkedAt: new Date(now + 1).toISOString() }, secondPublicCheck], publicSettings, now)).toBeTrue()
 		expect(submissionPreflightIsDue([{ ...firstPublicCheck, kind: 'read-rpc' }, secondPublicCheck], publicSettings, now)).toBeTrue()
@@ -452,6 +476,15 @@ describe('chaos operator runtime', () => {
 			{ authenticatedAddress: privateWallet, chainId: privateSettings.network.chainId, checkedAt: new Date(now).toISOString(), error: undefined, kind: 'private-relay', status: 'healthy', target: 'https://relay-one.example' },
 		]
 		expect(submissionPreflightIsDue(privateChecks, privateSettings, now)).toBeFalse()
+		const privateThresholdSettings: OperatorSettings = {
+			...privateSettings,
+			submission: { ...privateSettings.submission, relayUrls: [...privateSettings.submission.relayUrls, 'https://relay-three.example/path'] },
+		}
+		const degradedPrivateChecks: EndpointCheck[] = [
+			...privateChecks,
+			{ authenticatedAddress: privateWallet, chainId: undefined, checkedAt: new Date(now).toISOString(), error: 'Relay temporarily unavailable', failureDisposition: 'connectivity-degraded', kind: 'private-relay', status: 'failed', target: 'https://relay-three.example' },
+		]
+		expect(assertSubmissionPreflightFresh(degradedPrivateChecks, privateThresholdSettings, now)).toBe(degradedPrivateChecks)
 		expect(
 			submissionPreflightIsDue(
 				privateChecks.map(check => ({ ...check, authenticatedAddress: privateKeyToAccount(`0x${'22'.repeat(32)}`).address })),

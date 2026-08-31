@@ -584,7 +584,15 @@ function emptyDirectEscalationDepositQuote(): PoolSnapshot['directEscalationDepo
 	}
 }
 
-export async function discoverDirectEscalationDepositQuotes(client: ChaosReadClient, wallet: Address, escalationGame: Address, requestedAmountAttoRep: bigint, outcomeBalancesAttoRep: readonly [bigint, bigint, bigint], blockNumber: bigint): Promise<PoolSnapshot['directEscalationDepositQuotes']> {
+export async function discoverDirectEscalationDepositQuotes(
+	client: ChaosReadClient,
+	wallet: Address,
+	escalationGame: Address,
+	requestedAmountAttoRep: bigint,
+	outcomeBalancesAttoRep: readonly [bigint, bigint, bigint],
+	nonDecisionThresholdAttoRep: bigint,
+	blockNumber: bigint,
+): Promise<PoolSnapshot['directEscalationDepositQuotes']> {
 	const quotes: PoolSnapshot['directEscalationDepositQuotes'] = [emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote()]
 	if (requestedAmountAttoRep === 0n) return quotes
 	await drainConcurrent(
@@ -602,14 +610,11 @@ export async function discoverDirectEscalationDepositQuotes(client: ChaosReadCli
 			if (acceptedAmountAttoRep === 0n || acceptedAmountAttoRep > requestedAmountAttoRep || resultingCumulativeAmountAttoRep !== currentBalanceAttoRep + acceptedAmountAttoRep) {
 				throw new Error(`Escalation game ${escalationGame} returned an invalid direct-deposit preview for outcome ${outcome.toString()}`)
 			}
-			let exactPreview: readonly [bigint, bigint]
-			try {
-				exactPreview = await client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [outcome, acceptedAmountAttoRep], blockNumber, functionName: 'previewDepositOnOutcome' })
-			} catch (error) {
-				if (!contractSimulationReverted(error)) throw error
-				return
-			}
-			if (exactPreview[0] !== acceptedAmountAttoRep || exactPreview[1] !== resultingCumulativeAmountAttoRep) return
+			// Only a full start-bond deposit that exactly reaches the threshold is safe to
+			// authorize. Any intervening deposit on this outcome necessarily fills the
+			// remaining start-bond room, so this call reverts instead of allowing a smaller
+			// threshold-fill transfer and leaving residual allowance.
+			if (acceptedAmountAttoRep !== requestedAmountAttoRep || resultingCumulativeAmountAttoRep !== nonDecisionThresholdAttoRep) return
 			let mutationExpectedSuccess = false
 			try {
 				await client.simulateContract({ abi: escalationGameAbi, account: wallet, address: escalationGame, args: [outcome, acceptedAmountAttoRep], blockNumber, functionName: 'depositRepOnOutcome' })
@@ -620,7 +625,7 @@ export async function discoverDirectEscalationDepositQuotes(client: ChaosReadCli
 			}
 			quotes[outcome] = {
 				acceptedAmountAttoRep: acceptedAmountAttoRep.toString(),
-				maximumDepositAttoRep: acceptedAmountAttoRep.toString(),
+				maximumDepositAttoRep: requestedAmountAttoRep.toString(),
 				mutationExpectedSuccess,
 				resultingCumulativeAmountAttoRep: resultingCumulativeAmountAttoRep.toString(),
 			}
@@ -1328,7 +1333,7 @@ async function discoverPools(
 		}
 		const directEscalationDepositQuotes =
 			escalationAddress !== zeroAddress && systemState === 0n && !awaitingForkContinuation && !escalationForkContinuation && universe.forkTime === '0'
-				? await discoverDirectEscalationDepositQuotes(client, wallet, escalationAddress, escalationMaximum, escalationOutcomeBalancesAttoRep, blockNumber)
+				? await discoverDirectEscalationDepositQuotes(client, wallet, escalationAddress, escalationMaximum, escalationOutcomeBalancesAttoRep, escalationNonDecisionThresholdAttoRep, blockNumber)
 				: ([emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote()] satisfies PoolSnapshot['directEscalationDepositQuotes'])
 		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
 		const vaultCacheKey = address.toLowerCase()

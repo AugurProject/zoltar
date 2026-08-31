@@ -400,7 +400,7 @@ describe('transaction receipt quorum', () => {
 		const first = receiptRpcServer(112n, true, wrongHash)
 		const second = receiptRpcServer(112n, true, wrongHash)
 
-		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow(`returned transaction hash ${wrongHash}, expected ${receiptTransactionHash}`)
+		await expect(finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)).rejects.toThrow(`RPC returned transaction receipt with a different hash: expected "${receiptTransactionHash}", received "${wrongHash}"`)
 	})
 })
 
@@ -752,12 +752,14 @@ function executionRpcServer(options: { balance?: bigint; ethCall?: 'success' | '
 	let currentHead = options.head ?? 99n
 	let currentNonce = 3n
 	let ethCallHook: (() => void) | undefined
+	let requestHook: ((method: string) => void) | undefined
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
 			const body = rpcRequest(await request.json())
 			if (!('method' in body) || typeof body.method !== 'string') return new Response('Expected a JSON-RPC method', { status: 400 })
 			requestedMethods.push(body.method)
+			requestHook?.(body.method)
 			const id = 'id' in body ? body.id : 1
 			switch (body.method) {
 				case 'eth_chainId':
@@ -847,6 +849,9 @@ function executionRpcServer(options: { balance?: bigint; ethCall?: 'success' | '
 		},
 		setNonce(value: bigint) {
 			currentNonce = value
+		},
+		setRequestHook(value: (method: string) => void) {
+			requestHook = value
 		},
 		url: `http://127.0.0.1:${server.port.toString()}`,
 	}
@@ -1150,6 +1155,12 @@ async function postJournalExecutionFixture(postJournalHead: bigint) {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-execution-')
 	directories.push(directory)
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
+	const signTransaction = account.signTransaction
+	let signingAttempts = 0
+	account.signTransaction = async transaction => {
+		signingAttempts += 1
+		return await signTransaction(transaction)
+	}
 	const first = executionRpcServer()
 	const second = executionRpcServer()
 	const configured = settings(first.url, [second.url])
@@ -1175,10 +1186,54 @@ async function postJournalExecutionFixture(postJournalHead: bigint) {
 			transport: pool.transport,
 		}),
 	}
-	return { environment, first, second, state, stateFile }
+	return { environment, first, second, signingAttempts: () => signingAttempts, state, stateFile }
 }
 
 describe('transaction signing-anchor re-attestation', () => {
+	test('does not sign when submission evidence expires during post-refresh nonce re-attestation', async () => {
+		const { environment, first, second, signingAttempts, state } = await postJournalExecutionFixture(99n)
+		let evidenceFresh = false
+		const expireEvidence = (method: string) => {
+			if (method === 'eth_getTransactionCount') evidenceFresh = false
+		}
+		environment.beforeSign = async () => {
+			evidenceFresh = true
+			first.setRequestHook(expireEvidence)
+			second.setRequestHook(expireEvidence)
+		}
+		environment.assertSubmissionReady = () => {
+			if (!evidenceFresh) throw new Error('Submission preflight completed with stale endpoint evidence')
+		}
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toThrow('stale endpoint evidence')
+
+		expect(signingAttempts()).toBe(0)
+		expect(state.pendingTransactions).toHaveLength(0)
+		for (const methods of [first.requestedMethods, second.requestedMethods]) expect(methods).not.toContain('eth_sendRawTransaction')
+	})
+
+	test('does not submit when submission evidence expires during post-refresh anchor re-attestation', async () => {
+		const { environment, first, second, signingAttempts, state } = await postJournalExecutionFixture(99n)
+		let evidenceFresh = true
+		const expireEvidence = (method: string) => {
+			if (method === 'eth_getBlockByNumber') evidenceFresh = false
+		}
+		environment.beforeBroadcast = async () => {
+			evidenceFresh = true
+			first.setRequestHook(expireEvidence)
+			second.setRequestHook(expireEvidence)
+		}
+		environment.assertSubmissionReady = () => {
+			if (!evidenceFresh) throw new Error('Submission preflight completed with stale endpoint evidence')
+		}
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+
+		expect(signingAttempts()).toBe(1)
+		expect(state.pendingTransactions[0]?.status).toBe('signed')
+		for (const methods of [first.requestedMethods, second.requestedMethods]) expect(methods).not.toContain('eth_sendRawTransaction')
+	})
+
 	test('does not let a successful non-attester replace a failed signing-block attester', async () => {
 		const directory = await mkdtemp('/tmp/zoltar-chaos-pre-signing-')
 		directories.push(directory)

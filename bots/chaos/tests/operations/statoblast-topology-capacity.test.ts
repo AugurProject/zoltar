@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { canonicalLifecyclePresence, eligibleOperationPlans, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import type { EcosystemSnapshot, PlanningOptions, PoolSnapshot } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
 
@@ -115,6 +115,22 @@ function forkClaim(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 			escalationGame: pool.escalationGame,
 			outcome: 0,
 			parentDepositIndex: '0',
+			pool: pool.address,
+			vault: snapshot.wallet.address,
+		},
+	]
+}
+
+function resolvedEscalationDeposit(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
+	pool.questionOutcome = 1
+	snapshot.escalationDeposits = [
+		{
+			amountAttoRep: 1_000n.toString(),
+			claimed: false,
+			depositIndex: '3',
+			escalationGame: pool.escalationGame,
+			outcome: 1,
+			parentDepositIndex: '3',
 			pool: pool.address,
 			vault: snapshot.wallet.address,
 		},
@@ -251,6 +267,48 @@ function carryCandidate(snapshot: EcosystemSnapshot) {
 }
 
 describe('Statoblast vault-registration capacity', () => {
+	test('keeps escalation withdrawal visible while blocking an unregistered beneficiary at capacity', () => {
+		const snapshot = snapshotFixture()
+		const pool = requiredPool(snapshot)
+		resolvedEscalationDeposit(snapshot, pool)
+		atVaultCapacity(pool, false)
+		expect(plans(snapshot, 'statoblast.escalation.withdraw')).toHaveLength(0)
+		expect(presence(snapshot, 'statoblast.escalation.withdraw')).toEqual([expect.objectContaining({ blocksNovelty: true })])
+		const evaluation = evaluateOperationCatalog(snapshot, options).find(candidate => candidate.definition.id === 'statoblast.escalation.withdraw')
+		expect(evaluation?.eligibility.blockers.join(' ')).toContain('raise discovery.maxVaultsPerPool')
+
+		pool.walletVaultRegistered = true
+		const initial = plans(snapshot, 'statoblast.escalation.withdraw')[0]
+		if (initial === undefined) throw new Error('Registered escalation withdrawal did not build')
+		expect(reevaluateOperationContinuation(snapshot, initial, options).plan?.metadata).toEqual(initial.metadata)
+
+		pool.walletVaultRegistered = false
+		expect(reevaluateOperationContinuation(snapshot, initial, options).plan).toBeUndefined()
+	})
+
+	test('requires durable wallet-vault registration for direct deposits and cleans up if registration is lost', () => {
+		const snapshot = snapshotFixture()
+		const pool = requiredPool(snapshot)
+		pool.walletVaultRegistered = false
+		pool.canonicalVaultCount = '1'
+		expect(eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.escalation.deposit-wallet-rep')).toBeUndefined()
+
+		atVaultCapacity(pool, true)
+		const initial = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.escalation.deposit-wallet-rep')
+		if (initial === undefined) throw new Error('Registered direct-deposit fixture did not build')
+		const approval = initial.steps.find(step => step.id === 'approve-direct-rep')
+		if (approval === undefined) throw new Error('Direct-deposit approval step is missing')
+		const token = snapshot.wallet.tokens.find(candidate => candidate.address.toLowerCase() === pool.repToken.toLowerCase())
+		if (token === undefined) throw new Error('REP inventory is missing')
+		token.allowances[pool.escalationGame] = String(initial.metadata['acceptedAmountAttoRep'])
+		for (const quote of pool.directEscalationDepositQuotes) quote.mutationExpectedSuccess = true
+		pool.walletVaultRegistered = false
+		const { seed: _seed, ...continuationOptions } = options
+		const cleanup = reevaluateOperationContinuation(snapshot, initial, continuationOptions, { confirmedStepIds: [approval.id] }).plan
+		expect(cleanup?.continuationDisposition).toBe('cleanup-only')
+		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-direct-rep'])
+	})
+
 	test('blocks a new deposit at the vault limit, permits an authenticated existing vault, and cleans up a continuation that loses the last slot', () => {
 		const snapshot = snapshotFixture()
 		const pool = requiredPool(snapshot)

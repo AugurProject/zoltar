@@ -272,6 +272,26 @@ describe('non-Trading exact approval continuations', () => {
 		expectOnlyExactRevokes(continuation(snapshot, direct, [confirmed]), [{ spender: snapshot.pools[0]?.escalationGame ?? address(0), token: approval.to }])
 	})
 
+	test('revokes the direct escalation approval when an intervening deposit fills the threshold', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Missing direct escalation pool')
+		const direct = requiredPlan(snapshot, 'statoblast.escalation.deposit-wallet-rep')
+		const approval = approvalSteps(direct)[0]
+		if (approval === undefined) throw new Error('Missing direct escalation approval')
+		const confirmed = confirmApproval(snapshot, approval)
+		const outcome = direct.metadata['outcome']
+		if (typeof outcome !== 'number') throw new Error('Missing direct escalation outcome')
+		pool.escalationOutcomeBalancesAttoRep[outcome] = pool.escalationNonDecisionThresholdAttoRep
+		pool.directEscalationDepositQuotes[outcome] = {
+			acceptedAmountAttoRep: 0n.toString(),
+			maximumDepositAttoRep: 0n.toString(),
+			mutationExpectedSuccess: false,
+			resultingCumulativeAmountAttoRep: 0n.toString(),
+		}
+		expectOnlyExactRevokes(continuation(snapshot, direct, [confirmed]), [{ spender: pool.escalationGame, token: approval.to }])
+	})
+
 	test('cleans up only confirmed workflow-created approvals after terminal invalidation', () => {
 		const snapshot = disputeSnapshot()
 		const dispute = requiredPlan(snapshot, 'open-oracle.dispute')

@@ -52,6 +52,7 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 	let currentHead = options.head ?? 99n
 	let currentNonce = 3n
 	let ethCallHook: (() => void) | undefined
+	let requestHook: ((method: string) => void) | undefined
 	const vaultCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [options.vaultBacking.vault], functionName: 'securityVaults' })
 	const backingCall = options.vaultBacking === undefined ? undefined : encodeFunctionData({ abi: securityPoolAbi, args: [10n], functionName: 'backingUnitsToAttoRep' })
 	const server = Bun.serve({
@@ -60,6 +61,7 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 			const body = rpcRequest(await request.json())
 			if (!('method' in body) || typeof body.method !== 'string') return new Response('Expected a JSON-RPC method', { status: 400 })
 			requestedMethods.push(body.method)
+			requestHook?.(body.method)
 			if ((body.method === 'eth_call' || body.method === 'eth_estimateGas') && 'params' in body && Array.isArray(body.params)) {
 				requestedTransactions.push({ method: body.method, transaction: body.params[0] })
 			}
@@ -173,6 +175,9 @@ function recoveryRpcServer(blockHash: `0x${string}`, transactionHash: `0x${strin
 		},
 		setNonce(value: bigint) {
 			currentNonce = value
+		},
+		setRequestHook(value: (method: string) => void) {
+			requestHook = value
 		},
 		setBlockHash(value: `0x${string}`) {
 			currentBlockHash = value
@@ -703,6 +708,9 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 			first.setNonce(value)
 			second.setNonce(value)
 		},
+		setRequestHooks(value: (method: string) => void) {
+			for (const server of rpcServers) server.setRequestHook(value)
+		},
 	}
 }
 
@@ -1111,6 +1119,25 @@ describe('pending chaos transaction recovery decisions', () => {
 		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toContain('was consumed without a quorum receipt')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')
+	})
+
+	test('does not resubmit when submission evidence expires during post-refresh anchor re-attestation', async () => {
+		const fixture = await forkedRecoveryEnvironment()
+		let evidenceFresh = false
+		fixture.environment.beforeBroadcast = async () => {
+			evidenceFresh = true
+			fixture.setRequestHooks(method => {
+				if (method === 'eth_getBlockByNumber') evidenceFresh = false
+			})
+		}
+		fixture.environment.assertSubmissionReady = () => {
+			if (!evidenceFresh) throw new Error('Submission preflight completed with stale endpoint evidence')
+		}
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('stale endpoint evidence')
+
+		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
+		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 	})
 
 	test('preserves an earlier uncertain broadcast journal when a later recovery replay is deferred', async () => {

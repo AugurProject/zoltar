@@ -1156,7 +1156,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(spenders.filter(spender => spender === game)).toHaveLength(1)
 	})
 
-	test('fixed-points a tie-adjusted direct escalation quote before simulating the exact accepted amount', async () => {
+	test('selects only exact threshold-filling direct escalation quotes', async () => {
 		const wallet = address(1)
 		const game = address(15)
 		const previews: Array<readonly unknown[]> = []
@@ -1170,8 +1170,7 @@ describe('anchored ecosystem discovery', () => {
 						const outcome = parameters.args?.[0]
 						const requested = parameters.args?.[1]
 						if (typeof outcome !== 'number' || typeof requested !== 'bigint') throw new Error('Direct quote arguments missing')
-						const accepted = requested === 1_000n ? 999n : requested
-						return [accepted, BigInt(outcome * 10) + accepted] as const
+						return [requested, BigInt(outcome * 10) + requested] as const
 					}
 				}
 				if (property === 'simulateContract') {
@@ -1184,29 +1183,25 @@ describe('anchored ecosystem discovery', () => {
 				throw new Error(`Unexpected client method ${String(property)}`)
 			},
 		})
-		const quotes = await discoverDirectEscalationDepositQuotes(client, wallet, game, 1_000n, [0n, 10n, 20n], 55n)
-		const acceptedAmountAttoRep = 999n.toString()
+		const quotes = await discoverDirectEscalationDepositQuotes(client, wallet, game, 1_000n, [0n, 10n, 20n], 1_010n, 55n)
+		const acceptedAmountAttoRep = 1_000n.toString()
 		expect(quotes).toEqual([
-			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 999n.toString() },
-			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 1_009n.toString() },
-			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 1_019n.toString() },
+			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
+			{ acceptedAmountAttoRep, maximumDepositAttoRep: acceptedAmountAttoRep, mutationExpectedSuccess: true, resultingCumulativeAmountAttoRep: 1_010n.toString() },
+			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
 		])
-		expect(previews).toHaveLength(6)
-		expect(simulations).toEqual([
-			[0, 999n],
-			[1, 999n],
-			[2, 999n],
-		])
+		expect(previews).toHaveLength(3)
+		expect(simulations).toEqual([[1, 1_000n]])
 	})
 
-	test('rejects a direct escalation quote that is not stable at its accepted amount', async () => {
+	test('rejects a tie-decremented direct escalation quote without simulating it', async () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
 					return async (parameters: { args?: readonly unknown[] }) => {
 						const requested = parameters.args?.[1]
 						if (typeof requested !== 'bigint') throw new Error('Direct quote amount missing')
-						return requested === 1_000n ? ([999n, 999n] as const) : ([998n, 998n] as const)
+						return [requested - 1n, requested - 1n] as const
 					}
 				}
 				if (property === 'simulateContract')
@@ -1216,7 +1211,7 @@ describe('anchored ecosystem discovery', () => {
 				throw new Error(`Unexpected client method ${String(property)}`)
 			},
 		})
-		expect(await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 55n)).toEqual([
+		expect(await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 1_000n, 55n)).toEqual([
 			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
 			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
 			{ acceptedAmountAttoRep: 0n.toString(), maximumDepositAttoRep: 0n.toString(), mutationExpectedSuccess: false, resultingCumulativeAmountAttoRep: 0n.toString() },
@@ -1238,7 +1233,7 @@ describe('anchored ecosystem discovery', () => {
 				throw new Error(`Unexpected client method ${String(property)}`)
 			},
 		})
-		const quotes = await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 55n)
+		const quotes = await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 1_000n, 55n)
 		expect(quotes.every(quote => quote.acceptedAmountAttoRep === '0' && !quote.mutationExpectedSuccess)).toBeTrue()
 		expect(simulations).toBe(0)
 	})
