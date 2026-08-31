@@ -1,4 +1,5 @@
 import { runtimeConfig } from './config.ts'
+import { readRichListBalance } from './direct-observations.ts'
 import { errorChainIncludes } from './error-chain.ts'
 import {
 	addressActivityFrom,
@@ -43,6 +44,7 @@ import {
 	runIndexerOwnershipLifecycle,
 	runOwnedNetworkLifecycle,
 	safeIndexerFailure,
+	safeIndexerFailureReason,
 	scanDiscoveredLogCoverage,
 	withVerifiedProvider,
 } from './indexer-runtime.ts'
@@ -92,6 +94,8 @@ export { createRpcRequestQueue, RpcQueueSaturatedError, withRpcRequestQueue } fr
 import {
 	type ContractDeploymentObservation,
 	DatabaseConsistencyError,
+	type EvidenceProvenance,
+	type HistoryInvalidationReason,
 	type IndexedBlock,
 	type IndexerLease,
 	type LogScanCursor,
@@ -198,17 +202,21 @@ const metadataCall = async <T>(call: () => Promise<T>): Promise<MetadataCallResu
 }
 
 export const readTokenMetadata = async (address: Address, blockNumber: bigint, calls: TokenMetadataCalls): Promise<TokenMetadata> => {
-	const decimals = await metadataCall(calls.decimals)
-	if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255)
-		return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
-	const [name, symbol] = await Promise.all([metadataCall(calls.name), metadataCall(calls.symbol)])
-	if (name.status === 'pruned' || symbol.status === 'pruned') return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
-	return {
-		address,
-		decimals: decimals.value,
-		...(name.status === 'available' ? { name: name.value } : {}),
-		...(symbol.status === 'available' ? { symbol: symbol.value } : {}),
-		readBlock: blockNumber,
+	try {
+		const decimals = await metadataCall(calls.decimals)
+		if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255)
+			return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+		const [name, symbol] = await Promise.all([metadataCall(calls.name), metadataCall(calls.symbol)])
+		if (name.status === 'pruned' || symbol.status === 'pruned') return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+		return {
+			address,
+			decimals: decimals.value,
+			...(name.status === 'available' ? { name: name.value } : {}),
+			...(symbol.status === 'available' ? { symbol: symbol.value } : {}),
+			readBlock: blockNumber,
+		}
+	} catch (error) {
+		return { address, readError: safeIndexerFailureReason(error), readBlock: blockNumber }
 	}
 }
 
@@ -568,13 +576,23 @@ class NetworkIndexer {
 	#lastDeploymentScanAt: number | undefined
 	readonly #historicalCodeUnavailable = new Set<string>()
 	readonly #signal: AbortSignal
+	readonly #provenance: EvidenceProvenance | undefined
+	#lastSeedReplayReason: Extract<HistoryInvalidationReason, 'abi-redecode' | 'projection-rebuild'> | undefined
 	#lease: IndexerLease | undefined
 
-	constructor(network: NetworkConfig, database: ScannerDatabase, signal: AbortSignal) {
+	constructor(
+		network: NetworkConfig,
+		database: ScannerDatabase,
+		signal: AbortSignal,
+		options: {
+			readonly provenance?: EvidenceProvenance
+		} = {},
+	) {
 		this.#network = network
 		this.#configuredStartBlock = network.startBlock
 		this.#database = database
 		this.#signal = signal
+		this.#provenance = options.provenance
 		this.#providers = network.rpcUrls.map((rpcUrl, index) => {
 			const endpoint = rpcProviderLabel(rpcUrl, index)
 			const loggingFetch = createRpcLoggingFetch(rpcUrl, endpoint, runtimeConfig.rpcLogPath, rpcExchangeLog)
@@ -672,13 +690,13 @@ class NetworkIndexer {
 		let retainedBoundary = checkpoint?.number ?? storedBlockTip
 		if (storedStartBlock !== undefined) {
 			if (this.#configuredStartBlock > storedStartBlock) {
-				await this.#database.seedNetwork(this.#network, lease, true, true)
+				await this.#database.seedNetwork(this.#network, lease, true, true, undefined, this.#provenance)
 				throw new Error('Stored history boundary validation unexpectedly succeeded')
 			}
 			this.#network = { ...this.#network, startBlock: storedStartBlock }
 			if (retainedBoundary === undefined) retainedBoundary = await this.#withProviderFailover(() => this.#client.getBlockNumber())
 			await this.#validateManifestChange(retainedBoundary, storedStartBlock, lease)
-			const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
+			const manifestChanged = await this.#seedNetwork(lease)
 			if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
 			return
 		}
@@ -696,8 +714,15 @@ class NetworkIndexer {
 				`[${this.#network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`,
 			)
 		})
-		const manifestChanged = await this.#database.seedNetwork(this.#network, lease, true, true)
+		const manifestChanged = await this.#seedNetwork(lease)
 		if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
+	}
+
+	async #seedNetwork(lease: IndexerLease): Promise<boolean> {
+		const replayPlan = this.#provenance === undefined ? undefined : await this.#database.sourceReplayPlan(this.#network.chainId, this.#provenance, lease)
+		const changed = await this.#database.seedNetwork(this.#network, lease, true, true, replayPlan, this.#provenance)
+		this.#lastSeedReplayReason = changed ? replayPlan?.reason : undefined
+		return changed
 	}
 
 	async #validateManifestChange(checkpoint: bigint, storedStartBlock: bigint, lease: IndexerLease): Promise<void> {
@@ -720,8 +745,15 @@ class NetworkIndexer {
 	}
 
 	#reportManifestReplay(checkpoint: { readonly number: bigint; readonly hash: Hash }): void {
+		const reason =
+			this.#lastSeedReplayReason === 'abi-redecode'
+				? 'ABI snapshot changed'
+				: this.#lastSeedReplayReason === 'projection-rebuild'
+					? 'projection source changed'
+					: 'canonical manifest changed'
+		this.#lastSeedReplayReason = undefined
 		console.info(
-			`[${this.#network.id}] canonical manifest changed at indexed block #${checkpoint.number}; discarded prior canonical history and replaying from block #${this.#network.startBlock}`,
+			`[${this.#network.id}] ${reason} at indexed block #${checkpoint.number}; replaying canonical interpretations from block #${this.#network.startBlock}`,
 		)
 	}
 
@@ -770,7 +802,7 @@ class NetworkIndexer {
 			return
 		}
 		await this.#assertLease()
-		await this.#database.advanceNetworkStartBlock(this.#network.chainId, availableStart, this.#requireLease())
+		await this.#database.advanceNetworkStartBlock(this.#network.chainId, availableStart, this.#requireLease(), this.#provenance)
 		this.#network = { ...this.#network, startBlock: availableStart }
 		this.#historicalCodeUnavailable.clear()
 		this.#indexingStartReported = false
@@ -882,7 +914,7 @@ class NetworkIndexer {
 				ancestor,
 			})
 		await this.#assertLease()
-		await this.#database.rewind(this.#network.chainId, ancestor, ancestorHash, this.#requireLease())
+		await this.#database.rewind(this.#network.chainId, ancestor, ancestorHash, this.#requireLease(), 'manifest-reset', this.#provenance)
 		this.#indexingStartReported = false
 		this.#lastReportedPhase = undefined
 		console.info(
@@ -903,13 +935,13 @@ class NetworkIndexer {
 			])
 			if (storedHash !== undefined && storedHash === block.hash) {
 				await this.#assertLease()
-				await this.#database.rewind(this.#network.chainId, number, storedHash, this.#requireLease())
+				await this.#database.rewind(this.#network.chainId, number, storedHash, this.#requireLease(), 'chain-reorg', this.#provenance)
 				return
 			}
 			if (number === 0n) break
 		}
 		await this.#assertLease()
-		await this.#database.rewind(this.#network.chainId, -1n, undefined, this.#requireLease())
+		await this.#database.rewind(this.#network.chainId, -1n, undefined, this.#requireLease(), 'chain-reorg', this.#provenance)
 	}
 
 	async #refreshContractDeployment(indexedBoundary: bigint): Promise<void> {
@@ -1100,7 +1132,7 @@ class NetworkIndexer {
 					}
 				: indexed.block
 			await this.#assertLease()
-			await this.#database.storeBlock(this.#network.chainId, block, this.#requireLease())
+			await this.#database.storeBlock(this.#network.chainId, block, this.#requireLease(), this.#provenance)
 			contracts = indexed.contracts
 			tokenMetadata = indexed.tokenMetadata
 			expectedParentHash = indexed.block.hash
@@ -1456,6 +1488,7 @@ class NetworkIndexer {
 				storedLogs.push({
 					...position,
 					address: getAddress(log.address),
+					contractKind: contract.kind,
 					topics: log.topics,
 					data: log.data,
 					decoded: decodeLogRecord(contract.kind, log.topics, log.data, displayLabels, tokenMetadata, contract.address, contractKinds, displayContext),
@@ -1522,38 +1555,30 @@ class NetworkIndexer {
 			blockHash,
 			async () => {
 				const balances: RichListBalance[] = []
-				const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) => ({
-					owner,
-					assetAddress: zeroAddress,
-					assetKind: 'native' as const,
-					balance: await this.#client.getBalance({ address: owner, blockNumber }),
-				}))
+				const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) =>
+					readRichListBalance({ owner, assetAddress: zeroAddress, assetKind: 'native' }, () => this.#client.getBalance({ address: owner, blockNumber })),
+				)
 				balances.push(...nativeBalances)
 				const tokenRequests = targets.addresses.flatMap((owner) => targets.assets.map((asset) => ({ owner, asset })))
 				balances.push(
-					...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) => ({
-						owner,
-						assetAddress: asset.address,
-						assetKind: asset.kind,
-						balance: await (async () => {
-							const result = await this.#client.readContract({
+					...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) =>
+						readRichListBalance({ owner, assetAddress: asset.address, assetKind: asset.kind }, async () => {
+							return await this.#client.readContract({
 								address: asset.address,
 								abi: erc20BalanceAbi,
 								functionName: 'balanceOf',
 								args: [owner],
 								blockNumber,
 							})
-							if (typeof result !== 'bigint') throw new Error(`${asset.address} balanceOf returned an invalid value`)
-							return result
-						})(),
-					}))),
+						}),
+					)),
 				)
 				return balances
 			},
 			async (number) => (await this.#getBlockHeader(number)).hash,
 			async (balances) => {
 				await this.#assertLease()
-				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease())
+				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease(), this.#provenance)
 			},
 		)
 	}
@@ -1573,7 +1598,15 @@ class NetworkIndexer {
 			async (number) => (await this.#getBlockHeader(number)).hash,
 			async ({ snapshots, timestamp }) => {
 				await this.#assertLease()
-				await this.#database.storeEntityStateSnapshots(this.#network.chainId, blockNumber, blockHash, timestamp, snapshots, this.#requireLease())
+				await this.#database.storeEntityStateSnapshots(
+					this.#network.chainId,
+					blockNumber,
+					blockHash,
+					timestamp,
+					snapshots,
+					this.#requireLease(),
+					this.#provenance,
+				)
 			},
 		)
 	}
@@ -1599,8 +1632,14 @@ class NetworkIndexer {
 	}
 }
 
-export const startIndexers = (networks: readonly NetworkConfig[], database: ScannerDatabase, signal: AbortSignal): readonly Promise<void>[] =>
-	networks.map((network) => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal).run()))
+export const startIndexers = (
+	networks: readonly NetworkConfig[],
+	database: ScannerDatabase,
+	signal: AbortSignal,
+	options: {
+		readonly provenance?: EvidenceProvenance
+	} = {},
+): readonly Promise<void>[] => networks.map((network) => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal, options).run()))
 
 export const runIndexerTask = async (networkId: string, run: () => Promise<void>): Promise<void> => {
 	try {
