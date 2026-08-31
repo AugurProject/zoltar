@@ -1,11 +1,144 @@
 import { expect, test } from 'bun:test'
+import { createPublicClient, custom, mainnet } from '@zoltar/bot-shared/ethereum'
+import { parseSettings } from '#config/settings'
 import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
-import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
 import { getAddress } from '../helpers/ethereum.ts'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
+
+test('binds the complete pool scan to one canonical block', async () => {
+	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
+	const previousBlockHash: `0x${string}` = `0x${'11'.repeat(32)}`
+	const blockHash: `0x${string}` = `0x${'22'.repeat(32)}`
+	const reorgedBlockHash: `0x${string}` = `0x${'33'.repeat(32)}`
+	const pool = getAddress('0x0000000000000000000000000000000000000010')
+	const manager = getAddress('0x0000000000000000000000000000000000000020')
+	const forker = getAddress('0x0000000000000000000000000000000000000030')
+	const repToken = getAddress('0x0000000000000000000000000000000000000040')
+	const operator = getAddress('0x0000000000000000000000000000000000000050')
+	settings.selectedPools = [pool]
+	const contractReads: Array<{ blockNumber?: bigint; functionName: string }> = []
+	const multicalls: Array<{ blockNumber?: bigint }> = []
+	const logReads: Array<{ event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }> = []
+	let reorgSnapshot = false
+	const networkClient = createPublicClient({
+		chain: mainnet,
+		transport: custom({
+			request: parameters => {
+				if (parameters.method === 'eth_getBlockByNumber') {
+					if (!Array.isArray(parameters.params)) throw new Error('Block request parameters are missing')
+					const blockTag = parameters.params[0]
+					if (blockTag === '0x1') return Promise.resolve({ hash: previousBlockHash, number: '0x1', parentHash: `0x${'00'.repeat(32)}`, timestamp: '0x1', transactions: [] })
+					if (blockTag === 'latest' || blockTag === '0x2') return Promise.resolve({ hash: blockTag === '0x2' && reorgSnapshot ? reorgedBlockHash : blockHash, number: '0x2', parentHash: previousBlockHash, timestamp: '0x2', transactions: [] })
+					throw new Error(`Unexpected block tag: ${String(blockTag)}`)
+				}
+				throw new Error(`Unexpected RPC method: ${parameters.method}`)
+			},
+		}),
+	})
+	const client = new Proxy(networkClient, {
+		get(target, property) {
+			if (property === 'getLogs') {
+				return (parameters: { args?: { securityPool?: string }; event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }) => {
+					logReads.push(parameters)
+					if (parameters.event?.name === 'DeploySecurityPool') {
+						if (parameters.args?.securityPool === undefined) return Promise.resolve([])
+						return Promise.resolve([
+							{
+								args: {
+									currentRetentionRate: 1n,
+									initialReportPriorityFeeAttoEthPerGas: 1n,
+									parent: getAddress('0x0000000000000000000000000000000000000000'),
+									priceOracleManagerAndOperatorQueuer: manager,
+									questionId: 1n,
+									securityPool: pool,
+									settlementCollateralAttoEth: 10n,
+									statoblastSecurityMultiplierBps: 10_000n,
+									universeId: 0n,
+								},
+							},
+						])
+					}
+					if (parameters.event?.name === 'VaultAccountingCheckpoint') return Promise.resolve([{ args: { vault: operator } }])
+					throw new Error(`Unexpected log read: ${parameters.event?.name ?? 'unknown event'}`)
+				}
+			}
+			if (property === 'multicall') {
+				return (parameters: { blockNumber?: bigint; contracts: Array<{ functionName: string }> }) => {
+					multicalls.push(parameters)
+					return Promise.resolve(
+						parameters.contracts.map(contract => {
+							if (contract.functionName === 'securityVaults') return [1n, 1n, 0n, 0n]
+							if (contract.functionName === 'vaultBadDebtAttoEth') return 0n
+							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
+						}),
+					)
+				}
+			}
+			if (property === 'readContract') {
+				return (parameters: { blockNumber?: bigint; functionName: string }) => {
+					contractReads.push(parameters)
+					if (parameters.functionName === 'universes') {
+						return Promise.resolve({ forkQuestionId: 0n, forkTime: 0n, forkingOutcomeIndex: 0n, parentUniverseId: 0n, reputationToken: repToken })
+					}
+					if (parameters.functionName === 'getDeployedChildUniverses') return Promise.resolve([[], [], []])
+					if (parameters.functionName === 'getVaultCount') return Promise.resolve(1n)
+					if (parameters.functionName === 'currentRetentionRate') return Promise.resolve(1n)
+					if (parameters.functionName === 'totalRepBackingUnits') return Promise.resolve(1n)
+					if (parameters.functionName === 'escalationGame') return Promise.resolve(getAddress('0x0000000000000000000000000000000000000000'))
+					if (parameters.functionName === 'isPriceValid') return Promise.resolve(true)
+					if (parameters.functionName === 'lastPrice') return Promise.resolve(1n)
+					if (parameters.functionName === 'lastSettlementTimestamp') return Promise.resolve(1n)
+					if (parameters.functionName === 'minLiquidationPriceDistanceBps') return Promise.resolve(1n)
+					if (parameters.functionName === 'minimumSecurityBondDebtAttoEth') return Promise.resolve(1n)
+					if (parameters.functionName === 'minimumToken1ReportAttoEth') return Promise.resolve(1n)
+					if (parameters.functionName === 'minimumVaultRepDepositAttoRep') return Promise.resolve(1n)
+					if (parameters.functionName === 'getPoolAccountingSnapshot') {
+						return Promise.resolve({ feeEligibleCapacityOwnershipAttoRep: 1n, settlementCollateralAttoEth: 10n, totalCapacityOwnershipAttoRep: 1n })
+					}
+					if (parameters.functionName === 'pendingReportId') return Promise.resolve(0n)
+					if (parameters.functionName === 'pendingReportSponsor') return Promise.resolve(getAddress('0x0000000000000000000000000000000000000000'))
+					if (parameters.functionName === 'repToken') return Promise.resolve(repToken)
+					if (parameters.functionName === 'getRequestPriceCostAttoEth') return Promise.resolve(1n)
+					if (parameters.functionName === 'securityPoolForker') return Promise.resolve(forker)
+					if (parameters.functionName === 'systemState') return Promise.resolve(0n)
+					if (parameters.functionName === 'getTotalPoolHeldAttoRep') return Promise.resolve(1n)
+					if (parameters.functionName === 'forkData') return Promise.resolve([0n, getAddress('0x0000000000000000000000000000000000000000'), 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n])
+					if (parameters.functionName === 'getForkActivationTime') return Promise.resolve(0n)
+					if (parameters.functionName === 'getActiveStagedOperationCount') return Promise.resolve(0n)
+					if (parameters.functionName === 'getPendingSettlementOperationIds') return Promise.resolve([])
+					if (parameters.functionName === 'balanceOf') return Promise.resolve(5n)
+					throw new Error(`Unexpected contract read: ${parameters.functionName}`)
+				}
+			}
+			return Reflect.get(target, property, target)
+		},
+	})
+	const monitorIndex = createPoolMonitorIndex()
+	const vaultIndex = createVaultStateIndex<VaultPosition>()
+	vaultIndex.blockHash = previousBlockHash
+	vaultIndex.blockNumber = 1n
+	vaultIndex.knownVaultCount = 1n
+	monitorIndex.vaultsByPool.set(pool.toLowerCase(), vaultIndex)
+
+	const snapshot = await scanPools(client, settings, operator, monitorIndex)
+
+	expect(snapshot.block).toEqual({ hash: blockHash, number: 2n, timestamp: 2n })
+	expect(snapshot.walletRepByToken.get(repToken.toLowerCase())).toBe(5n)
+	expect(contractReads.length).toBeGreaterThan(20)
+	expect(contractReads.every(read => read.blockNumber === 2n)).toBeTrue()
+	expect(multicalls.length).toBe(2)
+	expect(multicalls.every(read => read.blockNumber === 2n)).toBeTrue()
+	expect(logReads.find(read => read.event?.name === 'DeploySecurityPool')).toMatchObject({ fromBlock: 0n, toBlock: 2n })
+	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })
+
+	settings.selectedPools = []
+	reorgSnapshot = true
+	await expect(scanPools(client, settings, undefined)).rejects.toThrow('Security pool snapshot changed during discovery')
+})
 
 test('vault checkpoint catch-up adapts long cursor gaps into bounded ordered ranges', async () => {
 	const completedRanges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
