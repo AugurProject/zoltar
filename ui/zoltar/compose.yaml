@@ -1,0 +1,18 @@
+name: zoltar-ui
+
+services:
+  zoltar:
+    build:
+      context: ../..
+      dockerfile: ui/Dockerfile
+      target: local-runtime
+    image: zoltar-ui
+    ports:
+      - 127.0.0.1:12346:8080
+    environment:
+      UI_APP: zoltar
+
+networks:
+  default:
+    name: zoltar
+    external: true
