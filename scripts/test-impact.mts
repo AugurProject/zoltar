@@ -59,9 +59,9 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
-		matches: filePath => filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts',
+		matches: filePath => filePath === 'ui/coreShared/build/production.mts' || filePath === 'ui/coreShared/build/appPaths.mts' || filePath === 'ui/coreShared/build/browserSmoke.mts',
 		ownedTestOptions: { timeout: 300_000 },
-		ownedTestPaths: ['ui/coreShared/build/productionBuild.test.ts'],
+		ownedTestPaths: ['ui/coreShared/build/browserSmoke.test.ts', 'ui/coreShared/build/productionBuild.test.ts'],
 	},
 	{
 		command: 'bun run test:browser:workflow',
