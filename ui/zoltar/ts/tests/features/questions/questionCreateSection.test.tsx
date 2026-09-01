@@ -88,7 +88,7 @@ describe('QuestionCreateSection', () => {
 		expect(updates).toContainEqual({ title: 'Updated question' })
 		expect(documentQueries.getByText('Previous creation failed')).not.toBeNull()
 		expect(documentQueries.getByRole('alert').textContent).toContain('Previous creation failed')
-		expectTransactionButtonDisabled(document.body, 'Review question', 'Connect a wallet before creating a question.')
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
 	})
 
 	test('reviews, submits, and offers only the Zoltar fork handoff after success', async () => {
@@ -123,7 +123,6 @@ describe('QuestionCreateSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' })))
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' })))
 		expect(createCount).toBe(1)
 

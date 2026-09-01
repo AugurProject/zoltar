@@ -14,6 +14,27 @@ export type RoutingConfig<TRoute extends AppRoute = AppRoute> = {
 
 const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['network', 'rpcUrl', 'simScenario', 'simState', 'simulate', 'universe'])
 
+function getPageSearchParams(search = window.location.search) {
+	return new URLSearchParams(search)
+}
+
+function shouldKeepHashQueryParam(key: string, value: string, pageParams = getPageSearchParams()) {
+	const pageValue = pageParams.get(key)
+	return pageValue === null || pageValue !== value
+}
+
+export function dedupeSearchAgainstPage(search: string, pageSearch = window.location.search) {
+	const pageParams = getPageSearchParams(pageSearch)
+	const params = new URLSearchParams(search)
+	for (const [key, value] of [...params.entries()]) {
+		if (!SHARED_ROUTE_QUERY_PARAMETERS.has(key)) continue
+		if (shouldKeepHashQueryParam(key, value, pageParams)) continue
+		params.delete(key)
+	}
+	const serializedSearch = params.toString()
+	return serializedSearch === '' ? '' : `?${serializedSearch}`
+}
+
 type RoutingState<TRoute extends AppRoute = AppRoute> = {
 	readonly config: RoutingConfig<TRoute>
 	readonly routeByHash: Readonly<Record<string, TRoute>>
@@ -131,16 +152,19 @@ export function getRouteHash(route: AppRoute) {
 }
 
 export function getRouteHashSearch(hash = window.location.hash) {
-	return parseRouteHash(hash).search
+	return dedupeSearchAgainstPage(parseRouteHash(hash).search)
 }
 
 export function getTopLevelRouteSearch(nextRoute: AppRoute, search = getRouteHashSearch(), preservedParameters: ReadonlySet<string> = new Set()) {
 	const routing = requireRouting()
 	const destinationParameters = routing.queryParametersByRoute[nextRoute] ?? new Set<string>()
+	const pageParams = getPageSearchParams()
 	const sourceParameters = new URLSearchParams(search)
 	const destinationSearch = new URLSearchParams()
 	for (const [key, value] of sourceParameters) {
-		if (SHARED_ROUTE_QUERY_PARAMETERS.has(key) || destinationParameters.has(key) || preservedParameters.has(key)) destinationSearch.append(key, value)
+		if (!SHARED_ROUTE_QUERY_PARAMETERS.has(key) && !destinationParameters.has(key) && !preservedParameters.has(key)) continue
+		if (SHARED_ROUTE_QUERY_PARAMETERS.has(key) && !destinationParameters.has(key) && !preservedParameters.has(key) && !shouldKeepHashQueryParam(key, value, pageParams)) continue
+		destinationSearch.append(key, value)
 	}
 	const serializedSearch = destinationSearch.toString()
 	return serializedSearch === '' ? '' : `?${serializedSearch}`

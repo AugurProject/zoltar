@@ -65,7 +65,7 @@ export function App() {
 		setSelectedPoolView,
 	} = useUrlState()
 	const { navigate, route } = useHashRoute()
-	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
+	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -118,7 +118,7 @@ export function App() {
 	const { transactionState } = transactionTray
 	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
 	const { errorMessage: deploymentErrorMessage } = deploymentFlow
-	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
+	const { createMarket, hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		activeZoltarView: 'questions',
@@ -294,17 +294,8 @@ export function App() {
 		isRefreshing,
 		walletBootstrapComplete,
 	}
-	const tabs: RouteTabDefinition[] = [
-		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
-		{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
-	]
-	const tabNavigationProps = {
-		route,
-		tabs,
-		onRouteChange: navigate,
-	}
-	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	const hasInvalidSecurityPoolsView = securityPoolsView !== '' && !securityPoolsViews.includes(securityPoolsView as SecurityPoolsView)
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
@@ -312,9 +303,24 @@ export function App() {
 		],
 		'browse',
 	)
-	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, ['browse', 'create', 'operate'])
+	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, securityPoolsViews)
+	const openOracleViews: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
+	const hasInvalidOpenOracleView = openOracleView !== '' && !openOracleViews.includes(openOracleView as OpenOracleView)
+	const activeRoute = (resolvedRoute === 'security-pools' && hasInvalidSecurityPoolsView) || (resolvedRoute === 'open-oracle' && hasInvalidOpenOracleView) ? 'not-found' : resolvedRoute
+	const showDeployTab = deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
+	const tabs: RouteTabDefinition[] = [
+		...(showDeployTab ? [{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' as const }] : []),
+		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
+	]
+	const tabNavigationProps = {
+		route,
+		tabs,
+		onRouteChange: navigate,
+	}
+	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
-	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
+	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, openOracleViews)
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
@@ -407,6 +413,13 @@ export function App() {
 			securityPoolError,
 			securityPoolForm,
 			securityPoolResult,
+			marketCreating,
+			marketError,
+			marketForm,
+			marketResult,
+			onCreateMarket: () => void createMarket(),
+			onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
+			onResetMarket: resetMarket,
 			repPerEthPrice,
 			repPerEthSource,
 			repPerEthSourceUrl,
@@ -590,6 +603,7 @@ export function App() {
 				tradingResult,
 			},
 		},
+		zoltarUniverse,
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
 		...openOracleSectionState,
@@ -611,7 +625,7 @@ export function App() {
 		openOracleForm,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
-	if (route === 'security-pools') {
+	if (route === 'deploy' || route === 'security-pools') {
 		routeSubNavigation = (
 			<RouteSubNavigation
 				ariaLabel={appCopy.securityPoolsViews}
@@ -621,6 +635,7 @@ export function App() {
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
 				]}
 			/>
 		)

@@ -15,7 +15,6 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -416,28 +415,6 @@ export function renderSelectedReportActionSection({
 			return (
 				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
-						<TransactionReview
-							primary={[{ label: openOracleCopy.reportLifecycle, value: openOracleCopy.settled }]}
-							details={
-								openOracleReportDetails === undefined
-									? []
-									: [
-											{
-												label: openOracleCopy.reporterToken1Credit,
-												value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
-											},
-											{
-												label: openOracleCopy.reporterToken2Credit,
-												value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
-											},
-											{
-												label: openOracleCopy.settlerCredit,
-												value: <CurrencyValue value={openOracleReportDetails.settlerRewardAttoEth} suffix={commonCopy.eth} copyable={false} />,
-											},
-										]
-							}
-							risks={[openOracleCopy.settlementFinalityRisk, openOracleCopy.settlementWithdrawalRisk]}
-						/>
 						{openOracleReportDetails === undefined
 							? undefined
 							: renderReportSection(openOracleCopy.settlementSummary, [

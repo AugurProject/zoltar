@@ -231,7 +231,6 @@ describe('SecurityPoolSection', () => {
 			expectTransactionButtonDisabled(document.body, 'Create pool', message)
 			const createButton = within(document.body).getByRole('button', { name: 'Create pool' })
 			expect(createButton.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-error')
-			expect(document.body.querySelectorAll('.disabled-reason')).toHaveLength(0)
 			expect(document.body.textContent?.split(message).length).toBe(2)
 
 			await cleanupRenderedComponent()

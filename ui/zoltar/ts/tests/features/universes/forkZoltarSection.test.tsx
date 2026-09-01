@@ -160,10 +160,6 @@ describe('ForkZoltarSection', () => {
 			if (approveButton === undefined) throw new Error('Expected approval button')
 			expect(approveButton.hasAttribute('disabled')).toBe(true)
 			expect(renderedComponent.container.textContent).toContain('Select a valid fork question to continue.')
-			const review = within(renderedComponent.container).getByRole('heading', { name: 'Transaction Review' }).closest('section')
-			if (review === null) throw new Error('Expected transaction review')
-			expect(review.textContent).not.toContain('Selected Fork Question')
-			expect(review.textContent).not.toContain('Select a valid fork question to continue.')
 			await renderedComponent.cleanup()
 		}
 
@@ -201,17 +197,15 @@ describe('ForkZoltarSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
-		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Fork Threshold≈ 100.00 REP')
-		expect(review.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
-		expect(review.textContent).not.toContain('Migration Custody Credit')
-		expect(review.textContent).not.toContain('Resulting REP Balance')
-		expect(review.textContent).not.toContain('Technical Details')
-		expect(review.textContent).not.toContain('Protocol FeeNone')
+		expect(document.body.textContent).toContain('Fork Threshold≈ 100.00 REP')
+		expect(document.body.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
+		expect(document.body.textContent).not.toContain('Migration Custody Credit')
+		expect(document.body.textContent).not.toContain('Resulting REP Balance')
+		expect(document.body.textContent).not.toContain('Technical Details')
+		expect(document.body.textContent).not.toContain('Protocol FeeNone')
 	})
 
-	test('requires the user to type the irreversible fork confirmation before submission', async () => {
+	test('allows direct fork submission once the selected question has ended', async () => {
 		const onForkZoltar = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
@@ -238,17 +232,13 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const confirmationInput = documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' })
 		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
-		expect(forkButton.hasAttribute('disabled')).toBe(true)
-
-		fireEvent.input(confirmationInput, { target: { value: 'FORK' } })
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).toHaveBeenCalledTimes(1)
 	})
 
-	test('requires fresh confirmation when the selected fork question changes', async () => {
+	test('keeps direct fork submission available when the selected fork question changes', async () => {
 		const createProps = (questionId: string) => ({
 			accountAddress: zeroAddress,
 			currentTimestamp: 2n,
@@ -279,16 +269,13 @@ describe('ForkZoltarSection', () => {
 		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const componentQueries = within(renderedComponent.container)
-		const confirmationInput = componentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }) as HTMLInputElement
 		const forkButton = componentQueries.getByRole('button', { name: 'Fork Universe' })
 
-		fireEvent.input(confirmationInput, { target: { value: 'FORK' } })
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 
 		render(h(ForkZoltarSection, createProps('0x02')), renderedComponent.container)
 
-		expect(confirmationInput.value).toBe('')
-		expect(forkButton.hasAttribute('disabled')).toBe(true)
+		expect(componentQueries.getByRole('button', { name: 'Fork Universe' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('gives direct recovery when the fork question ID is missing', async () => {
@@ -352,7 +339,6 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.input(documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }), { target: { value: 'FORK' } })
 		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		expect(forkButton.hasAttribute('disabled')).toBe(true)
 		expect(forkButton.getAttribute('title')).toContain('The selected question must end before the universe can fork.')
@@ -389,7 +375,6 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.input(documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }), { target: { value: 'FORK' } })
 		let forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
 		expect(forkButton.getAttribute('title')).toBe('Loading current chain time before checking whether the selected question has ended.')

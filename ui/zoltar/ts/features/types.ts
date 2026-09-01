@@ -77,7 +77,7 @@ export type OverviewPanelsProps = {
 	repPerEthFailure: RepPriceFailure | undefined
 } & RepPerEthPriceProps
 
-export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
+export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions' | 'universes'
 
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined

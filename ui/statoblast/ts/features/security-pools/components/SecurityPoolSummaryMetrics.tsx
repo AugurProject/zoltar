@@ -21,12 +21,19 @@ type SecurityPoolSummaryMetricsProps = {
 	currentTimestamp?: bigint | undefined
 	metricVariant?: MetricGridVariant
 	pool: ListedSecurityPool
+	poolHeldRepPerCapacityBps?: bigint | undefined
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
 	variant?: 'embedded' | 'hero'
 }
 
-export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+function formatRepPerCapacityBps(value: bigint) {
+	const whole = value / 10_000n
+	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
+	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
+}
+
+export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, poolHeldRepPerCapacityBps, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	if (variant === 'embedded')
 		return (
@@ -47,6 +54,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 						<CurrencyValue value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
+				{poolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(poolHeldRepPerCapacityBps)}</MetricField>}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
 					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 				</MetricField>
@@ -84,7 +92,6 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 					<strong className='security-pool-hero-oracle-value'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
 					</strong>
-					<span className='detail'>{securityPoolCopy.latestSettlementContextDetail}</span>
 				</div>
 				<div className='security-pool-hero-progress'>
 					<ProgressMeter

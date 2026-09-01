@@ -10,8 +10,6 @@ import { OutcomeChipRow } from '@zoltar/ui-core-shared/components/OutcomeChipRow
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
@@ -27,7 +25,6 @@ import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
 import { tryParseTimestampInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import type { ComponentChildren } from 'preact'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
@@ -144,7 +141,6 @@ export function QuestionCreateSection({
 	zoltarQuestions,
 }: QuestionCreateSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
-	const [reviewingQuestion, setReviewingQuestion] = useState(false)
 	const currentTimestamp = useChainTimestamp()
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
@@ -180,9 +176,6 @@ export function QuestionCreateSection({
 		if (clampedTick === scalarCreatePreviewTick) return
 		setScalarCreatePreviewTick(clampedTick)
 	}, [scalarCreatePreviewDetails?.numTicks, scalarCreatePreviewTick])
-	useEffect(() => {
-		setReviewingQuestion(false)
-	}, [questionForm])
 	const updateCategoricalOutcome = (outcomeIndex: number, value: string) => {
 		onQuestionFormChange({
 			categoricalOutcomes: questionForm.categoricalOutcomes.map((outcome, index) => (index === outcomeIndex ? value : outcome)),
@@ -257,14 +250,10 @@ export function QuestionCreateSection({
 						onSubmit={event => {
 							event.preventDefault()
 							if (!canCreateQuestion) return
-							if (!reviewingQuestion) {
-								setReviewingQuestion(true)
-								return
-							}
 							onCreateQuestion()
 						}}
 					>
-						<div className='question-create-editor' hidden={reviewingQuestion}>
+						<div className='question-create-editor'>
 							<p className='field-help'>{marketCopy.requiredFieldsNote}</p>
 							<div className='field'>
 								<span>{marketCopy.questionType}</span>
@@ -470,38 +459,9 @@ export function QuestionCreateSection({
 							</SectionBlock>
 						</div>
 
-						{reviewingQuestion ? (
-							<TransactionReview
-								context={[
-									{ label: marketCopy.questionType, value: getMarketTypeLabel(questionForm.marketType) },
-									{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-								]}
-								details={
-									questionForm.marketType === 'scalar'
-										? [
-												{ label: marketCopy.scalarMin, value: questionForm.scalarMin.trim() },
-												{ label: marketCopy.scalarMax, value: questionForm.scalarMax.trim() },
-												{ label: marketCopy.scalarIncrement, value: questionForm.scalarIncrement.trim() },
-												{ label: marketCopy.answerUnit, value: questionForm.answerUnit.trim() === '' ? commonCopy.none : questionForm.answerUnit.trim() },
-											]
-										: []
-								}
-								primary={[
-									{ label: commonCopy.question, value: draftTitle },
-									{ label: marketCopy.outcomes, value: getDraftOutcomeLabels(questionForm, questionFormValidation.fieldErrors.categoricalOutcomes).join(' / ') },
-									{ label: marketCopy.endTime, value: renderDraftTimestamp(questionForm.endTime, marketCopy.endTimeRequired) },
-								]}
-								risks={[marketCopy.questionCreationConsequence, ...(showEndedQuestionWarning ? [marketCopy.endedQuestionWarning] : [])]}
-							/>
-						) : undefined}
 						<div className='actions'>
-							{reviewingQuestion ? (
-								<button className='secondary' type='button' onClick={() => setReviewingQuestion(false)} disabled={questionCreating}>
-									{marketCopy.backToQuestion}
-								</button>
-							) : undefined}
 							<TransactionActionButton
-								idleLabel={reviewingQuestion ? commonCopy.createQuestionAction : marketCopy.reviewQuestion}
+								idleLabel={commonCopy.createQuestionAction}
 								pendingLabel={marketCopy.createQuestionPendingLabel}
 								onClick={() => undefined}
 								pending={questionCreating}

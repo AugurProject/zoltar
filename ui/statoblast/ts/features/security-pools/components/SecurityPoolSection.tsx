@@ -19,6 +19,8 @@ import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
+import { MarketCreateQuestionSection } from '../../markets/components/MarketCreateQuestionSection.js'
+import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
@@ -34,9 +36,16 @@ export function SecurityPoolSection({
 	loadingMarketDetails,
 	loadingAvailableQuestions,
 	marketDetails,
+	marketCreating = false,
+	marketError = undefined,
+	marketForm = getDefaultMarketFormState(),
+	marketResult = undefined,
+	onCreateMarket = () => undefined,
 	onCreateSecurityPool,
 	onLoadAvailableQuestions,
 	onOpenCreatedPool,
+	onMarketFormChange = () => undefined,
+	onResetMarket = () => undefined,
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
@@ -48,6 +57,13 @@ export function SecurityPoolSection({
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
+	const fallbackMarketForm = {
+		...getDefaultMarketFormState(),
+		description: securityPoolCopy.createQuestionForPoolTitle,
+		endTime: '4102444800',
+		startTime: '4102358400',
+		title: securityPoolCopy.createQuestionForPoolTitle,
+	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
 	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
@@ -290,6 +306,26 @@ export function SecurityPoolSection({
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
 						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
 						{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
+					</SectionBlock>
+
+					<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
+						<MarketCreateQuestionSection
+							accountAddress={accountState.address}
+							hasForked={false}
+							isOnActiveAppChain={isOnActiveAppChain}
+							loadingZoltarQuestions={loadingAvailableQuestions}
+							marketCreating={marketCreating}
+							marketError={marketError}
+							marketForm={marketForm ?? fallbackMarketForm}
+							marketResult={marketResult}
+							onCreateMarket={onCreateMarket}
+							onMarketFormChange={onMarketFormChange}
+							onOpenForkTab={() => undefined}
+							onResetMarket={onResetMarket}
+							onUseQuestionForFork={() => undefined}
+							onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
+							zoltarQuestions={availableQuestions}
+						/>
 					</SectionBlock>
 
 					<ErrorNotice message={securityPoolError} />

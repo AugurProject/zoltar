@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { AccountState, ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type {
 	ForkAuctionActionResult,
@@ -7,6 +7,7 @@ import type {
 	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
+	MarketCreationResult,
 	MarketDetails,
 	OpenOracleActionResult,
 	OracleManagerDetails,
@@ -65,7 +66,7 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate'
+export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -89,6 +90,13 @@ type SecurityPoolRouteContentProps = {
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
+	marketCreating: boolean
+	marketError: string | undefined
+	marketForm: MarketFormState
+	marketResult: MarketCreationResult | undefined
+	onCreateMarket: () => void
+	onMarketFormChange: (update: Partial<MarketFormState>) => void
+	onResetMarket: () => void
 } & RepPerEthPriceProps
 
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
@@ -194,6 +202,7 @@ export type SecurityPoolsSectionProps = {
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	workflow: SecurityPoolWorkflowRouteContentProps
+	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
 type SecurityVaultRouteContentProps = {

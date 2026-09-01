@@ -22,12 +22,18 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
-function getVaultHealthLabel(isCurrentlyHealthy: boolean | undefined) {
-	if (isCurrentlyHealthy === undefined) return commonCopy.unavailable
-	return isCurrentlyHealthy ? securityPoolCopy.healthy : securityPoolCopy.unhealthy
-}
-
-export function VaultMetricGrid({ associatedRepPerCapacityBps, badDebtAttoEth, className = '', layout = 'grid', disputeStakedAttoRep, isCurrentlyHealthy, poolHeldRepPerCapacityBps, priceValidUntilTimestamp, vaultAttoRepBacking, capacityOwnershipAttoRep }: VaultMetricGridProps) {
+export function VaultMetricGrid({
+	associatedRepPerCapacityBps,
+	badDebtAttoEth,
+	className = '',
+	layout = 'grid',
+	disputeStakedAttoRep,
+	isCurrentlyHealthy: _isCurrentlyHealthy,
+	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
+	priceValidUntilTimestamp,
+	vaultAttoRepBacking,
+	capacityOwnershipAttoRep,
+}: VaultMetricGridProps) {
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
@@ -66,10 +72,7 @@ export function VaultMetricGrid({ associatedRepPerCapacityBps, badDebtAttoEth, c
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
-				<p className='detail'>{securityPoolCopy.vaultCoverageDetail}</p>
 				{associatedRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.associatedRepPerCapacity}>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</MetricField>}
-				{poolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(poolHeldRepPerCapacityBps)}</MetricField>}
-				{associatedRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.currentVaultHealth}>{getVaultHealthLabel(isCurrentlyHealthy)}</MetricField>}
 				{badDebtAttoEth === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.badDebt}>
 						<CurrencyValue value={badDebtAttoEth} suffix={commonCopy.eth} />
