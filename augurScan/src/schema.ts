@@ -3,10 +3,18 @@ import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 
 export const CURRENT_SCHEMA_VERSION = '2'
+export const SUPPORTED_POSTGRES_VERSION = '17.11'
+export const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server release. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are release-specific; the database was not modified.`
 export const UNSUPPORTED_SCHEMA_MESSAGE =
 	'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
 
 const PREVIOUS_SCHEMA_VERSION = '1'
+const postgresVersionNumber = (release: string): string => {
+	const match = /^(\d+)\.(\d+)$/u.exec(release)
+	if (match?.[1] === undefined || match[2] === undefined) throw new Error(`Invalid supported PostgreSQL release: ${release}`)
+	return `${match[1]}${match[2].padStart(4, '0')}`
+}
+export const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_VERSION)
 
 type SupportedSchemaVersion = typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION
 
@@ -291,10 +299,18 @@ export const schemaInitializationAction = (markerVersion: string | undefined, pu
 	return 'initialize'
 }
 
+export const assertSupportedPostgresVersion = (version: unknown): void => {
+	if (version !== SUPPORTED_POSTGRES_VERSION_NUM) throw new Error(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+}
+
 export const initializeSchema = async (sql: SQL): Promise<void> => {
 	const connection = await sql.reserve()
+	let advisoryLockAcquired = false
 	try {
+		const serverVersions = await connection`SELECT current_setting('server_version_num') AS version`
+		assertSupportedPostgresVersion(serverVersions[0]?.version)
 		await connection`SELECT pg_advisory_lock(92138471)`
+		advisoryLockAcquired = true
 		const schema = await Bun.file(path.resolve(import.meta.dir, '../schema.sql')).text()
 		const markerExists = await connection`
 			SELECT to_regclass('public.augurscan_schema') IS NOT NULL AS exists
@@ -385,7 +401,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 		)
 	} finally {
 		try {
-			await connection`SELECT pg_advisory_unlock(92138471)`
+			if (advisoryLockAcquired) await connection`SELECT pg_advisory_unlock(92138471)`
 		} finally {
 			await connection.release()
 		}

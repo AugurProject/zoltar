@@ -1,12 +1,24 @@
 import { expect, test } from 'bun:test'
 import {
+	assertSupportedPostgresVersion,
 	CURRENT_SCHEMA_VERSION,
 	expectedSchemaLayout,
 	runSchemaTransaction,
+	SUPPORTED_POSTGRES_VERSION,
+	SUPPORTED_POSTGRES_VERSION_NUM,
 	schemaInitializationAction,
 	schemaLayoutsMatch,
+	UNSUPPORTED_POSTGRES_VERSION_MESSAGE,
 	UNSUPPORTED_SCHEMA_MESSAGE,
 } from '../src/schema.ts'
+
+test('accepts only the PostgreSQL release used to generate the schema fingerprint', () => {
+	expect(SUPPORTED_POSTGRES_VERSION_NUM).toBe('170011')
+	expect(() => assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM)).not.toThrow()
+	expect(() => assertSupportedPostgresVersion('170006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('180006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+})
 
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
@@ -28,6 +40,7 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 
 test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
 	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
+	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION} `)
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
 	const previous = expectedSchemaLayout(schema, '1')
 	expect(current.relations).toContain('table:chain_reorganizations')

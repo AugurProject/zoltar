@@ -6,6 +6,7 @@ const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '.dockerignore')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')
+const schemaFile = join(import.meta.dir, '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
@@ -59,5 +60,15 @@ describe('Docker packaging', () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)
 		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
+	})
+
+	test('runs the PostgreSQL release used to generate the authoritative schema', async () => {
+		const composeSource = await readFile(composeFile, 'utf8')
+		const schemaSource = await readFile(schemaFile, 'utf8')
+		const composeVersion = /image: postgres:(\d+\.\d+)-alpine/u.exec(composeSource)?.[1]
+		const schemaVersion = /Dumped from database version (\d+\.\d+)/u.exec(schemaSource)?.[1]
+		if (composeVersion === undefined) throw new Error('Compose must pin a PostgreSQL alpine image with a major and minor release')
+		if (schemaVersion === undefined) throw new Error('The authoritative schema must record its PostgreSQL server release')
+		expect(composeVersion).toBe(schemaVersion)
 	})
 })

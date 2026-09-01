@@ -21,6 +21,8 @@ The most important runtime settings are:
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
+Bundled and external databases must run PostgreSQL 17.11. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are release-specific.
+
 Changing a tracked manifest address, label, kind, or deployment boundary can replay the affected network. ABI changes cause an `abi-redecode`; application or projection changes cause a conservative `projection-rebuild`. A deployment earlier than the stored coverage boundary requires a new database rather than silently presenting partial history. Review [STATE_MODEL.md](STATE_MODEL.md) before a source or manifest upgrade.
 
 ## Back up and prove the restore

@@ -68,7 +68,7 @@ docker run --detach --rm --name augurscan-test-postgres \
   --env POSTGRES_USER=augurscan \
   --env POSTGRES_PASSWORD=augurscan \
   --env POSTGRES_DB=augurscan_test \
-  postgres:17.6-alpine
+  postgres:17.11-alpine
 
 POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test bun run test:integration
 docker stop augurscan-test-postgres
