@@ -13,7 +13,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-On Windows, run `start.bat` from this directory. Open <http://localhost:3000>. PostgreSQL data is stored in the `augurscan-data` named volume, so rebuilding the app container does not discard indexed history.
+On Windows, run `start.bat` from this directory. Open <http://localhost:3000>. Compose now runs separate `app` and `indexer` containers against the same PostgreSQL database, so browsing remains responsive while backfill continues. PostgreSQL data is stored in the `augurscan-data` named volume, so rebuilding the containers does not discard indexed history.
 
 The public RPC defaults are suitable for evaluation but may rate-limit a large backfill. Put archival-capable endpoints in `.env` for reliable indexing. `NETWORKS=mainnet` or `NETWORKS=sepolia` limits the enabled networks. The website remains available during backfill and reports each network's indexed block, observed head, lag, progress, estimated time remaining, and current error.
 
@@ -57,6 +57,8 @@ bun run typecheck
 bun test
 bun run dev
 ```
+
+`bun run dev` starts separate watched app and indexer processes. For manual local startup, run `bun run build && bun src/server.ts` for the web app and `bun run start:indexer` for the indexer in a second terminal.
 
 The browser source is under `browser/`. `bun run build` bundles it to the ignored `public/app.js`; do not edit that generated file.
 
