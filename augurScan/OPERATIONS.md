@@ -21,7 +21,7 @@ The most important runtime settings are:
 - `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
 - `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` enable HTTP Basic access control when both are set;
 - `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600, while `0` disables it when a trusted upstream enforces the limit;
-- `DISABLE_INDEXER=1` disables chain indexing and avoids the writer lease. It does not make the process or its database connection read-only: startup can initialize or migrate the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
+- `DISABLE_INDEXER=1` disables the dedicated indexer process. The web app already runs without indexing, but it still initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
@@ -63,11 +63,11 @@ export AUGURSCAN_RESTORE_ADMIN_URL='postgres://admin:password@database.example/p
 export AUGURSCAN_RESTORE_URL='postgres://augurscan_restore:password@database.example/augurscan_restore'
 ```
 
-Stop every augurScan app instance connected to the live database and prevent a standby from taking over while this procedure runs. For the Compose deployment, stop its app service. This freezes the source between the proof and the dump; leave it stopped until the upgrade step starts it again.
+Stop every augurScan indexer instance connected to the live database and prevent a standby from taking over while this procedure runs. For the Compose deployment, stop its `indexer` service. The web app can remain online for reads, but leave the indexer stopped until the upgrade step starts it again so the source evidence boundary stays fixed between the proof and the dump.
 
 ```bash
 set -euo pipefail
-docker compose stop app
+docker compose stop indexer
 ```
 
 The proof below records source counts and its greatest indexed checkpoint before the dump. The pending filename prevents a failed or partial dump from being mistaken for a backup.
@@ -258,7 +258,7 @@ The `/api/v1/reorgs` view uses a chain- and generation-bound cursor. A new inval
 
 ## Export deterministic evidence
 
-Run exports against the restored database through an isolated, indexer-disabled app. This keeps the live service available and prevents the export boundary from changing because of chain indexing. This process still needs write access: it can migrate the restored schema, appends an `indexer_runs` provenance row, prunes expired `live_events`, and records its stop time. After any required migration, it does not index new chain evidence, so the restored evidence boundary remains fixed. Both database modes use the pinned app image that Compose built during the upgrade.
+Run exports against the restored database through an isolated app process without the dedicated indexer. This keeps the live service available and prevents the export boundary from changing because of chain indexing. This process still needs write access: it can migrate the restored schema, appends an `indexer_runs` provenance row, prunes expired `live_events`, and records its stop time. After any required migration, it does not index new chain evidence, so the restored evidence boundary remains fixed. Both database modes use the pinned app image that Compose built during the upgrade.
 
 The isolated container needs its own direct, container-reachable URL for the restored database. External mode already set `AUGURSCAN_RESTORE_URL` during restore preparation. In bundled mode, set it explicitly with the actual password that the `postgres` service reads from `.env`; percent-encode reserved URL characters. Do not rely on an unexported `POSTGRES_PASSWORD`, and do not use `localhost` to name a database outside the container.
 
@@ -314,10 +314,10 @@ esac
 
 ## Stop for maintenance
 
-Stop the writer gracefully before PostgreSQL maintenance:
+Stop the indexer gracefully before PostgreSQL maintenance:
 
 ```bash
-docker compose stop app
+docker compose stop indexer
 ```
 
 `docker compose down` preserves the named history volume. `docker compose down --volumes` deletes it; use that command only when the loss is intentional and a tested backup exists.
