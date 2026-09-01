@@ -68,7 +68,7 @@ These checks reject an inconsistent graph. They cannot prove that an internally 
 
 - `rpcQuorum: 1` needs one healthy read endpoint and is available only in dry-run mode for isolated development.
 - Live execution requires `rpcQuorum: 2`, a primary `readRpcUrl`, and at least two `quorumRpcUrls`, for at least three distinct configured origins. Up to eight quorum readers are allowed, for at most nine configured read origins. Every configured reader participates in canonical scans; each check needs at least two healthy responses, and every successful response must agree. `rpcQuorum: 2` is a minimum health threshold, not a request to ignore readers beyond the first two.
-- Every endpoint must report the configured chain. Use HTTPS except for loopback HTTP or the local Anvil service. Different paths on one origin are not independent providers.
+- The chaos-bot server checks every endpoint, and each must report the configured chain. HTTP is allowed only for `localhost`, `127.0.0.1`, `[::1]`, `anvil`, or `reth`; every other host must use HTTPS. Different paths on one origin are not independent providers.
 - `publicRpcUrls` supplies public broadcasts. The schema requires at least one even when private submission is selected. Public submission preflight calls `eth_sendRawTransaction` with one fixed, validly encoded legacy envelope whose zero `s` signature can never recover a sender or enter a mempool; only a recognizable transaction-rejection error proves method dispatch.
 - `runtime.protocolStartBlock` is the earliest block that can contain protocol deployment or carry events. `"0"` is safe but can make the first backfill slow. Starting too late omits cumulative history and makes proof-dependent operations fail closed.
 

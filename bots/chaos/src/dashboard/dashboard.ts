@@ -165,6 +165,7 @@ type Configuration = {
 	paused?: boolean | undefined
 	rememberSigner?: boolean | undefined
 	revision?: string | number | undefined
+	rpcQuorum?: string | number | undefined
 	selectableOperationAllowlist?: string[] | null | undefined
 	wallet?: string | undefined
 	workflowValidForBlocks?: string | number | undefined
@@ -172,6 +173,7 @@ type Configuration = {
 
 const stateRequestTimeoutMilliseconds = 5_000
 const configurationRequestTimeoutMilliseconds = 5_000
+const connectivityMutationTimeoutMilliseconds = 30_000
 const stateRefreshMilliseconds = 10_000
 const ecosystemOrder = ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const
 const ecosystemLabels = new Map<string, string>([
@@ -280,6 +282,15 @@ const activityList = element('activity-list', HTMLOListElement)
 const settingsScope = element('settings-scope', HTMLSpanElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
 const settingsPauseNote = element('settings-pause-note', HTMLDivElement)
+const connectivityForm = element('connectivity-form', HTMLFormElement)
+const connectivityFields = element('connectivity-fields', HTMLFieldSetElement)
+const readRpcUrlInput = element('read-rpc-url', HTMLInputElement)
+const rpcQuorumInput = element('rpc-quorum', HTMLSelectElement)
+const quorumRpcUrlsInput = element('quorum-rpc-urls', HTMLTextAreaElement)
+const publicRpcUrlsInput = element('public-rpc-urls', HTMLTextAreaElement)
+const saveConnectivityButton = element('save-connectivity', HTMLButtonElement)
+const discardConnectivityButton = element('discard-connectivity', HTMLButtonElement)
+const connectivityStatus = element('connectivity-status', HTMLSpanElement)
 const settingsForm = element('settings-form', HTMLFormElement)
 const settingsFields = element('settings-fields', HTMLFieldSetElement)
 const executeInput = element('execute', HTMLInputElement)
@@ -318,16 +329,20 @@ let refreshPromise: Promise<RefreshResult> | undefined
 let settingsDirty = false
 let settingsConflict = false
 let settingsRevision: string | number | undefined
+let connectivityDraftDirty = false
+let connectivityDraftConflict = false
+let connectivityDraftRevision: string | number | undefined
 let pauseMutationPending = false
 let pauseMutationUnreconciled = false
 let settingsMutationUnreconciled = false
+let connectivityMutationUnreconciled = false
 let signerMutationUnreconciled = false
 let configurationCommitIndeterminate = false
 
 const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
 const configurationCommitIndeterminateMessage = 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.'
 
-type MutationReconciliationTarget = 'pause' | 'settings' | 'signer'
+type MutationReconciliationTarget = 'connectivity' | 'pause' | 'settings' | 'signer'
 
 type RecoveryContextRefresh = {
 	available: (value: Snapshot) => boolean
@@ -663,6 +678,7 @@ function parseConfiguration(value: unknown): Configuration {
 		paused: booleanValue(source['paused']),
 		rememberSigner: booleanValue(source['rememberSigner']),
 		revision: scalarValue(source['revision']),
+		rpcQuorum: scalarValue(source['rpcQuorum']),
 		selectableOperationAllowlist: nullableStrings(selectableOperationAllowlist),
 		wallet: stringValue(source['wallet']),
 		workflowValidForBlocks: scalarValue(source['workflowValidForBlocks']),
@@ -926,6 +942,7 @@ function obligationDetail(obligation: Obligation) {
 function applyMutationControlLatches() {
 	if (pauseMutationUnreconciled || configurationCommitIndeterminate) pauseButton.disabled = true
 	if (settingsMutationUnreconciled || configurationCommitIndeterminate) settingsFields.disabled = true
+	if (connectivityMutationUnreconciled || configurationCommitIndeterminate) connectivityFields.disabled = true
 	if (signerMutationUnreconciled || configurationCommitIndeterminate) signerFields.disabled = true
 	if (!configurationCommitIndeterminate) return
 	confirmResume.disabled = true
@@ -933,7 +950,8 @@ function applyMutationControlLatches() {
 }
 
 function setMutationReconciliationPending(target: MutationReconciliationTarget) {
-	if (target === 'pause') pauseMutationUnreconciled = true
+	if (target === 'connectivity') connectivityMutationUnreconciled = true
+	else if (target === 'pause') pauseMutationUnreconciled = true
 	else if (target === 'settings') settingsMutationUnreconciled = true
 	else signerMutationUnreconciled = true
 	applyMutationControlLatches()
@@ -952,6 +970,10 @@ function resolveMutationReconciliations() {
 	if (settingsMutationUnreconciled) {
 		settingsMutationUnreconciled = false
 		settingsSaveStatus.textContent = reconciliationMessage
+	}
+	if (connectivityMutationUnreconciled) {
+		connectivityMutationUnreconciled = false
+		connectivityStatus.textContent = reconciliationMessage
 	}
 	if (signerMutationUnreconciled) {
 		signerMutationUnreconciled = false
@@ -1549,6 +1571,7 @@ function renderConfiguration(value: Configuration, force = false) {
 	if (value.configurationCommitIndeterminate === true) latchConfigurationCommitIndeterminate()
 	const policyEditable = value.paused === true && snapshot?.paused === true && !settingsMutationUnreconciled && !configurationCommitIndeterminate
 	settingsFields.disabled = !policyEditable
+	connectivityFields.disabled = connectivityMutationUnreconciled || configurationCommitIndeterminate
 	settingsPauseNote.classList.toggle('hidden', policyEditable)
 	signerFields.disabled = signerMutationUnreconciled || configurationCommitIndeterminate
 	const network = value.network ?? snapshot?.network ?? 'Network unknown'
@@ -1558,6 +1581,20 @@ function renderConfiguration(value: Configuration, force = false) {
 	setBadge(networkBadge, value.chainId === undefined ? network : `${network} · ${String(value.chainId)}`, networkTone)
 	settingsScope.textContent = value.chainId === undefined ? network : `${network} · chain ${String(value.chainId)}`
 	settingsScope.className = 'badge neutral'
+	if (connectivityDraftDirty) {
+		if (value.revision !== connectivityDraftRevision) {
+			connectivityDraftConflict = true
+			saveConnectivityButton.disabled = true
+			discardConnectivityButton.disabled = false
+			connectivityStatus.textContent = 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.'
+		}
+	} else {
+		if (value.rpcQuorum === 1 || value.rpcQuorum === 2) rpcQuorumInput.value = String(value.rpcQuorum)
+		connectivityDraftRevision = value.revision
+		connectivityDraftConflict = false
+		saveConnectivityButton.disabled = false
+		discardConnectivityButton.disabled = true
+	}
 	const wallet = value.wallet ?? snapshot?.wallet
 	signerSummary.replaceChildren()
 	if (value.hasSigner === true) {
@@ -1706,10 +1743,10 @@ async function reconcileUnknownMutation(error: unknown, status: HTMLElement, sco
 	return { handled: true, reconciled }
 }
 
-async function put(path: string, value: unknown) {
+async function put(path: string, value: unknown, timeoutMilliseconds = configurationRequestTimeoutMilliseconds) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Dashboard mutation body is not serializable')
-	return await requestJson(path, configurationRequestTimeoutMilliseconds, {
+	return await requestJson(path, timeoutMilliseconds, {
 		body,
 		headers: { 'content-type': 'application/json' },
 		method: 'PUT',
@@ -2063,6 +2100,87 @@ obligationForm.addEventListener('submit', event => {
 			if (!reconciliation.handled) obligationStatus.textContent = error instanceof Error ? error.message : 'Lifecycle reconciliation failed.'
 		} finally {
 			obligationFields.disabled = !mutationReconciled || snapshot?.paused !== true || (snapshot?.obligations.length ?? 0) === 0
+		}
+	})()
+})
+
+connectivityFields.addEventListener('input', () => {
+	if (!connectivityDraftDirty) connectivityDraftRevision = configuration?.revision
+	connectivityDraftDirty = true
+	discardConnectivityButton.disabled = false
+})
+discardConnectivityButton.addEventListener('click', () => {
+	connectivityDraftDirty = false
+	connectivityDraftConflict = false
+	connectivityDraftRevision = configuration?.revision
+	readRpcUrlInput.value = ''
+	quorumRpcUrlsInput.value = ''
+	publicRpcUrlsInput.value = ''
+	if (configuration?.rpcQuorum === 1 || configuration?.rpcQuorum === 2) rpcQuorumInput.value = String(configuration.rpcQuorum)
+	saveConnectivityButton.disabled = false
+	discardConnectivityButton.disabled = true
+	connectivityStatus.textContent = 'RPC draft discarded. Re-enter the complete replacement set after reviewing the current configuration.'
+})
+connectivityForm.addEventListener('submit', event => {
+	event.preventDefault()
+	void (async () => {
+		if (connectivityDraftConflict) {
+			connectivityStatus.textContent = 'Discard this RPC draft and review the current configuration before saving.'
+			return
+		}
+		const lines = (value: string) =>
+			value
+				.split('\n')
+				.map(entry => entry.trim())
+				.filter(entry => entry !== '')
+		const publicRpcUrls = lines(publicRpcUrlsInput.value)
+		if (publicRpcUrls.length === 0) {
+			connectivityStatus.textContent = 'Enter at least one public submission RPC.'
+			return
+		}
+		connectivityFields.disabled = true
+		connectivityStatus.textContent = 'Checking every RPC from the chaos-bot server…'
+		let mutationReconciled = true
+		try {
+			await put(
+				'/api/connectivity',
+				{
+					connectivity: {
+						publicRpcUrls,
+						quorumRpcUrls: lines(quorumRpcUrlsInput.value),
+						readRpcUrl: readRpcUrlInput.value.trim(),
+						rpcQuorum: Number(rpcQuorumInput.value),
+					},
+					revision: connectivityDraftRevision,
+				},
+				connectivityMutationTimeoutMilliseconds,
+			)
+			connectivityDraftDirty = false
+			connectivityDraftConflict = false
+			connectivityDraftRevision = undefined
+			readRpcUrlInput.value = ''
+			quorumRpcUrlsInput.value = ''
+			publicRpcUrlsInput.value = ''
+			connectivityStatus.textContent = 'Chain and RPCs passed server-side validation and were saved.'
+			await refresh()
+		} catch (error) {
+			if (error instanceof Error && error.name === 'ConfigurationRevisionConflict') {
+				connectivityDraftConflict = true
+				saveConnectivityButton.disabled = true
+				discardConnectivityButton.disabled = false
+				await refresh()
+			}
+			const reconciliation = await reconcileUnknownMutation(error, connectivityStatus, 'configuration and state', 'connectivity')
+			mutationReconciled = !reconciliation.handled || reconciliation.reconciled
+			if (reconciliation.handled) {
+				connectivityDraftConflict = true
+				saveConnectivityButton.disabled = true
+				discardConnectivityButton.disabled = false
+			} else if (error instanceof Error && error.name === 'ConfigurationRevisionConflict') {
+				connectivityStatus.textContent = 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.'
+			} else connectivityStatus.textContent = error instanceof Error ? error.message : 'RPC settings could not be saved.'
+		} finally {
+			connectivityFields.disabled = !mutationReconciled || configurationCommitIndeterminate
 		}
 	})()
 })
