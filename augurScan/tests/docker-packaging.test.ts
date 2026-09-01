@@ -61,6 +61,7 @@ describe('Docker packaging', () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)
 		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
+		expect(source).toContain(`LOG_SCAN_RANGE_SIZE: \${LOG_SCAN_RANGE_SIZE:-100000}`)
 	})
 
 	test('runs the PostgreSQL build used to generate the authoritative schema', async () => {
