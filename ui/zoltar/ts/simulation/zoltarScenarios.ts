@@ -53,7 +53,7 @@ function createForkedCategoricalQuestion(currentTimestamp: bigint): { marketType
 		outcomeLabels,
 		questionData: {
 			answerUnit: '',
-			description: 'Five-outcome categorical market used to exercise fork resolution and migration flows.',
+			description: '',
 			displayValueMax: 0n,
 			displayValueMin: 0n,
 			endTime: currentTimestamp - DAY_IN_SECONDS,
