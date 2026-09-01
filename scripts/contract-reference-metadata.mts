@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '99d701c7d0e40f56ad7753e5c5c1ef17474d9b0e148f0b6d2bc8541fa44e05bb'
+export const expectedProductionSoliditySourceFingerprint = '58c0eebacb45f8a31f2b1c1978f871d6dfbd80533760298664fee9959887a7d5'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -779,7 +779,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from this deposit and its selected deposit target factor.',
 				declarations: [{ name: 'depositRepToVault' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is no later than the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
+					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
 				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{

@@ -106,7 +106,7 @@ describe('security pool state engine', () => {
 			vaultAdmissionClosed: continuationAfterEnd,
 		})
 
-		expectActionEnabled(exactBoundary, 'depositRepToVault')
+		expectActionBlocked(exactBoundary, 'depositRepToVault')
 		expectActionBlocked(afterBoundary, 'depositRepToVault')
 		expectActionEnabled(continuation, 'depositRepToVault')
 	})

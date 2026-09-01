@@ -54,7 +54,7 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(false)
+		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
 		currentTimestamp = 101n
 		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
 		escalationGame = escalationGameAddress

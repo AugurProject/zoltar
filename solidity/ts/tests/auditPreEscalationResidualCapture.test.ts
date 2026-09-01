@@ -49,19 +49,19 @@ describe('Audit: pre-escalation residual capture', () => {
 		await assert.rejects(approveAndDepositRepToVault(attacker, repDeposit, questionId, (1n << 256n) - 1n))
 	})
 
-	test('keeps vault admission open through the question end timestamp', async () => {
+	test('keeps vault admission open before the question end timestamp and closes it exactly at the boundary', async () => {
 		const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(depositor, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
 		// The harness mines the next transaction one second after the latest timestamp.
-		await mockWindow.setTime(questionEnd - 1n)
+		await mockWindow.setTime(questionEnd - 2n)
 		await depositRepToVault(depositor, securityPoolAddresses.securityPool, repDeposit)
-		await mockWindow.setTime(questionEnd)
+		await mockWindow.setTime(questionEnd - 1n)
 		await assert.rejects(depositRepToVault(depositor, securityPoolAddresses.securityPool, repDeposit))
 	})
 
-	test('prevents a same-block deposit before the first dispute from capturing an honest vault residual', async () => {
+	test('prevents an exact-end deposit before the first dispute from capturing an honest vault residual', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const attoRep = 10n ** 18n
@@ -72,14 +72,18 @@ describe('Audit: pre-escalation residual capture', () => {
 		await approveAndDepositRepToVault(escalationDepositor, totalEscalationPrincipal, questionId)
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(questionEnd + 1n)
+		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await mockWindow.setTime(questionEnd - 600n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		// The next transaction is mined exactly at the question end timestamp.
+		await mockWindow.setTime(questionEnd - 1n)
 
 		const attackerDeposit = 10n * repDeposit
 		const attackerWalletBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
-		// The attacker orders this transaction immediately before the first dispute deposit.
-		// Admission must already be closed even though the escalation game does not exist yet.
-		await assert.rejects(approveAndDepositRepToVault(attacker, attackerDeposit, questionId, (1n << 256n) - 1n))
+		// The attacker orders this transaction at the first ended-question boundary and
+		// immediately before the first dispute deposit. Admission must already be closed
+		// even though the escalation game does not exist yet.
+		await assert.rejects(depositRepToVault(attacker, securityPoolAddresses.securityPool, attackerDeposit, (1n << 256n) - 1n))
 		const attackerVaultBeforeDispute = await getSecurityVault(client, securityPoolAddresses.securityPool, attacker.account.address)
 		strictEqualTypeSafe(attackerVaultBeforeDispute.repBackingUnits, 0n, 'the rejected attacker should receive no residual-eligible backing units')
 		strictEqualTypeSafe(attackerVaultBeforeDispute.capacityOwnershipAttoRep, 0n, 'the rejected attacker should assume no open-interest allocation')

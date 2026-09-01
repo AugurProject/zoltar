@@ -282,7 +282,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		strictEqualTypeSafe(honestResidual, lowLosingPrincipal, 'the passive honest child vault must receive the complete ordinary-game residual')
 	})
 
-	test('rejects wallet deposits into a non-current game without moving REP or dispute state', async () => {
+	test('rejects direct deposits into a non-current game without moving REP or dispute state', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const infra = getInfraContractAddresses()

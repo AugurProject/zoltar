@@ -214,7 +214,6 @@ export const vaultActionsEndedDetail = 'REP deposits are unavailable because thi
 export const vaultActionsForkMigrationDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.'
 export const vaultActionsTruthAuctionDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.'
 export const vaultDepositAdmissionClosedDetail = 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.'
-export const vaultDepositEscalationStartedDetail = 'New vault REP backing is unavailable after ordinary escalation starts. Contribute wallet REP from Reporting instead.'
 export const vaultLookup = 'Vault Lookup'
 export const vaultMissing = 'Vault missing'
 export const vaultSummary = 'Vault Summary'

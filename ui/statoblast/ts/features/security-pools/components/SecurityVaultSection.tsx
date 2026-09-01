@@ -175,7 +175,6 @@ export function SecurityVaultSection({
 		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
 		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail
 		if (poolState?.vaultAdmissionClosed) return securityPoolCopy.vaultDepositAdmissionClosedDetail
-		if (poolState?.ordinaryEscalationGameStarted) return securityPoolCopy.vaultDepositEscalationStartedDetail
 		return undefined
 	})()
 	const effectiveRepExitMode = redeemRepFromVaultEnabled ? 'redeem' : 'withdraw'
