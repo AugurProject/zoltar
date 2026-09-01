@@ -780,7 +780,7 @@ const demoNetworkItems = () => {
 	}))
 }
 const demoContracts = demoNetworks.flatMap((network) => {
-	const manifestContracts = [
+	const manifestDefinitions: readonly (readonly [address: string, label: string, kind: string, deploymentBlock: string | undefined, exact: boolean])[] = [
 		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
 		['0x052c04adFF6C1BF51f52158e36441C1e99cdfDB4', 'Deployment Status Oracle', 'deploymentStatusOracle', '22181462', true],
 		['0x529dcaC57677451CBfe766d88CcC133D082500df', 'OpenOracle', 'openOracle', '22181501', true],
@@ -790,7 +790,8 @@ const demoContracts = demoNetworks.flatMap((network) => {
 		['0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', 'Wrapped Ether', 'weth', '4719568', true],
 		['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 'USD Coin', 'usdc', '6082465', true],
 		['0x1F98431c8aD98523631AE4a59f267346ea31F984', 'Uniswap V3 Factory', 'uniswapV3Factory', '12369621', true],
-	].map(([address, label, kind, deploymentBlock, exact], index) => ({
+	]
+	const manifestContracts: ContractRecord[] = manifestDefinitions.map(([address, label, kind, deploymentBlock, exact], index) => ({
 		chain_id: network.chain_id,
 		address,
 		label,
