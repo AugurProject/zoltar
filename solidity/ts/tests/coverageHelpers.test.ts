@@ -28,6 +28,7 @@ import {
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	ReputationToken_ReputationToken,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
@@ -309,12 +310,28 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 			/Initial deposit must be 1 REP/,
 		)
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, client.account.address],
+				}),
+			}),
+			/Operations delegate has no code/,
+		)
+		const operationsDelegate = await deployContract(
+			encodeDeployData({
+				abi: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi,
+				bytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
+			}),
+		)
 
 		const factoryAddress = await deployContract(
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, client.account.address],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, operationsDelegate],
 			}),
 		)
 		await assert.rejects(

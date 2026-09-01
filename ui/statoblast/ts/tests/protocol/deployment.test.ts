@@ -31,7 +31,7 @@ describe('statoblast deployment steps', () => {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)
 			}
 			// The oracle address is derived from its init bytecode, which embeds the
-			// monitored contract list. The statoblast list includes the nine extra
+			// monitored contract list. The statoblast list includes extra
 			// statoblast contracts, so the address must differ from the zoltar-only one.
 			const zoltarOracle = (await import('@zoltar/ui-zoltar/protocol/deployment.js')).getDeploymentSteps(profile).find(step => step.id === 'deploymentStatusOracle')
 			if (zoltarOracle === undefined) throw new Error('Missing zoltar oracle step')

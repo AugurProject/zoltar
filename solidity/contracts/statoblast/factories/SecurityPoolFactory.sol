@@ -54,6 +54,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
 		require(operationsDelegate != address(0), 'Operations delegate zero');
+		require(operationsDelegate.code.length != 0, 'Operations delegate has no code');
 		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate);
 	}
 

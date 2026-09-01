@@ -29,14 +29,21 @@
 		["0x8C648789566Ae350f147228e46aBE8bB63540Ffd", "Escalation Game Proof Verifier", "escalationProofVerifier"],
 		["0x7C5A168f9e4C6517CE3b3157248907b336eE04Ed", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x3a7c97fa90E97777E79dB9055e685Fd50096E917", "Security Pool Factory", "securityPoolFactory"],
-		["0xf8f6eA0f2149b59CD56C4370Ab4ec4De8bb6BFd2", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x13f99E75B6011fe5cf1F4C53Cfa47D55217dE0Ec", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x7D6f603599b13F43a52588965f7650A772DE2726", "Security Pool Factory", "securityPoolFactory"],
+		["0x2BA90891589f443d1f146c3D25866f0c6871191C", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x1E720f00d7Bb5D848513CCc1C18eCF4389E5f671", "Security Pool Factory", "securityPoolFactory"],
+		["0xf8f6eA0f2149b59CD56C4370Ab4ec4De8bb6BFd2", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0x13022CB4d0B53bCFF07B0EaaEC34c1969A81aa6C", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x2568044926b0783297455Cca74Ef3bBe1bB62dD7", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0xf3684bD2423B02eD4b623cE92a3acF2C0bE06632", "Security Pool Forker", "securityPoolForker"],
 		["0xe54B4467B60C32F51fa4F1c81d8B3B842874236a", "Security Pool Factory", "securityPoolFactory"],
 		["0x62e079c296eA20D8e9293eDe526720fFa69b2E3B", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x4a3511E55DD4F8D6Ac91e1BDd7E7071bE954ceEF", "Security Pool Factory", "securityPoolFactory"],
 		["0xD9B5FE0d14423928591721E22Dd38Bb2b13B745f", "Deployment Status Oracle", "deploymentStatusOracle"],
-		["0xc8f722FAEf57776A1093CFcc080b61780b50D1B4", "Security Pool Factory", "securityPoolFactory"]
+		["0xc8f722FAEf57776A1093CFcc080b61780b50D1B4", "Security Pool Factory", "securityPoolFactory"],
+		["0x0A974D7740349379Bd491410e718cba3961896C2", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xD7be4eEAdE66857742011d59611d03881cb6eBCb", "Security Pool Factory", "securityPoolFactory"],
+		["0x8E44aC96eA2741ffa459b3bAB1F44745295a2eFD", "Security Pool Operations Delegate", "securityPoolOperationsDelegate"]
 	]
 }

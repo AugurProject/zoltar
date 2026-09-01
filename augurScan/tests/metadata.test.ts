@@ -462,6 +462,7 @@ describe('ABI metadata', () => {
 			'priceCoordinatorFactory',
 			'scalarOutcomes',
 			'securityPoolUtils',
+			'securityPoolOperationsDelegate',
 			'shareTokenFactory',
 			'truthAuctionFactory',
 		]) {

@@ -40,7 +40,38 @@ describe('network configuration', () => {
 			const indexedByKind = new Map(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => [kind, address]))
 			expect(deployedById.get('deploymentStatusOracle')).toBe(indexedByKind.get('deploymentStatusOracle'))
 			expect(deployedById.get('securityPoolFactory')).toBe(indexedByKind.get('securityPoolFactory'))
+			expect(deployedById.get('securityPoolOperationsDelegate')).toBe(indexedByKind.get('securityPoolOperationsDelegate'))
 			expect(indexedByKind.get('usdc')).toBeDefined()
+		}
+	})
+
+	test('preserves every pre-merge historical factory and deployment oracle', () => {
+		for (const { id, manifest, historical } of [
+			{
+				id: 'mainnet',
+				manifest: mainnetManifest,
+				historical: [
+					['0x13f99E75B6011fe5cf1F4C53Cfa47D55217dE0Ec', 'deploymentStatusOracle'],
+					['0x7D6f603599b13F43a52588965f7650A772DE2726', 'securityPoolFactory'],
+					['0x2BA90891589f443d1f146c3D25866f0c6871191C', 'deploymentStatusOracle'],
+					['0x1E720f00d7Bb5D848513CCc1C18eCF4389E5f671', 'securityPoolFactory'],
+					['0x13022CB4d0B53bCFF07B0EaaEC34c1969A81aa6C', 'deploymentStatusOracle'],
+				],
+			},
+			{
+				id: 'sepolia',
+				manifest: sepoliaManifest,
+				historical: [
+					['0x9201310a45456BA6dC2D33E8F42806a67F04203f', 'deploymentStatusOracle'],
+					['0xb3929faea19B9d5A3464e62A996E489404D6Cce9', 'securityPoolFactory'],
+					['0x00Ea7782173E7F04f90eF0376F77d55b90Aa7B61', 'deploymentStatusOracle'],
+					['0x030004773B8FC48CE7AC79fa27ea10548237A949', 'securityPoolFactory'],
+					['0x20Af49DF3573ac604404a5E31c78e88683F80b71', 'deploymentStatusOracle'],
+				],
+			},
+		] as const) {
+			const configured = new Set(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => `${address.toLowerCase()}:${kind}`))
+			for (const [address, kind] of historical) expect(configured.has(`${address.toLowerCase()}:${kind}`)).toBeTrue()
 		}
 	})
 

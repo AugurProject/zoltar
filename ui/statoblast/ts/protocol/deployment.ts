@@ -38,7 +38,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	escalationGameFactory: '0x60d360f5056e6a9249e02ad271e870eadd8718253b383b4a70b13a1e246ad1b1',
 	openOracle: '0x665aa24c6bb92eb4df9ddcd4823e7aa93c680f74acbcb2e1134207fbba8def77',
 	priceOracleManagerAndOperatorQueuerFactory: '0x801e1a4cd4917c68fe649abd0f15423b6c2aa229e63886f528db500f7fb91015',
-	securityPoolFactory: '0x06b1347e9b1dc001bcdf1036da6b9f39c00289818fdebc2b98d2363421da54df',
+	securityPoolFactory: '0x6c2d1ea5b69758570c88333dc24695ca4f60f0fb631f4308c912ad4a090c9ff6',
 	securityPoolOperationsDelegate: '0x6b138f7528653fa76d0cea889ede59abe54c062c1acb37ed4c7d0ade5f884a5b',
 	securityPoolForker: '0x3b75ad4350865eb59ddb1d29d96c9de4f56028b4a4ff530c0d9ec44e4ca08927',
 	securityPoolUtils: '0xb3ae710a9fafc6349441b36336634b1bfca30ad89516d4fd087463bbe37d1b5b',
@@ -79,7 +79,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	escalationGameFactory: '0x60d360f5056e6a9249e02ad271e870eadd8718253b383b4a70b13a1e246ad1b1',
 	openOracle: '0x665aa24c6bb92eb4df9ddcd4823e7aa93c680f74acbcb2e1134207fbba8def77',
 	priceOracleManagerAndOperatorQueuerFactory: '0xfef520f4f2f638fc41c78823c64a8194fa5758017117f2a2436fa4697aef68dd',
-	securityPoolFactory: '0x026fc9d9023ea03eeceab4c6fe3a513ca24c6cb925e5a5b3739226024ab47d32',
+	securityPoolFactory: '0xdf38de25aced6d06194e0dcb78d871d5dfc7e069e1c280efd5bf887005d8ac25',
 	securityPoolOperationsDelegate: '0x6b138f7528653fa76d0cea889ede59abe54c062c1acb37ed4c7d0ade5f884a5b',
 	securityPoolForker: '0x21d78cdb9bef363fb24f3c2c598724f0f32cd664d3cfcaa9c0b16d6e8a856180',
 	securityPoolUtils: '0xb3ae710a9fafc6349441b36336634b1bfca30ad89516d4fd087463bbe37d1b5b',
@@ -91,7 +91,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	const addresses = getInfraContractAddresses(profile)
 	const steps: DeploymentStep[] = [
 		// Statoblast replaces the deployment status oracle step: the statoblast oracle
-		// must monitor the nine additional statoblast contracts, so it is deployed with
+		// must monitor additional Statoblast contracts, so it is deployed with
 		// a different constructor argument list (and therefore a different address).
 		...getZoltarDeploymentSteps(profile, wait).map(step =>
 			step.id === 'deploymentStatusOracle'

@@ -48,6 +48,7 @@ const kindToContractName: Readonly<Record<string, string>> = {
 	securityPool: 'SecurityPool',
 	securityPoolFactory: 'SecurityPoolFactory',
 	securityPoolForker: 'SecurityPoolForker',
+	securityPoolOperationsDelegate: 'SecurityPoolOperationsDelegate',
 	securityPoolUtils: 'SecurityPoolUtils',
 	shareToken: 'ShareToken',
 	shareTokenFactory: 'ShareTokenFactory',

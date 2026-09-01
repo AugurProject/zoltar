@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'b7bb6eaf630009c0422398b8a050fef7dc0f98d125eeeb08d8cdacef2e2ce146'
+export const expectedProductionSoliditySourceFingerprint = '8daa72bb57268b0ca4d22d6419bbd561ef6652f9ee72746371503cff4aaec9e0'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -680,7 +680,7 @@ export const contractReferences: ContractReference[] = [
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
 		readAbiFingerprint: '855853487a8ab201b9e990820bac4f51ec6ae6520ae2dcf49efcc93e81c9a474',
 		readSurface:
-			'Use `initialEscalationGameDepositAttoRep`, `minimumSecurityBondDebtAttoEth`, and `minimumVaultRepDepositAttoRep` for immutable deployment floors. The factory requires the escalation baseline to equal 1 REP, so each pool fixes its effective escalation deposit at construction as exactly `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor defaults to 1 ETH. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `initialEscalationGameDepositAttoRep`, `minimumSecurityBondDebtAttoEth`, and `minimumVaultRepDepositAttoRep` for immutable deployment floors. The factory requires the escalation baseline to equal 1 REP, so each pool fixes its effective escalation deposit at construction as exactly `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor defaults to 1 ETH. Construction rejects a zero or code-less operations delegate. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
 		readStorageDeclarations: [{ name: 'initialEscalationGameDepositAttoRep' }, { name: 'minimumSecurityBondDebtAttoEth' }, { name: 'minimumVaultRepDepositAttoRep' }],
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
@@ -796,7 +796,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; actual pool-held REP satisfies both live backing constraints for resulting collateral net of recorded bad debt, with dispute-staked REP counting only toward the associated-REP constraint; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
+					'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; live oracle-priced minting capacity covers the resulting settlement collateral, not merely this deposit; for resulting collateral net of recorded bad debt, combined pool-held and dispute-staked REP satisfies the associated-REP constraint while pool-held REP alone satisfies the migration-safety constraint; any explicit unassigned auction position remains healthy after the mint; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -993,7 +993,8 @@ export const contractReferences: ContractReference[] = [
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'setPoolFinancials' }],
 				effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, and clears fee-index rounding carry.',
-				preconditions: 'Fee-eligible capacity ownership does not exceed total capacity ownership, and the supplied settlement collateral does not exceed the current price-converted minting capacity; no lifecycle or value-change guard.',
+				preconditions:
+					'Fee-eligible capacity ownership does not exceed total capacity ownership. For supplied settlement collateral net of aggregate bad debt, current price-converted capacity is sufficient, combined pool-held and dispute-staked REP satisfies the associated-REP constraint, and pool-held REP alone satisfies the migration-safety constraint; no lifecycle or value-change guard.',
 				signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 			},
 			{
