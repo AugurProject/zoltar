@@ -39,6 +39,7 @@ type SecurityPoolForkerForkData = {
 	ownFork: boolean
 	unresolvedEscalationAtFork: boolean
 	outcomeIndex: bigint
+	forkActivationTime: bigint
 }
 
 type OwnForkRepBuckets = {
@@ -173,27 +174,9 @@ export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, secur
 		}),
 	)
 
-export const getMigratedAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getMigratedAttoRep',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
-		'Migrated REP',
-	)
+export const getMigratedAttoRep = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> => (await getSecurityPoolForkerForkData(client, securityPoolAddress)).migratedAttoRep
 
-export const getForkActivationTime = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getForkActivationTime',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
-		'Fork activation time',
-	)
+export const getForkActivationTime = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> => (await getSecurityPoolForkerForkData(client, securityPoolAddress)).forkActivationTime
 
 export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: Address): Promise<QuestionOutcome> => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
@@ -240,6 +223,7 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 		ownFork: requireBoolean(data[8], 'Security pool fork data own fork flag'),
 		unresolvedEscalationAtFork: requireBoolean(data[9], 'Security pool fork data unresolved escalation flag'),
 		outcomeIndex: requireBigInt(data[10], 'Security pool fork data outcome index'),
+		forkActivationTime: requireBigInt(data[11], 'Security pool fork data activation time'),
 	}
 }
 

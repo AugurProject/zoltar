@@ -188,10 +188,12 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 
 interface RefundBackfillOverrides {
 	auctionFinalized?: boolean
+	badDebtGeneration?: bigint
 	computedClearing?: readonly [boolean, bigint, bigint, bigint]
 	storedClearingTick?: bigint
 	underfunded?: boolean
 	underfundedWinningAttoEth?: bigint
+	unassignedPosition?: readonly [bigint, bigint, bigint, bigint, bigint]
 	vaults?: readonly Address[]
 }
 
@@ -201,6 +203,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 	const shareToken = address(22)
 	const truthAuction = address(23)
 	const vaults = overrides.vaults ?? (walletVaultRegistered ? [address(1)] : [])
+	const contractReads: string[] = []
 	const base = fakeClient(10n, hash(10), {
 		poolDeployments: [
 			{
@@ -217,6 +220,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 	})
 	const implementation = {
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+			contractReads.push(parameters.functionName)
 			switch (parameters.functionName) {
 				case 'getVaultCount':
 					return BigInt(vaults.length)
@@ -241,6 +245,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return false
 				case 'getPoolAccountingSnapshot':
 					return {
+						badDebtGeneration: overrides.badDebtGeneration ?? 0n,
 						currentRetentionRate: 10n ** 18n,
 						feeEligibleCapacityOwnershipAttoRep: 0n,
 						feeIndex: 0n,
@@ -263,7 +268,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
-				case 'getForkActivationTime':
 				case 'getCurrentMintingCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
@@ -295,13 +299,13 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'feePercentage':
 					return 0n
 				case 'forkData':
-					return [0n, address(0), 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+					return [0n, address(0), 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
 				case 'getOwnForkMigrationStatus':
 					return [false, 0n, 0n, 0n, 0n] as const
 				case 'getEscalationMigrationEntitlementStatus':
 					return [false, 0n, [false, false, false]] as const
 				case 'getUnassignedPosition':
-					return [0n, 0n, 0n] as const
+					return overrides.unassignedPosition ?? ([0n, 0n, 0n, 0n, 0n] as const)
 				case 'securityPoolFactory':
 					return address(4)
 				case 'securityPoolForker':
@@ -351,7 +355,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 			return override ?? Reflect.get(base.client, property)
 		},
 	})
-	return { client, pool, truthAuction }
+	return { client, contractReads, pool, truthAuction }
 }
 
 interface PoolBindingOverrides {
@@ -386,6 +390,14 @@ function poolBindingClient(pool: Address, coordinator: Address, overrides: PoolB
 }
 
 describe('anchored ecosystem discovery', () => {
+	test('ignores unassigned bad debt from an expired accounting generation', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const graph = refundBackfillClient(0n, false, { badDebtGeneration: 7n, unassignedPosition: [0n, 0n, 50n, 6n, 0n] })
+		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: graph.client, deployments, wallet: address(1) })
+		expect(snapshot.pools[0]?.unassignedBadDebtAttoEth).toBe('0')
+		expect(graph.contractReads).not.toContain('getForkActivationTime')
+	})
+
 	test('authenticates the canonical vault count and wallet registry membership', async () => {
 		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		const registered = refundBackfillClient(0n, true)
