@@ -3,6 +3,108 @@ export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | '
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
 export type RefreshOperation<T> = () => T | Promise<T>
 
+export interface SessionSnapshotStorage {
+	getItem(key: string): string | null
+	setItem(key: string, value: string): void
+	removeItem(key: string): void
+}
+
+export const availableSessionSnapshotStorage = (getStorage: () => SessionSnapshotStorage): SessionSnapshotStorage | undefined => {
+	try {
+		return getStorage()
+	} catch (error) {
+		void error
+		return undefined
+	}
+}
+
+export const createSessionSnapshotCache = <T>(storage: SessionSnapshotStorage | undefined, key: string, decode: (value: unknown) => T) => ({
+	read: (): T | undefined => {
+		if (storage === undefined) return undefined
+		try {
+			const serialized = storage.getItem(key)
+			return serialized === null ? undefined : decode(JSON.parse(serialized))
+		} catch (error) {
+			void error
+			try {
+				storage.removeItem(key)
+			} catch (removeError) {
+				void removeError
+			}
+			return undefined
+		}
+	},
+	write: (value: T): void => {
+		if (storage === undefined) return
+		try {
+			const serialized = JSON.stringify(value)
+			if (serialized !== undefined) storage.setItem(key, serialized)
+		} catch (error) {
+			void error
+		}
+	},
+})
+
+export const knownNetworkName = (chainId: string): string => {
+	if (chainId === '1') return 'Ethereum Mainnet'
+	if (chainId === '11155111') return 'Sepolia'
+	return `Chain ${chainId}`
+}
+
+interface NetworkStatusPresentation {
+	readonly chain_id?: unknown
+	readonly name?: unknown
+	readonly explorer_base_url?: unknown
+	readonly start_block?: unknown
+	readonly indexed_block?: unknown
+	readonly indexed_hash?: unknown
+	readonly indexed_timestamp?: unknown
+	readonly observed_block?: unknown
+	readonly phase?: unknown
+	readonly consecutive_failures?: unknown
+	readonly next_retry_at?: unknown
+	readonly last_error?: unknown
+}
+
+export const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
+	JSON.stringify([
+		network.chain_id,
+		network.name,
+		network.explorer_base_url,
+		network.start_block,
+		network.indexed_block,
+		network.indexed_hash,
+		network.indexed_timestamp,
+		network.observed_block,
+		network.phase,
+		network.consecutive_failures,
+		network.next_retry_at,
+		network.last_error,
+	])
+
+export const canReuseNetworkStatusPresentation = (
+	previous: NetworkStatusPresentation,
+	current: NetworkStatusPresentation,
+	renderedChainId: string | undefined,
+	renderedFreshness: string | undefined,
+	expectedChainId: string,
+	expectedFreshness: 'current' | 'stale',
+): boolean =>
+	renderedChainId === expectedChainId &&
+	renderedFreshness === expectedFreshness &&
+	networkStatusPresentationKey(previous) === networkStatusPresentationKey(current)
+
+export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: RefreshOperation<unknown>, refreshRoute: RefreshOperation<T>): Promise<T> => {
+	void Promise.resolve()
+		.then(refreshNetworkStatus)
+		.catch(() => undefined)
+	return Promise.resolve(refreshRoute())
+}
+
+export const loadInitialNetworkStatus = async (restoredSnapshot: boolean, load: RefreshOperation<unknown>): Promise<void> => {
+	if (!restoredSnapshot) await load()
+}
+
 export const operationsForkChildCount = (formattedCount: string, value: unknown): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
 export interface RefreshGate {

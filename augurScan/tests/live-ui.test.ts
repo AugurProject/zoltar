@@ -4,7 +4,9 @@ import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
 	approvalTransitionFields,
+	availableSessionSnapshotStorage,
 	canonicalPageLimit,
+	canReuseNetworkStatusPresentation,
 	classifyLiveRecords,
 	collectCanonicalPages,
 	collectCursorCollections,
@@ -18,6 +20,7 @@ import {
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
+	createSessionSnapshotCache,
 	demoTimelineEvidenceStatus,
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
@@ -34,7 +37,10 @@ import {
 	isCurrentLiveRequest,
 	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
+	knownNetworkName,
+	loadInitialNetworkStatus,
 	mergeUniqueRecords,
+	networkStatusPresentationKey,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
 	operationsDetailHeaderPresentation,
@@ -50,6 +56,7 @@ import {
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
+	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -893,6 +900,80 @@ test('keeps every log reachable when a live burst exceeds the first refreshed pa
 	expect([...refreshed.items, ...appended].map((item) => item.id)).toEqual(current.map((item) => item.id))
 })
 
+test('preserves the selected network label while navigating between product tabs', () => {
+	expect(knownNetworkName('1')).toBe('Ethereum Mainnet')
+	expect(knownNetworkName('11155111')).toBe('Sepolia')
+	expect(knownNetworkName('8453')).toBe('Chain 8453')
+})
+
+test('restores cached network status across product-tab document loads', () => {
+	const values = new Map<string, string>()
+	const storage = {
+		getItem: (key: string) => values.get(key) ?? null,
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: (key: string) => values.delete(key),
+	}
+	const decode = (value: unknown) => {
+		if (typeof value !== 'object' || value === null || !('indexed_block' in value)) throw new Error('Malformed network snapshot')
+		return {
+			indexed_block: String(value.indexed_block),
+			...('clientClockOffsetMs' in value && typeof value.clientClockOffsetMs === 'number' ? { clientClockOffsetMs: value.clientClockOffsetMs } : {}),
+		}
+	}
+	const cache = createSessionSnapshotCache(storage, 'network', decode)
+	cache.write({ indexed_block: '11052121', clientClockOffsetMs: 3_600_000 })
+	expect(cache.read()).toEqual({ indexed_block: '11052121', clientClockOffsetMs: 3_600_000 })
+	values.set('network', '{malformed')
+	expect(cache.read()).toBeUndefined()
+	expect(values.has('network')).toBe(false)
+})
+
+test('degrades to an empty cache when session storage is denied', () => {
+	const unavailable = availableSessionSnapshotStorage(() => {
+		throw new DOMException('Storage denied', 'SecurityError')
+	})
+	expect(unavailable).toBeUndefined()
+	const throwingStorage = {
+		getItem: () => {
+			throw new DOMException('Storage denied', 'SecurityError')
+		},
+		setItem: () => {
+			throw new DOMException('Storage denied', 'SecurityError')
+		},
+		removeItem: () => {
+			throw new DOMException('Storage denied', 'SecurityError')
+		},
+	}
+	const cache = createSessionSnapshotCache(throwingStorage, 'network', (value) => value)
+	expect(cache.read()).toBeUndefined()
+	expect(() => cache.write({ indexed_block: '1' })).not.toThrow()
+})
+
+test('recognizes when restored and refreshed network status have identical presentation', () => {
+	const network = { chain_id: '1', phase: 'backfilling', indexed_block: '11052121', observed_block: '11053121' }
+	expect(networkStatusPresentationKey(network)).toBe(networkStatusPresentationKey({ ...network }))
+	expect(networkStatusPresentationKey(network)).not.toBe(networkStatusPresentationKey({ ...network, indexed_block: '11052122' }))
+})
+
+test('reuses restored network status only for the rendered chain and current freshness state', () => {
+	const network = { chain_id: '1', phase: 'backfilling', indexed_block: '11052121' }
+	expect(canReuseNetworkStatusPresentation(network, { ...network }, '1', 'current', '1', 'current')).toBe(true)
+	expect(canReuseNetworkStatusPresentation(network, { ...network }, '11155111', 'current', '1', 'current')).toBe(false)
+	expect(canReuseNetworkStatusPresentation(network, { ...network }, '1', 'current', '1', 'stale')).toBe(false)
+})
+
+test('does not refresh network status when a product-tab load restores the cached snapshot', async () => {
+	let requests = 0
+	await loadInitialNetworkStatus(true, () => {
+		requests++
+	})
+	expect(requests).toBe(0)
+	await loadInitialNetworkStatus(false, () => {
+		requests++
+	})
+	expect(requests).toBe(1)
+})
+
 test('distinguishes indexer startup and backfill progress from stream connectivity', () => {
 	expect(indexerConnectionStatus(undefined, 'connecting', false)).toEqual({ label: 'Connecting', tone: 'pending' })
 	expect(indexerConnectionStatus({ indexed_block: null, phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Indexer starting', tone: 'pending' })
@@ -1147,6 +1228,31 @@ test('continues with the newest queued refresh when an in-flight refresh fails',
 	])
 	take(releases).resolve(true)
 	expect(await recovery).toBe(true)
+})
+
+test('completes a periodic route refresh without waiting for network status', async () => {
+	let releaseNetworkStatus: (() => void) | undefined
+	const networkStatus = new Promise<void>((resolve) => {
+		releaseNetworkStatus = resolve
+	})
+	const refreshed = refreshRouteAlongsideNetworkStatus(
+		() => networkStatus,
+		async () => 'route refreshed',
+	)
+	expect(await refreshed).toBe('route refreshed')
+	expect(releaseNetworkStatus).toBeDefined()
+	releaseNetworkStatus?.()
+})
+
+test('keeps a periodic route refresh independent from network-status failure', async () => {
+	const refreshed = refreshRouteAlongsideNetworkStatus(
+		async () => {
+			throw new Error('network status timed out')
+		},
+		async () => 'route refreshed',
+	)
+	expect(await refreshed).toBe('route refreshed')
+	await Promise.resolve()
 })
 
 test('serializes a reorg behind an in-flight refresh and uses current recovery state', async () => {
