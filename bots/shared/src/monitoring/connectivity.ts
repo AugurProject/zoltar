@@ -76,8 +76,8 @@ function endpointUrl(value: string) {
 		if (error instanceof TypeError) throw new Error('Invalid RPC URL')
 		throw error
 	}
-	const localHttpRpc = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]' || parsed.hostname === 'anvil'
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && localHttpRpc)) throw new Error('RPC URL must use HTTPS, loopback HTTP, or the local Anvil service')
+	const localHttpRpc = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]' || parsed.hostname === 'anvil' || parsed.hostname === 'reth'
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && localHttpRpc)) throw new Error('RPC URL must use HTTPS or HTTP on loopback, anvil, or reth')
 	if (parsed.username !== '' || parsed.password !== '') throw new Error('RPC URLs must not contain embedded credentials')
 	if (value.includes('#')) throw new Error('RPC URLs must not contain fragments')
 	return parsed.toString()

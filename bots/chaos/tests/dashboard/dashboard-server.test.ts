@@ -27,6 +27,7 @@ function controller(overrides: Partial<Parameters<typeof startDashboardServer>[1
 		password: dashboardPassword,
 		setCancellation: (value: unknown) => value,
 		setCandidate: (value: unknown) => value,
+		setConnectivity: (value: unknown) => value,
 		setObligation: (value: unknown) => value,
 		setPaused: (value: unknown) => value,
 		setReplacement: (value: unknown) => value,
@@ -68,6 +69,8 @@ describe('chaos dashboard server', () => {
 		expect(overview).toContain('Ecosystem state')
 		expect(overview).toContain('Activity &amp; recovery')
 		expect(overview).toContain('id="private-key"')
+		expect(overview).toContain('id="connectivity-form"')
+		expect(overview).toContain('http://reth:8545')
 		expect(overview).toContain('type="password"')
 		expect(overview).toContain('id="countdown"')
 		expect(overview).toContain('id="replacement-hash"')
@@ -99,7 +102,7 @@ describe('chaos dashboard server', () => {
 			expect(rejected.status, path).toBe(401)
 			expect(rejected.headers.get('www-authenticate'), path).toContain('Basic')
 		}
-		for (const path of ['/api/reconciliation/candidate', '/api/reconciliation/cancellation', '/api/reconciliation/obligation', '/api/paused', '/api/reconciliation/replacement', '/api/reconciliation/workflow', '/api/settings', '/api/signer']) {
+		for (const path of ['/api/connectivity', '/api/reconciliation/candidate', '/api/reconciliation/cancellation', '/api/reconciliation/obligation', '/api/paused', '/api/reconciliation/replacement', '/api/reconciliation/workflow', '/api/settings', '/api/signer']) {
 			const rejected = await fetch(new URL(path, server.url), { method: 'PUT' })
 			expect(rejected.status, path).toBe(401)
 			expect(rejected.headers.get('www-authenticate'), path).toContain('Basic')
@@ -110,6 +113,30 @@ describe('chaos dashboard server', () => {
 
 		const wrongAuthority = await fetch(server.url, { headers: { authorization, host: 'attacker.example' } })
 		expect(wrongAuthority.status).toBe(403)
+	})
+
+	test('routes RPC connectivity updates to the server controller', async () => {
+		let received: unknown
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: value => {
+					received = value
+				},
+			}),
+		)
+		servers.push(server)
+		const body = {
+			connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545', rpcQuorum: 1 },
+			revision: 'revision',
+		}
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify(body),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		expect(response.status).toBe(200)
+		expect(received).toEqual(body)
 	})
 
 	test('separates liveness from machine readiness and reports recovery blockers', async () => {

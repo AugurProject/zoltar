@@ -1,5 +1,6 @@
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
+import { checkPublicTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
 import { CONFIGURATION_REVISION_CONFLICT, configurationRevisionConflict, parseSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import type { ChaosProcessLocks } from '../core/process-locks.ts'
@@ -20,11 +21,13 @@ export const CONFIGURATION_COMMIT_INDETERMINATE = 'ConfigurationCommitIndetermin
 export const CONFIGURATION_COMMITTED_SAFELY_PAUSED = 'ConfigurationCommittedSafelyPaused'
 
 export type DashboardControllerOptions = {
+	checkConnectivityUpdate?: ((settings: OperatorSettings) => Promise<readonly EndpointCheck[]>) | undefined
 	configuration: ConfigurationState
 	gate: SignerOperationGate
 	hostname: ChaosDashboardController['hostname']
 	locks: ChaosProcessLocks
 	loopbackPublished?: boolean | undefined
+	onConnectivityUpdated?: ((settings: OperatorSettings, checks: readonly EndpointCheck[]) => void) | undefined
 	password?: string | undefined
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
@@ -96,6 +99,41 @@ export function settingsPatchCandidate(current: OperatorSettings, value: unknown
 			current.privateKey,
 		),
 	}
+}
+
+export function connectivityCandidate(current: OperatorSettings, value: unknown) {
+	const body = record(value, 'Connectivity update')
+	exactKeys(body, ['connectivity', 'revision'], 'Connectivity update')
+	return {
+		revision: body['revision'],
+		settings: parseSettings(
+			{
+				...serializedSettings(current),
+				connectivity: body['connectivity'],
+				networkConfigured: true,
+			},
+			current.privateKey,
+		),
+	}
+}
+
+async function preflightConnectivityUpdate(settings: OperatorSettings) {
+	const connectivity = settings.connectivity
+	if (connectivity === undefined) throw new Error('RPC connectivity is required')
+	const primaryCheck = await checkRpcEndpoint(connectivity.readRpcUrl, settings.network.chainId, 'read-rpc')
+	if (primaryCheck.status === 'failed') throw new EndpointCheckFailure(primaryCheck.error ?? 'Primary read RPC check failed', [primaryCheck])
+	const submissionChecks = await checkPublicTransactionSubmissionEndpoints(connectivity.publicRpcUrls, settings.network.chainId)
+	const failedSubmissionChecks = submissionChecks.filter(check => check.status === 'failed')
+	if (failedSubmissionChecks.length !== 0) {
+		throw new EndpointCheckFailure(failedSubmissionChecks.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'public transaction endpoint check failed'}`)).join('; '), [primaryCheck, ...submissionChecks])
+	}
+	const quorumChecks = await Promise.all(connectivity.quorumRpcUrls.map(url => checkRpcEndpoint(url, settings.network.chainId, 'read-rpc')))
+	const failed = quorumChecks.filter(check => check.status === 'failed')
+	if (failed.length !== 0) {
+		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'endpoint check failed'}`)).join('; '), [primaryCheck, ...submissionChecks, ...quorumChecks])
+	}
+	if (1 + quorumChecks.length < connectivity.rpcQuorum) throw new Error(`RPC quorum ${connectivity.rpcQuorum.toString()} requires at least ${connectivity.rpcQuorum.toString()} healthy read endpoints`)
+	return [primaryCheck, ...submissionChecks, ...quorumChecks]
 }
 
 export function pausedCandidate(current: OperatorSettings, value: unknown) {
@@ -818,6 +856,22 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				}
 				throw error
 			}
+		},
+		async setConnectivity(value) {
+			await update(async () => {
+				const candidate = connectivityCandidate(options.configuration.settings, value)
+				expectedRevision(candidate.revision, options.configuration.revision)
+				const checks = await (options.checkConnectivityUpdate ?? preflightConnectivityUpdate)(candidate.settings)
+				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
+					state.rpcEndpointHealth = [...checks]
+					recordActivity(state, {
+						message: 'Chain and RPC configuration verified and saved',
+						status: 'info',
+						type: 'configuration',
+					})
+				})
+				options.onConnectivityUpdated?.(candidate.settings, checks)
+			})
 		},
 		async setSettings(value) {
 			await update(async () => {

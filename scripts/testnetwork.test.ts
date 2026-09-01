@@ -38,12 +38,16 @@ describe('local test network packaging', () => {
 		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
 	})
 
-	test('accepts only the repository Anvil service as a non-loopback HTTP RPC', () => {
+	test('accepts only known local node services as non-loopback HTTP RPCs', () => {
 		expect(validateConnectivitySettings({ publicRpcUrls: ['http://anvil:8545'], readRpcUrl: 'http://anvil:8545' })).toEqual({
 			publicRpcUrls: ['http://anvil:8545/'],
 			readRpcUrl: 'http://anvil:8545/',
 		})
-		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS, loopback HTTP, or the local Anvil service')
+		expect(validateConnectivitySettings({ publicRpcUrls: ['http://reth:8545'], readRpcUrl: 'http://reth:8545' })).toEqual({
+			publicRpcUrls: ['http://reth:8545/'],
+			readRpcUrl: 'http://reth:8545/',
+		})
+		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://other-service:8545'], readRpcUrl: 'http://other-service:8545' })).toThrow('HTTPS or HTTP on loopback, anvil, or reth')
 	})
 
 	test('defaults both bots to one reader while the arbitrager owns its policy in saved settings', async () => {

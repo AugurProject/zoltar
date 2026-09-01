@@ -405,6 +405,42 @@
 				<div id="configuration-status" class="notice hidden" role="status"></div>
 				<div id="settings-pause-note" class="notice warning hidden" role="status">Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.</div>
 				<div class="settings-stack">
+					<details id="network-connectivity" class="panel settings-group" open>
+						<summary>
+							<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small>Server-side endpoint and chain verification</small></span>
+						</summary>
+						<div class="settings-body">
+							<form id="connectivity-form">
+								<fieldset id="connectivity-fields" disabled>
+									<p class="notice">RPC checks run from the chaos-bot server, which can reach local container services such as <code>http://reth:8545</code>. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.</p>
+									<div class="form-grid">
+										<label>Primary read RPC<input id="read-rpc-url" autocomplete="off" placeholder="http://reth:8545" spellcheck="false" type="url" required /></label>
+										<label
+											>RPC agreement
+											<select id="rpc-quorum">
+												<option value="1">One healthy reader</option>
+												<option value="2">Two agreeing readers</option>
+											</select>
+										</label>
+									<label class="form-grid-wide"
+										>Independent quorum read RPCs
+										<textarea id="quorum-rpc-urls" autocomplete="off" placeholder="One URL per line" rows="3" spellcheck="false"></textarea>
+									</label>
+									<label class="form-grid-wide"
+										>Public submission RPCs
+										<textarea id="public-rpc-urls" autocomplete="off" placeholder="One URL per line" rows="3" spellcheck="false" required></textarea>
+									</label>
+									</div>
+									<div class="form-actions">
+										<button id="save-connectivity" type="submit">Check and save RPCs</button>
+										<button id="discard-connectivity" class="secondary" type="button" disabled>Discard RPC draft</button>
+										<span id="connectivity-status" class="action-status" role="alert"></span>
+									</div>
+								</fieldset>
+							</form>
+						</div>
+					</details>
+
 					<details class="panel settings-group" open>
 						<summary>
 							<span class="settings-summary-copy"><strong>Execution policy</strong><small>Timing, reserves, and irreversible operation gate</small></span>
