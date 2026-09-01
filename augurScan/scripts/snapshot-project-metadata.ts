@@ -172,7 +172,8 @@ for (const networkId of ['mainnet', 'sepolia'] as const) {
 		[usdcAddress[networkId], 'USD Coin', 'usdc'],
 	)
 	const manifestPath = path.join(manifestsRoot, `${networkId}.json`)
-	const historical = manifestEntries(JSON.parse(await readFile(manifestPath, 'utf8')), manifestPath)
+	const historicalManifestPath = path.resolve(import.meta.dir, '../config/manifests', `${networkId}.json`)
+	const historical = manifestEntries(JSON.parse(await readFile(historicalManifestPath, 'utf8')), historicalManifestPath)
 	const unique = [...new Map([...historical, ...configured].map((entry) => [entry[0].toLowerCase(), entry])).values()]
 	await Bun.write(manifestPath, serializeManifest(unique))
 }

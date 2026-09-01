@@ -42,6 +42,8 @@
 		["0x19138180CFb059b5695789e73c79bA300db03A3c", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x5D8D6D36ba0655a4AA6E66C875d77226DbfB51aC", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0x1CDDf2EFA44700042901336666A2A6fe1cFB705d", "Security Pool Factory", "securityPoolFactory"],
-		["0x20Af49DF3573ac604404a5E31c78e88683F80b71", "Deployment Status Oracle", "deploymentStatusOracle"]
+		["0x20Af49DF3573ac604404a5E31c78e88683F80b71", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xaAdbf171b7E3c9437A06043daFbF743f8e5e5708", "Deployment Status Oracle", "deploymentStatusOracle"],
+		["0xB57F0632d0642E882A32D6E05b52aEF0899AAFc4", "Security Pool Factory", "securityPoolFactory"]
 	]
 }
