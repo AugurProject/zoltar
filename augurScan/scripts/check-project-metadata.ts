@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { contractSourceHash, contractSources } from './project-metadata-source.ts'
@@ -21,6 +21,9 @@ const artifactAvailable = await access(artifactPath).then(
 if (artifactAvailable) {
 	const generatedRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-metadata-'))
 	try {
+		const manifestPaths = ['manifests/mainnet.json', 'manifests/sepolia.json'] as const
+		await mkdir(path.join(generatedRoot, 'manifests'))
+		await Promise.all(manifestPaths.map((relativePath) => copyFile(path.join(projectRoot, 'config', relativePath), path.join(generatedRoot, relativePath))))
 		const generation = Bun.spawn(['bun', 'scripts/snapshot-project-metadata.ts', '--output-root', generatedRoot], {
 			cwd: projectRoot,
 			stdout: 'pipe',
@@ -29,7 +32,7 @@ if (artifactAvailable) {
 		const [exitCode, stdout, stderr] = await Promise.all([generation.exited, new Response(generation.stdout).text(), new Response(generation.stderr).text()])
 		if (exitCode !== 0) throw new Error(`Unable to generate augurScan metadata for comparison\n${stderr || stdout}`)
 		const stale: string[] = []
-		for (const relativePath of ['abis.json']) {
+		for (const relativePath of ['abis.json', ...manifestPaths]) {
 			const [expected, current] = await Promise.all([
 				readFile(path.join(generatedRoot, relativePath), 'utf8'),
 				readFile(path.join(projectRoot, 'config', relativePath), 'utf8'),

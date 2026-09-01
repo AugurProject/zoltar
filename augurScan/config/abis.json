@@ -1,5 +1,5 @@
 {
-  "sourceHash": "4a28ef122a390b3eff20a06824ba592450a4bcad59d2b55414a7029c81046712",
+  "sourceHash": "f5371811642485aabdfd08a5af62229cfb3cfc75e9330acb2d710b8b492370c8",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -23162,6 +23162,19 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "nextSettlementCollateralAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "name": "setValidatedSettlementCollateral",
+          "outputs": [],
+          "stateMutability": "payable",
           "type": "function"
         },
         {
