@@ -9,7 +9,13 @@ const build = async (): Promise<void> => {
 }
 
 await build()
-const server = Bun.spawn([process.execPath, '--watch', 'src/server.ts'], {
+const app = Bun.spawn([process.execPath, '--watch', 'src/server.ts'], {
+	cwd: projectRoot,
+	env: process.env,
+	stderr: 'inherit',
+	stdout: 'inherit',
+})
+const indexer = Bun.spawn([process.execPath, '--watch', 'src/indexer-process.ts'], {
 	cwd: projectRoot,
 	env: process.env,
 	stderr: 'inherit',
@@ -39,10 +45,25 @@ const browserWatcher = watch(path.join(projectRoot, 'browser'), { recursive: tru
 	void drainBuilds()
 })
 
+let shuttingDown = false
 const shutdown = (): void => {
+	if (shuttingDown) return
+	shuttingDown = true
 	browserWatcher.close()
-	server.kill()
+	app.kill()
+	indexer.kill()
 }
 process.once('SIGINT', shutdown)
 process.once('SIGTERM', shutdown)
-process.exitCode = await server.exited
+
+const watchExit = async (name: string, subprocess: typeof app): Promise<number> => {
+	const exitCode = await subprocess.exited
+	if (!shuttingDown) {
+		console.error(`AugurScan ${name} process exited with status ${exitCode}`)
+		shutdown()
+	}
+	return exitCode
+}
+
+const [appExitCode, indexerExitCode] = await Promise.all([watchExit('app', app), watchExit('indexer', indexer)])
+process.exitCode = appExitCode !== 0 ? appExitCode : indexerExitCode

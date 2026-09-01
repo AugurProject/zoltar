@@ -7,6 +7,7 @@
 		"build": "bun scripts/build-browser.ts",
 		"dev": "bun scripts/dev.ts",
 		"start": "bun run build && bun src/server.ts",
+		"start:indexer": "bun src/indexer-process.ts",
 		"schema:init": "bun src/schema.ts",
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
 		"metadata:check": "bun scripts/check-project-metadata.ts",

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import path from 'node:path'
 import mainnetDeployment from '../../docs/mainnet-deployment-addresses.json'
 import sepoliaDeployment from '../../docs/sepolia-deployment-addresses.json'
 import mainnetManifest from '../config/manifests/mainnet.json'
 import sepoliaManifest from '../config/manifests/sepolia.json'
-import { loadNetworks, parseManifestValue, runtimeConfig } from '../src/config.ts'
+import { loadNetworks, parseManifestValue } from '../src/config.ts'
+
+const projectRoot = path.resolve(import.meta.dir, '..')
 
 const originalNetworks = process.env['NETWORKS']
 const originalMainnetRpc = process.env['MAINNET_RPC_URL']
@@ -31,8 +34,21 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
-	test('uses a 100000 block default log scan range', () => {
-		expect(runtimeConfig.logScanRangeSize).toBe(100000)
+	test('uses a 100000 block default log scan range', async () => {
+		const environment = { ...process.env }
+		delete environment['LOG_SCAN_RANGE_SIZE']
+		const child = Bun.spawn(
+			[process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.logScanRangeSize)"],
+			{
+				cwd: projectRoot,
+				env: environment,
+				stdout: 'pipe',
+				stderr: 'pipe',
+			},
+		)
+		expect(await child.exited).toBe(0)
+		expect(await new Response(child.stdout).text()).toBe('100000\n')
+		expect(await new Response(child.stderr).text()).toBe('')
 	})
 
 	test('indexes the canonical deterministic deployments', () => {

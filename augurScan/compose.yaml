@@ -26,6 +26,27 @@ services:
     environment:
       POSTGRES_URL: ${POSTGRES_URL:-postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}
       PORT: 3000
+      DISABLE_INDEXER: 1
+      NETWORKS: ${NETWORKS:-mainnet,sepolia}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
+      AUGURSCAN_ACCESS_USERNAME: ${AUGURSCAN_ACCESS_USERNAME:-}
+      AUGURSCAN_ACCESS_PASSWORD: ${AUGURSCAN_ACCESS_PASSWORD:-}
+      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
+    ports:
+      - "${AUGURSCAN_PORT:-3000}:3000"
+    stop_grace_period: 30s
+
+  indexer:
+    build:
+      context: ..
+      dockerfile: augurScan/Dockerfile
+    command: ["bun", "augurScan/src/indexer-process.ts"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}
       DISABLE_INDEXER: ${DISABLE_INDEXER:-0}
       NETWORKS: ${NETWORKS:-mainnet,sepolia}
       MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://mainnet.gateway.tenderly.co}
@@ -42,14 +63,9 @@ services:
       SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS: ${SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-100000}
-      AUGURSCAN_ACCESS_USERNAME: ${AUGURSCAN_ACCESS_USERNAME:-}
-      AUGURSCAN_ACCESS_PASSWORD: ${AUGURSCAN_ACCESS_PASSWORD:-}
-      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
       RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
     volumes:
       - augurscan-logs:/var/log/augurscan
-    ports:
-      - "${AUGURSCAN_PORT:-3000}:3000"
     stop_grace_period: 30s
 
 volumes:

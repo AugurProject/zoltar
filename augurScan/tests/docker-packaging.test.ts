@@ -53,13 +53,16 @@ describe('Docker packaging', () => {
 		expect(dockerfileSource).toContain('mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan')
 		expect(composeSource).toContain('RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl')
 		expect(composeSource).toContain('augurscan-logs:/var/log/augurscan')
+		expect(composeSource).toContain('indexer:')
 		expect(composeSource).toContain('augurscan-logs:')
 		expect(gitIgnorePatterns).toContain('/augurScan/logs/')
 	})
 
-	test('forwards external PostgreSQL and standby indexer settings through Compose', async () => {
+	test('runs the web app separately from the indexer in Compose', async () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)
+		expect(source).toContain('DISABLE_INDEXER: 1')
+		expect(source).toContain('command: ["bun", "augurScan/src/indexer-process.ts"]')
 		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
 		expect(source).toContain(`LOG_SCAN_RANGE_SIZE: \${LOG_SCAN_RANGE_SIZE:-100000}`)
 	})
