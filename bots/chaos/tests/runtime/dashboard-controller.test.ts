@@ -7,6 +7,7 @@ import {
 	assertSettingsUpdatePaused,
 	ConfigurationCommitIndeterminate,
 	ConfigurationCommittedSafelyPaused,
+	connectivityCandidate,
 	createChaosDashboardController,
 	pausedCandidate,
 	restartSafeSettings,
@@ -137,6 +138,169 @@ async function captureFailure(operation: () => unknown | Promise<unknown>): Prom
 }
 
 describe('chaos dashboard configuration boundary', () => {
+	test('builds a focused server-side RPC connectivity update', () => {
+		const candidate = connectivityCandidate(settings(), {
+			connectivity: {
+				publicRpcUrls: ['http://reth:8545'],
+				quorumRpcUrls: [],
+				readRpcUrl: 'http://reth:8545',
+				rpcQuorum: 1,
+			},
+			revision: 'revision',
+		})
+		expect(candidate.revision).toBe('revision')
+		expect(candidate.settings.networkConfigured).toBeTrue()
+		expect(candidate.settings.connectivity).toEqual({
+			publicRpcUrls: ['http://reth:8545/'],
+			quorumRpcUrls: [],
+			readRpcUrl: 'http://reth:8545/',
+			rpcQuorum: 1,
+		})
+	})
+
+	test('preflights and applies RPC connectivity in the server controller', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current }
+		let checkedSettings: OperatorSettings | undefined
+		let activatedSettings: OperatorSettings | undefined
+		const controller = createChaosDashboardController({
+			checkConnectivityUpdate: async candidate => {
+				checkedSettings = candidate
+				return [{ chainId: candidate.network.chainId, checkedAt: '2026-09-01T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'http://reth:8545' }]
+			},
+			configuration,
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: {
+				acquireSigner: async () => undefined,
+				commitSigner: async () => undefined,
+				discardSigner: async () => undefined,
+				release: async () => undefined,
+			},
+			onConnectivityUpdated: candidate => {
+				activatedSettings = candidate
+			},
+			saveConfiguration: async () => 'revision:next',
+			saveState: async () => undefined,
+			state,
+		})
+		if (controller.setConnectivity === undefined) throw new Error('Connectivity controller is unavailable')
+		await controller.setConnectivity({
+			connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545', rpcQuorum: 1 },
+			revision: 'revision',
+		})
+		expect(checkedSettings?.connectivity?.readRpcUrl).toBe('http://reth:8545/')
+		expect(activatedSettings).toBe(configuration.settings)
+		expect(configuration.revision).toBe('revision:next')
+		expect(state.rpcEndpointHealth).toMatchObject([{ chainId: 11_155_111, kind: 'read-rpc', status: 'healthy' }])
+	})
+
+	test('rejects a public RPC that reports the configured chain but cannot submit transactions', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		const requestedMethods: string[] = []
+		const server = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new Error('RPC capability fixture requires an object request')
+				const method = Reflect.get(body, 'method')
+				if (typeof method !== 'string') throw new Error('RPC capability fixture requires a method')
+				requestedMethods.push(method)
+				if (method === 'eth_chainId') return Response.json({ id: 1, jsonrpc: '2.0', result: `0x${current.network.chainId.toString(16)}` })
+				return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
+			},
+		})
+		try {
+			if (server.port === undefined) throw new Error('RPC capability fixture did not expose a port')
+			const endpoint = `http://127.0.0.1:${server.port.toString()}`
+			let saved = false
+			const controller = createChaosDashboardController({
+				configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+				gate: createSignerOperationGate(),
+				hostname: '127.0.0.1',
+				locks: {
+					acquireSigner: async () => undefined,
+					commitSigner: async () => undefined,
+					discardSigner: async () => undefined,
+					release: async () => undefined,
+				},
+				saveConfiguration: async () => {
+					saved = true
+					return 'revision:next'
+				},
+				saveState: async () => undefined,
+				state,
+			})
+			if (controller.setConnectivity === undefined) throw new Error('Connectivity controller is unavailable')
+			await expect(
+				controller.setConnectivity({
+					connectivity: { publicRpcUrls: [endpoint], quorumRpcUrls: [], readRpcUrl: endpoint, rpcQuorum: 1 },
+					revision: 'revision',
+				}),
+			).rejects.toThrow('method not found')
+			expect(requestedMethods).toContain('eth_sendRawTransaction')
+			expect(saved).toBeFalse()
+		} finally {
+			server.stop(true)
+		}
+	})
+
+	test('rejects a complete public RPC set when one endpoint is transport-degraded', async () => {
+		const current = settings()
+		const state = runtimeState(current)
+		const requestedMethods = new Map<string, string[]>()
+		const server = Bun.serve({
+			port: 0,
+			fetch: async request => {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new Error('RPC degradation fixture requires an object request')
+				const method = Reflect.get(body, 'method')
+				if (typeof method !== 'string') throw new Error('RPC degradation fixture requires a method')
+				const path = new URL(request.url).pathname
+				requestedMethods.set(path, [...(requestedMethods.get(path) ?? []), method])
+				if (path === '/unavailable') return new Response('temporarily unavailable', { status: 503 })
+				if (method === 'eth_chainId') return Response.json({ id: 1, jsonrpc: '2.0', result: `0x${current.network.chainId.toString(16)}` })
+				return Response.json({ error: { code: -32_602, message: 'failed to recover the signer' }, id: 1, jsonrpc: '2.0' })
+			},
+		})
+		try {
+			if (server.port === undefined) throw new Error('RPC degradation fixture did not expose a port')
+			const origin = `http://127.0.0.1:${server.port.toString()}`
+			let saved = false
+			const controller = createChaosDashboardController({
+				configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+				gate: createSignerOperationGate(),
+				hostname: '127.0.0.1',
+				locks: {
+					acquireSigner: async () => undefined,
+					commitSigner: async () => undefined,
+					discardSigner: async () => undefined,
+					release: async () => undefined,
+				},
+				saveConfiguration: async () => {
+					saved = true
+					return 'revision:next'
+				},
+				saveState: async () => undefined,
+				state,
+			})
+			if (controller.setConnectivity === undefined) throw new Error('Connectivity controller is unavailable')
+			await expect(
+				controller.setConnectivity({
+					connectivity: { publicRpcUrls: [`${origin}/capable`, `${origin}/unavailable`], quorumRpcUrls: [], readRpcUrl: `${origin}/capable`, rpcQuorum: 1 },
+					revision: 'revision',
+				}),
+			).rejects.toThrow('HTTP 503')
+			expect(requestedMethods.get('/capable')).toContain('eth_sendRawTransaction')
+			expect(requestedMethods.get('/unavailable')).toEqual(['eth_chainId'])
+			expect(saved).toBeFalse()
+		} finally {
+			server.stop(true)
+		}
+	})
+
 	test('groups concrete lifecycle candidates into one classified catalog row', async () => {
 		const current = settings()
 		const state = runtimeState(current)

@@ -1199,6 +1199,10 @@ fieldset {
 	margin-top: 1rem;
 }
 
+.form-grid-wide {
+	grid-column: 1 / -1;
+}
+
 .form-grid label,
 #signer-form label:not(.checkbox-row) {
 	display: grid;
