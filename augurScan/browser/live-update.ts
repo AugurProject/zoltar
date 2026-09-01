@@ -3,6 +3,12 @@ export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | '
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
 export type RefreshOperation<T> = () => T | Promise<T>
 
+export const knownNetworkName = (chainId: string): string => {
+	if (chainId === '1') return 'Ethereum Mainnet'
+	if (chainId === '11155111') return 'Sepolia'
+	return `Chain ${chainId}`
+}
+
 export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: RefreshOperation<unknown>, refreshRoute: RefreshOperation<T>): Promise<T> => {
 	void Promise.resolve()
 		.then(refreshNetworkStatus)

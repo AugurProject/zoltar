@@ -64,6 +64,7 @@ import {
 	isCurrentLiveRequest,
 	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
+	knownNetworkName,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
@@ -8556,7 +8557,7 @@ const connectStream = () => {
 }
 
 if (initialChainId) {
-	globalNetworkFilter.replaceChildren(new Option(`Chain ${initialChainId}`, initialChainId))
+	globalNetworkFilter.replaceChildren(new Option(knownNetworkName(initialChainId), initialChainId))
 	globalNetworkFilter.value = initialChainId
 	globalNetworkFilter.dataset.restored = 'true'
 	syncNetworkUrl()

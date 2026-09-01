@@ -34,6 +34,7 @@ import {
 	isCurrentLiveRequest,
 	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
+	knownNetworkName,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
@@ -892,6 +893,12 @@ test('keeps every log reachable when a live burst exceeds the first refreshed pa
 	expect(requestedLimits).toEqual([100, 100, 20])
 	expect(refreshed.nextCursor).toBe(220)
 	expect([...refreshed.items, ...appended].map((item) => item.id)).toEqual(current.map((item) => item.id))
+})
+
+test('preserves the selected network label while navigating between product tabs', () => {
+	expect(knownNetworkName('1')).toBe('Ethereum Mainnet')
+	expect(knownNetworkName('11155111')).toBe('Sepolia')
+	expect(knownNetworkName('8453')).toBe('Chain 8453')
 })
 
 test('distinguishes indexer startup and backfill progress from stream connectivity', () => {
