@@ -220,7 +220,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock description={securityPoolCopy.marketHierarchyDetail} variant='plain'>
+					<SectionBlock variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
 								<label htmlFor='security-pool-question-picker'>
