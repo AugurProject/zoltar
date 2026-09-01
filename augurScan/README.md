@@ -68,7 +68,7 @@ docker run --detach --rm --name augurscan-test-postgres \
   --env POSTGRES_USER=augurscan \
   --env POSTGRES_PASSWORD=augurscan \
   --env POSTGRES_DB=augurscan_test \
-  postgres:17.11-bookworm
+  postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
 
 POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test bun run test:integration
 docker stop augurscan-test-postgres

@@ -27,6 +27,22 @@ export interface SchemaLayout {
 	readonly unsupportedObjects: readonly string[]
 }
 
+export type SchemaLayoutDifferences = Partial<Record<keyof SchemaLayout, { readonly missing: readonly string[]; readonly unexpected: readonly string[] }>>
+
+const schemaLayoutKeys = ['relations', 'columns', 'constraints', 'indexes', 'unsupportedObjects'] as const
+
+export const schemaLayoutDifferences = (expected: SchemaLayout, actual: SchemaLayout): SchemaLayoutDifferences => {
+	const differences: SchemaLayoutDifferences = {}
+	for (const key of schemaLayoutKeys) {
+		const expectedValues = new Set(expected[key])
+		const actualValues = new Set(actual[key])
+		const missing = expected[key].filter((value) => !actualValues.has(value))
+		const unexpected = actual[key].filter((value) => !expectedValues.has(value))
+		if (missing.length > 0 || unexpected.length > 0) differences[key] = { missing, unexpected }
+	}
+	return differences
+}
+
 const historicalIntegrityTables = new Set([
 	'action_interpretations',
 	'address_balance_observations',
@@ -62,6 +78,7 @@ const columnSignature = (table: string, column: string, type: string, notNull: b
 	`${table}.${column}|${normalizeDefinition(type)}|${notNull ? 'not-null' : 'nullable'}|${identity}|${normalizeDefinition(defaultExpression ?? '')}`
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
+	const normalizedSchema = schema.replaceAll('\r\n', '\n')
 	const relations = new Set<string>(['table:augurscan_schema'])
 	const columns = new Set<string>([
 		columnSignature('augurscan_schema', 'singleton', 'boolean', true, '', 'true'),
@@ -74,11 +91,11 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	])
 	const indexes = new Set<string>()
 	const defaultOverrides = new Map<string, string>()
-	for (const match of schema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*) ALTER COLUMN ([a-z_][a-z0-9_]*) SET DEFAULT ([\s\S]*?);/g)) {
+	for (const match of normalizedSchema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*) ALTER COLUMN ([a-z_][a-z0-9_]*) SET DEFAULT ([\s\S]*?);/g)) {
 		const [, table, column, expression] = match
 		if (table !== undefined && column !== undefined && expression !== undefined) defaultOverrides.set(`${table}.${column}`, expression)
 	}
-	for (const match of schema.matchAll(/CREATE TABLE public\.([a-z_][a-z0-9_]*) \(\n([\s\S]*?)\n\);/g)) {
+	for (const match of normalizedSchema.matchAll(/CREATE TABLE public\.([a-z_][a-z0-9_]*) \(\n([\s\S]*?)\n\);/g)) {
 		const [, table, body] = match
 		if (table === undefined || body === undefined || (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityTables.has(table))) continue
 		relations.add(`table:${table}`)
@@ -106,19 +123,19 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 			if (identity !== '') relations.add(`sequence:${table}_${column}_seq`)
 		}
 	}
-	for (const match of schema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*)\s+ADD CONSTRAINT ([a-z_][a-z0-9_]*) ([\s\S]*?);/g)) {
+	for (const match of normalizedSchema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*)\s+ADD CONSTRAINT ([a-z_][a-z0-9_]*) ([\s\S]*?);/g)) {
 		const [, table, name, definition] = match
 		if (table === undefined || name === undefined || definition === undefined) continue
 		if (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
 		constraints.add(`${table}.${name}|${normalizeDefinition(definition)}`)
 	}
-	for (const match of schema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
+	for (const match of normalizedSchema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
 		const [, unique, name, table, definition] = match
 		if (name === undefined || table === undefined || definition === undefined) continue
 		if (version === PREVIOUS_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
 		indexes.add(`${name}|${normalizeDefinition(`CREATE ${unique ?? ''}INDEX ${name} ON public.${table} ${definition}`)}`)
 	}
-	for (const match of schema.matchAll(/CREATE SEQUENCE public\.([a-z_][a-z0-9_]*)/g)) {
+	for (const match of normalizedSchema.matchAll(/CREATE SEQUENCE public\.([a-z_][a-z0-9_]*)/g)) {
 		const sequence = match[1]
 		if (sequence !== undefined) relations.add(`sequence:${sequence}`)
 	}
@@ -132,9 +149,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 }
 
 export const schemaLayoutsMatch = (expected: SchemaLayout, actual: SchemaLayout): boolean =>
-	(['relations', 'columns', 'constraints', 'indexes', 'unsupportedObjects'] as const).every(
-		(key) => JSON.stringify(expected[key]) === JSON.stringify(actual[key]),
-	)
+	schemaLayoutKeys.every((key) => JSON.stringify(expected[key]) === JSON.stringify(actual[key]))
 
 const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>): Promise<SchemaLayout> => {
 	const [relations, columns, constraints, indexes, unsupportedObjects] = await Promise.all([
@@ -269,7 +284,8 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 }
 
 const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>, schema: string, version: SupportedSchemaVersion): Promise<void> => {
-	if (!schemaLayoutsMatch(expectedSchemaLayout(schema, version), await actualSchemaLayout(connection))) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
+	const differences = schemaLayoutDifferences(expectedSchemaLayout(schema, version), await actualSchemaLayout(connection))
+	if (Object.keys(differences).length > 0) throw new Error(`${UNSUPPORTED_SCHEMA_MESSAGE} Differences: ${JSON.stringify(differences)}`)
 }
 
 export const runSchemaTransaction = async <T>(
