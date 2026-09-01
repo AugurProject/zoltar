@@ -50,6 +50,7 @@ import {
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
+	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -1147,6 +1148,31 @@ test('continues with the newest queued refresh when an in-flight refresh fails',
 	])
 	take(releases).resolve(true)
 	expect(await recovery).toBe(true)
+})
+
+test('completes a periodic route refresh without waiting for network status', async () => {
+	let releaseNetworkStatus: (() => void) | undefined
+	const networkStatus = new Promise<void>((resolve) => {
+		releaseNetworkStatus = resolve
+	})
+	const refreshed = refreshRouteAlongsideNetworkStatus(
+		() => networkStatus,
+		async () => 'route refreshed',
+	)
+	expect(await refreshed).toBe('route refreshed')
+	expect(releaseNetworkStatus).toBeDefined()
+	releaseNetworkStatus?.()
+})
+
+test('keeps a periodic route refresh independent from network-status failure', async () => {
+	const refreshed = refreshRouteAlongsideNetworkStatus(
+		async () => {
+			throw new Error('network status timed out')
+		},
+		async () => 'route refreshed',
+	)
+	expect(await refreshed).toBe('route refreshed')
+	await Promise.resolve()
 })
 
 test('serializes a reorg behind an in-flight refresh and uses current recovery state', async () => {

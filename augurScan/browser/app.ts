@@ -79,6 +79,7 @@ import {
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
+	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -8299,24 +8300,23 @@ $('#richlist-more').addEventListener('click', () => loadRichList({ append: true 
 
 const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean, recovery: CanonicalRecovery | undefined): Promise<boolean> => {
 	if (activeReorgRecovery !== undefined && activeReorgRecovery !== recovery) return await activeReorgRecovery.promise
-	const networkRefresh = loadNetworks()
 	if (isSystem) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
+		const contentRefreshed = await loadSystemState({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isOperations) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadOperations({ live: true })])
+		const contentRefreshed = await loadOperations({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isContracts) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadContracts({ live: true })])
+		const contentRefreshed = await loadContracts({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isRichList) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList({ live: true })])
+		const contentRefreshed = await loadRichList({ live: true })
 		if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalAccount === undefined && activeAccount && dialog.open) {
 			const account = activeAccount
 			const refreshedAccount = richListItems.find(
@@ -8331,7 +8331,7 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		return fullyRefreshed
 	}
 	if (isAddress) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile({ live: true })])
+		const contentRefreshed = await loadAddressProfile({ live: true })
 		if (
 			contentRefreshed &&
 			activeReorgRecovery === undefined &&
@@ -8354,13 +8354,10 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		pendingCanonicalActivityCount,
 		feed.querySelectorAll<HTMLElement>('.log-row').length,
 	)
-	const [, contentRefreshed] = await Promise.all([
-		networkRefresh,
-		loadLogs({
-			live: true,
-			...activityRetention,
-		}),
-	])
+	const contentRefreshed = await loadLogs({
+		live: true,
+		...activityRetention,
+	})
 	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && dialog.open)
 		await openDetail(activeLog, { live: true })
 	const canonicalDetailRefreshed = contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined ? await restorePendingCanonicalLog() : true
@@ -8590,7 +8587,7 @@ setInterval(() => {
 setInterval(() => {
 	if (document.hidden) return
 	if (isDemo) loadNetworks()
-	else void requestRouteRefresh(1)
+	else void refreshRouteAlongsideNetworkStatus(loadNetworks, () => requestRouteRefresh(1))
 }, 12_000)
 document.addEventListener('visibilitychange', () => {
 	if (!document.hidden) void requestRouteRefresh(1)

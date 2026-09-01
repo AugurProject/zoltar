@@ -3,6 +3,13 @@ export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | '
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
 export type RefreshOperation<T> = () => T | Promise<T>
 
+export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: RefreshOperation<unknown>, refreshRoute: RefreshOperation<T>): Promise<T> => {
+	void Promise.resolve()
+		.then(refreshNetworkStatus)
+		.catch(() => undefined)
+	return Promise.resolve(refreshRoute())
+}
+
 export const operationsForkChildCount = (formattedCount: string, value: unknown): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
 export interface RefreshGate {
