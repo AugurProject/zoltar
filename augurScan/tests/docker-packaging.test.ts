@@ -6,6 +6,8 @@ const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '.dockerignore')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')
+const readmeFile = join(import.meta.dir, '..', 'README.md')
+const schemaFile = join(import.meta.dir, '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
@@ -59,5 +61,17 @@ describe('Docker packaging', () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain(`POSTGRES_URL: \${POSTGRES_URL:-postgres://augurscan:\${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}`)
 		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
+	})
+
+	test('runs the PostgreSQL build used to generate the authoritative schema', async () => {
+		const composeSource = await readFile(composeFile, 'utf8')
+		const readmeSource = await readFile(readmeFile, 'utf8')
+		const schemaSource = await readFile(schemaFile, 'utf8')
+		const schemaVersion = /Dumped from database version (\d+\.\d+)/u.exec(schemaSource)?.[1]
+		if (schemaVersion === undefined) throw new Error('The authoritative schema must record its PostgreSQL server release')
+		const image = `postgres:${schemaVersion}-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73`
+		expect(schemaSource).toContain(`Dumped from database version ${schemaVersion} (Debian ${schemaVersion}-1.pgdg12+2)`)
+		expect(composeSource).toContain(`image: ${image}`)
+		expect(readmeSource).toContain(image)
 	})
 })

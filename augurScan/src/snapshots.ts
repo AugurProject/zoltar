@@ -246,19 +246,40 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	}
 }
 
-export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, read: StateRead): Promise<EntityStateSnapshot> => {
+export const sampleEntityStateWithRead = async (
+	target: StateSnapshotTarget,
+	read: StateRead,
+	onFailure: (error: unknown) => void = () => {},
+): Promise<EntityStateSnapshot> => {
 	const sourceMethod = `augurscan.${target.entityType}-state.v1`
+	const failures: unknown[] = []
+	const pending = new Set<Promise<unknown>>()
+	const observedRead: StateRead = (address, abi, functionName, args) => {
+		const operation = read(address, abi, functionName, args).catch((error: unknown) => {
+			failures.push(error)
+			throw error
+		})
+		pending.add(operation)
+		void operation.then(
+			() => pending.delete(operation),
+			() => pending.delete(operation),
+		)
+		return operation
+	}
 	try {
 		const readResult =
 			target.entityType === 'pool'
-				? await poolSnapshot(target, read)
+				? await poolSnapshot(target, observedRead)
 				: target.entityType === 'vault'
-					? await vaultSnapshot(target, read)
+					? await vaultSnapshot(target, observedRead)
 					: target.entityType === 'escalation'
-						? await escalationSnapshot(target, read)
-						: await auctionSnapshot(target, read)
+						? await escalationSnapshot(target, observedRead)
+						: await auctionSnapshot(target, observedRead)
 		return { entityType: target.entityType, entityIdentity: target.entityIdentity, sourceMethod, readStatus: 'success', readResult }
 	} catch (error) {
+		await Promise.allSettled([...pending])
+		if (failures.length === 0) onFailure(error)
+		else for (const failure of failures) onFailure(failure)
 		return {
 			entityType: target.entityType,
 			entityIdentity: target.entityIdentity,
@@ -273,10 +294,11 @@ export const sampleEntityState = async (
 	client: Pick<PublicClient, 'readContract'>,
 	target: StateSnapshotTarget,
 	blockNumber: bigint,
+	onFailure: (error: unknown) => void = () => {},
 ): Promise<EntityStateSnapshot> => {
 	const read: StateRead = async (address, abi, functionName, args) =>
 		await client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber })
-	return await sampleEntityStateWithRead(target, read)
+	return await sampleEntityStateWithRead(target, read, onFailure)
 }
 
 export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnapshotTarget => {

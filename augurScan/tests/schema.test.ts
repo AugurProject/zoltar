@@ -1,12 +1,26 @@
 import { expect, test } from 'bun:test'
 import {
+	assertSupportedPostgresVersion,
 	CURRENT_SCHEMA_VERSION,
 	expectedSchemaLayout,
 	runSchemaTransaction,
+	SUPPORTED_POSTGRES_VERSION,
+	SUPPORTED_POSTGRES_VERSION_NUM,
 	schemaInitializationAction,
+	schemaLayoutDifferences,
 	schemaLayoutsMatch,
+	UNSUPPORTED_POSTGRES_VERSION_MESSAGE,
 	UNSUPPORTED_SCHEMA_MESSAGE,
 } from '../src/schema.ts'
+
+test('accepts the PostgreSQL release used to generate the schema fingerprint across official image distributions', () => {
+	expect(SUPPORTED_POSTGRES_VERSION_NUM).toBe('170011')
+	expect(UNSUPPORTED_POSTGRES_VERSION_MESSAGE).toContain(SUPPORTED_POSTGRES_VERSION)
+	expect(() => assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM)).not.toThrow()
+	expect(() => assertSupportedPostgresVersion('170006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('180006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+})
 
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
@@ -28,6 +42,7 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 
 test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
 	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
+	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION}`)
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
 	const previous = expectedSchemaLayout(schema, '1')
 	expect(current.relations).toContain('table:chain_reorganizations')
@@ -76,6 +91,33 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['rule:actions.unexpected_rule'] })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['policy:actions.unexpected_policy'] })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, unsupportedObjects: ['table-security:actions:row=true:force=false'] })).toBe(false)
+})
+
+test('fingerprints schema files checked out with Windows line endings', async () => {
+	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
+	expect(expectedSchemaLayout(schema.replaceAll('\n', '\r\n'), CURRENT_SCHEMA_VERSION)).toEqual(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION))
+})
+
+test('reports the exact schema fingerprint differences without database contents', () => {
+	const expected = {
+		relations: ['table:expected'],
+		columns: ['expected.id|bigint|not-null||'],
+		constraints: [],
+		indexes: ['expected_id|CREATE INDEX expected_id ON expected USING btree (id)'],
+		unsupportedObjects: [],
+	}
+	const actual = {
+		relations: ['table:unexpected'],
+		columns: ['expected.id|integer|not-null||'],
+		constraints: [],
+		indexes: ['expected_id|CREATE INDEX expected_id ON expected USING btree (id)'],
+		unsupportedObjects: ['trigger:expected.unexpected_trigger'],
+	}
+	expect(schemaLayoutDifferences(expected, actual)).toEqual({
+		relations: { missing: ['table:expected'], unexpected: ['table:unexpected'] },
+		columns: { missing: ['expected.id|bigint|not-null||'], unexpected: ['expected.id|integer|not-null||'] },
+		unsupportedObjects: { missing: [], unexpected: ['trigger:expected.unexpected_trigger'] },
+	})
 })
 
 test('keeps the supported migration additive and backfills retained evidence', async () => {

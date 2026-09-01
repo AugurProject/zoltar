@@ -40,7 +40,7 @@ Every visible route refreshes after a committed block notification and on the st
 
 ## What the index covers
 
-augurScan starts at the configured history boundary or the earliest verified deployment within it. Protocol activity-source logs, tracked REP-token logs, and configured Uniswap factory or PoolManager events select transactions for indexing. It retains the complete receipts and known logs for those selected transactions. Failed calls, successful calls without a selecting log, internal calls without retained logs, and unrelated traffic through shared dependencies are outside this release.
+augurScan starts at the configured history boundary or the earliest verified deployment within it. If the RPC provider has pruned older logs, augurScan dynamically advances log coverage to the earliest block the provider can return; this log boundary is independent of the provider's historical-state boundary. See the [operations guide](OPERATIONS.md#prepare-the-deployment) for provider requirements. Protocol activity-source logs, tracked REP-token logs, and configured Uniswap factory or PoolManager events select transactions for indexing. It retains the complete receipts and known logs for those selected transactions. Failed calls, successful calls without a selecting log, internal calls without retained logs, and unrelated traffic through shared dependencies are outside this release.
 
 For selected transactions, augurScan retains the block number, hash, parent hash, and timestamp; the transaction hash, position, sender, recipient, value, input, status, gas used, and receipt; and exact raw log topics and data. Integer quantities and raw log bytes remain lossless, but this is not a complete raw Ethereum block archive. Reorganizations keep displaced occurrences as noncanonical history. Decoder and projection runs append source-attributed interpretations, while tagged contract reads—including address balances and token metadata—append run-attributed observations before updating current materializations. Manifest or source replay rebuilds derived state without erasing retained canonical chain evidence or direct observations.
 
@@ -68,7 +68,7 @@ docker run --detach --rm --name augurscan-test-postgres \
   --env POSTGRES_USER=augurscan \
   --env POSTGRES_PASSWORD=augurscan \
   --env POSTGRES_DB=augurscan_test \
-  postgres:17.6-alpine
+  postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
 
 POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test bun run test:integration
 docker stop augurscan-test-postgres

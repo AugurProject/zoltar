@@ -6,6 +6,10 @@ This guide covers a Compose deployment whose working directory is `augurScan/`. 
 
 Use archival-capable JSON-RPC providers that can return runtime bytecode, block headers, transactions, and receipts throughout the configured history boundary. Each RPC environment variable accepts an ordered comma-separated provider pool. augurScan verifies a provider's chain before using it and resumes failed work from its durable checkpoint.
 
+At startup, augurScan probes historical state. When the provider reports pruned state, augurScan locates its earliest retrievable state block and skips token metadata, balance, snapshot, and deployment-code reads below that boundary. Repeated state-discovery failures produce one console warning per provider, while every failed RPC exchange remains in the rotating JSONL log.
+
+Log availability is discovered separately. If an `eth_getLogs` request reports pruned history, augurScan warns that it is locating the log boundary, finds the earliest retrievable log block on demand, and advances log coverage to that block. The state and log boundaries can differ. An archival provider remains necessary for evidence before either reported boundary.
+
 `config/networks.json` selects each network's manifest. Manifest entries are `[address, label, kind]` or `[address, label, kind, deploymentBlock]`. A verified deployment block avoids historical bytecode discovery and gives later replay a deterministic boundary. Keep an old address in the manifest while it remains a valid activity source.
 
 The most important runtime settings are:
@@ -20,6 +24,8 @@ The most important runtime settings are:
 - `DISABLE_INDEXER=1` disables chain indexing and avoids the writer lease. It does not make the process or its database connection read-only: startup can initialize or migrate the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
+
+Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
 
 Changing a tracked manifest address, label, kind, or deployment boundary can replay the affected network. ABI changes cause an `abi-redecode`; application or projection changes cause a conservative `projection-rebuild`. A deployment earlier than the stored coverage boundary requires a new database rather than silently presenting partial history. Review [STATE_MODEL.md](STATE_MODEL.md) before a source or manifest upgrade.
 

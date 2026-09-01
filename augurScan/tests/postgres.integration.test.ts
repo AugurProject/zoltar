@@ -2031,6 +2031,70 @@ postgresTest(
 )
 
 postgresTest(
+	'does not rewrite rows that were already finalized',
+	async () => {
+		if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+		const database = new ScannerDatabase(postgresUrl)
+		const finalizationChainId = chainId + 205_000 + (process.pid % 100_000)
+		const firstHash = blockHash(`finalization-first-${finalizationChainId}`)
+		const secondHash = blockHash(`finalization-second-${finalizationChainId}`)
+		const network: NetworkConfig = {
+			id: `finalization-${finalizationChainId}`,
+			name: 'Finalization write fixture',
+			chainId: finalizationChainId,
+			rpcUrls: ['https://example.invalid'],
+			startBlock: 1n,
+			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
+			confirmationDepth: 0n,
+			contracts: [],
+		}
+		const indexed = (number: 1n | 2n, hash: ReturnType<typeof blockHash>, parentHash: ReturnType<typeof blockHash>): IndexedBlock => ({
+			number,
+			hash,
+			parentHash,
+			timestamp: new Date(`2026-04-0${number}T00:00:00Z`),
+			observedHead: 2n,
+			finalizedThrough: number,
+			contracts: [],
+			tokenMetadata: [],
+			addressActivity: [],
+			contractDeploymentObservations: [],
+			logScanCursors: [],
+			transactions: number === 1n ? [{ ...transaction(), receipt: { transactionHash, blockHash: hash, status: 'success', logs: [] } }] : [],
+			logs: number === 1n ? [{ ...log(hash, `finalized evidence at ${number}`), blockNumber: number }] : [],
+		})
+		try {
+			await initializeSchema(database.sql)
+			await database.seedNetwork(network)
+			const lease = await database.tryAcquireIndexerLock(finalizationChainId)
+			if (lease === undefined) throw new Error('finalization writer did not acquire its lock')
+			try {
+				await database.storeBlock(finalizationChainId, indexed(1n, firstHash, blockHash(`finalization-parent-${finalizationChainId}`)), lease)
+				const before = await database.sql`
+					SELECT
+						(SELECT ctid::text FROM blocks WHERE chain_id = ${finalizationChainId} AND hash = ${firstHash}) AS block_ctid,
+						(SELECT ctid::text FROM logs WHERE chain_id = ${finalizationChainId} AND block_hash = ${firstHash}) AS log_ctid
+				`
+				await database.storeBlock(finalizationChainId, indexed(2n, secondHash, firstHash), lease)
+				const after = await database.sql`
+					SELECT
+						(SELECT ctid::text FROM blocks WHERE chain_id = ${finalizationChainId} AND hash = ${firstHash}) AS block_ctid,
+						(SELECT ctid::text FROM logs WHERE chain_id = ${finalizationChainId} AND block_hash = ${firstHash}) AS log_ctid
+				`
+				expect(after).toEqual(before)
+			} finally {
+				await lease.release()
+			}
+		} finally {
+			await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
+			void database.close(0)
+		}
+	},
+	30_000,
+)
+
+postgresTest(
 	'labels an earlier manifest deployment backfill and replays its first missing block',
 	async () => {
 		if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')

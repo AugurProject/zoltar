@@ -62,3 +62,36 @@ test('stores bounded tagged-read failures as availability evidence', async () =>
 		readFailureReason: 'historical state unavailable provider detail',
 	})
 })
+
+test('allows pruning failures to escape for provider-floor rediscovery', async () => {
+	const pruned = new Error('state at block #10 is pruned')
+	await expect(
+		sampleEntityStateWithRead(
+			{ entityType: 'escalation', entityIdentity: pool.toLowerCase(), address: pool },
+			async () => {
+				throw pruned
+			},
+			(error) => {
+				throw error
+			},
+		),
+	).rejects.toBe(pruned)
+})
+
+test('prioritizes delayed pruning over an earlier ordinary snapshot failure', async () => {
+	const ordinary = new Error('temporary provider failure')
+	const pruned = new Error('state at block #10 is pruned')
+	await expect(
+		sampleEntityStateWithRead(
+			{ entityType: 'escalation', entityIdentity: pool.toLowerCase(), address: pool },
+			async (_address, _abi, functionName) => {
+				if (functionName === 'activationTime') throw ordinary
+				await Promise.resolve()
+				throw pruned
+			},
+			(error) => {
+				if (error === pruned) throw error
+			},
+		),
+	).rejects.toBe(pruned)
+})

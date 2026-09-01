@@ -18,6 +18,7 @@ import {
 	encodeAbiParameters,
 	encodeEventTopics,
 	getAddress,
+	type Hex,
 	http,
 	type Log,
 	parseAbi,
@@ -84,6 +85,7 @@ import {
 	discoveryLogAddresses,
 	findEarliestAvailableLogBlock,
 	findEarliestAvailableLogProvider,
+	findEarliestAvailableStateBlock,
 	indexerLogSources,
 	isPermanentHistoricalLogError,
 	isPrunedHistoricalStateError,
@@ -714,6 +716,46 @@ describe('network indexer lifecycle', () => {
 		expect(attempts.length).toBeLessThanOrEqual(8)
 	})
 
+	test('locates the earliest retrievable historical state block', async () => {
+		const attempts: bigint[] = []
+		const availableStart = await findEarliestAvailableStateBlock(10n, 100n, async (blockNumber) => {
+			attempts.push(blockNumber)
+			if (blockNumber < 42n)
+				throw new RpcRequestMethodError(
+					'eth_getBalance',
+					new RpcError(`state at block #${blockNumber} is pruned`, {
+						code: -32603,
+						shortMessage: `state at block #${blockNumber} is pruned`,
+					}),
+					'#1 http://reth:8545',
+				)
+		})
+		expect(availableStart).toBe(42n)
+		expect(attempts[0]).toBe(10n)
+		expect(attempts).toContain(100n)
+		expect(attempts.filter((block) => block === 10n)).toHaveLength(1)
+		const knownUnavailableAttempts: bigint[] = []
+		expect(
+			await findEarliestAvailableStateBlock(
+				10n,
+				100n,
+				async (blockNumber) => {
+					knownUnavailableAttempts.push(blockNumber)
+					if (blockNumber < 42n) throw new RpcError(`state at block #${blockNumber} is pruned`, { code: -32603 })
+				},
+				true,
+			),
+		).toBe(42n)
+		expect(knownUnavailableAttempts).not.toContain(10n)
+	})
+
+	test('does not mistake an unavailable head or unrelated failure for a state boundary', async () => {
+		const pruned = new RpcError('state at block #100 is pruned', { code: -32603, shortMessage: 'state at block #100 is pruned' })
+		await expect(findEarliestAvailableStateBlock(10n, 100n, async () => Promise.reject(pruned))).rejects.toBeInstanceOf(ChainConfigurationError)
+		const unrelated = new Error('temporary provider failure')
+		await expect(findEarliestAvailableStateBlock(10n, 100n, async () => Promise.reject(unrelated))).rejects.toBe(unrelated)
+	})
+
 	test('only treats pruned eth_getLogs history as a recoverable availability boundary', () => {
 		const prunedLogs = new RpcRequestMethodError(
 			'eth_getLogs',
@@ -1184,23 +1226,24 @@ describe('network indexer lifecycle', () => {
 		expect(checkedBlocks).toEqual([100n, 1n])
 	})
 
-	test('uses the configured coverage boundary when manifest deployment history is pruned', async () => {
+	test('propagates pruned manifest deployment history for state-floor rediscovery', async () => {
 		const failures: unknown[] = []
-		const deployment = await findManifestContractDeployment(
-			address,
-			1n,
-			100n,
-			false,
-			async (_candidate, block) => {
-				if (block === 1n) throw new RpcError('state at block #1 is pruned', { code: -32603, shortMessage: 'state at block #1 is pruned' })
-				return '0x01'
-			},
-			5_000,
-			Date.now,
-			(error) => failures.push(error),
-		)
-		expect(deployment).toEqual({ block: 1n, exact: false })
-		expect(failures).toHaveLength(1)
+		await expect(
+			findManifestContractDeployment(
+				address,
+				1n,
+				100n,
+				false,
+				async (_candidate, block) => {
+					if (block === 1n) throw new RpcError('state at block #1 is pruned', { code: -32603, shortMessage: 'state at block #1 is pruned' })
+					return '0x01'
+				},
+				5_000,
+				Date.now,
+				(error) => failures.push(error),
+			),
+		).rejects.toThrow('state at block #1 is pruned')
+		expect(failures).toEqual([])
 	})
 
 	test('plans log scans from each contract deployment boundary and omits contracts without code', async () => {
@@ -1229,6 +1272,121 @@ describe('network indexer lifecycle', () => {
 			{ contractAddress: absent.address, checkedBlock: 100n },
 		])
 		expect(checkedBlocks).not.toContain(49n)
+	})
+
+	test('retries deployment planning from a newly discovered moving state floor', async () => {
+		const contract = { address, label: 'Later deployment', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const reads: bigint[] = []
+		const failures: unknown[] = []
+		const codeAt = async (_address: Address, block: bigint): Promise<Hex | undefined> => {
+			reads.push(block)
+			if (block < 12n) throw new RpcError(`state at block #${block} is pruned`, { code: -32603, shortMessage: `state at block #${block} is pruned` })
+			return block >= 13n ? '0x01' : undefined
+		}
+		await expect(
+			planDeploymentAwareLogScan(
+				[contract],
+				10n,
+				13n,
+				10n,
+				codeAt,
+				async () => new Date(0),
+				(_contract, error) => failures.push(error),
+				new Set(),
+				10n,
+			),
+		).rejects.toThrow('state at block #10 is pruned')
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			10n,
+			13n,
+			10n,
+			codeAt,
+			async () => new Date(0),
+			(_contract, error) => failures.push(error),
+			new Set(),
+			12n,
+		)
+		expect(reads).toEqual([13n, 10n, 13n, 12n])
+		expect(failures).toEqual([])
+		expect(plan).toEqual({
+			inputs: [{ address, fromBlock: 13n, startBlock: 13n }],
+			observations: [{ contractAddress: address, checkedBlock: 13n, deployment: { block: 13n, exact: true, timestamp: new Date(0) } }],
+		})
+		expect(
+			await planDeploymentAwareLogScan(
+				[contract],
+				10n,
+				50n,
+				10n,
+				async () => {
+					throw new Error('A segment below the moving state floor must not read code')
+				},
+				async () => new Date(0),
+				undefined,
+				new Set(),
+				100n,
+			),
+		).toEqual({ inputs: [{ address, fromBlock: 10n, startBlock: 10n }], observations: [] })
+	})
+
+	test('settles concurrent deployment workers and prioritizes a delayed pruned-state boundary', async () => {
+		const delayedAddress = '0x2000000000000000000000000000000000000002'
+		const ordinary = new Error('temporary provider failure')
+		const pruned = new RpcError('state at block #10 is pruned', { code: -32603, shortMessage: 'state at block #10 is pruned' })
+		await expect(
+			planDeploymentAwareLogScan(
+				[
+					{ address, label: 'Ordinary failure', kind: 'openOracle', provenance: 'manifest' },
+					{ address: delayedAddress, label: 'Delayed pruning', kind: 'zoltar', provenance: 'manifest' },
+				],
+				10n,
+				100n,
+				10n,
+				async (candidate) => {
+					if (candidate === address) throw ordinary
+					await Promise.resolve()
+					throw pruned
+				},
+				async () => new Date(0),
+			),
+		).rejects.toBe(pruned)
+	})
+
+	test('keeps an inexact state-derived deployment observation from narrowing log coverage', async () => {
+		const contract = { address, label: 'Pre-floor deployment', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		const plan = await planDeploymentAwareLogScan(
+			[contract],
+			10n,
+			100n,
+			10n,
+			async () => '0x01',
+			async () => new Date(0),
+			undefined,
+			new Set(),
+			50n,
+		)
+		expect(plan).toEqual({
+			inputs: [{ address, fromBlock: 10n, startBlock: 10n }],
+			observations: [{ contractAddress: address, checkedBlock: 100n, deployment: { block: 50n, exact: false, timestamp: new Date(0) } }],
+		})
+		const persisted = { ...contract, deploymentBlock: 50n, deploymentBlockExact: false, deploymentCheckedBlock: 100n } satisfies ContractMetadata
+		expect(
+			await planDeploymentAwareLogScan(
+				[persisted],
+				101n,
+				110n,
+				10n,
+				async () => '0x01',
+				async () => new Date(0),
+				undefined,
+				new Set(),
+				50n,
+			),
+		).toEqual({
+			inputs: [{ address, fromBlock: 101n, startBlock: 10n }],
+			observations: [{ contractAddress: address, checkedBlock: 110n, deployment: { block: 50n, exact: false, timestamp: new Date(0) } }],
+		})
 	})
 
 	test('falls back to complete scanning when historical contract code is unavailable', async () => {
@@ -1333,7 +1491,7 @@ describe('network indexer lifecycle', () => {
 		])
 	})
 
-	test('skips a periodically refreshed pruned candidate without starving later candidates', async () => {
+	test('keeps a pruned candidate eligible while its provider state floor is rediscovered', async () => {
 		const availableAddress = '0x2000000000000000000000000000000000000002'
 		const unavailable = { address, label: 'Unavailable', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const available = { address: availableAddress, label: 'Available', kind: 'zoltar', provenance: 'manifest' } satisfies ContractMetadata
@@ -1342,21 +1500,22 @@ describe('network indexer lifecycle', () => {
 		const reads: string[] = []
 		const first = contractDeploymentCandidateFrom([unavailable, available], historicalCodeUnavailable)
 		expect(first).toBe(unavailable)
-		expect(
-			await readHistoricalCodeWithPermanentFallback(
+		await expect(
+			readHistoricalCodeWithPermanentFallback(
 				async () => {
 					reads.push(first?.address ?? '')
 					throw pruned
 				},
 				() => historicalCodeUnavailable.add(unavailable.address.toLowerCase()),
 			),
-		).toEqual({ status: 'unavailable' })
+		).rejects.toBe(pruned)
+		expect(historicalCodeUnavailable).toEqual(new Set())
 		const second = contractDeploymentCandidateFrom([unavailable, available], historicalCodeUnavailable)
-		expect(second).toBe(available)
+		expect(second).toBe(unavailable)
 		expect(
 			await readHistoricalCodeWithPermanentFallback(
 				async () => {
-					reads.push(second?.address ?? '')
+					reads.push(available.address)
 					return '0x01'
 				},
 				() => {},
@@ -1366,7 +1525,7 @@ describe('network indexer lifecycle', () => {
 			value: '0x01',
 		})
 		expect(reads).toEqual([address, availableAddress])
-		expect(contractDeploymentCandidateFrom([unavailable], historicalCodeUnavailable)).toBeUndefined()
+		expect(contractDeploymentCandidateFrom([unavailable], historicalCodeUnavailable)).toBe(unavailable)
 		await expect(
 			readHistoricalCodeWithPermanentFallback(
 				async () => {
@@ -1512,6 +1671,44 @@ describe('network indexer lifecycle', () => {
 		expect(detected).toEqual([0n, 100n])
 	})
 
+	test('preserves available log history when a manifest deployment bound is inexact', async () => {
+		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind]],
+				new Map([[address.toLowerCase(), contract]]),
+				new Map(),
+				100n,
+				10n,
+				async () => ({ block: 50n, exact: false }),
+				10n,
+			),
+		).toBe(10n)
+	})
+
+	test('does not trust a persisted inexact deployment as a manifest log floor', async () => {
+		const contract = {
+			address,
+			deploymentBlock: 50n,
+			deploymentBlockExact: false,
+			deploymentCheckedBlock: 100n,
+			label: 'Persisted inexact source',
+			kind: 'openOracle',
+			provenance: 'manifest',
+		} satisfies ContractMetadata
+		expect(
+			await planManifestBackfill(
+				[[address, contract.label, contract.kind]],
+				new Map([[address.toLowerCase(), contract]]),
+				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 50n, lastRetrievedBlock: 100n }]]),
+				100n,
+				10n,
+				async () => ({ block: 50n, exact: false }),
+				10n,
+			),
+		).toBe(10n)
+	})
+
 	test('starts a fresh index at the earliest tracked contract deployment', async () => {
 		const secondAddress = '0x2000000000000000000000000000000000000002' as const
 		const helperAddress = '0x3000000000000000000000000000000000000003' as const
@@ -1532,6 +1729,10 @@ describe('network indexer lifecycle', () => {
 			),
 		).toBe(750n)
 		expect(searches).toEqual([address, secondAddress])
+	})
+
+	test('starts fresh log coverage at the configured floor for an inexact deployment bound', async () => {
+		expect(await initialIndexStartBlock([[address, 'OpenOracle', 'openOracle']], 10n, 100n, async () => ({ block: 50n, exact: false }))).toBe(10n)
 	})
 
 	test('does not let an earlier ScalarOutcomes helper widen fresh history', async () => {
@@ -1896,13 +2097,37 @@ describe('network indexer lifecycle', () => {
 		)
 		const allLogs = [deployLog, sameBlockRepLog, laterRepLog]
 		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
+		const stateQueries: bigint[] = []
+		const metadataQueryBlocks: bigint[] = []
+		const codeQueryBlocks: bigint[] = []
 		const rpcServer = Bun.serve({
 			port: 0,
 			fetch: async (rpcRequest) => {
 				const request = parseRpcRequestBody(await rpcRequest.json())
+				if (request.method === 'eth_getBalance') {
+					const blockNumber = BigInt(String(request.params?.[1]))
+					stateQueries.push(blockNumber)
+					if (blockNumber < 11n)
+						return Response.json({
+							error: { code: -32603, message: `state at block #${blockNumber} is pruned` },
+							id: request.id,
+							jsonrpc: '2.0',
+						})
+				}
 				const result = (() => {
 					if (request.method === 'eth_chainId') return '0x7a69'
 					if (request.method === 'eth_blockNumber') return '0xc'
+					if (request.method === 'eth_getBalance') return '0x0'
+					if (request.method === 'eth_call') {
+						metadataQueryBlocks.push(BigInt(String(request.params?.[1])))
+						return '0x'
+					}
+					if (request.method === 'eth_getCode') {
+						const blockNumber = BigInt(String(request.params?.[1]))
+						codeQueryBlocks.push(blockNumber)
+						setTimeout(() => controller.abort(), 10)
+						return blockNumber >= 12n ? '0x01' : '0x'
+					}
 					if (request.method === 'eth_getBlockByNumber') {
 						const blockNumber = BigInt(String(request.params?.[0]))
 						const blockHash = blockHashes.get(blockNumber)
@@ -1995,18 +2220,19 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'logScanCursors').mockResolvedValue(new Map())
 		spyOn(database, 'seedNetwork').mockResolvedValue(false)
 		spyOn(database, 'tokenMetadata').mockResolvedValue(
-			new Map([
-				[repAddress.toLowerCase(), { address: repAddress, decimals: 18, name: 'Reputation', readBlock: 10n, symbol: 'REP' }],
-				[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }],
-			]),
+			new Map([[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }]]),
 		)
 		spyOn(database, 'storeBlock').mockImplementation(async (_chainId, block) => {
 			storedBlocks.push(block)
-			if (block.number === 12n) controller.abort()
 		})
-		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([])
+		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([
+			{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' },
+		])
+		const recordContractDeployment = spyOn(database, 'recordContractDeployment').mockResolvedValue()
+		spyOn(database, 'recordFailure').mockResolvedValue()
 		const info = spyOn(console, 'info').mockImplementation(() => {})
 		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 		const timeout = setTimeout(() => controller.abort(), 2_000)
 		try {
 			const network = {
@@ -2032,12 +2258,25 @@ describe('network indexer lifecycle', () => {
 			expect(rpcLogQueries.some((query) => query.fromBlock === 10n && query.toBlock === 10n && query.addresses.includes(repAddress))).toBe(true)
 			expect(rpcLogQueries.some((query) => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
 			expect(rpcLogQueries.every((query) => !query.addresses.includes(wethAddress))).toBe(true)
+			expect(stateQueries).toEqual([10n, 12n, 11n])
+			expect(metadataQueryBlocks).toEqual([11n])
+			expect(codeQueryBlocks).toEqual([12n, 11n])
+			expect(codeQueryBlocks.every((blockNumber) => blockNumber >= 11n)).toBe(true)
+			expect(recordContractDeployment.mock.calls[0]?.[3]).toMatchObject({ block: 12n, exact: true })
+			expect(
+				warn.mock.calls.some((call) =>
+					String(call[0]).includes(
+						'state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block',
+					),
+				),
+			).toBe(true)
 		} finally {
 			clearTimeout(timeout)
 			controller.abort()
 			await rpcServer.stop(true)
 			info.mockRestore()
 			error.mockRestore()
+			warn.mockRestore()
 		}
 	})
 
@@ -2066,7 +2305,7 @@ describe('network indexer lifecycle', () => {
 				detection,
 			),
 		).toBeUndefined()
-		expect(detection).toHaveBeenCalledTimes(1)
+		expect(detection).toHaveBeenCalledTimes(2)
 	})
 
 	test('bounds a stalled optional contract deployment history read', async () => {
@@ -2655,7 +2894,7 @@ describe('network indexer lifecycle', () => {
 					throw transportFailure
 				},
 			}),
-		).toEqual({ address, readError: 'HttpRequestError', readBlock: 10n })
+		).toEqual({ address, readError: 'Historical state pruned', readBlock: 10n })
 	})
 
 	test('retains independent native and token balance outcomes when one read fails', async () => {
@@ -2682,6 +2921,18 @@ describe('network indexer lifecycle', () => {
 			readStatus: 'failed',
 			readFailureReason: 'HttpRequestError',
 		})
+		const pruned = new RpcError('state at block #10 is pruned', { code: -32603, shortMessage: 'state at block #10 is pruned' })
+		await expect(
+			readRichListBalance(
+				{ owner: address, assetAddress: address, assetKind: 'rep' },
+				async () => {
+					throw pruned
+				},
+				(error) => {
+					throw error
+				},
+			),
+		).rejects.toBe(pruned)
 	})
 
 	test('records a stable fallback for contracts that do not implement token metadata', async () => {
@@ -2710,7 +2961,7 @@ describe('network indexer lifecycle', () => {
 		).toEqual({ address, decimals: 6, symbol: 'TKN', readBlock: 10n })
 	})
 
-	test('records retryable unavailable metadata when any historical metadata field is pruned', async () => {
+	test('records a distinct boundary signal when any historical metadata field is pruned', async () => {
 		const pruned = new RpcRequestMethodError(
 			'eth_call',
 			new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
@@ -2731,9 +2982,33 @@ describe('network indexer lifecycle', () => {
 					return 'TKN'
 				},
 			})
-			expect(metadata).toEqual({ address, readError: 'ERC-20 metadata unavailable', readBlock: 11_000_001n })
-			expect(tokenMetadataNeedsRead(metadata, 11_000_025n)).toBe(false)
-			expect(tokenMetadataNeedsRead(metadata, 11_000_026n)).toBe(true)
+			expect(metadata).toEqual({ address, readError: 'Historical state pruned', readBlock: 11_000_001n })
+			expect(tokenMetadataNeedsRead(metadata, 11_000_025n, 11_000_026n)).toBe(false)
+			expect(tokenMetadataNeedsRead(metadata, 11_000_026n, 11_000_026n)).toBe(true)
+		}
+	})
+
+	test('prioritizes pruned token metadata when a concurrent field fails ordinarily', async () => {
+		const pruned = new RpcRequestMethodError(
+			'eth_call',
+			new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
+			'#1 http://reth:8545',
+		)
+		for (const prunedField of ['name', 'symbol'] as const) {
+			const ordinary = new Error('temporary provider failure')
+			ordinary.name = 'HttpRequestError'
+			const field = async (name: 'name' | 'symbol'): Promise<string> => {
+				if (name !== prunedField) throw ordinary
+				await Promise.resolve()
+				throw pruned
+			}
+			expect(
+				await readTokenMetadata(address, 11_000_001n, {
+					decimals: async () => 18,
+					name: async () => await field('name'),
+					symbol: async () => await field('symbol'),
+				}),
+			).toEqual({ address, readError: 'Historical state pruned', readBlock: 11_000_001n })
 		}
 	})
 
@@ -2752,6 +3027,38 @@ describe('network indexer lifecycle', () => {
 		expect(result).toEqual({ blockNumber: 12_000_000n, value: 'available' })
 		expect(attemptedBlocks).toEqual([11_000_001n, 12_000_000n])
 		expect(isPrunedHistoricalStateError(new Error('temporary provider failure'))).toBe(false)
+	})
+
+	test('updates a moving state floor before the next fallback-capable read', async () => {
+		const attemptedBlocks: bigint[] = []
+		let stateFloor = 10n
+		const observedHead = 200n
+		const read = async (requestedBlock: bigint): Promise<string> =>
+			(
+				await readWithPrunedStateFallback(
+					requestedBlock < stateFloor ? observedHead : requestedBlock,
+					observedHead,
+					async (blockNumber) => {
+						attemptedBlocks.push(blockNumber)
+						if (blockNumber < 100n)
+							throw new RpcRequestMethodError(
+								'eth_call',
+								new RpcError(`state at block #${blockNumber} is pruned`, {
+									code: -32603,
+									shortMessage: `state at block #${blockNumber} is pruned`,
+								}),
+								'#1 http://reth:8545',
+							)
+						return 'available'
+					},
+					async () => {
+						stateFloor = 100n
+					},
+				)
+			).value
+		expect(await read(50n)).toBe('available')
+		expect(await read(60n)).toBe('available')
+		expect(attemptedBlocks).toEqual([50n, 200n, 200n])
 	})
 
 	test('does not move ordinary historical state failures to another block', async () => {
@@ -2830,6 +3137,9 @@ describe('network indexer lifecycle', () => {
 		expect(tokenMetadataNeedsRead(tokenMetadata, 34n)).toBe(false)
 		expect(tokenMetadataNeedsRead(tokenMetadata, 35n)).toBe(true)
 		expect(tokenMetadataNeedsRead({ ...tokenMetadata, decimals: 6, readError: undefined }, 100n)).toBe(false)
+		expect(tokenMetadataNeedsRead(undefined, 41n, 42n)).toBe(false)
+		expect(tokenMetadataNeedsRead(tokenMetadata, 41n, 42n)).toBe(false)
+		expect(tokenMetadataNeedsRead(undefined, 42n, 42n)).toBe(true)
 	})
 
 	test('never requires RPC history below a configured start boundary', () => {

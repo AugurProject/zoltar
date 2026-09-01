@@ -1799,9 +1799,32 @@ dialog::backdrop {
 .contract-list {
 	display: grid;
 	align-content: start;
-	max-height: 680px;
+	min-height: 320px;
+	max-height: calc(100vh - 450px);
 	overflow-y: auto;
 	border-right: 1px solid var(--line);
+}
+.contract-group {
+	display: grid;
+	min-width: 0;
+}
+.contract-group-rows {
+	display: grid;
+	min-width: 0;
+	max-width: 100%;
+}
+.contract-group-heading {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	margin: 0;
+	padding: 0.58rem 1rem;
+	color: var(--cyan);
+	border-bottom: 1px solid var(--line);
+	background: var(--panel);
+	font: 600 0.62rem / 1 var(--mono);
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
 }
 .contract-row {
 	display: grid;
@@ -2506,11 +2529,25 @@ dialog::backdrop {
 		grid-template-columns: 1fr;
 	}
 	.contract-list {
-		display: flex;
-		max-height: none;
-		overflow-x: auto;
+		display: grid;
+		max-height: 320px;
+		overflow-x: hidden;
+		overflow-y: auto;
 		border-right: 0;
 		border-bottom: 1px solid var(--line);
+	}
+	.contract-group {
+		display: grid;
+		overflow: hidden;
+	}
+	.contract-group-heading {
+		position: static;
+		padding: 0.58rem 1rem;
+	}
+	.contract-group-rows {
+		display: flex;
+		overflow-x: auto;
+		overscroll-behavior-inline: contain;
 	}
 	.contract-row {
 		min-width: 270px;

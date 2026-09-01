@@ -14,6 +14,7 @@ import {
 	databaseFailureMessage,
 	deploymentReadBudget,
 	findEarliestAvailableLogProvider,
+	findEarliestAvailableStateBlock,
 	indexerLogSources,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
@@ -169,8 +170,9 @@ export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata
 			return quotes.flatMap((quote) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing, quote)))
 		})
 
-export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint): boolean =>
-	metadata === undefined || (metadata.decimals === undefined && blockNumber >= metadata.readBlock + 25n)
+export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint, stateStartBlock = 0n): boolean =>
+	blockNumber >= stateStartBlock &&
+	(metadata === undefined || (metadata.decimals === undefined && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
 
 export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirmationDepth: bigint): bigint => {
 	const candidate = checkpoint > confirmationDepth ? checkpoint - confirmationDepth : startBlock
@@ -186,6 +188,7 @@ type TokenMetadataCalls = {
 }
 
 const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError'])
+const prunedTokenMetadataError = 'Historical state pruned'
 
 const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
 
@@ -204,18 +207,24 @@ const metadataCall = async <T>(call: () => Promise<T>): Promise<MetadataCallResu
 export const readTokenMetadata = async (address: Address, blockNumber: bigint, calls: TokenMetadataCalls): Promise<TokenMetadata> => {
 	try {
 		const decimals = await metadataCall(calls.decimals)
+		if (decimals.status === 'pruned') return { address, readError: prunedTokenMetadataError, readBlock: blockNumber }
 		if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255)
 			return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
-		const [name, symbol] = await Promise.all([metadataCall(calls.name), metadataCall(calls.symbol)])
-		if (name.status === 'pruned' || symbol.status === 'pruned') return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+		const [nameOutcome, symbolOutcome] = await Promise.allSettled([metadataCall(calls.name), metadataCall(calls.symbol)])
+		const name = nameOutcome.status === 'fulfilled' ? nameOutcome.value : undefined
+		const symbol = symbolOutcome.status === 'fulfilled' ? symbolOutcome.value : undefined
+		if (name?.status === 'pruned' || symbol?.status === 'pruned') return { address, readError: prunedTokenMetadataError, readBlock: blockNumber }
+		if (nameOutcome.status === 'rejected') throw nameOutcome.reason
+		if (symbolOutcome.status === 'rejected') throw symbolOutcome.reason
 		return {
 			address,
 			decimals: decimals.value,
-			...(name.status === 'available' ? { name: name.value } : {}),
-			...(symbol.status === 'available' ? { symbol: symbol.value } : {}),
+			...(name?.status === 'available' ? { name: name.value } : {}),
+			...(symbol?.status === 'available' ? { symbol: symbol.value } : {}),
 			readBlock: blockNumber,
 		}
 	} catch (error) {
+		if (isPrunedHistoricalStateError(error)) return { address, readError: prunedTokenMetadataError, readBlock: blockNumber }
 		return { address, readError: safeIndexerFailureReason(error), readBlock: blockNumber }
 	}
 }
@@ -306,22 +315,30 @@ export const planManifestBackfill = async (
 			storedContract !== undefined &&
 			storedContract.deploymentBlockExact !== true &&
 			(storedContract.provenance !== 'manifest' || !requiresManifestHistoryCoverage(storedContract))
-		const knownDeploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch ? undefined : contract.deploymentBlock)
+		const knownDeploymentBlock =
+			configuredDeploymentBlock ?? (requiresFreshDeploymentSearch || contract.deploymentBlockExact !== true ? undefined : contract.deploymentBlock)
 		let deploymentBlock = knownDeploymentBlock === undefined || knownDeploymentBlock > activeStartBlock ? knownDeploymentBlock : activeStartBlock
 		if (
 			!requiresFreshDeploymentSearch &&
 			cursor !== undefined &&
 			cursor.lastRetrievedBlock >= checkpoint &&
-			(deploymentBlock === undefined || cursor.startBlock <= deploymentBlock)
+			cursor.startBlock <= (deploymentBlock ?? activeStartBlock)
 		)
 			continue
 		if (deploymentBlock === undefined) {
-			const previousSearchStart = requiresFreshDeploymentSearch ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			const hasInexactDeployment = contract.deploymentBlock !== undefined && contract.deploymentBlockExact !== true
+			const previousSearchStart =
+				requiresFreshDeploymentSearch || hasInexactDeployment ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
 			const searchStart = previousSearchStart > activeStartBlock ? previousSearchStart : activeStartBlock
-			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch) continue
-			const deployment = await findDeployment(address, searchStart, checkpoint, !requiresFreshDeploymentSearch && contract.deploymentCheckedBlock !== undefined)
+			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch && !hasInexactDeployment) continue
+			const deployment = await findDeployment(
+				address,
+				searchStart,
+				checkpoint,
+				!requiresFreshDeploymentSearch && !hasInexactDeployment && contract.deploymentCheckedBlock !== undefined,
+			)
 			if (deployment === undefined) continue
-			deploymentBlock = deployment.block > activeStartBlock ? deployment.block : activeStartBlock
+			deploymentBlock = deployment.exact && deployment.block > activeStartBlock ? deployment.block : activeStartBlock
 		}
 		if (deploymentBlock > checkpoint) continue
 		const cursorMissingStart = cursor === undefined || cursor.startBlock > deploymentBlock ? deploymentBlock : cursor.lastRetrievedBlock + 1n
@@ -350,6 +367,7 @@ export const findManifestContractDeployment = async (
 			startBlockKnownAbsent,
 		)
 	} catch (error) {
+		if (isPrunedHistoricalStateError(error)) throw error
 		if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
 		onHistoricalCodeUnavailable(error)
 		return { block: startBlock, exact: false }
@@ -395,7 +413,9 @@ const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (it
 			if (item !== undefined) result[index] = await operation(item)
 		}
 	})
-	await Promise.all(workers)
+	const outcomes = await Promise.allSettled(workers)
+	const failures = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [outcome.reason] : []))
+	if (failures.length > 0) throw failures.find((error) => isPrunedHistoricalStateError(error)) ?? failures[0]
 	return result
 }
 
@@ -413,9 +433,10 @@ export const planDeploymentAwareLogScan = async (
 	blockTimestamp: (block: bigint) => Promise<Date>,
 	onDetectionFailure: (contract: ContractMetadata, error: unknown) => void = () => {},
 	historicalCodeUnavailable: ReadonlySet<string> = new Set(),
+	stateStartBlock = configuredStartBlock,
 ): Promise<DeploymentAwareLogPlan> => {
 	const planned = await mapLimit(contracts, 4, async (contract): Promise<DeploymentAwareLogPlan> => {
-		const knownStart = contract.deploymentBlock ?? contract.discoveryBlock
+		const knownStart = (contract.deploymentBlockExact === true ? contract.deploymentBlock : undefined) ?? contract.discoveryBlock
 		if (knownStart !== undefined) {
 			const coverageStart = knownStart > configuredStartBlock ? knownStart : configuredStartBlock
 			return {
@@ -433,16 +454,18 @@ export const planDeploymentAwareLogScan = async (
 		}
 		let deployment: { readonly block: bigint; readonly exact: boolean } | undefined
 		try {
-			const searchStart = contract.deploymentCheckedBlock ?? configuredStartBlock
-			if (toBlock <= searchStart && contract.deploymentCheckedBlock === undefined)
-				return { inputs: [{ address: contract.address, fromBlock, startBlock: configuredStartBlock }], observations: [] }
+			const hasInexactDeployment = contract.deploymentBlock !== undefined && contract.deploymentBlockExact !== true
+			const recordedSearchStart = hasInexactDeployment ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			const searchStart = stateStartBlock > recordedSearchStart ? stateStartBlock : recordedSearchStart
+			if (toBlock <= searchStart) return { inputs: [{ address: contract.address, fromBlock, startBlock: configuredStartBlock }], observations: [] }
 			deployment = await findContractDeploymentBlock(
 				searchStart,
 				toBlock,
 				(block) => codeAt(contract.address, block),
-				contract.deploymentCheckedBlock !== undefined,
+				!hasInexactDeployment && contract.deploymentCheckedBlock !== undefined && searchStart === recordedSearchStart,
 			)
 		} catch (error) {
+			if (isPrunedHistoricalStateError(error)) throw error
 			if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
 			onDetectionFailure(contract, error)
 			const candidateStart = contract.discoveryBlock ?? configuredStartBlock
@@ -458,12 +481,13 @@ export const planDeploymentAwareLogScan = async (
 			checkedBlock: toBlock,
 			deployment: { ...deployment, timestamp: await blockTimestamp(deployment.block) },
 		}
+		const coverageStart = deployment.exact && deployment.block > configuredStartBlock ? deployment.block : configuredStartBlock
 		return {
 			inputs: [
 				{
 					address: contract.address,
-					fromBlock: deployment.block > fromBlock ? deployment.block : fromBlock,
-					startBlock: deployment.block > configuredStartBlock ? deployment.block : configuredStartBlock,
+					fromBlock: coverageStart > fromBlock ? coverageStart : fromBlock,
+					startBlock: coverageStart,
 				},
 			],
 			observations: [observation],
@@ -511,7 +535,8 @@ export const initialIndexStartBlock = async (
 	const deployments = await mapLimit(manifestContracts, 4, async ([address, label, kind, configuredDeploymentBlock]) => {
 		if (!requiresManifestHistoryCoverage({ address, label, kind, provenance: 'manifest' })) return undefined
 		if (configuredDeploymentBlock !== undefined) return configuredDeploymentBlock <= observedHead ? configuredDeploymentBlock : undefined
-		return (await findDeployment(address, configuredStartBlock, observedHead, false))?.block
+		const deployment = await findDeployment(address, configuredStartBlock, observedHead, false)
+		return deployment === undefined ? undefined : deployment.exact ? deployment.block : configuredStartBlock
 	})
 	return (
 		deployments.reduce<bigint | undefined>((earliest, deployment) => {
@@ -562,9 +587,14 @@ export const manifestChangeRequiresFullReplay = async (
 class NetworkIndexer {
 	#network: NetworkConfig
 	readonly #configuredStartBlock: bigint
+	#stateStartBlock: bigint
+	#stateBoundaryDiscovered = false
 	readonly #database: ScannerDatabase
 	readonly #providers: readonly IndexerRpcProvider[]
 	readonly #verifiedProviders = new WeakSet<IndexerRpcProvider>()
+	readonly #providerStateBoundaries = new WeakMap<IndexerRpcProvider, { readonly startBlock: bigint; readonly discovered: boolean }>()
+	readonly #providerHistoricalCodeUnavailable = new WeakMap<IndexerRpcProvider, Set<string>>()
+	#activeProvider: IndexerRpcProvider
 	#failoverSawPrunedLogFailure = false
 	#client: PublicClient
 	#logClient: PublicClient
@@ -574,7 +604,6 @@ class NetworkIndexer {
 	#progressSample: { block: bigint; sampledAt: number; blocksPerSecond?: number } | undefined
 	#lastReportedPhase: 'backfilling' | 'degraded' | 'live' | undefined
 	#lastDeploymentScanAt: number | undefined
-	readonly #historicalCodeUnavailable = new Set<string>()
 	readonly #signal: AbortSignal
 	readonly #provenance: EvidenceProvenance | undefined
 	#lastSeedReplayReason: Extract<HistoryInvalidationReason, 'abi-redecode' | 'projection-rebuild'> | undefined
@@ -590,6 +619,7 @@ class NetworkIndexer {
 	) {
 		this.#network = network
 		this.#configuredStartBlock = network.startBlock
+		this.#stateStartBlock = network.startBlock
 		this.#database = database
 		this.#signal = signal
 		this.#provenance = options.provenance
@@ -607,6 +637,7 @@ class NetworkIndexer {
 		})
 		const firstProvider = this.#providers[0]
 		if (firstProvider === undefined) throw new ChainConfigurationError('At least one RPC provider is required')
+		this.#activeProvider = firstProvider
 		this.#client = firstProvider.client
 		this.#logClient = firstProvider.logClient
 		this.#rpcDiagnostics = createRpcDiagnosticContext(firstProvider)
@@ -616,10 +647,29 @@ class NetworkIndexer {
 		return requireRpcBlockHeader(await this.#client.getBlock({ blockNumber }), blockNumber)
 	}
 
+	#historicalCodeUnavailable(): Set<string> {
+		const stored = this.#providerHistoricalCodeUnavailable.get(this.#activeProvider)
+		if (stored !== undefined) return stored
+		const created = new Set<string>()
+		this.#providerHistoricalCodeUnavailable.set(this.#activeProvider, created)
+		return created
+	}
+
+	#selectProvider(provider: IndexerRpcProvider): void {
+		this.#activeProvider = provider
+		this.#client = provider.client
+		this.#logClient = provider.logClient
+		this.#rpcDiagnostics.select(provider)
+		const boundary = this.#providerStateBoundaries.get(provider)
+		this.#stateStartBlock = boundary?.startBlock ?? this.#network.startBlock
+		this.#stateBoundaryDiscovered = boundary?.discovered ?? false
+	}
+
 	#rememberHistoricalCodeUnavailable(address: Address, error: unknown): void {
 		const key = address.toLowerCase()
-		if (this.#historicalCodeUnavailable.has(key)) return
-		this.#historicalCodeUnavailable.add(key)
+		const unavailable = this.#historicalCodeUnavailable()
+		if (unavailable.has(key)) return
+		unavailable.add(key)
 		console.warn(
 			`[${this.#network.id}] historical contract code unavailable for ${address}; scanning complete available coverage from block #${this.#network.startBlock} instead: ${this.#rpcFailureReason(error)}`,
 		)
@@ -631,17 +681,48 @@ class NetworkIndexer {
 		indexedBoundary: bigint,
 		startBlockKnownAbsent: boolean,
 	): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> {
-		if (this.#historicalCodeUnavailable.has(address.toLowerCase())) return { block: startBlock, exact: false }
-		return await findManifestContractDeployment(
-			address,
-			startBlock,
-			indexedBoundary,
-			startBlockKnownAbsent,
-			(candidate, blockNumber) => this.#client.getBytecode({ address: candidate, blockNumber }),
-			5_000,
-			Date.now,
-			(error) => this.#rememberHistoricalCodeUnavailable(address, error),
+		if (this.#historicalCodeUnavailable().has(address.toLowerCase())) return { block: startBlock, exact: false }
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const searchStart = this.#stateStartBlock > startBlock ? this.#stateStartBlock : startBlock
+			try {
+				return await findManifestContractDeployment(
+					address,
+					searchStart,
+					indexedBoundary,
+					startBlockKnownAbsent && searchStart === startBlock,
+					(candidate, blockNumber) => this.#client.getBytecode({ address: candidate, blockNumber }),
+					5_000,
+					Date.now,
+					(error) => this.#rememberHistoricalCodeUnavailable(address, error),
+				)
+			} catch (error) {
+				if (!isPrunedHistoricalStateError(error) || attempt > 0) throw error
+				await this.#discoverStateStartBlock(await this.#client.getBlockNumber(), this.#stateStartBlock, true)
+			}
+		}
+		throw new Error('Manifest deployment state boundary retry was exhausted')
+	}
+
+	async #discoverStateStartBlock(observedHead: bigint, searchStart = this.#network.startBlock, searchStartKnownUnavailable = false): Promise<void> {
+		if (searchStart > observedHead) {
+			this.#stateStartBlock = searchStart
+			return
+		}
+		const stateStartBlock = await findEarliestAvailableStateBlock(
+			searchStart,
+			observedHead,
+			async (blockNumber) => {
+				await this.#client.getBalance({ address: zeroAddress, blockNumber })
+			},
+			searchStartKnownUnavailable,
 		)
+		this.#stateStartBlock = stateStartBlock
+		this.#stateBoundaryDiscovered = true
+		this.#providerStateBoundaries.set(this.#activeProvider, { startBlock: stateStartBlock, discovered: true })
+		if (stateStartBlock > this.#network.startBlock)
+			console.warn(
+				`[${this.#network.id}] RPC historical state before block #${stateStartBlock} is pruned; state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block`,
+			)
 	}
 
 	async run(): Promise<void> {
@@ -699,7 +780,12 @@ class NetworkIndexer {
 				throw new Error('Stored history boundary validation unexpectedly succeeded')
 			}
 			this.#network = { ...this.#network, startBlock: storedStartBlock }
-			if (retainedBoundary === undefined) retainedBoundary = await this.#withProviderFailover(() => this.#client.getBlockNumber())
+			const observedHead = await this.#withProviderFailover(async () => {
+				const head = await this.#client.getBlockNumber()
+				await this.#discoverStateStartBlock(head)
+				return head
+			})
+			if (retainedBoundary === undefined) retainedBoundary = observedHead
 			await this.#validateManifestChange(retainedBoundary, storedStartBlock, lease)
 			const manifestChanged = await this.#seedNetwork(lease)
 			if (checkpoint !== undefined && manifestChanged) this.#reportManifestReplay(checkpoint)
@@ -707,6 +793,7 @@ class NetworkIndexer {
 		}
 		await this.#withProviderFailover(async () => {
 			const observedHead = await this.#client.getBlockNumber()
+			await this.#discoverStateStartBlock(observedHead)
 			const startBlock = await initialIndexStartBlock(
 				this.#network.contracts,
 				this.#configuredStartBlock,
@@ -773,13 +860,12 @@ class NetworkIndexer {
 		return await withVerifiedProvider(
 			this.#providers,
 			this.#network.chainId,
-			async ({ client, logClient }) => {
-				this.#client = client
-				this.#logClient = logClient
+			async (provider) => {
+				this.#selectProvider(provider)
 				return await operation()
 			},
 			isLocalIndexerFailure,
-			(provider) => this.#rpcDiagnostics.select(provider),
+			(provider) => this.#selectProvider(provider),
 			this.#verifiedProviders,
 			(_provider, error) => {
 				if (isPermanentHistoricalLogError(error)) this.#failoverSawPrunedLogFailure = true
@@ -803,9 +889,7 @@ class NetworkIndexer {
 
 	async #advancePastPrunedLogs(provider: IndexerRpcProvider, availableStart: bigint): Promise<void> {
 		const previousStart = this.#network.startBlock
-		this.#client = provider.client
-		this.#logClient = provider.logClient
-		this.#rpcDiagnostics.select(provider)
+		this.#selectProvider(provider)
 		if (availableStart === previousStart) {
 			console.warn(
 				`[${this.#network.id}] selected ${provider.endpoint}, which can serve the existing log coverage floor #${availableStart}; continuing without changing coverage`,
@@ -815,7 +899,7 @@ class NetworkIndexer {
 		await this.#assertLease()
 		await this.#database.advanceNetworkStartBlock(this.#network.chainId, availableStart, this.#requireLease(), this.#provenance)
 		this.#network = { ...this.#network, startBlock: availableStart }
-		this.#historicalCodeUnavailable.clear()
+		this.#historicalCodeUnavailable().clear()
 		this.#indexingStartReported = false
 		this.#lastProgressLogAt = undefined
 		this.#progressSample = undefined
@@ -965,7 +1049,7 @@ class NetworkIndexer {
 			let candidate: ContractMetadata | undefined
 			try {
 				const candidates = await this.#database.contractDeploymentCandidates(this.#network.chainId, indexedBoundary, this.#requireLease())
-				candidate = contractDeploymentCandidateFrom(candidates, this.#historicalCodeUnavailable)
+				candidate = contractDeploymentCandidateFrom(candidates, this.#historicalCodeUnavailable())
 			} catch (error) {
 				if (errorChainIncludes(error, leaseFailureNames)) throw error
 				console.warn(
@@ -977,15 +1061,26 @@ class NetworkIndexer {
 			let resolved: ContractDeploymentObservation['deployment']
 			try {
 				const readWithinBudget = deploymentReadBudget()
-				const historicalRead = await readHistoricalCodeWithPermanentFallback(
-					() =>
-						findContractDeploymentBlock(this.#network.startBlock, indexedBoundary, (blockNumber) =>
-							readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
-						),
-					(error) => this.#rememberHistoricalCodeUnavailable(candidate.address, error),
-				)
-				if (historicalRead.status === 'unavailable') return
-				const deployment = historicalRead.value
+				let deployment: { readonly block: bigint; readonly exact: boolean } | undefined
+				for (let attempt = 0; attempt < 2; attempt++) {
+					const searchStart = this.#stateStartBlock > this.#network.startBlock ? this.#stateStartBlock : this.#network.startBlock
+					if (indexedBoundary <= searchStart) return
+					try {
+						const historicalRead = await readHistoricalCodeWithPermanentFallback(
+							() =>
+								findContractDeploymentBlock(searchStart, indexedBoundary, (blockNumber) =>
+									readWithinBudget(() => this.#client.getBytecode({ address: candidate.address, blockNumber })),
+								),
+							(error) => this.#rememberHistoricalCodeUnavailable(candidate.address, error),
+						)
+						if (historicalRead.status === 'unavailable') return
+						deployment = historicalRead.value
+						break
+					} catch (error) {
+						if (!isPrunedHistoricalStateError(error) || attempt > 0) throw error
+						await this.#discoverStateStartBlock(await this.#client.getBlockNumber(), this.#stateStartBlock, true)
+					}
+				}
 				resolved =
 					deployment === undefined
 						? undefined
@@ -1018,6 +1113,7 @@ class NetworkIndexer {
 		await this.#assertLease()
 		await this.#reconcileReorg()
 		const observedHead = await this.#client.getBlockNumber()
+		if (!this.#stateBoundaryDiscovered && observedHead >= this.#network.startBlock) await this.#discoverStateStartBlock(observedHead)
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
 		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
@@ -1224,6 +1320,28 @@ class NetworkIndexer {
 		)
 	}
 
+	async #planDeploymentAwareLogScan(contracts: readonly ContractMetadata[], fromBlock: bigint, toBlock: bigint): Promise<DeploymentAwareLogPlan> {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				return await planDeploymentAwareLogScan(
+					contracts,
+					fromBlock,
+					toBlock,
+					this.#network.startBlock,
+					(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
+					async (blockNumber) => unixSecondsToDate((await this.#getBlockHeader(blockNumber)).timestamp, 'Deployment scan block timestamp'),
+					(contract, error) => this.#rememberHistoricalCodeUnavailable(contract.address, error),
+					this.#historicalCodeUnavailable(),
+					this.#stateStartBlock,
+				)
+			} catch (error) {
+				if (!isPrunedHistoricalStateError(error) || attempt > 0) throw error
+				await this.#discoverStateStartBlock(await this.#client.getBlockNumber(), this.#stateStartBlock, true)
+			}
+		}
+		throw new Error('Deployment-aware log planning state boundary retry was exhausted')
+	}
+
 	async #getNextLogSegment(
 		fromBlock: bigint,
 		maximumToBlock: bigint,
@@ -1252,16 +1370,7 @@ class NetworkIndexer {
 					rangeEnd,
 					async () => (await this.#getBlockHeader(rangeEnd)).hash,
 					async () => {
-						plan = await planDeploymentAwareLogScan(
-							contracts,
-							rangeStart,
-							rangeEnd,
-							this.#network.startBlock,
-							(address, blockNumber) => this.#client.getBytecode({ address, blockNumber }),
-							async (blockNumber) => unixSecondsToDate((await this.#getBlockHeader(blockNumber)).timestamp, 'Deployment scan block timestamp'),
-							(contract, error) => this.#rememberHistoricalCodeUnavailable(contract.address, error),
-							this.#historicalCodeUnavailable,
-						)
+						plan = await this.#planDeploymentAwareLogScan(contracts, rangeStart, rangeEnd)
 						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
 					},
 				)
@@ -1417,8 +1526,9 @@ class NetworkIndexer {
 				}
 			}
 			for (const coordinator of discovered.filter((contract) => contract.kind === 'priceCoordinator')) {
+				const requestedStateBlock = number < this.#stateStartBlock ? observedHead : number
 				const registryRead = await readWithPrunedStateFallback(
-					number,
+					requestedStateBlock,
 					observedHead,
 					async (blockNumber) =>
 						await this.#client.readContract({
@@ -1427,6 +1537,7 @@ class NetworkIndexer {
 							functionName: 'liquidationApprovalRegistry',
 							blockNumber,
 						}),
+					async (prunedBlock) => this.#discoverStateStartBlock(observedHead, prunedBlock, true),
 				)
 				if (registryRead.blockNumber !== number)
 					console.warn(
@@ -1481,10 +1592,11 @@ class NetworkIndexer {
 			for (const candidate of tokenAddressesFrom(contract.kind, decoded, contract.address)) tokenCandidates.add(candidate)
 		}
 		const readTokenMetadata = await mapLimit(
-			[...tokenCandidates].filter((candidate) => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number)),
+			[...tokenCandidates].filter((candidate) => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number, this.#stateStartBlock)),
 			4,
 			(candidate) => this.#readTokenMetadata(candidate, number),
 		)
+		if (readTokenMetadata.some((metadata) => metadata.readError === prunedTokenMetadataError)) await this.#discoverStateStartBlock(observedHead, number, true)
 		for (const metadata of readTokenMetadata) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 		const displayLabels = new Map(labels)
 		const contractKinds = new Map([...contracts].map(([address, contract]) => [address, contract.kind] as const))
@@ -1562,67 +1674,94 @@ class NetworkIndexer {
 	}
 
 	async #refreshRichListBalances(blockNumber: bigint, blockHash: Hash): Promise<void> {
+		if (blockNumber < this.#stateStartBlock) return
 		const targets = await this.#database.richListBalanceTargets(this.#network.chainId, 10, this.#requireLease())
 		if (targets.addresses.length === 0) return
-		await commitCanonicalRead(
-			blockNumber,
-			blockHash,
-			async () => {
-				const balances: RichListBalance[] = []
-				const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) =>
-					readRichListBalance({ owner, assetAddress: zeroAddress, assetKind: 'native' }, () => this.#client.getBalance({ address: owner, blockNumber })),
-				)
-				balances.push(...nativeBalances)
-				const tokenRequests = targets.addresses.flatMap((owner) => targets.assets.map((asset) => ({ owner, asset })))
-				balances.push(
-					...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) =>
-						readRichListBalance({ owner, assetAddress: asset.address, assetKind: asset.kind }, async () => {
-							return await this.#client.readContract({
-								address: asset.address,
-								abi: erc20BalanceAbi,
-								functionName: 'balanceOf',
-								args: [owner],
-								blockNumber,
-							})
-						}),
-					)),
-				)
-				return balances
-			},
-			async (number) => (await this.#getBlockHeader(number)).hash,
-			async (balances) => {
-				await this.#assertLease()
-				await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease(), this.#provenance)
-			},
-		)
+		try {
+			await commitCanonicalRead(
+				blockNumber,
+				blockHash,
+				async () => {
+					const balances: RichListBalance[] = []
+					const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) =>
+						readRichListBalance(
+							{ owner, assetAddress: zeroAddress, assetKind: 'native' },
+							() => this.#client.getBalance({ address: owner, blockNumber }),
+							(error) => {
+								if (isPrunedHistoricalStateError(error)) throw error
+							},
+						),
+					)
+					balances.push(...nativeBalances)
+					const tokenRequests = targets.addresses.flatMap((owner) => targets.assets.map((asset) => ({ owner, asset })))
+					balances.push(
+						...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) =>
+							readRichListBalance(
+								{ owner, assetAddress: asset.address, assetKind: asset.kind },
+								async () =>
+									await this.#client.readContract({
+										address: asset.address,
+										abi: erc20BalanceAbi,
+										functionName: 'balanceOf',
+										args: [owner],
+										blockNumber,
+									}),
+								(error) => {
+									if (isPrunedHistoricalStateError(error)) throw error
+								},
+							),
+						)),
+					)
+					return balances
+				},
+				async (number) => (await this.#getBlockHeader(number)).hash,
+				async (balances) => {
+					await this.#assertLease()
+					await this.#database.storeRichListBalances(this.#network.chainId, blockNumber, blockHash, balances, this.#requireLease(), this.#provenance)
+				},
+			)
+		} catch (error) {
+			if (!isPrunedHistoricalStateError(error)) throw error
+			await this.#discoverStateStartBlock(await this.#client.getBlockNumber(), this.#stateStartBlock, true)
+		}
 	}
 
 	async #refreshEntityStateSnapshots(blockNumber: bigint, blockHash: Hash): Promise<void> {
+		if (blockNumber < this.#stateStartBlock) return
 		const targets = await this.#database.stateSnapshotTargets(this.#network.chainId, blockNumber, 25, this.#requireLease())
 		if (targets.length === 0) return
-		await commitCanonicalRead(
-			blockNumber,
-			blockHash,
-			async () => {
-				const header = await this.#getBlockHeader(blockNumber)
-				if (header.hash !== blockHash) throw new ChainContinuityError(`Canonical chain changed while sampling block ${blockNumber}`)
-				const snapshots = await mapLimit(targets, 4, (target) => sampleEntityState(this.#client, target, blockNumber))
-				return { snapshots, timestamp: unixSecondsToDate(header.timestamp, 'State snapshot block timestamp') }
-			},
-			async (number) => (await this.#getBlockHeader(number)).hash,
-			async ({ snapshots, timestamp }) => {
-				await this.#assertLease()
-				await this.#database.storeEntityStateSnapshots(
-					this.#network.chainId,
-					blockNumber,
-					blockHash,
-					timestamp,
-					snapshots,
-					this.#requireLease(),
-					this.#provenance,
-				)
-			},
-		)
+		try {
+			await commitCanonicalRead(
+				blockNumber,
+				blockHash,
+				async () => {
+					const header = await this.#getBlockHeader(blockNumber)
+					if (header.hash !== blockHash) throw new ChainContinuityError(`Canonical chain changed while sampling block ${blockNumber}`)
+					const snapshots = await mapLimit(targets, 4, (target) =>
+						sampleEntityState(this.#client, target, blockNumber, (error) => {
+							if (isPrunedHistoricalStateError(error)) throw error
+						}),
+					)
+					return { snapshots, timestamp: unixSecondsToDate(header.timestamp, 'State snapshot block timestamp') }
+				},
+				async (number) => (await this.#getBlockHeader(number)).hash,
+				async ({ snapshots, timestamp }) => {
+					await this.#assertLease()
+					await this.#database.storeEntityStateSnapshots(
+						this.#network.chainId,
+						blockNumber,
+						blockHash,
+						timestamp,
+						snapshots,
+						this.#requireLease(),
+						this.#provenance,
+					)
+				},
+			)
+		} catch (error) {
+			if (!isPrunedHistoricalStateError(error)) throw error
+			await this.#discoverStateStartBlock(await this.#client.getBlockNumber(), this.#stateStartBlock, true)
+		}
 	}
 
 	async #readTokenMetadata(address: Address, blockNumber: bigint): Promise<TokenMetadata> {
