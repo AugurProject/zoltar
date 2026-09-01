@@ -140,7 +140,7 @@ export function ZoltarMigrationSection({
 					</span>
 				))
 	const approvalGuardMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		return undefined
@@ -150,7 +150,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.migrationBalanceReadyDetail
 	}
 	const prepareHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
@@ -159,7 +159,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()
 	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (!hasPreparedBalance) return zoltarCopy.formatMigrationPreparationRequired(formatCurrencyBalance(missingPreparationAmount ?? 0n))
@@ -170,7 +170,7 @@ export function ZoltarMigrationSection({
 		return undefined
 	})()
 	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableAttoRep), formatCurrencyBalance(zoltarMigrationPreparedRepBalanceAttoRep ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))

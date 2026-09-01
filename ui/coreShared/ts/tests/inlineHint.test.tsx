@@ -1,0 +1,38 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { fireEvent, within } from './testUtils/queries'
+import { act } from 'preact/test-utils'
+import { InlineHint } from '../components/InlineHint.js'
+
+describe('InlineHint', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
+	test('renders a compact info control with the full message in the popover', async () => {
+		const renderedComponent = await renderIntoDocument(<InlineHint message='Need more REP before continuing.' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const toggle = documentQueries.getByRole('button', { name: 'More info' })
+		expect(toggle).toBeDefined()
+		await act(() => {
+			fireEvent.click(toggle)
+		})
+		expect(documentQueries.getByText('Need more REP before continuing.')).toBeDefined()
+	})
+})

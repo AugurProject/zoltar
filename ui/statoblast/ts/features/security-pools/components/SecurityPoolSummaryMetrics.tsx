@@ -51,12 +51,12 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 				</MetricField>
 				{showTotalBacking ? (
 					<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>
-						<CurrencyValue value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
 				{poolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(poolHeldRepPerCapacityBps)}</MetricField>}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
-					<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
+					<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 				</MetricField>
 				{children}
 			</MetricGrid>
@@ -82,7 +82,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.totalPoolHeldAttoRep}</span>
 					<strong className='security-pool-ribbon-stat-value'>
-						<CurrencyValue compactWhenOverflow copyable={false} value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue compactWhenOverflow copyable={false} exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</strong>
 				</div>
 			</div>
@@ -101,7 +101,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 						secondaryValue={
 							<span className='detail'>
 								{securityPoolCopy.maxLead}
-								{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
+								{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 							</span>
 						}
 						tone={getToneRatioThreshold({
@@ -110,7 +110,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 							warningThreshold: 0.85,
 						})}
 						value={pool.settlementCollateralAttoEth}
-						valueText={<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} />}
+						valueText={<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} />}
 					/>
 				</div>
 			</div>

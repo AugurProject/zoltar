@@ -77,6 +77,8 @@ type SecurityPoolRouteContentProps = {
 	hasLoadedAvailableQuestions: boolean
 	loadingAvailableQuestions: boolean
 	onCreateSecurityPool: () => void
+	onCreateQuestionAndSecurityPool?: () => void
+	questionAndPoolCreating?: boolean
 	onLoadAvailableQuestions: () => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean

@@ -13,13 +13,14 @@ type CurrencyValueProps = {
 	decimals?: number
 	loading?: boolean
 	copyable?: boolean
+	exactWhenRoundedToZero?: boolean
 	precision?: 'exact' | 'rounded'
 	suffix?: string
 	units?: number
 	value: bigint | undefined
 }
 
-export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, loading = false, precision = 'rounded', suffix = '', units = 18, value }: CurrencyValueProps) {
+export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, exactWhenRoundedToZero = false, loading = false, precision = 'rounded', suffix = '', units = 18, value }: CurrencyValueProps) {
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const spanRef = useRef<HTMLSpanElement>(null)
 	const measureRef = useRef<HTMLSpanElement>(null)
@@ -36,8 +37,12 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 			displayNumber = exactValue
 			compactDisplayNumber = displayNumber
 		} else {
-			displayNumber = `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}`
-			compactDisplayNumber = `≈ ${formatCompactCurrencyBalance(value, units)}`
+			const roundedValue = formatRoundedCurrencyBalance(value, units, decimals)
+			const zeroThreshold = 10n ** BigInt(Math.max(units - decimals, 0))
+			const absoluteValue = value < 0n ? -value : value
+			const useExactValue = exactWhenRoundedToZero && absoluteValue < zeroThreshold
+			displayNumber = useExactValue ? exactValue : `≈ ${roundedValue}`
+			compactDisplayNumber = useExactValue ? exactValue : `≈ ${formatCompactCurrencyBalance(value, units)}`
 		}
 	}
 	const displayValue = displayNumber === undefined ? undefined : `${displayNumber}${exactSuffix}`

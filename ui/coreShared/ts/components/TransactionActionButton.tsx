@@ -2,6 +2,7 @@ import { createContext } from 'preact'
 import { useContext, useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { LoadingAwareText, LoadingText } from './LoadingText.js'
+import { InlineHint } from './InlineHint.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
 import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
@@ -11,7 +12,7 @@ export function TransactionActionButtonLockProvider({ children, disabledReason }
 	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, inlineHint, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
@@ -19,6 +20,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	const disabledReason = isDisabled ? (availability?.reason ?? (blockedByPendingRequest ? globalDisabledReason : undefined)) : undefined
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
+	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	let describedBy: string | undefined
 	if (shouldShowDisabledReason) describedBy = disabledReasonId
 	else if (isDisabled && disabledReason !== undefined) describedBy = disabledReasonElementId
@@ -28,14 +30,17 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
-				{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
-			</button>
-			{shouldShowDisabledReason ? (
-				<p id={disabledReasonId} className='detail disabled-reason'>
+			<div className='tx-action-row'>
+				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
+					{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
+				</button>
+				{resolvedInlineHint === undefined ? undefined : <InlineHint {...(shouldShowDisabledReason ? { id: disabledReasonId } : {})} message={resolvedInlineHint} />}
+			</div>
+			{!shouldShowDisabledReason || disabledReason === undefined ? undefined : (
+				<span id={disabledReasonId} className='visually-hidden'>
 					<LoadingAwareText>{disabledReason}</LoadingAwareText>
-				</p>
-			) : undefined}
+				</span>
+			)}
 		</div>
 	)
 }

@@ -41,6 +41,7 @@ export function SecurityPoolSection({
 	marketForm = getDefaultMarketFormState(),
 	marketResult = undefined,
 	onCreateMarket = () => undefined,
+	onCreateQuestionAndSecurityPool,
 	onCreateSecurityPool,
 	onLoadAvailableQuestions,
 	onOpenCreatedPool,
@@ -54,6 +55,7 @@ export function SecurityPoolSection({
 	securityPoolForm,
 	securityPoolResult,
 	showHeader = true,
+	questionAndPoolCreating = false,
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
@@ -326,6 +328,20 @@ export function SecurityPoolSection({
 							onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
 							zoltarQuestions={availableQuestions}
 						/>
+						{onCreateQuestionAndSecurityPool === undefined ? undefined : (
+							<div className='actions'>
+								<TransactionActionButton
+									idleLabel={securityPoolCopy.createQuestionAndPool}
+									pendingLabel={securityPoolCopy.creatingQuestionAndPool}
+									onClick={onCreateQuestionAndSecurityPool}
+									pending={questionAndPoolCreating}
+									availability={{
+										disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || zoltarUniverseHasForked,
+										reason: zoltarUniverseHasForked ? securityPoolCopy.poolCreationAfterForkReason : undefined,
+									}}
+								/>
+							</div>
+						)}
 					</SectionBlock>
 
 					<ErrorNotice message={securityPoolError} />

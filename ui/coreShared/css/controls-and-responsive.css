@@ -113,6 +113,76 @@
 	gap: var(--space-2);
 }
 
+.tx-action-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.tx-action-row > .tx-action-button {
+	flex: 1 1 auto;
+}
+
+.inline-hint {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.inline-hint > summary {
+	list-style: none;
+}
+
+.inline-hint > summary::-webkit-details-marker {
+	display: none;
+}
+
+.inline-hint-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	border: 1px solid rgba(231, 181, 48, 0.55);
+	border-radius: 999px;
+	background: rgba(231, 181, 48, 0.18);
+	color: #f5d16b;
+	cursor: pointer;
+	font-size: 0.82rem;
+	font-weight: 700;
+	line-height: 1;
+	user-select: none;
+}
+
+.inline-hint-toggle:hover,
+.inline-hint[open] > .inline-hint-toggle,
+.inline-hint-toggle:focus-visible {
+	border-color: rgba(245, 209, 107, 0.9);
+	background: rgba(231, 181, 48, 0.28);
+}
+
+.inline-hint-popover {
+	position: absolute;
+	z-index: 30;
+	right: 0;
+	top: calc(100% + 0.45rem);
+	display: none;
+	width: min(22rem, 80vw);
+	padding: 0.7rem 0.8rem;
+	border: 1px solid rgba(231, 181, 48, 0.4);
+	border-radius: 0.8rem;
+	background: rgba(20, 24, 16, 0.97);
+	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+	color: var(--text);
+	font-size: var(--font-caption);
+	line-height: 1.5;
+}
+
+.inline-hint:hover .inline-hint-popover,
+.inline-hint:focus-within .inline-hint-popover,
+.inline-hint[open] .inline-hint-popover {
+	display: block;
+}
+
 .transaction-action-status {
 	display: grid;
 	gap: 0.28rem;

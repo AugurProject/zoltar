@@ -150,6 +150,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={buttonLabel}
+					inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
 					pendingLabel={pendingLabel}
 					onClick={() => onApprove(nextApprovalAmount)}
 					pending={pending}
@@ -161,7 +162,6 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			</div>
 
 			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
-			{allowanceMessage !== undefined || visibleStatusMessage === undefined || !canApprove ? undefined : <p className='detail'>{visibleStatusMessage}</p>}
 		</div>
 	)
 }

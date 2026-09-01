@@ -10,7 +10,7 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 		<div className={className}>
 			<span>{label}</span>
 			<strong>
-				<CurrencyValue value={value} suffix={suffix} />
+				<CurrencyValue exactWhenRoundedToZero value={value} suffix={suffix} />
 			</strong>
 		</div>
 	)
@@ -46,12 +46,12 @@ export function VaultMetricGrid({
 				<div className='vault-preview-meta'>
 					{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? (
 						<MetricField label={securityPoolCopy.badDebt}>
-							<CurrencyValue value={badDebtAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 					) : null}
 					{disputeStakedAttoRep === undefined ? null : (
 						<MetricField label={commonCopy.disputeStakedAttoRep}>
-							<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 					)}
 					{priceValidUntilTimestamp === undefined ? null : (
@@ -75,12 +75,12 @@ export function VaultMetricGrid({
 				{associatedRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.associatedRepPerCapacity}>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</MetricField>}
 				{badDebtAttoEth === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.badDebt}>
-						<CurrencyValue value={badDebtAttoEth} suffix={commonCopy.eth} />
+						<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 				)}
 				{disputeStakedAttoRep === undefined ? undefined : (
 					<MetricField label={commonCopy.disputeStakedAttoRep}>
-						<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
+						<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				)}
 				{priceValidUntilTimestamp === undefined ? undefined : (

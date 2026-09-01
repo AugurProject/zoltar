@@ -178,6 +178,7 @@ export function useMarketCreation(
 		marketSubmissionScopesRef.current.add(submittedMarketActionScopeKey)
 		marketResult.value = undefined
 		marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
+		let createdResult: MarketCreationResult | undefined
 		try {
 			await runWriteAction(
 				{
@@ -233,6 +234,7 @@ export function useMarketCreation(
 				},
 				'Failed to create question',
 				result => {
+					createdResult = result
 					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm)
 					marketResult.value = { storageKey: submittedMarketActionScopeKey, value: result }
 					marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
@@ -245,6 +247,7 @@ export function useMarketCreation(
 		} finally {
 			marketSubmissionScopesRef.current.delete(submittedMarketActionScopeKey)
 		}
+		return createdResult
 	}
 
 	const resetMarket = () => {

@@ -176,6 +176,17 @@ describe('CurrencyValue', () => {
 		expect(copyButton.textContent).not.toContain('≈')
 	})
 
+	test('shows the exact value when rounded output would collapse to zero', async () => {
+		const documentQueries = await renderCurrencyValue({
+			exactWhenRoundedToZero: true,
+			value: 1n,
+		})
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 0.000000000000000001' })
+
+		expect(copyButton.textContent).toBe('0.000000000000000001 ETH')
+		expect(copyButton.textContent).not.toContain('≈')
+	})
+
 	test('keeps maximum exact values inside the ellipsizing number-unit group', async () => {
 		const maximumUint256 = (1n << 256n) - 1n
 		const formattedMaximum = maximumUint256.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')

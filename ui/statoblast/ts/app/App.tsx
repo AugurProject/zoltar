@@ -48,6 +48,7 @@ import { getStatoblastDeploymentSections } from '../features/deployment/deployme
 
 export function App() {
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
+	const [combinedCreateStage, setCombinedCreateStage] = useState<'creating-pool' | 'creating-question' | undefined>(undefined)
 	const {
 		activeUniverseId,
 		openOracleReportId: urlOpenOracleReportId,
@@ -386,6 +387,20 @@ export function App() {
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	})
+	const createQuestionAndSecurityPool = async () => {
+		if (combinedCreateStage !== undefined) return
+		setCombinedCreateStage('creating-question')
+		try {
+			const result = await createMarket()
+			if (result === undefined) return
+			setSecurityPoolForm(current => ({ ...current, marketId: result.questionId }))
+			setSecurityPoolQuestionId(result.questionId)
+			setCombinedCreateStage('creating-pool')
+			await createPool(result.questionId)
+		} finally {
+			setCombinedCreateStage(undefined)
+		}
+	}
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
 		onActiveUniverseChange: setActiveUniverseId,
@@ -394,9 +409,11 @@ export function App() {
 			availableQuestionsContextKey: `${activeEnvironmentNonce}:${activeUniverseId.toString()}`,
 			availableQuestions: zoltarQuestions,
 			checkingDuplicateOriginPool,
+			questionAndPoolCreating: combinedCreateStage !== undefined,
 			duplicateOriginPoolExists,
 			hasLoadedAvailableQuestions: hasLoadedZoltarQuestions,
 			loadingAvailableQuestions: loadingZoltarQuestions,
+			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
 			onCreateSecurityPool: () => void createPool(),
 			onLoadAvailableQuestions: loadZoltarQuestions,

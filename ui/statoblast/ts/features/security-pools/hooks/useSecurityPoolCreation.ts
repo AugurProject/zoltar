@@ -130,12 +130,12 @@ export function useSecurityPoolCreation({
 		})
 	}
 
-	const createPool = async () => {
+	const createPool = async (questionIdOverride?: string) => {
 		if (securityPoolSubmissionInProgress.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
 		}
-		const submittedSecurityPoolForm = securityPoolForm.value
+		const submittedSecurityPoolForm = questionIdOverride === undefined ? securityPoolForm.value : { ...securityPoolForm.value, marketId: questionIdOverride }
 		const transactionContext = {
 			initialReportPriorityFeeGwei: submittedSecurityPoolForm.initialReportPriorityFeeGwei,
 			questionId: submittedSecurityPoolForm.marketId,
