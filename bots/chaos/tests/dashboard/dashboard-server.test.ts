@@ -216,7 +216,7 @@ describe('chaos dashboard server', () => {
 		})
 	})
 
-	test.each(['RPC URLs must not exceed 2048 characters', 'At most 8 read quorum RPC URLs are supported'])('returns safe connectivity validation failures verbatim: %s', async message => {
+	test.each(['RPC URLs must not exceed 2048 characters', 'At most 8 read quorum RPC URLs are supported', 'RPC quorum 2 requires at least 2 healthy read endpoints'])('returns safe connectivity validation failures verbatim: %s', async message => {
 		const server = startDashboardServer(
 			0,
 			controller({

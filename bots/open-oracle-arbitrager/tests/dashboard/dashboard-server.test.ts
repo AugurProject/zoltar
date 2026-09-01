@@ -47,6 +47,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let connectivityFailure: Error | undefined
+	let submissionFailure: Error | undefined
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
 	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
@@ -96,6 +97,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return { wallet: clear ? undefined : address }
 		},
 		updateSubmission: value => {
+			if (submissionFailure !== undefined) throw submissionFailure
 			submission = validateSubmissionSettings(value)
 			return submission
 		},
@@ -270,6 +272,27 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(submissionUpdate.status).toBe(200)
 	expect(submission.mode).toBe('private')
 	expect(submission.relayUrls).toHaveLength(2)
+	const relaySecret = 'private-relay-secret'
+	submissionFailure = new EndpointCheckFailure('private relay unavailable', [
+		{
+			chainId: undefined,
+			checkedAt: '2026-09-01T00:00:00.000Z',
+			error: `RPC https://operator:${relaySecret}@relay.example/private?key=${relaySecret} failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND relay.example`,
+			kind: 'private-relay',
+			status: 'failed',
+			target: `https://operator:${relaySecret}@relay.example/private?key=${relaySecret}`,
+		},
+	])
+	const failedSubmissionUpdate = await fetch(`${origin}/api/submission`, {
+		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.example'] }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	const failedSubmissionBody = await failedSubmissionUpdate.text()
+	expect(failedSubmissionUpdate.status).toBe(400)
+	expect(failedSubmissionBody).not.toContain(relaySecret)
+	expect(JSON.parse(failedSubmissionBody)).toEqual({ error: 'RPC https://relay.example failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND relay.example' })
+	submissionFailure = undefined
 	const connectivityUpdate = await fetch(`${origin}/api/connectivity`, {
 		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
 		headers: { 'content-type': 'application/json', origin },

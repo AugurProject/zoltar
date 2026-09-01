@@ -1,10 +1,10 @@
 import { join } from 'node:path'
+import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 import { publicOperatorFailure, publicOperatorSnapshot, publicPollFailure, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
-import { EndpointCheckFailure } from '#monitoring/connectivity'
 
 type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
@@ -58,121 +58,6 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
-function recognizedConnectivityValidationMessage(message: string) {
-	if (
-		message === 'Network, RPC, and quorum settings are required' ||
-		message === 'RPC quorum must be 1 or 2' ||
-		message === 'Select the chain profile before saving its RPC settings' ||
-		message === 'Switch chain profiles with the Chain selector before editing that profile' ||
-		message === 'Live execution requires at least two independent quorum RPCs (three read endpoints total)' ||
-		message === 'Connectivity settings must be a JSON object' ||
-		message === 'Connectivity settings require only readRpcUrl and publicRpcUrls' ||
-		message === 'Read RPC URL must be a string' ||
-		message === 'Public RPC URLs must be an array of strings' ||
-		message === 'At most 8 public RPC URLs are supported' ||
-		message === 'At most 8 read quorum RPC URLs are supported' ||
-		message === 'Invalid RPC URL' ||
-		message === 'RPC URLs must not exceed 2048 characters' ||
-		message === 'RPC URL must use HTTPS or HTTP on loopback, anvil, or reth' ||
-		message === 'RPC URLs must not contain embedded credentials' ||
-		message === 'RPC URLs must not contain fragments' ||
-		message === 'At least one public RPC URL is required' ||
-		message === 'Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider'
-	)
-		return message
-	return undefined
-}
-
-function formatRpcTransportFailure(origin: string, method: 'eth_chainId' | 'eth_sendRawTransaction', detail: string) {
-	let safeMessage: string | undefined
-	if (detail === 'The operation timed out.' || detail === 'fetch failed') safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
-	else if (/^connection refused$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: connection refused`
-	else if (/^Unable to connect(?:\. Is the computer able to access the url\?)?$/i.test(detail) || /^network is unreachable$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
-	else if (/^getaddrinfo (?:ENOTFOUND|EAI_AGAIN) [a-z0-9.-]+$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
-	else if (/^RPC returned HTTP (\d+)$/i.test(detail)) safeMessage = `RPC ${origin} returned HTTP ${/^RPC returned HTTP (\d+)$/i.exec(detail)?.[1]} while calling ${method}`
-	else if (/^RPC returned non-JSON HTTP (\d+)$/i.test(detail)) safeMessage = `RPC ${origin} returned non-JSON HTTP ${/^RPC returned non-JSON HTTP (\d+)$/i.exec(detail)?.[1]} while calling ${method}`
-	if (safeMessage === undefined) return undefined
-	return localRpcHostnameHint(safeMessage) ?? safeMessage
-}
-
-function formatPublicRpcChainIdFailure(origin: string, detail: string) {
-	const transportFailure = formatRpcTransportFailure(origin, 'eth_chainId', detail)
-	if (transportFailure !== undefined) return transportFailure
-	if (detail === 'RPC returned an invalid chain id' || detail === 'RPC returned an unsupported chain id') return `RPC ${origin} failed while calling eth_chainId: ${detail}`
-	const expectedChainMatch = /^Expected chain (\d+), received (\d+)$/.exec(detail)
-	if (expectedChainMatch?.[1] !== undefined && expectedChainMatch[2] !== undefined) return `RPC ${origin} failed while calling eth_chainId: Expected chain ${expectedChainMatch[1]}, received ${expectedChainMatch[2]}`
-	return undefined
-}
-
-function recognizedRpcMethodFailure(message: string) {
-	const match = /^RPC (https?:\/\/[^ ]+) failed while calling (eth_chainId|eth_sendRawTransaction): (.+)$/.exec(message)
-	if (match === null) return undefined
-	const origin = match[1]
-	const method = match[2]
-	const detail = match[3]
-	if (origin === undefined || method === undefined || detail === undefined) return undefined
-	return method === 'eth_chainId' ? formatPublicRpcChainIdFailure(origin, detail) : formatRpcTransportFailure(origin, 'eth_sendRawTransaction', detail)
-}
-
-function recognizedEndpointChainMismatch(message: string) {
-	const match = /^(https?:\/\/[^ ]+) returned chain (\d+)(?:; expected chain (\d+))?$/.exec(message)
-	if (match === null) return undefined
-	const origin = match[1]
-	const actualChainId = match[2]
-	const expectedChainId = match[3]
-	if (origin === undefined || actualChainId === undefined) return undefined
-	return expectedChainId === undefined ? `${origin} returned chain ${actualChainId}` : `${origin} returned chain ${actualChainId}; expected chain ${expectedChainId}`
-}
-
-function recognizedConnectivityChecks(error: unknown) {
-	if (!(error instanceof EndpointCheckFailure)) return undefined
-	const failedChecks = error.checks.filter(check => check.status === 'failed' && (check.kind === 'read-rpc' || check.kind === 'public-rpc'))
-	if (failedChecks.length === 0) return undefined
-	const messages = [
-		...new Set(
-			failedChecks.map(check => {
-				const detail = check.error
-				if (detail === undefined) return `RPC ${check.target} failed while calling eth_chainId. Review the endpoint and protected bot logs.`
-				const safeMessage = recognizedRpcMethodFailure(detail) ?? formatPublicRpcChainIdFailure(check.target, detail.replace(`${check.target}: `, ''))
-				if (safeMessage !== undefined) return safeMessage
-				const chainMismatch = recognizedEndpointChainMismatch(detail) ?? recognizedEndpointChainMismatch(detail.replace(`${check.target}: `, ''))
-				if (chainMismatch !== undefined) return chainMismatch
-				return `RPC ${check.target} failed while calling eth_chainId. Review the endpoint and protected bot logs.`
-			}),
-		),
-	]
-	return messages.join('; ')
-}
-
-function localRpcHostnameHint(message: string) {
-	const match = /^RPC (https?:\/\/[^ ]+) failed while calling (eth_chainId|eth_sendRawTransaction): (.+)$/.exec(message)
-	if (match === null) return undefined
-	const target = match[1]
-	const detail = match[3]
-	if (target === undefined || detail === undefined) return undefined
-	const normalizedDetail = detail.toLowerCase()
-	try {
-		const hostname = new URL(target).hostname
-		if (
-			(hostname === 'reth' || hostname === 'anvil') &&
-			(normalizedDetail.includes('timed out') ||
-				normalizedDetail.includes('fetch failed') ||
-				normalizedDetail.includes('connection refused') ||
-				normalizedDetail.includes('unable to connect') ||
-				normalizedDetail.includes('enotfound') ||
-				normalizedDetail.includes('eai_again') ||
-				normalizedDetail.includes('getaddrinfo') ||
-				normalizedDetail.includes('hostname resolution') ||
-				normalizedDetail.includes('name resolution'))
-		) {
-			return `${message} The hostname ${hostname} must resolve from the bot process; Docker service names like ${hostname} only work when the bot shares that container network.`
-		}
-	} catch (error) {
-		void error
-	}
-	return undefined
-}
-
 function publicError(error: unknown, status: number, operation: string, fallback: string, categorize = false) {
 	const message = errorMessage(error)
 	console.error(`dashboardOperation=${operation} failed=${message}`)
@@ -189,8 +74,16 @@ function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
 }
 
 function publicConnectivityUpdateError(error: unknown) {
-	const message = errorMessage(error)
-	return recognizedConnectivityValidationMessage(message) ?? recognizedConnectivityChecks(error) ?? recognizedRpcMethodFailure(message) ?? recognizedEndpointChainMismatch(message) ?? 'RPC connectivity checks failed. Review the submitted endpoints and retry.'
+	return publicConnectivityError(error, {
+		fallback: 'RPC connectivity checks failed. Review the submitted endpoints and retry.',
+		validationMessages: new Set([
+			'Live execution requires at least two independent quorum RPCs (three read endpoints total)',
+			'Network, RPC, and quorum settings are required',
+			'RPC quorum must be 1 or 2',
+			'Select the chain profile before saving its RPC settings',
+			'Switch chain profiles with the Chain selector before editing that profile',
+		]),
+	})
 }
 
 function markdownHeadingId(value: string) {
@@ -366,7 +259,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'submission-update', 'Submission settings could not be saved. Review the submitted values and protected bot logs.')
+					return publicError(error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.' }))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
