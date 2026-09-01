@@ -808,11 +808,34 @@
 }
 
 .question-preview-meta-item {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
+	display: grid;
 	gap: 0.45rem;
 	min-width: 0;
+}
+
+.question-preview-meta-item-primary-id {
+	grid-column: 1 / -1;
+}
+
+.question-preview-meta-item strong {
+	min-width: 0;
+}
+
+.question-preview-meta-item .copy-value-wrap,
+.question-preview-meta-item .identifier-value {
+	max-width: 100%;
+}
+
+.question-preview-meta-item .identifier-value {
+	word-break: break-all;
+}
+
+.question-preview-meta-item-primary-id .identifier-value.copyable {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	word-break: normal;
 }
 
 .question-draft-preview {

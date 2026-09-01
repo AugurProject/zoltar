@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -79,6 +79,12 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		zoltarUniverseHasForked: false,
 		...overrides,
 	}
+}
+
+function getButtonByText(label: string) {
+	const button = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
+	if (!(button instanceof HTMLButtonElement)) throw new Error(`Expected button: ${label}`)
+	return button
 }
 
 installTestRouting()
@@ -257,6 +263,119 @@ describe('SecurityPoolSection', () => {
 		expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
 		expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
 		expectTransactionButtonEnabled(document.body, 'Create pool')
+	})
+
+	test('keeps combined question-and-pool creation disabled until the question form is valid', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const button = getButtonByText('Create question and pool')
+		expect(button.disabled).toBe(true)
+		expect(button.title).toBe('Missing required fields: Title, End Time')
+	})
+
+	test('enables combined question-and-pool creation when both forms are ready', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getButtonByText('Create question and pool').disabled).toBe(false)
+	})
+
+	test('keeps combined question-and-pool creation disabled for non-binary question types', async () => {
+		const onCreateQuestionAndSecurityPool = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['Alpha', 'Beta'],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'categorical',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const button = getButtonByText('Create question and pool')
+		expect(button.disabled).toBe(true)
+		expect(button.title).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
+		fireEvent.click(button)
+		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
+		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })
+		fireEvent.click(marketTypeTrigger)
+		const marketTypeListbox = within(document.body).getByRole('listbox', { name: 'Dropdown options' })
+		expect(
+			within(marketTypeListbox)
+				.getAllByRole('option')
+				.map(option => option.textContent?.trim()),
+		).toEqual(['Binary'])
+	})
+
+	test('submits the combined question-and-pool action instead of standalone question creation', async () => {
+		const onCreateQuestionAndSecurityPool = mock(() => undefined)
+		const onCreateMarket = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateMarket,
+					onCreateQuestionAndSecurityPool,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		fireEvent.click(getButtonByText('Create question and pool'))
+		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(1)
+		expect(onCreateMarket).toHaveBeenCalledTimes(0)
+		expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Create question')).toBe(false)
 	})
 
 	test('previews the pasted question before pool creation without a manual load action', async () => {

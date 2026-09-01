@@ -207,6 +207,7 @@ export type TransactionActionButtonProps = {
 	disabledReasonElementId?: string | undefined
 	idleLabel: ComponentChildren
 	inlineHint?: string | undefined
+	inlineHintAriaLabel?: string | undefined
 	onClick: () => void
 	pending?: boolean
 	pendingLabel: ComponentChildren

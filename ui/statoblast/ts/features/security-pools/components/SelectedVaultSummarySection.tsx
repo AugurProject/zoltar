@@ -51,7 +51,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						<div className='security-pool-browse-vault-row-kpi'>
 							<span>{securityPoolCopy.badDebt}</span>
 							<strong>
-								<CurrencyValue value={securityVaultDetails.badDebtAttoEth} suffix={commonCopy.eth} />
+								<CurrencyValue exactWhenRoundedToZero value={securityVaultDetails.badDebtAttoEth} suffix={commonCopy.eth} />
 							</strong>
 						</div>
 					) : null}

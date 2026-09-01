@@ -218,7 +218,7 @@ export function SecurityPoolPriceOracleSection({
 				</MetricField>
 				{managerDetails === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.requestCost}>
-						<CurrencyValue value={managerDetails.requestPriceCostAttoEth} suffix={commonCopy.eth} />
+						<CurrencyValue exactWhenRoundedToZero value={managerDetails.requestPriceCostAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 				)}
 				{managerDetails?.pendingReportId === undefined || managerDetails.pendingReportId === 0n ? undefined : (

@@ -34,6 +34,7 @@ const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] =
 ]
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 export type QuestionCreateSectionProps = {
+	allowedMarketTypes?: readonly MarketFormState['marketType'][]
 	accountAddress: Address | undefined
 	canUseForFork: boolean
 	hasForked: boolean
@@ -49,6 +50,16 @@ export type QuestionCreateSectionProps = {
 	onResetQuestion: () => void
 	onUseQuestionForFork: (questionId: string) => void
 	renderResultActions?: (result: { marketType: MarketCreationResult['marketType']; questionId: string; questionTitle: string }) => ComponentChildren
+	submitActionOverride?: {
+		availability: {
+			disabled: boolean
+			reason: string | undefined
+		}
+		idleLabel: ComponentChildren
+		onSubmit: () => void
+		pending: boolean
+		pendingLabel: string
+	}
 	zoltarQuestions: MarketDetails[]
 }
 
@@ -123,6 +134,7 @@ function getDraftOutcomeLabels(questionForm: MarketFormState, categoricalOutcome
 }
 
 export function QuestionCreateSection({
+	allowedMarketTypes = ['binary', 'categorical', 'scalar'],
 	accountAddress,
 	canUseForFork,
 	hasForked,
@@ -138,12 +150,14 @@ export function QuestionCreateSection({
 	onResetQuestion,
 	onUseQuestionForFork,
 	renderResultActions,
+	submitActionOverride,
 	zoltarQuestions,
 }: QuestionCreateSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const currentTimestamp = useChainTimestamp()
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
+	const marketTypeOptions = useMemo(() => MARKET_TYPE_OPTIONS.filter(option => allowedMarketTypes.includes(option.value)), [allowedMarketTypes])
 	const questionFormValidation = validateMarketForm(questionForm)
 	const marketTypeGuidance = getMarketTypeGuidance(questionForm.marketType)
 	const scalarInputsValid = questionFormValidation.fieldErrors.scalarIncrement === undefined && questionFormValidation.fieldErrors.scalarMax === undefined && questionFormValidation.fieldErrors.scalarMin === undefined
@@ -164,6 +178,24 @@ export function QuestionCreateSection({
 	const endTimeError = timingRelationshipError ?? getVisibleFieldError('endTime')
 	const timingRelationshipErrorId = 'market-create-timing-error'
 	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !questionCreating && questionFormValidation.isValid
+	const submitAction =
+		submitActionOverride === undefined
+			? {
+					availability: {
+						disabled: !canCreateQuestion,
+						reason: (() => {
+							if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
+							if (!isOnActiveAppChain) return getWrongNetworkReason()
+							if (questionFormValidation.isValid) return undefined
+							return questionFormValidation.notice
+						})(),
+					},
+					idleLabel: commonCopy.createQuestionAction,
+					onSubmit: onCreateQuestion,
+					pending: questionCreating,
+					pendingLabel: marketCopy.createQuestionPendingLabel,
+				}
+			: submitActionOverride
 	const showEndedQuestionWarning = questionFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(questionForm, currentTimestamp)
 	const renderDraftTimestamp = (value: string, emptyValue: string) => {
 		if (value.trim() === '') return emptyValue
@@ -249,15 +281,15 @@ export function QuestionCreateSection({
 						noValidate
 						onSubmit={event => {
 							event.preventDefault()
-							if (!canCreateQuestion) return
-							onCreateQuestion()
+							if (submitAction.availability.disabled) return
+							submitAction.onSubmit()
 						}}
 					>
 						<div className='question-create-editor'>
 							<p className='field-help'>{marketCopy.requiredFieldsNote}</p>
 							<div className='field'>
 								<span>{marketCopy.questionType}</span>
-								<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
+								<EnumDropdown ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
 								<p className='field-help'>{marketTypeGuidance}</p>
 							</div>
 
@@ -460,23 +492,7 @@ export function QuestionCreateSection({
 						</div>
 
 						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={commonCopy.createQuestionAction}
-								pendingLabel={marketCopy.createQuestionPendingLabel}
-								onClick={() => undefined}
-								pending={questionCreating}
-								type='submit'
-								availability={{
-									disabled: !canCreateQuestion,
-									reason: (() => {
-										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-										if (!isOnActiveAppChain) return getWrongNetworkReason()
-
-										if (questionFormValidation.isValid) return undefined
-										return questionFormValidation.notice
-									})(),
-								}}
-							/>
+							<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
 						</div>
 					</form>
 				</SectionBlock>

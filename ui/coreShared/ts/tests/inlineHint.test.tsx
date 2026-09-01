@@ -35,4 +35,23 @@ describe('InlineHint', () => {
 		})
 		expect(documentQueries.getByText('Need more REP before continuing.')).toBeDefined()
 	})
+
+	test('keeps the popover visible after touch-style activation until dismissed', async () => {
+		const renderedComponent = await renderIntoDocument(<InlineHint message='Need more REP before continuing.' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const toggle = documentQueries.getByRole('button', { name: 'More info' })
+		await act(() => {
+			fireEvent.click(toggle)
+		})
+		expect(toggle.getAttribute('aria-expanded')).toBe('true')
+		expect(documentQueries.getByRole('note').textContent).toContain('Need more REP before continuing.')
+
+		await act(() => {
+			document.dispatchEvent(new window.PointerEvent('pointerdown'))
+		})
+		expect(documentQueries.queryByRole('note')).toBeNull()
+		expect(toggle.getAttribute('aria-expanded')).toBe('false')
+	})
 })

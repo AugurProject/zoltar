@@ -21,7 +21,6 @@ type SecurityPoolSummaryMetricsProps = {
 	currentTimestamp?: bigint | undefined
 	metricVariant?: MetricGridVariant
 	pool: ListedSecurityPool
-	poolHeldRepPerCapacityBps?: bigint | undefined
 	showPoolAddress?: boolean
 	showTotalBacking?: boolean
 	variant?: 'embedded' | 'hero'
@@ -33,8 +32,9 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
-export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, poolHeldRepPerCapacityBps, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
 	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
+	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
 	if (variant === 'embedded')
 		return (
 			<MetricGrid className={className} variant={metricVariant}>
@@ -54,7 +54,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', currentTi
 						<CurrencyValue exactWhenRoundedToZero value={pool.totalPoolHeldAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				) : undefined}
-				{poolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(poolHeldRepPerCapacityBps)}</MetricField>}
+				{resolvedPoolHeldRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.poolHeldRepPerCapacity}>{formatRepPerCapacityBps(resolvedPoolHeldRepPerCapacityBps)}</MetricField>}
 				<MetricField label={securityPoolCopy.openInterestMintedMax}>
 					<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} /> / {mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} />}
 				</MetricField>

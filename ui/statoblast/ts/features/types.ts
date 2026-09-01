@@ -200,9 +200,14 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
+	loadingUniverseDirectoryPools?: boolean | undefined
 	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
+	onLoadUniverseDirectoryPools?: (() => void) | undefined
 	overview: SecurityPoolsOverviewRouteContentProps
+	securityPools: ListedSecurityPool[]
+	securityPoolUniverseDirectoryError?: string | undefined
+	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }

@@ -1,3 +1,4 @@
+import * as commonCopy from '../copy/common.js'
 import { createContext } from 'preact'
 import { useContext, useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
@@ -8,12 +9,20 @@ import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentatio
 
 const TransactionActionButtonLockContext = createContext<string | undefined>(undefined)
 
+function getInlineHintAriaLabel(ariaLabel: string | undefined, inlineHintAriaLabel: string | undefined, idleLabel: ComponentChildren) {
+	if (inlineHintAriaLabel !== undefined) return inlineHintAriaLabel
+	if (ariaLabel !== undefined) return commonCopy.formatActionDetailLabel(ariaLabel)
+	if (typeof idleLabel === 'string' || typeof idleLabel === 'number') return commonCopy.formatActionDetailLabel(String(idleLabel))
+	return undefined
+}
+
 export function TransactionActionButtonLockProvider({ children, disabledReason }: { children: ComponentChildren; disabledReason: string | undefined }) {
 	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, inlineHint, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, inlineHint, inlineHintAriaLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const disabledReasonId = useId()
+	const disabledReasonPopoverId = `${disabledReasonId}-hint`
 	const globalTransaction = useGlobalTransactionPresentation()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
 	const blockedByPendingRequest = globalDisabledReason !== undefined && !pending
@@ -21,6 +30,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const disabledReason = isDisabled ? (availability?.reason ?? (blockedByPendingRequest ? globalDisabledReason : undefined)) : undefined
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
+	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)
 	let describedBy: string | undefined
 	if (shouldShowDisabledReason) describedBy = disabledReasonId
 	else if (isDisabled && disabledReason !== undefined) describedBy = disabledReasonElementId
@@ -34,7 +44,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
 					{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
 				</button>
-				{resolvedInlineHint === undefined ? undefined : <InlineHint {...(shouldShowDisabledReason ? { id: disabledReasonId } : {})} message={resolvedInlineHint} />}
+				{resolvedInlineHint === undefined ? undefined : <InlineHint {...(shouldShowDisabledReason ? { id: disabledReasonPopoverId } : {})} {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} message={resolvedInlineHint} />}
 			</div>
 			{!shouldShowDisabledReason || disabledReason === undefined ? undefined : (
 				<span id={disabledReasonId} className='visually-hidden'>

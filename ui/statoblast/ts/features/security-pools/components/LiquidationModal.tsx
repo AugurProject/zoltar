@@ -571,19 +571,19 @@ export function LiquidationModal({
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : (
 					<DataGrid className='modal-summary-grid' columns={2}>
 						<MetricField label={liquidationCopy.availableApproval}>
-							<CurrencyValue value={liquidationApprovalDetails.availableDebtAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.availableDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={liquidationCopy.reservedApproval}>
-							<CurrencyValue value={liquidationApprovalDetails.reservedDebtAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.reservedDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={liquidationCopy.consumedApproval}>
-							<CurrencyValue value={liquidationApprovalDetails.consumedDebtAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.consumedDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={liquidationCopy.perLiquidationLimit}>
-							<CurrencyValue value={liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={liquidationCopy.totalApprovalLimit}>
-							<CurrencyValue value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
+							<CurrencyValue exactWhenRoundedToZero value={liquidationApprovalDetails.params.maxCumulativeDebtAttoEth} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={liquidationCopy.approvalValidAfter}>
 							<TimestampValue timestamp={liquidationApprovalDetails.params.validAfter} />
@@ -606,13 +606,13 @@ export function LiquidationModal({
 				<TransactionReview
 					context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
 					primary={[
-						{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.capacityOwnershipMoved, value: <CurrencyValue value={liquidationSimulation?.capacityOwnershipMovedAttoRep} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
+						{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.badDebtAttoEth} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.repMoved, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
-						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
+						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue compactWhenOverflow exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
+						...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
 					]}
 					details={[
 						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
@@ -624,8 +624,8 @@ export function LiquidationModal({
 									{
 										title: liquidationCopy.fundingDetails,
 										rows: [
-											{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue value={liquidationFundingPreview?.queueOperationValueAttoEth} suffix={commonCopy.eth} /> },
-											{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue value={liquidationFundingPreview?.wethShortfallAttoEth} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.queueOperationValueAttoEth} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.wethShortfallAttoEth} suffix={commonCopy.eth} /> },
 											{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequiredAttoRep} suffix={commonCopy.rep} /> },
 											{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequiredAttoEth} suffix={commonCopy.weth} /> },
 											{

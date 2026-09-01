@@ -22,7 +22,7 @@ import { getActiveSimulationController, initializeActiveEnvironment } from '@zol
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
@@ -31,16 +31,17 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import type { MarketRouteContentProps, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
 import { isUniverseIndependentZoltarView, zoltarRouting } from '../lib/routing.js'
+import { hasInvalidZoltarView } from './lib/routeValidation.js'
 
 export function App() {
 	const { activeUniverseId, replaceZoltarView, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const zoltarViews: readonly ZoltarView[] = ['questions', 'create', 'fork', 'migrate', 'universes']
-	const hasInvalidZoltarView = zoltarView !== '' && !zoltarViews.includes(zoltarView as ZoltarView)
-	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
-	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
-	const activeRoute = resolvedRoute === 'zoltar' && hasInvalidZoltarView ? 'not-found' : resolvedRoute
+	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
+	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
+	const activeRoute = resolvedRoute === 'zoltar' && invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
 		accountState,
 		activeEnvironmentNonce,

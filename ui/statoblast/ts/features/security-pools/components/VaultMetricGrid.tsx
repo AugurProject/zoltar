@@ -22,18 +22,46 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
+function getAssociatedRepToneClass({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
+	if (isCurrentlyHealthy === false) return 'metric-value-danger'
+	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return isCurrentlyHealthy === true ? 'metric-value-success' : undefined
+	if (associatedRepPerCapacityBps < selectedPoolStatoblastSecurityMultiplierBps) return 'metric-value-danger'
+	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return 'metric-value-warning'
+	return 'metric-value-success'
+}
+
+function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
+	if (isCurrentlyHealthy === false) return securityPoolCopy.vaultHealthUnderwater
+	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return isCurrentlyHealthy === true ? securityPoolCopy.vaultHealthHealthy : undefined
+	if (associatedRepPerCapacityBps < selectedPoolStatoblastSecurityMultiplierBps) return securityPoolCopy.vaultHealthUnderwater
+	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return securityPoolCopy.vaultHealthNearMinimum
+	return securityPoolCopy.vaultHealthHealthy
+}
+
 export function VaultMetricGrid({
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
 	className = '',
 	layout = 'grid',
 	disputeStakedAttoRep,
-	isCurrentlyHealthy: _isCurrentlyHealthy,
+	isCurrentlyHealthy,
 	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
 	priceValidUntilTimestamp,
 	vaultAttoRepBacking,
+	selectedPoolStatoblastSecurityMultiplierBps,
 	capacityOwnershipAttoRep,
 }: VaultMetricGridProps) {
+	const associatedRepToneClass = getAssociatedRepToneClass({
+		associatedRepPerCapacityBps,
+		isCurrentlyHealthy,
+		selectedPoolStatoblastSecurityMultiplierBps,
+	})
+	const associatedRepStatusLabel = getAssociatedRepStatusLabel({
+		associatedRepPerCapacityBps,
+		isCurrentlyHealthy,
+		selectedPoolStatoblastSecurityMultiplierBps,
+	})
+
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
@@ -72,7 +100,14 @@ export function VaultMetricGrid({
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
-				{associatedRepPerCapacityBps === undefined ? undefined : <MetricField label={securityPoolCopy.associatedRepPerCapacity}>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</MetricField>}
+				{associatedRepPerCapacityBps === undefined ? undefined : (
+					<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
+						<span className='metric-inline-value'>
+							<span>{formatRepPerCapacityBps(associatedRepPerCapacityBps)}</span>
+							{associatedRepStatusLabel === undefined ? undefined : <span className='metric-inline-status'>{associatedRepStatusLabel}</span>}
+						</span>
+					</MetricField>
+				)}
 				{badDebtAttoEth === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.badDebt}>
 						<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />

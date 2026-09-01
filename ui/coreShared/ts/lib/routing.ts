@@ -18,6 +18,11 @@ function getPageSearchParams(search = window.location.search) {
 	return new URLSearchParams(search)
 }
 
+export function hasPresentEmptyQueryParam(search: string, key: string) {
+	const params = new URLSearchParams(search)
+	return params.has(key) && (params.get(key)?.trim() ?? '') === ''
+}
+
 function shouldKeepHashQueryParam(key: string, value: string, pageParams = getPageSearchParams()) {
 	const pageValue = pageParams.get(key)
 	return pageValue === null || pageValue !== value

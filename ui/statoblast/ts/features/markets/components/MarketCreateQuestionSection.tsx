@@ -12,14 +12,17 @@ type MarketCreateQuestionSectionProps = Omit<QuestionCreateProps, 'canUseForFork
 	onCreateMarket: QuestionCreateProps['onCreateQuestion']
 	onMarketFormChange: QuestionCreateProps['onQuestionFormChange']
 	onResetMarket: QuestionCreateProps['onResetQuestion']
+	submitActionOverride?: QuestionCreateProps['submitActionOverride']
 	onUseQuestionForFork: QuestionCreateProps['onUseQuestionForFork']
 	onUseQuestionForPool?: (questionId: string) => void
 }
 
-export function MarketCreateQuestionSection({ marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onResetMarket, onUseQuestionForPool, ...props }: MarketCreateQuestionSectionProps) {
+export function MarketCreateQuestionSection({ marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onResetMarket, onUseQuestionForPool, submitActionOverride, ...props }: MarketCreateQuestionSectionProps) {
 	return (
 		<QuestionCreateSection
 			{...props}
+			{...(submitActionOverride === undefined ? {} : { submitActionOverride })}
+			allowedMarketTypes={['binary']}
 			{...(onUseQuestionForPool === undefined
 				? {}
 				: {

@@ -20,6 +20,7 @@ import {
 	normalizeForkWorkflowSelectionStage,
 	resolveForkWorkflowSelectionStage,
 	isForkWorkflowDisabled,
+	isSupportedSelectedPoolView,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
 } from '../../../features/security-pools/lib/securityPoolWorkflow.js'
@@ -44,6 +45,15 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveSelectedPoolView('fork-auction')).toBe('fork-workflow')
 		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
 		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
+	})
+
+	void test('accepts only supported selected-pool view query values', () => {
+		expect(isSupportedSelectedPoolView(undefined)).toBe(true)
+		expect(isSupportedSelectedPoolView('')).toBe(true)
+		expect(isSupportedSelectedPoolView('vaults')).toBe(true)
+		expect(isSupportedSelectedPoolView('resolution')).toBe(true)
+		expect(isSupportedSelectedPoolView('fork-auction')).toBe(true)
+		expect(isSupportedSelectedPoolView('invalid')).toBe(false)
 	})
 
 	void test('maps fork workflow routing and legacy stage aliases', () => {

@@ -1919,6 +1919,12 @@ button.wallet-asset-action-pending:disabled {
 	color: var(--success);
 }
 
+.workflow-metric-grid strong.metric-value-warning,
+.workflow-question-grid strong.metric-value-warning,
+.workflow-vault-grid strong.metric-value-warning {
+	color: var(--warning);
+}
+
 .workflow-metric-grid strong.metric-value-danger,
 .workflow-question-grid strong.metric-value-danger,
 .workflow-vault-grid strong.metric-value-danger {

@@ -437,7 +437,6 @@ export function SecurityPoolWorkflowSection({
 							lastOraclePrice: currentPoolOraclePrice ?? selectedPoolSummaryPool.lastOraclePrice,
 							lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
 						}}
-						poolHeldRepPerCapacityBps={selectedVaultDetails?.poolHeldRepPerCapacityBps}
 						showTotalBacking
 						variant='hero'
 					>
@@ -461,7 +460,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolSummaryContent = (
 			<div className='selected-pool-context-summary'>
 				<div className='selected-pool-context-overview'>
-					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} poolHeldRepPerCapacityBps={selectedVaultDetails?.poolHeldRepPerCapacityBps} showTotalBacking>
+					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} showTotalBacking>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
 							<MetricField label={securityPoolCopy.parentPool}>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />

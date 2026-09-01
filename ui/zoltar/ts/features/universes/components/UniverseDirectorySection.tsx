@@ -56,8 +56,8 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 								<EntityCard
 									key={childUniverse.universeId.toString()}
 									actions={
-										childUniverse.universeId === activeUniverseId ? undefined : (
-											<UniverseLink className='secondary' universeId={childUniverse.universeId}>
+										childUniverse.universeId === activeUniverseId || !childUniverse.exists ? undefined : (
+											<UniverseLink className='button-link secondary-link' universeId={childUniverse.universeId}>
 												{commonCopy.select}
 											</UniverseLink>
 										)

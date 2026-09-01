@@ -544,7 +544,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).securityPoolResult?.deployPoolHash).toBe('0xabc')
 		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
 		expect(requireState(state).securityPoolCreationFeedback?.status.hash).toBe('0xabc')
-		expect(onTransactionHashes).toContain('0xabc')
+		expect(onTransactionHashes).toEqual([])
 		expect(refreshCalls).toBe(1)
 	})
 
@@ -695,16 +695,13 @@ describe('useSecurityPoolCreation', () => {
 
 		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
-		let createdCount = 0
 		const Harness = createHarness(
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
-				onTransactionPresented: () => {
-					createdCount += 1
-				},
+				onTransactionPresented: () => undefined,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
@@ -755,7 +752,7 @@ describe('useSecurityPoolCreation', () => {
 			universeId: 0n,
 		})
 		await firstCreate
-		expect(createdCount).toBe(1)
+		expect(createSecurityPool).toHaveBeenCalledTimes(1)
 	})
 
 	test('createPool blocks repeated submissions before wallet preflight finishes', async () => {

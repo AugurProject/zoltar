@@ -180,11 +180,10 @@ describe('SecurityVaultSection', () => {
 		expect(selectedVaultQueries.getByText('Dispute-staked REP')).not.toBeNull()
 		expect(selectedVaultQueries.getByText('Associated REP per capacity')).not.toBeNull()
 		expect(selectedVaultQueries.getByText('7.5×')).not.toBeNull()
-		expect(selectedVaultQueries.getByText('Pool-held REP per capacity')).not.toBeNull()
-		expect(selectedVaultQueries.getByText('6×')).not.toBeNull()
+		expect(selectedVaultQueries.queryByText('Pool-held REP per capacity')).toBeNull()
 	})
 
-	test('distinguishes authoritative current vault health from REP-per-capacity ratios', async () => {
+	test('colors associated REP per capacity green when the vault remains comfortably above the security multiplier', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SelectedVaultSummarySection
 				repPerEthPrice={undefined}
@@ -199,14 +198,32 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Current vault health')).not.toBeNull()
-		expect(documentQueries.getByText('Healthy')).not.toBeNull()
-		expect(documentQueries.getByText('Associated REP per capacity')).not.toBeNull()
-		expect(documentQueries.getByText('Pool-held REP per capacity')).not.toBeNull()
+		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
+		expect(metricValue?.className).toContain('metric-value-success')
+		expect(within(document.body).getByText('Healthy')).not.toBeNull()
 	})
 
-	test('labels failed health as unhealthy without implying complete liquidation eligibility', async () => {
+	test('colors associated REP per capacity yellow when the vault is near the security multiplier', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				currentVaultIsHealthy
+				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricValue = within(document.body).getByText('2.05×').closest('.metric-field-value')
+		expect(metricValue?.className).toContain('metric-value-warning')
+		expect(within(document.body).getByText('Near minimum')).not.toBeNull()
+	})
+
+	test('colors associated REP per capacity red when the current vault health is underwater', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SelectedVaultSummarySection
 				repPerEthPrice={undefined}
@@ -221,9 +238,9 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Unhealthy')).not.toBeNull()
-		expect(documentQueries.queryByText('Liquidatable')).toBeNull()
+		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
+		expect(metricValue?.className).toContain('metric-value-danger')
+		expect(within(document.body).getByText('Underwater')).not.toBeNull()
 	})
 
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {

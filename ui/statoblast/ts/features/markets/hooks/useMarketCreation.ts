@@ -247,6 +247,7 @@ export function useMarketCreation(
 		} finally {
 			marketSubmissionScopesRef.current.delete(submittedMarketActionScopeKey)
 		}
+		if (!isCurrentMarketActionScope()) return undefined
 		return createdResult
 	}
 

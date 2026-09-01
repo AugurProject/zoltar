@@ -21,7 +21,7 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	return { description: securityPoolCopy.managePoolDescription, title: commonCopy.managePool }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseChange, onActiveViewChange, overview, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 
@@ -62,7 +62,9 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseC
 				/>
 			) : undefined}
 
-			{view === 'universes' ? <UniverseDirectorySection activeUniverseId={overview.activeUniverseId} securityPools={overview.securityPools} zoltarUniverse={zoltarUniverse} /> : undefined}
+			{view === 'universes' ? (
+				<UniverseDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
+			) : undefined}
 
 			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}
 		</div>

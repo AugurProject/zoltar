@@ -21,9 +21,12 @@ import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisa
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { MarketCreateQuestionSection } from '../../markets/components/MarketCreateQuestionSection.js'
 import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
+import { validateMarketForm } from '@zoltar/ui-zoltar/features/questions/lib/questionCreation.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar/features/universes/lib/universe.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
 
 export function SecurityPoolSection({
 	accountState,
@@ -98,6 +101,7 @@ export function SecurityPoolSection({
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
+	const questionFormValidation = validateMarketForm(marketForm)
 	const guardedCreateDisabledReason = getSecurityPoolCreateDisabledReason({
 		accountAddress: accountState.address,
 		checkingDuplicateOriginPool,
@@ -111,6 +115,19 @@ export function SecurityPoolSection({
 	})
 	const createDisabledReason = loadingAvailableQuestions && securityPoolForm.marketId.trim() === '' ? securityPoolCopy.loadingAvailableQuestionsReason : guardedCreateDisabledReason
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
+	const createQuestionAndPoolDisabledReason = (() => {
+		if (accountState.address === undefined) return marketCopy.questionCreationWalletRequired
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
+		if (marketForm.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
+		if (!questionFormValidation.isValid) return questionFormValidation.notice
+		if (questionAndPoolCreating) return securityPoolCopy.combinedQuestionAndPoolInProgress
+		if (marketCreating) return securityPoolCopy.questionCreationInProgress
+		if (securityPoolCreating) return securityPoolCopy.poolCreationInProgress
+		const multiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
+		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
+		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
+	})()
 	let visibleFieldErrorId: string | undefined = undefined
 	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
 		visibleFieldErrorId = 'security-pool-security-multiplier-error'
@@ -321,6 +338,20 @@ export function SecurityPoolSection({
 							marketForm={marketForm ?? fallbackMarketForm}
 							marketResult={marketResult}
 							onCreateMarket={onCreateMarket}
+							{...(onCreateQuestionAndSecurityPool === undefined
+								? {}
+								: {
+										submitActionOverride: {
+											availability: {
+												disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
+												reason: createQuestionAndPoolDisabledReason,
+											},
+											idleLabel: securityPoolCopy.createQuestionAndPool,
+											onSubmit: onCreateQuestionAndSecurityPool,
+											pending: questionAndPoolCreating,
+											pendingLabel: securityPoolCopy.creatingQuestionAndPool,
+										},
+									})}
 							onMarketFormChange={onMarketFormChange}
 							onOpenForkTab={() => undefined}
 							onResetMarket={onResetMarket}
@@ -328,20 +359,6 @@ export function SecurityPoolSection({
 							onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
 							zoltarQuestions={availableQuestions}
 						/>
-						{onCreateQuestionAndSecurityPool === undefined ? undefined : (
-							<div className='actions'>
-								<TransactionActionButton
-									idleLabel={securityPoolCopy.createQuestionAndPool}
-									pendingLabel={securityPoolCopy.creatingQuestionAndPool}
-									onClick={onCreateQuestionAndSecurityPool}
-									pending={questionAndPoolCreating}
-									availability={{
-										disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || zoltarUniverseHasForked,
-										reason: zoltarUniverseHasForked ? securityPoolCopy.poolCreationAfterForkReason : undefined,
-									}}
-								/>
-							</div>
-						)}
 					</SectionBlock>
 
 					<ErrorNotice message={securityPoolError} />

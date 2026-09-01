@@ -125,6 +125,7 @@ export const emptyStateDetail = 'Nothing to show.'
 export const unlimitedApproval = 'Unlimited approval'
 export const minutes = 'minutes'
 export const moreInfo = 'More info'
+export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
 export const noneSelected = 'None selected'
 export const exists = 'Exists'
 export const notDeployed = 'Not deployed'
