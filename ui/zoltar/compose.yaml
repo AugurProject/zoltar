@@ -5,10 +5,10 @@ services:
     build:
       context: ../..
       dockerfile: ui/Dockerfile
-      target: local-runtime
+      target: local-runtime-zoltar
     image: zoltar-ui
     ports:
-      - 127.0.0.1:12346:8080
+      - 127.0.0.1:8012:8012
     environment:
       UI_APP: zoltar
 

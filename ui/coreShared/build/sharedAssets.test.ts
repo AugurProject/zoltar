@@ -4,8 +4,9 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as ts from 'typescript'
 import { sharedBrowserArtifactRelativePaths } from '../../../scripts/sharedBrowserArtifacts.ts'
-import { clearVendorOutput, vendor } from './vendor.mts'
+import { assertSuccessfulBuilds, clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
+import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
 
 const coreSharedPaths = getUiCoreSharedPaths()
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
@@ -23,6 +24,7 @@ const uiTruthAuctionBookPath = path.join(statoblastPaths.appSourceRoot, 'feature
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
 const uiVendorBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'vendor.mts')
 const uiWatchBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'watch.mts')
+const uiWorkerBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'workers.mts')
 const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
@@ -392,6 +394,7 @@ test('watch build regression scanner catches indirect bare Bun commands', () => 
 test('development import map maps browser dependency subpaths', () => {
 	const vendorBuildSource = fs.readFileSync(uiVendorBuildPath, 'utf8')
 	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
+	const workerBuildSource = fs.readFileSync(uiWorkerBuildPath, 'utf8')
 	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
 	const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8')) as { scripts?: Record<string, string | undefined> }
 
@@ -411,9 +414,17 @@ test('development import map maps browser dependency subpaths', () => {
 	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
+	expect(vendorBuildSource).toContain("includeTrading: parseUiAppIdFromProcess('vendor build') === 'trading'")
+	expect(watchBuildSource).toContain("const runProjectArtifactBuild = async (reason: string) => {\n\tif (shuttingDown) return\n\tif (appId === 'trading') {\n\t\tawait runVendorBuild(reason)")
+	expect(watchBuildSource).toContain("if (appId === 'trading') {\n\t\tawait runProjectArtifactBuild(reason)")
+	expect(watchBuildSource).toContain('if (workerBuildRunning) {\n\t\tvendorBuildQueued = true')
+	expect(watchBuildSource).toContain('if (vendorBuildRunning) {\n\t\tworkerBuildQueued = true')
+	expect(watchBuildSource).toContain("[WORKER_BUILD_PATH, appId, '--artifacts-current']")
 	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
 	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
 	expect(watchBuildSource).toContain('const BUN_EXECUTABLE_PATH = process.execPath')
+	expect(workerBuildSource).toContain("if (appId === 'trading' && !artifactsAreCurrent) await vendor()")
+	expect(workerBuildSource).toContain('if (!result.success) throw new Error(`Failed to build the ${appId} simulation worker:')
 	expect(collectBareBunStringLiterals(watchBuildSourceFile)).toEqual([])
 })
 
@@ -448,6 +459,43 @@ test('vendor build clears generated output before rebuilding assets', async () =
 	})
 
 	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'copyProjectArtifacts'])
+})
+
+test('vendor build failures cannot be silently ignored', () => {
+	expect(() => assertSuccessfulBuilds([{ success: true, logs: [] }], 'test bundle')).not.toThrow()
+	expect(() => assertSuccessfulBuilds([{ success: false, logs: [{ message: 'unresolved import' }] }], 'test bundle')).toThrow('test bundle failed:\nunresolved import')
+})
+
+test('project artifact generation writes Trading output only when explicitly requested', async () => {
+	const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zoltar-project-artifacts-'))
+	const artifactPaths: ProjectArtifactPaths = {
+		abiOutputPath: path.join(temporaryRoot, 'ui/coreShared/ts/abis.ts'),
+		abiSourcePath: path.join(temporaryRoot, 'solidity/ts/abi/abis.ts'),
+		contractArtifactOutputPath: path.join(temporaryRoot, 'ui/coreShared/ts/contractArtifact.ts'),
+		contractArtifactsJsonPath: path.join(temporaryRoot, 'solidity/artifacts/Contracts.json'),
+		tradingContractArtifactOutputPath: path.join(temporaryRoot, 'ui/trading/ts/generated/contractArtifact.ts'),
+	}
+	try {
+		fs.mkdirSync(path.dirname(artifactPaths.abiOutputPath), { recursive: true })
+		fs.mkdirSync(path.dirname(artifactPaths.abiSourcePath), { recursive: true })
+		fs.mkdirSync(path.dirname(artifactPaths.contractArtifactsJsonPath), { recursive: true })
+		fs.writeFileSync(artifactPaths.abiSourcePath, 'export const abis = {}\n')
+		fs.writeFileSync(artifactPaths.contractArtifactsJsonPath, JSON.stringify({ contracts: { 'contracts/Zoltar.sol': { Zoltar: { abi: [] } }, 'contracts/trading/Router.sol': { Router: { abi: [] } } } }))
+
+		await copyProjectArtifacts({}, artifactPaths)
+		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).toContain('Zoltar_Zoltar')
+		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).not.toContain('Router_Router')
+		expect(fs.existsSync(artifactPaths.tradingContractArtifactOutputPath)).toBe(false)
+
+		await copyProjectArtifacts({ includeTrading: true }, artifactPaths)
+		expect(fs.readFileSync(artifactPaths.tradingContractArtifactOutputPath, 'utf8')).toContain('contracts/trading/Router.sol')
+	} finally {
+		fs.rmSync(temporaryRoot, { force: true, recursive: true })
+	}
+
+	expect(isCoreProjectContractPath('contracts/Zoltar.sol')).toBe(true)
+	expect(isCoreProjectContractPath('contracts/statoblast/SecurityPool.sol')).toBe(true)
+	expect(isCoreProjectContractPath('contracts/trading/TwoWayConstantProductRouter.sol')).toBe(false)
 })
 
 for (const appId of UI_APP_IDS) {

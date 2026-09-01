@@ -153,9 +153,26 @@ describe('testnet deployment inputs', () => {
 		}
 	})
 
+	test('keeps the deployment workflow independent from UI installs and builds', async () => {
+		const workflow = await Bun.file(new URL('../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
+		expect(workflow).not.toContain('cd ui/')
+		expect(workflow).not.toContain('ui:build:apps')
+		expect(workflow).toContain('bun ./scripts/run-deploy-testnet.mts --help')
+	})
+
 	test('refreshes contract artifacts before loading the deployment script', async () => {
 		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
-		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun run ensure-contract-artifacts &&')
+		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun ./scripts/ensure-contract-artifacts.mts --headless &&')
+		expect(packageJson.scripts?.['deploy:testnet']).not.toContain('refresh:shared-dependencies')
+	})
+
+	test('runs deployment through the headless source bundler', async () => {
+		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
+		expect(packageJson.scripts?.['deploy:testnet']).toEndWith('bun ./scripts/run-deploy-testnet.mts')
+		const implementation = await Bun.file(new URL('./deploy-testnet.mts', import.meta.url)).text()
+		expect(implementation).not.toStartWith('#!')
+		expect(implementation).not.toContain('import.meta.main')
+		expect(implementation).not.toContain('invokedScriptPath')
 	})
 
 	test('refuses to start a deployment while its account has a pending transaction', async () => {

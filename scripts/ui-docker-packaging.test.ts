@@ -21,10 +21,39 @@ describe('UI Docker packaging', () => {
 		}
 		expect(source).not.toContain('ui/coreShared/tsconfig.vendor.json')
 		expect(source).not.toContain('bun run vendor')
-		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast')
+		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts zoltar')
+		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts statoblast')
 		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(source).toContain(`bun ./scripts/install-frozen.mts ui/${packageId}`)
 		expect(source).not.toMatch(/cd \/source\/ui\/\w+ && bun install/)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('ui/coreShared/build')
+	})
+
+	test('builds local runtime images from only the selected application dependency stage', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		expect(source).toContain('RUN mkdir -p /source/ui/coreShared/ts && bun run compile-contracts')
+		expect(source).not.toContain('/source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts')
+		expect(source).toContain('AS local-runtime-zoltar')
+		expect(source).toContain('COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/')
+		expect(source).toContain('AS local-runtime-statoblast')
+		expect(source).toContain('COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/')
+		expect(source).toContain('AS local-runtime-trading')
+		expect(source).toContain('COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/')
+		expect(source).toContain('COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts')
+		expect(source.indexOf('COPY ./ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(source.indexOf('RUN bun ./ui/coreShared/build/vendor.mts trading'))
+	})
+
+	test('serves Zoltar and Statoblast on their dedicated container ports', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		for (const [appId, port] of [
+			['zoltar', 8012],
+			['statoblast', 8011],
+		] as const) {
+			const stage = source.split(`AS local-runtime-${appId}`)[1]?.split(/^FROM /m)[0]
+			expect(stage).toBeDefined()
+			expect(stage).toContain(`EXPOSE ${port}`)
+			expect(stage).toContain(`ENV PORT=${port}`)
+			expect(stage).toContain(`http://127.0.0.1:${port}/`)
+		}
 	})
 
 	test('copies every deployment manifest required by the production build', async () => {
@@ -61,9 +90,9 @@ describe('UI Docker packaging', () => {
 		expect(packageSource).toContain(`"ui:publish:ipfs": "docker build --target publisher -f ui/Dockerfile . -t zoltar-ui-publisher && ${publishRunCommand}"`)
 		expect(packageSource).not.toContain('"ui:docker"')
 		const dockerSource = await readFile(dockerfile, 'utf8')
-		expect(dockerSource).toContain('FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime')
+		expect(dockerSource).toContain('AS local-runtime-zoltar')
 		expect(dockerSource).toContain('FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher')
-		expect(dockerSource.indexOf('AS local-runtime')).toBeLessThan(dockerSource.indexOf('AS publisher'))
+		expect(dockerSource.indexOf('AS local-runtime-zoltar')).toBeLessThan(dockerSource.indexOf('AS publisher'))
 		expect(dockerSource).toContain('CMD [ "bun", "/app/dockerServe.mts" ]')
 		expect(await readFile(publisherEntrypoint, 'utf8')).toContain('ipfs add --api "/ip4/$IPFS_IP4_ADDRESS/tcp/5001"')
 		const server = await readFile(staticServer, 'utf8')

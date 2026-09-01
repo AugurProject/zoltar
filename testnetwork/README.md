@@ -25,7 +25,7 @@ The node is intentionally ephemeral. `docker compose down` stops it, and startin
 
 ## Connect repository tools
 
-- **Zoltar UI:** from the repository root, run `bun run app:serve:zoltar`, then open `http://localhost:12346/?network=sepolia&rpcUrl=http%3A%2F%2Flocalhost%3A8545`. Connect a wallet configured for chain ID `11155111` and RPC URL `http://localhost:8545`.
+- **Zoltar UI:** from the repository root, run `bun run app:serve:zoltar`, then open `http://localhost:4153/?network=sepolia&rpcUrl=http%3A%2F%2Flocalhost%3A8545`. Connect a wallet configured for chain ID `11155111` and RPC URL `http://localhost:8545`.
 - **testnet deployer:** from the repository root, pass one of the development keys printed by Anvil. This cross-platform example uses the first standard Anvil account:
 
   ```bash

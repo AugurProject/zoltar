@@ -509,7 +509,7 @@ async function main() {
 	const appId = parseUiAppIdFromProcess('the browser smoke check')
 	const paths = getUiAppPaths(appId)
 	void paths
-	const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 12346 }
+	const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 4153 }
 	const explicitBaseUrl = process.env['UI_DEV_SERVER_URL']
 	if (appId !== undefined && explicitBaseUrl === undefined) {
 		throw new Error(`Set UI_DEV_SERVER_URL to the running ${appId} dev server base URL (expected http://localhost:${ports[appId]} from bun run app:serve:${appId}).`)

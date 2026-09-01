@@ -127,7 +127,7 @@ pins the deployment input and prevents its large upstream packages from entering
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
 | `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/*/js/**` | UI TypeScript builds per package |
-| `ui/trading/ts/generated/contractArtifact.ts` | `bun run compile-contracts`, `bun run generate`, or `bun run trading:ui:build` |
+| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./ui/coreShared/build/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
@@ -145,7 +145,7 @@ Do not regenerate or commit these outputs unless the task requires them or a req
 
 ### 7. UI manual QA
 
-For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:12346/?simulate=1`), `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`), or `bun run app:serve:trading` (`http://localhost:4163/?simulate=1`) for walletless testing.
+For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:4153/?simulate=1`), `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`), or `bun run app:serve:trading` (`http://localhost:4163/?simulate=1`) for walletless testing.
 
 Choose the smallest relevant scenario:
 

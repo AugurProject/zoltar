@@ -93,9 +93,21 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }
 
+type BuildResult = {
+	readonly success: boolean
+	readonly logs: readonly { readonly message: string }[]
+}
+
+export function assertSuccessfulBuilds(results: readonly BuildResult[], label: string) {
+	const failures = results.filter(result => !result.success)
+	if (failures.length === 0) return
+	const messages = failures.flatMap(result => result.logs.map(log => log.message))
+	throw new Error(`${label} failed${messages.length === 0 ? '' : `:\n${messages.join('\n')}`}`)
+}
+
 async function bundleTevm(vendorOutputPath = getVendorOutputPath()) {
 	const tevmOutRoot = path.join(vendorOutputPath, 'tevm')
-	await Promise.all([
+	const results = await Promise.all([
 		Bun.build({
 			entrypoints: [resolveBundlerSpecifierPath('tevm')],
 			naming: { entry: 'index.js' },
@@ -111,16 +123,19 @@ async function bundleTevm(vendorOutputPath = getVendorOutputPath()) {
 			sourcemap: 'linked',
 		}),
 	])
+	assertSuccessfulBuilds(results, 'TEVM vendor bundle')
 }
 
-const defaultVendorBuildSteps: VendorBuildSteps = {
-	clearVendorOutput,
-	bundleTevm,
-	vendorDependencies,
-	copyProjectArtifacts,
+function createDefaultVendorBuildSteps(): VendorBuildSteps {
+	return {
+		clearVendorOutput,
+		bundleTevm,
+		vendorDependencies,
+		copyProjectArtifacts: () => copyProjectArtifacts({ includeTrading: parseUiAppIdFromProcess('vendor build') === 'trading' }),
+	}
 }
 
-export async function vendor(steps: VendorBuildSteps = defaultVendorBuildSteps) {
+export async function vendor(steps: VendorBuildSteps = createDefaultVendorBuildSteps()) {
 	await steps.clearVendorOutput()
 	await steps.bundleTevm()
 	await steps.vendorDependencies()

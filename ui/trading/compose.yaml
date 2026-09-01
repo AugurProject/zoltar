@@ -5,7 +5,7 @@ services:
     build:
       context: ../..
       dockerfile: ui/Dockerfile
-      target: local-runtime
+      target: local-runtime-trading
     image: zoltar-trading
     ports:
       - 127.0.0.1:4163:8080

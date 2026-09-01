@@ -2,8 +2,13 @@ import * as path from 'path'
 import { promises as fs } from 'fs'
 import { getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath } from './bundlerPaths.mts'
+import { vendor } from './vendor.mts'
 
-const appPaths = getUiAppPaths(parseUiAppIdFromProcess('worker build'))
+const appId = parseUiAppIdFromProcess('worker build')
+const appPaths = getUiAppPaths(appId)
+const artifactsAreCurrent = process.argv.includes('--artifacts-current')
+
+if (appId === 'trading' && !artifactsAreCurrent) await vendor()
 
 const WORKER_BANNER = `
 const process = globalThis.process ?? {
@@ -29,6 +34,8 @@ const result = await Bun.build({
 	target: 'browser',
 	sourcemap: 'linked',
 })
+
+if (!result.success) throw new Error(`Failed to build the ${appId} simulation worker: ${result.logs.map(log => log.message).join('\n')}`)
 
 for (const output of result.outputs) {
 	if (output.path.endsWith('.js')) {

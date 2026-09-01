@@ -82,7 +82,7 @@ async function waitForDevelopmentServer(serverUrl: string) {
 
 describe('split development server paths', () => {
 	for (const [appId, port] of [
-		['zoltar', 12346],
+		['zoltar', 4153],
 		['statoblast', 12347],
 		['trading', 4163],
 	] as const) {
