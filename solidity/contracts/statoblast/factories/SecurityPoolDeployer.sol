@@ -17,10 +17,10 @@ contract SecurityPoolDeployer {
 	SecurityPoolDeploymentWorker immutable worker;
 	SecurityPoolEventEmitter immutable eventEmitter;
 
-	constructor() {
+	constructor(address operationsDelegate) {
 		factory = ISecurityPoolFactory(msg.sender);
 		eventEmitter = new SecurityPoolEventEmitter();
-		worker = new SecurityPoolDeploymentWorker(factory, eventEmitter);
+		worker = new SecurityPoolDeploymentWorker(factory, eventEmitter, operationsDelegate);
 	}
 
 	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialEscalationGameDepositAttoRep, address truthAuction) external returns (ISecurityPool securityPool) {
@@ -35,13 +35,15 @@ contract SecurityPoolDeploymentWorker {
 	address immutable deployer;
 	ISecurityPoolFactory public immutable factory;
 	SecurityPoolEventEmitter public immutable eventEmitter;
+	address public immutable operationsDelegate;
 	address private immutable creationCodeFirstChunk;
 	address private immutable creationCodeSecondChunk;
 
-	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter) {
+	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter, address _operationsDelegate) {
 		deployer = msg.sender;
 		factory = _factory;
 		eventEmitter = _eventEmitter;
+		operationsDelegate = _operationsDelegate;
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SecurityPool).creationCode);
 	}
 

@@ -28,7 +28,7 @@ abstract contract SecurityPoolForkerAuctionSettlementBase is SecurityPoolForkerB
 			claimedAuctionedBadDebtByPool[securityPool] + badDebtToAssignAttoEth;
 		require(nextClaimedAuctionedBadDebtAttoEth <= auctionedBadDebtByPool[securityPool], 'Bad debt');
 		claimedAuctionedBadDebtByPool[securityPool] = nextClaimedAuctionedBadDebtAttoEth;
-		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.auctionFeeIndexAtFinalization);
+		uint256 resultingTotalRepBackingUnits = SecurityPoolUtils.creditForkAuctionVault(securityPool, vault, auctionRepBackingUnits, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.auctionBadDebtGeneration, data.auctionFeeIndexAtFinalization);
 		emit ClaimAuctionProceeds(securityPool, vault, amountAttoRep, auctionRepBackingUnits, resultingTotalRepBackingUnits, data.claimedAuctionRepPurchasedAttoRep, data.claimedAuctionedCapacityOwnershipAttoRep, claimedAuctionedBadDebtByPool[securityPool], auctionedBadDebtByPool[securityPool]);
 	}
 }

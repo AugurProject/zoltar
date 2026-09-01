@@ -34,6 +34,7 @@ struct SecurityPoolForkerForkData {
 	uint256 migratedRepBackingUnits;
 	uint256 auctionFeeIndexAtFinalization;
 	uint256 unassignedRepBackingUnitsAtFinalization;
+	uint256 auctionBadDebtGeneration;
 }
 
 struct OwnForkChildRepAllocation {
