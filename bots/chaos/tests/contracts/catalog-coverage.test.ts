@@ -48,7 +48,7 @@ const expectedCanonicalManifest = [
 	'SecurityPoolDeployer:contracts/statoblast/factories/SecurityPoolDeployer.sol:deployment-helper',
 	'SecurityPoolDeploymentWorker:contracts/statoblast/factories/SecurityPoolDeployer.sol:deployment-helper',
 	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
-	'SecurityPoolLiquidationDelegate:contracts/statoblast/SecurityPoolLiquidationDelegate.sol:delegate-module',
+	'SecurityPoolOperationsDelegate:contracts/statoblast/SecurityPoolOperationsDelegate.sol:delegate-module',
 	'SecurityPoolEventEmitter:contracts/statoblast/SecurityPoolEventEmitter.sol:delegate-module',
 	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
 	'LiquidationApprovalRegistry:contracts/statoblast/LiquidationApprovalRegistry.sol:dynamic-endpoint',

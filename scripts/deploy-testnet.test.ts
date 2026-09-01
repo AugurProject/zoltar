@@ -535,6 +535,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.scalarOutcomes,
 			infrastructure.securityPoolFactory,
 			infrastructure.securityPoolForker,
+			infrastructure.securityPoolOperationsDelegate,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
 			infrastructure.uniformPriceDualCapBatchAuctionFactory,
@@ -563,10 +564,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 2n }))
+		expect(bootstrapDescendants.securityPoolDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))
+		expect(bootstrapDescendants.securityPoolDeploymentWorker).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeployer, nonce: 2n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(24)
+		expect(plan).toHaveLength(25)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

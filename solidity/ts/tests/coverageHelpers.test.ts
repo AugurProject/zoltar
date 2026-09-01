@@ -28,6 +28,7 @@ import {
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	ReputationToken_ReputationToken,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
@@ -304,17 +305,33 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n, zeroAddress],
 				}),
 			}),
-			/Initial escalation game deposit must equal 1 REP/,
+			/Initial deposit must be 1 REP/,
+		)
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, client.account.address],
+				}),
+			}),
+			/Operations delegate has no code/,
+		)
+		const operationsDelegate = await deployContract(
+			encodeDeployData({
+				abi: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi,
+				bytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
+			}),
 		)
 
 		const factoryAddress = await deployContract(
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, operationsDelegate],
 			}),
 		)
 		await assert.rejects(
@@ -324,7 +341,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'securityPoolDeploymentsRange',
 				args: [1n, 0n],
 			}),
-			/Security pool deployment range start index is out of bounds/,
+			/Pool range start out of bounds/,
 		)
 		await assert.rejects(
 			client.readContract({
@@ -333,7 +350,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'securityPoolDeploymentsRange',
 				args: [0n, 1n],
 			}),
-			/Security pool deployment range count exceeds available entries/,
+			/Pool range count too large/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -342,7 +359,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				functionName: 'deployChildSecurityPool',
 				args: [zeroAddress, zeroAddress, 0n, 0n, 2n, 0n, 0n],
 			}),
-			/Only the security pool forker can deploy child pools/,
+			/Only security pool forker/,
 		)
 	})
 
@@ -1613,7 +1630,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress],
+				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
@@ -1643,6 +1660,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
+				args: [zeroAddress],
 			}),
 		)
 		await assert.rejects(

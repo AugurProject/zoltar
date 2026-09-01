@@ -6,7 +6,7 @@ import {
 	LiquidationApprovalRegistry
 } from '../../statoblast/LiquidationApprovalRegistry.sol';
 import { IERC1271 } from '../../statoblast/SignatureValidation.sol';
-import { SecurityPoolLiquidationDelegate } from '../../statoblast/SecurityPoolLiquidationDelegate.sol';
+import { SecurityPoolOperationsDelegate } from '../../statoblast/SecurityPoolOperationsDelegate.sol';
 import { SecurityPoolUtils } from '../../statoblast/SecurityPoolUtils.sol';
 
 contract LiquidationApprovalCoordinatorMock {
@@ -51,7 +51,7 @@ contract Erc1271LiquidationReceiverMock is IERC1271 {
 	}
 }
 
-contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
+contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
 	function configure(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 1;
 		feeEligibleCapacityOwnershipAttoRep = 2;
@@ -112,17 +112,15 @@ contract CoarseLiquidationRoundingHarness is SecurityPoolLiquidationDelegate {
 
 	function getVaultOpenInterestAttoEth(address vault) external view returns (uint256) {
 		uint256 grossOpenInterestAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].capacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
-		return
-			grossOpenInterestAttoEth > vaultBadDebtAttoEth[vault]
-				? grossOpenInterestAttoEth - vaultBadDebtAttoEth[vault]
-				: 0;
+		uint256 vaultBadDebtAttoEth = _getVaultBadDebtAttoEth(vault);
+		return grossOpenInterestAttoEth > vaultBadDebtAttoEth ? grossOpenInterestAttoEth - vaultBadDebtAttoEth : 0;
 	}
 
 	function vaultState(address vault) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) {
 		return (
 			securityVaults[vault].repBackingUnits,
 			securityVaults[vault].capacityOwnershipAttoRep,
-			vaultBadDebtAttoEth[vault]
+			_getVaultBadDebtAttoEth(vault)
 		);
 	}
 }

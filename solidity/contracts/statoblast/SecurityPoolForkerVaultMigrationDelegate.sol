@@ -61,6 +61,7 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 		uint256 feeEligibleAuctionCapacityOwnershipAttoRep =
 			totalAttoRepPurchased == 0 ? 0 : data.auctionedCapacityOwnershipAttoRep;
 		securityPool.setPoolFinancials(settlementCollateralAttoEth, parentTotalCapacityOwnershipAttoRep, data.migratedCapacityOwnershipAttoRep + feeEligibleAuctionCapacityOwnershipAttoRep, parentBadDebtAtForkAttoEth);
+		data.auctionBadDebtGeneration = SecurityPoolUtils.getBadDebtGeneration(securityPool);
 		data.auctionFeeIndexAtFinalization = securityPool.feeIndex();
 		securityPool.setSystemState(SystemState.Operational);
 	}

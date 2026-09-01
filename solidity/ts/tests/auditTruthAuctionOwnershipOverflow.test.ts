@@ -53,7 +53,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		securityPoolAddresses = fixture.securityPoolAddresses
 	})
 
-	test('a full-cap winner can value and withdraw REP after a tiny vault migration', async () => {
+	test('a full-cap winner can value REP without bypassing a tiny migrated vault live capacity commitment', async () => {
 		const minimumVaultRep = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
@@ -138,12 +138,12 @@ describe('Truth-auction ownership overflow regression', () => {
 		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation log for ownership-overflow withdrawal')
 		assert.strictEqual(executionLog.args.operationId, operationId, 'the execution event should consume the newly queued operation')
 		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.WithdrawRep), 'the failed staged operation should be the requested REP withdrawal')
-		assert.strictEqual(executionLog.args.success, true, 'the bounded ownership conversion should let the staged withdrawal execute')
-		assert.strictEqual(executionLog.args.errorMessage, '', 'the successful withdrawal should not report an execution error')
-		assert.strictEqual(await getActiveStagedOperationCount(client, childPool.priceOracleManagerAndOperatorQueuer), 0n, 'the successful withdrawal should be consumed')
+		assert.strictEqual(executionLog.args.success, false, 'the bounded ownership conversion should reject rather than overflow when live open interest commits the winner capacity')
+		assert.strictEqual(executionLog.args.errorMessage, 'Capacity committed', 'the failed withdrawal should expose the live-open-interest invariant')
+		assert.strictEqual(await getActiveStagedOperationCount(client, childPool.priceOracleManagerAndOperatorQueuer), 0n, 'the rejected withdrawal should be consumed')
 		assert.strictEqual((await getStagedOperation(client, childPool.priceOracleManagerAndOperatorQueuer, operationId))[1], zeroAddress, 'the consumed withdrawal should clear its initiator')
-		assert.strictEqual(await getERC20Balance(client, childRepToken, auctionWinner.account.address), winnerWalletRepBefore + minimumVaultRep - 1n, 'the donated live-balance ratio should apply its one-unit floor without blocking the withdrawal')
-		assert.ok((await getSecurityVault(client, childPool.securityPool, auctionWinner.account.address)).repBackingUnits < winnerVaultBefore.repBackingUnits, 'the successful withdrawal should consume winner ownership')
+		assert.strictEqual(await getERC20Balance(client, childRepToken, auctionWinner.account.address), winnerWalletRepBefore, 'the rejected withdrawal should not transfer REP')
+		assert.strictEqual((await getSecurityVault(client, childPool.securityPool, auctionWinner.account.address)).repBackingUnits, winnerVaultBefore.repBackingUnits, 'the rejected withdrawal should retain winner ownership')
 	})
 
 	test('the documented theoretical-supply ceiling bounds every ownership conversion product', () => {

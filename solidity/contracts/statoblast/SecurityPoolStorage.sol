@@ -4,6 +4,11 @@ pragma solidity 0.8.35;
 import { EscalationGame } from './EscalationGame.sol';
 import { SecurityVault, SystemState } from './interfaces/ISecurityPool.sol';
 
+struct VaultBadDebt {
+	uint256 badDebtAttoEth;
+	uint256 generation;
+}
+
 abstract contract SecurityPoolStorage {
 	EscalationGame public escalationGame;
 	uint256 public totalCapacityOwnershipAttoRep;
@@ -27,7 +32,7 @@ abstract contract SecurityPoolStorage {
 	mapping(address => bool) internal isKnownVault;
 	SystemState public systemState;
 	uint256 public totalBadDebtAttoEth;
-	mapping(address => uint256) public vaultBadDebtAttoEth;
+	mapping(address => VaultBadDebt) internal vaultBadDebtByVault;
 	// Appended for delegatecall compatibility. Never reorder fields above this line.
 	uint256 public minimumSecurityBondDebtAttoEth;
 	uint256 public minimumVaultRepDepositAttoRep;
@@ -35,4 +40,17 @@ abstract contract SecurityPoolStorage {
 	mapping(address => uint256) public lastDepositTargetHealthFactorBpsByVault;
 	/// @dev Set only when this child initializes an inherited fork-continuation game whose terminal residual is burned.
 	bool internal postEndVaultAdmissionAllowed;
+	uint256 internal badDebtGeneration;
+
+	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
+		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];
+		if (vaultBadDebt.generation == badDebtGeneration) return vaultBadDebt.badDebtAttoEth;
+		return 0;
+	}
+
+	function _setVaultBadDebtAttoEth(address vault, uint256 badDebtAttoEth) internal {
+		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];
+		vaultBadDebt.badDebtAttoEth = badDebtAttoEth;
+		vaultBadDebt.generation = badDebtGeneration;
+	}
 }

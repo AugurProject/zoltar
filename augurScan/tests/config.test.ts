@@ -40,7 +40,30 @@ describe('network configuration', () => {
 			const indexedByKind = new Map(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => [kind, address]))
 			expect(deployedById.get('deploymentStatusOracle')).toBe(indexedByKind.get('deploymentStatusOracle'))
 			expect(deployedById.get('securityPoolFactory')).toBe(indexedByKind.get('securityPoolFactory'))
+			expect(deployedById.get('securityPoolOperationsDelegate')).toBe(indexedByKind.get('securityPoolOperationsDelegate'))
 			expect(indexedByKind.get('usdc')).toBeDefined()
+		}
+	})
+
+	test('indexes every current deterministic contract once and no superseded addresses', () => {
+		for (const { id, deployment, manifest } of [
+			{ id: 'mainnet', deployment: mainnetDeployment, manifest: mainnetManifest },
+			{ id: 'sepolia', deployment: sepoliaDeployment, manifest: sepoliaManifest },
+		]) {
+			const manifestEntries = parseManifestValue(manifest, `${id}.json`)
+			const usdcAddress = id === 'mainnet' ? '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' : '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
+			const expectedAddresses = new Set(
+				[
+					...deployment.deploymentSteps,
+					...deployment.derivedContracts,
+					{ address: deployment.network.genesisRepTokenAddress },
+					{ address: deployment.network.wethAddress },
+					{ address: usdcAddress },
+				].map(({ address }) => address.toLowerCase()),
+			)
+			expect(new Set(manifestEntries.map(([address]) => address.toLowerCase()))).toEqual(expectedAddresses)
+			expect(manifestEntries).toHaveLength(expectedAddresses.size)
+			expect(new Set(manifestEntries.map(([_address, _label, kind]) => kind)).size).toBe(manifestEntries.length)
 		}
 	})
 

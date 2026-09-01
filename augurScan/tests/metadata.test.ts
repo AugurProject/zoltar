@@ -28,7 +28,7 @@ describe('ABI metadata', () => {
 		expect(abiForKind('liquidationApprovalRegistry')).toBeDefined()
 	})
 
-	test('decodes caller-funded REP deposits into escalation games', () => {
+	test('decodes direct wallet REP deposits into escalation games', () => {
 		const abi = abiForKind('escalationGame')
 		if (abi === undefined) throw new Error('EscalationGame ABI missing')
 		const contract = { address: account as Address, label: 'Escalation game', kind: 'escalationGame', provenance: 'test' }
@@ -462,6 +462,7 @@ describe('ABI metadata', () => {
 			'priceCoordinatorFactory',
 			'scalarOutcomes',
 			'securityPoolUtils',
+			'securityPoolOperationsDelegate',
 			'shareTokenFactory',
 			'truthAuctionFactory',
 		]) {

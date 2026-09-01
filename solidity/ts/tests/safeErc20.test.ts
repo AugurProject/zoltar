@@ -170,7 +170,7 @@ describe('Safe ERC20 Operations', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress],
+				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
 
