@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { publicChaosConfiguration, publicChaosReadiness, publicChaosState, startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/dashboard-controller.ts'
+import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const dashboardPassword = 'correct horse battery staple'
@@ -137,6 +138,203 @@ describe('chaos dashboard server', () => {
 		})
 		expect(response.status).toBe(200)
 		expect(received).toEqual(body)
+	})
+
+	test('returns a specific connectivity failure for unreachable local RPC hostnames', async () => {
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new EndpointCheckFailure('RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?; RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
+						{
+							chainId: undefined,
+							checkedAt: '2026-09-01T00:00:00.000Z',
+							error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+							kind: 'read-rpc',
+							status: 'failed',
+							target: 'http://reth:8545',
+						},
+						{
+							chainId: undefined,
+							checkedAt: '2026-09-01T00:00:00.000Z',
+							error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+							kind: 'public-rpc',
+							status: 'failed',
+							target: 'http://reth:8545',
+						},
+					])
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.',
+		})
+	})
+
+	test('returns the container-network hint for anvil using Bun transport failure text', async () => {
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new EndpointCheckFailure('RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
+						{
+							chainId: undefined,
+							checkedAt: '2026-09-01T00:00:00.000Z',
+							error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+							kind: 'read-rpc',
+							status: 'failed',
+							target: 'http://anvil:8545',
+						},
+					])
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['http://anvil:8545'], quorumRpcUrls: [], readRpcUrl: 'http://anvil:8545', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname anvil must resolve from the bot process; Docker service names like anvil only work when the bot shares that container network.',
+		})
+	})
+
+	test.each(['RPC URLs must not exceed 2048 characters', 'At most 8 read quorum RPC URLs are supported'])('returns safe connectivity validation failures verbatim: %s', async message => {
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new Error(message)
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({ error: message })
+	})
+
+	test('reports public submission capability failures without mislabeling them as eth_chainId failures', async () => {
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new EndpointCheckFailure('RPC https://submit.example failed while calling eth_sendRawTransaction: Endpoint did not prove eth_sendRawTransaction support: HTTP 200 RPC -32601: method not found', [
+						{
+							chainId: 11_155_111,
+							checkedAt: '2026-09-01T00:00:00.000Z',
+							error: 'RPC https://submit.example failed while calling eth_sendRawTransaction: Endpoint did not prove eth_sendRawTransaction support: HTTP 200 RPC -32601: method not found',
+							failureDisposition: 'safety-paused',
+							kind: 'public-rpc',
+							status: 'failed',
+							target: 'https://submit.example',
+						},
+					])
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: "RPC https://submit.example failed while calling eth_sendRawTransaction. Review the endpoint's public transaction submission support and protected bot logs.",
+		})
+	})
+
+	test('keeps unrecognized public RPC preflight failures on the chain-id phase when no chain evidence exists', async () => {
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new EndpointCheckFailure('RPC https://submit.example failed while calling eth_chainId: RPC -32000: unexpected upstream failure', [
+						{
+							chainId: undefined,
+							checkedAt: '2026-09-01T00:00:00.000Z',
+							error: 'RPC https://submit.example failed while calling eth_chainId: RPC -32000: unexpected upstream failure',
+							failureDisposition: 'safety-paused',
+							kind: 'public-rpc',
+							status: 'failed',
+							target: 'https://submit.example',
+						},
+					])
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: 'RPC https://submit.example failed while calling eth_chainId. Review the endpoint and protected bot logs.',
+		})
+	})
+
+	test('redacts credential-bearing connectivity failures before returning them to the dashboard', async () => {
+		const secret = 'chaos-connectivity-secret'
+		const server = startDashboardServer(
+			0,
+			controller({
+				setConnectivity: () => {
+					throw new EndpointCheckFailure(`RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${secret}`, [
+						{ chainId: undefined, checkedAt: '2026-09-01T00:00:00.000Z', error: `RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${secret}`, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' },
+					])
+				},
+			}),
+		)
+		servers.push(server)
+		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+			body: JSON.stringify({
+				connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example', rpcQuorum: 1 },
+				revision: 'revision',
+			}),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		const body = await response.text()
+
+		expect(response.status).toBe(400)
+		expect(body).not.toContain(secret)
+		expect(JSON.parse(body)).toEqual({ error: 'RPC https://rpc.example failed while calling eth_chainId. Review the endpoint and protected bot logs.' })
 	})
 
 	test('separates liveness from machine readiness and reports recovery blockers', async () => {

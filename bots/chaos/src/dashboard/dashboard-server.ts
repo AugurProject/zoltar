@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
+import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
@@ -895,8 +896,137 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
-	if (operation === 'mutation:/api/connectivity') return json({ error: 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.' }, 400)
+	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
+}
+
+function recognizedConnectivityValidationMessage(message: string) {
+	if (
+		message === 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.' ||
+		message === 'Expected supported network' ||
+		message === 'Expected quorum RPC URL list' ||
+		message === 'Expected RPC configuration object' ||
+		message === 'RPC URLs must not exceed 2048 characters' ||
+		message === 'At most 8 read quorum RPC URLs are supported' ||
+		message === 'Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider' ||
+		message === 'RPC URL must use HTTPS or HTTP on loopback, anvil, or reth' ||
+		message === 'RPC URLs must not contain embedded credentials' ||
+		message === 'RPC URLs must not contain fragments' ||
+		message === 'Invalid RPC URL'
+	)
+		return message
+	return undefined
+}
+
+function formatRpcTransportFailure(origin: string, method: 'eth_chainId' | 'eth_sendRawTransaction', detail: string) {
+	let safeMessage: string | undefined
+	if (detail === 'The operation timed out.' || detail === 'fetch failed') safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
+	else if (/^connection refused$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: connection refused`
+	else if (/^Unable to connect(?:\. Is the computer able to access the url\?)?$/i.test(detail) || /^network is unreachable$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
+	else if (/^getaddrinfo (?:ENOTFOUND|EAI_AGAIN) [a-z0-9.-]+$/i.test(detail)) safeMessage = `RPC ${origin} failed while calling ${method}: ${detail}`
+	else if (/^RPC returned HTTP (\d+)$/i.test(detail)) safeMessage = `RPC ${origin} returned HTTP ${/^RPC returned HTTP (\d+)$/i.exec(detail)?.[1]} while calling ${method}`
+	else if (/^RPC returned non-JSON HTTP (\d+)$/i.test(detail)) safeMessage = `RPC ${origin} returned non-JSON HTTP ${/^RPC returned non-JSON HTTP (\d+)$/i.exec(detail)?.[1]} while calling ${method}`
+	if (safeMessage === undefined) return undefined
+	return localRpcHostnameHint(safeMessage) ?? safeMessage
+}
+
+function formatPublicRpcChainIdFailure(origin: string, detail: string) {
+	const transportFailure = formatRpcTransportFailure(origin, 'eth_chainId', detail)
+	if (transportFailure !== undefined) return transportFailure
+	if (detail === 'RPC returned an invalid chain id' || detail === 'RPC returned an unsupported chain id') return `RPC ${origin} failed while calling eth_chainId: ${detail}`
+	const expectedChainMatch = /^Expected chain (\d+), received (\d+)$/.exec(detail)
+	if (expectedChainMatch?.[1] !== undefined && expectedChainMatch[2] !== undefined) return `RPC ${origin} failed while calling eth_chainId: Expected chain ${expectedChainMatch[1]}, received ${expectedChainMatch[2]}`
+	return undefined
+}
+
+function formatPublicTransactionSubmissionFailure(origin: string, detail: string) {
+	const transportFailure = formatRpcTransportFailure(origin, 'eth_sendRawTransaction', detail)
+	if (transportFailure !== undefined) return transportFailure
+	return `RPC ${origin} failed while calling eth_sendRawTransaction. Review the endpoint's public transaction submission support and protected bot logs.`
+}
+
+function recognizedRpcMethodFailure(message: string) {
+	const match = /^RPC (https?:\/\/[^ ]+) failed while calling (eth_chainId|eth_sendRawTransaction): (.+)$/.exec(message)
+	if (match === null) return undefined
+	const origin = match[1]
+	const method = match[2]
+	const detail = match[3]
+	if (origin === undefined || method === undefined || detail === undefined) return undefined
+	return method === 'eth_chainId' ? formatPublicRpcChainIdFailure(origin, detail) : formatPublicTransactionSubmissionFailure(origin, detail)
+}
+
+function recognizedEndpointChainMismatch(message: string) {
+	const match = /^(https?:\/\/[^ ]+) returned chain (\d+)(?:; expected chain (\d+))?$/.exec(message)
+	if (match === null) return undefined
+	const origin = match[1]
+	const actualChainId = match[2]
+	const expectedChainId = match[3]
+	if (origin === undefined || actualChainId === undefined) return undefined
+	return expectedChainId === undefined ? `${origin} returned chain ${actualChainId}` : `${origin} returned chain ${actualChainId}; expected chain ${expectedChainId}`
+}
+
+function publicRpcFailureFallback(target: string, chainId: number | undefined) {
+	return chainId === undefined ? `RPC ${target} failed while calling eth_chainId. Review the endpoint and protected bot logs.` : `RPC ${target} failed while calling eth_sendRawTransaction. Review the endpoint's public transaction submission support and protected bot logs.`
+}
+
+function recognizedConnectivityChecks(error: unknown) {
+	if (!(error instanceof EndpointCheckFailure)) return undefined
+	const failedChecks = error.checks.filter(check => check.status === 'failed' && (check.kind === 'read-rpc' || check.kind === 'public-rpc'))
+	if (failedChecks.length === 0) return undefined
+	const messages = [
+		...new Set(
+			failedChecks.map(check => {
+				const detail = check.error
+				if (detail === undefined) return check.kind === 'public-rpc' ? publicRpcFailureFallback(check.target, check.chainId) : `RPC ${check.target} failed while calling eth_chainId. Review the endpoint and protected bot logs.`
+				const safeMessage =
+					recognizedRpcMethodFailure(detail) ??
+					(check.kind === 'public-rpc'
+						? check.chainId === undefined
+							? formatPublicRpcChainIdFailure(check.target, detail.replace(`${check.target}: `, ''))
+							: formatPublicTransactionSubmissionFailure(check.target, detail.replace(`${check.target}: `, ''))
+						: formatPublicRpcChainIdFailure(check.target, detail.replace(`${check.target}: `, '')))
+				if (safeMessage !== undefined) return safeMessage
+				const chainMismatch = recognizedEndpointChainMismatch(detail) ?? recognizedEndpointChainMismatch(detail.replace(`${check.target}: `, ''))
+				if (chainMismatch !== undefined) return chainMismatch
+				return check.kind === 'public-rpc' ? publicRpcFailureFallback(check.target, check.chainId) : `RPC ${check.target} failed while calling eth_chainId. Review the endpoint and protected bot logs.`
+			}),
+		),
+	]
+	return messages.join('; ')
+}
+
+function publicConnectivityFailure(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error)
+	return recognizedConnectivityValidationMessage(message) ?? recognizedConnectivityChecks(error) ?? recognizedRpcMethodFailure(message) ?? recognizedEndpointChainMismatch(message) ?? 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.'
+}
+
+function localRpcHostnameHint(message: string) {
+	const match = /^RPC (https?:\/\/[^ ]+) failed while calling (eth_chainId|eth_sendRawTransaction): (.+)$/.exec(message)
+	if (match === null) return undefined
+	const target = match[1]
+	const detail = match[3]
+	if (target === undefined || detail === undefined) return undefined
+	const normalizedDetail = detail.toLowerCase()
+	try {
+		const hostname = new URL(target).hostname
+		if (
+			(hostname === 'reth' || hostname === 'anvil') &&
+			(normalizedDetail.includes('timed out') ||
+				normalizedDetail.includes('fetch failed') ||
+				normalizedDetail.includes('connection refused') ||
+				normalizedDetail.includes('unable to connect') ||
+				normalizedDetail.includes('enotfound') ||
+				normalizedDetail.includes('eai_again') ||
+				normalizedDetail.includes('getaddrinfo') ||
+				normalizedDetail.includes('hostname resolution') ||
+				normalizedDetail.includes('name resolution'))
+		) {
+			return `${message} The hostname ${hostname} must resolve from the bot process; Docker service names like ${hostname} only work when the bot shares that container network.`
+		}
+	} catch (error) {
+		void error
+	}
+	return undefined
 }
 
 function indeterminateConfigurationFailure() {
