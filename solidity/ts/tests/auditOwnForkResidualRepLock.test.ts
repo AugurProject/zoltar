@@ -49,8 +49,6 @@ describe('Own-fork continuation residual settlement regression', () => {
 	})
 
 	test('burns significant continuation residual when the resolved child has no live owner', async () => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThreshold = (((await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const universeForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
@@ -63,6 +61,8 @@ describe('Own-fork continuation residual settlement regression', () => {
 			parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			parentVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, parentVault.repBackingUnits)
 		}
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		strictEqualTypeSafe(parentVaultRep, totalEscrowTarget, 'the sole vault should own exactly the three planned escalation deposits')
 

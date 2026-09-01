@@ -535,6 +535,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.scalarOutcomes,
 			infrastructure.securityPoolFactory,
 			infrastructure.securityPoolForker,
+			infrastructure.securityPoolOperationsDelegate,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
 			infrastructure.uniformPriceDualCapBatchAuctionFactory,
@@ -554,8 +555,8 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(17)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(17)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(16)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n }))
@@ -563,13 +564,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 2n }))
-		expect(bootstrapDescendants.securityPoolOperationsDelegate).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))
-		expect(bootstrapDescendants.securityPoolDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 2n }))
+		expect(bootstrapDescendants.securityPoolDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolDeploymentWorker).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeployer, nonce: 2n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(24)
+		expect(plan).toHaveLength(25)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

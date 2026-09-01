@@ -5,6 +5,7 @@ import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import {
 	ScalarOutcomes_ScalarOutcomes,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
@@ -123,11 +124,16 @@ export const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 		args: [zoltarAddress],
 	})
 
+export const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object)
+
+export const getSecurityPoolOperationsDelegateRuntimeCode = () => applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.deployedBytecode.object)
+
 export const getSecurityPoolFactoryByteCode = ({
 	escalationGameFactory,
 	openOracle,
 	priceOracleManagerAndOperatorQueuerFactory,
 	securityPoolForker,
+	securityPoolOperationsDelegate,
 	shareTokenFactory,
 	uniformPriceDualCapBatchAuctionFactory,
 	zoltar,
@@ -137,6 +143,7 @@ export const getSecurityPoolFactoryByteCode = ({
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	securityPoolForker: Address
+	securityPoolOperationsDelegate: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
@@ -158,6 +165,7 @@ export const getSecurityPoolFactoryByteCode = ({
 				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
+				securityPoolOperationsDelegate,
 			],
 		})
 	})()
@@ -178,6 +186,7 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 		scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
 		securityPoolUtilsBytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
+		securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
 		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 		zeroSalt: ZERO_SALT,
 	}).getInfraContractAddresses()
@@ -194,7 +203,6 @@ type BootstrapDescendantAddresses = {
 	securityPoolCreationCodeFirstChunk: Address
 	securityPoolCreationCodeSecondChunk: Address
 	securityPoolDeployer: Address
-	securityPoolOperationsDelegate: Address
 	securityPoolDeploymentWorker: Address
 }
 
@@ -202,8 +210,7 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 	const infrastructure = getInfraContractAddresses(profile)
 	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
 	const priceCoordinatorDeploymentWorker = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n })
-	const securityPoolOperationsDelegate = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
-	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 2n })
+	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
 	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 2n })
 	return {
 		liquidationApprovalRegistryDeployer,
@@ -215,7 +222,6 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
 		securityPoolDeployer,
-		securityPoolOperationsDelegate,
 		securityPoolDeploymentWorker,
 		securityPoolCreationCodeFirstChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 1n }),
 		securityPoolCreationCodeSecondChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 2n }),

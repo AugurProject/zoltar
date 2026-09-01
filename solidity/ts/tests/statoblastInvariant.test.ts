@@ -228,9 +228,9 @@ describe('Statoblast invariant harness', () => {
 
 	const setupFinalizedTruthAuctionWithMixedBids = async () => {
 		const endTime = await getQuestionEndDate(client, context.questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		const attackerClient = createClient(1)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
+		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestAmount = 10n * 10n ** 18n
@@ -987,10 +987,10 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.Operational, 'lifecycle should begin operational')
 
 		if (path === 'own') {
-			await mockWindow.setTime(context.questionEndDate + 1n)
-			await manipulatePriceOracle(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer)
 			const forkThresholdAttoRep = ((await getZoltarForkThreshold(client, genesisUniverse)) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
+			await mockWindow.setTime(context.questionEndDate + 1n)
+			await manipulatePriceOracle(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer)
 			await triggerOwnGameFork(client, context.securityPool)
 		} else {
 			await triggerExternalForkForSecurityPool(undefined, 'stateful lifecycle fork source')
@@ -1061,8 +1061,8 @@ describe('Statoblast invariant harness', () => {
 		const branchOrder = shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], 0xdecafbadn)
 		const attackerClient = createClient(1)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
-		await mockWindow.setTime(context.questionEndDate + 1n)
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(context.questionEndDate + 1n)
 		const coordinator = getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
 		await manipulatePriceOracle(client, mockWindow, coordinator)
 		await triggerOwnGameFork(client, context.securityPool)
@@ -1133,12 +1133,12 @@ describe('Statoblast invariant harness', () => {
 	})
 
 	test('own-fork locks excess parent REP into the migration balance', async () => {
-		await mockWindow.setTime(context.questionEndDate + 10n)
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const parentSupplyBeforeFork = await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, repToken, addressString(BURN_ADDRESS))
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(context.questionEndDate + 10n)
 		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
 		await triggerOwnGameFork(client, context.securityPool)
 
@@ -1357,9 +1357,9 @@ describe('Statoblast invariant harness', () => {
 	test('redeemRepFromVault becomes unavailable after the first child-pool redemption', async () => {
 		const attackerClient = createClient(1)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
-		await mockWindow.setTime(context.questionEndDate + 1n)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(genesisUniverse))) / 20n
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(context.questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
 		await triggerOwnGameFork(client, context.securityPool)
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
@@ -1511,10 +1511,10 @@ describe('Statoblast invariant harness', () => {
 	test('vault registry remains coherent when a direct own-fork claim consumes the last escrow', async () => {
 		const winningVault = createClient(1)
 		const losingVault = createClient(2)
-		await mockWindow.setTime(context.questionEndDate + 10n * DAY)
 		const forkThresholdAttoRep = ((await getZoltarForkThreshold(client, genesisUniverse)) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(winningVault, forkThresholdAttoRep, context.questionId)
 		await approveAndDepositRepToVault(losingVault, forkThresholdAttoRep, context.questionId)
+		await mockWindow.setTime(context.questionEndDate + 10n * DAY)
 		const winningRep = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, winningVault.account.address)).repBackingUnits)
 		const losingRep = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, losingVault.account.address)).repBackingUnits)
 		const winningCapacityOwnershipBeforeClaim = (await getSecurityVault(client, context.securityPool, winningVault.account.address)).capacityOwnershipAttoRep

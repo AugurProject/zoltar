@@ -342,6 +342,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep + 1n,
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
+				infra.securityPoolOperationsDelegate,
 			],
 		})
 		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial deposit must be 1 REP/)

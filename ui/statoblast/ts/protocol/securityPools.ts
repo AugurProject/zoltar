@@ -7,6 +7,7 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
+	ZoltarQuestionData_ZoltarQuestionData,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
@@ -86,6 +87,46 @@ function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSe
 async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityPoolAddress: Address) {
 	const code = await client.getCode({ address: securityPoolAddress })
 	return code !== undefined && code !== '0x'
+}
+
+export async function isSecurityPoolVaultAdmissionClosed(client: Pick<ReadClient, 'getBlock' | 'readContract'>, securityPoolAddress: Address) {
+	const [escalationGame, questionData, questionId] = await Promise.all([
+		client.readContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: securityPoolAddress,
+			functionName: 'escalationGame',
+			args: [],
+		}),
+		client.readContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: securityPoolAddress,
+			functionName: 'questionData',
+			args: [],
+		}),
+		client.readContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: securityPoolAddress,
+			functionName: 'questionId',
+			args: [],
+		}),
+	])
+	const [questionEndTime, block] = await Promise.all([
+		client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			address: questionData,
+			functionName: 'getQuestionEndDate',
+			args: [questionId],
+		}),
+		client.getBlock(),
+	])
+	if (block.timestamp < questionEndTime) return false
+	if (sameAddress(escalationGame, zeroAddress)) return true
+	return !(await client.readContract({
+		abi: statoblast_EscalationGame_EscalationGame.abi,
+		address: escalationGame,
+		functionName: 'forkContinuation',
+		args: [],
+	}))
 }
 
 async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, blockNumber?: bigint) {
@@ -446,14 +487,15 @@ async function loadSecurityPoolDetails(
 				})
 			: getSecurityPoolVaultCount(client, securityPoolAddress).then(createDeferredSecurityPoolVaultSummary),
 	])
-	const ordinaryEscalationGameStarted = sameAddress(escalationGameAddress, zeroAddress)
+	const hasForkContinuationEscalationGame = sameAddress(escalationGameAddress, zeroAddress)
 		? false
-		: !(await client.readContract({
+		: await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				functionName: 'forkContinuation',
 				address: escalationGameAddress,
 				args: [],
-			}))
+			})
+	const ordinaryEscalationGameStarted = !sameAddress(escalationGameAddress, zeroAddress) && !hasForkContinuationEscalationGame
 	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 	const systemState = getSecurityPoolSystemState(systemStateValue)
@@ -474,6 +516,7 @@ async function loadSecurityPoolDetails(
 			systemState,
 			truthAuctionStartedAt,
 		}),
+		hasForkContinuationEscalationGame,
 		initialReportPriorityFeeAttoEthPerGas,
 		lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 		lastOracleSettlementTimestamp: lastSettlementTimestamp,

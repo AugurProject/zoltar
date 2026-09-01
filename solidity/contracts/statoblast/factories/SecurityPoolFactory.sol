@@ -16,7 +16,6 @@ import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
-import { SecurityPoolOperationsDelegate } from '../SecurityPoolOperationsDelegate.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -40,7 +39,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event DeploySecurityPool(ISecurityPool indexed securityPool, UniformPriceDualCapBatchAuction truthAuction, OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _initialEscalationGameDepositAttoRep, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _initialEscalationGameDepositAttoRep, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep, address operationsDelegate) {
 		require(_initialEscalationGameDepositAttoRep == 1e18, 'Initial deposit must be 1 REP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
@@ -54,7 +53,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(_minimumSecurityBondDebtAttoEth > 0, 'Minimum security bond debt zero');
 		minimumSecurityBondDebtAttoEth = _minimumSecurityBondDebtAttoEth;
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
-		securityPoolDeployer = new SecurityPoolDeployer(address(new SecurityPoolOperationsDelegate()));
+		require(operationsDelegate != address(0), 'Operations delegate zero');
+		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate);
 	}
 
 	function securityPoolDeploymentCount() external view returns (uint256) {

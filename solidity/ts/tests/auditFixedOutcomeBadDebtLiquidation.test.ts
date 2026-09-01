@@ -59,10 +59,10 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	test('recycles redeemed REP to erase real capacity and seize an honest migrated vault', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
-		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit - repDeposit / 10n)
 

@@ -69,8 +69,8 @@ export function getCallerScopedSalt(caller: Address, salt: Hex) {
 function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: securityPoolFactory,
-		// The factory creates the shared operations delegate before its deployer.
-		nonce: 2n,
+		// The factory creates only its deployment helper.
+		nonce: 1n,
 	})
 }
 

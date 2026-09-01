@@ -1,5 +1,5 @@
 {
-  "sourceHash": "9bd78af3360bc4f29fef327c1fea8e81e7c97c0d8d92a19ed77a5fdf0cf17611",
+  "sourceHash": "f560d2677fa1274f1139637762dbc195f4ffcb3d6d45ce17b8db19a28b4e6241",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -26807,6 +26807,11 @@
               "internalType": "uint256",
               "name": "_minimumVaultRepDepositAttoRep",
               "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "operationsDelegate",
+              "type": "address"
             }
           ],
           "stateMutability": "nonpayable",

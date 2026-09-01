@@ -304,7 +304,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, 10n * 10n ** 18n, zeroAddress],
 				}),
 			}),
 			/Initial deposit must be 1 REP/,
@@ -314,7 +314,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, 10n * 10n ** 18n, client.account.address],
 			}),
 		)
 		await assert.rejects(

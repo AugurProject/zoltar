@@ -23,7 +23,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x2568044926b0783297455Cca74Ef3bBe1bB62dD7"
+			"address": "0xD9B5FE0d14423928591721E22Dd38Bb2b13B745f"
 		},
 		{
 			"id": "multicall3",
@@ -54,6 +54,11 @@
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
 			"address": "0x0eAd9A0facAE7f9428b65D35b356aE12790022a9"
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "Security Pool Operations Delegate",
+			"address": "0x8E44aC96eA2741ffa459b3bAB1F44745295a2eFD"
 		},
 		{
 			"id": "openOracle",
@@ -88,7 +93,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xe54B4467B60C32F51fa4F1c81d8B3B842874236a"
+			"address": "0xc8f722FAEf57776A1093CFcc080b61780b50D1B4"
 		}
 	],
 	"derivedContracts": [
@@ -110,12 +115,12 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xe54B4467B60C32F51fa4F1c81d8B3B842874236a"
+			"address": "0xc8f722FAEf57776A1093CFcc080b61780b50D1B4"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0xCbbBD0fFe76F73B1Df3AD20788F5FD0D8AAd7F02"
+			"address": "0x8E44aC96eA2741ffa459b3bAB1F44745295a2eFD"
 		},
 		{
 			"id": "escalationGameProofVerifier",

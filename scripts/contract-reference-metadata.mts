@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'b9e444c5e0d77fd640d4f47bd0cff6c85b784dcadac7133222c60791d644ec62'
+export const expectedProductionSoliditySourceFingerprint = 'b7bb6eaf630009c0422398b8a050fef7dc0f98d125eeeb08d8cdacef2e2ce146'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -675,7 +675,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'c502f414482a9872fb01eaa78dccd3c19d5e1af5227c10047ba645da00fb3406',
+		compiledAbiFingerprint: 'd5f05000f17877f60110467d7de940f4d286b3bc4e8f823c04037b737cd2545a',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
 		readAbiFingerprint: '855853487a8ab201b9e990820bac4f51ec6ae6520ae2dcf49efcc93e81c9a474',
@@ -778,7 +778,8 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Vault owner',
 				effect: 'Transfers REP into the pool, credits proportional REP backing units, and creates REP-denominated fee-earning capacity ownership from this deposit and its selected deposit target factor.',
 				declarations: [{ name: 'depositRepToVault' }],
-				preconditions: 'Operational and unforked; no ordinary escalation game has ever started on this pool; `isEscalationResolved()` is false; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
+				preconditions:
+					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; deposit target factor is at least 10,000; resulting vault REP meets the configured supply-scaled minimum.',
 				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{
