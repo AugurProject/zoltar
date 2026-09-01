@@ -4,8 +4,7 @@ import { runtimeConfig } from './config.ts'
 
 export const CURRENT_SCHEMA_VERSION = '2'
 export const SUPPORTED_POSTGRES_VERSION = '17.11'
-export const SUPPORTED_POSTGRES_BUILD = `Debian ${SUPPORTED_POSTGRES_VERSION}-1.pgdg12+2`
-export const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server build. augurScan requires ${SUPPORTED_POSTGRES_BUILD} because schema fingerprints are build-specific; the database was not modified.`
+export const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
 export const UNSUPPORTED_SCHEMA_MESSAGE =
 	'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
 
@@ -316,17 +315,16 @@ export const schemaInitializationAction = (markerVersion: string | undefined, pu
 	return 'initialize'
 }
 
-export const assertSupportedPostgresVersion = (versionNumber: unknown, build: unknown): void => {
-	if (versionNumber !== SUPPORTED_POSTGRES_VERSION_NUM || typeof build !== 'string' || !build.includes(`(${SUPPORTED_POSTGRES_BUILD})`))
-		throw new Error(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+export const assertSupportedPostgresVersion = (versionNumber: unknown): void => {
+	if (versionNumber !== SUPPORTED_POSTGRES_VERSION_NUM) throw new Error(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
 }
 
 export const initializeSchema = async (sql: SQL): Promise<void> => {
 	const connection = await sql.reserve()
 	let advisoryLockAcquired = false
 	try {
-		const serverVersions = await connection`SELECT current_setting('server_version_num') AS version_number, version() AS build`
-		assertSupportedPostgresVersion(serverVersions[0]?.version_number, serverVersions[0]?.build)
+		const serverVersions = await connection`SELECT current_setting('server_version_num') AS version_number`
+		assertSupportedPostgresVersion(serverVersions[0]?.version_number)
 		await connection`SELECT pg_advisory_lock(92138471)`
 		advisoryLockAcquired = true
 		const schema = await Bun.file(path.resolve(import.meta.dir, '../schema.sql')).text()

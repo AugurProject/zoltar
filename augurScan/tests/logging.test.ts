@@ -167,9 +167,63 @@ describe('AugurScan runtime logging', () => {
 				method: 'POST',
 			})
 			expect(consoleWarn).toHaveBeenCalledWith(
-				`Historical state unavailable from #1 http://reth:8545; method eth_getCode; message: state at block #1 is pruned; continuing with conservative log coverage; full exchange logged to ${filename}`,
+				`Historical state unavailable from #1 http://reth:8545; method eth_getCode; message: state at block #1 is pruned; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${filename}`,
 			)
 			expect(consoleError).not.toHaveBeenCalled()
+		} finally {
+			consoleError.mockRestore()
+			consoleWarn.mockRestore()
+		}
+	})
+
+	test('reports a pruned-state boundary probe once while retaining every exchange', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
+		try {
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async (_input, init) => {
+				const request: unknown = JSON.parse(String(init?.body))
+				if (typeof request !== 'object' || request === null || Array.isArray(request) || !('id' in request) || typeof request.id !== 'number')
+					throw new Error('Expected a numeric JSON-RPC request identifier')
+				return Response.json({ error: { code: -32603, message: `state at block #${request.id} is pruned` }, id: request.id, jsonrpc: '2.0' })
+			})
+			for (const id of [1, 2, 3]) {
+				await loggingFetch('http://reth:8545', {
+					body: JSON.stringify({ id, jsonrpc: '2.0', method: 'eth_getBalance', params: ['0x1234', `0x${id.toString(16)}`] }),
+					method: 'POST',
+				})
+			}
+			expect(consoleWarn).toHaveBeenCalledTimes(1)
+			expect(consoleError).not.toHaveBeenCalled()
+			expect((await readFile(filename, 'utf8')).trim().split('\n')).toHaveLength(3)
+		} finally {
+			consoleError.mockRestore()
+			consoleWarn.mockRestore()
+		}
+	})
+
+	test('coalesces missing-trie-node state probes while retaining every exchange', async () => {
+		const directory = await temporaryDirectory()
+		const filename = path.join(directory, 'rpc.jsonl')
+		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
+		try {
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async (_input, init) => {
+				const request: unknown = JSON.parse(String(init?.body))
+				if (typeof request !== 'object' || request === null || Array.isArray(request) || !('id' in request)) throw new Error('Expected an RPC identifier')
+				return Response.json({ error: { code: -32603, message: 'missing trie node 0xsecret' }, id: request.id, jsonrpc: '2.0' })
+			})
+			for (const id of [1, 2, 3])
+				await loggingFetch('http://reth:8545', {
+					body: JSON.stringify({ id, jsonrpc: '2.0', method: 'eth_getCode', params: ['0x1234', `0x${id.toString(16)}`] }),
+					method: 'POST',
+				})
+			expect(consoleWarn).toHaveBeenCalledTimes(1)
+			expect(consoleWarn.mock.calls[0]?.[0]).toContain('message: missing trie node')
+			expect(consoleWarn.mock.calls[0]?.[0]).not.toContain('0xsecret')
+			expect(consoleError).not.toHaveBeenCalled()
+			expect((await readFile(filename, 'utf8')).trim().split('\n')).toHaveLength(3)
 		} finally {
 			consoleError.mockRestore()
 			consoleWarn.mockRestore()

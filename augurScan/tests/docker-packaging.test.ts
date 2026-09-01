@@ -9,6 +9,8 @@ const composeFile = join(import.meta.dir, '..', 'compose.yaml')
 const readmeFile = join(import.meta.dir, '..', 'README.md')
 const schemaFile = join(import.meta.dir, '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '.gitignore')
+const ciWorkflow = join(import.meta.dir, '..', '..', '.github', 'workflows', 'ci.yml')
+const packageWorkflow = join(import.meta.dir, '..', '..', '.github', 'workflows', 'augur-scan.yml')
 
 describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
@@ -66,12 +68,16 @@ describe('Docker packaging', () => {
 	test('runs the PostgreSQL build used to generate the authoritative schema', async () => {
 		const composeSource = await readFile(composeFile, 'utf8')
 		const readmeSource = await readFile(readmeFile, 'utf8')
+		const ciSource = await readFile(ciWorkflow, 'utf8')
+		const packageSource = await readFile(packageWorkflow, 'utf8')
 		const schemaSource = await readFile(schemaFile, 'utf8')
 		const schemaVersion = /Dumped from database version (\d+\.\d+)/u.exec(schemaSource)?.[1]
 		if (schemaVersion === undefined) throw new Error('The authoritative schema must record its PostgreSQL server release')
-		const image = `postgres:${schemaVersion}-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0`
+		const image = `postgres:${schemaVersion}-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73`
 		expect(schemaSource).toContain(`Dumped from database version ${schemaVersion} (Debian ${schemaVersion}-1.pgdg12+2)`)
 		expect(composeSource).toContain(`image: ${image}`)
 		expect(readmeSource).toContain(image)
+		expect(ciSource).toContain(`image: ${image}`)
+		expect(packageSource).toContain(`image: ${image}`)
 	})
 })
