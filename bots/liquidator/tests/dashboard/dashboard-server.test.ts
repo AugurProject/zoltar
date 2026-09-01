@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
+import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 
@@ -340,6 +341,149 @@ describe('liquidator dashboard server', () => {
 		})
 		expect(recovery.status).toBe(200)
 		expect(reconciliation).toEqual(recoveryRequest)
+	})
+
+	test('returns a specific connectivity failure for unreachable local RPC hostnames', async () => {
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
+			getState: () => ({ paused: false }),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
+			setApprovedUniverses: value => value,
+			setNetworkConnectivity: () => {
+				throw new EndpointCheckFailure('RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?; RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
+					{
+						chainId: undefined,
+						checkedAt: '2026-09-01T00:00:00.000Z',
+						error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+						kind: 'read-rpc',
+						status: 'failed',
+						target: 'http://reth:8545',
+					},
+					{
+						chainId: undefined,
+						checkedAt: '2026-09-01T00:00:00.000Z',
+						error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+						kind: 'public-rpc',
+						status: 'failed',
+						target: 'http://reth:8545',
+					},
+				])
+			},
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const response = await fetch(new URL('/api/network-connectivity', server.url), {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545' }, network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.',
+		})
+	})
+
+	test('returns the container-network hint for anvil using Bun transport failure text', async () => {
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
+			getState: () => ({ paused: false }),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
+			setApprovedUniverses: value => value,
+			setNetworkConnectivity: () => {
+				throw new EndpointCheckFailure('RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
+					{
+						chainId: undefined,
+						checkedAt: '2026-09-01T00:00:00.000Z',
+						error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+						kind: 'read-rpc',
+						status: 'failed',
+						target: 'http://anvil:8545',
+					},
+				])
+			},
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const response = await fetch(new URL('/api/network-connectivity', server.url), {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['http://anvil:8545'], quorumRpcUrls: [], readRpcUrl: 'http://anvil:8545' }, network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({
+			error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname anvil must resolve from the bot process; Docker service names like anvil only work when the bot shares that container network.',
+		})
+	})
+
+	test.each(['RPC URLs must not exceed 2048 characters', 'At most 8 read quorum RPC URLs are supported'])('returns safe connectivity validation failures verbatim: %s', async message => {
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
+			getState: () => ({ paused: false }),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
+			setApprovedUniverses: value => value,
+			setNetworkConnectivity: () => {
+				throw new Error(message)
+			},
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const response = await fetch(new URL('/api/network-connectivity', server.url), {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example' }, network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+
+		expect(response.status).toBe(400)
+		expect(await response.json()).toEqual({ error: message })
+	})
+
+	test('redacts credential-bearing connectivity failures before returning them to the dashboard', async () => {
+		const secret = 'liquidator-connectivity-secret'
+		const server = startDashboardServer(0, {
+			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
+			getState: () => ({ paused: false }),
+			hostname: '127.0.0.1',
+			isNetworkConfigured: () => true,
+			setApprovedUniverses: value => value,
+			setNetworkConnectivity: () => {
+				throw new EndpointCheckFailure(`RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${secret}`, [
+					{ chainId: undefined, checkedAt: '2026-09-01T00:00:00.000Z', error: `RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${secret}`, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' },
+				])
+			},
+			setPaused: value => value,
+			setSelectedPools: value => value,
+			setSigner: value => value,
+			setStrategy: value => value,
+		})
+		servers.push(server)
+
+		const response = await fetch(new URL('/api/network-connectivity', server.url), {
+			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example' }, network: 'sepolia' }),
+			headers: { 'content-type': 'application/json', origin: server.url.origin },
+			method: 'PUT',
+		})
+		const body = await response.text()
+
+		expect(response.status).toBe(400)
+		expect(body).not.toContain(secret)
+		expect(JSON.parse(body)).toEqual({ error: 'RPC https://rpc.example failed while calling eth_chainId. Review the endpoint and protected bot logs.' })
 	})
 
 	test('accepts configured network authority when bound to all interfaces', async () => {

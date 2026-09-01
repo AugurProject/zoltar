@@ -202,6 +202,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let hangNextConfigurationRequest = false
 	let hangNextProfileResponse = false
 	let rejectPause = false
+	let networkConnectivityFailureMessage: string | undefined
 	const pauseRequests: unknown[] = []
 	const approvedUniverseRequests: string[][] = []
 	const selectedPoolRequests: string[][] = []
@@ -279,6 +280,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/network-connectivity') {
+			if (networkConnectivityFailureMessage !== undefined) {
+				return new window.Response(JSON.stringify({ error: networkConnectivityFailureMessage }), { headers: { 'content-type': 'application/json' }, status: 400 })
+			}
 			currentConfiguration = {
 				...currentConfiguration,
 				connectivity: { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'https://sepolia.example', rpcQuorum: 1 },
@@ -337,6 +341,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		setConfigurationRequestFailure: (failed: boolean) => {
 			configurationRequestFailure = failed
+		},
+		setNetworkConnectivityFailureMessage: (message: string | undefined) => {
+			networkConnectivityFailureMessage = message
 		},
 		setStaleProfilePolls: (count: number) => {
 			staleProfilePolls = count
@@ -633,6 +640,27 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('network-status')?.textContent).toBe('Sepolia profile loaded; RPC setup required.')
 		expect(rpcQuorum.value).toBe('1')
 		expect(page.window.document.getElementById('rpc-endpoint-health')?.children).toHaveLength(0)
+	})
+
+	test('shows the returned connectivity failure when saving RPC settings fails', async () => {
+		const page = await dashboard(configuration(), state())
+		page.setNetworkConnectivityFailureMessage('RPC http://reth:8545 failed while calling eth_chainId: The operation timed out. The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.')
+		const networkForm = page.window.document.getElementById('network-form')
+		const readRpcUrl = page.window.document.getElementById('read-rpc-url')
+		const publicRpcUrls = page.window.document.getElementById('public-rpc-urls')
+		if (!(networkForm instanceof page.window.HTMLFormElement) || !(readRpcUrl instanceof page.window.HTMLInputElement) || !(publicRpcUrls instanceof page.window.HTMLTextAreaElement)) {
+			throw new Error('Expected network configuration controls')
+		}
+
+		readRpcUrl.value = 'http://reth:8545'
+		publicRpcUrls.value = 'http://reth:8545'
+		networkForm.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+
+		const networkStatus = page.window.document.getElementById('network-status')
+		expect(networkStatus?.textContent).toBe('RPC http://reth:8545 failed while calling eth_chainId: The operation timed out. The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.')
+		expect(networkStatus?.classList.contains('error')).toBe(true)
 	})
 
 	test('keeps resume locked when configuration and network identity are unavailable', async () => {

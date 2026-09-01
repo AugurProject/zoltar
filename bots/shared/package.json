@@ -6,6 +6,7 @@
 	"exports": {
 		"./config/persistent-path": "./src/config/persistent-path.ts",
 		"./config/signer": "./src/config/signer.ts",
+		"./dashboard/connectivity-error": "./src/dashboard/connectivity-error.ts",
 		"./dashboard/security": "./src/dashboard/security.ts",
 		"./ethereum": "./src/ethereum.ts",
 		"./ethereum/rpc-transport": "./src/ethereum/rpc-transport.ts",
