@@ -21,8 +21,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js
 import { getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
-import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps } from '../../types.js'
@@ -74,11 +73,6 @@ export function renderOpenOracleFieldError(id: string, message: string | undefin
 			{message}
 		</p>
 	)
-}
-export function formatOpenOracleReviewDuration(value: string) {
-	const seconds = tryParseBigIntInput(value)
-	if (seconds === undefined) return commonCopy.metricUnavailablePlaceholder
-	return `${formatDuration(seconds)} (${openOracleCopy.formatExactSeconds(seconds.toString())})`
 }
 function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, reportId: string) {
 	switch (field) {

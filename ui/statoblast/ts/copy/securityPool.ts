@@ -162,7 +162,6 @@ export const ineligibleQuestionDetail = 'Security pools can only be created for 
 export const loadingQuestion = 'Loading question…'
 export const poolAddressLabel = 'Pool address'
 export const poolAlreadyExists = 'Pool Already Exists'
-export const marketHierarchyDetail = 'A Security Pool is the tradeable Market for one existing binary Zoltar Question. Select its Question ID here; the Question remains the reusable resolution definition.'
 export const statoblastSecurityMultiplierBpsHelpText = 'Multiplier target in x, with up to four decimal places; higher values require more REP.'
 export const initialReportPriorityFeeHelpText = 'Fixed gas-price premium added to Open Oracle report security. Enter gwei.'
 export const depositingRep = 'depositing REP'
