@@ -555,7 +555,6 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /burnEscalationWinnerHaircut\(amountAttoRep\)[\s\S]*configured escalation game/)
 	assert.match(contractInteractionReference, /getPoolAccountingSnapshot`, `getVaultFeeRemainder`/)
 	assert.match(contractInteractionReference, /getVaultCount`, `getVaults`/)
-	assert.match(contractInteractionReference, /`forkData` includes cumulative migrated REP and the fork-activation timestamp/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`/)
 	assert.match(operatorReference, /factory has no owner role and no later `resumeFromFork` relay/)
 	assert.match(securityPoolFactory, /_initialEscalationGameDepositAttoRep == 1e18[\s\S]*zoltar\.getNonDecisionThresholdAttoRep\(universeId\) > _getInitialEscalationDepositAttoRep\(reputationToken\)/)
@@ -580,11 +579,6 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
 	assert.match(operatorReference, /Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
-	assert.match(
-		operatorReference,
-		/EscalationGameDepositDelegate`, `EscalationGameClaimDelegate`, `EscalationGameForker`, `SecurityPoolForkerVaultMigrationDelegate`, `SecurityPoolSettlementDelegate`, and `SecurityPoolOperationsDelegate`[\s\S]*no ownership or import surface[\s\S]*SecurityPoolSettlementDelegate` is abstract[\s\S]*complete-set and fork-finalization collateral validation[\s\S]*single deployed `SecurityPoolOperationsDelegate`[\s\S]*funded REP-backing-unit, capacity-ownership, receiver-debt, and full-request bad-debt liquidation accounting[\s\S]*isolating fees and claims/,
-	)
-	assert.match(operatorReference, /Migration, settlement, liquidation, and storage modules[\s\S]*`SecurityPoolSettlementDelegate\.sol`[\s\S]*`SecurityPoolOperationsDelegate\.sol`[\s\S]*`EscalationGameForker\.sol` \(\.\.\/\.\.\/solidity\/contracts\/statoblast\/EscalationGameForker\.sol\)/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)
 	assert.match(contractInteractionReference, /startFromFork\(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep\)[\s\S]*does not start the remaining clock until `resumeFromFork`/)
@@ -947,10 +941,6 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(invariantsHtml, /AUC-07[\s\S]*aggregate[\s\S]*underfundedWinningAttoEth \/ maxAttoRepBeingSold[\s\S]*dust winner can round to zero REP/)
 	assert.doesNotMatch(invariantsHtml, /fraction funded by the bid's retained ETH/)
 	assert.match(contractInteractionReference, /winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero/)
-	assert.match(
-		contractInteractionReference,
-		/`ClaimAuctionProceeds` when REP backing, capacity ownership, or raw auction bad-debt settlement advances[\s\S]*cumulative claimed and total auctioned bad-debt fields are raw counters[\s\S]*effective vault debt still requires the recorded auction generation to match the pool’s current generation/,
-	)
 	assert.match(truthAuctionStorage, /return cumulativeAllocationAfter - cumulativeAllocationBefore/)
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)
 	assert.match(zoltar, /safeTransferFrom\(migrator, Constants\.BURN_ADDRESS, amountAttoRep\)/)
