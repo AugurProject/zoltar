@@ -243,6 +243,28 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).getByText('Underwater')).not.toBeNull()
 	})
 
+	test('does not infer vault health text from associated REP per capacity when current health is unavailable', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SelectedVaultSummarySection
+				repPerEthPrice={undefined}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
+				capacityOwnershipAttoRep={2n * 10n ** 18n}
+				currentVaultIsHealthy={undefined}
+				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })}
+				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
+				selectedVaultIsOwnedByAccount
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricValue = within(document.body).getByText('1.9×').closest('.metric-field-value')
+		expect(metricValue?.className).not.toContain('metric-value-danger')
+		expect(within(document.body).queryByText('Healthy')).toBeNull()
+		expect(within(document.body).queryByText('Near minimum')).toBeNull()
+		expect(within(document.body).queryByText('Underwater')).toBeNull()
+	})
+
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
 		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

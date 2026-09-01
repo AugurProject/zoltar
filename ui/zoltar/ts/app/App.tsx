@@ -41,7 +41,7 @@ export function App() {
 	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
 	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
-	const activeRoute = resolvedRoute === 'zoltar' && invalidZoltarView ? 'not-found' : resolvedRoute
+	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
 		accountState,
 		activeEnvironmentNonce,

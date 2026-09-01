@@ -1,11 +1,15 @@
-import * as protocol from '../protocol/index.js'
 import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getDeploymentSteps } from '../protocol/deployment.js'
+import { approveErc20 } from '../protocol/tokenActions.js'
+import { createMarket, loadZoltarUniverseSummary } from '../protocol/zoltar.js'
+import { createZoltarChildUniverse, forkZoltarUniverse } from '../protocol/zoltarForks.js'
+import { getZoltarAddress } from '../protocol/zoltarDeploymentHelpers.js'
 
-const defaultScenarioProtocol = { ...protocol }
+const defaultScenarioProtocol = { approveErc20, createMarket, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, getZoltarAddress, loadZoltarUniverseSummary }
 
 type ZoltarScenarioProtocol = Pick<typeof defaultScenarioProtocol, 'approveErc20' | 'createMarket' | 'createZoltarChildUniverse' | 'forkZoltarUniverse' | 'getDeploymentSteps' | 'getZoltarAddress' | 'loadZoltarUniverseSummary'>
 

@@ -24,16 +24,16 @@ function formatRepPerCapacityBps(value: bigint) {
 
 function getAssociatedRepToneClass({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
 	if (isCurrentlyHealthy === false) return 'metric-value-danger'
-	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return isCurrentlyHealthy === true ? 'metric-value-success' : undefined
-	if (associatedRepPerCapacityBps < selectedPoolStatoblastSecurityMultiplierBps) return 'metric-value-danger'
+	if (isCurrentlyHealthy !== true) return undefined
+	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return 'metric-value-success'
 	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return 'metric-value-warning'
 	return 'metric-value-success'
 }
 
 function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
 	if (isCurrentlyHealthy === false) return securityPoolCopy.vaultHealthUnderwater
-	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return isCurrentlyHealthy === true ? securityPoolCopy.vaultHealthHealthy : undefined
-	if (associatedRepPerCapacityBps < selectedPoolStatoblastSecurityMultiplierBps) return securityPoolCopy.vaultHealthUnderwater
+	if (isCurrentlyHealthy !== true) return undefined
+	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return securityPoolCopy.vaultHealthHealthy
 	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return securityPoolCopy.vaultHealthNearMinimum
 	return securityPoolCopy.vaultHealthHealthy
 }
