@@ -1,6 +1,7 @@
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { projectManifests } from './project-manifests.ts'
 import { contractSourceHash, contractSources } from './project-metadata-source.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
@@ -18,6 +19,13 @@ const artifactAvailable = await access(artifactPath).then(
 		throw error
 	},
 )
+const stale: string[] = []
+const expectedManifests = await projectManifests(repositoryRoot)
+for (const [networkId, expected] of Object.entries(expectedManifests)) {
+	const relativePath = `manifests/${networkId}.json`
+	const current = await readFile(path.join(projectRoot, 'config', relativePath), 'utf8')
+	if (expected !== current) stale.push(`config/${relativePath}`)
+}
 if (artifactAvailable) {
 	const generatedRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-metadata-'))
 	try {
@@ -28,7 +36,6 @@ if (artifactAvailable) {
 		})
 		const [exitCode, stdout, stderr] = await Promise.all([generation.exited, new Response(generation.stdout).text(), new Response(generation.stderr).text()])
 		if (exitCode !== 0) throw new Error(`Unable to generate augurScan metadata for comparison\n${stderr || stdout}`)
-		const stale: string[] = []
 		for (const relativePath of ['abis.json']) {
 			const [expected, current] = await Promise.all([
 				readFile(path.join(generatedRoot, relativePath), 'utf8'),
@@ -36,11 +43,11 @@ if (artifactAvailable) {
 			])
 			if (expected !== current) stale.push(`config/${relativePath}`)
 		}
-		if (stale.length > 0) throw new Error(`Generated augurScan metadata is stale: ${stale.join(', ')}. Run bun run metadata:snapshot.`)
 	} finally {
 		await rm(generatedRoot, { recursive: true, force: true })
 	}
 }
+if (stale.length > 0) throw new Error(`Generated augurScan metadata is stale: ${stale.join(', ')}. Run bun run metadata:snapshot.`)
 process.stdout.write(
 	`Generated augurScan metadata is current${artifactAvailable ? '' : ' by contract source hash; canonical artifacts were unavailable for an exact ABI comparison'}.\n`,
 )

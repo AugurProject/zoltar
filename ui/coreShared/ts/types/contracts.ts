@@ -17,7 +17,7 @@ export type ZoltarDeploymentStepId =
 	| 'shareTokenFactory'
 	| 'priceOracleManagerAndOperatorQueuerFactory'
 
-export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
+export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type LiquidationApprovalDetails = {

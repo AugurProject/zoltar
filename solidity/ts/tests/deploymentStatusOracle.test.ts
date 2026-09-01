@@ -52,7 +52,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
-		strictEqualTypeSafe(deploymentMask, 1n | (1n << 1n) | (1n << 3n) | (1n << 5n), 'oracle should report the deployed subset of infra contracts')
+		strictEqualTypeSafe(deploymentMask, 1n | (1n << 1n) | (1n << 3n) | (1n << 6n), 'oracle should report the deployed subset of infra contracts')
 	})
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {

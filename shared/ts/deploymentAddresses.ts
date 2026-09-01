@@ -10,6 +10,7 @@ type SecurityPoolFactoryAddressInputs = {
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	securityPoolForker: Address
+	securityPoolOperationsDelegate: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
@@ -35,6 +36,7 @@ type InfraContractAddressConfig = {
 	proxyDeployerAddress: Address
 	scalarOutcomesBytecode: Hex
 	securityPoolUtilsBytecode: Hex
+	securityPoolOperationsDelegateBytecode: Hex
 	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
 	getZoltarAddress: () => Address
@@ -57,6 +59,7 @@ type InfraContractAddresses = {
 	scalarOutcomes: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
+	securityPoolOperationsDelegate: Address
 	securityPoolUtils: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
@@ -115,6 +118,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
 		}
 		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate))
+		const securityPoolOperationsDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolOperationsDelegateBytecode)
 		const escalationGameProofVerifier = getCreateAddress({
 			from: escalationGameFactory,
 			nonce: 1n,
@@ -124,6 +128,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			...addresses,
 			escalationGameFactory,
 			escalationGameProofVerifier,
+			securityPoolOperationsDelegate,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,
 				config.zeroSalt,
@@ -132,6 +137,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					openOracle: addresses.openOracle,
 					priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
 					securityPoolForker: addresses.securityPoolForker,
+					securityPoolOperationsDelegate,
 					shareTokenFactory: addresses.shareTokenFactory,
 					uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
 					zoltar: addresses.zoltar,

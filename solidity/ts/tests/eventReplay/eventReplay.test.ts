@@ -57,6 +57,7 @@ const poolAccountingSnapshotAbi = [
 					{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
 					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
 					{ name: 'currentRetentionRate', type: 'uint256' },
+					{ name: 'badDebtGeneration', type: 'uint256' },
 				],
 			},
 		],

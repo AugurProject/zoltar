@@ -80,6 +80,8 @@ describe('Statoblast: truth auction', () => {
 		getTotalRepPurchasedAttoRep,
 		isIgnorableLogDecodeError,
 		createCompleteSet,
+		migrateShares,
+		redeemCompleteSet,
 		depositRepToVault,
 		depositToEscalationGame,
 		getSettlementCollateralAttoEth,
@@ -90,6 +92,7 @@ describe('Statoblast: truth auction', () => {
 		getTotalAccruedFees,
 		getTotalClaimableVaultFeesAttoEth,
 		getTotalCapacityOwnershipAttoRep,
+		getShareTokenSupplyAttoShares,
 		getVaultCount,
 		backingUnitsToAttoRep,
 		redeemFees,
@@ -186,7 +189,7 @@ describe('Statoblast: truth auction', () => {
 		await mockWindow.advanceTime(10n * DAY)
 	}
 
-	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint, purchaseAuctionRep = true) => {
+	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint, purchaseAuctionRep = true, forcedAuctionedBadDebtAttoEth?: bigint) => {
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -210,6 +213,15 @@ describe('Statoblast: truth auction', () => {
 		const auctionTick = purchaseAuctionRep ? await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy) : 0n
 		if (forcedSurplusAboveCapacityOwnershipAttoRep !== undefined) {
 			await mockWindow.setBalance(yesSecurityPool.securityPool, securityPoolCapacityOwnershipAttoRep + forcedSurplusAboveCapacityOwnershipAttoRep)
+		}
+		if (forcedAuctionedBadDebtAttoEth !== undefined) {
+			await mockWindow.addStateOverrides({
+				[getInfraContractAddresses().securityPoolForker]: {
+					stateDiff: {
+						[formatStorageSlot(getMappingStorageSlot(securityPoolAddresses.securityPool, 13n))]: forcedAuctionedBadDebtAttoEth,
+					},
+				},
+			})
 		}
 		await mockWindow.advanceTime(7n * DAY + DAY)
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -297,6 +309,53 @@ describe('Statoblast: truth auction', () => {
 	})
 
 	describe('auction startup and migration isolation', () => {
+		test('late auction claims cannot assign debt from an exhausted collateral generation', async () => {
+			const auctionedBadDebtAttoEth = 1n * 10n ** 18n
+			const { auctionParticipant, auctionTick, yesSecurityPool } = await setupLongDatedChildAuction('late auction debt generation source', undefined, true, auctionedBadDebtAttoEth)
+			const completeSetHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
+				await migrateShares(completeSetHolder, securityPoolAddresses.shareToken, genesisUniverse, outcome, [QuestionOutcome.Yes])
+			}
+			const originalClaimSupplyAttoShares = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
+			assert.ok(originalClaimSupplyAttoShares > 0n, 'the auctioned bad debt must belong to a funded collateral generation')
+			await redeemCompleteSet(completeSetHolder, yesSecurityPool.securityPool, originalClaimSupplyAttoShares)
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), 0n, 'the original collateral generation should be exhausted before the delayed claim')
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'totalBadDebtAttoEth' }), 0n, 'the exhausted generation should clear its aggregate auctioned debt')
+
+			await createCompleteSet(client, yesSecurityPool.securityPool, 10n ** 15n)
+			const nextGenerationBadDebtAttoEth = 1n
+			await mockWindow.addStateOverrides({
+				[yesSecurityPool.securityPool]: {
+					stateDiff: {
+						[formatStorageSlot(21n)]: nextGenerationBadDebtAttoEth,
+					},
+				},
+			})
+			const claimHash = await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
+			const claimReceipt = await client.waitForTransactionReceipt({ hash: claimHash })
+			const claimEvent = claimReceipt.logs
+				.map(log => {
+					try {
+						return decodeEventLog({
+							abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
+							data: log.data,
+							topics: log.topics,
+						})
+					} catch (error) {
+						if (!isIgnorableLogDecodeError(error)) throw error
+						return undefined
+					}
+				})
+				.find(log => log?.eventName === 'ClaimAuctionProceeds')
+			if (claimEvent === undefined || claimEvent.eventName !== 'ClaimAuctionProceeds') throw new Error('late auction claim event missing')
+
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'totalBadDebtAttoEth' }), nextGenerationBadDebtAttoEth, 'claiming an old auction must preserve unrelated current-generation aggregate debt')
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'vaultBadDebtAttoEth', args: [auctionParticipant.account.address] }), 0n, 'the delayed auction winner must not inherit old-generation debt')
+			strictEqualTypeSafe((await getUnassignedPosition(yesSecurityPool.securityPool)).badDebtAttoEth, 0n, 'the expired auction debt must not remain in the current unassigned position')
+			strictEqualTypeSafe(claimEvent.args.claimedAuctionedBadDebtAttoEth, auctionedBadDebtAttoEth, 'late settlement must still advance the raw cumulative claimed-auction debt counter')
+			strictEqualTypeSafe(claimEvent.args.auctionedBadDebtAttoEth, auctionedBadDebtAttoEth, 'late settlement must preserve the raw total auctioned debt counter')
+		})
+
 		test('external-fork escalation backing is auctionable before the child game resumes', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n

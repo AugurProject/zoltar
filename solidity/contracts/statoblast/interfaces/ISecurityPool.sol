@@ -45,6 +45,8 @@ struct PoolAccountingSnapshot {
 	uint256 lastUpdatedFeeAccumulator;
 	/// @dev Per-second collateral retention multiplier, scaled by 1e18.
 	uint256 currentRetentionRate;
+	/// @dev Monotonic identifier for the active collateral-claim and bad-debt generation.
+	uint256 badDebtGeneration;
 }
 
 struct LiquidationSnapshot {

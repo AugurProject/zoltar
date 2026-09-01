@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
 import { SecurityPoolForkerAuctionSettlementBase } from '../../statoblast/SecurityPoolForkerAuctionSettlementBase.sol';
-import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPool, PoolAccountingSnapshot } from '../../statoblast/interfaces/ISecurityPool.sol';
 import { SecurityPoolForkerForkData } from '../../statoblast/SecurityPoolForkerTypes.sol';
 
 contract AuctionSettlementPoolHarness {
@@ -20,6 +20,11 @@ contract AuctionSettlementPoolHarness {
 	uint256 public totalRepBackingUnits = 1e18;
 	uint256 public feeEligibleCapacityOwnershipAttoRep;
 	uint256 public totalBadDebtAttoEth;
+	uint256 public badDebtGeneration;
+
+	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot) {
+		snapshot.badDebtGeneration = badDebtGeneration;
+	}
 
 	function setTotalBadDebtAttoEth(uint256 amountAttoEth) external {
 		totalBadDebtAttoEth = amountAttoEth;
@@ -49,6 +54,8 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 
 	function configureAuctionBadDebt(ISecurityPool securityPool, uint256 badDebtAttoEth) external {
 		auctionedBadDebtByPool[securityPool] = badDebtAttoEth;
+		forkDataByPool[securityPool].auctionBadDebtGeneration = securityPool.getPoolAccountingSnapshot()
+			.badDebtGeneration;
 	}
 
 	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) external {
