@@ -62,13 +62,12 @@ describe('Docker packaging', () => {
 		expect(source).toContain(`DISABLE_INDEXER: \${DISABLE_INDEXER:-0}`)
 	})
 
-	test('runs the PostgreSQL release used to generate the authoritative schema', async () => {
+	test('runs the PostgreSQL build used to generate the authoritative schema', async () => {
 		const composeSource = await readFile(composeFile, 'utf8')
 		const schemaSource = await readFile(schemaFile, 'utf8')
-		const composeVersion = /image: postgres:(\d+\.\d+)-alpine/u.exec(composeSource)?.[1]
 		const schemaVersion = /Dumped from database version (\d+\.\d+)/u.exec(schemaSource)?.[1]
-		if (composeVersion === undefined) throw new Error('Compose must pin a PostgreSQL alpine image with a major and minor release')
 		if (schemaVersion === undefined) throw new Error('The authoritative schema must record its PostgreSQL server release')
-		expect(composeVersion).toBe(schemaVersion)
+		expect(schemaSource).toContain(`Dumped from database version ${schemaVersion} (Debian ${schemaVersion}-1.pgdg12+2)`)
+		expect(composeSource).toContain(`image: postgres:${schemaVersion}-bookworm`)
 	})
 })

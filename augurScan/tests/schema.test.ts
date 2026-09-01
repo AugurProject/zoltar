@@ -4,6 +4,7 @@ import {
 	CURRENT_SCHEMA_VERSION,
 	expectedSchemaLayout,
 	runSchemaTransaction,
+	SUPPORTED_POSTGRES_BUILD,
 	SUPPORTED_POSTGRES_VERSION,
 	SUPPORTED_POSTGRES_VERSION_NUM,
 	schemaInitializationAction,
@@ -14,10 +15,16 @@ import {
 
 test('accepts only the PostgreSQL release used to generate the schema fingerprint', () => {
 	expect(SUPPORTED_POSTGRES_VERSION_NUM).toBe('170011')
-	expect(() => assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM)).not.toThrow()
-	expect(() => assertSupportedPostgresVersion('170006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
-	expect(() => assertSupportedPostgresVersion('180006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
-	expect(() => assertSupportedPostgresVersion('unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(UNSUPPORTED_POSTGRES_VERSION_MESSAGE).toContain(SUPPORTED_POSTGRES_BUILD)
+	expect(() =>
+		assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM, 'PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu'),
+	).not.toThrow()
+	expect(() => assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM, 'PostgreSQL 17.11 on x86_64-pc-linux-musl')).toThrow(
+		UNSUPPORTED_POSTGRES_VERSION_MESSAGE,
+	)
+	expect(() => assertSupportedPostgresVersion('170006', `PostgreSQL 17.6 (${SUPPORTED_POSTGRES_BUILD})`)).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('180006', `PostgreSQL 18.6 (${SUPPORTED_POSTGRES_BUILD})`)).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('unknown', 'unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
 })
 
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
@@ -40,7 +47,7 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 
 test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
 	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
-	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION} `)
+	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION} (${SUPPORTED_POSTGRES_BUILD})`)
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
 	const previous = expectedSchemaLayout(schema, '1')
 	expect(current.relations).toContain('table:chain_reorganizations')
