@@ -1,9 +1,5 @@
-#!/usr/bin/env bun
-
 import { appendFile } from 'node:fs/promises'
-import * as path from 'node:path'
 import * as process from 'node:process'
-import * as url from 'node:url'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses } from '../ui/zoltar/ts/protocol/deploymentHelpers.ts'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../ui/zoltar/ts/protocol/deployment.ts'
@@ -730,21 +726,11 @@ function printHelp() {
 	console.log(getDeploymentHelp())
 }
 
-async function main() {
+export async function main() {
 	if (process.argv.includes('--help') || process.argv.includes('-h')) {
 		printHelp()
 		return
 	}
 	const { chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
 	await deployTestnet({ chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
-}
-
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
-	main().catch(error => {
-		console.error(error instanceof Error ? error.message : error)
-		process.exit(1)
-	})
 }

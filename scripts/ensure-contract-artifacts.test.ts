@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
+import { getRequiredSharedOutputRelativePaths, prepareHeadlessContractArtifacts, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
 
 async function exists(filePath: string) {
 	try {
@@ -23,6 +23,42 @@ test('ensure-contract-artifacts requires shared package testing helper outputs',
 	expect(requiredSharedOutputs).toContain('shared/js/testing/pickFixtureProperties.d.ts')
 	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.js')
 	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.d.ts')
+})
+
+test('ensure-contract-artifacts reserves root-only shared refreshes for headless preparation', async () => {
+	const source = await readFile(new URL('./ensure-contract-artifacts.mts', import.meta.url), 'utf8')
+	expect(source).toContain("runBunScript(['./scripts/ensure-shared-package-fresh.mts', '--refresh']")
+	expect(source).toContain("runBunScript(['run', 'refresh:shared-dependencies']")
+	expect(source).toContain("mode === '--headless'")
+	expect(source).toContain('prepareHeadlessContractArtifacts()')
+})
+
+test('headless preparation refreshes the root shared install even when artifacts are current', async () => {
+	const calls: string[] = []
+	await prepareHeadlessContractArtifacts(
+		async () => {
+			calls.push('refresh')
+		},
+		async () => {
+			calls.push('ensure')
+		},
+	)
+	expect(calls).toEqual(['ensure', 'refresh'])
+})
+
+test('headless preparation refreshes the root shared install once when artifacts are rebuilt', async () => {
+	const calls: string[] = []
+	await prepareHeadlessContractArtifacts(
+		async () => {
+			calls.push('refresh')
+		},
+		async refreshSharedDependencies => {
+			calls.push('ensure')
+			if (refreshSharedDependencies === undefined) throw new Error('Headless preparation did not supply a shared dependency refresh')
+			await refreshSharedDependencies()
+		},
+	)
+	expect(calls).toEqual(['ensure', 'refresh'])
 })
 
 test('ensure-contract-artifacts removes the deprecated cached contract artifact', async () => {

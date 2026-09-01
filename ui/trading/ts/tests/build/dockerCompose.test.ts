@@ -12,7 +12,7 @@ describe('standalone Docker Compose packaging', () => {
 		const source = await readFile(composeFile, 'utf8')
 		expect(source).toContain('context: ../..')
 		expect(source).toContain('dockerfile: ui/Dockerfile')
-		expect(source).toContain('target: local-runtime')
+		expect(source).toContain('target: local-runtime-trading')
 		expect(source).not.toContain('TRADING_UI_DEPLOYMENT')
 		expect(source).toContain('127.0.0.1:4163:8080')
 		expect(source).toContain('UI_APP: trading')
@@ -23,12 +23,13 @@ describe('standalone Docker Compose packaging', () => {
 		expect(source).toContain('COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json')
 		expect(source).toContain('COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json')
 		expect(source).toContain('bun ../coreShared/build/production.mts trading')
+		expect(source).toContain('AS local-runtime-trading')
 		expect(source).toContain('/source/ui/trading/dist/ /app/ui/trading/')
 	})
 
 	test('builds the standalone image from the repository-root Dockerfile', async () => {
 		const packageJson = await Bun.file(packageFile).json()
-		expect(packageJson.scripts['docker:build']).toBe('docker build --file ../Dockerfile --target local-runtime --tag zoltar-trading ../..')
+		expect(packageJson.scripts['docker:build']).toBe('docker build --file ../Dockerfile --target local-runtime-trading --tag zoltar-trading ../..')
 	})
 
 	test('provides a location-independent Windows launcher', async () => {

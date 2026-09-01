@@ -109,7 +109,7 @@ server.on('request', async (request, response) => {
 })
 
 // Initiate the server on `port` and print a message
-const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 12346 }
+const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 4153 }
 const port = ports[appId]
 server.listen(port)
 server.on('listening', () => {

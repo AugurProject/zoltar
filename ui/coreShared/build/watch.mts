@@ -26,7 +26,7 @@ const VENDOR_BUILD_PATH = appPaths.vendorBuildScript
 const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
 const WORKER_BUILD_PATH = appPaths.workersBuildScript
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
-const liveReloadEndpoints: Record<UiAppId, string> = { statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:12346/__live-reload' }
+const liveReloadEndpoints: Record<UiAppId, string> = { statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:4153/__live-reload' }
 const LIVE_RELOAD_ENDPOINT = liveReloadEndpoints[appId]
 const BUN_EXECUTABLE_PATH = process.execPath
 

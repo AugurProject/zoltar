@@ -42,7 +42,7 @@
 		"watch": "bun ../coreShared/build/watch.mts trading",
 		"serve": "bun ../coreShared/dev-server.ts trading",
 		"qa:browser": "bun ./scripts/browser-qa.mts",
-		"docker:build": "docker build --file ../Dockerfile --target local-runtime --tag zoltar-trading ../..",
+		"docker:build": "docker build --file ../Dockerfile --target local-runtime-trading --tag zoltar-trading ../..",
 		"docker:run": "docker run --rm --env UI_APP=trading --publish 4163:8080 zoltar-trading"
 	}
 }

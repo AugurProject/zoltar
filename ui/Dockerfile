@@ -4,7 +4,7 @@
 
 ARG BUN_VERSION=1.3.14
 
-FROM oven/bun:${BUN_VERSION}-alpine AS builder
+FROM oven/bun:${BUN_VERSION}-alpine AS common-builder
 
 # git is required by preinstall hook scripts (link-shared-node-modules.mts uses git rev-parse)
 RUN apk add --no-cache git
@@ -39,67 +39,98 @@ COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
 RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts && bun run compile-contracts
 
-# Install UI dependencies and vendor browser packages after the cached contract build.
+# Common UI build inputs.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
-COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
-COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
-COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
-COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
-COPY ./ui/trading/package.json /source/ui/trading/package.json
-COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/coreShared && bun ./scripts/install-frozen.mts ui/zoltar && bun ./scripts/install-frozen.mts ui/statoblast && bun ./scripts/install-frozen.mts ui/trading
 COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
-RUN bun ./ui/coreShared/build/vendor.mts zoltar && bun ./ui/coreShared/build/vendor.mts statoblast && bun ./ui/coreShared/build/vendor.mts trading
-
-# UI TypeScript source
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
-COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
-COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
-COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
-COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
-COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
-COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
+COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
+COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
+RUN bun ./scripts/install-frozen.mts ui/coreShared
+RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
+
+# Build Zoltar from only its inward dependencies.
+FROM common-builder AS zoltar-builder
+
+COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
+COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
+RUN bun ./scripts/install-frozen.mts ui/zoltar
+RUN bun ./ui/coreShared/build/vendor.mts zoltar
+COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
+COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
+RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
+
+# Local runtime images contain only the selected application artifact.
+FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-zoltar
+
+WORKDIR /app
+COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
+COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
+COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+USER bun
+EXPOSE 8080
+ENV UI_APP=zoltar
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+CMD [ "bun", "/app/dockerServe.mts" ]
+
+# Build Statoblast on top of its Zoltar dependency, without Trading.
+FROM zoltar-builder AS statoblast-builder
+
+COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
+COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
+RUN bun ./scripts/install-frozen.mts ui/statoblast
+RUN bun ./ui/coreShared/build/vendor.mts statoblast
+COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
+COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
+RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
+
+FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-statoblast
+
+WORKDIR /app
+COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
+COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
+COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+USER bun
+EXPOSE 8080
+ENV UI_APP=statoblast
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+CMD [ "bun", "/app/dockerServe.mts" ]
+
+# Trading is the only application that reaches the complete UI dependency DAG.
+FROM statoblast-builder AS trading-builder
+
+COPY ./ui/trading/package.json /source/ui/trading/package.json
+COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
+RUN bun ./scripts/install-frozen.mts ui/trading
+RUN bun ./ui/coreShared/build/vendor.mts trading
+COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
+COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
-COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
-
-# Refresh local packages, type-check, validate deployment data, and production-build both apps.
-RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
-RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
-RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
 
-# ----------------------------------------------------
-# Local runtime: Serve the production UI over plain HTTP
-# ----------------------------------------------------
-
-# Local runtime builds select this target explicitly, so no IPFS layers are built or run.
-FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime
+FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading
 
 WORKDIR /app
-
-COPY --from=builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
-COPY --from=builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
-COPY --from=builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
+COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
 COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-
+COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
 USER bun
 EXPOSE 8080
-# Select the application the runtime serves; override with `docker run -e UI_APP=statoblast`.
-ENV UI_APP=zoltar
+ENV UI_APP=trading
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
-
 CMD [ "bun", "/app/dockerServe.mts" ]
+
+# The publisher intentionally includes every application.
+FROM trading-builder AS builder
 
 # -------------------------------------------------
 # Publisher: Upload the production UI to host IPFS

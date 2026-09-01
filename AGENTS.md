@@ -145,7 +145,7 @@ Do not regenerate or commit these outputs unless the task requires them or a req
 
 ### 7. UI manual QA
 
-For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:12346/?simulate=1`), `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`), or `bun run app:serve:trading` (`http://localhost:4163/?simulate=1`) for walletless testing.
+For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run app:serve:zoltar` (`http://localhost:4153/?simulate=1`), `bun run app:serve:statoblast` (`http://localhost:12347/?simulate=1`), or `bun run app:serve:trading` (`http://localhost:4163/?simulate=1`) for walletless testing.
 
 Choose the smallest relevant scenario:
 

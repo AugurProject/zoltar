@@ -5,7 +5,7 @@ import { join } from 'node:path'
 const repositoryRoot = join(import.meta.dir, '..')
 
 const apps = [
-	{ id: 'zoltar', port: 12346 },
+	{ id: 'zoltar', port: 4153 },
 	{ id: 'statoblast', port: 12347 },
 ] as const
 
@@ -19,7 +19,7 @@ describe('local UI Docker launchers', () => {
 
 			expect(composeSource).toContain('context: ../..')
 			expect(composeSource).toContain('dockerfile: ui/Dockerfile')
-			expect(composeSource).toContain('target: local-runtime')
+			expect(composeSource).toContain(`target: local-runtime-${app.id}`)
 			expect(composeSource).toContain(`127.0.0.1:${app.port}:8080`)
 			expect(composeSource).toContain(`UI_APP: ${app.id}`)
 			expect(compose).toEqual(

@@ -153,7 +153,11 @@ async function runSharedBuild(): Promise<void> {
 	await runBunScript(['run', 'shared:build'], `bun run shared:build`)
 }
 
-async function runRefreshSharedDependencies(): Promise<void> {
+async function refreshRootSharedDependency(): Promise<void> {
+	await runBunScript(['./scripts/ensure-shared-package-fresh.mts', '--refresh'], `root @zoltar/shared dependency refresh`)
+}
+
+async function refreshAllSharedDependencies(): Promise<void> {
 	await runBunScript(['run', 'refresh:shared-dependencies'], `bun run refresh:shared-dependencies`)
 }
 
@@ -199,14 +203,14 @@ async function syncSharedFreshnessHash(): Promise<void> {
 	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
 }
 
-export async function ensureSharedBuildIsCurrent(): Promise<void> {
+export async function ensureSharedBuildIsCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
 	await removeUnexpectedSharedSourceOutputs()
 	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReason === undefined) return
 
 	console.log(`Regenerating shared build outputs before tests: ${sharedRegenerationReason}`)
 	await runSharedBuild()
-	await runRefreshSharedDependencies()
+	await refreshSharedDependencies()
 	await syncSharedFreshnessHash()
 	const sharedRegenerationReasonAfterBuild = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReasonAfterBuild !== undefined) {
@@ -214,9 +218,9 @@ export async function ensureSharedBuildIsCurrent(): Promise<void> {
 	}
 }
 
-export async function ensureContractArtifactsAreCurrent(): Promise<void> {
+export async function ensureContractArtifactsAreCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
 	await removeDeprecatedContractArtifactOutputs()
-	await ensureSharedBuildIsCurrent()
+	await ensureSharedBuildIsCurrent(refreshSharedDependencies)
 	const regenerationReason = await getArtifactRegenerationReason()
 	if (regenerationReason === undefined) return
 
@@ -229,6 +233,15 @@ export async function ensureContractArtifactsAreCurrent(): Promise<void> {
 	}
 }
 
+export async function prepareHeadlessContractArtifacts(refreshRootDependency = refreshRootSharedDependency, ensureArtifacts: typeof ensureContractArtifactsAreCurrent = ensureContractArtifactsAreCurrent): Promise<void> {
+	let refreshedDuringBuild = false
+	await ensureArtifacts(async () => {
+		await refreshRootDependency()
+		refreshedDuringBuild = true
+	})
+	if (!refreshedDuringBuild) await refreshRootDependency()
+}
+
 const currentScriptPath = url.fileURLToPath(import.meta.url)
 const invokedScriptPath = process.argv[1]
 const mode = process.argv[2]
@@ -236,6 +249,8 @@ const mode = process.argv[2]
 if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
 	if (mode === '--ensure-shared-only') {
 		await ensureSharedBuildIsCurrent()
+	} else if (mode === '--headless') {
+		await prepareHeadlessContractArtifacts()
 	} else if (mode === '--sync-shared-freshness') {
 		await syncSharedFreshnessHash()
 	} else if (mode === '--sync-contract-freshness') {

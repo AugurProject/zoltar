@@ -53,7 +53,7 @@ Important:
 After completing [Setup](#setup), start a local chain and launch the app:
 
 1. Start the repository-pinned local chain with `bun run anvil`
-1. Run `bun run app:serve:zoltar` for Zoltar (http://localhost:12346), `bun run app:serve:statoblast` for Statoblast (http://localhost:12347), or `bun run app:serve:trading` for Trading (http://localhost:4163)
+1. Run `bun run app:serve:zoltar` for Zoltar (http://localhost:4153), `bun run app:serve:statoblast` for Statoblast (http://localhost:12347), or `bun run app:serve:trading` for Trading (http://localhost:4163)
 
 If you are iterating on the app and want rebuilds, use:
 
@@ -203,8 +203,8 @@ those features are used.
 The UI also supports a walletless browser-local simulation mode for manual QA.
 After completing [Setup](#setup):
 
-1. Run `bun run app:serve:zoltar` (Zoltar on port 12346), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
-1. Open `http://localhost:12346/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
+1. Run `bun run app:serve:zoltar` (Zoltar on port 4153), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
+1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
 
 This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. Trading defaults to `simScenario=trading`, which deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable.
 
@@ -221,7 +221,7 @@ Simulation mode details:
 Run each interface in development mode. Each command first builds the complete dependency-ordered UI workspace, then serves the selected app:
 
 ```bash
-bun run app:serve:zoltar      # Zoltar on http://localhost:12346
+bun run app:serve:zoltar      # Zoltar on http://localhost:4153
 bun run app:serve:statoblast  # Statoblast on http://localhost:12347
 bun run app:serve:trading     # Trading on http://localhost:4163
 ```

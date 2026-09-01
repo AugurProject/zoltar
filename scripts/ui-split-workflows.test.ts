@@ -16,8 +16,8 @@ const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ipf
 const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const developerDocumentation = [
-	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },
-	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '12346' },
+	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
+	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
 ]
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
@@ -136,7 +136,7 @@ describe('split UI workflow paths', () => {
 		expect(workflow.match(/ui\/trading\/ts\/generated\/contractArtifact\.ts/g)).toHaveLength(2)
 	})
 
-	test('clean CI and testnet jobs emit the complete UI dependency DAG', async () => {
+	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {
 		const ciWorkflow = await readFile(activeCiWorkflowPath, 'utf8')
 		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
 		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current')
@@ -145,10 +145,13 @@ describe('split UI workflow paths', () => {
 
 		const deployWorkflow = await readFile(deployTestnetWorkflowPath, 'utf8')
 		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
-			expect(deployWorkflow).toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
+			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
 		}
-		expect(deployWorkflow).toContain('bun run ui:build:apps')
-		expect(deployWorkflow).toContain('bun ./scripts/deploy-testnet.mts --help')
+		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
+		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
+		expect(deployWorkflow).toContain('bun ./scripts/ensure-contract-artifacts.mts --headless')
+		expect(deployWorkflow).toContain('bun ./scripts/run-deploy-testnet.mts --help')
+		expect(deployWorkflow).not.toContain('bun ./scripts/deploy-testnet.mts --help')
 	})
 
 	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
