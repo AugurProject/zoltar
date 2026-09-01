@@ -795,6 +795,14 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		hostname: loaded.settings.runtime.uiHost,
 		locks,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
+		onConnectivityUpdated: (settings, checks) => {
+			resources = {
+				pool: createChaosReadPool(settings),
+				readPreflightChecks: checks.filter(check => check.kind === 'read-rpc'),
+				submissionPreflightConfigurationIdentity: undefined,
+				submissionPreflightChecks: checks.filter(check => check.kind === 'public-rpc'),
+			}
+		},
 		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 		state,
 	})

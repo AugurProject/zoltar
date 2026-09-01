@@ -12,6 +12,7 @@ export type ChaosDashboardController = {
 	password?: string | undefined
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
+	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
@@ -679,6 +680,7 @@ export function publicChaosConfiguration(value: unknown) {
 		minimumRepReserve: scalar(strategy, 'minimumRepReserve'),
 		network: stringField(record(settings['network']) ?? {}, 'name'),
 		networkConfigured: booleanField(settings, 'networkConfigured'),
+		rpcQuorum: scalar(record(settings['connectivity']) ?? {}, 'rpcQuorum'),
 		operationControls: publicOperationControls(settings['operations'] ?? source['operationControls']),
 		paused: booleanField(settings, 'paused'),
 		rememberSigner: booleanField(source, 'rememberSigner'),
@@ -893,6 +895,7 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
+	if (operation === 'mutation:/api/connectivity') return json({ error: 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.' }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
 
@@ -1009,6 +1012,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {
 					return await enqueueMutation(async () => {

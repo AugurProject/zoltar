@@ -141,9 +141,16 @@ describe('operator connectivity', () => {
 		expect(() => validateReadRpcUrls(['http://unsafe.example'])).toThrow('HTTPS')
 	})
 
+	test('accepts the local Reth Docker service over HTTP', () => {
+		expect(validateConnectivitySettings({ publicRpcUrls: ['http://reth:8545'], readRpcUrl: 'http://reth:8545' })).toEqual({
+			publicRpcUrls: ['http://reth:8545/'],
+			readRpcUrl: 'http://reth:8545/',
+		})
+	})
+
 	test('does not include rejected RPC endpoint secrets in validation errors', () => {
 		expect(() => validateReadRpcUrls(['not-a-url?token=RPC_SECRET'])).toThrow(/^Invalid RPC URL$/)
-		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS, loopback HTTP, or the local Anvil service$/)
+		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS or HTTP on loopback, anvil, or reth$/)
 	})
 
 	test('checks the configured chain and sends raw transactions', async () => {

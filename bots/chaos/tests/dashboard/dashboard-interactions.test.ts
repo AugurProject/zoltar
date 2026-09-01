@@ -302,12 +302,15 @@ browserTest(
 		let failNextStateRead = false
 		let submissionConfigured = true
 		let selectableOperationAllowlist: string[] | null = null
+		const connectivityMutations: unknown[] = []
+		let delayNextConnectivityMutation = true
+		let configurationRevision = 'fixture-1'
 		const settingsMutations: unknown[] = []
 		let stateRequests = 0
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({
 				hasSigner: true,
-				revision: 'fixture-1',
+				revision: configurationRevision,
 				settings: {
 					connectivity: {
 						publicRpcUrls: [`https://submit.example/?token=${rpcSecret}`],
@@ -358,6 +361,13 @@ browserTest(
 			password: dashboardPassword,
 			setCancellation: () => {},
 			setCandidate: () => {},
+			setConnectivity: async value => {
+				connectivityMutations.push(value)
+				if (delayNextConnectivityMutation) {
+					delayNextConnectivityMutation = false
+					await Bun.sleep(5_250)
+				}
+			},
 			setObligation: () => {},
 			setPaused: () => {},
 			setReplacement: () => {},
@@ -377,7 +387,7 @@ browserTest(
 			await cdp.command('Network.enable')
 			await cdp.command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
 			const waitFor = async (expression: string, message: string) => {
-				for (let attempt = 0; attempt < 200; attempt += 1) {
+				for (let attempt = 0; attempt < 400; attempt += 1) {
 					if ((await cdp.evaluate(expression)) === true) return
 					await Bun.sleep(25)
 				}
@@ -405,6 +415,13 @@ browserTest(
 			const waitForSettingsMutation = async (count: number, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
 					if (settingsMutations.length === count) return
+					await Bun.sleep(25)
+				}
+				throw new Error(message)
+			}
+			const waitForConnectivityMutation = async (count: number, message: string) => {
+				for (let attempt = 0; attempt < 200; attempt += 1) {
+					if (connectivityMutations.length === count) return
 					await Bun.sleep(25)
 				}
 				throw new Error(message)
@@ -580,6 +597,7 @@ browserTest(
 				{ height: 900, label: 'desktop', width: 1_440 },
 				{ height: 844, label: 'mobile', width: 390 },
 			]) {
+				const nextConfigurationRevision = viewport.label === 'desktop' ? 'fixture-2' : 'fixture-3'
 				await cdp.command('Page.navigate', { url: 'about:blank' })
 				await waitFor("document.readyState === 'complete'", `Chromium did not reset before the ${viewport.label} workflow check`)
 				stateRequests = 0
@@ -1102,6 +1120,8 @@ browserTest(
 						},
 						executeDescription: document.querySelector('#execute')?.getAttribute('aria-describedby'),
 						executeHelp: document.querySelector('#execute-help')?.textContent,
+						connectivityDisabled: document.querySelector('#connectivity-fields')?.disabled,
+						connectivityHelp: document.querySelector('#connectivity-fields .notice')?.textContent,
 						lede: document.querySelector('.settings-intro .lede')?.textContent,
 						locked: document.querySelector('#settings-fields')?.disabled,
 						pauseNote: document.querySelector('#settings-pause-note')?.textContent,
@@ -1109,6 +1129,8 @@ browserTest(
 					})`),
 				).toEqual({
 					catalogLink: { href: '/catalog', text: 'Operation catalog' },
+					connectivityDisabled: false,
+					connectivityHelp: 'RPC checks run from the chaos-bot server, which can reach local container services such as http://reth:8545. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.',
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
@@ -1116,6 +1138,60 @@ browserTest(
 					pauseNote: 'Execution-policy controls are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, or ecosystem scope.',
 					pauseNoteVisible: true,
 				})
+				await cdp.evaluate(`(() => {
+					const quorum = document.querySelector('#rpc-quorum')
+					if (!(quorum instanceof HTMLSelectElement)) return false
+					quorum.value = '1'
+					quorum.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					return true
+				})()`)
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor("document.querySelector('#refresh-button')?.matches(':disabled') === false && document.querySelector('#rpc-quorum')?.value === '1'", `${viewport.label} RPC quorum draft was not preserved across a same-revision refresh`)
+				await cdp.evaluate("document.querySelector('#discard-connectivity')?.click()")
+				await waitFor("document.querySelector('#rpc-quorum')?.value === '2'", `${viewport.label} discarded RPC quorum draft did not restore the current configuration`)
+				await cdp.evaluate(`(() => {
+					const form = document.querySelector('#connectivity-form')
+					const read = document.querySelector('#read-rpc-url')
+					if (!(form instanceof HTMLFormElement) || !(read instanceof HTMLInputElement)) return false
+					read.value = 'http://stale-draft.example'
+					read.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					return true
+				})()`)
+				configurationRevision = nextConfigurationRevision
+				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await waitFor(
+					"document.querySelector('#connectivity-status')?.textContent === 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.' && document.querySelector('#save-connectivity')?.matches(':disabled') === true",
+					`${viewport.label} stale RPC draft was not blocked after a newer configuration loaded`,
+				)
+				const staleConnectivityMutationCount = connectivityMutations.length
+				await cdp.evaluate("document.querySelector('#connectivity-form')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))")
+				await Bun.sleep(50)
+				expect(connectivityMutations.length).toBe(staleConnectivityMutationCount)
+				await cdp.evaluate("document.querySelector('#discard-connectivity')?.click()")
+				await waitFor("document.querySelector('#read-rpc-url')?.value === '' && document.querySelector('#save-connectivity')?.matches(':disabled') === false", `${viewport.label} stale RPC draft could not be explicitly discarded`)
+				const connectivityMutationCount = connectivityMutations.length + 1
+				await cdp.evaluate(`(() => {
+					const read = document.querySelector('#read-rpc-url')
+					const publicRpcs = document.querySelector('#public-rpc-urls')
+					const quorumRpcs = document.querySelector('#quorum-rpc-urls')
+					const form = document.querySelector('#connectivity-form')
+					if (!(read instanceof HTMLInputElement) || !(publicRpcs instanceof HTMLTextAreaElement) || !(quorumRpcs instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return false
+					read.value = 'http://reth:8545'
+					publicRpcs.value = 'http://reth:8545'
+					quorumRpcs.value = 'http://anvil:8545'
+					read.dispatchEvent(new InputEvent('input', { bubbles: true }))
+					form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
+					return true
+				})()`)
+				await waitForConnectivityMutation(connectivityMutationCount, `${viewport.label} RPC connectivity form did not submit through the dashboard server`)
+				expect(connectivityMutations.at(-1)).toEqual({
+					connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: ['http://anvil:8545'], readRpcUrl: 'http://reth:8545', rpcQuorum: 2 },
+					revision: nextConfigurationRevision,
+				})
+				await waitFor(
+					"document.querySelector('#connectivity-status')?.textContent === 'Chain and RPCs passed server-side validation and were saved.' && document.querySelector('#save-connectivity')?.matches(':disabled') === false",
+					`${viewport.label} RPC connectivity form did not report success and return to a usable state`,
+				)
 				expect(
 					await cdp.evaluate(`(() => {
 						const input = document.querySelector('#workflow-valid-blocks')
@@ -1348,7 +1424,7 @@ browserTest(
 							workflowValidForBlocks: 288,
 						},
 					},
-					revision: 'fixture-1',
+					revision: nextConfigurationRevision,
 				})
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} dry-run zero-reserve policy did not reconcile`)
 
@@ -1388,7 +1464,7 @@ browserTest(
 							workflowValidForBlocks: 288,
 						},
 					},
-					revision: 'fixture-1',
+					revision: nextConfigurationRevision,
 				})
 				await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} exact gas-cost safety-floor policy did not reconcile`)
 
@@ -1519,6 +1595,22 @@ browserTest(
 				expect(Reflect.get(target, 'width'), `${String(Reflect.get(target, 'name'))} label width`).toBeGreaterThanOrEqual(44)
 				expect(Reflect.get(target, 'height'), `${String(Reflect.get(target, 'name'))} label height`).toBeGreaterThanOrEqual(44)
 			}
+			const connectivityLayout = await cdp.evaluate(`(() => {
+				const form = document.querySelector('#connectivity-form')
+				const button = document.querySelector('#save-connectivity')
+				if (!(form instanceof HTMLFormElement) || !(button instanceof HTMLButtonElement)) return undefined
+				const formBounds = form.getBoundingClientRect()
+				const buttonBounds = button.getBoundingClientRect()
+				return { buttonHeight: buttonBounds.height, formLeft: formBounds.left, formRight: formBounds.right, viewportWidth: document.documentElement.clientWidth }
+			})()`)
+			const formLeft = Reflect.get(connectivityLayout, 'formLeft')
+			const formRight = Reflect.get(connectivityLayout, 'formRight')
+			const viewportWidth = Reflect.get(connectivityLayout, 'viewportWidth')
+			const buttonHeight = Reflect.get(connectivityLayout, 'buttonHeight')
+			if (typeof formLeft !== 'number' || typeof formRight !== 'number' || typeof viewportWidth !== 'number' || typeof buttonHeight !== 'number') throw new Error('Mobile connectivity form bounds are unavailable')
+			expect(formLeft).toBeGreaterThanOrEqual(0)
+			expect(formRight).toBeLessThanOrEqual(viewportWidth)
+			expect(buttonHeight).toBeGreaterThanOrEqual(44)
 
 			for (const route of ['activity', 'settings']) {
 				await cdp.command('Page.navigate', { url: 'about:blank' })
