@@ -456,7 +456,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		await waitFor(() => expect(documentQueries.getByText('Available questions could not be loaded. Retry, or enter an exact question ID below.')).not.toBeNull())
+		await waitFor(() => expect(documentQueries.getByText('Available questions could not be loaded.')).not.toBeNull())
 		expect(loadCalls).toBe(1)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
 		await waitFor(() => expect(loadCalls).toBe(2))

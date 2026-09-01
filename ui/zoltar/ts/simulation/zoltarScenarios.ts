@@ -49,13 +49,13 @@ function createForkedCategoricalQuestion(currentTimestamp: bigint): { marketType
 		outcomeLabels,
 		questionData: {
 			answerUnit: '',
-			description: 'Seeded five-way categorical fork scenario.',
+			description: 'Five-outcome categorical market used to exercise fork resolution and migration flows.',
 			displayValueMax: 0n,
 			displayValueMin: 0n,
 			endTime: currentTimestamp - DAY_IN_SECONDS,
 			numTicks: 0n,
 			startTime: currentTimestamp - 30n * DAY_IN_SECONDS,
-			title: 'Which seeded outcome wins the first fork?',
+			title: 'Which outcome wins the first fork?',
 		},
 	}
 }
