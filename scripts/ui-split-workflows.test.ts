@@ -6,7 +6,9 @@ const repositoryRoot = join(import.meta.dir, '..')
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
-const coverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
+const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
+const stagedCoverageWorkflowPath = join(repositoryRoot, 'workflow', 'coverage.yml')
+const coverageWorkflowPath = (await Bun.file(stagedCoverageWorkflowPath).exists()) ? stagedCoverageWorkflowPath : activeCoverageWorkflowPath
 const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-domains.yml')
 const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
@@ -73,11 +75,12 @@ describe('split UI workflow paths', () => {
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 	})
 
-	test('scheduled coverage publishes and retains the canonical policy report', async () => {
+	test('manual coverage publishes and retains the canonical policy report', async () => {
 		const workflow = await readWorkflow(coverageWorkflowPath)
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
-		expect(Array.isArray(triggers['schedule'])).toBe(true)
+		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run coverage:fast')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
 		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
 		expect(publisher).toBeDefined()
@@ -113,14 +116,6 @@ describe('split UI workflow paths', () => {
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=application'))).toBe(true)
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=solidity'))).toBe(true)
 		expect(domainSteps.some(step => step['run'] === 'bun run test:mutation:smoke')).toBe(true)
-
-		const coverageWorkflow = await readWorkflow(coverageWorkflowPath)
-		const coverageTriggers = requireRecord(coverageWorkflow['on'], 'coverage triggers')
-		expect(coverageTriggers).toHaveProperty('pull_request')
-		const coverageSteps = Object.values(workflowJobs(coverageWorkflow)).flatMap(workflowSteps)
-		expect(coverageSteps.some(step => step['run'] === 'bun run coverage:fast')).toBe(true)
-		expect(coverageSteps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
-		expect(coverageSteps.some(step => step['run'] === 'bun run test:mutation:smoke')).toBe(false)
 
 		const stabilityWorkflow = await readWorkflow(testStabilityWorkflowPath)
 		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
