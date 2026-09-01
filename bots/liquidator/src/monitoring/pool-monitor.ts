@@ -306,10 +306,8 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	])
 	const settlementCollateralAttoEth = poolAccountingSnapshot.settlementCollateralAttoEth
 	const totalCapacityOwnershipAttoRep = poolAccountingSnapshot.totalCapacityOwnershipAttoRep
-	const [forkData, forkActivationTime] = await Promise.all([
-		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
-		client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'getForkActivationTime' }),
-	])
+	const forkData = await client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'forkData' })
+	const forkActivationTime = forkData[11]
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
 	const normalizedEscalationGame = getAddress(escalationGame)
 	let vaultIndex = monitorIndex.vaultsByPool.get(address.toLowerCase())

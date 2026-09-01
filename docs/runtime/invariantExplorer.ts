@@ -193,8 +193,24 @@ try {
 }
 const target = document.getElementById(targetId)
 if (target instanceof HTMLDetailsElement && target.classList.contains('invariant-entry')) {
+	const syncTargetScrollMargin = (): void => {
+		if (getComputedStyle(explorer).position === 'sticky') {
+			target.style.scrollMarginTop = `${explorer.getBoundingClientRect().height + 16}px`
+			return
+		}
+		target.style.removeProperty('scroll-margin-top')
+	}
+	syncTargetScrollMargin()
+	window.addEventListener('resize', syncTargetScrollMargin)
 	target.open = true
-	requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }))
+	requestAnimationFrame(() => {
+		target.scrollIntoView({ behavior: 'instant', block: 'start' })
+		requestAnimationFrame(() => {
+			if (getComputedStyle(explorer).position !== 'sticky') return
+			const overlap = explorer.getBoundingClientRect().bottom + 16 - target.getBoundingClientRect().top
+			if (overlap > 0) window.scrollBy({ behavior: 'instant', top: -overlap })
+		})
+	})
 }
 
 applyFilters()

@@ -272,6 +272,7 @@ const poolAccountingComponents = [
 	{ name: 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep', type: 'uint256' },
 	{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
 	{ name: 'currentRetentionRate', type: 'uint256' },
+	{ name: 'badDebtGeneration', type: 'uint256' },
 ] as const
 
 const liquidationSnapshotComponents = [
@@ -395,7 +396,7 @@ export const securityPoolAbi = [
 	},
 	{ inputs: [{ name: 'vault', type: 'address' }], name: 'getVaultOpenInterestAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'getTotalPoolHeldAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-	{ inputs: [{ name: '', type: 'address' }], name: 'vaultBadDebtAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'vault', type: 'address' }], name: 'vaultBadDebtAttoEth', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [{ name: 'repBackingUnits', type: 'uint256' }], name: 'backingUnitsToAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
@@ -765,11 +766,12 @@ export const securityPoolForkerAbi = [
 		stateMutability: 'view',
 		type: 'function',
 	},
-	{ inputs: [{ name: 'securityPool', type: 'address' }], name: 'getForkActivationTime', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [{ name: 'securityPool', type: 'address' }],
 		name: 'getUnassignedPosition',
 		outputs: [
+			{ name: '', type: 'uint256' },
+			{ name: '', type: 'uint256' },
 			{ name: '', type: 'uint256' },
 			{ name: '', type: 'uint256' },
 			{ name: '', type: 'uint256' },
@@ -792,6 +794,7 @@ export const securityPoolForkerAbi = [
 			{ name: 'ownFork', type: 'bool' },
 			{ name: 'unresolvedEscalationAtFork', type: 'bool' },
 			{ name: 'outcomeIndex', type: 'uint256' },
+			{ name: 'forkActivationTime', type: 'uint256' },
 		],
 		stateMutability: 'view',
 		type: 'function',

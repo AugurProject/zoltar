@@ -150,7 +150,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
+	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, forkOwnSecurityPool, forkOutcomeIndex, forkActivationTime } = requireForkDataView(forkData)
 	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtForkAttoRep, escalationChildRepPerSelectedOutcomeAttoRep, escrowSourceRepAtForkAttoRep] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
@@ -160,17 +160,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		systemState,
 		truthAuctionStartedAt,
 	})
-	const universeForkTime = (
-		await readRequiredMulticall(client, [
-			{
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'getForkTime',
-				address: getInfraContractAddresses().zoltar,
-				args: [universeId],
-			},
-		])
-	)[0]
-	const migrationEndsAt = universeForkTime === 0n ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
+	const migrationEndsAt = forkActivationTime === 0n ? undefined : forkActivationTime + MIGRATION_TIME_LENGTH
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [

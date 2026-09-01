@@ -1,18 +1,27 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 
-contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
+contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
 
+	function decodeError(bytes calldata result) external pure returns (string memory reason) {
+		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)')))
+			return 'Delegate call failed';
+		return abi.decode(result[4:], (string));
+	}
+
 	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
 		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
+		// Reducing the denominator would reallocate live settlement collateral to every remaining vault.
+		if (nextCapacityOwnershipAttoRep < previousCapacityOwnershipAttoRep)
+			require(settlementCollateralAttoEth == 0, 'Capacity committed');
 		feeIndexRemainder = 0;
 		totalCapacityOwnershipAttoRep =
 			totalCapacityOwnershipAttoRep -
@@ -59,9 +68,10 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			request.requestedDebtAttoEth >= targetOpenInterestAttoEth ? 0 : minimumVaultRepDepositAttoRep;
 		(nominalDebtToMoveAttoEth, capacityOwnershipToMoveAttoRep, , maximumBackingUnitsToTransfer) = SecurityPoolUtils.calculateBundledLiquidationTransfer(securityVaults[request.targetVault].repBackingUnits, request.snapshotTargetCapacityOwnershipAttoRep, targetOpenInterestAttoEth, request.requestedDebtAttoEth, request.repEthPrice, pool.getTotalPoolHeldAttoRep(), totalRepBackingUnits, minimumRemainingAttoRep);
 		uint256 receiverGrossOpenInterestAfterAttoEth = SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[request.receiverVault].capacityOwnershipAttoRep + capacityOwnershipToMoveAttoRep, totalCapacityOwnershipAttoRep);
+		uint256 receiverBadDebtAttoEth = _getVaultBadDebtAttoEth(request.receiverVault);
 		uint256 receiverOpenInterestAfterAttoEth =
-			receiverGrossOpenInterestAfterAttoEth > vaultBadDebtAttoEth[request.receiverVault]
-				? receiverGrossOpenInterestAfterAttoEth - vaultBadDebtAttoEth[request.receiverVault]
+			receiverGrossOpenInterestAfterAttoEth > receiverBadDebtAttoEth
+				? receiverGrossOpenInterestAfterAttoEth - receiverBadDebtAttoEth
 				: 0;
 		require(receiverOpenInterestAfterAttoEth >= receiverOpenInterestBeforeAttoEth, 'Receiver debt decreased');
 		debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;
@@ -73,8 +83,9 @@ contract SecurityPoolLiquidationDelegate is SecurityPoolStorage {
 			badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth;
 			if (badDebtAttoEth != 0) {
 				totalBadDebtAttoEth += badDebtAttoEth;
-				vaultBadDebtAttoEth[request.targetVault] += badDebtAttoEth;
-				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, vaultBadDebtAttoEth[request.targetVault], totalBadDebtAttoEth);
+				uint256 resultingVaultBadDebtAttoEth = _getVaultBadDebtAttoEth(request.targetVault) + badDebtAttoEth;
+				_setVaultBadDebtAttoEth(request.targetVault, resultingVaultBadDebtAttoEth);
+				emit VaultBadDebtRecorded(request.targetVault, badDebtAttoEth, resultingVaultBadDebtAttoEth, totalBadDebtAttoEth);
 			}
 		}
 		require(debtToMoveAttoEth > 0 || badDebtAttoEth > 0, 'No liq');

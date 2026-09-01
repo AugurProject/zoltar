@@ -1337,7 +1337,7 @@ describe('Statoblast: fork migration', () => {
 					const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 					await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 					await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
-					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit)
+					await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit * 2n)
 
 					await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 					await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -1499,7 +1499,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(contractBalance + ethBalanceAttoEthAfter - ethBalanceAttoEthBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
 		})
 
-		test('fee accrual splits intervals at deposit, withdrawal, and oracle-price capacity transitions', async () => {
+		test('fee accrual splits intervals at deposits, rejected committed-capacity withdrawals, and oracle-price transitions', async () => {
 			const initialCapacityOwnershipAttoRep = 75n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, initialCapacityOwnershipAttoRep)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 30n * 10n ** 18n)
@@ -1541,8 +1541,10 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.advanceTime(100n)
 			await requestPriceIfNeededAndStageOperation(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, receiverClient.account.address, repDeposit)
 			const afterWithdrawal = await getPoolAccountingSnapshot()
-			strictEqualTypeSafe(afterWithdrawal.settlementCollateralAttoEth, expectedCollateralAfterCheckpoint(afterDeposit, afterWithdrawal.lastUpdatedFeeAccumulator), 'withdrawal must checkpoint the preceding interval at the deposit-adjusted rate')
-			assert.ok(afterWithdrawal.currentRetentionRate < afterDeposit.currentRetentionRate, 'removed capacity should recompute a more aggressive fee rate immediately')
+			strictEqualTypeSafe(afterWithdrawal.settlementCollateralAttoEth, expectedCollateralAfterCheckpoint(afterDeposit, afterWithdrawal.lastUpdatedFeeAccumulator), 'rejected withdrawal must still checkpoint the preceding interval at the deposit-adjusted rate')
+			strictEqualTypeSafe(afterWithdrawal.totalCapacityOwnershipAttoRep, afterDeposit.totalCapacityOwnershipAttoRep, 'rejected withdrawal must preserve total capacity while settlement collateral remains')
+			strictEqualTypeSafe(afterWithdrawal.feeEligibleCapacityOwnershipAttoRep, afterDeposit.feeEligibleCapacityOwnershipAttoRep, 'rejected withdrawal must preserve fee-eligible capacity while settlement collateral remains')
+			assert.ok(afterWithdrawal.currentRetentionRate >= afterDeposit.currentRetentionRate, 'unchanged capacity must not make the fee rate more aggressive as collateral decays')
 
 			await mockWindow.advanceTime(100n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 2n * PRICE_PRECISION)

@@ -26,11 +26,18 @@ interface ISecurityPoolForkerEvents {
 }
 
 interface ISecurityPoolForker is ISecurityPoolForkerEvents {
-	function getForkActivationTime(ISecurityPool securityPool) external view returns (uint256);
 	/// @notice Pool-owned accounting not yet assigned to a withdrawable vault.
 	/// @dev Fee eligibility can be smaller than total capacity after a zero-purchase auction.
-	function getUnassignedPosition(ISecurityPool securityPool) external view returns (uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth);
-	function getUnassignedPositionFeeIndex(ISecurityPool securityPool) external view returns (uint256);
+	function getUnassignedPosition(ISecurityPool securityPool)
+		external
+		view
+		returns (
+			uint256 repBackingUnits,
+			uint256 capacityOwnershipAttoRep,
+			uint256 badDebtAttoEth,
+			uint256 badDebtGeneration,
+			uint256 feeIndexAtFinalization
+		);
 	function getOwnForkRepBuckets(ISecurityPool securityPool)
 		external
 		view

@@ -706,11 +706,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="bal-03">
-						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity</span></summary>
+						<summary><code>BAL-03</code><span class="invariant-title">Collateral capacity and backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">At a complete-set mint boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so this is not a continuous collateral-below-capacity invariant. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
-							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A later REP price change can lower capacity below 9 ETH without changing the existing open interest or ownership records.</p>
+							<div class="invariant-property">At a complete-set mint or fork-finalization boundary, the resulting tracked collateral must fit the current ETH minting capacity derived from total REP-denominated capacity ownership, the live REP-per-ETH price, and the pool security multiplier. The pool must also hold enough actual REP to satisfy both backing constraints for collateral net of recorded bad debt. Dispute-staked REP contributes to the associated-REP constraint but not the migration-safety constraint. Finalized auction ownership enters total ownership, and positive-purchase ownership also enters fee eligibility and accrues fees whether or not a bidder has claimed it. Unassigned auction ownership can provide additional minting headroom only when its explicit position remains healthy after the mint. Existing open interest is not deleted when later repricing lowers live capacity, so these are transaction-boundary checks rather than continuous collateral-below-capacity or live-backing invariants. Once the remaining claim supply reaches zero, aggregate and per-vault bad debt from that exhausted collateral generation cannot offset the backing required by a later generation. Deferred truth-auction debt is tagged with the auction-finalization generation: a late claim may still settle REP, capacity ownership, and fees, but it cannot move expired debt into a later generation. Fee checkpointing and redemption cannot reclassify unsolicited ETH as collateral, and a price change reprices capacity without iterating through vaults.</div>
+							<p class="invariant-example"><strong>Example:</strong> If current oracle-priced capacity is 10 ETH, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH. A mint within that 10 ETH capacity also reverts if unresolved escalation has moved too much REP out of the pool to cover the resulting active open interest. A later REP price change can lower capacity or backing below the checked boundary without changing existing open interest or ownership records.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -723,8 +723,12 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>_requireCapacityNotExceeded</code>, <code>setPoolFinancials</code>, and fee redemption</a>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">fork finalization</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code>, <code>setPoolFinancials</code>, <code>redeemCompleteSet</code>, <code>redeemShares</code>, and <code>_resetBadDebtGenerationIfClaimsExhausted</code></a
+										>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> and <code>setValidatedSettlementCollateral</code></a
+										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a
+										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
+										>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code> and unassigned-position health checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -922,7 +926,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>createCompleteSet</code></a>
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and the <code>createCompleteSet</code> wrapper</a>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> settlement accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -2152,8 +2157,8 @@
 						<summary><code>AUC-06</code><span class="invariant-title">Bidder-vault credits</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A bid claim keeps purchased REP pool-held and transfers the bid's proportional REP backing units, capacity ownership, bad debt, and finalization-to-claim fees from the unassigned position to the bid's recorded vault. Each decrease in unassigned backing, capacity, and bad debt equals the corresponding vault credit. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, while capacity-ownership and bad-debt division dust follows each bid's fixed cumulative ETH position. This makes each winner's allocation independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero. Claiming does not change total capacity ownership, fee-eligible capacity ownership, active open interest, total bad debt, retention rate, or aggregate accrued fees.</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid. The claim moves the bid's backing units, deterministic capacity share, proportional bad debt, and accrued fees into that vault while leaving every pool aggregate unchanged. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
+							<div class="invariant-property">A bid claim keeps purchased REP pool-held and transfers the bid's proportional REP backing units, capacity ownership, and finalization-to-claim fees from the unassigned position to the bid's recorded vault. It also transfers the proportional auction bad debt while the auction-finalization generation is current; after that generation expires, the raw claimed-debt counter advances without crediting stale debt to the vault. Each decrease in unassigned backing and capacity equals the corresponding vault credit, and current-generation unassigned debt decreases by its corresponding vault credit. The auction rate is derived only from bounded child-local units, and cumulative credit cannot exceed the finalized denominator. These credits add to rather than replace that vault's migrated position, while capacity-ownership and current-generation bad-debt division dust follows each bid's fixed cumulative ETH position. This makes each winner's allocation independent of claim order. A winning dust bid still receives a positive fixed-position capacity ownership share when its REP allocation rounds to zero. Claiming does not change total capacity ownership, fee-eligible capacity ownership, active open interest, current-generation total bad debt, retention rate, or aggregate accrued fees.</div>
+							<p class="invariant-example"><strong>Example:</strong> A vault with migrated REP backing units keeps them when settling a winning auction bid. A current-generation claim moves the bid's backing units, deterministic capacity share, proportional bad debt, and accrued fees into that vault while leaving every pool aggregate unchanged. If the generation has expired, the same claim moves the backing units, capacity share, and fees but assigns no old debt. If a dust bid's REP share is zero but its capacity ownership share is positive, claiming that bid alone still credits the capacity ownership.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2166,7 +2171,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Auction-claim settlement</a>
+										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Auction-claim settlement</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
+										>,
+										<a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2571,8 +2578,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code></a
-										>, ERC-1155 receiver checks, and receiver callback tests
+										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code> wrapper</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> accounting</a>, ERC-1155 receiver checks, and receiver callback tests
 									</dd>
 								</div>
 								<div>
