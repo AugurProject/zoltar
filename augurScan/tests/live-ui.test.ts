@@ -14,6 +14,7 @@ import {
 	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
+	contractRegistrySection,
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
@@ -1040,6 +1041,23 @@ test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')
+})
+
+test('groups protocol contracts, configured dependencies, and discovered contracts in the system registry', () => {
+	for (const kind of [
+		'multicall3',
+		'proxyDeployer',
+		'reputationToken',
+		'scalarOutcomes',
+		'uniswapV2Factory',
+		'uniswapV3Factory',
+		'uniswapV4PoolManager',
+		'usdc',
+		'weth',
+	])
+		expect(contractRegistrySection({ kind, provenance: 'manifest' })).toBe('System dependencies')
+	expect(contractRegistrySection({ kind: 'openOracle', provenance: 'manifest' })).toBe('Protocol contracts')
+	expect(contractRegistrySection({ kind: 'securityPool', provenance: 'DeploySecurityPool' })).toBe('Discovered contracts')
 })
 
 test('classifies appended, changed, and stable live records by canonical key', () => {

@@ -34,6 +34,7 @@ import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
 	approvalTransitionFields,
+	type ContractRegistrySection,
 	canonicalPageLimit,
 	classifyLiveRecords,
 	collectCanonicalPages,
@@ -43,6 +44,7 @@ import {
 	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
 	contractDeploymentTimestampLabel,
+	contractRegistrySection,
 	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
 	demoTimelineEvidenceStatus,
@@ -777,13 +779,17 @@ const demoNetworkItems = () => {
 		phase: 'live',
 	}))
 }
-const demoContracts = demoNetworks.flatMap((network) =>
-	[
+const demoContracts = demoNetworks.flatMap((network) => {
+	const manifestContracts = [
 		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
 		['0x052c04adFF6C1BF51f52158e36441C1e99cdfDB4', 'Deployment Status Oracle', 'deploymentStatusOracle', '22181462', true],
 		['0x529dcaC57677451CBfe766d88CcC133D082500df', 'OpenOracle', 'openOracle', '22181501', true],
 		['0xaa280cf94Fc3531aDe40b479C17eBef53923291C', 'Zoltar', 'zoltar', undefined, true],
 		['0xBea56ec12C943213408DA17f754A523A8aB38947', 'Security Pool Factory', 'securityPoolFactory', undefined, true],
+		['0x221657776846890989a759ba2973e427dff5c9bb', 'Genesis REP', 'reputationToken', '7290001', true],
+		['0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', 'Wrapped Ether', 'weth', '4719568', true],
+		['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 'USD Coin', 'usdc', '6082465', true],
+		['0x1F98431c8aD98523631AE4a59f267346ea31F984', 'Uniswap V3 Factory', 'uniswapV3Factory', '12369621', true],
 	].map(([address, label, kind, deploymentBlock, exact], index) => ({
 		chain_id: network.chain_id,
 		address,
@@ -802,8 +808,25 @@ const demoContracts = demoNetworks.flatMap((network) =>
 		deployment_block_exact: deploymentBlock === undefined ? null : exact,
 		deployment_checked_block: network.indexed_block,
 		explorer_base_url: network.explorer_base_url,
-	})),
-)
+	}))
+	return [
+		...manifestContracts,
+		{
+			chain_id: network.chain_id,
+			address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
+			label: 'Security Pool 0',
+			kind: 'securityPool',
+			provenance: 'DeploySecurityPool',
+			discovery_block: network.indexed_block,
+			discovery_tx_hash: demoHash,
+			deployment_block: network.indexed_block,
+			deployment_timestamp: network.indexed_timestamp,
+			deployment_block_exact: true,
+			deployment_checked_block: network.indexed_block,
+			explorer_base_url: network.explorer_base_url,
+		},
+	]
+})
 const demoEvents = [
 	'PoolAccountingCheckpoint',
 	'Transfer',
@@ -6062,11 +6085,15 @@ const renderContracts = () => {
 		list.setAttribute('aria-busy', 'false')
 		return
 	}
+	const sectionOrder: readonly ContractRegistrySection[] = ['Protocol contracts', 'System dependencies', 'Discovered contracts']
+	const displayedContractItems = [...contractItems].sort(
+		(left, right) => sectionOrder.indexOf(contractRegistrySection(left)) - sectionOrder.indexOf(contractRegistrySection(right)),
+	)
 	const requested = pageUrl.searchParams.get('contract')?.toLowerCase()
 	const selected =
 		contractItems.find((contract) => contract.address.toLowerCase() === selectedContractAddress?.toLowerCase()) ??
 		contractItems.find((contract) => contract.address.toLowerCase() === requested) ??
-		requiredArrayItem(contractItems, 0, 'Default contract')
+		requiredArrayItem(displayedContractItems, 0, 'Default contract')
 	selectedContractAddress = selected.address
 	const scrollLeft = list.scrollLeft
 	const scrollTop = list.scrollTop
@@ -6074,9 +6101,17 @@ const renderContracts = () => {
 		document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('.contract-row')?.dataset.contractAddress : undefined
 	const focusedAction =
 		document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[data-contract-action]')?.dataset.contractAction : undefined
+	const groupScrollPositions = new Map(
+		[...list.querySelectorAll<HTMLElement>('.contract-group[data-contract-group]')].flatMap((group) => {
+			const name = group.dataset.contractGroup
+			const rows = group.querySelector<HTMLElement>('.contract-group-rows')
+			return name === undefined || rows === null ? [] : [[name, rows.scrollLeft] as const]
+		}),
+	)
 	const existingRows = new Map([...list.querySelectorAll<HTMLElement>('.contract-row[data-contract-address]')].map((row) => [row.dataset.contractAddress, row]))
-	const renderedRows = []
-	for (const contract of contractItems) {
+	const revealRequestedSelection = requested !== undefined && !existingRows.has(selected.address.toLowerCase())
+	const groupedRows = new Map<ContractRegistrySection, HTMLButtonElement[]>()
+	for (const contract of displayedContractItems) {
 		const status = contractDeploymentStatus(contract)
 		const addressKey = contract.address.toLowerCase()
 		const row = existingRows.get(addressKey) ?? element('button', 'contract-row')
@@ -6093,15 +6128,52 @@ const renderContracts = () => {
 			for (const candidate of list.querySelectorAll<HTMLElement>('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
 			renderContractDetail(contract)
 		}
-		renderedRows.push(row)
+		const section = contractRegistrySection(contract)
+		const rows = groupedRows.get(section) ?? []
+		rows.push(row)
+		groupedRows.set(section, rows)
 	}
-	const retainedRows = new Set<Element>(renderedRows)
-	for (const child of [...list.children]) if (!retainedRows.has(child)) child.remove()
-	for (const row of renderedRows) list.append(row)
+	const sections = sectionOrder.flatMap((sectionName) => {
+		const rows = groupedRows.get(sectionName)
+		if (rows === undefined || rows.length === 0) return []
+		const section = element('section', 'contract-group')
+		section.dataset.contractGroup = sectionName
+		const rowList = element('div', 'contract-group-rows')
+		rowList.append(...rows)
+		section.append(element('h3', 'contract-group-heading', sectionName), rowList)
+		return [section]
+	})
+	list.replaceChildren(...sections)
+	for (const section of list.querySelectorAll<HTMLElement>('.contract-group[data-contract-group]')) {
+		const name = section.dataset.contractGroup
+		const rows = section.querySelector<HTMLElement>('.contract-group-rows')
+		if (name !== undefined && rows !== null) rows.scrollLeft = groupScrollPositions.get(name) ?? 0
+	}
 	list.scrollLeft = scrollLeft
 	list.scrollTop = scrollTop
 	syncContractUrl(selected.address)
 	renderContractDetail(selected)
+	if (revealRequestedSelection) {
+		const selectedRow = list.querySelector<HTMLElement>(`[data-contract-address="${selected.address.toLowerCase()}"]`)
+		const rowList = selectedRow?.closest<HTMLElement>('.contract-group-rows')
+		const selectedGroup = selectedRow?.closest<HTMLElement>('.contract-group')
+		if (
+			selectedRow !== null &&
+			selectedRow !== undefined &&
+			rowList !== null &&
+			rowList !== undefined &&
+			selectedGroup !== null &&
+			selectedGroup !== undefined
+		) {
+			const listBounds = list.getBoundingClientRect()
+			list.scrollTop += selectedGroup.getBoundingClientRect().top - listBounds.top
+			const rowBounds = selectedRow.getBoundingClientRect()
+			if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom)
+				list.scrollTop += rowBounds.top - listBounds.top - Math.max(0, (list.clientHeight - rowBounds.height) / 2)
+			const groupBounds = rowList.getBoundingClientRect()
+			rowList.scrollLeft += rowBounds.left - groupBounds.left - Math.max(0, (rowList.clientWidth - rowBounds.width) / 2)
+		}
+	}
 	if (focusedAction !== undefined) document.querySelector<HTMLElement>(`[data-contract-action="${focusedAction}"]`)?.focus()
 	else if (focusedContractAddress !== undefined) list.querySelector<HTMLElement>(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
 	list.setAttribute('aria-busy', 'false')
