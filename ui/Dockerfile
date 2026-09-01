@@ -37,7 +37,7 @@ COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
-RUN mkdir -p /source/ui/coreShared/ts /source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts && bun run compile-contracts
+RUN mkdir -p /source/ui/coreShared/ts && bun run compile-contracts
 
 # Common UI build inputs.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
@@ -74,9 +74,10 @@ COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zolta
 COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
 COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
 USER bun
-EXPOSE 8080
+EXPOSE 8012
 ENV UI_APP=zoltar
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+ENV PORT=8012
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/dockerServe.mts" ]
 
 # Build Statoblast on top of its Zoltar dependency, without Trading.
@@ -98,9 +99,10 @@ COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/
 COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
 COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
 USER bun
-EXPOSE 8080
+EXPOSE 8011
 ENV UI_APP=statoblast
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
+ENV PORT=8011
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/dockerServe.mts" ]
 
 # Trading is the only application that reaches the complete UI dependency DAG.
@@ -109,12 +111,12 @@ FROM statoblast-builder AS trading-builder
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
 RUN bun ./scripts/install-frozen.mts ui/trading
-RUN bun ./ui/coreShared/build/vendor.mts trading
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
+RUN bun ./ui/coreShared/build/vendor.mts trading
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading

@@ -8,7 +8,7 @@ services:
       target: local-runtime-statoblast
     image: zoltar-statoblast
     ports:
-      - 127.0.0.1:12347:8080
+      - 127.0.0.1:8011:8011
     environment:
       UI_APP: statoblast
 

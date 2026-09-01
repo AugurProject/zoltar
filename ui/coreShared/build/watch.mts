@@ -462,6 +462,10 @@ const runVendorBuild = async (reason: string) => {
 		vendorBuildQueued = true
 		return
 	}
+	if (workerBuildRunning) {
+		vendorBuildQueued = true
+		return
+	}
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
@@ -501,12 +505,21 @@ const runVendorBuild = async (reason: string) => {
 	if (vendorBuildQueued) {
 		vendorBuildQueued = false
 		await runVendorBuild('queued vendor input')
+		return
+	}
+	if (workerBuildQueued) {
+		workerBuildQueued = false
+		await runWorkerBuild('completed vendor rebuild')
 	}
 	queueLiveReload(reason)
 }
 
 const runWorkerBuild = async (reason: string) => {
 	if (shuttingDown) return
+	if (vendorBuildRunning) {
+		workerBuildQueued = true
+		return
+	}
 	if (workerBuildRunning) {
 		workerBuildQueued = true
 		return
@@ -514,7 +527,7 @@ const runWorkerBuild = async (reason: string) => {
 	workerBuildRunning = true
 	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
 	try {
-		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH, appId], {
+		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH, appId, '--artifacts-current'], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -547,9 +560,15 @@ const runWorkerBuild = async (reason: string) => {
 		await shutdown(failureCode)
 		return
 	}
+	if (vendorBuildQueued) {
+		vendorBuildQueued = false
+		await runVendorBuild('queued vendor input')
+		return
+	}
 	if (workerBuildQueued) {
 		workerBuildQueued = false
 		await runWorkerBuild('queued TypeScript input')
+		return
 	}
 }
 
@@ -575,6 +594,10 @@ const runSharedBuild = async (reason: string) => {
 
 const runProjectArtifactBuild = async (reason: string) => {
 	if (shuttingDown) return
+	if (appId === 'trading') {
+		await runVendorBuild(reason)
+		return
+	}
 	if (projectArtifactBuildRunning) {
 		projectArtifactBuildQueued = true
 		return
@@ -668,6 +691,10 @@ const runContractBuild = async (reason: string) => {
 	if (contractBuildQueued) {
 		contractBuildQueued = false
 		await runContractBuild('queued Solidity input')
+		return
+	}
+	if (appId === 'trading') {
+		await runProjectArtifactBuild(reason)
 		return
 	}
 	queueLiveReload(reason)

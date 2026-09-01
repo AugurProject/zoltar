@@ -1,7 +1,7 @@
 # Local development
 
 1. From the repository root, confirm dependencies with `test -d node_modules`. Use the repository’s frozen setup if absent.
-2. Run `bun run trading:compile`. The main Solidity artifact, shared JavaScript, and `ui/trading/ts/generated/contractArtifact.ts` are generated and must not be edited.
+2. Run `bun run trading:compile`. It compiles the core artifacts and then explicitly runs the Trading vendor build, which generates `ui/trading/ts/generated/contractArtifact.ts`; generated files must not be edited.
 3. Run `bun run trading:test` and `bun run trading:ui:build`.
 5. Start `bun run app:serve:trading`, then open `http://localhost:4163/?simulate=1#/markets` for the shared TEVM simulator or `http://localhost:4163/?demo=1#/markets` for deterministic visual fixtures.
 

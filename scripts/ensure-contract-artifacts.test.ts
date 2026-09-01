@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { getRequiredSharedOutputRelativePaths, prepareHeadlessContractArtifacts, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
+import { getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, prepareHeadlessContractArtifacts, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
 
 async function exists(filePath: string) {
 	try {
@@ -23,6 +23,13 @@ test('ensure-contract-artifacts requires shared package testing helper outputs',
 	expect(requiredSharedOutputs).toContain('shared/js/testing/pickFixtureProperties.d.ts')
 	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.js')
 	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.d.ts')
+})
+
+test('core contract artifact preparation does not require Trading UI output', () => {
+	const requiredOutputs = getRequiredContractArtifactRelativePaths()
+
+	expect(requiredOutputs).toContain('ui/coreShared/ts/contractArtifact.ts')
+	expect(requiredOutputs).not.toContain('ui/trading/ts/generated/contractArtifact.ts')
 })
 
 test('ensure-contract-artifacts reserves root-only shared refreshes for headless preparation', async () => {

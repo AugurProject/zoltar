@@ -30,6 +30,8 @@ describe('UI Docker packaging', () => {
 
 	test('builds local runtime images from only the selected application dependency stage', async () => {
 		const source = await readFile(dockerfile, 'utf8')
+		expect(source).toContain('RUN mkdir -p /source/ui/coreShared/ts && bun run compile-contracts')
+		expect(source).not.toContain('/source/ui/zoltar/ts /source/ui/statoblast/ts /source/ui/trading/ts')
 		expect(source).toContain('AS local-runtime-zoltar')
 		expect(source).toContain('COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/')
 		expect(source).toContain('AS local-runtime-statoblast')
@@ -37,6 +39,21 @@ describe('UI Docker packaging', () => {
 		expect(source).toContain('AS local-runtime-trading')
 		expect(source).toContain('COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/')
 		expect(source).toContain('COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts')
+		expect(source.indexOf('COPY ./ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(source.indexOf('RUN bun ./ui/coreShared/build/vendor.mts trading'))
+	})
+
+	test('serves Zoltar and Statoblast on their dedicated container ports', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		for (const [appId, port] of [
+			['zoltar', 8012],
+			['statoblast', 8011],
+		] as const) {
+			const stage = source.split(`AS local-runtime-${appId}`)[1]?.split(/^FROM /m)[0]
+			expect(stage).toBeDefined()
+			expect(stage).toContain(`EXPOSE ${port}`)
+			expect(stage).toContain(`ENV PORT=${port}`)
+			expect(stage).toContain(`http://127.0.0.1:${port}/`)
+		}
 	})
 
 	test('copies every deployment manifest required by the production build', async () => {

@@ -17,6 +17,8 @@ const setupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'set
 const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')
 const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
+const rootPackagePath = join(repositoryRoot, 'package.json')
+const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
@@ -129,6 +131,18 @@ describe('split UI workflow paths', () => {
 
 		const workflow = await readFile(activeCiWorkflowPath, 'utf8')
 		expect(workflow.match(/ui\/trading\/ts\/generated\/contractArtifact\.ts/g)).toHaveLength(2)
+	})
+
+	test('Trading-owned compile and test commands explicitly generate Trading artifacts', async () => {
+		const packageJson = JSON.parse(await readFile(rootPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		const tradingPackageJson = JSON.parse(await readFile(tradingPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		expect(packageJson.scripts?.['trading:compile']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(packageJson.scripts?.['trading:test']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(packageJson.scripts?.['tsc:app']).toStartWith('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:ui']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:typescript']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(tradingPackageJson.scripts?.['test']).toStartWith('bun run generate')
+		expect(tradingPackageJson.scripts?.['watch']).toStartWith('bun run generate')
 	})
 
 	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {

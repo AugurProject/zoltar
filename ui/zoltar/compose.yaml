@@ -8,7 +8,7 @@ services:
       target: local-runtime-zoltar
     image: zoltar-ui
     ports:
-      - 127.0.0.1:4153:8080
+      - 127.0.0.1:8012:8012
     environment:
       UI_APP: zoltar
 
