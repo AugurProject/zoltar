@@ -3,7 +3,7 @@ import mainnetDeployment from '../../docs/mainnet-deployment-addresses.json'
 import sepoliaDeployment from '../../docs/sepolia-deployment-addresses.json'
 import mainnetManifest from '../config/manifests/mainnet.json'
 import sepoliaManifest from '../config/manifests/sepolia.json'
-import { loadNetworks, parseManifestValue } from '../src/config.ts'
+import { loadNetworks, parseManifestValue, runtimeConfig } from '../src/config.ts'
 
 const originalNetworks = process.env['NETWORKS']
 const originalMainnetRpc = process.env['MAINNET_RPC_URL']
@@ -31,6 +31,10 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
+	test('uses a 100000 block default log scan range', () => {
+		expect(runtimeConfig.logScanRangeSize).toBe(100000)
+	})
+
 	test('indexes the canonical deterministic deployments', () => {
 		for (const { id, deployment, manifest } of [
 			{ id: 'mainnet', deployment: mainnetDeployment, manifest: mainnetManifest },
