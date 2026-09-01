@@ -200,6 +200,11 @@ test('accepts production address identities and network startup states', () => {
 	expect(isNetworkRecordValue(startupNetwork)).toBeTrue()
 	expect(isNetworkRecordValue({ ...startupNetwork, last_reorg_at: 12 })).toBeFalse()
 	expect(isNetworkRecordValue({ ...startupNetwork, next_retry_at: false })).toBeFalse()
+	expect(isNetworkRecordValue({ ...startupNetwork, indexed_timestamp: 'not-a-date' })).toBeFalse()
+	expect(isNetworkRecordValue({ ...startupNetwork, indexed_block: 'not-a-block' })).toBeFalse()
+	expect(isNetworkRecordValue({ ...startupNetwork, chain_id: '01' })).toBeFalse()
+	expect(isNetworkRecordValue({ ...startupNetwork, indexed_block: '01' })).toBeFalse()
+	expect(isNetworkRecordValue({ ...startupNetwork, consecutive_failures: -1 })).toBeFalse()
 })
 
 test('validates nested state rows and complete specialized price records', () => {

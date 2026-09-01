@@ -34,8 +34,10 @@ import {
 	accountStateDuringStagedRefresh,
 	activityRefreshRetention,
 	approvalTransitionFields,
+	availableSessionSnapshotStorage,
 	type ContractRegistrySection,
 	canonicalPageLimit,
+	canReuseNetworkStatusPresentation,
 	classifyLiveRecords,
 	collectCanonicalPages,
 	collectCursorCollections,
@@ -47,6 +49,7 @@ import {
 	contractRegistrySection,
 	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
+	createSessionSnapshotCache,
 	demoTimelineEvidenceStatus,
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
@@ -64,6 +67,8 @@ import {
 	isCurrentLiveRequest,
 	isHistoryInvalidationReason,
 	isNoncanonicalDetailFailure,
+	knownNetworkName,
+	loadInitialNetworkStatus,
 	mergeUniqueRecords,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
@@ -79,6 +84,7 @@ import {
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
+	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -376,6 +382,7 @@ interface ItemsPage<T> {
 interface NetworkResponse extends ItemsPage<NetworkRecord> {
 	serverTime?: string
 	freshnessThresholdMs?: number
+	clientClockOffsetMs?: number
 }
 
 interface RelatedLogRecord {
@@ -1543,10 +1550,25 @@ const decodeNetworkResponse = (value: unknown): NetworkResponse => {
 	if (!isRecord(value)) throw new Error('Network status response is malformed')
 	const serverTime = value['serverTime']
 	const freshnessThresholdMs = value['freshnessThresholdMs']
+	const clientClockOffsetMs = value['clientClockOffsetMs']
 	if (serverTime !== undefined && !isString(serverTime)) throw new Error('Network server time is malformed')
-	if (freshnessThresholdMs !== undefined && typeof freshnessThresholdMs !== 'number') throw new Error('Network freshness threshold is malformed')
-	return { ...page, ...(serverTime === undefined ? {} : { serverTime }), ...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }) }
+	if (freshnessThresholdMs !== undefined && (typeof freshnessThresholdMs !== 'number' || !Number.isFinite(freshnessThresholdMs) || freshnessThresholdMs <= 0))
+		throw new Error('Network freshness threshold is malformed')
+	if (clientClockOffsetMs !== undefined && (typeof clientClockOffsetMs !== 'number' || !Number.isFinite(clientClockOffsetMs)))
+		throw new Error('Network client clock offset is malformed')
+	return {
+		...page,
+		...(serverTime === undefined ? {} : { serverTime }),
+		...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }),
+		...(clientClockOffsetMs === undefined ? {} : { clientClockOffsetMs }),
+	}
 }
+
+const networkSnapshotCache = createSessionSnapshotCache(
+	availableSessionSnapshotStorage(() => window.sessionStorage),
+	'augurscan:network-status:v1',
+	decodeNetworkResponse,
+)
 
 const decodeValue = <T>(value: unknown, guard: (candidate: unknown) => candidate is T, label: string): T => {
 	if (!guard(value)) throw new Error(`${label} response is malformed`)
@@ -2807,6 +2829,7 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 }
 
 const renderNetworks = (networks: NetworkRecord[]) => {
+	const previouslySelectedNetwork = latestNetworks.find((network) => String(network.chain_id) === selectedChainId())
 	let selectedReorgAdvanced = false
 	for (const network of networks) {
 		const previous = latestNetworks.find((item) => String(item.chain_id) === String(network.chain_id))
@@ -2817,6 +2840,10 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 		} else if (previous && previous.indexed_hash !== network.indexed_hash) invalidateAddressIdentityCache(network.chain_id, true)
 	}
 	latestNetworks = networks
+	const selectedNetwork = networks.find((item) => String(item.chain_id) === selectedChainId())
+	const currentTime = Date.now() + serverClockOffsetMs
+	const selectedHeadFreshness = selectedNetwork === undefined ? undefined : indexerHeadFreshness(selectedNetwork, currentTime)
+	const renderedNetworkCard = networkCards.querySelector<HTMLElement>('.network-card[data-live-key]')
 	if (selectedReorgAdvanced && activeReorgRecovery !== undefined) activeReorgRecovery.pendingRefresh = true
 	else if (selectedReorgAdvanced && polledReorgRefreshTimer === undefined) {
 		const chainId = selectedChainId()
@@ -2826,10 +2853,25 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 				void refreshCanonicalViews('Canonical history reset detected', 'Address identities and views are refreshing from the latest indexed generation.')
 		}, 0)
 	}
+	if (
+		previouslySelectedNetwork !== undefined &&
+		selectedNetwork !== undefined &&
+		selectedHeadFreshness !== undefined &&
+		canReuseNetworkStatusPresentation(
+			previouslySelectedNetwork,
+			selectedNetwork,
+			renderedNetworkCard?.dataset.liveKey,
+			renderedNetworkCard?.dataset.headFreshness,
+			String(selectedNetwork.chain_id),
+			selectedHeadFreshness.stale ? 'stale' : 'current',
+		)
+	) {
+		networkCards.setAttribute('aria-busy', 'false')
+		updateConnectionStatus()
+		return
+	}
 	networkCards.classList.remove('empty')
 	networkCards.replaceChildren()
-	const currentTime = Date.now() + serverClockOffsetMs
-	const selectedNetwork = networks.find((item) => String(item.chain_id) === selectedChainId())
 	for (const network of selectedNetwork === undefined ? [] : [selectedNetwork]) {
 		const headFreshness = indexerHeadFreshness(network, currentTime)
 		const progress = indexerProgressEstimate(network, indexerProgressSamples.get(String(network.chain_id)), currentTime)
@@ -4639,6 +4681,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			const { items, serverTime, freshnessThresholdMs } = decodeNetworkResponse(await api('/api/v1/networks'))
 			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
+			networkSnapshotCache.write({ items, ...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }), clientClockOffsetMs: serverClockOffsetMs })
 			if (freshnessThresholdMs !== undefined && Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0)
 				networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousNetwork = selectedChainId()
@@ -8299,24 +8342,23 @@ $('#richlist-more').addEventListener('click', () => loadRichList({ append: true 
 
 const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean, recovery: CanonicalRecovery | undefined): Promise<boolean> => {
 	if (activeReorgRecovery !== undefined && activeReorgRecovery !== recovery) return await activeReorgRecovery.promise
-	const networkRefresh = loadNetworks()
 	if (isSystem) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadSystemState({ live: true })])
+		const contentRefreshed = await loadSystemState({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isOperations) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadOperations({ live: true })])
+		const contentRefreshed = await loadOperations({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isContracts) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadContracts({ live: true })])
+		const contentRefreshed = await loadContracts({ live: true })
 		if (contentRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 		return contentRefreshed
 	}
 	if (isRichList) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadRichList({ live: true })])
+		const contentRefreshed = await loadRichList({ live: true })
 		if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalAccount === undefined && activeAccount && dialog.open) {
 			const account = activeAccount
 			const refreshedAccount = richListItems.find(
@@ -8331,7 +8373,7 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		return fullyRefreshed
 	}
 	if (isAddress) {
-		const [, contentRefreshed] = await Promise.all([networkRefresh, loadAddressProfile({ live: true })])
+		const contentRefreshed = await loadAddressProfile({ live: true })
 		if (
 			contentRefreshed &&
 			activeReorgRecovery === undefined &&
@@ -8354,13 +8396,10 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		pendingCanonicalActivityCount,
 		feed.querySelectorAll<HTMLElement>('.log-row').length,
 	)
-	const [, contentRefreshed] = await Promise.all([
-		networkRefresh,
-		loadLogs({
-			live: true,
-			...activityRetention,
-		}),
-	])
+	const contentRefreshed = await loadLogs({
+		live: true,
+		...activityRetention,
+	})
 	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && dialog.open)
 		await openDetail(activeLog, { live: true })
 	const canonicalDetailRefreshed = contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined ? await restorePendingCanonicalLog() : true
@@ -8559,11 +8598,21 @@ const connectStream = () => {
 }
 
 if (initialChainId) {
-	globalNetworkFilter.replaceChildren(new Option(`Chain ${initialChainId}`, initialChainId))
+	globalNetworkFilter.replaceChildren(new Option(knownNetworkName(initialChainId), initialChainId))
 	globalNetworkFilter.value = initialChainId
 	globalNetworkFilter.dataset.restored = 'true'
 	syncNetworkUrl()
 	updateNetworkLabels()
+}
+const cachedNetworkSnapshot = initialChainId === '' ? undefined : networkSnapshotCache.read()
+let restoredCachedNetworkSnapshot = false
+if (cachedNetworkSnapshot?.items.some((network) => String(network.chain_id) === initialChainId)) {
+	if (cachedNetworkSnapshot.clientClockOffsetMs !== undefined) serverClockOffsetMs = cachedNetworkSnapshot.clientClockOffsetMs
+	if (cachedNetworkSnapshot.freshnessThresholdMs !== undefined) networkFreshnessThresholdMs = cachedNetworkSnapshot.freshnessThresholdMs
+	reconcileNetworkOptions(cachedNetworkSnapshot.items)
+	renderNetworks(cachedNetworkSnapshot.items)
+	updateFreshness()
+	restoredCachedNetworkSnapshot = true
 }
 
 connectStream()
@@ -8590,7 +8639,7 @@ setInterval(() => {
 setInterval(() => {
 	if (document.hidden) return
 	if (isDemo) loadNetworks()
-	else void requestRouteRefresh(1)
+	else void refreshRouteAlongsideNetworkStatus(loadNetworks, () => requestRouteRefresh(1))
 }, 12_000)
 document.addEventListener('visibilitychange', () => {
 	if (!document.hidden) void requestRouteRefresh(1)
@@ -8637,7 +8686,7 @@ if (isSystem) setStateTab(isStateTab(requestedTab) ? requestedTab : 'pools')
 if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefined
 
 const initialDashboardLoad = (async () => {
-	await loadNetworks({ synchronizeActivity: false })
+	await loadInitialNetworkStatus(restoredCachedNetworkSnapshot, () => loadNetworks({ synchronizeActivity: false }))
 	if (isSystem) await loadSystemState()
 	else if (isOperations) await loadOperations()
 	else if (isContracts) await loadContracts()

@@ -153,23 +153,27 @@ export const isEntityHistoryCoverageValue = (value: unknown): value is EntityHis
 	(value['hasPreviousPages'] === undefined || typeof value['hasPreviousPages'] === 'boolean') &&
 	(value['nextCursor'] === undefined || isString(value['nextCursor']))
 
+const isNullableIntegerString = (value: unknown): value is string | null => value === null || isUnsignedIntegerString(value)
+const isDateString = (value: unknown): value is string => isString(value) && Number.isFinite(new Date(value).getTime())
+const isNullableDateString = (value: unknown): value is string | null => value === null || isDateString(value)
+
 export const isNetworkRecordValue = (value: unknown): boolean =>
 	isRecord(value) &&
-	isString(value['chain_id']) &&
+	isUnsignedIntegerString(value['chain_id']) &&
 	isString(value['id']) &&
 	isString(value['name']) &&
-	isString(value['start_block']) &&
-	isNullableString(value['indexed_block']) &&
+	isUnsignedIntegerString(value['start_block']) &&
+	isNullableIntegerString(value['indexed_block']) &&
 	isNullableString(value['indexed_hash']) &&
-	isNullableString(value['indexed_timestamp']) &&
-	isNullableString(value['observed_block']) &&
-	isNullableString(value['finalized_block']) &&
+	isNullableDateString(value['indexed_timestamp']) &&
+	isNullableIntegerString(value['observed_block']) &&
+	isNullableIntegerString(value['finalized_block']) &&
 	isString(value['phase']) &&
-	isNullableString(value['last_poll_at']) &&
-	isNullableString(value['last_success_at']) &&
-	typeof value['consecutive_failures'] === 'number' &&
-	(value['last_reorg_at'] === undefined || isNullableString(value['last_reorg_at'])) &&
-	(value['next_retry_at'] === undefined || isNullableString(value['next_retry_at'])) &&
+	isNullableDateString(value['last_poll_at']) &&
+	isNullableDateString(value['last_success_at']) &&
+	isNonNegativeInteger(value['consecutive_failures']) &&
+	(value['last_reorg_at'] === undefined || isNullableDateString(value['last_reorg_at'])) &&
+	(value['next_retry_at'] === undefined || isNullableDateString(value['next_retry_at'])) &&
 	isNullableString(value['last_error']) &&
 	isString(value['explorer_base_url'])
 
