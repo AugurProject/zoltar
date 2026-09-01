@@ -11,7 +11,7 @@ import {
 	type TransactionReceipt,
 	zeroAddress,
 } from './ethereum.ts'
-import { jsonRpcErrorName, safeRpcProviderMessage } from './logging.ts'
+import { jsonRpcErrorName, safePrunedStateProviderMessage, safeRpcProviderMessage } from './logging.ts'
 import { RpcRequestMethodError, type RpcRequestQueue, rpcQueueSaturationFrom, withRpcRequestQueue } from './rpc-request-queue.ts'
 import { bigintToSafeNumber } from './time.ts'
 import type { ContractMetadata, StoredLog } from './types.ts'
@@ -191,16 +191,7 @@ export const isPrunedHistoricalStateError = (error: unknown): boolean => {
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
 		seen.add(current)
-		for (const description of preferredRpcDescriptions(current)) {
-			const normalized = classifiedRpcDescription(description)
-			if (
-				normalized.includes('missing trie node') ||
-				normalized.includes('pruned historical state') ||
-				normalized.includes('historical state pruned') ||
-				/^state at block (?:[0-9]+|0x[0-9a-f]+) is pruned$/u.test(normalized)
-			)
-				return true
-		}
+		for (const description of preferredRpcDescriptions(current)) if (safePrunedStateProviderMessage(description) !== undefined) return true
 		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
@@ -210,12 +201,15 @@ export const readWithPrunedStateFallback = async <T>(
 	requestedBlock: bigint,
 	fallbackBlock: bigint,
 	read: (blockNumber: bigint) => Promise<T>,
+	onPrunedFallback: (requestedBlock: bigint, fallbackBlock: bigint) => Promise<void> = async () => {},
 ): Promise<{ readonly blockNumber: bigint; readonly value: T }> => {
 	try {
 		return { blockNumber: requestedBlock, value: await read(requestedBlock) }
 	} catch (error) {
 		if (!isPrunedHistoricalStateError(error) || fallbackBlock <= requestedBlock) throw error
-		return { blockNumber: fallbackBlock, value: await read(fallbackBlock) }
+		const value = await read(fallbackBlock)
+		await onPrunedFallback(requestedBlock, fallbackBlock)
+		return { blockNumber: fallbackBlock, value }
 	}
 }
 
@@ -257,6 +251,34 @@ export const findEarliestAvailableLogBlock = async (
 	}
 	if (!startBlockKnownUnavailable && (await isAvailable(startBlock))) return startBlock
 	if (!(await isAvailable(observedHead))) throw new ChainConfigurationError(`RPC cannot serve logs at observed head #${observedHead}`)
+	let lower = startBlock
+	let upper = observedHead
+	while (lower + 1n < upper) {
+		const middle = lower + (upper - lower) / 2n
+		if (await isAvailable(middle)) upper = middle
+		else lower = middle
+	}
+	return upper
+}
+
+export const findEarliestAvailableStateBlock = async (
+	startBlock: bigint,
+	observedHead: bigint,
+	stateAt: (blockNumber: bigint) => Promise<void>,
+	startBlockKnownUnavailable = false,
+): Promise<bigint> => {
+	if (startBlock > observedHead) throw new Error('The state availability search start must not exceed the observed head')
+	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
+		try {
+			await stateAt(blockNumber)
+			return true
+		} catch (error) {
+			if (isPrunedHistoricalStateError(error)) return false
+			throw error
+		}
+	}
+	if (!startBlockKnownUnavailable && (await isAvailable(startBlock))) return startBlock
+	if (!(await isAvailable(observedHead))) throw new ChainConfigurationError(`RPC cannot serve state at observed head #${observedHead}`)
 	let lower = startBlock
 	let upper = observedHead
 	while (lower + 1n < upper) {
@@ -727,6 +749,7 @@ export const readHistoricalCodeWithPermanentFallback = async <T>(
 	try {
 		return { status: 'success', value: await read() }
 	} catch (error) {
+		if (isPrunedHistoricalStateError(error)) throw error
 		if (!isPermanentHistoricalCodeError(error)) throw error
 		onHistoricalCodeUnavailable(error)
 		return { status: 'unavailable' }

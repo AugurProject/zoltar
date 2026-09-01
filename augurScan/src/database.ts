@@ -1559,8 +1559,8 @@ export class ScannerDatabase {
 					WHERE log_scan_cursors.last_retrieved_block <= EXCLUDED.last_retrieved_block
 				`
 			}
-			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND number <= ${block.finalizedThrough.toString()}`
-			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND block_number <= ${block.finalizedThrough.toString()}`
+			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND number <= ${block.finalizedThrough.toString()}`
+			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND block_number <= ${block.finalizedThrough.toString()}`
 			await transaction`
 				UPDATE networks SET indexed_block = ${block.number.toString()}, indexed_hash = ${block.hash}, indexed_timestamp = ${block.timestamp}, observed_block = ${block.observedHead.toString()}, finalized_block = ${block.finalizedThrough.toString()}, phase = ${block.number >= block.observedHead ? 'live' : 'backfilling'}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now()
 				WHERE chain_id = ${chainId}

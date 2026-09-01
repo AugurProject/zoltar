@@ -842,6 +842,25 @@ export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => 
 	return { label: 'Checking deployment', tone: 'pending' }
 }
 
+export type ContractRegistrySection = 'Protocol contracts' | 'System dependencies' | 'Discovered contracts'
+
+const dependencyContractKinds = new Set([
+	'multicall3',
+	'proxyDeployer',
+	'reputationToken',
+	'scalarOutcomes',
+	'uniswapV2Factory',
+	'uniswapV3Factory',
+	'uniswapV4PoolManager',
+	'usdc',
+	'weth',
+])
+
+export const contractRegistrySection = (contract: { readonly kind: string; readonly provenance: string }): ContractRegistrySection => {
+	if (contract.provenance !== 'manifest') return 'Discovered contracts'
+	return dependencyContractKinds.has(contract.kind) ? 'System dependencies' : 'Protocol contracts'
+}
+
 export const contractDeploymentTimestampLabel = (contract: ContractDeploymentRecord): string =>
 	contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'
 

@@ -27,6 +27,16 @@ export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 	return /^state at block (?:#[0-9]+|0x[0-9a-f]+) is pruned[.!]?$/iu.test(message) || /^pruned history unavailable[.!]?$/iu.test(message) ? message : undefined
 }
 
+export const safePrunedStateProviderMessage = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined
+	const normalized = value.replace(/\s+/gu, ' ').trim().toLowerCase()
+	if (/^state at block (?:#[0-9]+|0x[0-9a-f]+|[0-9]+) is pruned[.!]?$/u.test(normalized)) return 'state at requested block is pruned'
+	if (normalized.includes('missing trie node')) return 'missing trie node'
+	if (normalized.includes('pruned historical state')) return 'pruned historical state'
+	if (normalized.includes('historical state pruned')) return 'historical state pruned'
+	return undefined
+}
+
 export const timestampedLogArguments = (values: readonly unknown[], now = new Date()): readonly unknown[] => [`[${now.toISOString()}]:`, ...values]
 
 let consoleTimestampsInstalled = false
@@ -128,9 +138,17 @@ const appendRpcRecord = async (log: RotatingJsonLog, logPath: string, record: un
 	}
 }
 
-export const createRpcLoggingFetch =
-	(rpcUrl: string, consoleEndpoint: string, logPath: string, log: RotatingJsonLog, fetchFn: RpcFetchFn = fetch): RpcFetchFn =>
-	async (input, init) => {
+const historicalStateMethods = new Set(['eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
+
+export const createRpcLoggingFetch = (
+	rpcUrl: string,
+	consoleEndpoint: string,
+	logPath: string,
+	log: RotatingJsonLog,
+	fetchFn: RpcFetchFn = fetch,
+): RpcFetchFn => {
+	let reportedPrunedState = false
+	return async (input, init) => {
 		const requestBody = init?.body
 		const requestEnvelope = parseEnvelope(requestBody)
 		const startedAt = new Date()
@@ -150,16 +168,20 @@ export const createRpcLoggingFetch =
 			if (rpcError !== undefined) {
 				const name = jsonRpcErrorName(rpcError.code)
 				const providerMessage = safeRpcProviderMessage(rpcError.message)
+				const prunedStateMessage = safePrunedStateProviderMessage(rpcError.message)
 				const method = typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'
 				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`
 				if (method === 'eth_getLogs' && rpcError.code === 4444 && providerMessage !== undefined) {
 					console.warn(
 						`Historical log history unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; locating earliest retrievable block; full exchange logged to ${logPath}`,
 					)
-				} else if (method === 'eth_getCode' && providerMessage !== undefined) {
-					console.warn(
-						`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; continuing with conservative log coverage; full exchange logged to ${logPath}`,
-					)
+				} else if (historicalStateMethods.has(method) && prunedStateMessage !== undefined) {
+					if (!reportedPrunedState) {
+						reportedPrunedState = true
+						console.warn(
+							`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage ?? prunedStateMessage}; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${logPath}`,
+						)
+					}
 				} else console.error(message)
 			}
 			return response
@@ -176,3 +198,4 @@ export const createRpcLoggingFetch =
 			throw error
 		}
 	}
+}
