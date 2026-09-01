@@ -80,6 +80,8 @@ const payload = {
 await Bun.write(outputPath, `${JSON.stringify(payload, undefined, 2)}\n`)
 
 const manifests = await projectManifests(projectRoot)
-await Promise.all(Object.entries(manifests).map(async ([networkId, manifest]) => await Bun.write(path.join(manifestsRoot, `${networkId}.json`), manifest)))
+await Promise.all(
+	(['mainnet', 'sepolia'] as const).map(async (networkId) => await Bun.write(path.join(manifestsRoot, `${networkId}.json`), manifests[networkId])),
+)
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)
