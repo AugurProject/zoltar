@@ -4,15 +4,18 @@ import { TRADING_OPERATIONS } from '../../src/operations/trading.ts'
 import { genesisInitializationDefinitionId, type GenesisInitializationState } from '../../src/runtime/selection.ts'
 import { address, snapshotFixture } from './fixture.ts'
 
+const maximumEthSpendAttoEth = 10n ** 15n
+const maximumRepSpendAttoRep = 10n ** 15n
+
 const options = {
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
 	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxStagedOperationsPerPool: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10_000 },
 	maximumBlockIntervalSeconds: 15,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: '0',
-	minimumRepReserveAttoRep: '0',
+	'maxEthSpendAttoEth': maximumEthSpendAttoEth.toString(),
+	'maxRepSpendAttoRep': maximumRepSpendAttoRep.toString(),
+	'minimumEthReserveAttoEth': 0n.toString(),
+	'minimumRepReserveAttoRep': 0n.toString(),
 	seed: 1,
 } as const
 
@@ -52,7 +55,7 @@ describe('genesis initialization', () => {
 	test('builds bounded pool creation, initialization, and seeding plans from authenticated state', () => {
 		const snapshot = snapshotFixture()
 		snapshot.deployments.uniswapV3Factory = address(40)
-		snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', seeder: true }
+		snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', proxy: true, seeder: true }
 		const creation = evaluateSelectableOperationDefinition('trading.genesis-uniswap.create-pool', snapshot, options)
 		expect(creation.plan?.steps[0]?.to).toBe(address(40))
 
