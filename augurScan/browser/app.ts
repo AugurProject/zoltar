@@ -4763,21 +4763,18 @@ const rowFor = (log: ActivityRecord) => {
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
-	chain.append(element('span', '', `#${number(log.block_number)}`), openCue)
+	const blockLink = explorerLink(log.explorer_base_url, 'block', log.block_number, `#${number(log.block_number)}`)
+	blockLink.className = 'address-link'
+	chain.append(blockLink, openCue)
 	const timestamp = element('time', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
 	timestamp.dataset.time = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
 	const contract = element('span', 'cell')
-	contract.append(
-		protocolAddressLink(log.emitter_address, {
-			knownLabel: log.contract_label,
-			chainId: log.chain_id,
-			className: 'contract-name address-link',
-			compact: true,
-		}),
-		element('span', 'contract-address', short(log.emitter_address)),
-	)
+	const contractLink = explorerLink(log.explorer_base_url, 'address', log.emitter_address, log.contract_label ?? short(log.emitter_address, 10, 8))
+	contractLink.className = 'contract-name address-link'
+	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
+	contract.append(contractLink, element('span', 'contract-address', short(log.emitter_address)))
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Open ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
@@ -5120,9 +5117,6 @@ const decodedValueNode = (rawValue: unknown, displayValue: unknown, chainId: str
 	return node
 }
 
-const evidenceText = (value: unknown): string =>
-	value === undefined || value === null ? '—' : typeof value === 'string' ? value : (JSON.stringify(value) ?? '—')
-
 const decodedArgumentsTable = (
 	schema: ArgumentDefinition[] | null | undefined,
 	rawArguments: Record<string, unknown> | null | undefined,
@@ -5137,7 +5131,7 @@ const decodedArgumentsTable = (
 	const table = element('table', 'arguments')
 	const head = element('thead')
 	const headRow = element('tr')
-	for (const label of ['# / Name', 'Solidity type', 'Display value', 'Raw value']) headRow.append(element('th', '', label))
+	for (const label of ['# / Name', 'Solidity type', 'Value']) headRow.append(element('th', '', label))
 	head.append(headRow)
 	const body = element('tbody')
 	for (const entry of entries) {
@@ -5148,11 +5142,9 @@ const decodedArgumentsTable = (
 		const typeCell = element('td', '', `${entry.type}${entry.indexed ? ' · indexed' : ''}`)
 		typeCell.dataset.label = 'Solidity type'
 		const displayCell = element('td')
-		displayCell.dataset.label = 'Display value'
+		displayCell.dataset.label = 'Value'
 		displayCell.append(decodedValueNode(rawValue, display[entry.name], chainId))
-		const rawCell = element('td', '', evidenceText(rawValue))
-		rawCell.dataset.label = 'Raw value'
-		row.append(nameCell, typeCell, displayCell, rawCell)
+		row.append(nameCell, typeCell, displayCell)
 		body.append(row)
 	}
 	table.append(head, body)
@@ -5254,13 +5246,11 @@ const performOpenDetail = async (
 	const drawerContent = existingDrawer?.querySelector<HTMLElement>('.event-detail-content') ?? element('div', 'event-detail-content')
 	if (!existingDrawer) {
 		const header = element('header', 'event-detail-header')
-		const heading = element('div')
-		heading.append(element('h3', '', 'Event details'))
 		const close = element('button', 'icon-button', '×')
 		close.type = 'button'
 		close.setAttribute('aria-label', 'Close event details')
 		close.addEventListener('click', () => closeEventDrawer({ restoreFocus: true }))
-		header.append(heading, close)
+		header.append(close)
 		const canonicalStatus = element('div', 'detail-canonical-status event-detail-canonical-status')
 		canonicalStatus.hidden = true
 		canonicalStatus.setAttribute('role', 'status')
@@ -5295,28 +5285,17 @@ const performOpenDetail = async (
 		const deployedContractAddress = typeof detail.receipt['contractAddress'] === 'string' ? detail.receipt['contractAddress'] : undefined
 		const grid = element('div', 'detail-grid')
 		grid.append(
-			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
-			addressDetailCard('Contract', detail.emitter_address, { knownLabel: detail.contract_label, chainId: detail.chain_id }),
-			detailCard('Contract identity', `${detail.contract_kind ?? 'unknown kind'} · ${detail.contract_provenance ?? 'unknown provenance'}`),
 			detailCard('Event signature', detail.event_signature ?? 'No matching ABI'),
 			detailCard('Block hash', detail.block_hash),
 			detailCard('Occurrence position', `transaction ${number(detail.transaction_index)} · log ${number(detail.log_index)}`),
-			detailCard('Transaction', detail.tx_hash),
 			addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
 			addressDetailCard('To', detail.to_address, { chainId: detail.chain_id }),
 			detailCard('Gas used', number(detail.gas_used)),
 			detailCard(
-				'Decoded action',
+				'Transaction call',
 				decodedActionLabel(detail.action_summary, detail.to_address, detail.contract_label, detail.emitter_address, deployedContractAddress),
 			),
 		)
-		const tools = element('div', 'detail-card wide detail-tools')
-		tools.append(
-			explorerLink(detail.explorer_base_url, 'block', detail.block_hash, 'Open block'),
-			explorerLink(detail.explorer_base_url, 'tx', detail.tx_hash, 'Open transaction'),
-			explorerLink(detail.explorer_base_url, 'address', detail.emitter_address, 'Open contract'),
-		)
-		grid.append(tools)
 		const argumentsCard = element('div', 'detail-card wide')
 		argumentsCard.append(element('p', 'eyebrow', 'Decoded arguments'))
 		argumentsCard.append(decodedArgumentsTable(detail.argument_schema, detail.arguments, detail.display_arguments, detail.chain_id))

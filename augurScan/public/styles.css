@@ -1498,13 +1498,9 @@ button[aria-busy="true"]:disabled {
 .event-detail-header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	gap: 1rem;
-	margin-bottom: 0.9rem;
-}
-.event-detail-header h3 {
-	margin: 0.15rem 0 0;
-	font-size: 1.1rem;
+	margin-bottom: 0.4rem;
 }
 .event-detail-content .detail-grid {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1526,7 +1522,7 @@ button[aria-busy="true"]:disabled {
 		0.71rem / 1 ui-monospace,
 		monospace;
 }
-.chain-block > span:first-child {
+.chain-block > :first-child {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
