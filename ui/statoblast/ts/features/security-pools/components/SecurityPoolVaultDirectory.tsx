@@ -11,7 +11,7 @@ type SecurityPoolVaultDirectoryProps = {
 	renderBadge?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	renderTitle?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'mock' | 'v3' | 'v4' | undefined
+	repPerEthSource: 'mock' | 'v3' | 'v4' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 }
 

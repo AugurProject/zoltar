@@ -3,19 +3,19 @@ import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
 import { getCollateralizationDisplayState, getCollateralizationTone } from '../../markets/lib/trading.js'
 type CollateralizationMetricFieldProps = {
 	className?: string | undefined
 	collateralizationPercent: bigint | undefined
 	label?: ComponentChildren
-	repPerEthSource: RepPriceSource | undefined
+	repPerEthSource: UiRepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	capacityOwnershipAttoRep: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	unavailableCopy?: string | undefined
 }
-function getDefaultLabel(repPerEthSource: RepPriceSource | undefined, repPerEthSourceUrl: string | undefined) {
+function getDefaultLabel(repPerEthSource: UiRepPriceSource | undefined, repPerEthSourceUrl: string | undefined) {
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	return (
 		<span title={repPriceSourceCopy.tooltip}>
