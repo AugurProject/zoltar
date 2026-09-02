@@ -21,7 +21,7 @@ import {
 	zoltarAbi,
 } from '../contracts/abi.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
-import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
 	AuctionBidSnapshot,
@@ -534,14 +534,18 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 
 async function discoverGenesisUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint) {
 	const genesisRep = universes.find(universe => universe.id === '0')?.repToken
-	if (genesisRep === undefined) return { factory: false, initialized: false, liquidity: '0', seeder: false }
+	if (genesisRep === undefined) return { factory: false, initialized: false, liquidity: '0', proxy: false, seeder: false }
 	const seeder = genesisUniswapSeederDeployment()
 	const uniswapFactory = context.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
-	const [factoryCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
+	const [factoryCode, proxyCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: CANONICAL_PROXY_DEPLOYER, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
+	if (proxyCode !== undefined && proxyCode !== '0x' && proxyCode.toLowerCase() !== CANONICAL_PROXY_DEPLOYER_RUNTIME) throw new Error('Canonical proxy deployer has unexpected runtime code')
+	if (seederCode !== undefined && seederCode !== '0x' && seederCode.toLowerCase() !== seeder.runtime.toLowerCase()) throw new Error('Genesis Uniswap seeder has unexpected runtime code')
+	const authenticatedSeeder = seederCode !== undefined && seederCode !== '0x'
+	const authenticatedProxy = proxyCode !== undefined && proxyCode !== '0x'
 	const factory = factoryCode !== undefined && factoryCode !== '0x'
-	if (!factory) return { factory, initialized: false, liquidity: '0', seeder: seederCode !== undefined && seederCode !== '0x' }
+	if (!factory) return { factory, initialized: false, liquidity: '0', proxy: authenticatedProxy, seeder: authenticatedSeeder }
 	const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [genesisRep, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
-	if (pool === zeroAddress) return { factory, initialized: false, liquidity: '0', seeder: seederCode !== undefined && seederCode !== '0x' }
+	if (pool === zeroAddress) return { factory, initialized: false, liquidity: '0', proxy: authenticatedProxy, seeder: authenticatedSeeder }
 	const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
 		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
 		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
@@ -554,7 +558,7 @@ async function discoverGenesisUniswap(context: EcosystemDiscoveryContext, univer
 	const expected = [genesisRep.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
 	const actual = [getAddress(token0).toLowerCase(), getAddress(token1).toLowerCase()].sort()
 	if (actual[0] !== expected[0] || actual[1] !== expected[1] || fee !== BigInt(GENESIS_UNISWAP_FEE)) throw new Error(`Genesis Uniswap pool ${pool} has unexpected immutable token or fee bindings`)
-	return { factory, initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, seeder: seederCode !== undefined && seederCode !== '0x' }
+	return { factory, initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, proxy: authenticatedProxy, seeder: authenticatedSeeder }
 }
 
 function fixedPointPower(value: bigint, exponent: bigint) {

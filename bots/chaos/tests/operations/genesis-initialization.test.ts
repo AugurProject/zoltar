@@ -27,6 +27,7 @@ function completeState(overrides: Partial<GenesisInitializationState>): GenesisI
 		hasSeededUniswapPool: true,
 		hasUniswapPool: true,
 		hasUniswapSeeder: true,
+		hasWeth: true,
 		hasWalletVault: true,
 		tradingFactoryDeployed: true,
 		tradingRouterDeployed: true,
@@ -42,6 +43,7 @@ describe('genesis initialization', () => {
 		expect(genesisInitializationDefinitionId(completeState({ hasUniswapSeeder: false }))).toBe('trading.genesis-uniswap.deploy-seeder')
 		expect(genesisInitializationDefinitionId(completeState({ hasUniswapPool: false }))).toBe('trading.genesis-uniswap.create-pool')
 		expect(genesisInitializationDefinitionId(completeState({ hasInitializedUniswapPool: false }))).toBe('trading.genesis-uniswap.initialize-pool')
+		expect(genesisInitializationDefinitionId(completeState({ hasWeth: false }))).toBe('open-oracle.weth.wrap')
 		expect(genesisInitializationDefinitionId(completeState({ hasSeededUniswapPool: false }))).toBe('trading.genesis-uniswap.seed-pool')
 		expect(genesisInitializationDefinitionId(completeState({ tradingFactoryDeployed: false }))).toBe('trading.root.deploy-factory')
 		expect(genesisInitializationDefinitionId(completeState({ tradingRouterDeployed: false }))).toBe('trading.root.deploy-router')

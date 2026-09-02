@@ -50,6 +50,7 @@ function initializedState(overrides: Partial<GenesisInitializationState>): Genes
 		hasSeededUniswapPool: true,
 		hasUniswapPool: true,
 		hasUniswapSeeder: true,
+		hasWeth: true,
 		hasWalletVault: true,
 		tradingFactoryDeployed: true,
 		tradingRouterDeployed: true,

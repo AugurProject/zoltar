@@ -47,6 +47,7 @@ describe('Docker entrypoint', () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
 		expect(source).toContain('cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).toContain('COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg')
 	})
 
 	test('has a Linux-compatible shell shebang', async () => {

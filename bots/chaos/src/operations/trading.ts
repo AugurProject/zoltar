@@ -127,7 +127,7 @@ const deployGenesisUniswapSeeder: OperationDefinition = {
 	description: 'Deterministically deploys the stateless helper used to mint the genesis REP/WETH position.',
 	discoveryInputs: ['deterministic helper deployment'],
 	ecosystem: 'trading',
-	evaluate: snapshot => eligible(snapshot.genesisUniswap?.seeder === false ? undefined : 'Genesis Uniswap seeding helper is already deployed'),
+	evaluate: snapshot => eligible(snapshot.genesisUniswap?.proxy === true ? undefined : 'Canonical proxy deployer is unavailable', snapshot.genesisUniswap?.seeder === false ? undefined : 'Genesis Uniswap seeding helper is already deployed'),
 	id: 'trading.genesis-uniswap.deploy-seeder',
 	label: 'Deploy genesis Uniswap seeder',
 	method: 'fallback',

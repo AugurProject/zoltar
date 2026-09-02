@@ -53,6 +53,7 @@ export type GenesisInitializationState = {
 	hasWalletVault: boolean
 	hasUniswapPool: boolean
 	hasUniswapSeeder: boolean
+	hasWeth: boolean
 	hasInitializedUniswapPool: boolean
 	hasSeededUniswapPool: boolean
 	tradingFactoryDeployed: boolean
@@ -66,6 +67,7 @@ export const genesisInitializationDefinitionIds = new Set([
 	'trading.genesis-uniswap.deploy-seeder',
 	'trading.genesis-uniswap.create-pool',
 	'trading.genesis-uniswap.initialize-pool',
+	'open-oracle.weth.wrap',
 	'trading.genesis-uniswap.seed-pool',
 	'trading.root.deploy-factory',
 	'trading.root.deploy-router',
@@ -82,6 +84,7 @@ export function genesisInitializationDefinitionId(state: GenesisInitializationSt
 	else if (!state.hasUniswapSeeder) definitionId = 'trading.genesis-uniswap.deploy-seeder'
 	else if (!state.hasUniswapPool) definitionId = 'trading.genesis-uniswap.create-pool'
 	else if (!state.hasInitializedUniswapPool) definitionId = 'trading.genesis-uniswap.initialize-pool'
+	else if (!state.hasWeth) definitionId = 'open-oracle.weth.wrap'
 	else if (!state.hasSeededUniswapPool) definitionId = 'trading.genesis-uniswap.seed-pool'
 	else if (!state.tradingFactoryDeployed) definitionId = 'trading.root.deploy-factory'
 	else if (!state.tradingRouterDeployed) definitionId = 'trading.root.deploy-router'

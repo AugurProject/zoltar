@@ -1030,6 +1030,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					hasWalletVault: genesisPool?.walletVaultRegistered === true,
 					hasUniswapPool: scan.snapshot.genesisUniswap?.pool !== undefined,
 					hasUniswapSeeder: scan.snapshot.genesisUniswap?.seeder ?? false,
+					hasWeth: BigInt(scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === scan.snapshot.deployments.weth.toLowerCase())?.balance ?? '0') > 0n,
 					hasInitializedUniswapPool: scan.snapshot.genesisUniswap?.initialized ?? false,
 					hasSeededUniswapPool: BigInt(scan.snapshot.genesisUniswap?.liquidity ?? '0') > 0n,
 					tradingFactoryDeployed: scan.snapshot.tradingDeployment?.factory ?? true,

@@ -14,7 +14,7 @@ RUN mkdir -p shared/js \
 	&& bun install --frozen-lockfile \
 	&& bun run shared:build
 
-COPY solidity/package.json solidity/bun.lock solidity/bunfig.toml solidity/default-config.json solidity/tsconfig-compile.json ./solidity/
+COPY solidity/package.json solidity/bun.lock solidity/bunfig.toml solidity/default-config.json solidity/tsconfig.json solidity/tsconfig-compile.json ./solidity/
 COPY solidity/contracts/ ./solidity/contracts/
 COPY solidity/ts/ ./solidity/ts/
 RUN cd solidity \
@@ -46,6 +46,7 @@ COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts
 COPY bots/chaos/scripts/docker-entrypoint.sh ./bots/chaos/scripts/docker-entrypoint.sh
 COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts
 COPY bots/chaos/src/ ./bots/chaos/src/
+COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg
 RUN chmod 0755 bots/chaos/scripts/docker-entrypoint.sh \
 	&& install -d -m 0700 -o bun -g bun bots/chaos/.state \
 	&& install -d -m 0700 -o bun -g bun bots/chaos/.state/process-locks

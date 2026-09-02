@@ -43,6 +43,7 @@ describe('Docker packaging', () => {
 		expect(source).toContain('-alpine AS shared-builder')
 		expect(source).toContain('&& bun run shared:build')
 		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
+		expect(source).toContain('COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production \\\n\t&& cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
 		expect(source).toContain('COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts')
 		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')

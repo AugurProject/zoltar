@@ -52,6 +52,8 @@ describe('chaos Docker packaging', () => {
 		expect(source).toContain('-alpine AS shared-builder')
 		expect(source).toContain('&& bun run shared:build')
 		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
+		expect(source).toContain('solidity/tsconfig.json solidity/tsconfig-compile.json')
+		expect(source).toContain('COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg')
 		expect(source).toContain('COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts')
 		expect(source).toContain('COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts')
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')

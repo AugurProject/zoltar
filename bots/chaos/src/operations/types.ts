@@ -412,7 +412,7 @@ export interface EcosystemSnapshot {
 	reports: OracleGameSnapshot[]
 	pairs: PairSnapshot[]
 	tradingDeployment?: { factory: boolean; router: boolean }
-	genesisUniswap?: { factory: boolean; initialized: boolean; liquidity: string; pool?: Address | undefined; seeder: boolean }
+	genesisUniswap?: { factory: boolean; initialized: boolean; liquidity: string; pool?: Address | undefined; proxy: boolean; seeder: boolean }
 	warnings: string[]
 }
 

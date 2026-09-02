@@ -36,6 +36,7 @@ COPY bots/open-oracle-arbitrager/docs/ ./bots/open-oracle-arbitrager/docs/
 COPY bots/open-oracle-arbitrager/scripts/check-market-fixture.mts ./bots/open-oracle-arbitrager/scripts/check-market-fixture.mts
 COPY bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh ./bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh
 COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/
+COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg
 RUN chmod 0755 bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh \
 	&& install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state
 
