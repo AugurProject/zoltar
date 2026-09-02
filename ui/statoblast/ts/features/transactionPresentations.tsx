@@ -39,7 +39,7 @@ export function createSecurityPoolCreationTransactionIntent(context?: SecurityPo
 	})
 }
 
-export function createSecurityPoolCreationSuccessPresentation(result: SecurityPoolCreationResult) {
+function createSecurityPoolCreationSuccessPresentation(result: SecurityPoolCreationResult) {
 	return buildPresentation({
 		detail: transactionCopy.securityPoolCreatedDetail,
 		hash: result.deployPoolHash,

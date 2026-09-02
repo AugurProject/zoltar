@@ -52,12 +52,12 @@ export const formatShowEarlierNavigationItems = (navigationLabel: string) => `Sh
 export const formatShowLaterNavigationItems = (navigationLabel: string) => `Show later ${navigationLabel}`
 export const connected = 'Connected'
 export const notConnected = 'Not connected'
-export const operations = 'Operations'
 export const repUsdc = 'REP/USDC'
 export const refreshingRepPrices = 'Refreshing REP prices…'
 export const simulation = 'Simulation'
-export const simulationNetworkDisclaimer = 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.'
 export const universeForkedDetail = 'This universe has forked.'
+export const universeForkedWarningTitle = 'Migration required'
+export const universeForkedWarningDetail = 'Migrate REP into the destination universe before continuing with new actions.'
 export const zoltarForkedOn = 'Universe forked on'
 export const transactionUniverseMismatch = 'Transaction universe mismatch'
 export const formatTransactionUniverseMismatch = (transactionUniverse: string, activeUniverse: string) => `This transaction belongs to ${transactionUniverse}, while the header shows ${activeUniverse}.`

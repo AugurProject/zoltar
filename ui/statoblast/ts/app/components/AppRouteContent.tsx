@@ -11,6 +11,7 @@ import * as statoblastAppCopy from '../../copy/app.js'
 export const STATOBLAST_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },
 	{ href: '#/security-pools', label: commonCopy.securityPools },
+	{ href: '#/security-pools?securityPoolsView=universes', label: commonCopy.universe },
 	{ href: '#/open-oracle', label: statoblastAppCopy.openOracle },
 ] as const
 

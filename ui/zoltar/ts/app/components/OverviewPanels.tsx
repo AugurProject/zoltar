@@ -10,6 +10,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
@@ -99,7 +100,7 @@ export function OverviewPanels({
 		return <Badge tone='ok'>{appCopy.connected}</Badge>
 	})()
 	const environmentDescription = (() => {
-		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
+		void isBrowserSimulationReadBackend
 		return undefined
 	})()
 	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
@@ -139,7 +140,7 @@ export function OverviewPanels({
 			</details>
 		)
 	})()
-	const operationsHeaderDescription = (() => {
+	const headerDescription = (() => {
 		const forkDescription = (() => {
 			if (!universeHasForked) return undefined
 			if (universeForkTime === undefined) return appCopy.universeForkedDetail
@@ -169,10 +170,15 @@ export function OverviewPanels({
 							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
 					}
-					description={operationsHeaderDescription}
-					eyebrow={appCopy.operations}
+					description={headerDescription}
 					title={applicationTitle}
 				/>
+				{universeHasForked ? (
+					<WarningSurface role='alert' surface='flat'>
+						<strong>{appCopy.universeForkedWarningTitle}</strong>
+						<p>{appCopy.universeForkedWarningDetail}</p>
+					</WarningSurface>
+				) : undefined}
 				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
 					<MetricField className='overview-address-metric' label={appCopy.address}>
 						{(() => {
@@ -224,9 +230,16 @@ export function OverviewPanels({
 						<MetricField
 							className='overview-metric-secondary'
 							label={
-								<>
-									{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
-								</>
+								<span className='metric-label-with-action'>
+									<span>
+										{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
+									</span>
+									{isRepPricingUnavailable ? undefined : (
+										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+											↻
+										</button>
+									)}
+								</span>
 							}
 						>
 							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}

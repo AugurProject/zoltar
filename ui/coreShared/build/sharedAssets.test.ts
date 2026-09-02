@@ -363,12 +363,12 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 		expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/logScan": "../shared/js/logScan.js"')
-		if (appId === 'zoltar') {
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
-		} else {
+		if (appId !== 'zoltar') {
 			expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
 			expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+		} else {
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 		}
 		expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
@@ -403,10 +403,10 @@ test('development import map maps browser dependency subpaths', () => {
 		for (const [specifier, mappedPath] of Object.entries(developmentImportMapRegressionEntries)) {
 			expect(imports[specifier], `${appId} import map entry for ${specifier}`).toBe(mappedPath)
 		}
-		if (appId === 'zoltar') {
-			expect(imports['@zoltar/shared/openOracle']).toBeUndefined()
-		} else {
+		if (appId !== 'zoltar') {
 			expect(imports['@zoltar/shared/openOracle']).toBe('../shared/js/openOracle.js')
+		} else {
+			expect(imports['@zoltar/shared/openOracle']).toBeUndefined()
 		}
 	}
 	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('build/watch.mts zoltar')

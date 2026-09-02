@@ -152,7 +152,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 					</div>
 				</div>
 				<div className='question-preview-meta'>
-					<div className='question-preview-meta-item'>
+					<div className='question-preview-meta-item question-preview-meta-item-primary-id'>
 						<span className='question-preview-meta-label'>{commonCopy.questionId}</span>
 						<strong>
 							<IdentifierValue value={question.questionId} />

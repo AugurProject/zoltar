@@ -17,6 +17,7 @@ export function getAppPageTitle({ activeZoltarView, route }: AppPageTitleInput) 
 		if (activeZoltarView === 'create') return commonCopy.createQuestion
 		if (activeZoltarView === 'fork') return zoltarCopy.forkZoltar
 		if (activeZoltarView === 'migrate') return zoltarCopy.migrateRep
+		if (activeZoltarView === 'universes') return commonCopy.universe
 		return marketCopy.questions
 	}
 	return appCopy.pageNotFoundTitle

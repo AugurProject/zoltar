@@ -57,7 +57,17 @@ describe('TransactionActionButton', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Submit' })).not.toBeNull()
+		const hintToggle = documentQueries.getByRole('button', { name: 'Submit details' })
 		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(hintToggle)
+		})
+		const hintPopover = documentQueries.getByRole('note')
+		const button = documentQueries.getByRole('button', { name: 'Submit' })
+		const descriptionId = button.getAttribute('aria-describedby')
+		expect(descriptionId).not.toBeNull()
+		expect(hintPopover.getAttribute('id')).not.toBe(descriptionId)
+		expect(document.getElementById(descriptionId ?? '')).not.toBeNull()
 	})
 
 	test('adds a spinner to a loading disabled reason', async () => {
@@ -94,11 +104,13 @@ describe('TransactionActionButton', () => {
 	})
 
 	test('supports a contextual accessible name while retaining concise visible copy', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionActionButton ariaLabel='Deploy Scalar Outcomes' idleLabel='Deploy' onClick={() => undefined} pendingLabel='Deploying…' />)
+		const renderedComponent = await renderIntoDocument(<TransactionActionButton ariaLabel='Deploy Scalar Outcomes' idleLabel='Deploy' inlineHint='Confirm the scalar deployment inputs before continuing.' onClick={() => undefined} pendingLabel='Deploying…' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const button = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
+		const inlineHint = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes details' })
 		expect(button.textContent).toBe('Deploy')
+		expect(inlineHint).not.toBeNull()
 	})
 
 	test('blocks new actions while another transaction is still in flight', async () => {

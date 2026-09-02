@@ -9,7 +9,7 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ReportingSection } from '../../../features/reporting/components/ReportingSection.js'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../../../features/reporting/lib/reporting.js'
-import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapitalAttoRep, getSelectedOutcomeRewardWindowFillTimestamp } from '../../../features/reporting/lib/reportingDomain.js'
+import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapitalAttoRep } from '../../../features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../../../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingSectionProps } from '../../../features/types.js'
@@ -252,7 +252,8 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 }
 
 function findProjectionPreviewElement() {
-	return within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
+	const preview = document.body.querySelector('.reporting-workflow-section')
+	return preview instanceof HTMLElement ? preview : null
 }
 
 function findProjectionPreviewText() {
@@ -327,11 +328,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
 		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
-		const transactionContext = document.body.querySelector('.transaction-object-context')
-		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected reporting transaction context')
-		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
-		expect(transactionContext.textContent?.includes('Source Vault')).toBe(false)
-		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(false)
+		expect(document.body.querySelector('.transaction-object-context')).toBeNull()
 	})
 
 	test('suppresses the Pending Start banner once an escalation game has been initialized', async () => {
@@ -614,8 +611,8 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(1)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(selectedButton.textContent?.includes('Selected')).toBe(true)
-		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(true)
-		expect(document.body.textContent?.includes('Assumes no later contributions.')).toBe(true)
+		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(false)
+		expect(document.body.textContent?.includes('Assumes no later contributions.')).toBe(false)
 	})
 
 	test('removes the approval explainer copy and still blocks when pool-held vault REP backing is insufficient', async () => {
@@ -1279,13 +1276,11 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes('Timer ChangeStarts escalation')).toBe(true)
-		expect(document.body.textContent?.includes(`Recheck By${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m)`)).toBe(true)
+		expect(document.body.textContent?.includes('Timer Change')).toBe(false)
+		expect(document.body.textContent?.includes('Recheck By')).toBe(false)
 	})
 
 	test('separates the 3-day first-report window from the later check-back deadline for larger first reports', async () => {
-		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCostAttoRep(rep(3n), rep(50n), rep(10n))
-		const latestCheckBackTimestamp = 150n + ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1300,8 +1295,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Timer ChangeStarts escalation')).toBe(true)
-		expect(document.body.textContent?.includes(`Recheck By${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)})`)).toBe(true)
+		expect(document.body.textContent?.includes('Timer Change')).toBe(false)
+		expect(document.body.textContent?.includes('Recheck By')).toBe(false)
 	})
 
 	test('shows explicit outcome-selection guidance before the first report starts escalation', async () => {
@@ -1341,7 +1336,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Enter at least 3 REP to start the escalation game.')
 	})
 
-	test('accepts decimal report amounts for the profit preview', async () => {
+	test('accepts decimal report amounts without the removed profit preview', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1355,11 +1350,12 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(findProjectionPreviewText().includes('Estimated profit if Yes wins')).toBe(true)
+		expect(findProjectionPreviewText()).toBe('')
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
+		expect((within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ }) as HTMLInputElement).value).toBe('3.5')
 	})
 
-	test('shows the timer-extension preview once in transaction review for contributions that raise binding capital', async () => {
+	test('does not render the removed timer-extension preview for contributions that raise binding capital', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1374,19 +1370,12 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const preview = findProjectionPreviewElement()
-		if (preview === undefined || preview === null) throw new Error('Expected projection preview to render')
-		const expectedCheckBackTimestamp = getSelectedOutcomeRewardWindowFillTimestamp(createDynamicReportingDetails(), 'no', rep(2n))
-		expect(documentQueries.getAllByText(/^Extends /)).toHaveLength(1)
-		expect(preview.textContent?.includes('Estimated profit if No wins')).toBe(true)
-		expect(preview.textContent?.includes('Timer ChangeExtends')).toBe(true)
-		expect(preview.textContent?.includes('Recheck By')).toBe(true)
-		expect(expectedCheckBackTimestamp === undefined ? false : preview.textContent?.includes(formatTimestamp(expectedCheckBackTimestamp))).toBe(true)
-		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
+		expect(findProjectionPreviewElement()).toBeNull()
+		expect(document.body.textContent?.includes('Estimated profit if No wins')).toBe(false)
+		expect(document.body.textContent?.includes('Timer Change')).toBe(false)
 	})
 
-	test('shows a no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
+	test('does not render the removed no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
 		const reportingDetails = createDynamicReportingDetails()
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1401,14 +1390,12 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const previewText = findProjectionPreviewText()
-		expect(previewText.includes('Estimated profit if Yes wins')).toBe(true)
-		expect(previewText.includes('Timer ChangeNo change')).toBe(true)
-		expect(previewText.includes(`Recheck By${formatTimestamp(reportingDetails.escalationEndTime)} (in ${formatDuration(reportingDetails.escalationEndTime - reportingDetails.currentTime)})`)).toBe(true)
-		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
+		expect(findProjectionPreviewText()).toBe('')
+		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(false)
+		expect(document.body.textContent?.includes('Timer Change')).toBe(false)
 	})
 
-	test('shows an immediate-finalization preview when the contribution creates a threshold tie', async () => {
+	test('does not render the removed immediate-finalization preview when the contribution creates a threshold tie', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1430,9 +1417,9 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const previewText = findProjectionPreviewText()
-		expect(previewText.includes('Timer ChangeFinalizes immediately')).toBe(true)
-		expect(previewText.includes('Estimated profit if Yes wins')).toBe(true)
+		expect(findProjectionPreviewText()).toBe('')
+		expect(document.body.textContent?.includes('Timer Change')).toBe(false)
+		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(false)
 	})
 
 	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
@@ -1456,7 +1443,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(findProjectionPreviewText().includes('Timer ChangeNo change')).toBe(true)
+		expect(findProjectionPreviewText()).toBe('')
 		expect(document.body.textContent?.includes('from pool-held backing into dispute-staked REP')).toBe(true)
 		expect(document.body.textContent?.includes('instead of the full entered amount.')).toBe(true)
 	})
@@ -1473,20 +1460,17 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('4')
 	})
 
-	test('autofills the active max-profit preset and updates the preview', async () => {
+	test('autofills the active max-profit preset', async () => {
 		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingForm: createReportingForm({ selectedOutcome: 'yes' }) }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const previewBefore = findProjectionPreviewText()
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
-		const previewAfter = findProjectionPreviewText()
 		expect((amountInput as HTMLInputElement).value).toBe('7')
-		expect(previewBefore).not.toBe(previewAfter)
+		expect(findProjectionPreviewText()).toBe('')
 	})
 
 	test('autofills the max contribution with the smaller of outcome capacity and pool-held vault REP backing', async () => {
@@ -2105,7 +2089,7 @@ describe('ReportingSection', () => {
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
 		expect((amountInput as HTMLInputElement).value).toBe('1500')
-		expect(document.body.textContent?.includes('Estimated profit if No wins')).toBe(true)
+		expect(document.body.textContent?.includes('Estimated profit if No wins')).toBe(false)
 	})
 
 	test('disables the minimum-outcome-change preset when the selected side already leads', async () => {

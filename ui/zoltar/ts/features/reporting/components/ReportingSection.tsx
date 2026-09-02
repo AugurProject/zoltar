@@ -14,7 +14,6 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -23,7 +22,6 @@ import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shar
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import {
-	calculateEstimatedEscalationReturn,
 	ESCALATION_GAME_ACTIVATION_DELAY,
 	getEscalationDepositClaimAmount,
 	getEscalationPhase,
@@ -32,8 +30,6 @@ import {
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getRemainingSelectedOutcomeContributionCapacity,
-	getSelectedOutcomeRewardWindowFillTimestamp,
-	getReportingTimerPreview,
 	isPoolQuestionFinalized,
 	previewReportingContribution,
 } from '../lib/reportingDomain.js'
@@ -299,30 +295,8 @@ export function ReportingSection({
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
-	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
-	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? reportingCopy.selectedSide : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
-	let projectedFinalizationTimestamp: bigint | undefined
-	if (timerPreview !== undefined && effectiveCurrentTimestamp !== undefined) {
-		if (timerPreview.kind === 'not-started') {
-			projectedFinalizationTimestamp = effectiveCurrentTimestamp + timerPreview.timeUntilEnd
-		} else if (timerPreview.actualState === 'ends-immediately') {
-			projectedFinalizationTimestamp = effectiveCurrentTimestamp
-		} else if (activeReportingDetails !== undefined) {
-			projectedFinalizationTimestamp = effectiveCurrentTimestamp + getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n)
-		}
-	}
-	const rewardWindowFillTimestamp = activeReportingDetails === undefined || selectedOutcome === undefined || actualReportDepositAmount === undefined ? undefined : getSelectedOutcomeRewardWindowFillTimestamp(activeReportingDetails, selectedOutcome, actualReportDepositAmount)
-	const reportingTimerChange = (() => {
-		if (timerPreview === undefined) return undefined
-		if (timerPreview.kind === 'not-started') return reportingCopy.startsEscalation
-		if (timerPreview.actualState === 'ends-immediately') return reportingCopy.finalizesImmediately
-		if (timerPreview.actualState === 'extends') return reportingCopy.formatTimerExtension(formatDuration(timerPreview.timerIncrease ?? 0n))
-		return reportingCopy.noTimerChange
-	})()
-	const reportingRecheckTimestamp = rewardWindowFillTimestamp !== undefined && effectiveCurrentTimestamp !== undefined && rewardWindowFillTimestamp > effectiveCurrentTimestamp ? rewardWindowFillTimestamp : projectedFinalizationTimestamp
 	const availableReportingRep = usesWalletFunding ? effectiveReportingDetails?.viewerWalletRepBalanceAttoRep : effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep
-	const resultingAvailableReportingRep = availableReportingRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > availableReportingRep ? undefined : availableReportingRep - actualReportDepositAmount
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
@@ -636,24 +610,6 @@ export function ReportingSection({
 							{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
 						</p>
 					)}
-					<TransactionReview
-						context={[{ label: commonCopy.question, value: marketDetails?.title ?? commonCopy.unavailable }]}
-						primary={[
-							{ label: reportingCopy.disputeStakedRepAfterReport, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
-							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
-						]}
-						details={[
-							{ label: reportingCopy.formatEstimatedProfitLabel(selectedOutcomeLabel), value: selectedEstimate === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedEstimate.profit} suffix={commonCopy.rep} /> },
-							{ label: reportingCopy.timerChange, value: reportingTimerChange ?? commonCopy.metricUnavailablePlaceholder },
-							{
-								label: reportingCopy.recheckBy,
-								value: reportingRecheckTimestamp === undefined ? commonCopy.metricUnavailablePlaceholder : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingRecheckTimestamp} />,
-							},
-							{ label: usesWalletFunding ? reportingCopy.walletRepAfterReport : reportingCopy.poolHeldVaultRepBackingAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
-							{ label: reportingCopy.assumption, value: reportingCopy.projectionAssumption },
-						]}
-						risks={[reportingCopy.reportingDisputeStakeRisk, reportingCopy.reportTimerRisk, reportingCopy.escalationClaimNonTradeableDetail]}
-					/>
 					<div className='reporting-shared-action-region'>
 						{shouldRenderSharedReportSettlementDisabledReason ? (
 							<p className='detail' id={settlementDisabledReasonId}>

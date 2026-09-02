@@ -161,7 +161,7 @@ export function useMarketCreation(
 		marketFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
 	}
 
-	const createMarket = async () => {
+	const createMarket = async ({ refreshQuestionList = true }: { refreshQuestionList?: boolean } = {}) => {
 		if (marketSubmissionScopesRef.current.has(marketActionScopeKey)) {
 			marketError.value = { storageKey: marketActionScopeKey, value: 'Question creation already in progress' }
 			return
@@ -178,6 +178,7 @@ export function useMarketCreation(
 		marketSubmissionScopesRef.current.add(submittedMarketActionScopeKey)
 		marketResult.value = undefined
 		marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
+		let createdResult: MarketCreationResult | undefined
 		try {
 			await runWriteAction(
 				{
@@ -210,7 +211,7 @@ export function useMarketCreation(
 					refreshState: async () => {
 						if (!isCurrentMarketActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						await zoltar.loadZoltarQuestions()
+						if (refreshQuestionList) await zoltar.loadZoltarQuestions()
 					},
 					setErrorMessage: message => {
 						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }
@@ -233,6 +234,7 @@ export function useMarketCreation(
 				},
 				'Failed to create question',
 				result => {
+					createdResult = result
 					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm)
 					marketResult.value = { storageKey: submittedMarketActionScopeKey, value: result }
 					marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
@@ -245,6 +247,8 @@ export function useMarketCreation(
 		} finally {
 			marketSubmissionScopesRef.current.delete(submittedMarketActionScopeKey)
 		}
+		if (!isCurrentMarketActionScope()) return undefined
+		return createdResult
 	}
 
 	const resetMarket = () => {

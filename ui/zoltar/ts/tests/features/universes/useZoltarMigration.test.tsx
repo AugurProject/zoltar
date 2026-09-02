@@ -70,6 +70,13 @@ describe('useZoltarMigration', () => {
 	})
 
 	test('reports transaction failures through the tray callback without leaving a local migration error', async () => {
+		const prepareRepForMigrationInZoltar = mock(async () => ({
+			action: 'addRepToMigrationBalance' as const,
+			amountAttoRep: 10n * 10n ** 18n,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa' as Hash,
+			outcomeIndexes: [],
+			universeId: 1n,
+		}))
 		const refreshState = mock(async () => undefined)
 		const refreshZoltarUniverse = mock(async () => undefined)
 		const refreshZoltarForkAccess = mock(async () => undefined)
@@ -82,6 +89,12 @@ describe('useZoltarMigration', () => {
 			createWalletWriteClient: mock(() => ({
 				kind: 'write-client',
 			})),
+		}))
+		mock.module('../../../protocol/zoltarForks.js', () => ({
+			migrateInternalRepInZoltar: mock(async () => {
+				throw new Error('migrateInternalRepInZoltar should not be called in this test')
+			}),
+			prepareRepForMigrationInZoltar,
 		}))
 
 		const { useZoltarMigration } = await import(`../../../features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
@@ -120,11 +133,12 @@ describe('useZoltarMigration', () => {
 			await requireHookState(hookState).prepareRepForMigration()
 		})
 
-		expect(transactionFailures).toEqual(['Migration is unavailable because this universe has not forked'])
+		expect(prepareRepForMigrationInZoltar).toHaveBeenCalledTimes(1)
+		expect(transactionFailures).toEqual([])
 		expect(requireHookState(hookState).zoltarMigrationError).toBeUndefined()
 		expect(refreshState).not.toHaveBeenCalled()
 		expect(refreshZoltarUniverse).not.toHaveBeenCalled()
-		expect(refreshZoltarForkAccess).not.toHaveBeenCalled()
+		expect(refreshZoltarForkAccess).toHaveBeenCalledTimes(1)
 	})
 
 	test('does not request a migration transaction when the active wallet network changed', async () => {

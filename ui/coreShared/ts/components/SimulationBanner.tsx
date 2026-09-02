@@ -39,7 +39,11 @@ type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'sav
 
 function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 	const params = new URLSearchParams(getRouteHashSearch())
-	params.set(SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE)
+	if (new URLSearchParams(window.location.search).get(SIMULATION_QUERY_PARAM) === SIMULATION_QUERY_VALUE) {
+		params.delete(SIMULATION_QUERY_PARAM)
+	} else {
+		params.set(SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE)
+	}
 	update(params)
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`

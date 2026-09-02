@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
@@ -48,16 +48,11 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 	return {
 		accountState: createAccountState(),
 		activeUniverseId: 0n,
-		availableQuestionsContextKey: 'environment-1:universe-0',
-		availableQuestions: [createMarketDetails(), createMarketDetails({ marketType: 'categorical', questionId: '0x02', title: 'Categorical question' })],
 		checkingDuplicateOriginPool: false,
 		duplicateOriginPoolExists: false,
-		hasLoadedAvailableQuestions: true,
-		loadingAvailableQuestions: false,
 		loadingMarketDetails: false,
 		marketDetails: createMarketDetails(),
 		onCreateSecurityPool: () => undefined,
-		onLoadAvailableQuestions: async () => undefined,
 		onOpenCreatedPool: () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onReturnToBrowse: () => undefined,
@@ -79,6 +74,12 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		zoltarUniverseHasForked: false,
 		...overrides,
 	}
+}
+
+function getButtonByText(label: string) {
+	const button = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
+	if (!(button instanceof HTMLButtonElement)) throw new Error(`Expected button: ${label}`)
+	return button
 }
 
 installTestRouting()
@@ -157,13 +158,31 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
-		expect(documentQueries.getByText('A Security Pool is the tradeable Market for one existing binary Zoltar Question. Select its Question ID here; the Question remains the reusable resolution definition.')).not.toBeNull()
 		expect(documentQueries.getByText('Starting Annual Fee')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
 		expect(document.body.textContent?.includes('Pool creation turns a binary question into a collateralized trading surface.')).toBe(false)
 		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
+	})
+
+	test('asks users to choose an existing or new question before showing the matching workflow', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onCreateQuestionAndSecurityPool: () => undefined })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+		expect(documentQueries.queryByRole('combobox')).toBeNull()
+		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
+		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
+
+		fireEvent.click(documentQueries.getByRole('radio', { name: 'Create a new question' }))
+		expect(documentQueries.queryByRole('textbox', { name: 'Question ID' })).toBeNull()
+		expect(document.querySelector('form[aria-label="Create Question"]')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create question and pool' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create question' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create pool' })).toBeNull()
 	})
 
 	test('keeps the security multiplier field label concise while associating helper text', async () => {
@@ -231,7 +250,6 @@ describe('SecurityPoolSection', () => {
 			expectTransactionButtonDisabled(document.body, 'Create pool', message)
 			const createButton = within(document.body).getByRole('button', { name: 'Create pool' })
 			expect(createButton.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-error')
-			expect(document.body.querySelectorAll('.disabled-reason')).toHaveLength(0)
 			expect(document.body.textContent?.split(message).length).toBe(2)
 
 			await cleanupRenderedComponent()
@@ -260,6 +278,191 @@ describe('SecurityPoolSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Create pool')
 	})
 
+	test('keeps combined question-and-pool creation disabled until the question form is valid', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+
+		const button = getButtonByText('Create question and pool')
+		expect(button.disabled).toBe(true)
+		expect(button.title).toBe('Missing required fields: Title, End Time')
+	})
+
+	test('enables combined question-and-pool creation when both forms are ready', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool: () => undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+
+		expect(getButtonByText('Create question and pool').disabled).toBe(false)
+	})
+
+	test('keeps combined question-and-pool creation disabled for non-binary question types', async () => {
+		const onCreateQuestionAndSecurityPool = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['Alpha', 'Beta'],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'categorical',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateQuestionAndSecurityPool,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+
+		const button = getButtonByText('Create question and pool')
+		expect(button.disabled).toBe(true)
+		expect(button.title).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
+		fireEvent.click(button)
+		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
+		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })
+		fireEvent.click(marketTypeTrigger)
+		const marketTypeListbox = within(document.body).getByRole('listbox', { name: 'Dropdown options' })
+		expect(
+			within(marketTypeListbox)
+				.getAllByRole('option')
+				.map(option => option.textContent?.trim()),
+		).toEqual(['Binary'])
+	})
+
+	test('submits the combined question-and-pool action instead of standalone question creation', async () => {
+		const onCreateQuestionAndSecurityPool = mock(() => undefined)
+		const onCreateMarket = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					marketForm: {
+						answerUnit: '',
+						categoricalOutcomes: ['', ''],
+						description: 'Pool question',
+						endTime: '1735689600',
+						marketType: 'binary',
+						scalarIncrement: '',
+						scalarMax: '',
+						scalarMin: '',
+						startTime: '',
+						title: 'Will this happen?',
+					},
+					onCreateMarket,
+					onCreateQuestionAndSecurityPool,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+
+		fireEvent.click(getButtonByText('Create question and pool'))
+		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(1)
+		expect(onCreateMarket).toHaveBeenCalledTimes(0)
+		expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Create question')).toBe(false)
+	})
+
+	test('keeps the combined source locked while creating and shows only pool retry after partial success', async () => {
+		const onCreateSecurityPool = mock(() => undefined)
+		const baseProps = createProps({
+			marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
+			onCreateQuestionAndSecurityPool: () => undefined,
+			onCreateSecurityPool,
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		expect(documentQueries.getByText('Question created. The security pool transaction is next.')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create pool from question' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create another question' })).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
+		})
+		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry pool creation' }))
+		expect(onCreateSecurityPool).toHaveBeenCalledTimes(1)
+		expect(onCreateSecurityPool).toHaveBeenCalledWith('0x03')
+	})
+
+	test('locks the submitted question controls while creation is pending', async () => {
+		const baseProps = createProps({ onCreateQuestionAndSecurityPool: () => undefined })
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, { ...baseProps, securityPoolCreating: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('textbox', { name: 'Question ID' }) as HTMLInputElement).disabled).toBe(true)
+
+		await act(() => {
+			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
+		})
+		fireEvent.click(documentQueries.getByRole('radio', { name: 'Create a new question' }))
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
+		})
+		expect((documentQueries.getByRole('textbox', { name: 'Title' }).closest('fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
+	})
+
+	test('applies the normal pool guards to partial-success retries', async () => {
+		const baseProps = createProps({
+			accountState: createAccountState({ address: undefined }),
+			marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
+			onCreateQuestionAndSecurityPool: () => undefined,
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'Connect a wallet before creating a security pool.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), duplicateOriginPoolExists: true }), renderedComponent.container)
+		})
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), zoltarUniverseHasForked: true }), renderedComponent.container)
+		})
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'Security pools cannot be created after this universe has forked.')
+	})
+
 	test('previews the pasted question before pool creation without a manual load action', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -275,128 +478,12 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Enter an exact binary Yes / No Zoltar question ID when it is not listed above.')).not.toBeNull()
+		expect(documentQueries.getByText('Enter an exact binary Yes / No Zoltar question ID.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
 		expect(document.body.querySelector('.loaded-question-preview')).not.toBeNull()
 		expect(document.body.querySelector('.section-block.surface .record-card:not(.flat)')).toBeNull()
-	})
-
-	test('lets users choose an eligible question without copying its identifier', async () => {
-		const formChanges: Array<Partial<SecurityPoolSectionProps['securityPoolForm']>> = []
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					onSecurityPoolFormChange: update => formChanges.push(update),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const picker = within(document.body).getByRole('combobox', { name: 'Choose an available question' })
-		expect(within(picker).getByRole('option', { name: 'Will this resolve?' })).not.toBeNull()
-		expect(within(picker).queryByRole('option', { name: 'Categorical question' })).toBeNull()
-		fireEvent.change(picker, { target: { value: '0x01' } })
-		expect(formChanges).toEqual([{ marketId: '0x01' }])
-	})
-
-	test('loads available questions when creation is opened directly', async () => {
-		let loadCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					onLoadAvailableQuestions: async () => {
-						loadCalls += 1
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(loadCalls).toBe(1)
-	})
-
-	test('stops after an automatic question-load failure and offers a bounded retry', async () => {
-		let loadCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					onLoadAvailableQuestions: async () => {
-						loadCalls += 1
-						if (loadCalls === 1) throw new Error('Question read failed')
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => expect(documentQueries.getByText('Available questions could not be loaded. Retry, or enter an exact question ID below.')).not.toBeNull())
-		expect(loadCalls).toBe(1)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
-		await waitFor(() => expect(loadCalls).toBe(2))
-		expect(documentQueries.queryByRole('button', { name: 'Retry questions' })).toBeNull()
-	})
-
-	test('starts one fresh question load when context changes during an in-flight request', async () => {
-		let resolveFirstLoad: (() => void) | undefined
-		let loadCalls = 0
-		const onLoadAvailableQuestions = async () => {
-			loadCalls += 1
-			if (loadCalls === 1)
-				await new Promise<void>(resolve => {
-					resolveFirstLoad = resolve
-				})
-		}
-		const initialProps = createProps({
-			availableQuestions: [],
-			hasLoadedAvailableQuestions: false,
-			onLoadAvailableQuestions,
-		})
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(loadCalls).toBe(1)
-
-		await act(() => {
-			render(h(SecurityPoolSection, { ...initialProps, availableQuestionsContextKey: 'environment-2:universe-1', loadingAvailableQuestions: true }), renderedComponent.container)
-		})
-		resolveFirstLoad?.()
-		await act(async () => await Promise.resolve())
-		await act(() => {
-			render(h(SecurityPoolSection, { ...initialProps, availableQuestionsContextKey: 'environment-2:universe-1' }), renderedComponent.container)
-		})
-
-		await waitFor(() => expect(loadCalls).toBe(2))
-	})
-
-	test('uses loading-aware create guidance while available questions are loading', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					loadingAvailableQuestions: true,
-					marketDetails: undefined,
-					securityPoolForm: {
-						initialReportPriorityFeeGwei: '10',
-						marketId: '',
-						statoblastSecurityMultiplierBps: '2',
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Wait for available questions to finish loading, or enter an exact question ID.')
 	})
 
 	test('omits missing-context helper copy when a loaded question lacks description details', async () => {
@@ -503,6 +590,7 @@ describe('SecurityPoolSection', () => {
 		let openedAddress: string | undefined
 		let returnedToBrowse = false
 		let resetCount = 0
+		let resetMarketCount = 0
 
 		const resultPool = {
 			deployPoolHash: zeroHash,
@@ -527,6 +615,9 @@ describe('SecurityPoolSection', () => {
 					onResetSecurityPoolCreation: () => {
 						resetCount += 1
 					},
+					onResetMarket: () => {
+						resetMarketCount += 1
+					},
 				}),
 			),
 		)
@@ -538,6 +629,7 @@ describe('SecurityPoolSection', () => {
 		expect(returnedToBrowse).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
+		expect(resetMarketCount).toBe(1)
 	})
 
 	test('warns when a retained created pool belongs to a different active universe', async () => {

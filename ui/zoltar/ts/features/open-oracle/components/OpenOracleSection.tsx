@@ -1,6 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { useEffect, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -10,16 +9,13 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/TransactionObjectContext.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
-import { getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, formatOpenOracleMultiplier, getOpenOracleReportStatus, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
+import { getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleReportStatus, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '../../types.js'
@@ -27,7 +23,6 @@ import {
 	BROWSE_PAGE_SIZE,
 	type BrowseLoadState,
 	type BrowseStatusFilter,
-	formatOpenOracleReviewDuration,
 	getEffectiveOpenOracleReportDetails,
 	getOpenOracleCreateFieldErrorId,
 	getOpenOracleFieldDescribedBy,
@@ -314,7 +309,7 @@ export function OpenOracleSection({
 								items={[
 									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} copyable={false} responsiveAbbreviation /> },
 									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} copyable={false} responsiveAbbreviation /> },
-									{ label: transactionReviewCopy.youPay, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
+									{ label: openOracleCopy.ethValueToSend, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
 								]}
 							/>
 							<div className='form-grid'>
@@ -527,28 +522,6 @@ export function OpenOracleSection({
 									<h4>{openOracleCopy.parameterDetails}</h4>
 									<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
 								</ReadOnlyDetailAccordion>
-
-								<TransactionReview
-									context={[
-										{ label: openOracleCopy.token1Address, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} /> },
-										{ label: openOracleCopy.token2Address, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} /> },
-										{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
-									]}
-									primary={[
-										{ label: transactionReviewCopy.youPay, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
-										{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
-									]}
-									details={[
-										{ label: openOracleCopy.settlerReward, value: formatValueWithUnit(openOracleCreateForm.settlerRewardEthAmount || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
-										{ label: openOracleCopy.settlementDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.settlementTime) },
-										{ label: openOracleCopy.disputeDelaySeconds, value: formatOpenOracleReviewDuration(openOracleCreateForm.disputeDelay) },
-										{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
-										{ label: commonCopy.multiplier, value: formatOpenOracleMultiplier(tryParseBigIntInput(openOracleCreateForm.multiplier)) },
-										{ label: openOracleCopy.escalationHalt, value: openOracleCreateForm.escalationHalt || commonCopy.metricUnavailablePlaceholder },
-										{ label: openOracleCopy.protocolFeePercentage, value: `${openOracleCreateForm.protocolFee || commonCopy.metricUnavailablePlaceholder}%` },
-									]}
-									risks={[openOracleCopy.standaloneFundingRisk, openOracleCopy.standaloneDisputeSettingsRisk]}
-								/>
 
 								<div className='actions'>
 									<TransactionActionButton
