@@ -3,7 +3,6 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { shortAddress } from '../lib/format.js'
 import { Status } from '../components/Status.js'
 import { TradingAddressValue } from '../components/TradingAddress.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
@@ -22,7 +21,7 @@ export type TradingDeploymentSetupServices = Readonly<{
 	loadCoreDeployments(): Promise<readonly CoreDeployment[]>
 }>
 
-export type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
+export type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; networkName: string | undefined; ready: boolean }>
 
 export function createDeploymentReadClient(rpcUrl: string, backend: Pick<ChainBackend, 'createReadClient' | 'id'> = getActiveBackend()): PublicClient {
 	return backend.id === 'simulation' ? backend.createReadClient() : createPublicClient({ transport: http(rpcUrl) })
@@ -68,13 +67,14 @@ function deploymentProgress(status: DeploymentStatus | undefined) {
 	return `${Number(status.factory) + Number(status.router)} / 2`
 }
 
-function inspectionPresentation(state: 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
+function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
 	if (registryLoading) return { label: 'Loading networks', tone: 'neutral' as const }
 	if (registryError) return { label: 'Networks unavailable', tone: 'warn' as const }
 	if (busy) return { label: 'Deployment in progress', tone: 'neutral' as const }
 	if (deploymentComplete) return { label: 'Deployment complete', tone: 'good' as const }
 	if (state === 'loading') return { label: 'Checking network', tone: 'neutral' as const }
-	if (state === 'ready') return { label: 'Ready to deploy', tone: 'good' as const }
+	if (state === 'ready') return undefined
+	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warn' as const }
 	if (state === 'error') return { label: 'Configuration unavailable', tone: 'warn' as const }
 	if (plan) return { label: 'Checking network', tone: 'neutral' as const }
 	return { label: 'Select a network', tone: 'neutral' as const }
@@ -87,7 +87,8 @@ function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTr
 	return `Deploy ${nextStep.label}`
 }
 
-function contractStatusPresentation(deployed: boolean, isNext: boolean) {
+function contractStatusPresentation(deployed: boolean | undefined, isNext: boolean) {
+	if (deployed === undefined) return { label: appCopy.checkingContract, tone: 'neutral' as const }
 	if (deployed) return { label: 'Deployed', tone: 'good' as const }
 	if (isNext) return { label: 'Next to deploy', tone: 'neutral' as const }
 	return { label: 'Not deployed', tone: 'warn' as const }
@@ -121,7 +122,7 @@ export function TradingDeploymentSetup({
 	const [walletChain, setWalletChain] = useState<number>()
 	const [walletConnectionMessage, setWalletConnectionMessage] = useState<string>()
 	const [walletConnecting, setWalletConnecting] = useState(false)
-	const [inspectionState, setInspectionState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+	const [inspectionState, setInspectionState] = useState<'blocked' | 'idle' | 'loading' | 'ready' | 'error'>('idle')
 	const [inspectionError, setInspectionError] = useState<string>()
 	const [plan, setPlan] = useState<TradingDeploymentPlan>()
 	const [publicClient, setPublicClient] = useState<PublicClient>()
@@ -224,13 +225,23 @@ export function TradingDeploymentSetup({
 		void (async () => {
 			try {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
+				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps)
+				if (!active || revision !== inputRevision.current) return
+				setPlan(nextPlan)
 				const client = services.createPublicClient(input.rpcUrl)
 				validateRpcChainId(await client.getChainId(), input.chainId)
-				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps)
-				const status = await loadTradingDeploymentStatus(client, nextPlan)
 				if (!active || revision !== inputRevision.current) return
 				setPublicClient(client)
-				setPlan(nextPlan)
+				const securityPoolFactoryCode = await client.getCode({ address: nextPlan.core.securityPoolFactory })
+				if (securityPoolFactoryCode === undefined || securityPoolFactoryCode === '0x') {
+					if (!active || revision !== inputRevision.current) return
+					setDeploymentStatus({ factory: false, router: false })
+					setInspectedRevision(revision)
+					setInspectionState('blocked')
+					return
+				}
+				const status = await loadTradingDeploymentStatus(client, nextPlan)
+				if (!active || revision !== inputRevision.current) return
 				setDeploymentStatus(status)
 				setInspectedRevision(revision)
 				setInspectionState('ready')
@@ -319,11 +330,11 @@ export function TradingDeploymentSetup({
 	}
 	const walletControlRevision = useRef(walletControlRequestNonce)
 	useEffect(() => {
-		onWalletStateChange?.({ account: walletAccount, connecting: walletConnecting, ready: !registryLoading && registryError === undefined && selectedCore !== undefined })
+		onWalletStateChange?.({ account: walletAccount, connecting: walletConnecting, networkName: selectedCore?.chainName, ready: !registryLoading && registryError === undefined && selectedCore !== undefined })
 	}, [onWalletStateChange, registryError, registryLoading, selectedCore, walletAccount, walletConnecting])
 	useEffect(
 		() => () => {
-			onWalletStateChange?.({ account: undefined, connecting: false, ready: false })
+			onWalletStateChange?.({ account: undefined, connecting: false, networkName: undefined, ready: false })
 		},
 		[onWalletStateChange],
 	)
@@ -339,8 +350,8 @@ export function TradingDeploymentSetup({
 		plan === undefined
 			? []
 			: [plan.factory, plan.router].map(step => {
-					const deployed = deploymentStatus?.[step.id] === true
-					const isNext = nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false })?.id === step.id && !deploymentComplete
+					const deployed = deploymentStatus?.[step.id]
+					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false })?.id === step.id && !deploymentComplete
 					return { step, presentation: contractStatusPresentation(deployed, isNext) }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
@@ -350,7 +361,7 @@ export function TradingDeploymentSetup({
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
 			<button class='wallet-button' type='button' disabled={busy} aria-label={`Disconnect wallet ${walletAccount}`} title='Disconnect wallet' onClick={disconnectDeploymentWallet}>
-				{shortAddress(walletAccount)}
+				<TradingAddressValue value={walletAccount} />
 			</button>
 		) : (
 			<button class='wallet-button' type='button' disabled={busy || walletConnecting || registryLoading || coreDeployments.length === 0} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
@@ -468,7 +479,7 @@ export function TradingDeploymentSetup({
 	return (
 		<main class='route' id='main-content'>
 			{settingsHost === undefined ? null : createPortal(settingsPanel, settingsHost)}
-			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} description={appCopy.deploymentDescription} actions={standaloneWalletButton} />
+			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} actions={standaloneWalletButton} />
 			<section class='section deployment-setup'>
 				{settingsHost === undefined ? settingsPanel : null}
 				{registryError === undefined ? null : (
@@ -500,7 +511,7 @@ export function TradingDeploymentSetup({
 									<Status tone={presentation.tone}>{presentation.label}</Status>
 									<div class='deployment-step__details'>
 										<strong>{step.label}</strong>
-										<code title={step.address}>{shortAddress(step.address)}</code>
+										<TradingAddressValue value={step.address} />
 									</div>
 								</li>
 							))}
@@ -512,7 +523,7 @@ export function TradingDeploymentSetup({
 						<span>Deployment progress</span>
 						<strong>{deploymentProgress(deploymentStatus)}</strong>
 					</div>
-					<Status tone={inspection.tone}>{inspection.label}</Status>
+					{inspection === undefined ? null : <Status tone={inspection.tone}>{inspection.label}</Status>}
 				</div>
 				{walletConnected && !walletReady && selectedCore !== undefined ? (
 					<p class='error' role='alert'>
