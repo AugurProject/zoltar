@@ -137,7 +137,7 @@ type LiquidationModalStateProps = {
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
-	uiPriceOracle?: import('@zoltar/ui-core-shared/app/components/AppSettingsMenu.js').UiPriceOracle | undefined
+	uiPriceOracle?: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle | undefined
 }
 
 type SecurityPoolsOverviewRouteContentProps = {
@@ -151,7 +151,7 @@ type SecurityPoolsOverviewRouteContentProps = {
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
 	repPerEthPrice: bigint | undefined
-	uiPriceOracle: import('@zoltar/ui-core-shared/app/components/AppSettingsMenu.js').UiPriceOracle
+	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined

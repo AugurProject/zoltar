@@ -4,7 +4,7 @@ import { TabNavigation } from '../../components/TabNavigation.js'
 import type { SimulationController } from '../../simulation/controller.js'
 import type { RouteTabDefinition } from '../../types/components.js'
 import type { ComponentChildren } from 'preact'
-import { AppSettingsMenu, type UiPriceOracle } from './AppSettingsMenu.js'
+import { AppSettingsMenu } from './AppSettingsMenu.js'
 
 type AppHeaderShellProps = {
 	mainElementId?: string
@@ -21,11 +21,10 @@ type AppHeaderShellProps = {
 	}
 	onEnvironmentChanged?: () => Promise<void>
 	onRefresh: () => Promise<void>
-	priceOracle?: UiPriceOracle
-	onPriceOracleChange?: (value: UiPriceOracle) => void
+	settingsContent?: ComponentChildren
 }
 
-export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, priceOracle, onPriceOracleChange }: AppHeaderShellProps) {
+export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
 	const focusAppContent = () => {
 		const appContent = document.getElementById(mainElementId)
 		if (!(appContent instanceof HTMLElement)) return
@@ -34,7 +33,7 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 	}
 
 	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
-	const settingsMenu = <AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} {...(priceOracle === undefined ? {} : { priceOracle })} {...(onPriceOracleChange === undefined ? {} : { onPriceOracleChange })} />
+	const settingsMenu = <AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} settingsContent={settingsContent} />
 	const shellHeader = header ?? (
 		<div className='top-shell'>
 			<div className='top-shell-settings-row'>{settingsMenu}</div>

@@ -185,7 +185,7 @@ describe('rpc config', () => {
 				},
 				storage: {
 					getItem: () => {
-						throw new Error('SecurityError')
+						throw new DOMException('Storage unavailable', 'SecurityError')
 					},
 				},
 			}),
@@ -207,6 +207,22 @@ describe('rpc config', () => {
 					location: { search: '' },
 				}),
 			).toBe('https://fallback.example')
+		} finally {
+			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+		}
+	})
+
+	test('propagates unexpected failures while acquiring global localStorage', () => {
+		const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		try {
+			Object.defineProperty(globalThis, 'localStorage', {
+				configurable: true,
+				get: () => {
+					throw new DOMException('Unexpected storage failure', 'InvalidStateError')
+				},
+			})
+			expect(() => resolveConfiguredRpcUrl({ fallbackRpcUrl: 'https://fallback.example', location: { search: '' } })).toThrow('Unexpected storage failure')
 		} finally {
 			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
 			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)

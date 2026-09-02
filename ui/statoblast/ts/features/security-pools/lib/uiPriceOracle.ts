@@ -1,5 +1,6 @@
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-zoltar/protocol/oracleTiming.js'
-import type { UiPriceOracle } from '@zoltar/ui-core-shared/app/components/AppSettingsMenu.js'
+
+export type UiPriceOracle = 'uniswap' | 'open-oracle' | 'open-oracle-fallback'
 
 export function resolveUiRepPerEthPrice({
 	currentTimestamp,

@@ -3,7 +3,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
-import { readUiPriceOracle } from '../../app/components/AppSettingsMenu.js'
 import type { SimulationController } from '../../simulation/controller.js'
 
 import { fireEvent, waitFor, within } from '../testUtils/queries'
@@ -51,21 +50,6 @@ function createSimulationController(): SimulationController {
 }
 
 describe('AppHeaderShell', () => {
-	test('falls back safely when browser storage cannot be acquired', () => {
-		const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-		try {
-			Object.defineProperty(globalThis, 'localStorage', {
-				configurable: true,
-				get: () => {
-					throw new Error('SecurityError')
-				},
-			})
-			expect(readUiPriceOracle()).toBe('open-oracle-fallback')
-		} finally {
-			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
-			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
-		}
-	})
 	test('always shows a skip link and focuses app content without changing the hash', async () => {
 		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1')
@@ -134,36 +118,6 @@ describe('AppHeaderShell', () => {
 			expect(document.activeElement).toBe(settingsButton)
 		} finally {
 			await rendered.cleanup()
-			domEnvironment.cleanup()
-		}
-	})
-
-	test('applies an oracle choice in memory and reports a storage write failure', async () => {
-		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
-		const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-		Object.defineProperty(globalThis, 'localStorage', {
-			configurable: true,
-			value: {
-				getItem: () => null,
-				setItem: () => {
-					throw new Error('Storage denied')
-				},
-			},
-		})
-		const onPriceOracleChange = mock(() => undefined)
-		const rendered = await renderIntoDocument(<AppHeaderShell overview={<div>Overview</div>} simulationController={undefined} onRefresh={async () => undefined} priceOracle='open-oracle-fallback' onPriceOracleChange={onPriceOracleChange} />)
-		try {
-			const queries = within(rendered.container)
-			fireEvent.click(queries.getByRole('button', { name: 'Settings' }))
-			const priceSelect = rendered.container.querySelector('.app-settings-price-oracle select')
-			if (priceSelect?.tagName !== 'SELECT') throw new Error('Expected UI price oracle selector')
-			fireEvent.change(priceSelect, { target: { value: 'uniswap' } })
-			expect(onPriceOracleChange).toHaveBeenCalledWith('uniswap')
-			expect(queries.getByRole('alert').textContent).toContain('Storage denied')
-		} finally {
-			await rendered.cleanup()
-			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
-			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
 			domEnvironment.cleanup()
 		}
 	})

@@ -26,7 +26,7 @@ export type * from '@zoltar/ui-core-shared/types/components.js'
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 }
 

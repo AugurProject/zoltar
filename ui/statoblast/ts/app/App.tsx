@@ -47,7 +47,7 @@ import { statoblastRouting } from '../lib/routing.js'
 import { getStatoblastDeploymentSections } from '../features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { shouldAutoLoadUniverseDirectory } from './lib/universeDirectory.js'
-import { readUiPriceOracle } from '@zoltar/ui-core-shared/app/components/AppSettingsMenu.js'
+import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '../features/security-pools/lib/uiPriceOracle.js'
 import { getCurrentPoolOracleManagerDetails } from '../features/security-pools/lib/securityPoolWorkflow.js'
 
@@ -743,8 +743,7 @@ export function App() {
 					tabNavigation={tabNavigationProps}
 					onEnvironmentChanged={refreshActiveEnvironment}
 					onRefresh={refreshSimulationView}
-					priceOracle={uiPriceOracle}
-					onPriceOracleChange={setUiPriceOracle}
+					settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
 				/>
 			}
 			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}

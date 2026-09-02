@@ -3,33 +3,13 @@ import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
 import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../lib/rpcConfig.js'
 import * as appCopy from '../../copy/app.js'
+import type { ComponentChildren } from 'preact'
 
-export type UiPriceOracle = 'uniswap' | 'open-oracle' | 'open-oracle-fallback'
-
-const PRICE_ORACLE_STORAGE_KEY = 'statoblast.uiPriceOracle'
-const priceOracleDescriptions: Record<UiPriceOracle, string> = {
-	uniswap: appCopy.uniswapUiPriceDetail,
-	'open-oracle': appCopy.openOracleUiPriceDetail,
-	'open-oracle-fallback': appCopy.openOracleFallbackUiPriceDetail,
-}
-
-export function readUiPriceOracle(storage?: Pick<Storage, 'getItem'>): UiPriceOracle {
-	try {
-		const resolvedStorage = storage ?? globalThis.localStorage
-		const value = resolvedStorage.getItem(PRICE_ORACLE_STORAGE_KEY)
-		if (value === 'uniswap' || value === 'open-oracle' || value === 'open-oracle-fallback') return value
-	} catch (error) {
-		if (!(error instanceof Error)) throw error
-	}
-	return 'open-oracle-fallback'
-}
-
-export function AppSettingsMenu({ onEnvironmentChanged, priceOracle, onPriceOracleChange }: { onEnvironmentChanged: () => Promise<void>; priceOracle?: UiPriceOracle; onPriceOracleChange?: (value: UiPriceOracle) => void }) {
+export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren }) {
 	const [open, setOpen] = useState(false)
 	const [selectedNetwork, setSelectedNetwork] = useState<RpcNetworkId>(getActiveNetworkProfile().id)
 	const [rpcUrls, setRpcUrls] = useState(() => readNetworkRpcUrls())
 	const [error, setError] = useState<string | undefined>(undefined)
-	const [priceOracleError, setPriceOracleError] = useState<string | undefined>(undefined)
 	const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
 	const menuRef = useRef<HTMLDivElement>(null)
 	const triggerRef = useRef<HTMLButtonElement>(null)
@@ -69,15 +49,6 @@ export function AppSettingsMenu({ onEnvironmentChanged, priceOracle, onPriceOrac
 		} catch (caughtError) {
 			setError(caughtError instanceof Error ? caughtError.message : appCopy.rpcSaveFailed)
 			setSaveState('idle')
-		}
-	}
-	const savePriceOracle = (value: UiPriceOracle) => {
-		onPriceOracleChange?.(value)
-		try {
-			globalThis.localStorage.setItem(PRICE_ORACLE_STORAGE_KEY, value)
-			setPriceOracleError(undefined)
-		} catch (caughtError) {
-			setPriceOracleError(caughtError instanceof Error ? caughtError.message : appCopy.rpcSaveFailed)
 		}
 	}
 
@@ -136,28 +107,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, priceOracle, onPriceOrac
 							{appCopy.rpcSaved}
 						</p>
 					) : undefined}
-					{priceOracle !== undefined && onPriceOracleChange !== undefined ? (
-						<label className='app-settings-price-oracle'>
-							<span>{appCopy.uiPriceOracle}</span>
-							<select
-								value={priceOracle}
-								onChange={event => {
-									const value = event.currentTarget.value as UiPriceOracle
-									savePriceOracle(value)
-								}}
-							>
-								<option value='uniswap'>{appCopy.uniswap}</option>
-								<option value='open-oracle'>{appCopy.latestOpenOraclePrice}</option>
-								<option value='open-oracle-fallback'>{appCopy.openOracleThenUniswap}</option>
-							</select>
-							<small>{priceOracleDescriptions[priceOracle]}</small>
-							{priceOracleError === undefined ? undefined : (
-								<small className='field-error' role='alert'>
-									{priceOracleError}
-								</small>
-							)}
-						</label>
-					) : undefined}
+					{settingsContent}
 				</div>
 			) : undefined}
 		</div>

@@ -2,7 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import * as pricingCopy from '../copy/pricing.js'
 import { assertNever } from './assert.js'
 
-export type RepPriceSource = 'v4' | 'v3' | 'mock' | 'open-oracle'
+export type RepPriceSource = 'v4' | 'v3' | 'mock'
 
 type RepPriceSourceCopy = {
 	badgeLabel: string | undefined
@@ -37,14 +37,6 @@ export function getRepPriceSourceCopy(source: RepPriceSource | undefined): RepPr
 				quotedCollateralizationLabel: pricingCopy.targetCollateralizationAtUniswapV3Price,
 				quotedRepPerEthLabel: pricingCopy.uniswapV3RepEth,
 				tooltip: pricingCopy.uniswapV3PriceSourceDetail,
-			}
-		case 'open-oracle':
-			return {
-				badgeLabel: pricingCopy.openOracleBadgeLabel,
-				linkTitle: pricingCopy.priceFromOpenOracle,
-				quotedCollateralizationLabel: pricingCopy.targetCollateralizationAtOpenOraclePrice,
-				quotedRepPerEthLabel: pricingCopy.openOracleRepEth,
-				tooltip: pricingCopy.openOraclePriceSourceDetail,
 			}
 		case undefined:
 			return {

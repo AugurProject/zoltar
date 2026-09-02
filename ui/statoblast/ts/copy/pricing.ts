@@ -1,0 +1,5 @@
+export const openOracleBadgeLabel = 'Open Oracle'
+export const openOraclePriceSourceDetail = 'Uses the latest price reported by the selected pool Open Oracle.'
+export const priceFromOpenOracle = 'Price from the selected pool Open Oracle'
+export const targetCollateralizationAtOpenOraclePrice = 'Target Collateralization @ Open Oracle Price'
+export const openOracleRepEth = 'Open Oracle REP / ETH'

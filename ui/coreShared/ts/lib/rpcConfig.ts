@@ -57,6 +57,10 @@ function readLocationParams(location: LocationLike | undefined) {
 	return params
 }
 
+function isExpectedStorageReadError(error: unknown) {
+	return error instanceof SyntaxError || (error instanceof DOMException && error.name === 'SecurityError')
+}
+
 function readStoredRpcUrl(storage: StorageLike | undefined, networkId?: RpcNetworkId) {
 	if (storage === undefined) return undefined
 	try {
@@ -73,8 +77,8 @@ function readStoredRpcUrl(storage: StorageLike | undefined, networkId?: RpcNetwo
 		}
 		return storage.getItem(RPC_URL_STORAGE_KEY)
 	} catch (error) {
-		if (error instanceof Error) return undefined
-		return undefined
+		if (isExpectedStorageReadError(error)) return undefined
+		throw error
 	}
 }
 
@@ -91,7 +95,7 @@ export function readNetworkRpcUrls(storage: StorageLike | undefined = getGlobalL
 			if (typeof configuredUrl === 'string') urls[networkId] = configuredUrl
 		}
 	} catch (error) {
-		if (!(error instanceof Error)) throw error
+		if (!isExpectedStorageReadError(error)) throw error
 	}
 	return urls
 }
@@ -113,7 +117,7 @@ function getGlobalLocalStorage(globalWithRpcConfig: GlobalWithRpcConfig) {
 	try {
 		return globalWithRpcConfig.localStorage
 	} catch (error) {
-		if (!(error instanceof DOMException)) throw error
+		if (!(error instanceof DOMException) || error.name !== 'SecurityError') throw error
 		return undefined
 	}
 }

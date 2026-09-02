@@ -28,14 +28,14 @@ import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailur
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getOracleRequestEthGuardMessage } from '@zoltar/ui-zoltar/features/open-oracle/lib/oracleRequestEth.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
-import type { UiPriceOracle } from '@zoltar/ui-core-shared/app/components/AppSettingsMenu.js'
+import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -56,7 +56,7 @@ type LiquidationModalProps = {
 	poolOracleManagerError?: string | undefined
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: RepPriceSource | undefined
+	repPerEthSource: UiRepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	uiPriceOracle?: UiPriceOracle | undefined
 	poolState?: SecurityPoolStateModel | undefined
