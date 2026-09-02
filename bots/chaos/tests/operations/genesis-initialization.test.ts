@@ -122,6 +122,7 @@ describe('genesis initialization', () => {
 		expect(initialization.plan?.metadata).toMatchObject({ pool: childPool, universeId: '2' })
 
 		snapshot.universeUniswap.pools[1] = { initialized: true, liquidity: '0', pool: childPool, repToken: childRep, universeId: '2' }
+		snapshot.universeUniswap.pools.push({ initialized: true, liquidity: '0', pool: address(47), repToken: address(48), universeId: '1' })
 		const seeding = evaluateSelectableOperationDefinition('trading.universe-uniswap.seed-pool', snapshot, options)
 		expect(seeding.plan?.metadata).toMatchObject({ pool: childPool, rep: childRep, universeId: '2' })
 		expect(seeding.plan?.steps.map(step => step.id)).toEqual(['approve-universe-token0', 'approve-universe-token1', 'seed-universe-uniswap-pool'])
@@ -130,7 +131,6 @@ describe('genesis initialization', () => {
 		const seeder = String(plan.metadata['seeder'])
 		for (const token of snapshot.wallet.tokens) token.allowances[seeder] = '1'
 		const definition = TRADING_OPERATIONS.find(candidate => candidate.id === 'trading.universe-uniswap.seed-pool')
-		snapshot.universeUniswap.pools.push({ initialized: true, liquidity: '0', pool: address(47), repToken: address(48), universeId: '1' })
 		const continuation = definition?.buildContinuationPlan?.(snapshot, options, { confirmedStepIds: ['approve-universe-token0'], previousPlan: plan })
 		expect(continuation?.metadata).toEqual(plan.metadata)
 		expect(continuation?.continuationDisposition).toBeUndefined()

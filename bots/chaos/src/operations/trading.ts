@@ -310,7 +310,7 @@ const seedGenesisUniswapPool: OperationDefinition = {
 	risk: 'medium',
 }
 
-const childUniswapPool = (snapshot: EcosystemSnapshot, state: 'missing' | 'uninitialized' | 'unseeded') =>
+const childUniswapPool = (snapshot: EcosystemSnapshot, state: 'missing' | 'uninitialized' | 'unseeded', feasible: (repToken: Address) => boolean = () => true) =>
 	snapshot.universeUniswap?.pools
 		.filter(candidate => candidate.universeId !== '0')
 		.filter(candidate => {
@@ -318,6 +318,7 @@ const childUniswapPool = (snapshot: EcosystemSnapshot, state: 'missing' | 'unini
 			if (state === 'uninitialized') return candidate.pool !== undefined && !candidate.initialized
 			return candidate.pool !== undefined && candidate.initialized && amount(candidate.liquidity) === 0n
 		})
+		.filter(candidate => feasible(candidate.repToken))
 		.sort((left, right) => {
 			const leftId = amount(left.universeId)
 			const rightId = amount(right.universeId)
@@ -325,6 +326,21 @@ const childUniswapPool = (snapshot: EcosystemSnapshot, state: 'missing' | 'unini
 			if (leftId > rightId) return 1
 			return 0
 		})[0]
+
+function universeUniswapSeedAmounts(snapshot: EcosystemSnapshot, options: PlanningOptions, repToken: Address) {
+	const repInventory = tokenInventory(snapshot, repToken)
+	const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
+	if (repInventory === undefined || wethInventory === undefined) return undefined
+	const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', 10n ** 15n)
+	const minimumRepReserve = optionAmount(options, 'minimumRepReserveAttoRep', 0n)
+	const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 15n)
+	const repBalance = amount(repInventory.balance)
+	const spendableRep = repBalance > minimumRepReserve ? repBalance - minimumRepReserve : 0n
+	const repAmount = [spendableRep, maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+	const wethAmount = [amount(wethInventory.balance), maximumWeth, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+	if (repAmount === 0n || wethAmount === 0n || (repAmount < wethAmount ? repAmount : wethAmount) / 2n === 0n) return undefined
+	return { repAmount, wethAmount }
+}
 
 const createUniverseUniswapPool: OperationDefinition = {
 	buildPlan(snapshot) {
@@ -394,19 +410,11 @@ const initializeUniverseUniswapPool: OperationDefinition = {
 
 const seedUniverseUniswapPool: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const target = childUniswapPool(snapshot, 'unseeded')
+		const target = childUniswapPool(snapshot, 'unseeded', repToken => universeUniswapSeedAmounts(snapshot, options, repToken) !== undefined)
 		if (target?.pool === undefined) return undefined
-		const repInventory = tokenInventory(snapshot, target.repToken)
-		const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
-		if (repInventory === undefined || wethInventory === undefined) return undefined
-		const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', 10n ** 15n)
-		const minimumRepReserve = optionAmount(options, 'minimumRepReserveAttoRep', 0n)
-		const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 15n)
-		const repBalance = amount(repInventory.balance)
-		const spendableRep = repBalance > minimumRepReserve ? repBalance - minimumRepReserve : 0n
-		const repAmount = [spendableRep, maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
-		const wethAmount = [amount(wethInventory.balance), maximumWeth, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
-		if (repAmount === 0n || wethAmount === 0n) return undefined
+		const seedAmounts = universeUniswapSeedAmounts(snapshot, options, target.repToken)
+		if (seedAmounts === undefined) return undefined
+		const { repAmount, wethAmount } = seedAmounts
 		const seeder = genesisUniswapSeederDeployment().address
 		const token0 = target.repToken.toLowerCase() < snapshot.deployments.weth.toLowerCase() ? target.repToken : snapshot.deployments.weth
 		const token1 = token0 === target.repToken ? snapshot.deployments.weth : target.repToken
@@ -482,7 +490,11 @@ const seedUniverseUniswapPool: OperationDefinition = {
 	description: 'Seeds a bounded full-range REP/WETH position for an authenticated child universe, owned by the operator wallet.',
 	discoveryInputs: ['authenticated per-universe pool liquidity, wallet REP/WETH balances and exact helper allowances'],
 	ecosystem: 'trading',
-	evaluate: snapshot => eligible(snapshot.universeUniswap?.seeder === true ? undefined : 'Deploy the Uniswap seeder first', childUniswapPool(snapshot, 'unseeded') !== undefined ? undefined : 'Every initialized child-universe REP/WETH pool has liquidity'),
+	evaluate: (snapshot, options) =>
+		eligible(
+			snapshot.universeUniswap?.seeder === true ? undefined : 'Deploy the Uniswap seeder first',
+			childUniswapPool(snapshot, 'unseeded', repToken => universeUniswapSeedAmounts(snapshot, options, repToken) !== undefined) !== undefined ? undefined : 'No initialized child-universe REP/WETH pool without liquidity has spendable REP and WETH',
+		),
 	id: 'trading.universe-uniswap.seed-pool',
 	label: 'Seed child-universe REP/WETH pool',
 	method: 'seed',
