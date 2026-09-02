@@ -14,6 +14,14 @@ RUN mkdir -p shared/js \
 	&& bun install --frozen-lockfile \
 	&& bun run shared:build
 
+COPY solidity/package.json solidity/bun.lock solidity/bunfig.toml solidity/default-config.json solidity/tsconfig-compile.json ./solidity/
+COPY solidity/contracts/ ./solidity/contracts/
+COPY solidity/ts/ ./solidity/ts/
+RUN cd solidity \
+	&& bun install --frozen-lockfile \
+	&& bun tsc --project tsconfig-compile.json \
+	&& bun ./js/compile.js
+
 FROM oven/bun:${BUN_VERSION}-alpine
 
 ENV BUN_ENV=production
@@ -21,6 +29,7 @@ ENV ZOLTAR_BOT_CONTAINER=true
 WORKDIR /app
 
 COPY --from=shared-builder /source/shared/ ./shared/
+COPY --from=shared-builder /source/solidity/ts/types/contractArtifact.ts ./solidity/ts/types/contractArtifact.ts
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/chaos/package.json bots/chaos/bun.lock ./bots/chaos/

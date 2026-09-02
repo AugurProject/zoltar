@@ -1,7 +1,27 @@
 import { createHash } from 'node:crypto'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { auctionAbi, coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi, liquidationApprovalRegistryAbi, openOracleAbi, questionDataAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, zoltarAbi } from '../contracts/abi.ts'
+import {
+	auctionAbi,
+	coordinatorAbi,
+	erc1155Abi,
+	erc20Abi,
+	escalationGameAbi,
+	liquidationApprovalRegistryAbi,
+	openOracleAbi,
+	questionDataAbi,
+	securityPoolAbi,
+	securityPoolFactoryAbi,
+	securityPoolForkerAbi,
+	shareTokenAbi,
+	tradingFactoryAbi,
+	tradingPairAbi,
+	tradingRouterAbi,
+	uniswapV3FactoryAbi,
+	uniswapV3PoolAbi,
+	zoltarAbi,
+} from '../contracts/abi.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
+import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
 	AuctionBidSnapshot,
@@ -97,6 +117,7 @@ export interface DiscoveryLimits {
 }
 
 export interface EcosystemDiscoveryContext {
+	allowMissingTradingDeployment?: boolean
 	client: ChaosReadClient
 	deployments: EcosystemDeployments
 	wallet: Address
@@ -491,14 +512,49 @@ export function forkRepMigrationTarget(forkData: { auctionableAttoRepAtFork: big
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
-	const [forkerZoltar, tradingSecurityPoolFactory, routerFactory] = await drainConcurrent([
+	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
-		client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' }),
-		client.readContract({ abi: tradingRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' }),
+		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingFactory, blockNumber }) : Promise.resolve('deployed'),
+		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingRouter, blockNumber }) : Promise.resolve('deployed'),
 	])
 	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'SecurityPoolForker Zoltar edge')
+	const factory = tradingFactoryCode !== undefined && tradingFactoryCode !== '0x'
+	const router = tradingRouterCode !== undefined && tradingRouterCode !== '0x'
+	if ((!factory || !router) && !context.allowMissingTradingDeployment) throw new Error('Configured trading factory and router must both have deployed code')
+	if (router && !factory) throw new Error('Configured trading router exists without its factory')
+	if (!factory) return { factory, router }
+	const tradingSecurityPoolFactory = await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
 	requireGraphEdge(getAddress(tradingSecurityPoolFactory), deployments.securityPoolFactory, 'Trading factory security-pool-factory edge')
-	requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')
+	if (router) {
+		const routerFactory = await client.readContract({ abi: tradingRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' })
+		requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')
+	}
+	return { factory, router }
+}
+
+async function discoverGenesisUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint) {
+	const genesisRep = universes.find(universe => universe.id === '0')?.repToken
+	if (genesisRep === undefined) return { factory: false, initialized: false, liquidity: '0', seeder: false }
+	const seeder = genesisUniswapSeederDeployment()
+	const uniswapFactory = context.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+	const [factoryCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
+	const factory = factoryCode !== undefined && factoryCode !== '0x'
+	if (!factory) return { factory, initialized: false, liquidity: '0', seeder: seederCode !== undefined && seederCode !== '0x' }
+	const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [genesisRep, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
+	if (pool === zeroAddress) return { factory, initialized: false, liquidity: '0', seeder: seederCode !== undefined && seederCode !== '0x' }
+	const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token1' }),
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'fee' }),
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'slot0' }),
+		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'liquidity' }),
+	])
+	requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Genesis Uniswap pool ${pool} factory edge`)
+	const expected = [genesisRep.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
+	const actual = [getAddress(token0).toLowerCase(), getAddress(token1).toLowerCase()].sort()
+	if (actual[0] !== expected[0] || actual[1] !== expected[1] || fee !== BigInt(GENESIS_UNISWAP_FEE)) throw new Error(`Genesis Uniswap pool ${pool} has unexpected immutable token or fee bindings`)
+	return { factory, initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, seeder: seederCode !== undefined && seederCode !== '0x' }
 }
 
 function fixedPointPower(value: bigint, exponent: bigint) {
@@ -560,6 +616,10 @@ export function minimumSafeVaultDeposit(minimumBacking: bigint, vaultBackingUnit
 
 export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: readonly PoolSnapshot[], token: Address): Address[] {
 	const spenders = new Map<string, Address>()
+	if (deployments.uniswapV3Factory !== undefined) {
+		const genesisSeeder = genesisUniswapSeederDeployment().address
+		spenders.set(genesisSeeder.toLowerCase(), genesisSeeder)
+	}
 	spenders.set(deployments.zoltar.toLowerCase(), deployments.zoltar)
 	spenders.set(deployments.openOracle.toLowerCase(), deployments.openOracle)
 	for (const pool of pools) {
@@ -1722,7 +1782,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const resolvedTopology = await immutableTopologyForAnchor(context, { hash: block.hash, number: blockNumber })
 	const topology = resolvedTopology.topology
 	const topologyMutation = { changed: resolvedTopology.reset }
-	await authenticateConfiguredGraph(context, blockNumber)
+	const tradingDeployment = await authenticateConfiguredGraph(context, blockNumber)
 	const warnings: string[] = []
 	const [chainId, ethBalanceAttoEth, universes, questions, openOracleEthCredit] = await drainConcurrent([
 		context.client.getChainId(),
@@ -1732,7 +1792,8 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
-	const pairs = await discoverPairs(context, pools, blockNumber, topology, topologyMutation)
+	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
+	const genesisUniswap = context.allowMissingTradingDeployment ? await discoverGenesisUniswap(context, universes, blockNumber) : undefined
 	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
 	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
@@ -1754,6 +1815,8 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		reports,
 		schemaVersion: 1,
 		stagedOperations: staged,
+		tradingDeployment,
+		...(genesisUniswap === undefined ? {} : { genesisUniswap }),
 		universes,
 		wallet: { address: context.wallet, ethBalanceAttoEth: ethBalanceAttoEth.toString(), lpTokens, openOracleEthCredit: openOracleEthCredit.toString(), shares, tokens },
 		warnings: canonicalDiscoveryWarnings(warnings),

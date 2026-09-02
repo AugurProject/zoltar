@@ -27,6 +27,7 @@ export type DeploymentSettings = {
 	securityPoolForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
+	uniswapV3Factory?: Address | undefined
 	weth: Address
 	zoltar: Address
 }
@@ -140,6 +141,7 @@ const settingsFilesystem: SettingsFilesystem = {
 const settingsWriteQueues = new Map<string, Promise<void>>()
 
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
+const canonicalUniswapV3Factory = getAddress('0x1F98431c8aD98523631AE4a59f267346ea31F984')
 const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -271,7 +273,7 @@ function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connec
 
 function parseDeployment(value: unknown): DeploymentSettings {
 	const deployment = requiredRecord(value, 'deployment')
-	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
+	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', ...('uniswapV3Factory' in deployment ? ['uniswapV3Factory'] : []), 'weth', 'zoltar'] as const
 	assertExactKeys(deployment, keys, 'deployment')
 	return {
 		openOracle: getAddress(nonemptyString(deployment['openOracle'], 'deployment.openOracle')),
@@ -280,6 +282,7 @@ function parseDeployment(value: unknown): DeploymentSettings {
 		securityPoolForker: getAddress(nonemptyString(deployment['securityPoolForker'], 'deployment.securityPoolForker')),
 		tradingFactory: getAddress(nonemptyString(deployment['tradingFactory'], 'deployment.tradingFactory')),
 		tradingRouter: getAddress(nonemptyString(deployment['tradingRouter'], 'deployment.tradingRouter')),
+		uniswapV3Factory: deployment['uniswapV3Factory'] === undefined ? canonicalUniswapV3Factory : getAddress(nonemptyString(deployment['uniswapV3Factory'], 'deployment.uniswapV3Factory')),
 		weth: getAddress(nonemptyString(deployment['weth'], 'deployment.weth')),
 		zoltar: getAddress(nonemptyString(deployment['zoltar'], 'deployment.zoltar')),
 	}

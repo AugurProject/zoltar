@@ -215,6 +215,7 @@ export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPo
 			let discoveredTopology: CanonicalImmutableTopologyCache | undefined
 			let topologyChanged: boolean | undefined
 			const snapshot = await discoverEcosystemSnapshot({
+				allowMissingTradingDeployment: settings.strategy.initializeGenesisUniverse,
 				anchorBlockNumber: anchor.blockNumber,
 				client,
 				deployments: settings.deployment,

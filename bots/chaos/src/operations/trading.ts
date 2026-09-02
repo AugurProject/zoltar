@@ -1,6 +1,8 @@
-import { decodeFunctionData, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { erc1155Abi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi } from '../contracts/abi.ts'
-import { amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline } from './planning.ts'
+import { decodeFunctionData, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
+import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
+import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline, tokenInventory } from './planning.ts'
 import { timestampDeadlineHasRequiredSafety } from './timing.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationPlanDraft, PairSnapshot, PlanningOptions, PoolSnapshot, ShareInventory } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -10,6 +12,284 @@ const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapsh
 const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
 const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 const BPS_DENOMINATOR = 10_000n
+const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
+const ZERO_SALT = toHex(0, { size: 32 })
+const GENESIS_TRADING_FEE_BPS = 30
+
+function deploymentStep(id: string, label: string, to: Address, data: Hex, evidence: OperationEvidence[]) {
+	return { data, evidence, gasLimit: '12000000', id, label, preflightCalls: [], to, walletAssetDebits: [] }
+}
+
+function tradingRootDeploymentPlans(snapshot: EcosystemSnapshot) {
+	const factoryData = encodeDeployData({
+		abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi,
+		args: [snapshot.deployments.securityPoolFactory, BigInt(GENESIS_TRADING_FEE_BPS)],
+		bytecode: `0x${trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.evm.bytecode.object}`,
+	})
+	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: CANONICAL_PROXY_DEPLOYER, salt: ZERO_SALT })
+	const routerData = encodeDeployData({
+		abi: trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.abi,
+		args: [factoryAddress],
+		bytecode: `0x${trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.evm.bytecode.object}`,
+	})
+	const routerAddress = getCreate2Address({ bytecode: routerData, from: CANONICAL_PROXY_DEPLOYER, salt: ZERO_SALT })
+	return { factoryAddress, factoryData, routerAddress, routerData }
+}
+
+const deployTradingFactory: OperationDefinition = {
+	buildPlan(snapshot) {
+		const deployment = tradingRootDeploymentPlans(snapshot)
+		if (deployment.factoryAddress !== snapshot.deployments.tradingFactory) return undefined
+		return planBase({
+			definitionId: deployTradingFactory.id,
+			ecosystem: 'trading',
+			label: deployTradingFactory.label,
+			metadata: { factory: deployment.factoryAddress },
+			postconditions: ['The deterministic trading factory references the configured SecurityPoolFactory'],
+			risk: 'medium',
+			snapshot,
+			steps: [
+				deploymentStep('deploy-trading-factory', 'Deploy trading factory', CANONICAL_PROXY_DEPLOYER, deployment.factoryData, [
+					{ abi: 'function securityPoolFactory() view returns (address)', args: [], contract: deployment.factoryAddress, expected: snapshot.deployments.securityPoolFactory, functionName: 'securityPoolFactory', kind: 'storage-postcondition', relation: 'equals' },
+				]),
+			],
+		})
+	},
+	classification: 'selectable',
+	contract: 'TwoWayConstantProductFactory',
+	description: 'Deterministically deploys the configured trading factory through the authenticated canonical proxy deployer.',
+	discoveryInputs: ['configured trading roots and canonical proxy deployment'],
+	ecosystem: 'trading',
+	evaluate(snapshot) {
+		const deployment = tradingRootDeploymentPlans(snapshot)
+		return eligible(snapshot.tradingDeployment?.factory === false ? undefined : 'Trading factory is already deployed', deployment.factoryAddress === snapshot.deployments.tradingFactory ? undefined : 'Configured trading factory does not match the deterministic deployment plan')
+	},
+	id: 'trading.root.deploy-factory',
+	label: 'Deploy trading factory',
+	method: 'fallback',
+	risk: 'medium',
+}
+
+const deployTradingRouter: OperationDefinition = {
+	buildPlan(snapshot) {
+		const deployment = tradingRootDeploymentPlans(snapshot)
+		if (deployment.routerAddress !== snapshot.deployments.tradingRouter) return undefined
+		return planBase({
+			definitionId: deployTradingRouter.id,
+			ecosystem: 'trading',
+			label: deployTradingRouter.label,
+			metadata: { router: deployment.routerAddress },
+			postconditions: ['The deterministic trading router references the configured trading factory'],
+			risk: 'medium',
+			snapshot,
+			steps: [
+				deploymentStep('deploy-trading-router', 'Deploy trading router', CANONICAL_PROXY_DEPLOYER, deployment.routerData, [
+					{ abi: 'function factory() view returns (address)', args: [], contract: deployment.routerAddress, expected: snapshot.deployments.tradingFactory, functionName: 'factory', kind: 'storage-postcondition', relation: 'equals' },
+				]),
+			],
+		})
+	},
+	classification: 'selectable',
+	contract: 'TwoWayConstantProductRouter',
+	description: 'Deterministically deploys the configured trading router through the authenticated canonical proxy deployer.',
+	discoveryInputs: ['configured trading roots and canonical proxy deployment'],
+	ecosystem: 'trading',
+	evaluate(snapshot) {
+		const deployment = tradingRootDeploymentPlans(snapshot)
+		return eligible(
+			snapshot.tradingDeployment?.factory === true ? undefined : 'Deploy the trading factory first',
+			snapshot.tradingDeployment?.router === false ? undefined : 'Trading router is already deployed',
+			deployment.routerAddress === snapshot.deployments.tradingRouter ? undefined : 'Configured trading router does not match the deterministic deployment plan',
+		)
+	},
+	id: 'trading.root.deploy-router',
+	label: 'Deploy trading router',
+	method: 'fallback',
+	risk: 'medium',
+}
+
+const deployGenesisUniswapSeeder: OperationDefinition = {
+	buildPlan(snapshot) {
+		const deployment = genesisUniswapSeederDeployment()
+		return planBase({
+			definitionId: deployGenesisUniswapSeeder.id,
+			ecosystem: 'trading',
+			label: deployGenesisUniswapSeeder.label,
+			metadata: { seeder: deployment.address },
+			postconditions: ['The deterministic, stateless Uniswap V3 seeding helper has deployed code'],
+			risk: 'medium',
+			snapshot,
+			steps: [deploymentStep('deploy-genesis-uniswap-seeder', 'Deploy Uniswap V3 seeding helper', CANONICAL_PROXY_DEPLOYER, deployment.data, [])],
+		})
+	},
+	classification: 'selectable',
+	contract: 'GenesisUniswapV3Seeder',
+	description: 'Deterministically deploys the stateless helper used to mint the genesis REP/WETH position.',
+	discoveryInputs: ['deterministic helper deployment'],
+	ecosystem: 'trading',
+	evaluate: snapshot => eligible(snapshot.genesisUniswap?.seeder === false ? undefined : 'Genesis Uniswap seeding helper is already deployed'),
+	id: 'trading.genesis-uniswap.deploy-seeder',
+	label: 'Deploy genesis Uniswap seeder',
+	method: 'fallback',
+	risk: 'medium',
+}
+
+function genesisRep(snapshot: EcosystemSnapshot) {
+	return snapshot.universes.find(universe => universe.id === '0')?.repToken
+}
+
+const createGenesisUniswapPool: OperationDefinition = {
+	buildPlan(snapshot) {
+		const rep = genesisRep(snapshot)
+		if (rep === undefined) return undefined
+		const uniswapFactory = snapshot.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+		return planBase({
+			definitionId: createGenesisUniswapPool.id,
+			ecosystem: 'trading',
+			label: createGenesisUniswapPool.label,
+			metadata: { factory: uniswapFactory, fee: GENESIS_UNISWAP_FEE, rep, weth: snapshot.deployments.weth },
+			postconditions: ['The configured Uniswap V3 factory returns the canonical genesis REP/WETH fee-tier pool'],
+			risk: 'medium',
+			snapshot,
+			steps: [encodeStep({ abi: uniswapV3FactoryAbi, args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE], evidence: [], functionName: 'createPool', id: 'create-genesis-uniswap-pool', label: 'Create REP/WETH pool', to: uniswapFactory, walletAssetDebits: [] })],
+		})
+	},
+	classification: 'selectable',
+	contract: 'UniswapV3Factory',
+	description: 'Creates the genesis REP/WETH pool at the fixed 1% fee tier.',
+	discoveryInputs: ['genesis REP token, configured WETH and authenticated Uniswap V3 factory'],
+	ecosystem: 'trading',
+	evaluate: snapshot => eligible(snapshot.genesisUniswap?.factory === true ? undefined : 'Configured Uniswap V3 factory has no code', snapshot.genesisUniswap?.pool === undefined ? undefined : 'Genesis REP/WETH pool already exists'),
+	id: 'trading.genesis-uniswap.create-pool',
+	label: 'Create genesis REP/WETH pool',
+	method: 'createPool',
+	risk: 'medium',
+}
+
+const initializeGenesisUniswapPool: OperationDefinition = {
+	buildPlan(snapshot) {
+		const pool = snapshot.genesisUniswap?.pool
+		if (pool === undefined) return undefined
+		return planBase({
+			definitionId: initializeGenesisUniswapPool.id,
+			ecosystem: 'trading',
+			label: initializeGenesisUniswapPool.label,
+			metadata: { pool, sqrtPriceX96: GENESIS_UNISWAP_SQRT_PRICE_X96.toString() },
+			postconditions: ['The genesis REP/WETH pool has a 1:1 initial sqrt price'],
+			risk: 'medium',
+			snapshot,
+			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], evidence: [], functionName: 'initialize', id: 'initialize-genesis-uniswap-pool', label: 'Initialize REP/WETH pool', to: pool, walletAssetDebits: [] })],
+		})
+	},
+	classification: 'selectable',
+	contract: 'UniswapV3Pool',
+	description: 'Initializes the genesis REP/WETH pool at a deterministic 1:1 price.',
+	discoveryInputs: ['authenticated genesis REP/WETH pool slot0'],
+	ecosystem: 'trading',
+	evaluate: snapshot => eligible(snapshot.genesisUniswap?.pool === undefined ? 'Create the genesis REP/WETH pool first' : undefined, snapshot.genesisUniswap?.initialized === false ? undefined : 'Genesis REP/WETH pool is already initialized'),
+	id: 'trading.genesis-uniswap.initialize-pool',
+	label: 'Initialize genesis REP/WETH pool',
+	method: 'initialize',
+	risk: 'medium',
+}
+
+const seedGenesisUniswapPool: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const pool = snapshot.genesisUniswap?.pool
+		const rep = genesisRep(snapshot)
+		if (pool === undefined || rep === undefined) return undefined
+		const repInventory = tokenInventory(snapshot, rep)
+		const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
+		if (repInventory === undefined || wethInventory === undefined) return undefined
+		const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', 10n ** 15n)
+		const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 15n)
+		const amount0 = [amount(repInventory.balance), maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+		const amount1 = [amount(wethInventory.balance), maximumWeth, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+		if (amount0 === 0n || amount1 === 0n) return undefined
+		const seeder = genesisUniswapSeederDeployment().address
+		const token0 = rep.toLowerCase() < snapshot.deployments.weth.toLowerCase() ? rep : snapshot.deployments.weth
+		const token1 = token0 === rep ? snapshot.deployments.weth : rep
+		const maximum0 = token0 === rep ? amount0 : amount1
+		const maximum1 = token1 === rep ? amount0 : amount1
+		const liquidity = (maximum0 < maximum1 ? maximum0 : maximum1) / 2n
+		if (liquidity === 0n) return undefined
+		const steps = []
+		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
+			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-genesis-token0', label: 'Approve genesis token0', to: token0, walletAssetDebits: [] }))
+		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
+			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-genesis-token1', label: 'Approve genesis token1', to: token1, walletAssetDebits: [] }))
+		steps.push(
+			encodeStep({
+				abi: genesisUniswapSeederAbi,
+				args: [pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
+				evidence: [],
+				functionName: 'seed',
+				id: 'seed-genesis-uniswap-pool',
+				label: 'Seed REP/WETH liquidity',
+				to: seeder,
+				walletAssetDebits: [erc20WalletDebit(token0, maximum0, token0 === rep ? 'rep' : 'weth'), erc20WalletDebit(token1, maximum1, token1 === rep ? 'rep' : 'weth')],
+			}),
+		)
+		return planBase({
+			definitionId: seedGenesisUniswapPool.id,
+			ecosystem: 'trading',
+			label: seedGenesisUniswapPool.label,
+			maximumCleanupTransactionCount: 2,
+			metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool, seeder, token0, token1 },
+			postconditions: ['The authenticated genesis REP/WETH pool has nonzero active liquidity and exact approvals are consumed'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const cleanup = () => {
+			const token0 = metadataAddress(context.previousPlan.metadata, 'token0')
+			const token1 = metadataAddress(context.previousPlan.metadata, 'token1')
+			const seeder = metadataAddress(context.previousPlan.metadata, 'seeder')
+			if (token0 === undefined || token1 === undefined || seeder === undefined) return undefined
+			const steps = [token0, token1].flatMap((token, index) =>
+				allowance(tokenInventory(snapshot, token), seeder) === 0n
+					? []
+					: [encodeStep({ abi: erc20Abi, args: [seeder, 0n], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)], functionName: 'approve', id: `revoke-genesis-token${index.toString()}`, label: `Revoke genesis token${index.toString()} allowance`, to: token, walletAssetDebits: [] })],
+			)
+			if (steps.length === 0) return undefined
+			return planBase({
+				continuationDisposition: 'cleanup-only',
+				definitionId: seedGenesisUniswapPool.id,
+				ecosystem: 'trading',
+				label: `Clean up ${seedGenesisUniswapPool.label}`,
+				metadata: context.previousPlan.metadata,
+				postconditions: ['Every confirmed workflow-created seeder allowance is zero'],
+				risk: 'medium',
+				snapshot,
+				steps,
+			})
+		}
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const refreshed = seedGenesisUniswapPool.buildPlan(snapshot, options)
+		return refreshed !== undefined && JSON.stringify(refreshed.metadata) === JSON.stringify(context.previousPlan.metadata) ? refreshed : cleanup()
+	},
+	classification: 'selectable',
+	contract: 'GenesisUniswapV3Seeder',
+	description: 'Seeds a bounded full-range REP/WETH position owned by the operator wallet.',
+	discoveryInputs: ['authenticated pool liquidity, wallet REP/WETH balances and exact helper allowances'],
+	ecosystem: 'trading',
+	evaluate: snapshot => {
+		const rep = genesisRep(snapshot)
+		const seeder = genesisUniswapSeederDeployment().address
+		return eligible(
+			snapshot.genesisUniswap?.initialized === true ? undefined : 'Initialize the genesis REP/WETH pool first',
+			snapshot.genesisUniswap?.seeder === true ? undefined : 'Deploy the genesis Uniswap seeder first',
+			amount(snapshot.genesisUniswap?.liquidity ?? '0') === 0n ? undefined : 'Genesis REP/WETH pool is already seeded',
+			rep !== undefined && allowance(tokenInventory(snapshot, rep), seeder) >= 0n ? undefined : 'Genesis REP inventory is unavailable',
+		)
+	},
+	id: 'trading.genesis-uniswap.seed-pool',
+	label: 'Seed genesis REP/WETH pool',
+	method: 'seed',
+	risk: 'medium',
+}
 const TRADING_SLIPPAGE_BPS = 100n
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 const ORACLE_PRICE_VALIDITY_SECONDS = 300n
@@ -490,7 +770,7 @@ const createPair: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		const paired = new Set(snapshot.pairs.map(pair => pair.pool.toLowerCase()))
 		const pool = choose(
-			snapshot.pools.filter(candidate => !paired.has(candidate.address.toLowerCase())),
+			snapshot.pools.filter(candidate => !paired.has(candidate.address.toLowerCase()) && (options.genesisInitializationTarget?.pool === undefined || candidate.address.toLowerCase() === options.genesisInitializationTarget.pool.toLowerCase())),
 			mixSeed(options.seed, createPair.id),
 		)
 		if (pool === undefined) return undefined
@@ -790,6 +1070,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 					? undefined
 					: choose(
 							snapshot.pairs.filter(candidate => {
+								if (options.genesisInitializationTarget?.pair !== undefined && candidate.address.toLowerCase() !== options.genesisInitializationTarget.pair.toLowerCase()) return false
 								if (candidate.status !== (kind === 'initialize' ? 6 : 0)) return false
 								const candidatePool = poolForPair(snapshot, candidate)
 								if (candidatePool === undefined || !poolLifecycleOpen(snapshot, candidatePool, options) || !ethRouterOraclePriceIsSafe(snapshot, candidatePool, options) || !canCreateCompleteSet(candidatePool, spend)) return false
@@ -1249,6 +1530,12 @@ const lpApprovalDefinition: OperationDefinition = {
 }
 
 export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
+	deployTradingFactory,
+	deployTradingRouter,
+	deployGenesisUniswapSeeder,
+	createGenesisUniswapPool,
+	initializeGenesisUniswapPool,
+	seedGenesisUniswapPool,
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),

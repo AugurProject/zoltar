@@ -19,7 +19,6 @@ type RecoveryScenario = {
 
 const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
-const dashboardPassword = 'dashboard interaction fixture password'
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
@@ -359,7 +358,6 @@ browserTest(
 				return stateRequests >= 3 ? recoveredDashboardState : initialDashboardState
 			},
 			hostname: '127.0.0.1',
-			password: dashboardPassword,
 			setCancellation: () => {},
 			setCandidate: () => {},
 			setConnectivity: async value => {
@@ -386,7 +384,6 @@ browserTest(
 			const cdp = await connectToChromium(debuggingPort)
 			socket = cdp.socket
 			await cdp.command('Network.enable')
-			await cdp.command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 400; attempt += 1) {
 					if ((await cdp.evaluate(expression)) === true) return
@@ -1136,11 +1133,11 @@ browserTest(
 					catalogLink: { href: '/catalog', text: 'Operation catalog' },
 					connectivityDisabled: false,
 					connectivityHelp: "RPC checks run from the chaos-bot server. Docker service URLs such as http://reth:8545 work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.",
-					initializerHelp: 'For an empty genesis topology, continuously fills missing prerequisites in order: binary question, origin security pool, wallet vault, trading pair, and initial pair liquidity. These five operations bypass the selectable allowlist.',
+					initializerHelp: 'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool and seed, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
 					initializeGenesisUniverse: true,
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					selectableScopeHelp:
-						'Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; its five ordered operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
+						'Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
@@ -1714,7 +1711,6 @@ browserTest(
 			}),
 			getState: () => state({ signerReady: true, wallet: walletAddress }),
 			hostname: '127.0.0.1',
-			password: dashboardPassword,
 			setCancellation: () => {},
 			setCandidate: () => {},
 			setObligation: () => {},
@@ -1734,7 +1730,6 @@ browserTest(
 			const cdp = await connectToChromium(debuggingPort)
 			socket = cdp.socket
 			await cdp.command('Network.enable')
-			await cdp.command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
 					if ((await cdp.evaluate(expression)) === true) return

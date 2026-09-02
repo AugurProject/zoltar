@@ -85,6 +85,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 		strategy: {
 			allowHighRiskOperations: true,
 			allowIrreversibleOperations: false,
+			initializeGenesisUniverse: false,
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 			maximumEthPerOperationAttoEth: ONE_TOKEN,
 			maximumGasCostAttoEth: ONE_TOKEN,
