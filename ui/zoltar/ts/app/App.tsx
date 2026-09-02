@@ -22,7 +22,7 @@ import { getActiveSimulationController, initializeActiveEnvironment } from '@zol
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
@@ -31,12 +31,17 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import type { MarketRouteContentProps, ZoltarView } from '../features/types.js'
 import type { Route } from '../types/app.js'
 import { isUniverseIndependentZoltarView, zoltarRouting } from '../lib/routing.js'
+import { hasInvalidZoltarView } from './lib/routeValidation.js'
 
 export function App() {
 	const { activeUniverseId, replaceZoltarView, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
-	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
+	const zoltarViews: readonly ZoltarView[] = ['questions', 'create', 'fork', 'migrate', 'universes']
 	const { navigate, route } = useHashRoute()
-	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
+	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
+	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
+	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
+	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -135,7 +140,7 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseError,
 		zoltarUniverseMissing,
-	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView: questionCreationView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
@@ -231,7 +236,7 @@ export function App() {
 		questionForm,
 		questionResult,
 	}
-	const tabNavigationTabs: RouteTabDefinition[] = [...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []), { hash: zoltarRouting.getHash('zoltar'), label: marketCopy.questions, route: 'zoltar' }]
+	const tabNavigationTabs: RouteTabDefinition[] = [...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []), { hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }]
 	const tabNavigationProps = {
 		route,
 		tabs: tabNavigationTabs,
@@ -239,7 +244,7 @@ export function App() {
 		showProtocolGuide: false,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
-	if (route === 'zoltar') {
+	if (route === 'deploy' || route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
 				ariaLabel={appCopy.zoltarViews}
@@ -248,17 +253,9 @@ export function App() {
 				options={[
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
-					...(showZoltarUniverseWarning
-						? []
-						: [
-								{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' as const },
-								{
-									label: marketCopy.repMigration,
-									value: 'migrate' as const,
-									disabled: zoltarUniverse?.hasForked !== true,
-									...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
-								},
-							]),
+					...(showZoltarUniverseWarning ? [] : [{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' as const }]),
+					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')), label: marketCopy.repMigration, value: 'migrate' as const },
+					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' as const },
 				]}
 			/>
 		)

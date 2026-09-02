@@ -15,6 +15,7 @@ export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workfl
 export const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'fork-workflow']
 export const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle']
 export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
+const LEGACY_SELECTED_POOL_VIEWS = ['resolution', 'withdraw-escalation-deposits', 'oracle', 'fork-migration', 'fork-auction', 'fork-settlement'] as const
 
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 	switch (view) {
@@ -44,6 +45,10 @@ export function resolveSelectedPoolView(value: string | undefined): SelectedPool
 		return value
 	})()
 	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', SELECTED_POOL_VIEWS)
+}
+
+export function isSupportedSelectedPoolView(value: string | undefined) {
+	return value === undefined || value === '' || SELECTED_POOL_VIEWS.includes(value as SelectedPoolView) || LEGACY_SELECTED_POOL_VIEWS.includes(value as (typeof LEGACY_SELECTED_POOL_VIEWS)[number])
 }
 
 export function isSelectedPoolForkWorkflowView(view: SelectedPoolView) {

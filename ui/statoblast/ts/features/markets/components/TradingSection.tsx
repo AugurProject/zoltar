@@ -383,10 +383,10 @@ export function TradingSection({
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				<MetricGrid>
 					<MetricField label={tradingCopy.walletEth}>
-						<CurrencyValue value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
+						<CurrencyValue exactWhenRoundedToZero value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 					<MetricField label={tradingCopy.availableToMint}>
-						<CurrencyValue loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
 					</MetricField>
 				</MetricGrid>
 				<label className='field'>
@@ -411,7 +411,7 @@ export function TradingSection({
 					primary={[
 						{
 							label: transactionReviewCopy.youPay,
-							value: mintAmount === undefined ? transactionReviewCopy.amountUnavailable : <CurrencyValue value={mintAmount} suffix={commonCopy.eth} />,
+							value: mintAmount === undefined ? transactionReviewCopy.amountUnavailable : <CurrencyValue exactWhenRoundedToZero value={mintAmount} suffix={commonCopy.eth} />,
 						},
 						{
 							label: tradingCopy.estimatedSharesReceived,
@@ -440,8 +440,8 @@ export function TradingSection({
 						},
 					]}
 					details={[
-						{ label: tradingCopy.estimatedRetentionFee, value: <CurrencyValue value={mintCheckpoint?.estimatedRetentionFeeAttoEth} suffix={commonCopy.eth} /> },
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
+						{ label: tradingCopy.estimatedRetentionFee, value: <CurrencyValue exactWhenRoundedToZero value={mintCheckpoint?.estimatedRetentionFeeAttoEth} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue exactWhenRoundedToZero value={resultingEthBalance} suffix={commonCopy.eth} /> },
 					]}
 					risks={[tradingCopy.mintBalanceRisk]}
 				/>
@@ -488,10 +488,10 @@ export function TradingSection({
 									</span>
 								),
 						},
-						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={redeemAmount} suffix={commonCopy.eth} /> },
+						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue exactWhenRoundedToZero value={redeemAmount} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={retentionFeeDisclosure}
-					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> }]}
+					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue exactWhenRoundedToZero value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.redeemCompleteSetRisk]}
 				/>
 				<div className='actions'>
@@ -566,10 +566,10 @@ export function TradingSection({
 				<TransactionReview
 					primary={[
 						{ label: tradingCopy.winningShares, value: <CurrencyValue value={resolvedWinningShareBalance} /> },
-						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={resolvedWinningPayout} suffix={commonCopy.eth} /> },
+						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue exactWhenRoundedToZero value={resolvedWinningPayout} suffix={commonCopy.eth} /> },
 					]}
 					disclosures={retentionFeeDisclosure}
-					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
+					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue exactWhenRoundedToZero value={resolvedWinningPayout === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.resolvedShareRisk]}
 				/>
 				<div className='actions'>

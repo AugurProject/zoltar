@@ -6,6 +6,7 @@ import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../../types.j
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { UniverseDirectorySection } from './UniverseDirectorySection.js'
 
 export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
@@ -16,10 +17,11 @@ export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAdd
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	if (view === 'browse') return { description: securityPoolCopy.browsePoolsDescription, title: commonCopy.browsePools }
 	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
+	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
 	return { description: securityPoolCopy.managePoolDescription, title: commonCopy.managePool }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseChange, onActiveViewChange, overview, workflow }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 
@@ -58,6 +60,10 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseC
 						openView('operate', securityPoolAddress)
 					}}
 				/>
+			) : undefined}
+
+			{view === 'universes' ? (
+				<UniverseDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
 			) : undefined}
 
 			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}

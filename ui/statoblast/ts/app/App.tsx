@@ -34,7 +34,7 @@ import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/active
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-zoltar/features/reporting/lib/reportingForm.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/lib/routing.js'
 import { writeSecurityPoolsViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/lib/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
@@ -45,9 +45,12 @@ import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../features/t
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import { statoblastRouting } from '../lib/routing.js'
 import { getStatoblastDeploymentSections } from '../features/deployment/deploymentSections.js'
+import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
+import { shouldAutoLoadUniverseDirectory } from './lib/universeDirectory.js'
 
 export function App() {
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
+	const [combinedCreateStage, setCombinedCreateStage] = useState<'creating-pool' | 'creating-question' | undefined>(undefined)
 	const {
 		activeUniverseId,
 		openOracleReportId: urlOpenOracleReportId,
@@ -65,7 +68,7 @@ export function App() {
 		setSelectedPoolView,
 	} = useUrlState()
 	const { navigate, route } = useHashRoute()
-	const activeRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
+	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'security-pools', 'open-oracle', 'not-found'])
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -118,7 +121,7 @@ export function App() {
 	const { transactionState } = transactionTray
 	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
 	const { errorMessage: deploymentErrorMessage } = deploymentFlow
-	const { hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
+	const { createMarket, loadZoltarForkAccess, loadingZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		activeZoltarView: 'questions',
@@ -173,6 +176,7 @@ export function App() {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
 		hasLoadedSecurityPoolPage,
+		hasLoadedUniverseDirectoryPools,
 		liquidationDebtEthAmount,
 		maximumLiquidationDebtAttoEth,
 		liquidationManagerAddress,
@@ -194,7 +198,9 @@ export function App() {
 		loadingLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary,
 		loadingSecurityPoolPage,
+		loadingUniverseDirectoryPools,
 		loadBrowseSecurityPoolPage,
+		loadUniverseDirectoryPools,
 		loadSecurityPools,
 		loadLiquidationFundingPreview,
 		loadLiquidationApproval,
@@ -208,6 +214,8 @@ export function App() {
 		securityPoolBrowseCount,
 		securityPoolPage,
 		securityPools,
+		securityPoolUniverseDirectoryError,
+		universeDirectoryPools,
 		setLiquidationAmount,
 		setLiquidationReceiverVault,
 		setLiquidationApprovalId,
@@ -245,6 +253,10 @@ export function App() {
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
+	const combinedCreateScopeKeyRef = useRef('')
+	const lastUniverseDirectoryAutoLoadContextKeyRef = useRef<string | undefined>(undefined)
+	combinedCreateScopeKeyRef.current = `${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}:${activeEnvironmentNonce}:${deploymentStatuses.map(status => `${status.id}:${status.deployed ? '1' : '0'}`).join(',')}`
+	const universeDirectoryContextKey = `${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}`
 	const refreshSimulationView = async () => {
 		await refreshState()
 		refreshRepPrices()
@@ -294,17 +306,7 @@ export function App() {
 		isRefreshing,
 		walletBootstrapComplete,
 	}
-	const tabs: RouteTabDefinition[] = [
-		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
-		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
-		{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
-	]
-	const tabNavigationProps = {
-		route,
-		tabs,
-		onRouteChange: navigate,
-	}
-	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
@@ -312,9 +314,31 @@ export function App() {
 		],
 		'browse',
 	)
-	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, ['browse', 'create', 'operate'])
+	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, securityPoolsViews)
+	const openOracleViews: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
+	const invalidRouteState = getInvalidStatoblastRouteState({
+		activeSecurityPoolsView,
+		openOracleView,
+		resolvedRoute,
+		search: parseRouteHash(window.location.hash).search,
+		securityPoolsView,
+		selectedPoolView,
+	})
+	const activeRoute = invalidRouteState.hasInvalidSecurityPoolsView || invalidRouteState.hasInvalidSelectedPoolView || invalidRouteState.hasInvalidOpenOracleView ? 'not-found' : resolvedRoute
+	const showDeployTab = deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
+	const tabs: RouteTabDefinition[] = [
+		...(showDeployTab ? [{ hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' as const }] : []),
+		{ hash: statoblastRouting.getHash('security-pools'), label: commonCopy.securityPools, route: 'security-pools' },
+		{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.oracleReports, route: 'open-oracle' },
+	]
+	const tabNavigationProps = {
+		route,
+		tabs,
+		onRouteChange: navigate,
+	}
+	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
-	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
+	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, openOracleViews)
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
@@ -380,20 +404,51 @@ export function App() {
 		deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')),
 		onRetryDeploymentStatus: () => void refreshState({ loadChainClock: false, loadWalletState: false }),
 	})
+	const createQuestionAndSecurityPool = async () => {
+		if (combinedCreateStage !== undefined) return
+		if (marketForm.marketType !== 'binary') return
+		const submittedCombinedCreateScopeKey = combinedCreateScopeKeyRef.current
+		const submittedSecurityPoolForm = securityPoolForm
+		setCombinedCreateStage('creating-question')
+		try {
+			const result = await createMarket({ refreshQuestionList: false })
+			if (result === undefined || combinedCreateScopeKeyRef.current !== submittedCombinedCreateScopeKey) return
+			setSecurityPoolForm(current => ({ ...current, marketId: result.questionId }))
+			setSecurityPoolQuestionId(result.questionId)
+			setCombinedCreateStage('creating-pool')
+			await createPool(result.questionId, submittedSecurityPoolForm)
+		} finally {
+			setCombinedCreateStage(undefined)
+		}
+	}
+	useEffect(() => {
+		if (
+			!shouldAutoLoadUniverseDirectory({
+				activeSecurityPoolsView,
+				canReadOnchainData,
+				currentContextKey: universeDirectoryContextKey,
+				hasLoadedUniverseDirectoryPools,
+				lastAutoLoadContextKey: lastUniverseDirectoryAutoLoadContextKeyRef.current,
+				loadingUniverseDirectoryPools,
+				securityPoolUniverseDirectoryError,
+			})
+		)
+			return
+		lastUniverseDirectoryAutoLoadContextKeyRef.current = universeDirectoryContextKey
+		void loadUniverseDirectoryPools()
+	}, [activeSecurityPoolsView, canReadOnchainData, hasLoadedUniverseDirectoryPools, loadingUniverseDirectoryPools, securityPoolUniverseDirectoryError, universeDirectoryContextKey])
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
 		onActiveUniverseChange: setActiveUniverseId,
+		loadingUniverseDirectoryPools,
 		createPool: {
 			accountState,
-			availableQuestionsContextKey: `${activeEnvironmentNonce}:${activeUniverseId.toString()}`,
-			availableQuestions: zoltarQuestions,
 			checkingDuplicateOriginPool,
+			questionAndPoolCreating: combinedCreateStage !== undefined,
 			duplicateOriginPoolExists,
-			hasLoadedAvailableQuestions: hasLoadedZoltarQuestions,
-			loadingAvailableQuestions: loadingZoltarQuestions,
+			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
-			onCreateSecurityPool: () => void createPool(),
-			onLoadAvailableQuestions: loadZoltarQuestions,
+			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,
@@ -407,11 +462,19 @@ export function App() {
 			securityPoolError,
 			securityPoolForm,
 			securityPoolResult,
+			marketCreating,
+			marketError,
+			marketForm,
+			marketResult,
+			onCreateMarket: () => void createMarket(),
+			onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
+			onResetMarket: resetMarket,
 			repPerEthPrice,
 			repPerEthSource,
 			repPerEthSourceUrl,
 		},
 		onActiveViewChange: view => setSecurityPoolsView(view),
+		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPools(),
 		overview: {
 			accountState,
 			activeUniverseId,
@@ -426,6 +489,9 @@ export function App() {
 			securityPools,
 			repPerEthPrice,
 		},
+		securityPools,
+		securityPoolUniverseDirectoryError,
+		universeDirectoryPools,
 		workflow: {
 			accountState,
 			activeUniverseId,
@@ -590,6 +656,7 @@ export function App() {
 				tradingResult,
 			},
 		},
+		zoltarUniverse,
 	}
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
 		...openOracleSectionState,
@@ -611,7 +678,7 @@ export function App() {
 		openOracleForm,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
-	if (route === 'security-pools') {
+	if (route === 'deploy' || route === 'security-pools') {
 		routeSubNavigation = (
 			<RouteSubNavigation
 				ariaLabel={appCopy.securityPoolsViews}
@@ -621,6 +688,7 @@ export function App() {
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
 					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
+					{ href: buildRouteHref(statoblastRouting.getHash('security-pools'), writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
 				]}
 			/>
 		)

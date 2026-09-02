@@ -124,6 +124,11 @@
 	color: var(--danger);
 }
 
+strong.metric-value-warning,
+.entity-metric strong.metric-value-warning {
+	color: var(--warning);
+}
+
 strong.metric-value-success {
 	color: var(--success);
 }

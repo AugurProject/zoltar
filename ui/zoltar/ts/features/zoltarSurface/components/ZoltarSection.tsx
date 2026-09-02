@@ -6,6 +6,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { ChildUniverseDeploymentSection } from '../../universes/components/ChildUniverseDeploymentSection.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
+import { UniverseDirectorySection } from '../../universes/components/UniverseDirectorySection.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -58,15 +59,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 	const pageCount = getPaginationPageCount(currentPage?.questionCount, QUESTION_PAGE_SIZE)
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader
-				actions={
-					<button className='primary' type='button' onClick={() => onActiveViewChange('create')}>
-						{commonCopy.createQuestion}
-					</button>
-				}
-				description={canFork ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse}
-				title={marketCopy.browseQuestions}
-			/>
+			<RouteHeader description={canFork ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
 			<SectionBlock
 				actions={
 					<PaginationControls
@@ -152,6 +145,7 @@ function ZoltarUniverseOverview({ accountAddress, isOnActiveAppChain, onCreateCh
 
 export function ZoltarSection({
 	accountState,
+	activeUniverseId,
 	activeView,
 	environmentRefreshKey,
 	loadingZoltarForkAccess,
@@ -237,6 +231,15 @@ export function ZoltarSection({
 		/>
 	)
 	if (activeView === 'questions' || zoltarUniverseState === 'missing') return questionsView
+
+	if (activeView === 'universes') {
+		return (
+			<>
+				<RouteHeader title={commonCopy.universe} />
+				<UniverseDirectorySection activeUniverseId={activeUniverseId} zoltarUniverse={zoltarUniverse} />
+			</>
+		)
+	}
 
 	if (zoltarUniverse === undefined) {
 		return <StateHint presentation={getUniversePresentation('loading') ?? { key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />

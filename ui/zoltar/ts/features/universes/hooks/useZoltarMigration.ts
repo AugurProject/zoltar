@@ -125,7 +125,6 @@ export function useZoltarMigration({
 				ownsTransaction = true
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
-				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalanceAttoRep, zoltarForkRepBalanceAttoRep)

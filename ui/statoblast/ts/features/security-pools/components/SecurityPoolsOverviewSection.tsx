@@ -239,10 +239,10 @@ export function SecurityPoolsOverviewSection({
 												label: securityPoolCopy.openInterestMinted,
 												value: (
 													<span className='comparison-record-value-stack'>
-														<CurrencyValue value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
+														<CurrencyValue exactWhenRoundedToZero value={pool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
 														<span className='detail'>
 															{securityPoolCopy.maxLead}
-															{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
+															{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
 														</span>
 													</span>
 												),

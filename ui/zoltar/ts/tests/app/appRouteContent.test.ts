@@ -19,6 +19,7 @@ describe('AppRouteContent', () => {
 		expect(ZOLTAR_NOT_FOUND_LINKS).toEqual([
 			{ href: '#/deploy', label: 'Deploy' },
 			{ href: '#/zoltar', label: 'Zoltar' },
+			{ href: '#/zoltar?zoltarView=universes', label: 'Universe' },
 		])
 	})
 

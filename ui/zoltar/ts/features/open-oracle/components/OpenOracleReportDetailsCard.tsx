@@ -15,10 +15,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
 import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -72,7 +69,6 @@ type OpenOracleReportDetailsCardProps = {
 }
 
 export function OpenOracleReportDetailsCard({
-	accountAddress,
 	isConnected,
 	isOnActiveAppChain,
 	onApproveToken1,
@@ -185,7 +181,6 @@ export function OpenOracleReportDetailsCard({
 		{ label: openOracleCopy.reportId, value: openOracleReportDetails.reportId.toString() },
 		{ label: openOracleCopy.tokenPair, value: openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol) },
 		{ label: openOracleCopy.oracleAddress, value: <AddressValue address={openOracleReportDetails.openOracleAddress} /> },
-		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 	]
 	return (
 		<>
@@ -416,21 +411,6 @@ export function OpenOracleReportDetailsCard({
 					onClose={() => onSelectedReportModalChange(undefined)}
 					title={openOracleCopy.withdrawBalance(selectedWithdrawalItem.symbol)}
 				>
-					<TransactionReview
-						primary={[
-							{
-								label: transactionReviewCopy.youReceive,
-								value: <CurrencyValue value={selectedWithdrawalAmount} suffix={selectedWithdrawalItem.symbol} units={selectedWithdrawalItem.units} precision='exact' copyable={false} />,
-							},
-						]}
-						details={[
-							{
-								label: openOracleCopy.withdrawalRecipient,
-								value: <AddressValue address={accountAddress} />,
-							},
-						]}
-						risks={[openOracleCopy.formatWithdrawalRisk(selectedWithdrawalItem.symbol)]}
-					/>
 					<ErrorNotice message={selectedWithdrawalReviewMessage} />
 					<div className='actions'>
 						<TransactionActionButton

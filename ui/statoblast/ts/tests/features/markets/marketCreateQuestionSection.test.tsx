@@ -95,28 +95,14 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
-		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type: Binary' })
-		await act(() => {
-			fireEvent.click(questionTypeButton)
-		})
-		await act(() => {
-			const options = documentQueries.getAllByRole('option') as HTMLButtonElement[]
-			const categoricalOption = options.find(option => option.textContent?.includes('Categorical') === true)
-			if (categoricalOption === undefined) throw new Error('Expected categorical option')
-			fireEvent.click(categoricalOption)
-		})
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Title') as HTMLInputElement, { target: { value: 'Updated title' } })
 		})
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Start Time') as HTMLInputElement, { target: { value: '1200' } })
 		})
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
-		})
-
-		expectTransactionButtonDisabled(document.body, 'Review question', 'Connect a wallet before creating a question.')
-		expect(updates.some(update => update.marketType === 'categorical')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
+		expect(updates.length).toBeGreaterThan(0)
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
 
@@ -145,7 +131,7 @@ describe('MarketCreateQuestionSection', () => {
 		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
 		expect(titleInput.required).toBe(true)
 		expect((documentQueries.getByLabelText('End Time') as HTMLInputElement).required).toBe(true)
-		expect(documentQueries.getByText('Required fields are marked with an asterisk (*).')).not.toBeNull()
+		expect(documentQueries.queryByText('Required fields are marked with an asterisk (*).')).toBeNull()
 		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
@@ -208,10 +194,10 @@ describe('MarketCreateQuestionSection', () => {
 		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error')
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Review question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
 	})
 
-	test('keeps scalar details and ended-state risk visible through reversible review and submission', async () => {
+	test('keeps scalar details and ended-state risk visible through direct submission', async () => {
 		let createCount = 0
 		const scalarForm = createMarketForm({
 			answerUnit: 'USD',
@@ -248,36 +234,15 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
-		const reviewButton = documentQueries.getByRole('button', { name: 'Review question' }) as HTMLButtonElement
-		expect(reviewButton.disabled).toBe(false)
-
-		await act(() => {
-			fireEvent.click(reviewButton)
-		})
-		expect(createCount).toBe(0)
-		const review = documentQueries.getByRole('heading', { name: 'Transaction Review' }).closest('section')
-		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
-		const reviewQueries = within(review)
-		expect(reviewQueries.getByText('Scalar Min')).not.toBeNull()
-		expect(reviewQueries.getByText('Scalar Max')).not.toBeNull()
-		expect(reviewQueries.getByText('Scalar Increment')).not.toBeNull()
-		expect(reviewQueries.getByText('Answer Unit')).not.toBeNull()
-		for (const value of ['0', '10', '0.5', 'USD']) expect(reviewQueries.getByText(value)).not.toBeNull()
-		expect(reviewQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
-
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Back to question' }))
-		})
+		const createButton = documentQueries.getByRole('button', { name: 'Create question' }) as HTMLButtonElement
+		expect(createButton.disabled).toBe(false)
 		expect((documentQueries.getByLabelText('Scalar Min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
 		expect((documentQueries.getByLabelText('Scalar Max') as HTMLInputElement).value).toBe(scalarForm.scalarMax)
 		expect((documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement).value).toBe(scalarForm.scalarIncrement)
 		expect((documentQueries.getByLabelText('Answer Unit') as HTMLInputElement).value).toBe(scalarForm.answerUnit)
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Review question' }))
-		})
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
+			fireEvent.click(createButton)
 		})
 		expect(createCount).toBe(1)
 	})
@@ -617,7 +582,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Review question')
+		expectTransactionButtonDisabled(document.body, 'Create question')
 	})
 
 	test('marks scalar range fields required and associates their contextual errors', async () => {
@@ -689,11 +654,6 @@ describe('MarketCreateQuestionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Review question' }))
-		})
-		expect(createCallCount).toBe(0)
-		expect(document.body.querySelector('.question-create-editor')?.hasAttribute('hidden')).toBe(true)
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
 		})
