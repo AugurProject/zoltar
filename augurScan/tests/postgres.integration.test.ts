@@ -386,7 +386,13 @@ postgresTest('rolls back every sparse batch table when final canonical validatio
 		expect(await database.checkpoint(sparseChainId, lease)).toEqual({ number: 2n, hash: second.hash })
 	} finally {
 		await lease?.release()
+		await database.sql`DELETE FROM actions WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM logs WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM transactions WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM log_scan_cursors WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM blocks WHERE chain_id = ${sparseChainId}`
 		await database.sql`DELETE FROM networks WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${sparseChainId.toString()}`
 		await database.close()
 	}
 })
