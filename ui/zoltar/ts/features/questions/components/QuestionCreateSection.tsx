@@ -286,7 +286,6 @@ export function QuestionCreateSection({
 						}}
 					>
 						<div className='question-create-editor'>
-							<p className='field-help'>{marketCopy.requiredFieldsNote}</p>
 							<div className='field'>
 								<span>{marketCopy.questionType}</span>
 								<EnumDropdown ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />

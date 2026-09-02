@@ -82,7 +82,6 @@ export const title = 'Title'
 export const useForFork = 'Use for fork'
 export const formatUseForForkLabel = (questionTitle: string, questionId: string) => `Use for fork: ${questionTitle} (${questionId})`
 export const questionCreationWalletRequired = 'Connect a wallet before creating a question.'
-export const requiredFieldsNote = 'Required fields are marked with an asterisk (*).'
 export const binary = 'Binary'
 export const categorical = 'Categorical'
 export const binaryQuestionDescription = 'Ask a yes-or-no question that can be resolved from one public source of truth.'

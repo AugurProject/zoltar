@@ -233,7 +233,12 @@ export function ZoltarSection({
 	if (activeView === 'questions' || zoltarUniverseState === 'missing') return questionsView
 
 	if (activeView === 'universes') {
-		return <UniverseDirectorySection activeUniverseId={activeUniverseId} zoltarUniverse={zoltarUniverse} />
+		return (
+			<>
+				<RouteHeader title={commonCopy.universe} />
+				<UniverseDirectorySection activeUniverseId={activeUniverseId} zoltarUniverse={zoltarUniverse} />
+			</>
+		)
 	}
 
 	if (zoltarUniverse === undefined) {

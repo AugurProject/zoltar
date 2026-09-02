@@ -28,7 +28,7 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock title={commonCopy.universe} variant='plain'>
+			<SectionBlock variant='plain'>
 				<DataGrid>
 					<MetricField label={commonCopy.universe}>{formatUniverseLabel(zoltarUniverse.universeId)}</MetricField>
 					<MetricField label={commonCopy.status}>{zoltarUniverse.hasForked ? commonCopy.forked : marketCopy.unforked}</MetricField>

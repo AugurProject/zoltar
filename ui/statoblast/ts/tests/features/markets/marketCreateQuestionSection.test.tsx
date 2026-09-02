@@ -145,7 +145,7 @@ describe('MarketCreateQuestionSection', () => {
 		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
 		expect(titleInput.required).toBe(true)
 		expect((documentQueries.getByLabelText('End Time') as HTMLInputElement).required).toBe(true)
-		expect(documentQueries.getByText('Required fields are marked with an asterisk (*).')).not.toBeNull()
+		expect(documentQueries.queryByText('Required fields are marked with an asterisk (*).')).toBeNull()
 		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
