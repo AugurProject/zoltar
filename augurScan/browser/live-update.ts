@@ -180,6 +180,65 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
+export const activityDetailAnchorIndex = (rowKeys: readonly string[], triggerKey: string | undefined): number | undefined => {
+	if (triggerKey === undefined) return undefined
+	const index = rowKeys.indexOf(triggerKey)
+	return index >= 0 ? index : undefined
+}
+
+interface ActivityDetailRowLike {
+	after(node: unknown): void
+	dataset: DOMStringMap
+}
+
+interface ActivityDetailFeedLike {
+	querySelectorAll(selectors: string): ArrayLike<ActivityDetailRowLike>
+}
+
+interface ActivityDetailDrawerLike {
+	dataset: DOMStringMap
+}
+
+export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: ActivityDetailDrawerLike): boolean => {
+	const rows = Array.from(feed.querySelectorAll('.log-row[data-live-key]'))
+	const rowKeys = rows.flatMap((row) => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
+	const anchorIndex = activityDetailAnchorIndex(rowKeys, drawer.dataset.triggerKey)
+	const anchor = anchorIndex === undefined ? undefined : rows[anchorIndex]
+	if (anchor === undefined) return false
+	anchor.after(drawer)
+	return true
+}
+
+interface ActivityLogCountFeedLike {
+	querySelectorAll(selectors: string): ArrayLike<unknown>
+}
+
+export const visibleActivityLogCount = (feed: ActivityLogCountFeedLike): number => feed.querySelectorAll('.log-row').length
+
+interface DisclosureLike {
+	dataset: DOMStringMap
+	open?: boolean
+}
+
+interface DisclosureContainerLike {
+	querySelectorAll(selectors: string): ArrayLike<DisclosureLike>
+}
+
+export const captureDisclosureState = (container: DisclosureContainerLike): Readonly<Record<string, boolean>> =>
+	Object.fromEntries(
+		Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]')).flatMap((item) =>
+			item.dataset.disclosureKey === undefined ? [] : [[item.dataset.disclosureKey, item.open === true] as const],
+		),
+	)
+
+export const restoreDisclosureState = (container: DisclosureContainerLike, state: Readonly<Record<string, boolean>>): void => {
+	for (const item of Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]'))) {
+		const key = item.dataset.disclosureKey
+		if (key === undefined || state[key] === undefined) continue
+		item.open = state[key]
+	}
+}
+
 export const operationsCatalogRecordKey = (
 	section: 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading',
 	record: Readonly<Record<string, unknown>>,

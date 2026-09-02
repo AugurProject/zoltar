@@ -1,12 +1,15 @@
 import { expect, test } from 'bun:test'
+import { Window } from 'happy-dom'
 import { requiredElementRole } from '../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
+	activityDetailAnchorIndex,
 	activityRefreshRetention,
 	approvalTransitionFields,
 	availableSessionSnapshotStorage,
 	canonicalPageLimit,
 	canReuseNetworkStatusPresentation,
+	captureDisclosureState,
 	classifyLiveRecords,
 	collectCanonicalPages,
 	collectCursorCollections,
@@ -53,12 +56,14 @@ import {
 	operationsRouteFreshness,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
+	placeActivityDetailDrawer,
 	queuedPaginationPresentation,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
 	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
+	restoreDisclosureState,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
 	runWithForegroundReservation,
@@ -70,6 +75,7 @@ import {
 	timelineOccurrenceFields,
 	transactionRetryMode,
 	urlWithoutLogDetail,
+	visibleActivityLogCount,
 } from '../browser/live-update.ts'
 
 test('retains every distinct catalog record across a delayed 251-record live refresh', async () => {
@@ -109,6 +115,80 @@ test('uses stable identities for historical operations catalogs', () => {
 			entity_identity: '0xvault',
 		}),
 	).toBe('0xblock:0xtx:2:vault:0xvault')
+})
+
+test('anchors an open activity detail drawer to the clicked log row', () => {
+	expect(activityDetailAnchorIndex(['first', 'second', 'third'], 'second')).toBe(1)
+	expect(activityDetailAnchorIndex(['first', 'second', 'third'], 'missing')).toBeUndefined()
+})
+
+test('places and reanchors the activity detail drawer after the clicked row across refreshes', () => {
+	const { document } = new Window()
+	document.body.replaceChildren()
+	const feed = document.createElement('div')
+	const drawer = document.createElement('section')
+	drawer.className = 'event-detail-drawer'
+	drawer.dataset.triggerKey = 'second'
+	for (const key of ['first', 'second', 'third']) {
+		const row = document.createElement('article')
+		row.className = 'log-row'
+		row.dataset.liveKey = key
+		feed.append(row)
+	}
+	document.body.append(feed)
+	expect(placeActivityDetailDrawer(feed, drawer)).toBeTrue()
+	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
+	expect(visibleActivityLogCount(feed)).toBe(3)
+
+	feed.replaceChildren()
+	for (const key of ['first', 'second', 'third']) {
+		const row = document.createElement('article')
+		row.className = 'log-row'
+		row.dataset.liveKey = key
+		feed.append(row)
+	}
+	expect(placeActivityDetailDrawer(feed, drawer)).toBeTrue()
+	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
+	expect(visibleActivityLogCount(feed)).toBe(3)
+
+	feed.replaceChildren()
+	for (const key of ['first', 'third']) {
+		const row = document.createElement('article')
+		row.className = 'log-row'
+		row.dataset.liveKey = key
+		feed.append(row)
+	}
+	expect(placeActivityDetailDrawer(feed, drawer)).toBeFalse()
+	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row'])
+	expect(visibleActivityLogCount(feed)).toBe(2)
+})
+
+test('restores disclosure open state across a detail rerender while keeping initial sections collapsed', () => {
+	const { document } = new Window()
+	const content = document.createElement('div')
+	const firstPass = document.createElement('div')
+	const action = document.createElement('details')
+	action.className = 'detail-disclosure'
+	action.dataset.disclosureKey = 'transaction-action'
+	action.open = true
+	const receipt = document.createElement('details')
+	receipt.className = 'detail-disclosure'
+	receipt.dataset.disclosureKey = 'transaction-receipt'
+	firstPass.append(action, receipt)
+	content.append(firstPass)
+
+	const preservedState = captureDisclosureState(content)
+	const secondPass = document.createElement('div')
+	const rerenderedAction = document.createElement('details')
+	rerenderedAction.className = 'detail-disclosure'
+	rerenderedAction.dataset.disclosureKey = 'transaction-action'
+	const rerenderedReceipt = document.createElement('details')
+	rerenderedReceipt.className = 'detail-disclosure'
+	rerenderedReceipt.dataset.disclosureKey = 'transaction-receipt'
+	secondPass.append(rerenderedAction, rerenderedReceipt)
+	restoreDisclosureState(secondPass, preservedState)
+	expect(rerenderedAction.open).toBeTrue()
+	expect(rerenderedReceipt.open).toBeFalse()
 })
 
 test('uses the irregular plural for fork children', () => {
