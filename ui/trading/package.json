@@ -17,7 +17,6 @@
 		"@zoltar/ui-statoblast": "file:../statoblast",
 		"@zoltar/ui-zoltar": "file:../zoltar",
 		"preact": "10.26.4",
-		"source-map": "0.6.1",
 		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {

@@ -3,6 +3,7 @@ import * as path from 'path'
 import * as process from 'node:process'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 import { parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
+import { createTevmBufferImportPlugin } from './tevmBufferImport.mts'
 
 const appId = parseUiAppIdFromProcess('the production build')
 const paths = getUiAppPaths(appId)
@@ -97,52 +98,16 @@ async function buildProductionApp(paths: UiAppPaths) {
 }
 
 async function buildProductionWorker(paths: UiAppPaths) {
-	const BANNER_LINE_COUNT = WORKER_BANNER.split('\n').length
-
 	const result = await Bun.build({
+		banner: WORKER_BANNER,
 		entrypoints: [normalizeBundlerPath(paths.workerEntrypoint)],
 		naming: { entry: 'tevmWorker.worker.js' },
 		outdir: paths.appDistAssetsRoot,
-		plugins: [createBrowserVendorAliasPlugin()],
+		plugins: [createBrowserVendorAliasPlugin(), createTevmBufferImportPlugin()],
 		target: 'browser',
 		sourcemap: 'linked',
 	})
 	assertBuildSucceeded('Production worker bundle', result)
-
-	for (const output of result.outputs) {
-		if (output.path.endsWith('.js')) {
-			const originalCode = await output.text()
-			await Bun.write(output.path, WORKER_BANNER + '\n' + originalCode)
-		}
-	}
-
-	const { SourceMapConsumer, SourceMapGenerator } = await import('source-map')
-	for (const output of result.outputs) {
-		if (!output.path.endsWith('.js.map')) continue
-
-		const rawMap = JSON.parse(await output.text()) as unknown as import('source-map').RawSourceMap
-		const consumer = await new SourceMapConsumer(rawMap)
-		const generator = new SourceMapGenerator(rawMap.file ? { file: rawMap.file } : {})
-
-		for (let i = 0; i < rawMap.sources.length; i++) {
-			const source = rawMap.sources[i]
-			const content = rawMap.sourcesContent?.[i]
-			if (source && content) generator.setSourceContent(source, content)
-		}
-
-		consumer.eachMapping(mapping => {
-			if (!mapping.source) return
-
-			generator.addMapping({
-				source: mapping.source,
-				original: { line: mapping.originalLine, column: mapping.originalColumn },
-				generated: { line: mapping.generatedLine + BANNER_LINE_COUNT, column: mapping.generatedColumn },
-				name: mapping.name ?? undefined,
-			})
-		})
-
-		await fs.writeFile(output.path, generator.toString())
-	}
 }
 
 export async function buildProductionBundle() {
