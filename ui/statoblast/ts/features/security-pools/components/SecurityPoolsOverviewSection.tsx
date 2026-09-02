@@ -28,10 +28,12 @@ import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type Secur
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
+import { resolveUiRepPerEthPrice } from '../lib/uiPriceOracle.js'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
 	activeUniverseId,
+	currentTimestamp,
 	environmentRefreshKey,
 	hasLoadedSecurityPoolPage,
 	loadingSecurityPoolPage,
@@ -41,6 +43,8 @@ export function SecurityPoolsOverviewSection({
 	securityPoolBrowseCount,
 	securityPoolPage,
 	securityPoolOverviewError,
+	repPerEthPrice,
+	uiPriceOracle = 'open-oracle',
 }: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
@@ -199,7 +203,8 @@ export function SecurityPoolsOverviewSection({
 								questionOutcome: pool.questionOutcome,
 								lifecycleState: displayState,
 							})
-							const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
+							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
+							const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
 							const badgeTone = (() => {
 								if (displayState === 'operational') return 'ok'
 								if (displayState === undefined) return 'muted'

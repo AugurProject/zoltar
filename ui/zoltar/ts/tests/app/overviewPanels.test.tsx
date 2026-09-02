@@ -212,6 +212,15 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
 
+	test('renders an application-provided REP per ETH source label', async () => {
+		const documentQueries = await renderOverviewPanels({
+			repPerEthPrice: 2n * 10n ** 18n,
+			repPerEthSourceLabel: <span>Custom oracle</span>,
+		})
+
+		expect(documentQueries.getByText('Custom oracle')).not.toBeNull()
+	})
+
 	test('shows a disabled spinner button while a wallet connection request is pending', async () => {
 		const documentQueries = await renderOverviewPanels({
 			isConnectingWallet: true,

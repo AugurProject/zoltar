@@ -21,6 +21,7 @@ import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { ReadBackendStatus } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
@@ -75,6 +76,7 @@ export type OverviewPanelsProps = {
 	showRepPrices?: boolean
 	readBackendStatus?: ReadBackendStatus
 	repPerEthFailure: RepPriceFailure | undefined
+	repPerEthSourceLabel?: ComponentChildren
 } & RepPerEthPriceProps
 
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions' | 'universes'

@@ -130,7 +130,7 @@ export function SecurityVaultSection({
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const currentVaultIsHealthy =
-		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || !hasValidOraclePrice || oracleManagerDetails === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
+		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || repPerEthPrice === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
 			? undefined
 			: isVaultHealthyAtFactor({
 					disputeStakedAttoRep: currentSelectedVaultDetails.disputeStakedAttoRep,
@@ -138,14 +138,14 @@ export function SecurityVaultSection({
 					openInterestAttoEth: currentSelectedVaultDetails.openInterestAttoEth,
 					poolHeldVaultRepBackingAttoRep: currentSelectedVaultDetails.vaultAttoRepBacking,
 					poolSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
-					repPerEthPrice: oracleManagerDetails.lastPrice,
+					repPerEthPrice,
 				})
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
 	const withdrawableRepAmountAttoRep = getSecurityVaultWithdrawableRepAmount({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
-		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
+		repPerEthPrice,
 		capacityOwnershipAttoRep: currentSelectedVaultDetails?.capacityOwnershipAttoRep,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
@@ -153,7 +153,7 @@ export function SecurityVaultSection({
 	})
 	const maximumWithdrawableAttoRep = (() => {
 		if (currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n) return 0n
-		if (hasValidOraclePrice) return withdrawableRepAmountAttoRep
+		if (repPerEthPrice !== undefined) return withdrawableRepAmountAttoRep
 		return currentSelectedVaultDetails?.vaultAttoRepBacking
 	})()
 	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep ?? MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP

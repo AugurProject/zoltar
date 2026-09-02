@@ -31,6 +31,54 @@ body {
 	min-height: 100vh;
 	flex-direction: column;
 }
+.app-settings {
+	position: relative;
+	z-index: 30;
+}
+.app-settings-trigger {
+	min-height: 2.75rem;
+	padding: 0.45rem 0.8rem;
+}
+.app-settings-menu {
+	position: absolute;
+	top: calc(100% + 0.5rem);
+	right: 0;
+	width: min(22rem, calc(100vw - 2rem));
+	padding: 1rem;
+	border: 1px solid var(--line-strong);
+	border-radius: 0.6rem;
+	background: var(--surface-raised);
+	box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
+	color: var(--text);
+}
+.app-settings-menu label {
+	display: grid;
+	gap: 0.35rem;
+	margin-bottom: 0.75rem;
+}
+.app-settings-menu label > span {
+	font-size: 0.75rem;
+	color: var(--muted);
+}
+.app-settings-menu input,
+.app-settings-menu select {
+	width: 100%;
+	padding: 0.55rem;
+	border: 1px solid var(--line-strong);
+	border-radius: 0.4rem;
+	background: var(--surface);
+	color: var(--text);
+}
+.app-settings-menu .field-help {
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+.app-settings-menu .field-error {
+	color: var(--bad);
+}
+.app-settings-menu input[aria-invalid="true"] {
+	border-color: var(--bad);
+}
 button,
 input {
 	font: inherit;
@@ -1597,6 +1645,10 @@ summary {
 	.header-actions .network-pill {
 		grid-column: 1;
 	}
+	.header-actions > .app-settings {
+		grid-column: 2;
+		justify-self: end;
+	}
 	.header-actions .universe-selector {
 		grid-column: 3;
 	}
@@ -1641,8 +1693,12 @@ summary {
 		background: #090d12;
 		backdrop-filter: none;
 	}
-	.header-actions .wallet-button {
+	.site-header > .brand {
 		grid-row: 1;
+		grid-column: 1;
+	}
+	.header-actions .wallet-button {
+		grid-row: 3;
 		grid-column: 2;
 		justify-self: end;
 		padding: 0.55rem;
@@ -1701,18 +1757,23 @@ summary {
 	.header-actions {
 		display: contents;
 	}
+	.header-actions > .app-settings {
+		grid-row: 1;
+		grid-column: 2;
+		justify-self: end;
+	}
 	.header-actions .network-pill {
 		grid-row: 2;
 		grid-column: 1;
 		justify-self: start;
 	}
 	.header-actions .wallet-summary {
-		grid-row: 3;
+		grid-row: 4;
 		grid-column: 1 / -1;
 		width: 100%;
 	}
 	.header-actions .wallet-summary[open] {
-		grid-row: 3;
+		grid-row: 4;
 		grid-column: 1 / -1;
 		width: 100%;
 	}
@@ -1800,10 +1861,10 @@ summary {
 		border-top: 1px solid var(--line);
 	}
 	.site-header nav {
-		grid-row: 4;
+		grid-row: 5;
 	}
 	.site-header:has(.wallet-summary[open]) nav {
-		grid-row: 4;
+		grid-row: 5;
 	}
 	.brand small {
 		display: none;

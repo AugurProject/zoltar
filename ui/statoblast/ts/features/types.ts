@@ -62,7 +62,7 @@ export type VaultMetricGridProps = {
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 }
 
@@ -137,11 +137,13 @@ type LiquidationModalStateProps = {
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
+	uiPriceOracle?: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle | undefined
 }
 
 type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
+	currentTimestamp: bigint | undefined
 	environmentRefreshKey: number
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
@@ -149,6 +151,7 @@ type SecurityPoolsOverviewRouteContentProps = {
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
 	repPerEthPrice: bigint | undefined
+	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
@@ -185,7 +188,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
@@ -229,7 +232,7 @@ type SecurityVaultRouteContentProps = {
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
 }
@@ -261,7 +264,7 @@ type TradingRouteContentProps = {
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	tradingActiveAction: TradingActionResult['action'] | undefined
@@ -273,6 +276,7 @@ type TradingRouteContentProps = {
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	calculationPriceConfigured?: boolean
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean

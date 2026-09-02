@@ -153,7 +153,7 @@ export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUr
 	let readBackendBlockTimestamp: bigint | undefined
 	const fallbackRpcUrl = profile.chain.rpcUrls.default.http[0]
 	if (fallbackRpcUrl === undefined) throw new Error(`No default RPC URL is configured for ${profile.displayName}`)
-	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? { fallbackRpcUrl } : { fallbackRpcUrl, overrideRpcUrl: rpcUrl })
+	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? { fallbackRpcUrl, networkId: profile.id } : { fallbackRpcUrl, networkId: profile.id, overrideRpcUrl: rpcUrl })
 
 	return {
 		bootstrapError: undefined,
