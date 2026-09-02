@@ -138,13 +138,41 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		expect(rendered.container.querySelector('.route-header h2')?.textContent).toBe('Deploy')
-		expect(rendered.container.textContent).toContain('Deploy and verify the shared deterministic contracts that back the application.')
+		expect(rendered.container.textContent).not.toContain('Deploy and verify the shared deterministic contracts that back the application.')
 		expect(rendered.container.textContent).not.toContain('No bundled or wallet-deployed trading configuration was found.')
 		expect(rendered.container.textContent).toContain('Trading contracts')
 		expect(rendered.container.textContent).toContain('Next to deploy')
 		expect(rendered.container.textContent).toContain('Deploy Trading factory')
+		expect(rendered.container.textContent).toContain('0 / 2')
+		expect(rendered.container.textContent).not.toContain('Ready to deploy')
+	})
+
+	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
+		const plan = getTradingDeploymentPlan(core, 30)
+		const client = createPublicClient({
+			transport: custom(
+				{
+					request: async ({ method, params }) => {
+						if (method === 'eth_chainId') return '0xaa36a7'
+						if (method === 'eth_getCode' && Array.isArray(params)) {
+							const address = params[0]
+							if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+							return '0x'
+						}
+						throw new Error(`Unexpected RPC method ${method}`)
+					},
+				},
+				{ retryCount: 0 },
+			),
+		})
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('SecurityPoolFactory is not deployed')
+		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
+		expect(rendered.container.textContent).toContain(plan.factory.address)
+		expect(rendered.container.textContent).toContain(plan.router.address)
 		expect(rendered.container.textContent).toContain('0 / 2')
 	})
 
@@ -155,7 +183,7 @@ describe('trading deployment setup', () => {
 		const services = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [canonicalCore] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={configuration} onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		expect(rendered.container.querySelector<HTMLDetailsElement>('.deployment-settings')?.open).toBe(false)
 		expect(rendered.container.textContent).not.toContain('Use default RPC')
 	})
@@ -179,7 +207,7 @@ describe('trading deployment setup', () => {
 		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => ({ account: testWalletAccount, chainId: core.chainId, provider }), getWalletProvider: () => undefined, loadCoreDeployments: async () => [core] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForText('Wallet context changed during connection')
 		expect(rendered.container.querySelector('.wallet-button')?.textContent).toContain('Connect wallet')
@@ -200,7 +228,7 @@ describe('trading deployment setup', () => {
 		})
 		const services = { createPublicClient: () => deploymentClient(), connectWallet: async () => await connection, getWalletProvider: () => undefined, loadCoreDeployments: async () => [core] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		const connect = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Connect wallet')
 		if (!(connect instanceof HTMLButtonElement)) throw new Error('Connect wallet button is unavailable')
 		await act(async () => connect.click())
@@ -286,7 +314,7 @@ describe('trading deployment setup', () => {
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Retry checks' && !button.disabled)).toBe(false)
 		if (resolveRetry === undefined) throw new Error('Retry registry resolver is unavailable')
 		resolveRetry([core])
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 	})
 
 	test('removes stale registry data and deployment actions when a registry refresh fails', async () => {
@@ -338,17 +366,18 @@ describe('trading deployment setup', () => {
 		await enterNetworkSettings(rendered.container)
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
+		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .status')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
 		await act(async () => {
 			retry.click()
 		})
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		expect(select.value).toBe(core.chainId.toString())
 		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
 		expect(rpcInput?.value).toBe('https://rpc.example')
-		expect(rendered.container.textContent).toContain('Ready to deploy')
+		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 	})
 
 	test('invalidates a verified plan synchronously when deployment inputs change', async () => {
@@ -366,7 +395,7 @@ describe('trading deployment setup', () => {
 		await act(async () => await Bun.sleep(0))
 		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
 		if (rpcInput === null) throw new Error('Deployment RPC setting is unavailable')
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
@@ -392,7 +421,7 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, ...walletServices }} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => await Bun.sleep(0))
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
 		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
@@ -432,9 +461,11 @@ describe('trading deployment setup', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.site-header .wallet-button')).not.toBeNull()
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
-		await waitForText('Ready to deploy')
+		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
+		expect(rendered.container.querySelector('.site-header .network-pill')?.textContent).toContain(core.chainName)
+		expect(rendered.container.querySelector('.site-header .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
 			await act(async () => {
