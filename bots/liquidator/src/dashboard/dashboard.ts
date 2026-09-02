@@ -808,8 +808,11 @@ function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
 }
 
-function publicFailure(error: unknown, message: string) {
-	void error
+function publicFailure(error: unknown, message: string, includeDetail = false) {
+	if (includeDetail && error instanceof Error) {
+		const detail = error.message.trim()
+		if (detail !== '' && detail !== message && !/^Request failed with HTTP \d+$/.test(detail) && !/(?:https?:\/\/[^\s/:]+:[^@\s]+@|authorization|bearer|password|secret|token\s*[=:])/i.test(detail)) return detail
+	}
 	return message
 }
 
@@ -1174,7 +1177,7 @@ networkForm.addEventListener('submit', async event => {
 		populateConfiguration(configuration)
 		actionStatus(networkStatus, 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 	} catch (error) {
-		actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.'), true)
+		actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.', true), true)
 	} finally {
 		networkFields.disabled = pendingNetworkProfile !== undefined || !stateConnected || currentConfiguration === undefined
 	}
