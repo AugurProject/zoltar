@@ -71,7 +71,9 @@ export function SecurityPoolSection({
 	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
+	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult === undefined ? 'existing' : 'new')
 	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
+	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || marketResult !== undefined
 	const requestedAvailableQuestionsContextRef = useRef<string | undefined>(undefined)
 	let availableQuestionsHelp: ComponentChildren = undefined
 	if (loadingAvailableQuestions) {
@@ -150,6 +152,56 @@ export function SecurityPoolSection({
 	} else if (duplicateOriginPoolExists) {
 		createButtonLabel = securityPoolCopy.poolAlreadyExists
 	} else if (zoltarUniverseHasForked) createButtonLabel = securityPoolCopy.poolCreationLocked
+	const poolConfigurationFields = (
+		<>
+			<div className='field'>
+				<label htmlFor='security-pool-security-multiplier'>
+					<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
+				</label>
+				<FormInput
+					id='security-pool-security-multiplier'
+					aria-describedby={`security-pool-security-multiplier-help${statoblastSecurityMultiplierValidationMessage === undefined ? '' : ' security-pool-security-multiplier-error'}`}
+					invalid={statoblastSecurityMultiplierValidationMessage !== undefined}
+					disabled={questionSourceLocked}
+					value={securityPoolForm.statoblastSecurityMultiplierBps}
+					onInput={event => onSecurityPoolFormChange({ statoblastSecurityMultiplierBps: event.currentTarget.value })}
+				/>
+				<p className='field-help' id='security-pool-security-multiplier-help'>
+					{securityPoolCopy.statoblastSecurityMultiplierBpsHelpText}
+				</p>
+				{statoblastSecurityMultiplierValidationMessage === undefined ? undefined : (
+					<p className='field-error' id='security-pool-security-multiplier-error'>
+						{statoblastSecurityMultiplierValidationMessage}
+					</p>
+				)}
+			</div>
+			<div className='field'>
+				<label htmlFor='security-pool-initial-report-priority-fee'>
+					<span>{commonCopy.initialReportPriorityFee}</span>
+				</label>
+				<FormInput
+					id='security-pool-initial-report-priority-fee'
+					aria-describedby={`security-pool-initial-report-priority-fee-help${initialReportPriorityFeeValidationMessage === undefined ? '' : ' security-pool-initial-report-priority-fee-error'}`}
+					invalid={initialReportPriorityFeeValidationMessage !== undefined}
+					disabled={questionSourceLocked}
+					value={securityPoolForm.initialReportPriorityFeeGwei}
+					onInput={event => onSecurityPoolFormChange({ initialReportPriorityFeeGwei: event.currentTarget.value })}
+				/>
+				<p className='field-help' id='security-pool-initial-report-priority-fee-help'>
+					{securityPoolCopy.initialReportPriorityFeeHelpText}
+				</p>
+				{initialReportPriorityFeeValidationMessage === undefined ? undefined : (
+					<p className='field-error' id='security-pool-initial-report-priority-fee-error'>
+						{initialReportPriorityFeeValidationMessage}
+					</p>
+				)}
+			</div>
+			<div className='field'>
+				<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
+				<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
+			</div>
+		</>
+	)
 
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (
@@ -178,7 +230,14 @@ export function SecurityPoolSection({
 									{commonCopy.returnToBrowse}
 								</button>
 							)}
-							<button className='secondary' onClick={onResetSecurityPoolCreation}>
+							<button
+								className='secondary'
+								onClick={() => {
+									onResetSecurityPoolCreation()
+									onResetMarket()
+									setQuestionSource('existing')
+								}}
+							>
 								{securityPoolCopy.createAnotherPool}
 							</button>
 						</div>
@@ -221,145 +280,154 @@ export function SecurityPoolSection({
 			) : (
 				<>
 					<SectionBlock variant='plain'>
-						<div className='form-grid'>
-							<div className='field'>
-								<label htmlFor='security-pool-question-picker'>
-									<span>{securityPoolCopy.chooseAvailableQuestion}</span>
-								</label>
-								<select id='security-pool-question-picker' disabled={loadingAvailableQuestions} value={eligibleQuestions.some(question => question.questionId === securityPoolForm.marketId) ? securityPoolForm.marketId : ''} onChange={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })}>
-									<option value=''>{securityPoolCopy.chooseQuestionPlaceholder}</option>
-									{eligibleQuestions.map(question => (
-										<option key={question.questionId} value={question.questionId}>
-											{getQuestionTitle(question)}
-										</option>
-									))}
-								</select>
-								{availableQuestionsHelp === undefined ? undefined : <p className='field-help'>{availableQuestionsHelp}</p>}
-								<ErrorNotice message={availableQuestionsLoadError} />
-								{availableQuestionsLoadError === undefined ? undefined : (
-									<div className='actions'>
-										<button className='secondary' type='button' onClick={retryAvailableQuestions}>
-											{securityPoolCopy.retryAvailableQuestions}
-										</button>
+						<fieldset className='form-grid' disabled={questionSourceLocked}>
+							<legend>{securityPoolCopy.questionSourceLegend}</legend>
+							<label>
+								<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
+							</label>
+							<label>
+								<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
+							</label>
+						</fieldset>
+					</SectionBlock>
+
+					{questionSource === 'existing' ? (
+						<SectionBlock variant='plain'>
+							<div className='form-grid'>
+								<div className='field'>
+									<label htmlFor='security-pool-question-picker'>
+										<span>{securityPoolCopy.chooseAvailableQuestion}</span>
+									</label>
+									<select
+										id='security-pool-question-picker'
+										disabled={loadingAvailableQuestions || questionSourceLocked}
+										value={eligibleQuestions.some(question => question.questionId === securityPoolForm.marketId) ? securityPoolForm.marketId : ''}
+										onChange={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })}
+									>
+										<option value=''>{securityPoolCopy.chooseQuestionPlaceholder}</option>
+										{eligibleQuestions.map(question => (
+											<option key={question.questionId} value={question.questionId}>
+												{getQuestionTitle(question)}
+											</option>
+										))}
+									</select>
+									{availableQuestionsHelp === undefined ? undefined : <p className='field-help'>{availableQuestionsHelp}</p>}
+									<ErrorNotice message={availableQuestionsLoadError} />
+									{availableQuestionsLoadError === undefined ? undefined : (
+										<div className='actions'>
+											<button className='secondary' type='button' onClick={retryAvailableQuestions}>
+												{securityPoolCopy.retryAvailableQuestions}
+											</button>
+										</div>
+									)}
+								</div>
+								<div className='field'>
+									<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
+									<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
+								</div>
+								{loadingMarketDetails ? (
+									<p className='detail'>
+										<LoadingText>{securityPoolCopy.loadingQuestion}</LoadingText>
+									</p>
+								) : undefined}
+								{marketDetails === undefined ? undefined : (
+									<div className='loaded-question-preview'>
+										<Question question={marketDetails} variant='preview' />
 									</div>
 								)}
-							</div>
-							<div className='field'>
-								<LookupFieldRow label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
-								<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
-							</div>
-							{loadingMarketDetails ? (
-								<p className='detail'>
-									<LoadingText>{securityPoolCopy.loadingQuestion}</LoadingText>
-								</p>
-							) : undefined}
-							{marketDetails === undefined ? undefined : (
-								<div className='loaded-question-preview'>
-									<Question question={marketDetails} variant='preview' />
+
+								{poolConfigurationFields}
+
+								<div className='actions'>
+									<TransactionActionButton
+										idleLabel={createButtonLabel}
+										pendingLabel={securityPoolCopy.creatingPool}
+										onClick={() => onCreateSecurityPool()}
+										pending={securityPoolCreating}
+										availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
+										disabledReasonElementId={visibleFieldErrorId}
+										showDisabledReason={visibleFieldErrorId === undefined}
+									/>
 								</div>
-							)}
-
-							<div className='field'>
-								<label htmlFor='security-pool-security-multiplier'>
-									<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
-								</label>
-								<FormInput
-									id='security-pool-security-multiplier'
-									aria-describedby={`security-pool-security-multiplier-help${statoblastSecurityMultiplierValidationMessage === undefined ? '' : ' security-pool-security-multiplier-error'}`}
-									invalid={statoblastSecurityMultiplierValidationMessage !== undefined}
-									value={securityPoolForm.statoblastSecurityMultiplierBps}
-									onInput={event => onSecurityPoolFormChange({ statoblastSecurityMultiplierBps: event.currentTarget.value })}
-								/>
-								<p className='field-help' id='security-pool-security-multiplier-help'>
-									{securityPoolCopy.statoblastSecurityMultiplierBpsHelpText}
-								</p>
-								{statoblastSecurityMultiplierValidationMessage === undefined ? undefined : (
-									<p className='field-error' id='security-pool-security-multiplier-error'>
-										{statoblastSecurityMultiplierValidationMessage}
-									</p>
-								)}
 							</div>
+							{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
+							{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
+							{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
+						</SectionBlock>
+					) : undefined}
 
-							<div className='field'>
-								<label htmlFor='security-pool-initial-report-priority-fee'>
-									<span>{commonCopy.initialReportPriorityFee}</span>
-								</label>
-								<FormInput
-									id='security-pool-initial-report-priority-fee'
-									aria-describedby={`security-pool-initial-report-priority-fee-help${initialReportPriorityFeeValidationMessage === undefined ? '' : ' security-pool-initial-report-priority-fee-error'}`}
-									invalid={initialReportPriorityFeeValidationMessage !== undefined}
-									value={securityPoolForm.initialReportPriorityFeeGwei}
-									onInput={event =>
-										onSecurityPoolFormChange({
-											initialReportPriorityFeeGwei: event.currentTarget.value,
-										})
-									}
-								/>
-								<p className='field-help' id='security-pool-initial-report-priority-fee-help'>
-									{securityPoolCopy.initialReportPriorityFeeHelpText}
-								</p>
-								{initialReportPriorityFeeValidationMessage === undefined ? undefined : (
-									<p className='field-error' id='security-pool-initial-report-priority-fee-error'>
-										{initialReportPriorityFeeValidationMessage}
-									</p>
-								)}
-							</div>
-
-							<div className='field'>
-								<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
-								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
-							</div>
-
-							<div className='actions'>
-								<TransactionActionButton
-									idleLabel={createButtonLabel}
-									pendingLabel={securityPoolCopy.creatingPool}
-									onClick={onCreateSecurityPool}
-									pending={securityPoolCreating}
-									availability={{ disabled: isCreateDisabled, reason: createDisabledReason }}
-									disabledReasonElementId={visibleFieldErrorId}
-									showDisabledReason={visibleFieldErrorId === undefined}
-								/>
-							</div>
-						</div>
-						{!duplicateOriginPoolExists ? undefined : <p className='detail'>{securityPoolCopy.duplicatePoolDetail}</p>}
-						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
-						{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
-					</SectionBlock>
-
-					<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
-						<MarketCreateQuestionSection
-							accountAddress={accountState.address}
-							hasForked={false}
-							isOnActiveAppChain={isOnActiveAppChain}
-							loadingZoltarQuestions={loadingAvailableQuestions}
-							marketCreating={marketCreating}
-							marketError={marketError}
-							marketForm={marketForm ?? fallbackMarketForm}
-							marketResult={marketResult}
-							onCreateMarket={onCreateMarket}
-							{...(onCreateQuestionAndSecurityPool === undefined
-								? {}
-								: {
-										submitActionOverride: {
-											availability: {
-												disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
-												reason: createQuestionAndPoolDisabledReason,
+					{questionSource === 'new' && marketResult === undefined ? (
+						<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
+							<MarketCreateQuestionSection
+								accountAddress={accountState.address}
+								formDisabled={questionSourceLocked}
+								hasForked={false}
+								isOnActiveAppChain={isOnActiveAppChain}
+								loadingZoltarQuestions={loadingAvailableQuestions}
+								marketCreating={marketCreating}
+								marketError={marketError}
+								marketForm={marketForm ?? fallbackMarketForm}
+								marketResult={marketResult}
+								onCreateMarket={onCreateMarket}
+								{...(onCreateQuestionAndSecurityPool === undefined
+									? {}
+									: {
+											submitActionOverride: {
+												availability: {
+													disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
+													reason: createQuestionAndPoolDisabledReason,
+												},
+												idleLabel: securityPoolCopy.createQuestionAndPool,
+												onSubmit: onCreateQuestionAndSecurityPool,
+												pending: questionAndPoolCreating,
+												pendingLabel: securityPoolCopy.creatingQuestionAndPool,
 											},
-											idleLabel: securityPoolCopy.createQuestionAndPool,
-											onSubmit: onCreateQuestionAndSecurityPool,
-											pending: questionAndPoolCreating,
-											pendingLabel: securityPoolCopy.creatingQuestionAndPool,
-										},
-									})}
-							onMarketFormChange={onMarketFormChange}
-							onOpenForkTab={() => undefined}
-							onResetMarket={onResetMarket}
-							onUseQuestionForFork={() => undefined}
-							onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
-							zoltarQuestions={availableQuestions}
-						/>
-					</SectionBlock>
+										})}
+								onMarketFormChange={onMarketFormChange}
+								onOpenForkTab={() => undefined}
+								onResetMarket={onResetMarket}
+								submitFields={poolConfigurationFields}
+								onUseQuestionForFork={() => undefined}
+								onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
+								zoltarQuestions={availableQuestions}
+							/>
+						</SectionBlock>
+					) : undefined}
+					{questionSource === 'new' && marketResult !== undefined ? (
+						<EntityCard
+							surface='flat'
+							title={marketForm.title}
+							variant='record'
+							actions={
+								<div className='actions'>
+									<TransactionActionButton
+										idleLabel={securityPoolCopy.retryPoolCreation}
+										pendingLabel={securityPoolCopy.creatingPool}
+										onClick={() => onCreateSecurityPool(marketResult.questionId)}
+										pending={questionAndPoolCreating || securityPoolCreating}
+										availability={{
+											disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
+											reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
+										}}
+									/>
+								</div>
+							}
+						>
+							<p className='detail'>{securityPoolCopy.questionCreatedPoolPending}</p>
+							<ul className='status-list hashes'>
+								<li>
+									<span>{commonCopy.questionId}</span>
+									<strong>{marketResult.questionId}</strong>
+								</li>
+								<li>
+									<span>{marketCopy.creationTransactionHash}</span>
+									<strong>
+										<TransactionHashLink hash={marketResult.createQuestionHash} />
+									</strong>
+								</li>
+							</ul>
+						</EntityCard>
+					) : undefined}
 
 					<ErrorNotice message={securityPoolError} />
 				</>

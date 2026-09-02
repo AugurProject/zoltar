@@ -37,6 +37,7 @@ export type QuestionCreateSectionProps = {
 	allowedMarketTypes?: readonly MarketFormState['marketType'][]
 	accountAddress: Address | undefined
 	canUseForFork: boolean
+	formDisabled?: boolean
 	hasForked: boolean
 	isOnActiveAppChain: boolean
 	questionCreating: boolean
@@ -50,6 +51,7 @@ export type QuestionCreateSectionProps = {
 	onResetQuestion: () => void
 	onUseQuestionForFork: (questionId: string) => void
 	renderResultActions?: (result: { marketType: MarketCreationResult['marketType']; questionId: string; questionTitle: string }) => ComponentChildren
+	submitFields?: ComponentChildren
 	submitActionOverride?: {
 		availability: {
 			disabled: boolean
@@ -137,6 +139,7 @@ export function QuestionCreateSection({
 	allowedMarketTypes = ['binary', 'categorical', 'scalar'],
 	accountAddress,
 	canUseForFork,
+	formDisabled = false,
 	hasForked,
 	isOnActiveAppChain,
 	loadingZoltarQuestions,
@@ -150,6 +153,7 @@ export function QuestionCreateSection({
 	onResetQuestion,
 	onUseQuestionForFork,
 	renderResultActions,
+	submitFields,
 	submitActionOverride,
 	zoltarQuestions,
 }: QuestionCreateSectionProps) {
@@ -285,7 +289,7 @@ export function QuestionCreateSection({
 							submitAction.onSubmit()
 						}}
 					>
-						<div className='question-create-editor'>
+						<fieldset className='question-create-editor' disabled={formDisabled}>
 							<div className='field'>
 								<span>{marketCopy.questionType}</span>
 								<EnumDropdown ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
@@ -488,7 +492,8 @@ export function QuestionCreateSection({
 									</div>
 								</div>
 							</SectionBlock>
-						</div>
+						</fieldset>
+						{submitFields}
 
 						<div className='actions'>
 							<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />

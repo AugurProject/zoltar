@@ -6,22 +6,26 @@ type QuestionCreateProps = ComponentProps<typeof QuestionCreateSection>
 
 type MarketCreateQuestionSectionProps = Omit<QuestionCreateProps, 'canUseForFork' | 'onCreateQuestion' | 'onQuestionFormChange' | 'onResetQuestion' | 'onUseQuestionForFork' | 'questionCreating' | 'questionError' | 'questionForm' | 'questionResult' | 'renderResultActions'> & {
 	marketCreating: QuestionCreateProps['questionCreating']
+	formDisabled?: QuestionCreateProps['formDisabled']
 	marketError: QuestionCreateProps['questionError']
 	marketForm: QuestionCreateProps['questionForm']
 	marketResult: QuestionCreateProps['questionResult']
 	onCreateMarket: QuestionCreateProps['onCreateQuestion']
 	onMarketFormChange: QuestionCreateProps['onQuestionFormChange']
 	onResetMarket: QuestionCreateProps['onResetQuestion']
+	submitFields?: QuestionCreateProps['submitFields']
 	submitActionOverride?: QuestionCreateProps['submitActionOverride']
 	onUseQuestionForFork: QuestionCreateProps['onUseQuestionForFork']
 	onUseQuestionForPool?: (questionId: string) => void
 }
 
-export function MarketCreateQuestionSection({ marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onResetMarket, onUseQuestionForPool, submitActionOverride, ...props }: MarketCreateQuestionSectionProps) {
+export function MarketCreateQuestionSection({ formDisabled, marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onResetMarket, onUseQuestionForPool, submitActionOverride, submitFields, ...props }: MarketCreateQuestionSectionProps) {
 	return (
 		<QuestionCreateSection
 			{...props}
 			{...(submitActionOverride === undefined ? {} : { submitActionOverride })}
+			{...(submitFields === undefined ? {} : { submitFields })}
+			{...(formDisabled === undefined ? {} : { formDisabled })}
 			allowedMarketTypes={['binary']}
 			{...(onUseQuestionForPool === undefined
 				? {}

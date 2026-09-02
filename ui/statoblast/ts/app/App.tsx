@@ -408,6 +408,7 @@ export function App() {
 		if (combinedCreateStage !== undefined) return
 		if (marketForm.marketType !== 'binary') return
 		const submittedCombinedCreateScopeKey = combinedCreateScopeKeyRef.current
+		const submittedSecurityPoolForm = securityPoolForm
 		setCombinedCreateStage('creating-question')
 		try {
 			const result = await createMarket()
@@ -415,7 +416,7 @@ export function App() {
 			setSecurityPoolForm(current => ({ ...current, marketId: result.questionId }))
 			setSecurityPoolQuestionId(result.questionId)
 			setCombinedCreateStage('creating-pool')
-			await createPool(result.questionId)
+			await createPool(result.questionId, submittedSecurityPoolForm)
 		} finally {
 			setCombinedCreateStage(undefined)
 		}
@@ -451,7 +452,7 @@ export function App() {
 			loadingAvailableQuestions: loadingZoltarQuestions,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
-			onCreateSecurityPool: () => void createPool(),
+			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
 			onLoadAvailableQuestions: loadZoltarQuestions,
 			loadingMarketDetails,
 			marketDetails,

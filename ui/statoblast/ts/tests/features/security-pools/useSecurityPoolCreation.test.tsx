@@ -481,7 +481,9 @@ describe('useSecurityPoolCreation', () => {
 	})
 
 	test('createPool succeeds and refreshes state when all preconditions pass', async () => {
-		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }) => {
+		const submittedParameters: Array<{ initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }> = []
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
+			submittedParameters.push(parameters)
 			client.onTransactionSubmitted?.('0xabc')
 			return {
 				deployPoolHash: '0xabc' as Hash,
@@ -529,7 +531,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeGwei: '20', marketId: '11', statoblastSecurityMultiplierBps: '3' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -537,7 +539,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			await requireState(state).createPool()
+			await requireState(state).createPool('11', { initialReportPriorityFeeGwei: '10', marketId: '', statoblastSecurityMultiplierBps: '2' })
 		})
 
 		expect(requireState(state).securityPoolResult?.questionId).toBe('0x0b')
@@ -546,6 +548,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).securityPoolCreationFeedback?.status.hash).toBe('0xabc')
 		expect(onTransactionHashes).toEqual([])
 		expect(refreshCalls).toBe(1)
+		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
 	})
 
 	test('createPool preserves the current market details when a stale duplicate-pool error resolves for an older market', async () => {

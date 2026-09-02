@@ -171,6 +171,24 @@ describe('SecurityPoolSection', () => {
 		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
 	})
 
+	test('asks users to choose an existing or new question before showing the matching workflow', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onCreateQuestionAndSecurityPool: () => undefined })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
+		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
+
+		fireEvent.click(documentQueries.getByRole('radio', { name: 'Create a new question' }))
+		expect(documentQueries.queryByRole('textbox', { name: 'Question ID' })).toBeNull()
+		expect(document.querySelector('form[aria-label="Create Question"]')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create question and pool' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create question' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create pool' })).toBeNull()
+	})
+
 	test('keeps the security multiplier field label concise while associating helper text', async () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -274,6 +292,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
@@ -302,6 +321,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
 
 		expect(getButtonByText('Create question and pool').disabled).toBe(false)
 	})
@@ -329,6 +349,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
@@ -370,11 +391,82 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
 
 		fireEvent.click(getButtonByText('Create question and pool'))
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(1)
 		expect(onCreateMarket).toHaveBeenCalledTimes(0)
 		expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Create question')).toBe(false)
+	})
+
+	test('keeps the combined source locked while creating and shows only pool retry after partial success', async () => {
+		const onCreateSecurityPool = mock(() => undefined)
+		const baseProps = createProps({
+			marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
+			onCreateQuestionAndSecurityPool: () => undefined,
+			onCreateSecurityPool,
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		expect(documentQueries.getByText('Question created. The security pool transaction is next.')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create pool from question' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create another question' })).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
+		})
+		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry pool creation' }))
+		expect(onCreateSecurityPool).toHaveBeenCalledTimes(1)
+		expect(onCreateSecurityPool).toHaveBeenCalledWith('0x03')
+	})
+
+	test('locks the submitted question controls while creation is pending', async () => {
+		const baseProps = createProps({ onCreateQuestionAndSecurityPool: () => undefined })
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, { ...baseProps, securityPoolCreating: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('combobox', { name: 'Choose an available question' }) as HTMLSelectElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: 'Question ID' }) as HTMLInputElement).disabled).toBe(true)
+
+		await act(() => {
+			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
+		})
+		fireEvent.click(documentQueries.getByRole('radio', { name: 'Create a new question' }))
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
+		})
+		expect((documentQueries.getByRole('textbox', { name: 'Title' }).closest('fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' }) as HTMLInputElement).disabled).toBe(true)
+	})
+
+	test('applies the normal pool guards to partial-success retries', async () => {
+		const baseProps = createProps({
+			accountState: createAccountState({ address: undefined }),
+			marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
+			onCreateQuestionAndSecurityPool: () => undefined,
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'Connect a wallet before creating a security pool.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), duplicateOriginPoolExists: true }), renderedComponent.container)
+		})
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
+
+		await act(() => {
+			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), zoltarUniverseHasForked: true }), renderedComponent.container)
+		})
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'Security pools cannot be created after this universe has forked.')
 	})
 
 	test('previews the pasted question before pool creation without a manual load action', async () => {
@@ -620,6 +712,7 @@ describe('SecurityPoolSection', () => {
 		let openedAddress: string | undefined
 		let returnedToBrowse = false
 		let resetCount = 0
+		let resetMarketCount = 0
 
 		const resultPool = {
 			deployPoolHash: zeroHash,
@@ -644,6 +737,9 @@ describe('SecurityPoolSection', () => {
 					onResetSecurityPoolCreation: () => {
 						resetCount += 1
 					},
+					onResetMarket: () => {
+						resetMarketCount += 1
+					},
 				}),
 			),
 		)
@@ -655,6 +751,7 @@ describe('SecurityPoolSection', () => {
 		expect(returnedToBrowse).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
+		expect(resetMarketCount).toBe(1)
 	})
 
 	test('warns when a retained created pool belongs to a different active universe', async () => {

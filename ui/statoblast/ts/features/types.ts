@@ -76,7 +76,7 @@ type SecurityPoolRouteContentProps = {
 	duplicateOriginPoolExists: boolean
 	hasLoadedAvailableQuestions: boolean
 	loadingAvailableQuestions: boolean
-	onCreateSecurityPool: () => void
+	onCreateSecurityPool: (questionIdOverride?: string) => void
 	onCreateQuestionAndSecurityPool?: () => void
 	questionAndPoolCreating?: boolean
 	onLoadAvailableQuestions: () => Promise<void>
