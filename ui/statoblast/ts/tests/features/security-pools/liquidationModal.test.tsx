@@ -1131,6 +1131,31 @@ describe('LiquidationModal', () => {
 		expect(amountChanges).toEqual(['50'])
 	})
 
+	test('uses the configured Uniswap price for Max when the Open Oracle is invalid', async () => {
+		const amountChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
+			maximumLiquidationDebtAttoEth: 25n * 10n ** 18n,
+			onLiquidationAmountChange: value => amountChanges.push(value),
+			repPerEthPrice: 3n * 10n ** 18n,
+			targetVaultSummary: createTargetVaultSummary({
+				vaultAttoRepBacking: 73n * 10n ** 18n,
+				capacityOwnershipAttoRep: 50n * 10n ** 18n,
+				vaultAddress: defaultTargetVaultAddress,
+			}),
+			uiPriceOracle: 'uniswap',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			const maxButton = document.body.querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLElement)) throw new Error('Expected liquidation Max button')
+			fireEvent.click(maxButton)
+		})
+
+		expect(amountChanges).toEqual(['50'])
+	})
+
 	test('fills the liquidation amount from the dust-safe liquidation Max value', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({

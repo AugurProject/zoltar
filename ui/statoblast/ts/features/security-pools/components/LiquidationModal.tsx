@@ -35,6 +35,7 @@ import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFoc
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import type { UiPriceOracle } from '@zoltar/ui-core-shared/app/components/AppSettingsMenu.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -57,6 +58,7 @@ type LiquidationModalProps = {
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
+	uiPriceOracle?: UiPriceOracle | undefined
 	poolState?: SecurityPoolStateModel | undefined
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
@@ -218,6 +220,7 @@ export function LiquidationModal({
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	uiPriceOracle,
 	selectedPool,
 	securityPoolOverviewActiveAction,
 	securityPoolLiquidationError,
@@ -272,6 +275,7 @@ export function LiquidationModal({
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = tryParseEthAmountInput(liquidationDebtEthAmount)
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
+	const uiCalculationPrice = uiPriceOracle === undefined ? poolOraclePrice : repPerEthPrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
@@ -308,24 +312,24 @@ export function LiquidationModal({
 		return undefined
 	})()
 	const liquidationSimulation =
-		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
+		targetVaultSummary === undefined || uiCalculationPrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
 			? undefined
 			: simulateLiquidation({
 					callerVaultSummary: receiverVaultSummary,
 					requestedDebtAttoEth: liquidationAmountValue,
 					totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
 					minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
-					repPerEthPrice: poolOraclePrice,
+					repPerEthPrice: uiCalculationPrice,
 					settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
 					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 					targetVaultSummary,
 				})
 	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
-		repPerEthPrice: poolOraclePrice,
+		repPerEthPrice: uiCalculationPrice,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? maximumLiquidationDebtAttoEth) : maximumLiquidationDebtAttoEth
+	const liquidationMaxActionAmount = computedLiquidationMaxAmount ?? maximumLiquidationDebtAttoEth
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
 		requestedDebtAttoEth: liquidationAmountValue,

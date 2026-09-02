@@ -16,6 +16,8 @@ import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type SecurityPoolSummaryMetricsProps = {
+	calculationRepPerEthPrice?: bigint | undefined
+	calculationPriceConfigured?: boolean | undefined
 	children?: ComponentChildren
 	className?: string
 	currentTimestamp?: bigint | undefined
@@ -32,8 +34,8 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
 }
 
-export function SecurityPoolSummaryMetrics({ children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
+export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false, calculationRepPerEthPrice, children, className = '', currentTimestamp, metricVariant = 'default', pool, showPoolAddress = false, showTotalBacking = false, variant = 'embedded' }: SecurityPoolSummaryMetricsProps) {
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPriceConfigured ? calculationRepPerEthPrice : pool.lastOraclePrice, pool.statoblastSecurityMultiplierBps)
 	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
 	if (variant === 'embedded')
 		return (

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
@@ -6,6 +7,7 @@ import { Status } from '../../components/Status.js'
 import { TradingAddressValue } from '../../components/TradingAddress.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -13,6 +15,7 @@ import { App, currentRoute, tradingNetworkLabel } from '../../app/App.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/lib/routing.js'
 import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
+import { getActiveNetworkProfile, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {
 	registerTradingSimulationScenario()
@@ -74,6 +77,52 @@ test('Trading refreshes the active environment when history changes the simulati
 	} finally {
 		await rendered.cleanup()
 		resetRoutingForTesting()
+		dom.cleanup()
+	}
+})
+
+test('Trading force-refreshes the active environment after saving the active network RPC', async () => {
+	resetActiveEnvironmentForTesting()
+	const dom = installDomEnvironment('http://localhost/#/markets')
+	const originalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+	Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage })
+	let environmentInitializations = 0
+	const rendered = await renderIntoDocument(
+		<App
+			initializeEnvironment={async () => {
+				environmentInitializations += 1
+			}}
+			loadLiveDeployment={async () => ({
+				chainId: 1,
+				chainName: 'Ethereum Mainnet',
+				factory: `0x${'22'.repeat(20)}`,
+				feeBps: 30,
+				router: `0x${'33'.repeat(20)}`,
+				rpcUrl: 'https://old-rpc.example',
+				securityPoolFactory: `0x${'11'.repeat(20)}`,
+			})}
+		/>,
+	)
+	try {
+		await waitFor(() => expect(rendered.container.textContent).toContain('Deployment verified'))
+		const queries = within(rendered.container)
+		await act(async () => fireEvent.click(queries.getByRole('button', { name: 'Settings' })))
+		const networkSelect = queries.getByRole('combobox', { name: 'RPC network' }) as HTMLSelectElement
+		expect(networkSelect.value).toBe('mainnet')
+		expect(getActiveNetworkProfile().id).toBe('mainnet')
+		const rpcInput = queries.getByRole('textbox', { name: 'Fallback RPC URL' }) as HTMLInputElement
+		rpcInput.value = 'https://new-rpc.example'
+		await act(async () => fireEvent.input(rpcInput))
+		const saveButton = queries.getByRole('button', { name: 'Save RPC' }) as HTMLButtonElement
+		expect(saveButton.disabled).toBe(false)
+		await act(async () => saveButton.click())
+		expect(globalThis.localStorage.getItem('zoltar.rpcUrls')).toContain('new-rpc.example')
+		await waitFor(() => expect(environmentInitializations).toBe(1))
+	} finally {
+		await rendered.cleanup()
+		if (originalStorageDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+		else Object.defineProperty(globalThis, 'localStorage', originalStorageDescriptor)
+		resetActiveEnvironmentForTesting()
 		dom.cleanup()
 	}
 })

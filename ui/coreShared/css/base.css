@@ -73,6 +73,71 @@ main {
 	border: 0;
 }
 
+.top-shell-settings-row {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0.75rem 0.75rem 0;
+}
+
+.app-settings {
+	position: relative;
+	z-index: 30;
+}
+
+.app-settings-trigger {
+	min-height: var(--touch-target-min, 2.75rem);
+	padding: 0.45rem 0.8rem;
+}
+
+.app-settings-menu {
+	position: absolute;
+	top: calc(100% + 0.5rem);
+	right: 0;
+	width: min(22rem, calc(100vw - 3rem));
+	padding: 1rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-control, 0.6rem);
+	background: var(--surface-raised);
+	box-shadow: 0 1rem 2.5rem var(--shadow-color-strong, rgba(0, 0, 0, 0.35));
+}
+
+.app-settings-menu label {
+	display: grid;
+	gap: 0.35rem;
+	margin-bottom: 0.75rem;
+}
+
+.app-settings-menu label > span {
+	font-family: var(--font-family-mono);
+	font-size: 0.75rem;
+	color: var(--text-muted);
+}
+
+.app-settings-menu input,
+.app-settings-menu select {
+	width: 100%;
+	min-height: var(--touch-target-min, 2.75rem);
+	padding: 0.55rem 0.65rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-control, 0.6rem);
+	background: var(--surface-raised);
+	color: var(--text);
+}
+
+.app-settings-menu input[aria-invalid="true"] {
+	border-color: var(--danger-border, #ef4444);
+}
+
+.app-settings-price-oracle {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border-strong);
+}
+
+.app-settings-price-oracle small {
+	color: var(--text-muted);
+}
+
 .page-notices {
 	display: grid;
 	gap: 0.75rem;

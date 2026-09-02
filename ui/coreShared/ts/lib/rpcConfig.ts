@@ -1,6 +1,7 @@
 export const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
 const RPC_URL_SEARCH_PARAM = 'rpcUrl'
 const RPC_URL_STORAGE_KEY = 'zoltar.rpcUrl'
+const RPC_URLS_STORAGE_KEY = 'zoltar.rpcUrls'
 const LOCAL_HTTP_RPC_HOSTNAMES = new Set(['localhost', '::1', '[::1]'])
 
 export type ConfiguredRpcSource = 'default' | 'environment' | 'global' | 'localStorage' | 'override' | 'url'
@@ -25,7 +26,10 @@ type LocationLike = {
 
 type StorageLike = {
 	getItem(key: string): string | null
+	setItem?(key: string, value: string): void
 }
+
+export type RpcNetworkId = 'mainnet' | 'sepolia' | 'simulation'
 
 type GlobalWithRpcConfig = typeof globalThis & {
 	__ZOLTAR_RPC_URL__?: unknown
@@ -53,14 +57,56 @@ function readLocationParams(location: LocationLike | undefined) {
 	return params
 }
 
-function readStoredRpcUrl(storage: StorageLike | undefined) {
+function readStoredRpcUrl(storage: StorageLike | undefined, networkId?: RpcNetworkId) {
 	if (storage === undefined) return undefined
 	try {
+		if (networkId !== undefined) {
+			const storedUrls = storage.getItem(RPC_URLS_STORAGE_KEY)
+			if (storedUrls !== null) {
+				const parsed: unknown = JSON.parse(storedUrls)
+				if (typeof parsed === 'object' && parsed !== null) {
+					const configuredUrl = Reflect.get(parsed, networkId)
+					if (typeof configuredUrl === 'string') return configuredUrl
+				}
+			}
+			return undefined
+		}
 		return storage.getItem(RPC_URL_STORAGE_KEY)
 	} catch (error) {
 		if (error instanceof Error) return undefined
 		return undefined
 	}
+}
+
+export function readNetworkRpcUrls(storage: StorageLike | undefined = getGlobalLocalStorage(globalThis as GlobalWithRpcConfig)) {
+	const urls: Partial<Record<RpcNetworkId, string>> = {}
+	if (storage === undefined) return urls
+	try {
+		const storedUrls = storage.getItem(RPC_URLS_STORAGE_KEY)
+		if (storedUrls === null) return urls
+		const parsed: unknown = JSON.parse(storedUrls)
+		if (typeof parsed !== 'object' || parsed === null) return urls
+		for (const networkId of ['mainnet', 'sepolia', 'simulation'] as const) {
+			const configuredUrl = Reflect.get(parsed, networkId)
+			if (typeof configuredUrl === 'string') urls[networkId] = configuredUrl
+		}
+	} catch (error) {
+		if (!(error instanceof Error)) throw error
+	}
+	return urls
+}
+
+export function saveNetworkRpcUrl(networkId: RpcNetworkId, rpcUrl: string | undefined, storage: StorageLike | undefined = getGlobalLocalStorage(globalThis as GlobalWithRpcConfig)) {
+	if (storage?.setItem === undefined) throw new Error('Browser storage is unavailable.')
+	const urls = readNetworkRpcUrls(storage)
+	if (rpcUrl === undefined || rpcUrl.trim() === '') delete urls[networkId]
+	else {
+		const normalizedUrl = rpcUrl.trim()
+		const validationError = getRpcUrlValidationError(normalizedUrl)
+		if (validationError !== undefined) throw new Error(validationError)
+		urls[networkId] = normalizedUrl
+	}
+	storage.setItem(RPC_URLS_STORAGE_KEY, JSON.stringify(urls))
 }
 
 function getGlobalLocalStorage(globalWithRpcConfig: GlobalWithRpcConfig) {
@@ -128,7 +174,7 @@ function resolveConfiguredRpcOverride(source: ConfiguredRpcOverrideSource, value
 	}
 }
 
-export function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, location, overrideRpcUrl, storage }: { fallbackRpcUrl?: string; location?: LocationLike; overrideRpcUrl?: string; storage?: StorageLike } = {}): ConfiguredRpcConfig {
+export function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, location, networkId, overrideRpcUrl, storage }: { fallbackRpcUrl?: string; location?: LocationLike; networkId?: RpcNetworkId; overrideRpcUrl?: string; storage?: StorageLike } = {}): ConfiguredRpcConfig {
 	const overrideConfig = resolveConfiguredRpcOverride('override', overrideRpcUrl, fallbackRpcUrl)
 	if (overrideConfig !== undefined) return overrideConfig
 
@@ -136,7 +182,7 @@ export function resolveConfiguredRpcConfig({ fallbackRpcUrl = DEFAULT_RPC_URL, l
 	const urlConfig = resolveConfiguredRpcOverride('url', readLocationParams(location ?? globalWithRpcConfig.location).get(RPC_URL_SEARCH_PARAM), fallbackRpcUrl)
 	if (urlConfig !== undefined) return urlConfig
 
-	const storedConfig = resolveConfiguredRpcOverride('localStorage', readStoredRpcUrl(storage ?? getGlobalLocalStorage(globalWithRpcConfig)), fallbackRpcUrl)
+	const storedConfig = resolveConfiguredRpcOverride('localStorage', readStoredRpcUrl(storage ?? getGlobalLocalStorage(globalWithRpcConfig), networkId), fallbackRpcUrl)
 	if (storedConfig !== undefined) return storedConfig
 
 	const globalConfig = resolveConfiguredRpcOverride('global', globalWithRpcConfig.__ZOLTAR_RPC_URL__, fallbackRpcUrl)

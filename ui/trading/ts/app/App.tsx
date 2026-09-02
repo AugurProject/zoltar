@@ -144,7 +144,6 @@ export function App({
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
-		if (nextLocationKey === previousLocationKey) return
 		activeEnvironmentLocationRef.current = nextLocationKey
 		setLiveDeploymentStatus('loading')
 		setLiveConfiguration(undefined)
@@ -259,7 +258,7 @@ export function App({
 				simulationController={simulationController}
 				onEnvironmentChanged={refreshActiveEnvironment}
 				onRefresh={async () => window.location.reload()}
-				renderHeader={simulationBanner => (
+				renderHeader={(simulationBanner, settingsMenu) => (
 					<div class='site-chrome'>
 						{simulationBanner}
 						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
@@ -289,6 +288,7 @@ export function App({
 								</a>
 							</nav>
 							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
+								{settingsMenu}
 								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
 									<span />
 									{tradingNetworkLabel(liveDeploymentStatus)}

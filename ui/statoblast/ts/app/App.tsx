@@ -47,8 +47,12 @@ import { statoblastRouting } from '../lib/routing.js'
 import { getStatoblastDeploymentSections } from '../features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { shouldAutoLoadUniverseDirectory } from './lib/universeDirectory.js'
+import { readUiPriceOracle } from '@zoltar/ui-core-shared/app/components/AppSettingsMenu.js'
+import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '../features/security-pools/lib/uiPriceOracle.js'
+import { getCurrentPoolOracleManagerDetails } from '../features/security-pools/lib/securityPoolWorkflow.js'
 
 export function App() {
+	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const [combinedCreateStage, setCombinedCreateStage] = useState<'creating-pool' | 'creating-question' | undefined>(undefined)
 	const {
@@ -274,6 +278,29 @@ export function App() {
 	const showApplicationDeploymentWarning = applicationDeploymentMissing
 	const disableRouteContent = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing)
 	const isRouteContentDisabled = disableRouteContent
+	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
+	const uiRepPerEthPrice = resolveUiRepPerEthPrice({
+		currentTimestamp,
+		openOraclePrice: selectedPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice,
+		openOracleSettlementTimestamp: selectedPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp,
+		openOracleValid: selectedPoolOracleManagerDetails?.isPriceValid,
+		priceOracle: uiPriceOracle,
+		uniswapPrice: repPerEthPrice,
+	})
+	const uiUsesOpenOraclePrice = isUiOpenOraclePriceUsed({
+		currentTimestamp,
+		openOraclePrice: selectedPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice,
+		openOracleSettlementTimestamp: selectedPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp,
+		openOracleValid: selectedPoolOracleManagerDetails?.isPriceValid,
+		priceOracle: uiPriceOracle,
+	})
+	const uiRepPerEthSource = (() => {
+		if (uiRepPerEthPrice === undefined) return undefined
+		if (uiUsesOpenOraclePrice) return 'open-oracle' as const
+		return repPerEthSource
+	})()
+	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
 	const overviewProps = {
 		activeUniverseId,
 		accountState,
@@ -290,9 +317,9 @@ export function App() {
 		onSwitchNetwork: () => void switchNetwork(),
 		parentUniverseId: zoltarUniverse?.parentUniverseId,
 		repPerEthFailure,
-		repPerEthPrice,
-		repPerEthSource,
-		repPerEthSourceUrl,
+		repPerEthPrice: uiRepPerEthPrice,
+		repPerEthSource: uiRepPerEthSource,
+		repPerEthSourceUrl: uiRepPerEthSourceUrl,
 		repUsdcFailure,
 		repUsdcPrice,
 		repUsdcSource,
@@ -336,7 +363,6 @@ export function App() {
 		tabs,
 		onRouteChange: navigate,
 	}
-	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
 	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, openOracleViews)
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
@@ -469,15 +495,16 @@ export function App() {
 			onCreateMarket: () => void createMarket(),
 			onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
 			onResetMarket: resetMarket,
-			repPerEthPrice,
-			repPerEthSource,
-			repPerEthSourceUrl,
+			repPerEthPrice: uiRepPerEthPrice,
+			repPerEthSource: uiRepPerEthSource,
+			repPerEthSourceUrl: uiRepPerEthSourceUrl,
 		},
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPools(),
 		overview: {
 			accountState,
 			activeUniverseId,
+			currentTimestamp,
 			environmentRefreshKey: activeEnvironmentNonce,
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
@@ -488,6 +515,7 @@ export function App() {
 			securityPoolOverviewError,
 			securityPools,
 			repPerEthPrice,
+			uiPriceOracle,
 		},
 		securityPools,
 		securityPoolUniverseDirectoryError,
@@ -584,15 +612,16 @@ export function App() {
 			poolOracleManagerError,
 			poolOracleManagerErrorAddress,
 			poolPriceOracleResult,
+			uiPriceOracle,
 			selectedPoolRefreshNonce,
 			universeForkTime: zoltarUniverse?.forkTime,
 			selectedPoolView,
 			onSecurityPoolAddressChange: value => {
 				setSecurityPoolAddress(value)
 			},
-			repPerEthPrice,
-			repPerEthSource,
-			repPerEthSourceUrl,
+			repPerEthPrice: uiRepPerEthPrice,
+			repPerEthSource: uiRepPerEthSource,
+			repPerEthSourceUrl: uiRepPerEthSourceUrl,
 			reporting: {
 				accountState,
 				loadingReportingDetails,
@@ -630,9 +659,9 @@ export function App() {
 				walletRepBalanceLoading,
 				securityVaultResult,
 				selectedPoolStatoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
-				repPerEthPrice,
-				repPerEthSource,
-				repPerEthSourceUrl,
+				repPerEthPrice: uiRepPerEthPrice,
+				repPerEthSource: uiRepPerEthSource,
+				repPerEthSourceUrl: uiRepPerEthSourceUrl,
 				securityPoolVaults: selectedPool?.vaults,
 			},
 			trading: {
@@ -644,9 +673,9 @@ export function App() {
 				onRedeemCompleteSet: () => void redeemCompleteSet(),
 				onRedeemShares: () => void redeemShares(),
 				onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
-				repPerEthPrice,
-				repPerEthSource,
-				repPerEthSourceUrl,
+				repPerEthPrice: uiRepPerEthPrice,
+				repPerEthSource: uiRepPerEthSource,
+				repPerEthSourceUrl: uiRepPerEthSourceUrl,
 				selectedPool,
 				tradingActiveAction,
 				tradingDetails,
@@ -706,7 +735,18 @@ export function App() {
 			activeUniverseId={activeUniverseId}
 			currentBlockNumber={currentBlockNumber}
 			currentTimestamp={currentTimestamp}
-			header={<AppHeaderShell overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />}
+			header={
+				<AppHeaderShell
+					overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />}
+					simulationController={simulationController}
+					subNavigation={routeSubNavigation}
+					tabNavigation={tabNavigationProps}
+					onEnvironmentChanged={refreshActiveEnvironment}
+					onRefresh={refreshSimulationView}
+					priceOracle={uiPriceOracle}
+					onPriceOracleChange={setUiPriceOracle}
+				/>
+			}
 			heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
 			notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={showApplicationDeploymentWarning} zoltarUniverseError={zoltarUniverseError} />}
 			routeContentDisabled={isRouteContentDisabled}
