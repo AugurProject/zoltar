@@ -7,6 +7,9 @@ import { createDeploymentReadClient, TradingDeploymentSetup, type TradingDeploym
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 
 const core = {
 	chainId: 11_155_111,
@@ -90,6 +93,7 @@ describe('trading deployment setup', () => {
 	})
 
 	test('derives and verifies the canonical CREATE2 trading deployment without configuration', async () => {
+		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		const plan = getTradingDeploymentPlan(core, 30)
 		let contractReadCount = 0
 		let rpcChainId = '0xaa36a7'
@@ -113,12 +117,18 @@ describe('trading deployment setup', () => {
 				},
 			}),
 		})
-		const configuration = await resolveCanonicalLiveDeployment([core], () => client)
-		expect(configuration.factory).toBe(plan.factory.address)
-		expect(configuration.router).toBe(plan.router.address)
-		expect(configuration.rpcUrl).toBe(core.defaultRpcUrl)
-		rpcChainId = '0x1'
-		await expect(resolveCanonicalLiveDeployment([core], () => client)).rejects.toThrow('RPC chain 1 does not match deployment chain 11155111')
+		try {
+			const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum Mainnet', id: 'mainnet' }
+			const configuration = await resolveCanonicalLiveDeployment([mainnetCore, core], () => client)
+			expect(configuration.chainId).toBe(core.chainId)
+			expect(configuration.factory).toBe(plan.factory.address)
+			expect(configuration.router).toBe(plan.router.address)
+			expect(configuration.rpcUrl).toBe(core.defaultRpcUrl)
+			rpcChainId = '0x1'
+			await expect(resolveCanonicalLiveDeployment([mainnetCore, core], () => client)).rejects.toThrow('RPC chain 1 does not match deployment chain 11155111')
+		} finally {
+			restoreEnvironment()
+		}
 	})
 	let cleanupRendered: (() => Promise<void>) | undefined
 

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
+import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -51,6 +53,17 @@ function callData(params: unknown) {
 	if (typeof transaction !== 'object' || transaction === null || !('data' in transaction) || typeof transaction.data !== 'string') throw new Error('RPC transaction must contain data')
 	return transaction.data as Hex
 }
+
+test('creates live read clients from the configured active backend', () => {
+	const configuredClient = createPublicClient({ transport: custom({ request: async () => '0x1' }) })
+	const backend = { ...createFakeBackend(), createReadClient: () => configuredClient }
+	const restoreEnvironment = installActiveEnvironmentForTesting(backend)
+	try {
+		expect(createTradingPublicClient(configuration)).toBe(configuredClient)
+	} finally {
+		restoreEnvironment()
+	}
+})
 
 describe('live guarded transaction writes', () => {
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {

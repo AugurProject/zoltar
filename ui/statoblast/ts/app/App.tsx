@@ -50,6 +50,7 @@ import { shouldAutoLoadUniverseDirectory } from './lib/universeDirectory.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '../features/security-pools/lib/uiPriceOracle.js'
 import { getCurrentPoolOracleManagerDetails } from '../features/security-pools/lib/securityPoolWorkflow.js'
+import { renderRepPriceSourceLabel } from '../features/security-pools/lib/repPriceSource.js'
 
 export function App() {
 	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
@@ -318,7 +319,8 @@ export function App() {
 		parentUniverseId: zoltarUniverse?.parentUniverseId,
 		repPerEthFailure,
 		repPerEthPrice: uiRepPerEthPrice,
-		repPerEthSource: uiRepPerEthSource,
+		repPerEthSource: uiUsesOpenOraclePrice ? undefined : repPerEthSource,
+		repPerEthSourceLabel: renderRepPriceSourceLabel(uiRepPerEthSource, uiRepPerEthSourceUrl),
 		repPerEthSourceUrl: uiRepPerEthSourceUrl,
 		repUsdcFailure,
 		repUsdcPrice,

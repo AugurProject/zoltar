@@ -15,7 +15,10 @@ import { App, currentRoute, tradingNetworkLabel } from '../../app/App.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/lib/routing.js'
 import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
-import { getActiveNetworkProfile, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { createPublicClient, custom } from '@zoltar/shared/ethereum'
+import { createTradingPublicClient } from '../../protocol/live.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {
 	registerTradingSimulationScenario()
@@ -87,10 +90,14 @@ test('Trading force-refreshes the active environment after saving the active net
 	const originalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 	Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage })
 	let environmentInitializations = 0
+	const configuredClient = createPublicClient({ transport: custom({ request: async () => '0x1' }) })
+	let restoreConfiguredEnvironment: (() => void) | undefined
 	const rendered = await renderIntoDocument(
 		<App
 			initializeEnvironment={async () => {
 				environmentInitializations += 1
+				restoreConfiguredEnvironment?.()
+				restoreConfiguredEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend(), createReadClient: () => configuredClient })
 			}}
 			loadLiveDeployment={async () => ({
 				chainId: 1,
@@ -118,8 +125,10 @@ test('Trading force-refreshes the active environment after saving the active net
 		await act(async () => saveButton.click())
 		expect(globalThis.localStorage.getItem('zoltar.rpcUrls')).toContain('new-rpc.example')
 		await waitFor(() => expect(environmentInitializations).toBe(1))
+		expect(createTradingPublicClient({ chainId: 1, chainName: 'Ethereum Mainnet', factory: `0x${'22'.repeat(20)}`, feeBps: 30, router: `0x${'33'.repeat(20)}`, rpcUrl: 'https://old-rpc.example', securityPoolFactory: `0x${'11'.repeat(20)}` })).toBe(configuredClient)
 	} finally {
 		await rendered.cleanup()
+		restoreConfiguredEnvironment?.()
 		if (originalStorageDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
 		else Object.defineProperty(globalThis, 'localStorage', originalStorageDescriptor)
 		resetActiveEnvironmentForTesting()
