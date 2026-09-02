@@ -72,4 +72,19 @@ describe('statoblast route validation', () => {
 			}).hasInvalidSelectedPoolView,
 		).toBe(true)
 	})
+
+	test('allows preserved security-pool context on selected open oracle report routes', () => {
+		const invalidRouteState = getInvalidStatoblastRouteState({
+			activeSecurityPoolsView: 'operate',
+			openOracleView: 'selected-report',
+			resolvedRoute: 'open-oracle',
+			search: '?openOracleView=selected-report&openOracleReportId=9&securityPool=0x123&securityPoolsView=operate&selectedPoolView=reporting',
+			securityPoolsView: 'operate',
+			selectedPoolView: 'reporting',
+		})
+
+		expect(invalidRouteState.hasInvalidOpenOracleView).toBe(false)
+		expect(invalidRouteState.hasInvalidSecurityPoolsView).toBe(false)
+		expect(invalidRouteState.hasInvalidSelectedPoolView).toBe(false)
+	})
 })
