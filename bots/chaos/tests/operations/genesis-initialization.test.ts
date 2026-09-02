@@ -70,7 +70,9 @@ describe('genesis initialization', () => {
 		for (const token of snapshot.wallet.tokens) token.allowances[seeder] = '1'
 		const definition = TRADING_OPERATIONS.find(candidate => candidate.id === 'trading.genesis-uniswap.seed-pool')
 		const cleanup = definition?.buildContinuationPlan?.(snapshot, options, { confirmedStepIds: ['approve-genesis-token0'], continuationDisposition: 'cleanup-only', previousPlan: plan })
-		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-genesis-token0', 'revoke-genesis-token1'])
+		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-genesis-token0'])
+		const untouched = definition?.buildContinuationPlan?.(snapshot, options, { confirmedStepIds: [], continuationDisposition: 'cleanup-only', previousPlan: plan })
+		expect(untouched).toBeUndefined()
 	})
 
 	test('binds pool and vault plans to the requested genesis topology despite competitors', () => {

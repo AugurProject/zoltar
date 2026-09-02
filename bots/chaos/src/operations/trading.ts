@@ -248,8 +248,10 @@ const seedGenesisUniswapPool: OperationDefinition = {
 			const token1 = metadataAddress(context.previousPlan.metadata, 'token1')
 			const seeder = metadataAddress(context.previousPlan.metadata, 'seeder')
 			if (token0 === undefined || token1 === undefined || seeder === undefined) return undefined
+			const plannedStepIds = new Set(context.previousPlan.steps.map(step => step.id))
+			const confirmedStepIds = new Set(context.confirmedStepIds)
 			const steps = [token0, token1].flatMap((token, index) =>
-				allowance(tokenInventory(snapshot, token), seeder) === 0n
+				!plannedStepIds.has(`approve-genesis-token${index.toString()}`) || !confirmedStepIds.has(`approve-genesis-token${index.toString()}`) || allowance(tokenInventory(snapshot, token), seeder) === 0n
 					? []
 					: [encodeStep({ abi: erc20Abi, args: [seeder, 0n], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)], functionName: 'approve', id: `revoke-genesis-token${index.toString()}`, label: `Revoke genesis token${index.toString()} allowance`, to: token, walletAssetDebits: [] })],
 			)
