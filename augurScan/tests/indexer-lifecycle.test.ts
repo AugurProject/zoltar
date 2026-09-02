@@ -80,12 +80,14 @@ import {
 } from '../src/indexer.ts'
 import {
 	ChainConfigurationError,
+	commitSparseCanonicalBatch,
 	contractDeploymentCandidateFrom,
 	createLogClient,
 	discoveryLogAddresses,
 	findEarliestAvailableLogBlock,
 	findEarliestAvailableLogProvider,
 	findEarliestAvailableStateBlock,
+	findSparseCanonicalAncestor,
 	indexerLogSources,
 	isPermanentHistoricalLogError,
 	isPrunedHistoricalStateError,
@@ -2100,6 +2102,7 @@ describe('network indexer lifecycle', () => {
 		const stateQueries: bigint[] = []
 		const metadataQueryBlocks: bigint[] = []
 		const codeQueryBlocks: bigint[] = []
+		const headerQueryBlocks: bigint[] = []
 		const rpcServer = Bun.serve({
 			port: 0,
 			fetch: async (rpcRequest) => {
@@ -2130,6 +2133,7 @@ describe('network indexer lifecycle', () => {
 					}
 					if (request.method === 'eth_getBlockByNumber') {
 						const blockNumber = BigInt(String(request.params?.[0]))
+						headerQueryBlocks.push(blockNumber)
 						const blockHash = blockHashes.get(blockNumber)
 						if (blockHash === undefined) throw new Error(`Unexpected block ${blockNumber}`)
 						return {
@@ -2222,8 +2226,9 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'tokenMetadata').mockResolvedValue(
 			new Map([[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }]]),
 		)
-		spyOn(database, 'storeBlock').mockImplementation(async (_chainId, block) => {
-			storedBlocks.push(block)
+		spyOn(database, 'storeBlocks').mockImplementation(async (_chainId, blocks, _lease, _provenance, validateBeforeCommit) => {
+			await validateBeforeCommit?.()
+			storedBlocks.push(...blocks)
 		})
 		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([
 			{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' },
@@ -2251,7 +2256,8 @@ describe('network indexer lifecycle', () => {
 			}
 			await Promise.all(startIndexers([network], database, controller.signal))
 			expect(error.mock.calls).toEqual([])
-			expect(storedBlocks.map((block) => block.number)).toEqual([10n, 11n, 12n])
+			expect(storedBlocks.map((block) => block.number)).toEqual([10n, 12n])
+			expect(headerQueryBlocks).not.toContain(11n)
 			const storedRepLogs = storedBlocks.flatMap((block) => block.logs).filter((log) => log.address === repAddress)
 			expect(storedRepLogs.map((log) => log.blockNumber)).toEqual([10n, 12n])
 			expect(storedBlocks.flatMap((block) => block.addressActivity).some((activity) => activity.address === holder)).toBe(true)
@@ -2259,7 +2265,7 @@ describe('network indexer lifecycle', () => {
 			expect(rpcLogQueries.some((query) => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
 			expect(rpcLogQueries.every((query) => !query.addresses.includes(wethAddress))).toBe(true)
 			expect(stateQueries).toEqual([10n, 12n, 11n])
-			expect(metadataQueryBlocks).toEqual([11n])
+			expect(metadataQueryBlocks).toEqual([12n])
 			expect(codeQueryBlocks).toEqual([12n, 11n])
 			expect(codeQueryBlocks.every((blockNumber) => blockNumber >= 11n)).toBe(true)
 			expect(recordContractDeployment.mock.calls[0]?.[3]).toMatchObject({ block: 12n, exact: true })
@@ -3149,6 +3155,52 @@ describe('network indexer lifecycle', () => {
 		expect(reorgSearchFloor(1_000n, 2_000n, 64n)).toBe(1_936n)
 	})
 
+	test('searches only stored sparse anchors for a reorganization ancestor', async () => {
+		const matchingHash = `0x${'1'.repeat(64)}` as const
+		const replacedHash = `0x${'2'.repeat(64)}` as const
+		const hashes = new Map([
+			[10n, matchingHash],
+			[12n, replacedHash],
+		])
+		const checkpointReads: bigint[] = []
+		const headerReads: bigint[] = []
+		const ancestor = await findSparseCanonicalAncestor(
+			12n,
+			10n,
+			async (atOrBefore) => {
+				checkpointReads.push(atOrBefore)
+				const number = [...hashes.keys()].filter((candidate) => candidate <= atOrBefore).toSorted((left, right) => (left < right ? 1 : -1))[0]
+				if (number === undefined) return undefined
+				const hash = hashes.get(number)
+				if (hash === undefined) throw new Error(`Missing stored hash for block ${number}`)
+				return { number, hash }
+			},
+			async (number) => {
+				headerReads.push(number)
+				return number === 10n ? matchingHash : (`0x${'3'.repeat(64)}` as const)
+			},
+		)
+		expect(ancestor).toEqual({ number: 10n, hash: matchingHash })
+		expect(checkpointReads).toEqual([12n, 11n])
+		expect(headerReads).toEqual([12n, 10n])
+	})
+
+	test('checks the nearest sparse anchor below the reorg search floor', async () => {
+		const hash = `0x${'4'.repeat(64)}` as const
+		const headerReads: bigint[] = []
+		const ancestor = await findSparseCanonicalAncestor(
+			199n,
+			164n,
+			async () => ({ number: 100n, hash }),
+			async (number) => {
+				headerReads.push(number)
+				return hash
+			},
+		)
+		expect(ancestor).toEqual({ number: 100n, hash })
+		expect(headerReads).toEqual([100n])
+	})
+
 	test('refuses to commit a block that changed during RPC collection', async () => {
 		const indexedHash = `0x${'1'.repeat(64)}` as const
 		const replacementHash = `0x${'2'.repeat(64)}` as const
@@ -3157,6 +3209,38 @@ describe('network indexer lifecycle', () => {
 			'The remote canonical chain changed while indexing; retrying',
 		)
 		await expect(confirmCanonicalBlock(100n, indexedHash, async () => indexedHash)).resolves.toBeUndefined()
+	})
+
+	test('does not commit a sparse batch when its prior checkpoint changed', async () => {
+		const checkpointHash = `0x${'1'.repeat(64)}` as const
+		const replacementHash = `0x${'2'.repeat(64)}` as const
+		const endHash = `0x${'3'.repeat(64)}` as const
+		let checkpointReads = 0
+		const visible: number[] = []
+		await expect(
+			commitSparseCanonicalBatch(
+				[
+					{ number: 100n, hash: checkpointHash },
+					{ number: 200n, hash: endHash },
+				],
+				async (blockNumber) => {
+					if (blockNumber !== 100n) return endHash
+					checkpointReads += 1
+					return checkpointReads === 1 ? checkpointHash : replacementHash
+				},
+				async (validateBeforeCommit) => {
+					const staged = [150, 200]
+					try {
+						await validateBeforeCommit()
+						visible.push(...staged)
+					} catch (error) {
+						staged.length = 0
+						throw error
+					}
+				},
+			),
+		).rejects.toThrow('Block 100 changed while it was being indexed')
+		expect(visible).toEqual([])
 	})
 
 	test('does not commit balance evidence when the anchor changes after the read', async () => {

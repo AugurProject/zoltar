@@ -515,7 +515,10 @@ export const runSerializedOperationsLoad = async (
 	while (state.promise !== undefined) {
 		const active = state.promise
 		const disposition = operationsLoadDisposition(state.context ?? '', requestedContext, live, hasPaginationTarget)
-		if (disposition === 'supersede') supersede()
+		if (disposition === 'supersede') {
+			supersede()
+			state.context = requestedContext
+		}
 		const activeResult = await active
 		if (disposition === 'join') return activeResult
 		if (currentContext() !== requestedContext) return false

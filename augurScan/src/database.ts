@@ -261,15 +261,16 @@ export const assertIndexerLeaseReleaseObservation = (expectedBackendPid: number,
 export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHash'>, checkpoint: StoredCheckpoint): void => {
 	if (checkpoint.indexedBlock === undefined) {
 		if (checkpoint.indexedHash !== undefined) throw new DatabaseConsistencyError('The database checkpoint has a block hash without a block number')
-		if (block.number !== checkpoint.startBlock)
-			throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the network must start at block ${checkpoint.startBlock}`)
+		if (block.number < checkpoint.startBlock)
+			throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the network starts at block ${checkpoint.startBlock}`)
 		return
 	}
 	if (checkpoint.indexedHash === undefined) throw new DatabaseConsistencyError('The database checkpoint has a block number without a block hash')
 	const expectedNumber = checkpoint.indexedBlock + 1n
-	if (block.number !== expectedNumber)
-		throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the next database checkpoint must be block ${expectedNumber}`)
-	if (block.parentHash !== checkpoint.indexedHash) throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
+	if (block.number < expectedNumber)
+		throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the database checkpoint is already block ${checkpoint.indexedBlock}`)
+	if (block.number === expectedNumber && block.parentHash !== checkpoint.indexedHash)
+		throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
 }
 
 export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint, hasStoredBlocks = false): void => {
@@ -733,7 +734,7 @@ export class ScannerDatabase {
 						lag(number) OVER (PARTITION BY chain_id ORDER BY number) AS previous_number
 					FROM recent_canonical_blocks
 				) ordered
-				WHERE previous_number IS NOT NULL AND (number <> previous_number + 1 OR parent_hash <> previous_hash)
+				WHERE previous_number IS NOT NULL AND number = previous_number + 1 AND parent_hash <> previous_hash
 			)
 			SELECT * FROM checkpoint_issues
 			UNION ALL SELECT * FROM cursor_issues
@@ -1314,6 +1315,22 @@ export class ScannerDatabase {
 		})
 	}
 
+	async canonicalCheckpointAtOrBefore(
+		chainId: number,
+		number: bigint,
+		lease?: IndexerLease,
+	): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+			const rows = await sql`
+				SELECT number, hash FROM blocks
+				WHERE chain_id = ${chainId} AND number <= ${number.toString()} AND canonical
+				ORDER BY number DESC LIMIT 1
+			`
+			const row = rows[0]
+			return row === undefined ? undefined : { number: BigInt(String(row['number'])), hash: String(row['hash']) as Hash }
+		})
+	}
+
 	async rewind(
 		chainId: number,
 		ancestor: bigint,
@@ -1424,23 +1441,39 @@ export class ScannerDatabase {
 	}
 
 	async storeBlock(chainId: number, block: IndexedBlock, lease: IndexerLease, provenance?: EvidenceProvenance): Promise<void> {
+		await this.storeBlocks(chainId, [block], lease, provenance)
+	}
+
+	async storeBlocks(
+		chainId: number,
+		blocks: readonly IndexedBlock[],
+		lease: IndexerLease,
+		provenance?: EvidenceProvenance,
+		validateBeforeCommit: () => Promise<void> = async () => {},
+	): Promise<void> {
 		await withIndexerLease(lease, async (transaction) => {
-			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
-			const checkpoint = checkpointRows[0]
-			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before indexing`)
-			assertBlockAppend(block, {
-				startBlock: BigInt(String(checkpoint['start_block'])),
-				...(checkpoint['indexed_block'] === null ? {} : { indexedBlock: BigInt(String(checkpoint['indexed_block'])) }),
-				...(checkpoint['indexed_hash'] === null ? {} : { indexedHash: String(checkpoint['indexed_hash']) }),
-			})
-			await transaction`
+			for (const block of blocks) await this.#storeBlock(transaction, chainId, block, provenance)
+			await validateBeforeCommit()
+		})
+	}
+
+	async #storeBlock(transaction: SQL, chainId: number, block: IndexedBlock, provenance?: EvidenceProvenance): Promise<void> {
+		const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
+		const checkpoint = checkpointRows[0]
+		if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before indexing`)
+		assertBlockAppend(block, {
+			startBlock: BigInt(String(checkpoint['start_block'])),
+			...(checkpoint['indexed_block'] === null ? {} : { indexedBlock: BigInt(String(checkpoint['indexed_block'])) }),
+			...(checkpoint['indexed_hash'] === null ? {} : { indexedHash: String(checkpoint['indexed_hash']) }),
+		})
+		await transaction`
 				INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical, finalized)
 				VALUES (${chainId}, ${block.number.toString()}, ${block.hash}, ${block.parentHash}, ${block.timestamp}, true, ${block.number <= block.finalizedThrough})
 				ON CONFLICT (chain_id, hash) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized
 			`
-			for (const metadata of block.tokenMetadata) {
-				const readStatus = metadata.readError === undefined ? 'success' : 'failed'
-				await transaction`
+		for (const metadata of block.tokenMetadata) {
+			const readStatus = metadata.readError === undefined ? 'success' : 'failed'
+			await transaction`
 					INSERT INTO token_metadata_observations (
 						chain_id, address, block_hash, name, symbol, decimals, read_status, read_error, read_block, canonical,
 						observed_at, indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
@@ -1451,31 +1484,31 @@ export class ScannerDatabase {
 						${provenance?.applicationSourceHash ?? null}, ${provenance?.projectionSourceHash ?? null}
 					)
 				`
-				if (readStatus === 'failed') {
-					const successfulCurrentMetadata = await transaction`
+			if (readStatus === 'failed') {
+				const successfulCurrentMetadata = await transaction`
 						SELECT 1 FROM token_metadata
 						WHERE chain_id = ${chainId} AND address = ${metadata.address.toLowerCase()}
 							AND canonical AND read_error IS NULL
 						LIMIT 1
 					`
-					if (successfulCurrentMetadata.length > 0) continue
-				}
-				await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND address = ${metadata.address.toLowerCase()} AND canonical AND block_hash <> ${block.hash}`
-				await transaction`
+				if (successfulCurrentMetadata.length > 0) continue
+			}
+			await transaction`UPDATE token_metadata SET canonical = false WHERE chain_id = ${chainId} AND address = ${metadata.address.toLowerCase()} AND canonical AND block_hash <> ${block.hash}`
+			await transaction`
 					INSERT INTO token_metadata (chain_id, address, block_hash, name, symbol, decimals, read_error, read_block, canonical, updated_at)
 					VALUES (${chainId}, ${metadata.address.toLowerCase()}, ${block.hash}, ${metadata.name ?? null}, ${metadata.symbol ?? null}, ${metadata.decimals ?? null}, ${metadata.readError ?? null}, ${metadata.readBlock.toString()}, true, now())
 					ON CONFLICT (chain_id, address, block_hash) DO UPDATE SET name = EXCLUDED.name, symbol = EXCLUDED.symbol, decimals = EXCLUDED.decimals, read_error = EXCLUDED.read_error, read_block = EXCLUDED.read_block, canonical = true, updated_at = now()
 				`
-			}
-			for (const contract of block.contracts) {
-				if (contract.discoveryTxHash === undefined || contract.discoveryBlock === undefined)
-					throw new Error('Dynamic contract discovery is missing its chain position')
-				await transaction`
+		}
+		for (const contract of block.contracts) {
+			if (contract.discoveryTxHash === undefined || contract.discoveryBlock === undefined)
+				throw new Error('Dynamic contract discovery is missing its chain position')
+			await transaction`
 					INSERT INTO contract_discoveries (chain_id, address, block_hash, block_number, tx_hash, label, kind, provenance, canonical)
 					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${block.hash}, ${contract.discoveryBlock.toString()}, ${contract.discoveryTxHash}, ${contract.label}, ${contract.kind}, ${contract.provenance}, true)
 					ON CONFLICT (chain_id, address, block_hash, tx_hash) DO UPDATE SET canonical = true
 				`
-				await transaction`
+			await transaction`
 					INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, discovery_tx_hash, canonical, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block)
 					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${contract.label}, ${contract.kind}, ${contract.provenance}, ${contract.discoveryBlock?.toString() ?? null}, ${contract.discoveryTxHash ?? null}, true, ${contract.discoveryBlock.toString()}, ${block.timestamp}, true, ${block.number.toString()})
 					ON CONFLICT (chain_id, address) DO UPDATE SET
@@ -1490,10 +1523,10 @@ export class ScannerDatabase {
 						deployment_block_exact = COALESCE(contracts.deployment_block_exact, EXCLUDED.deployment_block_exact),
 						deployment_checked_block = GREATEST(contracts.deployment_checked_block, EXCLUDED.deployment_checked_block)
 				`
-			}
-			for (const observation of block.contractDeploymentObservations) {
-				assertContractDeploymentObservation(block.number, observation)
-				await transaction`
+		}
+		for (const observation of block.contractDeploymentObservations) {
+			assertContractDeploymentObservation(block.number, observation)
+			await transaction`
 					UPDATE contracts SET
 						deployment_block = ${observation.deployment?.block.toString() ?? null},
 						deployment_timestamp = ${observation.deployment?.timestamp ?? null},
@@ -1501,42 +1534,42 @@ export class ScannerDatabase {
 						deployment_checked_block = ${observation.checkedBlock.toString()}
 					WHERE chain_id = ${chainId} AND address = ${observation.contractAddress.toLowerCase()} AND canonical
 				`
-			}
-			for (const item of block.transactions) {
-				await transaction`
+		}
+		for (const item of block.transactions) {
+			await transaction`
 					INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
 					VALUES (${chainId}, ${item.hash}, ${block.hash}, ${block.number.toString()}, ${item.transactionIndex}, ${item.from.toLowerCase()}, ${item.to?.toLowerCase() ?? null}, ${item.value.toString()}, ${item.input}, ${item.status}, ${item.gasUsed.toString()}, (${databaseJsonText(item.receipt)}::text)::jsonb, true)
 					ON CONFLICT (chain_id, block_hash, hash) DO UPDATE SET canonical = true
 				`
-				await transaction`
+			await transaction`
 					INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, function_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary)
 					VALUES (${chainId}, ${block.hash}, ${item.hash}, ${item.to?.toLowerCase() ?? null}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary})
 					ON CONFLICT (chain_id, block_hash, tx_hash) DO UPDATE SET function_name = EXCLUDED.function_name, function_signature = EXCLUDED.function_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
-				if (provenance !== undefined)
-					await transaction`
+			if (provenance !== undefined)
+				await transaction`
 						INSERT INTO action_interpretations
 							(chain_id, block_hash, tx_hash, indexer_run_id, abi_source_hash, application_source_hash, interpretation)
 						VALUES (${chainId}, ${block.hash}, ${item.hash}, ${provenance.indexerRunId}, ${provenance.abiSourceHash},
 							${provenance.applicationSourceHash}, (${serializedInterpretation(item.decoded)}::text)::jsonb)
 						ON CONFLICT DO NOTHING
 					`
-			}
-			for (const activity of block.addressActivity) {
-				await transaction`
+		}
+		for (const activity of block.addressActivity) {
+			await transaction`
 					INSERT INTO address_activity (chain_id, block_hash, block_number, tx_hash, address, pool_address, role, canonical)
 					VALUES (${chainId}, ${block.hash}, ${block.number.toString()}, ${activity.transactionHash}, ${activity.address.toLowerCase()}, ${activity.poolAddress?.toLowerCase() ?? '0x0000000000000000000000000000000000000000'}, ${activity.role}, true)
 					ON CONFLICT (chain_id, block_hash, tx_hash, address, pool_address) DO UPDATE SET role = CASE WHEN EXCLUDED.role = 'sender' THEN 'sender' ELSE address_activity.role END, canonical = true
 				`
-			}
-			for (const item of block.logs) {
-				await transaction`
+		}
+		for (const item of block.logs) {
+			await transaction`
 					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, event_signature, arguments, display_arguments, argument_schema, decode_status, decode_error, summary, canonical, finalized)
 					VALUES (${chainId}, ${item.transactionHash}, ${item.blockHash}, ${item.blockNumber.toString()}, ${item.transactionIndex}, ${item.logIndex}, ${item.address.toLowerCase()}, (${databaseJsonText(item.topics)}::text)::jsonb, ${item.data}, ${item.decoded.name ?? null}, ${item.decoded.signature ?? null}, (${databaseJsonText(item.decoded.arguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.displayArguments ?? null)}::text)::jsonb, (${databaseJsonText(item.decoded.argumentSchema ?? [])}::text)::jsonb, ${item.decoded.status}, ${item.decoded.error ?? null}, ${item.decoded.summary}, true, ${item.blockNumber <= block.finalizedThrough})
 					ON CONFLICT (chain_id, block_hash, tx_hash, log_index) DO UPDATE SET canonical = true, finalized = EXCLUDED.finalized, event_name = EXCLUDED.event_name, event_signature = EXCLUDED.event_signature, arguments = EXCLUDED.arguments, display_arguments = EXCLUDED.display_arguments, argument_schema = EXCLUDED.argument_schema, decode_status = EXCLUDED.decode_status, decode_error = EXCLUDED.decode_error, summary = EXCLUDED.summary
 				`
-				if (provenance !== undefined)
-					await transaction`
+			if (provenance !== undefined)
+				await transaction`
 						INSERT INTO log_interpretations
 							(chain_id, block_hash, tx_hash, log_index, interpretation_kind, interpretation_key,
 								indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash, interpretation)
@@ -1545,11 +1578,11 @@ export class ScannerDatabase {
 							${provenance.projectionSourceHash}, (${serializedInterpretation(item.decoded)}::text)::jsonb)
 						ON CONFLICT DO NOTHING
 					`
-				await storeLogProjections(transaction, chainId, item, provenance)
-			}
-			for (const cursor of block.logScanCursors) {
-				assertLogScanCursorUpdate(block.number, cursor)
-				await transaction`
+			await storeLogProjections(transaction, chainId, item, provenance)
+		}
+		for (const cursor of block.logScanCursors) {
+			assertLogScanCursorUpdate(block.number, cursor)
+			await transaction`
 					INSERT INTO log_scan_cursors (chain_id, contract_address, start_block, last_retrieved_block, updated_at)
 					VALUES (${chainId}, ${cursor.contractAddress.toLowerCase()}, ${cursor.startBlock.toString()}, ${cursor.lastRetrievedBlock.toString()}, now())
 					ON CONFLICT (chain_id, contract_address) DO UPDATE SET
@@ -1558,19 +1591,18 @@ export class ScannerDatabase {
 						updated_at = now()
 					WHERE log_scan_cursors.last_retrieved_block <= EXCLUDED.last_retrieved_block
 				`
-			}
-			await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND number <= ${block.finalizedThrough.toString()}`
-			await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND block_number <= ${block.finalizedThrough.toString()}`
-			await transaction`
+		}
+		await transaction`UPDATE blocks SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND number <= ${block.finalizedThrough.toString()}`
+		await transaction`UPDATE logs SET finalized = true WHERE chain_id = ${chainId} AND canonical AND NOT finalized AND block_number <= ${block.finalizedThrough.toString()}`
+		await transaction`
 				UPDATE networks SET indexed_block = ${block.number.toString()}, indexed_hash = ${block.hash}, indexed_timestamp = ${block.timestamp}, observed_block = ${block.observedHead.toString()}, finalized_block = ${block.finalizedThrough.toString()}, phase = ${block.number >= block.observedHead ? 'live' : 'backfilling'}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now()
 				WHERE chain_id = ${chainId}
 			`
-			await lockLiveEventWriter(transaction)
-			await transaction`
+		await lockLiveEventWriter(transaction)
+		await transaction`
 				INSERT INTO live_events (event, payload)
 				VALUES ('block', (${databaseJsonText({ chainId, blockNumber: block.number.toString(), logs: block.logs.length })}::text)::jsonb)
 			`
-		})
 	}
 
 	async updateObservedHead(chainId: number, head: bigint, phase: string, lease: IndexerLease): Promise<void> {

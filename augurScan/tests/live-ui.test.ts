@@ -568,6 +568,40 @@ test('serializes pagination ahead of multiple queued live refreshes', async () =
 	expect(started).toEqual(['initial', 'pagination', 'live-one', 'live-two'])
 })
 
+test('runs the final route after rapid operations navigation returns to a superseded context', async () => {
+	const state: { promise?: Promise<boolean>; context?: string } = {}
+	let currentContext = '1:/operations/reports'
+	let finishReports: (result: boolean) => void = unexpectedCall
+	const started: string[] = []
+	const execute = (context: string, run: () => Promise<boolean>) =>
+		runSerializedOperationsLoad(
+			state,
+			context,
+			false,
+			false,
+			() => currentContext,
+			() => undefined,
+			async () => {
+				started.push(context)
+				return await run()
+			},
+		)
+	const firstReports = execute(
+		currentContext,
+		() =>
+			new Promise<boolean>((resolve) => {
+				finishReports = resolve
+			}),
+	)
+	currentContext = '1:/operations/risk'
+	const risk = execute(currentContext, async () => true)
+	currentContext = '1:/operations/reports'
+	const finalReports = execute(currentContext, async () => true)
+	finishReports(false)
+	expect(await Promise.all([firstReports, risk, finalReports])).toEqual([false, false, true])
+	expect(started).toEqual(['1:/operations/reports', '1:/operations/reports'])
+})
+
 const unexpectedCall = (): never => {
 	throw new Error('Expected asynchronous test callback to be assigned')
 }
