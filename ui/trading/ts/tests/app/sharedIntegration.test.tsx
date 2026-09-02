@@ -97,7 +97,10 @@ test('Trading preserves its route headers and does not restyle shared disclosure
 })
 
 test('verified deployment status stays accurate in live and simulated environments', () => {
-	expect(tradingNetworkLabel('verified')).toBe('Deployment verified')
+	const address = '0x00000000000000000000000000000000000000a1'
+	const configuration = { chainId: 1, chainName: 'Ethereum', factory: address, feeBps: 30, router: address, rpcUrl: 'https://rpc.example', securityPoolFactory: address, zoltar: address }
+	expect(tradingNetworkLabel('verified', configuration, { account: undefined, connecting: false, networkName: undefined, ready: true })).toBe('Ethereum')
+	expect(tradingNetworkLabel('verified', configuration, { account: undefined, connecting: false, networkName: 'Sepolia', ready: true })).toBe('Sepolia')
 })
 
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
