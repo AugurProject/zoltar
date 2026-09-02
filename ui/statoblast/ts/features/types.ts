@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { AccountState, ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
 import type {
 	ForkAuctionActionResult,
@@ -7,6 +7,7 @@ import type {
 	LiquidationApprovalDetails,
 	LiquidationFundingPreview,
 	ListedSecurityPool,
+	MarketCreationResult,
 	MarketDetails,
 	OpenOracleActionResult,
 	OracleManagerDetails,
@@ -65,18 +66,15 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate'
+export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
-	availableQuestionsContextKey: string
-	availableQuestions: MarketDetails[]
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
-	hasLoadedAvailableQuestions: boolean
-	loadingAvailableQuestions: boolean
-	onCreateSecurityPool: () => void
-	onLoadAvailableQuestions: () => Promise<void>
+	onCreateSecurityPool: (questionIdOverride?: string) => void
+	onCreateQuestionAndSecurityPool?: () => void
+	questionAndPoolCreating?: boolean
 	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
@@ -89,6 +87,13 @@ type SecurityPoolRouteContentProps = {
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
+	marketCreating: boolean
+	marketError: string | undefined
+	marketForm: MarketFormState
+	marketResult: MarketCreationResult | undefined
+	onCreateMarket: () => void
+	onMarketFormChange: (update: Partial<MarketFormState>) => void
+	onResetMarket: () => void
 } & RepPerEthPriceProps
 
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
@@ -190,10 +195,16 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
+	loadingUniverseDirectoryPools?: boolean | undefined
 	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
+	onLoadUniverseDirectoryPools?: (() => void) | undefined
 	overview: SecurityPoolsOverviewRouteContentProps
+	securityPools: ListedSecurityPool[]
+	securityPoolUniverseDirectoryError?: string | undefined
+	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
+	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
 type SecurityVaultRouteContentProps = {

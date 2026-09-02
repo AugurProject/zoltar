@@ -121,8 +121,8 @@ describe('useMarketCreation', () => {
 		let firstCreate: Promise<void> | undefined
 		let secondCreate: Promise<void> | undefined
 		await act(() => {
-			firstCreate = requireHookState(hookState).createMarket()
-			secondCreate = requireHookState(hookState).createMarket()
+			firstCreate = requireHookState(hookState).createMarket({ refreshQuestionList: false })
+			secondCreate = requireHookState(hookState).createMarket({ refreshQuestionList: false })
 		})
 		if (firstCreate === undefined || secondCreate === undefined) {
 			throw new Error('Expected both createMarket promises')
@@ -143,7 +143,7 @@ describe('useMarketCreation', () => {
 		await firstCreate
 		await secondCreate
 
-		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
+		expect(loadZoltarQuestions).not.toHaveBeenCalled()
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
@@ -828,6 +828,54 @@ describe('useMarketCreation', () => {
 		expect(requireHookState(hookState).marketResult).toBeUndefined()
 		expect(requireHookState(hookState).marketFeedback).toBeUndefined()
 		expect(requireHookState(hookState).marketError).toBeUndefined()
+	})
+
+	test('returns no created question when the environment changes before completion', async () => {
+		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
+		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+		}))
+		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		let hookState: UseMarketCreationState | undefined
+		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
+			hookState = useMarketCreation(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 7n,
+					activeZoltarView: 'create',
+					autoLoadInitialData: false,
+					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
+					environmentRefreshKey,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				{ createMarket: async () => await deferred.promise },
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Environment zero question' }))
+		})
+		let submission = Promise.resolve<MarketCreationResult | undefined>(undefined)
+		await act(async () => {
+			submission = requireHookState(hookState).createMarket()
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		await act(() => {
+			render(<Harness environmentRefreshKey={1} />, renderedComponent.container)
+		})
+		await act(async () => {
+			deferred.resolve({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' })
+		})
+
+		expect(await submission).toBeUndefined()
 	})
 
 	test('keeps a replacement environment submission locked until its own completion', async () => {

@@ -215,6 +215,20 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('Max ≈ 80.00 ETH')
 	})
 
+	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {
+		const pool = createSecurityPool({
+			lastOraclePrice: 1n,
+			settlementCollateralAttoEth: 1_000_000_000_000_000n,
+			totalCapacityOwnershipAttoRep: 1n * 10n ** 18n,
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const cardText = (getSecurityPoolCard('Will this resolve?').textContent ?? '').replace(/\s+/g, ' ')
+		expect(cardText).toContain('0.001 ETH')
+		expect(cardText).not.toContain('≈ 0.00 ETH')
+	})
+
 	test('does not present pool-held vault REP backing alone as a pool health gauge when dispute-staked REP changes ordinary coverage', async () => {
 		const pool = createSecurityPool({
 			statoblastSecurityMultiplierBps: 20_000n,

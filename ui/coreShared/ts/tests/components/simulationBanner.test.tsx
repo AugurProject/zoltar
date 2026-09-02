@@ -822,6 +822,47 @@ describe('SimulationBanner', () => {
 		}
 	})
 
+	test('does not duplicate the simulate flag when the page query already enables simulation', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/?simulate=1#/zoltar?simScenario=baseline')
+		const onRefresh = mock(async () => undefined)
+		const subscribers = new Set<() => void>()
+		const controller = createSimulationController({
+			subscribe: handler => {
+				subscribers.add(handler)
+				return () => {
+					subscribers.delete(handler)
+				}
+			},
+		})
+		const onEnvironmentChanged = mock(async () => {
+			controller.currentScenario = 'deployed'
+			controller.simulationSource = {
+				kind: 'scenario',
+				scenario: 'deployed',
+			}
+			for (const subscriber of subscribers) subscriber()
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
+
+		try {
+			const picker = within(renderedComponent.container).getAllByRole('combobox')[0]
+			if (picker === undefined || picker.tagName !== 'SELECT') throw new Error('Expected the scenario picker')
+			fireEvent.change(picker, {
+				currentTarget: { value: 'scenario:deployed' },
+				target: { value: 'scenario:deployed' },
+			})
+
+			await waitFor(() => {
+				expect(domEnvironment.window.location.search).toBe('?simulate=1')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=deployed')
+				expect(domEnvironment.window.location.hash.match(/simulate=1/g)?.length ?? 0).toBe(0)
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('restores the route and shows an alert when scenario navigation fails', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
 		const initialHistoryLength = domEnvironment.window.history.length

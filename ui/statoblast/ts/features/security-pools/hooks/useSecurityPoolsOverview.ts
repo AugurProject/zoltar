@@ -121,23 +121,28 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationModalOpen = useSignal(false)
 	const securityPoolBrowseCount = useSignal<bigint | undefined>(undefined)
 	const securityPoolPage = useSignal<SecurityPoolBrowsePage | undefined>(undefined)
+	const universeDirectoryPools = useSignal<ListedSecurityPool[] | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
+	const universeDirectoryLoad = useLoadController()
 	const liquidationFundingPreviewLoad = useLoadController()
 	const liquidationApprovalLoad = useLoadController()
 	const liquidationReceiverVaultSummaryLoad = useLoadController()
 	const securityPoolPageLoad = useLoadController()
 	const securityPoolsLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
+	const universeDirectoryLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const hasLoadedSecurityPoolPage = useSignal(false)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolsLoadError = useSignal<string | undefined>(undefined)
+	const universeDirectoryError = useSignal<string | undefined>(undefined)
 	const securityPoolsLoadErrorEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const securityPoolLiquidationError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 	const nextSecurityPoolsLoad = useRequestGuard()
+	const nextUniverseDirectoryLoad = useRequestGuard()
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
 	const nextLiquidationReceiverVaultSummaryLoad = useRequestGuard()
@@ -197,6 +202,44 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
 			},
 		})
+	}
+
+	const loadUniverseDirectoryPools = async () => {
+		const requestedEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
+		const requestedAccountAddress = latestAccountAddress.current
+		const requestedAccountKey = requestedAccountAddress?.toLowerCase() ?? 'no-account'
+		const isCurrent = nextUniverseDirectoryLoad()
+		const result = await universeDirectoryLoad.run({
+			isCurrent,
+			onStart: () => {
+				if (!isCurrent()) return
+				universeDirectoryError.value = undefined
+				universeDirectoryLoadedEnvironmentRefreshKey.value = undefined
+			},
+			load: async () => {
+				await dependencies.waitForSecurityPoolReadBackend()
+				const loadedPools: ListedSecurityPool[] = []
+				const pageSize = 100
+				for (let pageIndex = 0; ; pageIndex += 1) {
+					const page = await dependencies.loadSecurityPoolPage(pageIndex, pageSize, requestedAccountAddress)
+					loadedPools.push(...page.pools)
+					if (BigInt(loadedPools.length) >= page.poolCount || page.pools.length < pageSize) return loadedPools
+				}
+			},
+			onSuccess: pools => {
+				const currentAccountKey = latestAccountAddress.current?.toLowerCase() ?? 'no-account'
+				if (!isCurrent() || latestEnvironmentRefreshKey.current !== requestedEnvironmentRefreshKey || currentAccountKey !== requestedAccountKey) return
+				universeDirectoryPools.value = pools
+				universeDirectoryLoadedEnvironmentRefreshKey.value = requestedEnvironmentRefreshKey
+			},
+			onError: error => {
+				if (!isCurrent()) return
+				universeDirectoryPools.value = undefined
+				universeDirectoryError.value = getErrorMessage(error, 'Failed to load universe stats')
+			},
+		})
+		const currentAccountKey = latestAccountAddress.current?.toLowerCase() ?? 'no-account'
+		return result !== undefined && latestEnvironmentRefreshKey.current === requestedEnvironmentRefreshKey && currentAccountKey === requestedAccountKey
 	}
 
 	const resolveLiquidationFundingPreview = async (managerAddress: Address, walletAddress: Address): Promise<LiquidationFundingPreview> => {
@@ -567,11 +610,13 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationTimeoutMinutes: liquidationTimeoutMinutes.value,
 		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
+		hasLoadedUniverseDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		securityPoolsLoadedEnvironmentRefreshKey: securityPoolsLoadedEnvironmentRefreshKey.value,
 		hasLoadedSecurityPoolPage: hasLoadedSecurityPoolPage.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
 		loadingSecurityPoolPage: securityPoolPageLoad.isLoading.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
+		loadingUniverseDirectoryPools: universeDirectoryLoad.isLoading.value,
 		loadingLiquidationFundingPreview: loadingCurrentLiquidationFundingPreview,
 		loadingLiquidationApproval: loadingCurrentLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary: loadingCurrentLiquidationReceiverVaultSummary,
@@ -592,6 +637,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		securityPoolBrowseCount: securityPoolBrowseCount.value,
 		securityPoolPage: securityPoolPage.value,
 		securityPools: securityPools.value,
+		securityPoolUniverseDirectoryError: universeDirectoryError.value,
+		universeDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey ? universeDirectoryPools.value : undefined,
 		setLiquidationAmount: (value: string) => {
 			liquidationDebtEthAmount.value = value
 		},
@@ -616,6 +663,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			liquidationApprovalError.value = undefined
 			liquidationApprovalLoadingKey.value = undefined
 		},
+		loadUniverseDirectoryPools,
 		loadSecurityPools,
 	}
 }

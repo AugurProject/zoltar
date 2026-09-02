@@ -8,6 +8,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const ZOLTAR_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },
 	{ href: '#/zoltar', label: commonCopy.zoltar },
+	{ href: '#/zoltar?zoltarView=universes', label: commonCopy.universe },
 ] as const
 
 type AppRoute = 'deploy' | 'not-found' | 'zoltar'

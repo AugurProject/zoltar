@@ -1,6 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { useMemo } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -12,7 +11,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -116,8 +114,8 @@ export function ZoltarMigrationSection({
 		[rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildRepBalancesAttoRep, zoltarMigrationPreparedRepBalanceAttoRep],
 	)
 	const hasSufficientSplitLimit = migrationAmount !== undefined && splitLimit !== undefined && migrationAmount <= splitLimit
-	const canPrepare = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
-	const canSplit = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
+	const canPrepare = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
+	const canSplit = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalanceAttoRep, zoltarForkRepBalanceAttoRep)
 	const walletRepAfterPrepareAttoRep = zoltarForkRepBalanceAttoRep === undefined || missingPreparationAmount > zoltarForkRepBalanceAttoRep ? undefined : zoltarForkRepBalanceAttoRep - missingPreparationAmount
 	const custodyRepAfterPrepareAttoRep = (zoltarMigrationPreparedRepBalanceAttoRep ?? 0n) + missingPreparationAmount
@@ -142,7 +140,7 @@ export function ZoltarMigrationSection({
 					</span>
 				))
 	const approvalGuardMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		return undefined
@@ -152,7 +150,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.migrationBalanceReadyDetail
 	}
 	const prepareHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
@@ -161,7 +159,7 @@ export function ZoltarMigrationSection({
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()
 	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
 		if (!hasPreparedBalance) return zoltarCopy.formatMigrationPreparationRequired(formatCurrencyBalance(missingPreparationAmount ?? 0n))
@@ -172,7 +170,7 @@ export function ZoltarMigrationSection({
 		return undefined
 	})()
 	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.preparationNotForkedReason)
+		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableAttoRep), formatCurrencyBalance(zoltarMigrationPreparedRepBalanceAttoRep ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))
@@ -211,7 +209,7 @@ export function ZoltarMigrationSection({
 
 	return (
 		<>
-			<SectionBlock title={zoltarCopy.migrateRep}>
+			<SectionBlock variant='plain'>
 				<div className='workflow-summary-strip workflow-guide'>
 					<div className='workflow-summary-strip-steps migration-workflow-steps'>
 						{workflowSteps.map(step => (
@@ -241,14 +239,27 @@ export function ZoltarMigrationSection({
 								onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })}
 								placeholder={commonCopy.zeroDecimalPlaceholder}
 								value={zoltarMigrationForm.amount}
-								disabled={zoltarMigrationPending || !hasForked}
+								disabled={zoltarMigrationPending}
 							/>
-							<button className='quiet field-inline-action' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || !hasForked || migrationAmountSource <= 0n}>
+							<button className='quiet field-inline-action' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || migrationAmountSource <= 0n}>
 								{commonCopy.max}
 							</button>
 						</div>
 						{migrationAmountHintMessage === undefined ? undefined : <p className='detail'>{migrationAmountHintMessage}</p>}
 					</div>
+
+					{rootUniverse === undefined ? undefined : (
+						<MigrationOutcomeUniversesSection
+							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
+							childUniverses={rootUniverse.childUniverses}
+							disabled={zoltarMigrationPending}
+							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
+							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
+							onAddNextOutcome={addNextOutcome}
+							onToggleOutcomeIndex={toggleOutcomeIndex}
+							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
+						/>
+					)}
 
 					<TokenApprovalControl
 						actionLabel={zoltarCopy.preparingCurrentAmountLabel}
@@ -266,19 +277,6 @@ export function ZoltarMigrationSection({
 						tokenUnits={18}
 					/>
 
-					{rootUniverse === undefined ? undefined : (
-						<MigrationOutcomeUniversesSection
-							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
-							childUniverses={rootUniverse.childUniverses}
-							disabled={zoltarMigrationPending}
-							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
-							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
-							onAddNextOutcome={addNextOutcome}
-							onToggleOutcomeIndex={toggleOutcomeIndex}
-							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
-						/>
-					)}
-
 					{heldChildUniverses.length === 0 ? undefined : (
 						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>
 							<DataGrid dense>
@@ -290,18 +288,6 @@ export function ZoltarMigrationSection({
 							</DataGrid>
 						</WorkflowSubsection>
 					)}
-
-					<TransactionReview
-						context={[
-							{ label: commonCopy.question, value: rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable },
-							{ label: zoltarCopy.selectedDestinations, value: selectedDestinationsContent },
-						]}
-						primary={[
-							needsAdditionalPreparation ? { label: transactionReviewCopy.youPay, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.migrationAmount, value: <CurrencyValue value={migrationAmount} suffix={commonCopy.rep} /> },
-							needsAdditionalPreparation ? { label: zoltarCopy.repMovedToMigrationCustody, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.childUniverseRepReceived, value: <CurrencyValue value={splitRepReceivedAttoRep} suffix={commonCopy.rep} /> },
-						]}
-						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
-					/>
 
 					<ReadOnlyDetailAccordion title={zoltarCopy.balanceChanges}>
 						<MetricGrid>
@@ -333,6 +319,16 @@ export function ZoltarMigrationSection({
 						/>
 						<TransactionActionButton idleLabel={zoltarCopy.splitRep} pendingLabel={zoltarCopy.splittingRepPending} onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }} />
 					</div>
+					<DataGrid dense>
+						<MetricField label={commonCopy.question}>{rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable}</MetricField>
+						<MetricField label={zoltarCopy.selectedDestinations}>{selectedDestinationsContent}</MetricField>
+						<MetricField label={zoltarCopy.migrationAmount}>
+							<CurrencyValue value={migrationAmount} suffix={commonCopy.rep} />
+						</MetricField>
+						<MetricField label={needsAdditionalPreparation ? zoltarCopy.repMovedToMigrationCustody : zoltarCopy.childUniverseRepReceived}>
+							<CurrencyValue value={needsAdditionalPreparation ? missingPreparationAmount : splitRepReceivedAttoRep} suffix={commonCopy.rep} />
+						</MetricField>
+					</DataGrid>
 				</div>
 			</SectionBlock>
 

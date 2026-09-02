@@ -402,7 +402,6 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Simulation')).toBeDefined()
-		expect(document.body.textContent ?? '').toContain('Simulation mode uses browser-local contract state.')
 		expect(documentQueries.queryByText('Write Network')).toBeNull()
 		expect(documentQueries.queryByText('Read Source')).toBeNull()
 		expect(documentQueries.queryByText('Browser simulation')).toBeNull()

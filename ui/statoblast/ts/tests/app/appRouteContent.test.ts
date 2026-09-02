@@ -8,6 +8,7 @@ describe('Statoblast AppRouteContent', () => {
 		expect(STATOBLAST_NOT_FOUND_LINKS).toEqual([
 			{ href: '#/deploy', label: 'Deploy' },
 			{ href: '#/security-pools', label: 'Security Pools' },
+			{ href: '#/security-pools?securityPoolsView=universes', label: 'Universe' },
 			{ href: '#/open-oracle', label: 'Open Oracle' },
 		])
 	})

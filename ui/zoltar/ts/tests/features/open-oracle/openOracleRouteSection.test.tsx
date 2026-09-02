@@ -262,8 +262,9 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('1d 0h 0m (86400 seconds)')).not.toBeNull()
-		expect(within(document.body).getByText('1h 0m (3600 seconds)')).not.toBeNull()
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByLabelText('Settlement Delay (seconds)') as HTMLInputElement).value).toBe('86400')
+		expect((documentQueries.getByLabelText('Dispute Delay (seconds)') as HTMLInputElement).value).toBe('3600')
 	})
 
 	test('associates unreadable token contract preflight with the affected address field', async () => {
@@ -605,7 +606,7 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonEnabled(document.body, 'Create standalone Oracle report')
 	})
 
-	test('uses valid timing defaults and reviews every lifecycle parameter', async () => {
+	test('uses valid timing defaults for every lifecycle parameter', async () => {
 		const defaultForm = getDefaultOpenOracleCreateFormState()
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -629,17 +630,15 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const documentQueries = within(document.body)
 		expectTransactionButtonEnabled(document.body, 'Create standalone Oracle report')
-		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction Review' })
-		const review = reviewHeading.closest('section')
-		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
-		const reviewQueries = within(review)
+		expect(documentQueries.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
 		for (const label of ['Settlement Delay (seconds)', 'Dispute Delay (seconds)', 'Dispute Fee (%)', 'Multiplier', 'Escalation Halt', 'Protocol Fee (%)']) {
-			expect(reviewQueries.getByText(label)).not.toBeNull()
+			expect(documentQueries.getByLabelText(label)).not.toBeNull()
 		}
-		expect(review.textContent).toContain(defaultForm.settlementTime)
-		expect(review.textContent).toContain(defaultForm.disputeDelay)
-		expect(reviewQueries.getAllByText('1\u00a0ETH')).toHaveLength(2)
+		expect((documentQueries.getByLabelText('Settlement Delay (seconds)') as HTMLInputElement).value).toBe(defaultForm.settlementTime)
+		expect((documentQueries.getByLabelText('Dispute Delay (seconds)') as HTMLInputElement).value).toBe(defaultForm.disputeDelay)
+		expect((documentQueries.getByLabelText('Settler Reward') as HTMLInputElement).value).toBe('1')
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {
@@ -897,8 +896,8 @@ describe('OpenOracleSection route create view', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
 		expect(withdrawnBalances).toEqual([])
 		expect(documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
-		expect(documentQueries.getByText('7 ETH')).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Confirm withdrawal' })).not.toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm withdrawal' }))
 		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
 		expect(withdrawnBalances).toEqual(['ethAttoEth'])
@@ -957,7 +956,6 @@ describe('OpenOracleSection route create view', () => {
 
 		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REPv2' })
 		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByText('125 REPv2')).not.toBeNull()
 		expect(dialogQueries.getByRole('alert').textContent).toContain('Your withdrawable REPv2 balance changed. Review the updated amount and confirm again')
 		expectTransactionButtonEnabled(dialog, 'Confirm withdrawal')
 	})
