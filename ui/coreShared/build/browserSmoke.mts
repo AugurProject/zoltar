@@ -26,6 +26,7 @@ type BrowserSmokeState = {
 	body: string
 	height: number
 	hasMain: boolean
+	readyState: DocumentReadyState
 	title: string
 	width: number
 }
@@ -216,6 +217,7 @@ export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: 
 	const explicitReadyStateReached = readyText !== undefined && includesText(readyText)
 	return (
 		state.hasMain &&
+		state.readyState === 'complete' &&
 		state.width === viewport.width &&
 		state.height === viewport.height &&
 		state.body !== '' &&
@@ -460,7 +462,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 		const mountTimeoutMilliseconds = options.mountTimeoutMilliseconds ?? MOUNT_TIMEOUT_MILLISECONDS
 		while (Date.now() - start < mountTimeoutMilliseconds) {
 			const result = (await send('Runtime.evaluate', {
-				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, title: document.title, width: window.innerWidth })`,
+				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, readyState: document.readyState, title: document.title, width: window.innerWidth })`,
 				returnByValue: true,
 			})) as { result?: { value?: string } }
 			const raw = result.result?.value

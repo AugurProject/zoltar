@@ -11,6 +11,7 @@ const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
 	height: 844,
 	hasMain: true,
+	readyState: 'complete' as const,
 	title: 'Security Pools | Augur Statoblast',
 	width: 390,
 }
@@ -47,6 +48,10 @@ test('an explicit route-ready marker overrides stale bootstrap copy outside the 
 test('browser smoke readiness requires the exact requested CSS viewport', () => {
 	expect(isBrowserSmokeReady({ ...mountedState, width: 500 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 	expect(isBrowserSmokeReady({ ...mountedState, height: 701 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
+})
+
+test('browser smoke readiness waits for the document load lifecycle', () => {
+	expect(isBrowserSmokeReady({ ...mountedState, readyState: 'interactive' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
 test('browser cleanup handles a Chromium process that already exited', async () => {
