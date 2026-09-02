@@ -18,11 +18,9 @@
 		"@zoltar/shared": "file:../../shared",
 		"@zoltar/ui-core-shared": "file:../coreShared",
 		"@zoltar/ui-zoltar": "file:../zoltar",
-		"buffer": "6.0.3",
 		"micro-eth-signer": "0.18.1",
 		"micro-packed": "0.8.0",
 		"preact": "10.26.4",
-		"source-map": "0.6.1",
 		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {

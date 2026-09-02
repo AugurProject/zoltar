@@ -124,7 +124,7 @@ for (const appId of UI_APP_IDS) {
 		const appBundle = await fs.readFile(appBundlePath, 'utf8')
 		const workerBundle = await fs.readFile(workerBundlePath, 'utf8')
 		const appSourceMap = JSON.parse(await fs.readFile(appSourceMapPath, 'utf8')) as { sources: string[] }
-		const workerSourceMap = JSON.parse(await fs.readFile(workerSourceMapPath, 'utf8')) as { sources: string[] }
+		const workerSourceMap = JSON.parse(await fs.readFile(workerSourceMapPath, 'utf8')) as { sources: string[]; sourcesContent: string[] }
 
 		expect(appBundle).not.toContain('./vendor/')
 		expect(appBundle).not.toContain('./js/')
@@ -134,6 +134,9 @@ for (const appId of UI_APP_IDS) {
 		expect(workerBundle).not.toContain('./js/')
 		expect(appSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
 		expect(workerSourceMap.sources.some(source => source.replaceAll('\\', '/').startsWith('../../ts/'))).toBe(true)
+		const tevmActionsSourceIndex = workerSourceMap.sources.findIndex(source => source.replaceAll('\\', '/').endsWith('/@tevm/actions/dist/index.js'))
+		expect(tevmActionsSourceIndex).toBeGreaterThanOrEqual(0)
+		expect(workerSourceMap.sourcesContent[tevmActionsSourceIndex]).toStartWith("import { Buffer } from 'node:buffer'")
 		expect(appBundle).toContain(expectedRoute)
 		if (appId === 'trading') {
 			expect(appBundle).not.toContain('SIMULATED DATA')
