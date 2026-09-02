@@ -8,7 +8,6 @@
       },
       "devDependencies": {
         "bun-types": "1.3.11",
-        "funtypes": "5.1.1",
         "knip": "6.17.1",
         "solc": "0.8.35",
         "solc-0-8-28": "npm:solc@0.8.28",
@@ -191,8 +190,6 @@
     "formatly": ["formatly@0.3.0", "", { "dependencies": { "fd-package-json": "^2.0.0" }, "bin": { "formatly": "bin/index.mjs" } }, "sha512-9XNj/o4wrRFyhSMJOvsuyMwy8aUfBaZ1VrqHVfohyXf0Sw0e+yfKG+xZaY3arGCOMdwFsqObtzVOc1gU9KiT9w=="],
 
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
-
-    "funtypes": ["funtypes@5.1.1", "", {}, "sha512-JdOe6zAk3kzTTuoTKrdshe16mr8FwuNzUnSg5gZpeJxMYFiY0LaIec9A4/VHK8Z3fSnm09eMrH93vaHE2R0J5Q=="],
 
     "get-tsconfig": ["get-tsconfig@4.14.0", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA=="],
 

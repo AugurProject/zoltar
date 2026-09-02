@@ -3,7 +3,6 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import solc from 'solc'
 import openOracleSolc from 'solc-0-8-28'
-import * as funtypes from 'funtypes'
 import * as url from 'url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -44,63 +43,44 @@ const allowedImmutableContractWarnings = [
 	},
 ]
 
-const CompileError = funtypes.ReadonlyObject({
-	severity: funtypes.String,
-	formattedMessage: funtypes.String,
-})
-
-const AbiParameter: funtypes.Runtype<{
+type AbiParameter = {
 	readonly name?: string
 	readonly type?: string
 	readonly internalType?: string
 	readonly indexed?: boolean
-	readonly components?: readonly unknown[]
-}> = funtypes.Lazy(() =>
-	funtypes.ReadonlyPartial({
-		name: funtypes.String,
-		type: funtypes.String,
-		internalType: funtypes.String,
-		indexed: funtypes.Boolean,
-		components: funtypes.ReadonlyArray(AbiParameter),
-	}),
-)
+	readonly components?: readonly AbiParameter[]
+}
 
-const AbiEntry = funtypes.ReadonlyPartial({
-	type: funtypes.String,
-	name: funtypes.String,
-	stateMutability: funtypes.String,
-	anonymous: funtypes.Boolean,
-	inputs: funtypes.ReadonlyArray(AbiParameter),
-	outputs: funtypes.ReadonlyArray(AbiParameter),
-})
+type AbiEntry = {
+	readonly type?: string
+	readonly name?: string
+	readonly stateMutability?: string
+	readonly anonymous?: boolean
+	readonly inputs?: readonly AbiParameter[]
+	readonly outputs?: readonly AbiParameter[]
+}
 
-const ContractData = funtypes.ReadonlyPartial({
-	abi: funtypes.ReadonlyArray(AbiEntry),
-	evm: funtypes.ReadonlyPartial({
-		bytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String,
-			opcodes: funtypes.String,
-			sourceMap: funtypes.String,
-		}),
-		deployedBytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String,
-			opcodes: funtypes.String,
-			sourceMap: funtypes.String,
-		}),
-	}),
-	storageLayout: funtypes.Unknown,
-})
+type ContractData = {
+	readonly abi?: readonly AbiEntry[]
+	readonly evm?: {
+		readonly bytecode?: BytecodeData
+		readonly deployedBytecode?: BytecodeData
+	}
+	readonly storageLayout?: unknown
+}
 
-const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
-	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
-	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
-	compilerProfiles: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
-})
+type BytecodeData = {
+	readonly object?: string
+	readonly opcodes?: string
+	readonly sourceMap?: string
+}
 
-const HashCache = funtypes.ReadonlyPartial({
-	hash: funtypes.String,
-})
+type CompileResult = {
+	readonly contracts?: Readonly<Record<string, Readonly<Record<string, ContractData>>>>
+	readonly sources?: unknown
+	readonly errors?: readonly { readonly severity: string; readonly formattedMessage: string }[]
+	readonly compilerProfiles?: unknown
+}
 
 const mainCompilerSettings = {
 	viaIR: true,
@@ -175,6 +155,98 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
+function validationError(message: string): Error {
+	const error = new Error(message)
+	error.name = 'ValidationError'
+	return error
+}
+
+function requireRecord(value: unknown, path: string): Record<string, unknown> {
+	if (!isObjectRecord(value) || Array.isArray(value)) throw validationError(`${path} must be an object`)
+	return value
+}
+
+function validateOptionalString(record: Record<string, unknown>, key: string, path: string) {
+	const value = record[key]
+	if (value !== undefined && typeof value !== 'string') throw validationError(`${path}.${key} must be a string`)
+}
+
+function validateAbiParameter(value: unknown, path: string): AbiParameter {
+	const parameter = requireRecord(value, path)
+	validateOptionalString(parameter, 'name', path)
+	validateOptionalString(parameter, 'type', path)
+	validateOptionalString(parameter, 'internalType', path)
+	if (parameter['indexed'] !== undefined && typeof parameter['indexed'] !== 'boolean') throw validationError(`${path}.indexed must be a boolean`)
+	if (parameter['components'] !== undefined) {
+		if (!Array.isArray(parameter['components'])) throw validationError(`${path}.components must be an array`)
+		parameter['components'].forEach((component, index) => validateAbiParameter(component, `${path}.components[${index}]`))
+	}
+	return parameter
+}
+
+function validateAbiEntry(value: unknown, path: string): AbiEntry {
+	const entry = requireRecord(value, path)
+	validateOptionalString(entry, 'type', path)
+	validateOptionalString(entry, 'name', path)
+	validateOptionalString(entry, 'stateMutability', path)
+	if (entry['anonymous'] !== undefined && typeof entry['anonymous'] !== 'boolean') throw validationError(`${path}.anonymous must be a boolean`)
+	for (const key of ['inputs', 'outputs'] as const) {
+		const parameters = entry[key]
+		if (parameters === undefined) continue
+		if (!Array.isArray(parameters)) throw validationError(`${path}.${key} must be an array`)
+		parameters.forEach((parameter, index) => validateAbiParameter(parameter, `${path}.${key}[${index}]`))
+	}
+	return entry
+}
+
+function validateBytecodeData(value: unknown, path: string): BytecodeData {
+	const bytecode = requireRecord(value, path)
+	validateOptionalString(bytecode, 'object', path)
+	validateOptionalString(bytecode, 'opcodes', path)
+	validateOptionalString(bytecode, 'sourceMap', path)
+	return bytecode
+}
+
+function validateContractData(value: unknown, path: string): ContractData {
+	const contract = requireRecord(value, path)
+	if (contract['abi'] !== undefined) {
+		if (!Array.isArray(contract['abi'])) throw validationError(`${path}.abi must be an array`)
+		contract['abi'].forEach((entry, index) => validateAbiEntry(entry, `${path}.abi[${index}]`))
+	}
+	if (contract['evm'] !== undefined) {
+		const evm = requireRecord(contract['evm'], `${path}.evm`)
+		for (const key of ['bytecode', 'deployedBytecode'] as const) {
+			if (evm[key] !== undefined) validateBytecodeData(evm[key], `${path}.evm.${key}`)
+		}
+	}
+	return contract
+}
+
+function parseCompileResult(value: unknown): CompileResult {
+	const result = requireRecord(value, 'compile result')
+	if (result['contracts'] !== undefined) {
+		const contracts = requireRecord(result['contracts'], 'compile result.contracts')
+		for (const [sourcePath, sourceContracts] of Object.entries(contracts)) {
+			const contractRecords = requireRecord(sourceContracts, `compile result.contracts.${sourcePath}`)
+			for (const [contractName, contract] of Object.entries(contractRecords)) validateContractData(contract, `compile result.contracts.${sourcePath}.${contractName}`)
+		}
+	}
+	if (result['errors'] !== undefined) {
+		if (!Array.isArray(result['errors'])) throw validationError('compile result.errors must be an array')
+		for (const [index, diagnostic] of result['errors'].entries()) {
+			const error = requireRecord(diagnostic, `compile result.errors[${index}]`)
+			if (typeof error['severity'] !== 'string' || typeof error['formattedMessage'] !== 'string') throw validationError(`compile result.errors[${index}] must contain string severity and formattedMessage fields`)
+		}
+	}
+	return result
+}
+
+function parseHashCache(value: unknown): { readonly hash?: string } {
+	const cache = requireRecord(value, 'hash cache')
+	validateOptionalString(cache, 'hash', 'hash cache')
+	return cache
+}
+
 function normalizeSoliditySourceLineEndings(source: string): string {
 	return source.replace(/\r\n?/g, '\n')
 }
@@ -187,7 +259,7 @@ function isAllowedImmutableContractWarning(formattedMessage: string): boolean {
 	return allowedImmutableContractWarnings.some(({ sourcePath, message }) => formattedMessage.includes(message) && formattedMessage.includes(sourcePath))
 }
 
-function isFuntypesValidationError(error: unknown): error is Error {
+function isValidationError(error: unknown): error is Error {
 	return error instanceof Error && error.name === 'ValidationError'
 }
 
@@ -241,11 +313,11 @@ async function loadHashCache(): Promise<{ hash: string | undefined }> {
 	try {
 		if (await exists(HASH_CACHE_PATH)) {
 			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
-			const parsed = HashCache.parse(JSON.parse(data))
+			const parsed = parseHashCache(JSON.parse(data))
 			return { hash: parsed.hash }
 		}
 	} catch (error) {
-		if (error instanceof SyntaxError || hasNodeErrorCode(error, 'ENOENT') || isFuntypesValidationError(error)) return { hash: undefined }
+		if (error instanceof SyntaxError || hasNodeErrorCode(error, 'ENOENT') || isValidationError(error)) return { hash: undefined }
 		throw error
 	}
 
@@ -288,7 +360,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 }
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
-	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
+	const solidityContract = parseCompileResult(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
 	if (!solidityContract.contracts) throw new Error('No contracts compiled')
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (!isObjectRecord(contract)) throw new Error('missing contract')
@@ -368,7 +440,7 @@ function compileSourceMap(label: string, compiler: SolcCompiler, sources: Map<st
 	const output = compiler.compile(JSON.stringify(input))
 	console.timeEnd(`${label} compilation`)
 
-	const result = CompileResult.parse(JSON.parse(output))
+	const result = parseCompileResult(JSON.parse(output))
 	const diagnostics = Array.isArray(result.errors) ? result.errors : []
 	const errors: string[] = []
 
@@ -462,7 +534,7 @@ function mergeCompileSources(mainSources: unknown, openOracleSources: unknown, s
 	return Object.keys(mergedSources).length > 0 ? mergedSources : undefined
 }
 
-function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, openOracleResult: funtypes.Static<typeof CompileResult>, openOracleCompiler: SolcCompiler) {
+function mergeCompileResults(mainResult: CompileResult, openOracleResult: CompileResult, openOracleCompiler: SolcCompiler) {
 	const mergedContracts: Record<string, Record<string, unknown>> = {}
 	const openOracleSourceIdOffset = getOpenOracleSourceIdOffset(mainResult.sources)
 
@@ -513,9 +585,9 @@ const compileContracts = async () => {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
 		try {
 			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
-			CompileResult.parse(JSON.parse(artifactContent))
+			parseCompileResult(JSON.parse(artifactContent))
 		} catch (error) {
-			if (!(error instanceof SyntaxError) && !hasNodeErrorCode(error, 'ENOENT') && !isFuntypesValidationError(error)) throw error
+			if (!(error instanceof SyntaxError) && !hasNodeErrorCode(error, 'ENOENT') && !isValidationError(error)) throw error
 			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
 			needsRecompilation = true
 		}
@@ -525,7 +597,7 @@ const compileContracts = async () => {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
 		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
 		const openOracleResult = compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings)
-		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult, openOracleCompiler))
+		const mergedResult = parseCompileResult(mergeCompileResults(mainResult, openOracleResult, openOracleCompiler))
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 		await fs.writeFile(ARTIFACTS_JSON, JSON.stringify(mergedResult))
