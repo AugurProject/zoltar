@@ -277,16 +277,16 @@ describe('database checkpoint fencing', () => {
 		expect(replayCursorRequiresReset(0, 0, 0)).toBe(false)
 	})
 
-	test('accepts only the configured first block or the direct checkpoint child', () => {
+	test('accepts sparse canonical checkpoints and still fences direct children', () => {
 		const parentHash = blockHash('parent')
 		const otherHash = blockHash('other')
 		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n })).not.toThrow()
 		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n, indexedHash: parentHash })).toThrow('block hash without a block number')
-		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n })).toThrow('must start at block 10')
+		expect(() => assertBlockAppend({ number: 9n, parentHash }, { startBlock: 10n })).toThrow('starts at block 10')
+		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n })).not.toThrow()
 		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).not.toThrow()
-		expect(() => assertBlockAppend({ number: 12n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
-			'next database checkpoint must be block 11',
-		)
+		expect(() => assertBlockAppend({ number: 12n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).not.toThrow()
+		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow('already block 10')
 		expect(() => assertBlockAppend({ number: 11n, parentHash: otherHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
 			'does not extend the current database checkpoint',
 		)
@@ -332,6 +332,69 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertRewindTarget(-1n, hash, checkpoint, false)).toThrow('must not specify an ancestor hash')
 		expect(() => assertRewindTarget(10n, hash, { indexedBlock: 11n }, true)).toThrow('complete indexed checkpoint')
 	})
+})
+
+postgresTest('rolls back every sparse batch table when final canonical validation fails', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const sparseChainId = chainId + 10_000 + process.pid
+	const network = {
+		id: `sparse-atomic-${sparseChainId}`,
+		name: 'Sparse atomic fixture',
+		chainId: sparseChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 1n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [],
+	} satisfies NetworkConfig
+	let lease: IndexerLease | undefined
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork(network)
+		lease = await database.tryAcquireIndexerLock(sparseChainId)
+		if (lease === undefined) throw new Error('sparse atomic writer did not acquire its lock')
+		const first = indexedBlock('block-one', blockHash('sparse-genesis'), [], 'first sparse log')
+		const second = {
+			...indexedBlock('block-two', first.hash),
+			logScanCursors: [{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n }],
+		}
+		const liveEventsBefore = await database.sql`SELECT count(*)::integer AS count FROM live_events`
+
+		await expect(
+			database.storeBlocks(sparseChainId, [first, second], lease, undefined, async () => {
+				throw new Error('canonical anchor changed')
+			}),
+		).rejects.toThrow('canonical anchor changed')
+
+		for (const table of ['blocks', 'transactions', 'logs', 'log_scan_cursors'] as const) {
+			const rows = await database.sql.unsafe(`SELECT count(*)::integer AS count FROM ${table} WHERE chain_id = $1`, [sparseChainId])
+			expect(rows[0]?.['count']).toBe(0)
+		}
+		const failedCheckpoint = await database.sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${sparseChainId}`
+		expect(failedCheckpoint[0]).toMatchObject({ indexed_block: null, indexed_hash: null })
+		const liveEventsAfterFailure = await database.sql`SELECT count(*)::integer AS count FROM live_events`
+		expect(liveEventsAfterFailure[0]?.['count']).toBe(liveEventsBefore[0]?.['count'])
+
+		await database.storeBlocks(sparseChainId, [first, second], lease)
+		expect(
+			(await database.sql`SELECT number FROM blocks WHERE chain_id = ${sparseChainId} ORDER BY number`).map((row: Record<string, unknown>) =>
+				String(row['number']),
+			),
+		).toEqual(['1', '2'])
+		expect(await database.checkpoint(sparseChainId, lease)).toEqual({ number: 2n, hash: second.hash })
+	} finally {
+		await lease?.release()
+		await database.sql`DELETE FROM actions WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM logs WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM transactions WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM log_scan_cursors WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM blocks WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM networks WHERE chain_id = ${sparseChainId}`
+		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${sparseChainId.toString()}`
+		await database.close()
+	}
 })
 
 postgresTest('rejects every public namespace object before fresh schema initialization', async () => {

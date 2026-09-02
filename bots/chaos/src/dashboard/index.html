@@ -412,7 +412,7 @@
 						<div class="settings-body">
 							<form id="connectivity-form">
 								<fieldset id="connectivity-fields" disabled>
-									<p class="notice">RPC checks run from the chaos-bot server, which can reach local container services such as <code>http://reth:8545</code>. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.</p>
+									<p class="notice">RPC checks run from the chaos-bot server. Docker service URLs such as <code>http://reth:8545</code> work only when that process shares the service's container network. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.</p>
 									<div class="form-grid">
 										<label>Primary read RPC<input id="read-rpc-url" autocomplete="off" placeholder="http://reth:8545" spellcheck="false" type="url" required /></label>
 										<label

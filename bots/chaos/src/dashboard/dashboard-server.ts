@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
@@ -895,8 +896,15 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
-	if (operation === 'mutation:/api/connectivity') return json({ error: 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.' }, 400)
+	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
+}
+
+function publicConnectivityFailure(error: unknown) {
+	return publicConnectivityError(error, {
+		fallback: 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.',
+		validationMessages: new Set(['Expected quorum RPC URL list', 'Expected RPC configuration object', 'Expected supported network', 'RPC connectivity checks failed. Review the complete submitted endpoint set and retry.', 'RPC quorum 2 requires at least 2 healthy read endpoints']),
+	})
 }
 
 function indeterminateConfigurationFailure() {

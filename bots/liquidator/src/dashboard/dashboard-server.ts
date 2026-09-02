@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 
 export type DashboardController = {
@@ -46,6 +47,20 @@ function closingJson(value: unknown) {
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
+}
+
+function publicConnectivityUpdateError(error: unknown) {
+	return publicConnectivityError(error, {
+		fallback: 'RPC connectivity checks failed. Review the submitted endpoints and retry.',
+		validationMessages: new Set([
+			'Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)',
+			'Network and RPC settings must be an object',
+			'Network must be mainnet or sepolia',
+			'RPC connectivity settings must be an object',
+			'RPC quorum must be 1 or 2',
+			'Select the chain profile before saving its RPC settings',
+		]),
+	})
 }
 
 function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {
@@ -284,7 +299,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					const result = await handler(value)
 					return url.pathname === '/api/network-profile' ? closingJson(result) : json(result)
 				} catch (error) {
-					return publicError(error, 400, `mutation:${url.pathname}`, 'The dashboard change could not be saved. Review the submitted values and protected bot logs.')
+					const fallback = url.pathname === '/api/network-connectivity' ? publicConnectivityUpdateError(error) : 'The dashboard change could not be saved. Review the submitted values and protected bot logs.'
+					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') {

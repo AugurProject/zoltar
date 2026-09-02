@@ -2531,28 +2531,26 @@ dialog::backdrop {
 	}
 	.contract-list {
 		display: grid;
-		max-height: 320px;
-		overflow-x: hidden;
-		overflow-y: auto;
+		max-height: none;
+		overflow: visible;
 		border-right: 0;
 		border-bottom: 1px solid var(--line);
 	}
 	.contract-group {
 		display: grid;
-		overflow: hidden;
+		overflow: visible;
 	}
 	.contract-group-heading {
 		position: static;
 		padding: 0.58rem 1rem;
 	}
 	.contract-group-rows {
-		display: flex;
-		overflow-x: auto;
-		overscroll-behavior-inline: contain;
+		display: grid;
+		overflow: visible;
 	}
 	.contract-row {
-		min-width: 270px;
-		border-right: 1px solid var(--line);
+		min-width: 0;
+		border-right: 0;
 	}
 	.contract-detail-grid {
 		grid-template-columns: 1fr;

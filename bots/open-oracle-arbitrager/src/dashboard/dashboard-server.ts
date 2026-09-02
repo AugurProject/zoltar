@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
 import { publicOperatorFailure, publicOperatorSnapshot, publicPollFailure, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
@@ -73,9 +74,16 @@ function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
 }
 
 function publicConnectivityUpdateError(error: unknown) {
-	const message = errorMessage(error)
-	if (message === 'Select the chain profile before saving its RPC settings' || message === 'Switch chain profiles with the Chain selector before editing that profile') return message
-	return 'RPC connectivity checks failed. Review the submitted endpoints and retry.'
+	return publicConnectivityError(error, {
+		fallback: 'RPC connectivity checks failed. Review the submitted endpoints and retry.',
+		validationMessages: new Set([
+			'Live execution requires at least two independent quorum RPCs (three read endpoints total)',
+			'Network, RPC, and quorum settings are required',
+			'RPC quorum must be 1 or 2',
+			'Select the chain profile before saving its RPC settings',
+			'Switch chain profiles with the Chain selector before editing that profile',
+		]),
+	})
 }
 
 function markdownHeadingId(value: string) {
@@ -251,7 +259,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'submission-update', 'Submission settings could not be saved. Review the submitted values and protected bot logs.')
+					return publicError(error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.' }))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {

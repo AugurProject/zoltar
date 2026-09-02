@@ -4,6 +4,7 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import type { PositionRecord } from '#state/position-store'
+import { EndpointCheckFailure } from '#monitoring/connectivity'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -46,6 +47,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let connectivityFailure: Error | undefined
+	let submissionFailure: Error | undefined
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
 	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
@@ -95,6 +97,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return { wallet: clear ? undefined : address }
 		},
 		updateSubmission: value => {
+			if (submissionFailure !== undefined) throw submissionFailure
 			submission = validateSubmissionSettings(value)
 			return submission
 		},
@@ -269,6 +272,27 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(submissionUpdate.status).toBe(200)
 	expect(submission.mode).toBe('private')
 	expect(submission.relayUrls).toHaveLength(2)
+	const relaySecret = 'private-relay-secret'
+	submissionFailure = new EndpointCheckFailure('private relay unavailable', [
+		{
+			chainId: undefined,
+			checkedAt: '2026-09-01T00:00:00.000Z',
+			error: `RPC https://operator:${relaySecret}@relay.example/private?key=${relaySecret} failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND relay.example`,
+			kind: 'private-relay',
+			status: 'failed',
+			target: `https://operator:${relaySecret}@relay.example/private?key=${relaySecret}`,
+		},
+	])
+	const failedSubmissionUpdate = await fetch(`${origin}/api/submission`, {
+		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.example'] }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	const failedSubmissionBody = await failedSubmissionUpdate.text()
+	expect(failedSubmissionUpdate.status).toBe(400)
+	expect(failedSubmissionBody).not.toContain(relaySecret)
+	expect(JSON.parse(failedSubmissionBody)).toEqual({ error: 'RPC https://relay.example failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND relay.example' })
+	submissionFailure = undefined
 	const connectivityUpdate = await fetch(`${origin}/api/connectivity`, {
 		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
 		headers: { 'content-type': 'application/json', origin },
@@ -278,7 +302,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
 	const mutationCredentialMarker = 'mutation-operator-secret'
-	connectivityFailure = new Error(`RPC https://operator:${mutationCredentialMarker}@rpc.example returned credential-bearing provider text`)
+	connectivityFailure = new EndpointCheckFailure(`RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${mutationCredentialMarker}`, [
+		{ chainId: undefined, checkedAt: '2026-09-01T00:00:00.000Z', error: `RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${mutationCredentialMarker}`, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' },
+	])
 	const failedConnectivityUpdate = await fetch(`${origin}/api/connectivity`, {
 		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
 		headers: { 'content-type': 'application/json', origin },
@@ -287,7 +313,52 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(failedConnectivityUpdate.status).toBe(400)
 	const failedConnectivityBody = await failedConnectivityUpdate.json()
 	expect(JSON.stringify(failedConnectivityBody)).not.toContain(mutationCredentialMarker)
-	expect(failedConnectivityBody).toEqual({ error: 'RPC connectivity checks failed. Review the submitted endpoints and retry.' })
+	expect(failedConnectivityBody).toEqual({ error: 'RPC https://rpc.example failed while calling eth_chainId. Review the endpoint and protected bot logs.' })
+	connectivityFailure = new EndpointCheckFailure('RPC http://reth:8545 failed while calling eth_chainId: getaddrinfo ENOTFOUND reth; RPC http://reth:8545 failed while calling eth_chainId: getaddrinfo ENOTFOUND reth', [
+		{
+			chainId: undefined,
+			checkedAt: '2026-09-01T00:00:00.000Z',
+			error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+			kind: 'read-rpc',
+			status: 'failed',
+			target: 'http://reth:8545',
+		},
+		{
+			chainId: undefined,
+			checkedAt: '2026-09-01T00:00:00.000Z',
+			error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
+			kind: 'public-rpc',
+			status: 'failed',
+			target: 'http://reth:8545',
+		},
+	])
+	const unresolvedHostnameUpdate = await fetch(`${origin}/api/connectivity`, {
+		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(unresolvedHostnameUpdate.status).toBe(400)
+	const unresolvedHostnameBody = await unresolvedHostnameUpdate.json()
+	expect(JSON.stringify(unresolvedHostnameBody)).not.toContain(mutationCredentialMarker)
+	expect(unresolvedHostnameBody).toEqual({
+		error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.',
+	})
+	connectivityFailure = new Error('RPC URLs must not exceed 2048 characters')
+	const oversizedUrlUpdate = await fetch(`${origin}/api/connectivity`, {
+		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(oversizedUrlUpdate.status).toBe(400)
+	expect(await oversizedUrlUpdate.json()).toEqual({ error: 'RPC URLs must not exceed 2048 characters' })
+	connectivityFailure = new Error('At most 8 read quorum RPC URLs are supported')
+	const readQuorumLimitUpdate = await fetch(`${origin}/api/connectivity`, {
+		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(readQuorumLimitUpdate.status).toBe(400)
+	expect(await readQuorumLimitUpdate.json()).toEqual({ error: 'At most 8 read quorum RPC URLs are supported' })
 	connectivityFailure = undefined
 	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
 		body: JSON.stringify([address]),

@@ -479,7 +479,7 @@ const globalNetworkFilter = $('#global-network-filter')
 const dialog = $('#detail-dialog')
 const detailContent = $('#detail-content')
 const connection = $('.connection')
-const pageUrl = new URL(location.href)
+let pageUrl = new URL(location.href)
 const isDemo = pageUrl.searchParams.get('demo') === '1'
 const connectionDemo = pageUrl.searchParams.get('connectionDemo')
 const usesDemoConnectionLabel = isDemo && connectionDemo !== 'indexer' && connectionDemo !== 'reconnecting'
@@ -488,12 +488,12 @@ const priceDemo = pageUrl.searchParams.get('priceDemo')
 const detailState = pageUrl.searchParams.get('detailState')
 const deploymentState = pageUrl.searchParams.get('deploymentState')
 const networkState = pageUrl.searchParams.get('networkState')
-const isSystem = location.pathname === '/system'
-const isOperations = location.pathname === '/operations' || location.pathname.startsWith('/operations/')
-const isContracts = location.pathname === '/contracts'
-const isRichList = location.pathname === '/richlist'
-const isAddress = location.pathname === '/address'
-const isActivity = !isSystem && !isOperations && !isContracts && !isRichList && !isAddress
+let isSystem = location.pathname === '/system'
+let isOperations = location.pathname === '/operations' || location.pathname.startsWith('/operations/')
+let isContracts = location.pathname === '/contracts'
+let isRichList = location.pathname === '/richlist'
+let isAddress = location.pathname === '/address'
+let isActivity = !isSystem && !isOperations && !isContracts && !isRichList && !isAddress
 const initialChainId = pageUrl.searchParams.get('chainId') ?? ''
 const initialActivityFilters = {
 	event: pageUrl.searchParams.get('event') ?? '',
@@ -602,6 +602,22 @@ let currentAddressPortfolioDepths:
 const addressIdentityCache = new Map<string, string | false | Promise<string | undefined>>()
 let polledReorgRefreshTimer: number | undefined
 let requestRouteRefresh: (count?: number, force?: boolean) => Promise<boolean>
+const loadedRouteContexts = new Set<string>()
+const operationsRouteCache = new Map<
+	string,
+	{
+		readonly fragment: DocumentFragment
+		readonly catalogState: typeof operationsCatalogState
+		readonly riskCatalogState: typeof operationsRiskCatalogState
+		readonly detailState: typeof operationsDetailState
+		readonly scrollY: number
+		readonly focusedIndex?: number
+	}
+>()
+let renderedOperationsContext: string | undefined
+let navigationGeneration = 0
+const operationsFocusableSelector =
+	'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]'
 const logRefreshGate = createForegroundRefreshGate()
 const contractRefreshGate = createForegroundRefreshGate()
 const richListRefreshGate = createForegroundRefreshGate()
@@ -2960,11 +2976,8 @@ const updateFreshness = () => {
 		return
 	}
 	if (lastNetworkRequestFailed) {
-		const banner = $('#freshness-banner')
-		banner.hidden = false
+		$('#freshness-banner').hidden = true
 		retryCanonical.hidden = true
-		$('#freshness-title').textContent = 'Status API unavailable'
-		$('#freshness-detail').textContent = 'Showing the last committed data already on screen; automatic retries continue.'
 		return
 	}
 	const staleHead = latestNetworks
@@ -4614,8 +4627,9 @@ const loadOperations = async ({
 			} catch (error) {
 				if (requestVersion !== operationsRequestVersion) return false
 				if (preserveRenderedContent) {
-					status.className = 'sr-only'
-					status.textContent = 'Could not refresh protocol operations. Existing indexed evidence remains visible.'
+					status.className = 'system-status'
+					status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations refresh failure'
+					renderRetryStatus(status, 'Could not refresh protocol operations. Existing indexed evidence remains visible.', () => loadOperations({ live: true }))
 					content.setAttribute('aria-busy', 'false')
 					return false
 				}
@@ -4635,6 +4649,7 @@ const syncNetworkUrl = () => {
 	if (chainId) url.searchParams.set('chainId', chainId)
 	else url.searchParams.delete('chainId')
 	history.replaceState(null, '', url)
+	pageUrl = url
 	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a, .operations-nav a')) {
 		const destination = new URL(link.href)
 		if (chainId) destination.searchParams.set('chainId', chainId)
@@ -6123,6 +6138,15 @@ const renderContractDetail = (contract: ContractRecord | undefined) => {
 
 const renderContracts = () => {
 	const list = $('#contract-list')
+	const revealNarrowContractDetail = (moveFocus = false) => {
+		if (!window.matchMedia('(max-width: 900px)').matches) return
+		const detail = $('#contract-detail')
+		detail.scrollIntoView({ block: 'start' })
+		if (moveFocus) {
+			detail.tabIndex = -1
+			detail.focus({ preventScroll: true })
+		}
+	}
 	if (contractItems.length === 0) {
 		list.replaceChildren(element('div', 'state-placeholder', 'No system contracts are registered for this network.'))
 		renderContractDetail(undefined)
@@ -6166,11 +6190,12 @@ const renderContracts = () => {
 		const head = element('span', 'contract-row-head')
 		head.append(element('strong', '', contract.label), element('span', `deployment-status ${status.tone}`, status.label))
 		row.replaceChildren(head, element('code', '', contract.address), element('span', 'eyebrow', contract.kind))
-		row.onclick = () => {
+		row.onclick = (event) => {
 			selectedContractAddress = contract.address
 			syncContractUrl(contract.address)
 			for (const candidate of list.querySelectorAll<HTMLElement>('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
 			renderContractDetail(contract)
+			revealNarrowContractDetail(event.detail === 0)
 		}
 		const section = contractRegistrySection(contract)
 		const rows = groupedRows.get(section) ?? []
@@ -6217,6 +6242,7 @@ const renderContracts = () => {
 			const groupBounds = rowList.getBoundingClientRect()
 			rowList.scrollLeft += rowBounds.left - groupBounds.left - Math.max(0, (rowList.clientWidth - rowBounds.width) / 2)
 		}
+		revealNarrowContractDetail()
 	}
 	if (focusedAction !== undefined) document.querySelector<HTMLElement>(`[data-contract-action="${focusedAction}"]`)?.focus()
 	else if (focusedContractAddress !== undefined) list.querySelector<HTMLElement>(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
@@ -8035,11 +8061,11 @@ const loadSystemState = (options: LoadOptions = {}): Promise<boolean> => {
 	return options.live === true ? systemStateRefreshGate.runBackground(operation) : systemStateRefreshGate.runForeground(operation)
 }
 
-const setStateTab = (type: StateTab) => {
+const setStateTab = (type: StateTab, restoredEntityKey?: string) => {
 	stateDetailContextVersion++
 	stateDetailRequestVersion++
 	activeStateType = type
-	selectedEntityKey = undefined
+	selectedEntityKey = restoredEntityKey
 	selectedEntityHistoryOffset = 0
 	$('#state-detail').setAttribute('aria-busy', 'false')
 	for (const tab of document.querySelectorAll<HTMLElement>('[data-state-tab]')) {
@@ -8067,7 +8093,9 @@ const resetActivityFilterContext = () => {
 $('#filters').addEventListener('submit', (event) => {
 	event.preventDefault()
 	if (!validateAddressFilter(true)) return
-	appliedActivityFilters = activityFilterValues()
+	const nextFilters = activityFilterValues()
+	if (nextFilters.event === appliedActivityFilters.event && nextFilters.address === appliedActivityFilters.address) return
+	appliedActivityFilters = nextFilters
 	syncActivityFilterUrl()
 	viewContextVersion++
 	logsAbortController?.abort()
@@ -8228,6 +8256,9 @@ $('#entity-search').addEventListener('keydown', (event) => {
 })
 
 const resetSelectedNetworkContext = () => {
+	loadedRouteContexts.clear()
+	operationsRouteCache.clear()
+	renderedOperationsContext = undefined
 	viewContextVersion++
 	detailContextVersion++
 	stateDetailContextVersion++
@@ -8249,15 +8280,13 @@ const resetSelectedNetworkContext = () => {
 	if (headFreshnessTimer !== undefined) clearTimeout(headFreshnessTimer)
 	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
-	if (isActivity) {
-		logsAbortController?.abort()
-		logsAbortController = undefined
-		logsRequestVersion++
-		feed.replaceChildren()
-		nextCursor = undefined
-		$('#activity-summary').textContent = 'No logs shown'
-		$('#more').hidden = true
-	}
+	logsAbortController?.abort()
+	logsAbortController = undefined
+	logsRequestVersion++
+	feed.replaceChildren()
+	nextCursor = undefined
+	$('#activity-summary').textContent = 'No logs shown'
+	$('#more').hidden = true
 	if (dialog.open) closeDetail({ preservePendingCanonicalAccount: true })
 	const url = new URL(location.href)
 	url.searchParams.delete('log')
@@ -8265,39 +8294,33 @@ const resetSelectedNetworkContext = () => {
 	url.searchParams.delete('account')
 	url.searchParams.delete('contract')
 	history.replaceState(null, '', url)
-	if (isSystem) {
-		stateDetailRequestVersion++
-		stateData = undefined
-		selectedEntityKey = undefined
-		selectedEntityHistoryOffset = 0
-		$('#state-stats').replaceChildren()
-		$('#entity-list').replaceChildren()
-		$('#entity-count').textContent = '—'
-		$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system state…'))
-	} else if (isContracts) {
-		contractItems = []
-		selectedContractAddress = undefined
-		$('#contract-list').replaceChildren()
-		$('#contract-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system contracts…'))
-	} else if (isRichList) {
-		richListItems = []
-		richListTotal = 0
-		$('#richlist-rows').replaceChildren()
-		$('#richlist-summary').textContent = '0 of 0 known addresses'
-		$('#richlist-more').hidden = true
-	} else if (isAddress) {
-		currentAddressProfile = undefined
-		currentAddressPortfolioDepths = undefined
-		$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
-	} else if (isOperations) {
-		operationsRequestVersion++
-		operationsLoadState.promise = undefined
-		operationsLoadState.context = undefined
-		operationsCatalogState = undefined
-		operationsRiskCatalogState = undefined
-		$('#operations-content').replaceChildren()
-		$('#operations-content').setAttribute('aria-busy', 'true')
-	}
+	stateDetailRequestVersion++
+	stateData = undefined
+	selectedEntityKey = undefined
+	selectedEntityHistoryOffset = 0
+	$('#state-stats').replaceChildren()
+	$('#entity-list').replaceChildren()
+	$('#entity-count').textContent = '—'
+	$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system state…'))
+	contractItems = []
+	selectedContractAddress = undefined
+	$('#contract-list').replaceChildren()
+	$('#contract-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system contracts…'))
+	richListItems = []
+	richListTotal = 0
+	$('#richlist-rows').replaceChildren()
+	$('#richlist-summary').textContent = '0 of 0 known addresses'
+	$('#richlist-more').hidden = true
+	currentAddressProfile = undefined
+	currentAddressPortfolioDepths = undefined
+	$('#address-profile-content').replaceChildren(element('div', 'state-placeholder', 'Loading address activity…'))
+	operationsRequestVersion++
+	operationsLoadState.promise = undefined
+	operationsLoadState.context = undefined
+	operationsCatalogState = undefined
+	operationsRiskCatalogState = undefined
+	$('#operations-content').replaceChildren()
+	$('#operations-content').setAttribute('aria-busy', 'true')
 }
 
 globalNetworkFilter.addEventListener('change', async () => {
@@ -8651,81 +8674,287 @@ if (pageUrl.searchParams.has('decoded')) syncActivityFilterUrl()
 validateAddressFilter()
 $('#clear-filters').disabled = !hasActivityFilters()
 
-const deepLink = pageUrl.searchParams.get('log')
-const accountDeepLink = pageUrl.searchParams.get('account')
-if (!isRichList && accountDeepLink !== null) {
+const initialAccountDeepLink = pageUrl.searchParams.get('account')
+if (!isRichList && initialAccountDeepLink !== null) {
 	const url = new URL(location.href)
 	url.searchParams.delete('account')
 	history.replaceState(null, '', url)
 }
-$('#activity').hidden = !isActivity
-$('#system').hidden = !isSystem
-$('#operations').hidden = !isOperations
-$('#contracts').hidden = !isContracts
-$('#richlist').hidden = !isRichList
-$('#address-profile').hidden = !isAddress
-$('.skip-link').href = isSystem
-	? '#system'
-	: isOperations
-		? '#operations'
-		: isContracts
-			? '#contracts'
-			: isRichList
-				? '#richlist'
-				: isAddress
-					? '#address-profile'
-					: '#activity'
-for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a'))
-	if (new URL(link.href).pathname === location.pathname || (isOperations && new URL(link.href).pathname === '/operations'))
-		link.setAttribute('aria-current', 'page')
-for (const link of document.querySelectorAll<HTMLAnchorElement>('.operations-nav a'))
-	if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
+const syncVisibleRoute = () => {
+	isSystem = location.pathname === '/system'
+	isOperations = location.pathname === '/operations' || location.pathname.startsWith('/operations/')
+	isContracts = location.pathname === '/contracts'
+	isRichList = location.pathname === '/richlist'
+	isAddress = location.pathname === '/address'
+	isActivity = !isSystem && !isOperations && !isContracts && !isRichList && !isAddress
+	$('#activity').hidden = !isActivity
+	$('#system').hidden = !isSystem
+	$('#operations').hidden = !isOperations
+	$('#contracts').hidden = !isContracts
+	$('#richlist').hidden = !isRichList
+	$('#address-profile').hidden = !isAddress
+	$('.skip-link').href = isSystem
+		? '#system'
+		: isOperations
+			? '#operations'
+			: isContracts
+				? '#contracts'
+				: isRichList
+					? '#richlist'
+					: isAddress
+						? '#address-profile'
+						: '#activity'
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a')) {
+		const current = new URL(link.href).pathname === location.pathname || (isOperations && new URL(link.href).pathname === '/operations')
+		if (current) link.setAttribute('aria-current', 'page')
+		else link.removeAttribute('aria-current')
+	}
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.operations-nav a')) {
+		if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
+		else link.removeAttribute('aria-current')
+	}
+}
+syncVisibleRoute()
 
 const requestedTab = pageUrl.searchParams.get('tab')
 if (isSystem) setStateTab(isStateTab(requestedTab) ? requestedTab : 'pools')
 if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefined
 
-const initialDashboardLoad = (async () => {
-	await loadInitialNetworkStatus(restoredCachedNetworkSnapshot, () => loadNetworks({ synchronizeActivity: false }))
-	if (isSystem) await loadSystemState()
-	else if (isOperations) await loadOperations()
-	else if (isContracts) await loadContracts()
-	else if (isRichList) await loadRichList()
-	else if (isAddress) await loadAddressProfile()
+const initialNetworkStatusLoad = loadInitialNetworkStatus(restoredCachedNetworkSnapshot, () => loadNetworks({ synchronizeActivity: false }))
+const loadVisibleRoute = async () => {
+	await initialNetworkStatusLoad
+	const context = `${selectedChainId()}:${location.pathname}`
+	const live = loadedRouteContexts.has(context) && (!isOperations || renderedOperationsContext === context)
+	let loaded: boolean | undefined
+	if (isSystem) loaded = await loadSystemState({ live })
+	else if (isOperations) loaded = await loadOperations({ live })
+	else if (isContracts) loaded = await loadContracts({ live })
+	else if (isRichList) loaded = await loadRichList({ live })
+	else if (isAddress) loaded = await loadAddressProfile({ live })
 	else {
 		syncActivityFilterUrl()
-		if (validateAddressFilter()) await loadLogs()
-		else showInvalidAddressFilter()
+		if (validateAddressFilter()) loaded = await loadLogs({ live })
+		else {
+			showInvalidAddressFilter()
+			loaded = false
+		}
 	}
-})()
+	if (loaded !== false) {
+		loadedRouteContexts.add(context)
+		if (isOperations) renderedOperationsContext = context
+	}
+}
+const stashOperationsRoute = () => {
+	if (!isOperations || renderedOperationsContext === undefined) return
+	const content = $('#operations-content')
+	const focusedElements = [...content.querySelectorAll<HTMLElement>(operationsFocusableSelector)]
+	const focusedIndex = document.activeElement instanceof HTMLElement ? focusedElements.indexOf(document.activeElement) : -1
+	const fragment = document.createDocumentFragment()
+	fragment.append(...content.childNodes)
+	operationsRouteCache.set(renderedOperationsContext, {
+		fragment,
+		catalogState: operationsCatalogState,
+		riskCatalogState: operationsRiskCatalogState,
+		detailState: operationsDetailState,
+		scrollY: window.scrollY,
+		...(focusedIndex < 0 ? {} : { focusedIndex }),
+	})
+}
+type OperationsRoutePosition = { readonly scrollY: number; readonly focusedIndex?: number }
+const restoreOperationsPosition = (position: OperationsRoutePosition) => {
+	window.scrollTo({ top: position.scrollY })
+	if (position.focusedIndex === undefined) return
+	const focusedElement = $('#operations-content').querySelectorAll<HTMLElement>(operationsFocusableSelector)[position.focusedIndex]
+	focusedElement?.focus({ preventScroll: true })
+}
+const restoreOperationsRoute = (): OperationsRoutePosition | undefined => {
+	if (!isOperations) return undefined
+	const context = `${selectedChainId()}:${location.pathname}`
+	const snapshot = operationsRouteCache.get(context)
+	if (snapshot === undefined) {
+		renderedOperationsContext = undefined
+		return undefined
+	}
+	$('#operations-content').replaceChildren(snapshot.fragment)
+	operationsCatalogState = snapshot.catalogState
+	operationsRiskCatalogState = snapshot.riskCatalogState
+	operationsDetailState = snapshot.detailState
+	operationsRouteCache.delete(context)
+	renderedOperationsContext = context
+	const position = { scrollY: snapshot.scrollY, ...(snapshot.focusedIndex === undefined ? {} : { focusedIndex: snapshot.focusedIndex }) }
+	restoreOperationsPosition(position)
+	return position
+}
+const hydrateVisibleRoute = () => {
+	if (isActivity) {
+		const restoredFilters = {
+			event: pageUrl.searchParams.get('event') ?? '',
+			address: pageUrl.searchParams.get('address') ?? '',
+		}
+		$('#event-filter').value = restoredFilters.event
+		$('#address-filter').value = restoredFilters.address
+		validateAddressFilter()
+		$('#clear-filters').disabled = restoredFilters.event === '' && restoredFilters.address === ''
+		if (restoredFilters.event !== appliedActivityFilters.event || restoredFilters.address !== appliedActivityFilters.address) {
+			appliedActivityFilters = restoredFilters
+			viewContextVersion++
+			logsAbortController?.abort()
+			logsRequestVersion++
+			resetActivityFilterContext()
+			loadedRouteContexts.delete(`${selectedChainId()}:${location.pathname}`)
+		}
+	}
+	if (isSystem) {
+		const restoredTab = pageUrl.searchParams.get('tab')
+		setStateTab(isStateTab(restoredTab) ? restoredTab : 'pools', pageUrl.searchParams.get('entity') ?? undefined)
+		historyFromBlock.value = pageUrl.searchParams.get('fromBlock') ?? ''
+		historyToBlock.value = pageUrl.searchParams.get('toBlock') ?? ''
+	}
+	if (isContracts) {
+		selectedContractAddress = pageUrl.searchParams.get('contract') ?? undefined
+		if (contractItems.length > 0) renderContracts()
+	}
+}
+const invalidateRouteRequests = () => {
+	viewContextVersion++
+	detailContextVersion++
+	stateDetailContextVersion++
+	contractRequestVersion++
+	richListRequestVersion++
+	addressProfileRequestVersion++
+	catalogRequestVersion++
+	stateDetailRequestVersion++
+	operationsRequestVersion++
+	logsAbortController?.abort()
+	logsAbortController = undefined
+	logsRequestVersion++
+}
+const focusNewRoute = () => {
+	window.scrollTo({ top: 0 })
+	const heading = document.querySelector<HTMLElement>('main > section:not([hidden]) h1, main > section:not([hidden]) h2')
+	if (heading === null) return
+	heading.tabIndex = -1
+	heading.focus({ preventScroll: true })
+}
+const navigateInPlace = async (url: URL, replace = false) => {
+	if (url.pathname === location.pathname && url.search === location.search) return
+	const navigation = ++navigationGeneration
+	stashOperationsRoute()
+	invalidateRouteRequests()
+	if (replace) history.replaceState(null, '', url)
+	else history.pushState(null, '', url)
+	pageUrl = new URL(location.href)
+	syncVisibleRoute()
+	const restoredPosition = restoreOperationsRoute()
+	hydrateVisibleRoute()
+	await loadVisibleRoute()
+	if (navigation !== navigationGeneration) return
+	if (restoredPosition === undefined) focusNewRoute()
+}
+const restoreRouteDeepLink = async () => {
+	const currentUrl = new URL(location.href)
+	const deepLink = currentUrl.searchParams.get('log')
+	const accountDeepLink = currentUrl.searchParams.get('account')
+	if (isActivity && deepLink !== null) {
+		const parts = deepLink.split(':')
+		const [chainId, blockHash, transactionHash, logIndex] = parts
+		const parsedLogIndex = logIndex === undefined || !/^\d+$/.test(logIndex) ? undefined : Number(logIndex)
+		if (
+			parts.length === 4 &&
+			typeof chainId === 'string' &&
+			chainId === selectedChainId() &&
+			typeof blockHash === 'string' &&
+			/^0x[0-9a-fA-F]{64}$/.test(blockHash) &&
+			typeof transactionHash === 'string' &&
+			/^0x[0-9a-fA-F]{64}$/.test(transactionHash) &&
+			parsedLogIndex !== undefined &&
+			Number.isSafeInteger(parsedLogIndex)
+		) {
+			await openDetail({ chain_id: chainId, block_hash: blockHash, tx_hash: transactionHash, log_index: parsedLogIndex })
+			return
+		}
+		currentUrl.searchParams.delete('log')
+		history.replaceState(null, '', currentUrl)
+		pageUrl = currentUrl
+	}
+	if (isRichList && accountDeepLink !== null) {
+		const parts = accountDeepLink.split(':')
+		const [chainId, address] = parts
+		if (parts.length === 2 && chainId === selectedChainId() && /^0x[0-9a-fA-F]{40}$/.test(address ?? '')) {
+			if (chainId === undefined || address === undefined) throw new Error('Account deep link is malformed')
+			const item = richListItems.find((candidate) => candidate.chain_id === chainId && candidate.address.toLowerCase() === address.toLowerCase())
+			const network = latestNetworks.find((candidate) => String(candidate.chain_id) === chainId)
+			await openAccountTransactions(item ?? { chain_id: chainId, address, explorer_base_url: network?.explorer_base_url })
+			return
+		}
+		currentUrl.searchParams.delete('account')
+		history.replaceState(null, '', currentUrl)
+		pageUrl = currentUrl
+	}
+}
+for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a, .operations-nav a')) {
+	link.addEventListener('click', (event) => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+		const target = new URL(link.href)
+		const activeProductTab = link.closest('.product-nav') !== null && link.getAttribute('aria-current') === 'page'
+		if (activeProductTab || target.pathname === location.pathname) {
+			event.preventDefault()
+			return
+		}
+		event.preventDefault()
+		for (const name of ['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock']) target.searchParams.delete(name)
+		for (const [name, value] of new URL(location.href).searchParams) {
+			if (!target.searchParams.has(name) && !['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock'].includes(name))
+				target.searchParams.set(name, value)
+		}
+		void navigateInPlace(target)
+	})
+}
+document.addEventListener('click', (event) => {
+	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+	const targetElement = event.target
+	if (!(targetElement instanceof Element)) return
+	const link = targetElement.closest<HTMLAnchorElement>('#operations-content a[href]')
+	if (link === null || link.hasAttribute('download') || (link.target !== '' && link.target !== '_self')) return
+	const target = new URL(link.href)
+	if (target.origin !== location.origin || !target.pathname.startsWith('/operations')) return
+	event.preventDefault()
+	void navigateInPlace(target)
+})
+window.addEventListener('popstate', () => {
+	const navigation = ++navigationGeneration
+	stashOperationsRoute()
+	invalidateRouteRequests()
+	pageUrl = new URL(location.href)
+	if (dialog.open) {
+		const restoredUrl = new URL(location.href)
+		closeDetail()
+		history.replaceState(null, '', restoredUrl)
+		pageUrl = restoredUrl
+	}
+	const historyChainId = pageUrl.searchParams.get('chainId')
+	if (historyChainId !== null && historyChainId !== selectedChainId() && [...globalNetworkFilter.options].some((option) => option.value === historyChainId)) {
+		const restoredUrl = new URL(location.href)
+		globalNetworkFilter.value = historyChainId
+		globalNetworkFilter.dataset.restored = 'true'
+		resetSelectedNetworkContext()
+		history.replaceState(null, '', restoredUrl)
+		pageUrl = restoredUrl
+		syncNetworkUrl()
+		updateNetworkLabels()
+		renderNetworks(latestNetworks)
+		updateFreshness()
+	}
+	syncVisibleRoute()
+	const restoredPosition = restoreOperationsRoute()
+	hydrateVisibleRoute()
+	void loadVisibleRoute().then(async () => {
+		if (navigation !== navigationGeneration) return
+		if (restoredPosition === undefined) focusNewRoute()
+		await restoreRouteDeepLink()
+	})
+})
+const initialDashboardLoad = loadVisibleRoute()
 await initialDashboardLoad
-if (isActivity && deepLink !== null) {
-	const [chainId, blockHash, transactionHash, logIndex] = deepLink.split(':')
-	if (chainId && chainId === selectedChainId() && blockHash && transactionHash && logIndex)
-		await openDetail({ chain_id: chainId, block_hash: blockHash, tx_hash: transactionHash, log_index: Number(logIndex) })
-	else {
-		const url = new URL(location.href)
-		url.searchParams.delete('log')
-		history.replaceState(null, '', url)
-	}
-}
-if (isRichList && accountDeepLink !== null) {
-	const [chainId, address] = accountDeepLink.split(':')
-	if (chainId === selectedChainId() && /^0x[0-9a-fA-F]{40}$/.test(address ?? '')) {
-		if (chainId === undefined || address === undefined) throw new Error('Account deep link is malformed')
-		const item = richListItems.find((candidate) => candidate.chain_id === chainId && candidate.address.toLowerCase() === address?.toLowerCase())
-		const network = latestNetworks.find((candidate) => String(candidate.chain_id) === chainId)
-		await openAccountTransactions(
-			item ?? {
-				chain_id: chainId,
-				address,
-				explorer_base_url: network?.explorer_base_url,
-			},
-		)
-	} else {
-		const url = new URL(location.href)
-		url.searchParams.delete('account')
-		history.replaceState(null, '', url)
-	}
-}
+await restoreRouteDeepLink()
 if (isDemo && pageUrl.searchParams.get('queuedPaginationDemo') === '1') window.setTimeout(() => void requestRouteRefresh(1), 100)
