@@ -70,16 +70,11 @@ export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
-	availableQuestionsContextKey: string
-	availableQuestions: MarketDetails[]
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
-	hasLoadedAvailableQuestions: boolean
-	loadingAvailableQuestions: boolean
 	onCreateSecurityPool: (questionIdOverride?: string) => void
 	onCreateQuestionAndSecurityPool?: () => void
 	questionAndPoolCreating?: boolean
-	onLoadAvailableQuestions: () => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined

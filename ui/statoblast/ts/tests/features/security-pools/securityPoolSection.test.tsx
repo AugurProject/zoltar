@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
@@ -48,16 +48,11 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 	return {
 		accountState: createAccountState(),
 		activeUniverseId: 0n,
-		availableQuestionsContextKey: 'environment-1:universe-0',
-		availableQuestions: [createMarketDetails(), createMarketDetails({ marketType: 'categorical', questionId: '0x02', title: 'Categorical question' })],
 		checkingDuplicateOriginPool: false,
 		duplicateOriginPoolExists: false,
-		hasLoadedAvailableQuestions: true,
-		loadingAvailableQuestions: false,
 		loadingMarketDetails: false,
 		marketDetails: createMarketDetails(),
 		onCreateSecurityPool: () => undefined,
-		onLoadAvailableQuestions: async () => undefined,
 		onOpenCreatedPool: () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onReturnToBrowse: () => undefined,
@@ -177,6 +172,7 @@ describe('SecurityPoolSection', () => {
 
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
+		expect(documentQueries.queryByRole('combobox')).toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Question ID' })).not.toBeNull()
 		expect(document.querySelector('form[aria-label="Create Question"]')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create question and pool' })).toBeNull()
@@ -433,7 +429,6 @@ describe('SecurityPoolSection', () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, { ...baseProps, securityPoolCreating: true }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('combobox', { name: 'Choose an available question' }) as HTMLSelectElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('textbox', { name: 'Question ID' }) as HTMLInputElement).disabled).toBe(true)
 
 		await act(() => {
@@ -455,7 +450,6 @@ describe('SecurityPoolSection', () => {
 		})
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, baseProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
 		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'Connect a wallet before creating a security pool.')
 
 		await act(() => {
@@ -484,128 +478,12 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Enter an exact binary Yes / No Zoltar question ID when it is not listed above.')).not.toBeNull()
+		expect(documentQueries.getByText('Enter an exact binary Yes / No Zoltar question ID.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
 		expect(document.body.querySelector('.loaded-question-preview')).not.toBeNull()
 		expect(document.body.querySelector('.section-block.surface .record-card:not(.flat)')).toBeNull()
-	})
-
-	test('lets users choose an eligible question without copying its identifier', async () => {
-		const formChanges: Array<Partial<SecurityPoolSectionProps['securityPoolForm']>> = []
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					onSecurityPoolFormChange: update => formChanges.push(update),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const picker = within(document.body).getByRole('combobox', { name: 'Choose an available question' })
-		expect(within(picker).getByRole('option', { name: 'Will this resolve?' })).not.toBeNull()
-		expect(within(picker).queryByRole('option', { name: 'Categorical question' })).toBeNull()
-		fireEvent.change(picker, { target: { value: '0x01' } })
-		expect(formChanges).toEqual([{ marketId: '0x01' }])
-	})
-
-	test('loads available questions when creation is opened directly', async () => {
-		let loadCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					onLoadAvailableQuestions: async () => {
-						loadCalls += 1
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(loadCalls).toBe(1)
-	})
-
-	test('stops after an automatic question-load failure and offers a bounded retry', async () => {
-		let loadCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					onLoadAvailableQuestions: async () => {
-						loadCalls += 1
-						if (loadCalls === 1) throw new Error('Question read failed')
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => expect(documentQueries.getByText('Available questions could not be loaded.')).not.toBeNull())
-		expect(loadCalls).toBe(1)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
-		await waitFor(() => expect(loadCalls).toBe(2))
-		expect(documentQueries.queryByRole('button', { name: 'Retry questions' })).toBeNull()
-	})
-
-	test('starts one fresh question load when context changes during an in-flight request', async () => {
-		let resolveFirstLoad: (() => void) | undefined
-		let loadCalls = 0
-		const onLoadAvailableQuestions = async () => {
-			loadCalls += 1
-			if (loadCalls === 1)
-				await new Promise<void>(resolve => {
-					resolveFirstLoad = resolve
-				})
-		}
-		const initialProps = createProps({
-			availableQuestions: [],
-			hasLoadedAvailableQuestions: false,
-			onLoadAvailableQuestions,
-		})
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(loadCalls).toBe(1)
-
-		await act(() => {
-			render(h(SecurityPoolSection, { ...initialProps, availableQuestionsContextKey: 'environment-2:universe-1', loadingAvailableQuestions: true }), renderedComponent.container)
-		})
-		resolveFirstLoad?.()
-		await act(async () => await Promise.resolve())
-		await act(() => {
-			render(h(SecurityPoolSection, { ...initialProps, availableQuestionsContextKey: 'environment-2:universe-1' }), renderedComponent.container)
-		})
-
-		await waitFor(() => expect(loadCalls).toBe(2))
-	})
-
-	test('uses loading-aware create guidance while available questions are loading', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					availableQuestions: [],
-					hasLoadedAvailableQuestions: false,
-					loadingAvailableQuestions: true,
-					marketDetails: undefined,
-					securityPoolForm: {
-						initialReportPriorityFeeGwei: '10',
-						marketId: '',
-						statoblastSecurityMultiplierBps: '2',
-					},
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Wait for available questions to finish loading, or enter an exact question ID.')
 	})
 
 	test('omits missing-context helper copy when a loaded question lacks description details', async () => {

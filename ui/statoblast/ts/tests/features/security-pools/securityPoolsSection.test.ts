@@ -328,16 +328,11 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps> = {}): SecurityPoolRouteContentProps {
 	return {
 		accountState: createAccountState(),
-		availableQuestionsContextKey: 'environment-1:universe-0',
-		availableQuestions: [],
 		checkingDuplicateOriginPool: false,
 		duplicateOriginPoolExists: false,
-		hasLoadedAvailableQuestions: true,
-		loadingAvailableQuestions: false,
 		loadingMarketDetails: false,
 		marketDetails: undefined,
 		onCreateSecurityPool: () => undefined,
-		onLoadAvailableQuestions: async () => undefined,
 		onResetSecurityPoolCreation: () => undefined,
 		onSecurityPoolFormChange: () => undefined,
 		poolCreationMarketDetails: undefined,

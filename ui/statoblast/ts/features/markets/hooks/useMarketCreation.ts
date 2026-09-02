@@ -161,7 +161,7 @@ export function useMarketCreation(
 		marketFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
 	}
 
-	const createMarket = async () => {
+	const createMarket = async ({ refreshQuestionList = true }: { refreshQuestionList?: boolean } = {}) => {
 		if (marketSubmissionScopesRef.current.has(marketActionScopeKey)) {
 			marketError.value = { storageKey: marketActionScopeKey, value: 'Question creation already in progress' }
 			return
@@ -211,7 +211,7 @@ export function useMarketCreation(
 					refreshState: async () => {
 						if (!isCurrentMarketActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						await zoltar.loadZoltarQuestions()
+						if (refreshQuestionList) await zoltar.loadZoltarQuestions()
 					},
 					setErrorMessage: message => {
 						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }

@@ -2,7 +2,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -31,13 +31,9 @@ import * as marketCopy from '@zoltar/ui-zoltar/copy/market.js'
 export function SecurityPoolSection({
 	accountState,
 	activeUniverseId,
-	availableQuestionsContextKey,
-	availableQuestions,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
-	hasLoadedAvailableQuestions,
 	loadingMarketDetails,
-	loadingAvailableQuestions,
 	marketDetails,
 	marketCreating = false,
 	marketError = undefined,
@@ -46,7 +42,6 @@ export function SecurityPoolSection({
 	onCreateMarket = () => undefined,
 	onCreateQuestionAndSecurityPool,
 	onCreateSecurityPool,
-	onLoadAvailableQuestions,
 	onOpenCreatedPool,
 	onMarketFormChange = () => undefined,
 	onResetMarket = () => undefined,
@@ -70,36 +65,8 @@ export function SecurityPoolSection({
 		title: securityPoolCopy.createQuestionForPoolTitle,
 	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
-	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult === undefined ? 'existing' : 'new')
-	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
 	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || marketResult !== undefined
-	const requestedAvailableQuestionsContextRef = useRef<string | undefined>(undefined)
-	let availableQuestionsHelp: ComponentChildren = undefined
-	if (loadingAvailableQuestions) {
-		availableQuestionsHelp = <LoadingText>{securityPoolCopy.loadingAvailableQuestions}</LoadingText>
-	} else if (availableQuestionsLoadError === undefined && eligibleQuestions.length === 0) {
-		availableQuestionsHelp = securityPoolCopy.noAvailableQuestions
-	}
-	useEffect(() => {
-		if (requestedAvailableQuestionsContextRef.current !== availableQuestionsContextKey) {
-			requestedAvailableQuestionsContextRef.current = undefined
-			setAvailableQuestionsLoadError(undefined)
-		}
-		if (hasLoadedAvailableQuestions) {
-			requestedAvailableQuestionsContextRef.current = undefined
-			setAvailableQuestionsLoadError(undefined)
-			return
-		}
-		if (loadingAvailableQuestions || requestedAvailableQuestionsContextRef.current === availableQuestionsContextKey) return
-		requestedAvailableQuestionsContextRef.current = availableQuestionsContextKey
-		void onLoadAvailableQuestions().catch(() => setAvailableQuestionsLoadError(securityPoolCopy.availableQuestionsLoadError))
-	}, [availableQuestionsContextKey, hasLoadedAvailableQuestions, loadingAvailableQuestions, onLoadAvailableQuestions])
-	const retryAvailableQuestions = () => {
-		setAvailableQuestionsLoadError(undefined)
-		requestedAvailableQuestionsContextRef.current = availableQuestionsContextKey
-		void onLoadAvailableQuestions().catch(() => setAvailableQuestionsLoadError(securityPoolCopy.availableQuestionsLoadError))
-	}
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
@@ -115,7 +82,7 @@ export function SecurityPoolSection({
 		statoblastSecurityMultiplier: securityPoolForm.statoblastSecurityMultiplierBps,
 		zoltarUniverseHasForked,
 	})
-	const createDisabledReason = loadingAvailableQuestions && securityPoolForm.marketId.trim() === '' ? securityPoolCopy.loadingAvailableQuestionsReason : guardedCreateDisabledReason
+	const createDisabledReason = guardedCreateDisabledReason
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
 	const createQuestionAndPoolDisabledReason = (() => {
 		if (accountState.address === undefined) return marketCopy.questionCreationWalletRequired
@@ -295,33 +262,6 @@ export function SecurityPoolSection({
 						<SectionBlock variant='plain'>
 							<div className='form-grid'>
 								<div className='field'>
-									<label htmlFor='security-pool-question-picker'>
-										<span>{securityPoolCopy.chooseAvailableQuestion}</span>
-									</label>
-									<select
-										id='security-pool-question-picker'
-										disabled={loadingAvailableQuestions || questionSourceLocked}
-										value={eligibleQuestions.some(question => question.questionId === securityPoolForm.marketId) ? securityPoolForm.marketId : ''}
-										onChange={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })}
-									>
-										<option value=''>{securityPoolCopy.chooseQuestionPlaceholder}</option>
-										{eligibleQuestions.map(question => (
-											<option key={question.questionId} value={question.questionId}>
-												{getQuestionTitle(question)}
-											</option>
-										))}
-									</select>
-									{availableQuestionsHelp === undefined ? undefined : <p className='field-help'>{availableQuestionsHelp}</p>}
-									<ErrorNotice message={availableQuestionsLoadError} />
-									{availableQuestionsLoadError === undefined ? undefined : (
-										<div className='actions'>
-											<button className='secondary' type='button' onClick={retryAvailableQuestions}>
-												{securityPoolCopy.retryAvailableQuestions}
-											</button>
-										</div>
-									)}
-								</div>
-								<div className='field'>
 									<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
 									<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
 								</div>
@@ -363,7 +303,7 @@ export function SecurityPoolSection({
 								formDisabled={questionSourceLocked}
 								hasForked={false}
 								isOnActiveAppChain={isOnActiveAppChain}
-								loadingZoltarQuestions={loadingAvailableQuestions}
+								loadingZoltarQuestions={false}
 								marketCreating={marketCreating}
 								marketError={marketError}
 								marketForm={marketForm ?? fallbackMarketForm}
@@ -389,7 +329,7 @@ export function SecurityPoolSection({
 								submitFields={poolConfigurationFields}
 								onUseQuestionForFork={() => undefined}
 								onUseQuestionForPool={questionId => onSecurityPoolFormChange({ marketId: questionId })}
-								zoltarQuestions={availableQuestions}
+								zoltarQuestions={[]}
 							/>
 						</SectionBlock>
 					) : undefined}

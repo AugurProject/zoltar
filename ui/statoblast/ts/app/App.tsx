@@ -121,7 +121,7 @@ export function App() {
 	const { transactionState } = transactionTray
 	const deploymentFlow = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, setDeploymentStatuses })
 	const { errorMessage: deploymentErrorMessage } = deploymentFlow
-	const { createMarket, hasLoadedZoltarQuestions, loadZoltarForkAccess, loadingZoltarForkAccess, loadingZoltarQuestions, loadZoltarQuestions, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarQuestions, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
+	const { createMarket, loadZoltarForkAccess, loadingZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse, zoltarUniverseError } = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		activeZoltarView: 'questions',
@@ -411,7 +411,7 @@ export function App() {
 		const submittedSecurityPoolForm = securityPoolForm
 		setCombinedCreateStage('creating-question')
 		try {
-			const result = await createMarket()
+			const result = await createMarket({ refreshQuestionList: false })
 			if (result === undefined || combinedCreateScopeKeyRef.current !== submittedCombinedCreateScopeKey) return
 			setSecurityPoolForm(current => ({ ...current, marketId: result.questionId }))
 			setSecurityPoolQuestionId(result.questionId)
@@ -443,17 +443,12 @@ export function App() {
 		loadingUniverseDirectoryPools,
 		createPool: {
 			accountState,
-			availableQuestionsContextKey: `${activeEnvironmentNonce}:${activeUniverseId.toString()}`,
-			availableQuestions: zoltarQuestions,
 			checkingDuplicateOriginPool,
 			questionAndPoolCreating: combinedCreateStage !== undefined,
 			duplicateOriginPoolExists,
-			hasLoadedAvailableQuestions: hasLoadedZoltarQuestions,
-			loadingAvailableQuestions: loadingZoltarQuestions,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,
 			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
-			onLoadAvailableQuestions: loadZoltarQuestions,
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,

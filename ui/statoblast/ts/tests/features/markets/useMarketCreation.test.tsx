@@ -121,8 +121,8 @@ describe('useMarketCreation', () => {
 		let firstCreate: Promise<void> | undefined
 		let secondCreate: Promise<void> | undefined
 		await act(() => {
-			firstCreate = requireHookState(hookState).createMarket()
-			secondCreate = requireHookState(hookState).createMarket()
+			firstCreate = requireHookState(hookState).createMarket({ refreshQuestionList: false })
+			secondCreate = requireHookState(hookState).createMarket({ refreshQuestionList: false })
 		})
 		if (firstCreate === undefined || secondCreate === undefined) {
 			throw new Error('Expected both createMarket promises')
@@ -143,7 +143,7 @@ describe('useMarketCreation', () => {
 		await firstCreate
 		await secondCreate
 
-		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
+		expect(loadZoltarQuestions).not.toHaveBeenCalled()
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
