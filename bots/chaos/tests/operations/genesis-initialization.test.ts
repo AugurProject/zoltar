@@ -12,10 +12,10 @@ const options = {
 	allowIrreversibleOperations: true,
 	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxStagedOperationsPerPool: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10_000 },
 	maximumBlockIntervalSeconds: 15,
-	'maxEthSpendAttoEth': maximumEthSpendAttoEth.toString(),
-	'maxRepSpendAttoRep': maximumRepSpendAttoRep.toString(),
-	'minimumEthReserveAttoEth': 0n.toString(),
-	'minimumRepReserveAttoRep': 0n.toString(),
+	maxEthSpendAttoEth: maximumEthSpendAttoEth.toString(),
+	maxRepSpendAttoRep: maximumRepSpendAttoRep.toString(),
+	minimumEthReserveAttoEth: 0n.toString(),
+	minimumRepReserveAttoRep: 0n.toString(),
 	seed: 1,
 } as const
 
