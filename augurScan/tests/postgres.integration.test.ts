@@ -357,7 +357,7 @@ postgresTest('rolls back every sparse batch table when final canonical validatio
 		if (lease === undefined) throw new Error('sparse atomic writer did not acquire its lock')
 		const first = indexedBlock('block-one', blockHash('sparse-genesis'), [], 'first sparse log')
 		const second = {
-			...indexedBlock('block-two', first.hash, [], 'second sparse log'),
+			...indexedBlock('block-two', first.hash),
 			logScanCursors: [{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n }],
 		}
 		const liveEventsBefore = await database.sql`SELECT count(*)::integer AS count FROM live_events`
