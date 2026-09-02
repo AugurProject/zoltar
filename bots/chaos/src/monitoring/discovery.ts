@@ -62,6 +62,7 @@ export type ChaosReadClient = PublicClient<Transport, Chain>
 
 export const DISCOVERY_RPC_CONCURRENCY = 12
 export const DISCOVERY_RPC_QUEUE_LIMIT = DISCOVERY_RPC_CONCURRENCY * 4
+const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
@@ -541,7 +542,7 @@ async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, unive
 	const authenticatedSeeder = seederCode !== undefined && seederCode !== '0x'
 	const authenticatedProxy = proxyCode !== undefined && proxyCode !== '0x'
 	const factory = factoryCode !== undefined && factoryCode !== '0x'
-	const pools = await mapWithConcurrency(universes, DISCOVERY_RPC_CONCURRENCY, async universe => {
+	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
 		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
 		const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
 		if (pool === zeroAddress) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
