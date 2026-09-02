@@ -329,12 +329,17 @@ export function LiquidationModal({
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	const liquidationMaxActionAmount = computedLiquidationMaxAmount ?? maximumLiquidationDebtAttoEth
+	const protocolLiquidationMaxAmount = getMaxLiquidationAmount({
+		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
+		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
+		targetVaultSummary,
+	})
+	const liquidationMaxActionAmount = computedLiquidationMaxAmount ?? (uiPriceOracle === undefined ? maximumLiquidationDebtAttoEth : undefined)
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
 		requestedDebtAttoEth: liquidationAmountValue,
 		totalCapacityOwnershipAttoRep: selectedPool?.totalCapacityOwnershipAttoRep,
-		maxLiquidationDebtAttoEth: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
+		maxLiquidationDebtAttoEth: protocolLiquidationMaxAmount,
 		minimumSecurityBondDebtAttoEth: selectedPool?.minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,

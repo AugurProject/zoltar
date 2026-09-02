@@ -20,6 +20,11 @@ describe('UI price oracle', () => {
 		expect(resolveUiRepPerEthPrice({ ...prices, openOracleValid: false, priceOracle: 'open-oracle' })).toBe(20n)
 	})
 
+	test('treats a zero settlement timestamp as no Open Oracle report', () => {
+		expect(resolveUiRepPerEthPrice({ ...prices, openOraclePrice: 0n, openOracleSettlementTimestamp: 0n, priceOracle: 'open-oracle' })).toBeUndefined()
+		expect(resolveUiRepPerEthPrice({ ...prices, openOraclePrice: 0n, openOracleSettlementTimestamp: 0n, priceOracle: 'open-oracle-fallback' })).toBe(10n)
+	})
+
 	test('uses a valid Open Oracle price and otherwise falls back to Uniswap', () => {
 		expect(resolveUiRepPerEthPrice({ ...prices, openOracleValid: true, priceOracle: 'open-oracle-fallback' })).toBe(20n)
 		expect(resolveUiRepPerEthPrice({ ...prices, openOracleValid: false, priceOracle: 'open-oracle-fallback' })).toBe(10n)

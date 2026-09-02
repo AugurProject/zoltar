@@ -203,6 +203,7 @@ describe('SecurityPoolsOverviewSection', () => {
 	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
 		const pool = createSecurityPool({
 			lastOraclePrice: 3n * 10n ** 18n,
+			lastOracleSettlementTimestamp: 1n,
 			settlementCollateralAttoEth: 5n * 10n ** 18n,
 			statoblastSecurityMultiplierBps: 20_000n,
 			totalCapacityOwnershipAttoRep: 80n * 10n ** 18n,
@@ -213,6 +214,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		const card = getSecurityPoolCard('Will this resolve?')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max ≈ 13.33 ETH')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('Max ≈ 80.00 ETH')
+	})
+
+	test('does not price capacity from a never-reported Open Oracle value', async () => {
+		const pool = createSecurityPool({ lastOraclePrice: 0n, lastOracleSettlementTimestamp: 0n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const card = getSecurityPoolCard('Will this resolve?')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Open Oracle PriceUnavailable')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Max Unavailable')
 	})
 
 	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {
