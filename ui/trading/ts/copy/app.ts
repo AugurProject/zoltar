@@ -27,11 +27,13 @@ export const genesisUniverse = 'Genesis universe'
 export const positionsByPool = 'Positions by SecurityPool'
 export const standaloneLiveClient = 'Standalone live client'
 export const contractsUnavailable = 'Trading contracts unavailable'
+export const networkUnavailable = 'Network unavailable'
+export const securityPoolFactoryNotDeployed = 'SecurityPoolFactory is not deployed'
 export const checkingContracts = 'Checking deterministic trading contracts…'
+export const checkingContract = 'Checking'
 export const poolDataUnavailable = 'Pool data unavailable'
 export const projectGuide = 'Project guide'
 export const marketGuide = 'How the market works'
-export { deploymentDescription } from '@zoltar/ui-core-shared/copy/app.js'
 export const marketGuideSteps = [
 	{
 		number: '01',

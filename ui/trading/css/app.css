@@ -747,6 +747,10 @@ nav a[aria-current="page"] {
 .deployment-step__details code {
 	color: var(--muted);
 }
+.deployment-step__details .address {
+	overflow: visible;
+	white-space: normal;
+}
 .deployment-setup__fields .field {
 	margin: 0;
 }
@@ -778,6 +782,14 @@ nav a[aria-current="page"] {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
+}
+.deployment-setup__actions .primary-action {
+	border-color: var(--line-strong);
+	background: var(--surface-raised);
+	color: var(--text);
+}
+.deployment-setup__actions .primary-action:not(:disabled):hover {
+	border-color: var(--accent);
 }
 .error {
 	color: var(--bad);
@@ -1695,6 +1707,15 @@ summary {
 		grid-row: 2;
 		grid-column: 1;
 		justify-self: start;
+		max-width: calc(100vw - 8rem);
+		min-width: 0;
+		overflow: hidden;
+	}
+	.wallet-button .address-value-full {
+		display: none;
+	}
+	.wallet-button .address-value-abbreviated {
+		display: inline;
 	}
 	.header-actions--deployment .deployment-settings-host {
 		grid-row: 2;

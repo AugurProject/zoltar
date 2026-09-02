@@ -4,6 +4,7 @@ import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { UniverseSelector } from '../components/UniverseSelector.js'
 import { WalletSummary } from '../components/WalletSummary.js'
+import { TradingAddressValue } from '../components/TradingAddress.js'
 import { buildLiveUniverseOptions, type UniverseOption } from '../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
@@ -14,7 +15,6 @@ import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } fro
 import { shortAddress } from '../lib/format.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import * as commonCopy from '../copy/common.js'
 import * as appCopy from '../copy/app.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
@@ -69,9 +69,10 @@ async function resolveLiveDeployment() {
 	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
-export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus) {
-	if (liveDeploymentStatus === 'verified') return commonCopy.deploymentVerified
-	if (liveDeploymentStatus === 'unavailable') return 'Deployment unavailable'
+export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
+	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
+	if (networkName !== undefined) return networkName
+	if (liveDeploymentStatus === 'unavailable') return appCopy.networkUnavailable
 	return 'Checking deployment'
 }
 
@@ -84,7 +85,7 @@ function networkToneClass(liveDeploymentStatus: LiveDeploymentStatus) {
 function deploymentWalletLabel(state: DeploymentWalletState) {
 	if (state.connecting) return 'Connecting wallet…'
 	if (state.account === undefined) return 'Connect wallet'
-	return shortAddress(state.account)
+	return <TradingAddressValue value={state.account} />
 }
 
 export function App({
@@ -107,7 +108,7 @@ export function App({
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
-	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, ready: false })
+	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
 	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
@@ -291,7 +292,7 @@ export function App({
 								{settingsMenu}
 								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
 									<span />
-									{tradingNetworkLabel(liveDeploymentStatus)}
+									{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}
 								</span>
 								{showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 								{showUniverseSelector ? <UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}

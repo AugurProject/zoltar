@@ -21,6 +21,7 @@ import {
 	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	createSessionSnapshotCache,
+	decodedActionLabel,
 	demoTimelineEvidenceStatus,
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
@@ -68,6 +69,7 @@ import {
 	timelineEntityTypeLabel,
 	timelineOccurrenceFields,
 	transactionRetryMode,
+	urlWithoutLogDetail,
 } from '../browser/live-update.ts'
 
 test('retains every distinct catalog record across a delayed 251-record live refresh', async () => {
@@ -1156,6 +1158,19 @@ test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
 	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')
+})
+
+test('identifies contract creation from the known deployed contract', () => {
+	expect(decodedActionLabel('Call 0x60806040', null, 'Deployment Status Oracle', '0xabc', '0xAbC')).toBe('Deploy Deployment Status Oracle')
+	expect(decodedActionLabel('Call 0x60806040', null, 'WETH', '0xdef', '0xabc')).toBe('Deploy contract')
+	expect(decodedActionLabel('Call 0x60806040', null, null)).toBe('Deploy contract')
+	expect(decodedActionLabel('submitReport(bytes32)', '0x1234', 'Deployment Status Oracle')).toBe('submitReport(bytes32)')
+})
+
+test('clears a log deep link from the current activity entry before route navigation', () => {
+	const activity = new URL('https://scan.example/?chainId=1&log=1%3Ablock%3Atx%3A0')
+	expect(urlWithoutLogDetail(activity).href).toBe('https://scan.example/?chainId=1')
+	expect(activity.searchParams.has('log')).toBeTrue()
 })
 
 test('groups protocol contracts, configured dependencies, and discovered contracts in the system registry', () => {
