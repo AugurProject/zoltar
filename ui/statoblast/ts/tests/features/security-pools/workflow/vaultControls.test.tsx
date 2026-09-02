@@ -363,6 +363,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						}),
 					],
 					securityVault: createSecurityVaultProps({
+						repPerEthPrice: 3n * 10n ** 18n,
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
 							vaultAttoRepBacking: 20_000n * 10n ** 18n,
