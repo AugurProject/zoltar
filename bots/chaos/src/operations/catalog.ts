@@ -54,6 +54,13 @@ function evaluateDefinition(definition: OperationDefinition, snapshot: Ecosystem
 	return plan === undefined ? blockedPlannerEvaluation(definition) : evaluatedPlan(definition, plan, options.seed)
 }
 
+export function evaluateSelectableOperationDefinition(definitionId: string, snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === definitionId)
+	if (definition === undefined) throw new Error(`Unknown operation definition ${definitionId}`)
+	if (definition.classification !== 'selectable') throw new Error(`Operation definition ${definitionId} is not selectable`)
+	return evaluateDefinition(definition, snapshot, options)
+}
+
 function evaluateLifecycleDefinition(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation[] {
 	const eligibility = definition.evaluate(snapshot, options)
 	if (!eligibility.eligible) return [{ definition: publicDefinition(definition), eligibility }]

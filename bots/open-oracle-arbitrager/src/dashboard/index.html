@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="color-scheme" content="dark" />
 		<title>OpenOracle Arbitrager</title>
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
 	</head>
@@ -76,7 +77,7 @@
 						</div>
 					</div>
 					<div class="metric-grid">
-						<div class="metric"><span>Open positions</span><strong id="risk-open-positions">—</strong></div>
+						<div class="metric"><span>Open positions · capacity</span><strong id="risk-open-positions">—</strong></div>
 						<div class="metric"><span>Locked / limit</span><strong id="risk-locked">—</strong></div>
 						<div class="metric"><span>Daily gas / limit</span><strong id="risk-daily-gas">—</strong></div>
 						<div class="metric"><span>Per-position limit</span><strong id="risk-position-limit">—</strong></div>
@@ -115,7 +116,7 @@
 						<tbody id="opportunities-body"></tbody>
 					</table>
 				</div>
-				<p id="opportunities-empty" class="empty-state">No eligible WETH/token report was found in the latest scan.</p>
+				<p id="opportunities-empty" class="empty-state">No WETH/token report opportunity was found in the latest scan. Position capacity is a risk limit, not a hidden opportunity.</p>
 			</section>
 
 			<div class="operations-stack" data-page-content="operations">
@@ -345,7 +346,7 @@
 			</div>
 			<div id="settings-load-state" class="notice settings-load-state" data-page-content="settings"><span id="settings-load-status" role="status" aria-live="polite">Loading operator configuration…</span><button id="retry-settings-button" class="button button-secondary" type="button" hidden>Retry</button></div>
 			<div class="settings-stack" data-page-content="settings">
-				<details id="network-connectivity" class="settings-group panel">
+				<details id="network-connectivity" class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Chain and RPC connectivity</strong><small id="network-value">Unknown network</small></span>
 					</summary>
@@ -377,7 +378,7 @@
 					</div>
 				</details>
 
-				<details class="settings-group panel">
+				<details class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Strategy</strong><small>Profit threshold, price safety, timing, and polling</small></span>
 					</summary>
@@ -393,7 +394,7 @@
 					</div>
 				</details>
 
-				<details class="settings-group panel">
+				<details class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Execution wallet</strong><small id="signer-status" class="muted" role="status" aria-live="polite">Locked</small></span>
 					</summary>
@@ -410,7 +411,7 @@
 					</div>
 				</details>
 
-				<details id="deployment-configuration" class="settings-group panel">
+				<details id="deployment-configuration" class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Deployment configuration</strong><small>Contract, venue, manifest, and quorum identities</small></span>
 					</summary>
@@ -433,7 +434,7 @@
 					</div>
 				</details>
 
-				<details class="settings-group panel">
+				<details class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Submission</strong><small>Transaction delivery · applies to the next scan</small></span>
 					</summary>
@@ -455,7 +456,7 @@
 					</div>
 				</details>
 
-				<details class="settings-group panel">
+				<details class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Execution token allowlist</strong><small>Observed-only tokens remain monitor-only until approved</small></span>
 					</summary>
@@ -470,7 +471,7 @@
 					</div>
 				</details>
 
-				<details id="complete-configuration" class="settings-group panel">
+				<details id="complete-configuration" class="settings-group panel" open>
 					<summary>
 						<span class="settings-summary-copy"><strong>Complete bot configuration</strong><small>Advanced single source of truth</small></span>
 					</summary>

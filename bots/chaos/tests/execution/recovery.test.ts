@@ -303,6 +303,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 		strategy: {
 			allowHighRiskOperations: true,
 			allowIrreversibleOperations: false,
+			initializeGenesisUniverse: false,
 			enabledEcosystems: ['open-oracle'],
 			maximumEthPerOperationAttoEth: 10n ** 20n,
 			maximumGasCostAttoEth: 10n ** 20n,

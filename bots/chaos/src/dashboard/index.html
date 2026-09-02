@@ -5,6 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="dark" />
 		<title>Zoltar chaos bot</title>
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
 	</head>
@@ -412,7 +413,7 @@
 						<div class="settings-body">
 							<form id="connectivity-form">
 								<fieldset id="connectivity-fields" disabled>
-									<p class="notice">RPC checks run from the chaos-bot server. Docker service URLs such as <code>http://reth:8545</code> work only when that process shares the service's container network. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.</p>
+									<p class="notice">RPC checks run from the chaos-bot server. Docker service URLs such as <code>http://reth:8545</code> work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.</p>
 									<div class="form-grid">
 										<label>Primary read RPC<input id="read-rpc-url" autocomplete="off" placeholder="http://reth:8545" spellcheck="false" type="url" required /></label>
 										<label
@@ -471,8 +472,15 @@
 									</div>
 									<div class="switch-row">
 										<div>
+											<label for="initialize-genesis-universe">Initialize genesis universe</label>
+											<p id="initialize-genesis-universe-help">Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.</p>
+										</div>
+										<input id="initialize-genesis-universe" name="initializeGenesisUniverse" type="checkbox" aria-describedby="initialize-genesis-universe-help" />
+									</div>
+									<div class="switch-row">
+										<div>
 											<label for="all-selectable-operations">Allow every selectable operation</label>
-											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enter exact selectable definition IDs from the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only; lifecycle discovery, recovery, and execution are never disabled by this control.</p>
+											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enter exact selectable definition IDs from the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.</p>
 										</div>
 										<input id="all-selectable-operations" name="allSelectableOperations" type="checkbox" aria-describedby="selectable-operation-scope-help" />
 									</div>
@@ -519,7 +527,6 @@
 						<div class="settings-body">
 							<form id="signer-form" autocomplete="off">
 								<fieldset id="signer-fields">
-									<p class="notice warning">The private key is accepted only by this protected endpoint. It is never returned by the API, embedded in the page, or written to activity. Do not let a browser or password manager save it; autocomplete suppression is defense in depth, not a guarantee.</p>
 									<label
 										>Private key
 										<input id="private-key" autocomplete="off" placeholder="0x…" spellcheck="false" type="password" />

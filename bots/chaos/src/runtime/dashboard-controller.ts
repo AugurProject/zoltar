@@ -28,7 +28,6 @@ export type DashboardControllerOptions = {
 	locks: ChaosProcessLocks
 	loopbackPublished?: boolean | undefined
 	onConnectivityUpdated?: ((settings: OperatorSettings, checks: readonly EndpointCheck[]) => void) | undefined
-	password?: string | undefined
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
 	state: RuntimeState
@@ -69,7 +68,11 @@ export function settingsPatchCandidate(current: OperatorSettings, value: unknown
 	const scheduler = record(patch['scheduler'], 'Scheduler patch')
 	exactKeys(scheduler, ['maximumDelaySeconds', 'minimumDelaySeconds'], 'Scheduler patch')
 	const strategy = record(patch['strategy'], 'Strategy patch')
-	exactKeys(strategy, ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'selectableOperationAllowlist', 'workflowValidForBlocks'], 'Strategy patch')
+	exactKeys(
+		strategy,
+		['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'initializeGenesisUniverse', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'selectableOperationAllowlist', 'workflowValidForBlocks'],
+		'Strategy patch',
+	)
 	const serialized = serializedSettings(current)
 	return {
 		revision: body['revision'],
@@ -86,6 +89,7 @@ export function settingsPatchCandidate(current: OperatorSettings, value: unknown
 					...serialized.strategy,
 					allowHighRiskOperations: strategy['allowHighRiskOperations'],
 					allowIrreversibleOperations: strategy['allowIrreversibleOperations'],
+					initializeGenesisUniverse: strategy['initializeGenesisUniverse'],
 					enabledEcosystems: strategy['enabledEcosystems'],
 					maximumEthPerOperation: strategy['maximumEthPerOperation'],
 					maximumGasCostEth: strategy['maximumGasCostEth'],
@@ -512,7 +516,6 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 		getState: () => dashboardState(options.state, options.configuration),
 		hostname: options.hostname,
 		...(options.loopbackPublished === undefined ? {} : { loopbackPublished: options.loopbackPublished }),
-		...(options.password === undefined ? {} : { password: options.password }),
 		async setCancellation(value) {
 			await update(async () => {
 				if (!options.configuration.settings.paused || !options.state.paused) {

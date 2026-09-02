@@ -390,6 +390,7 @@ export interface EcosystemDeployments {
 	weth: Address
 	tradingFactory: Address
 	tradingRouter: Address
+	uniswapV3Factory?: Address | undefined
 }
 
 export interface EcosystemSnapshot {
@@ -410,6 +411,8 @@ export interface EcosystemSnapshot {
 	auctions: AuctionSnapshot[]
 	reports: OracleGameSnapshot[]
 	pairs: PairSnapshot[]
+	tradingDeployment?: { factory: boolean; router: boolean }
+	genesisUniswap?: { factory: boolean; initialized: boolean; liquidity: string; pool?: Address | undefined; proxy: boolean; seeder: boolean }
 	warnings: string[]
 }
 
@@ -526,6 +529,13 @@ export interface ImmutableTopologyPlanningCapacity {
 
 export interface PlanningOptions {
 	seed: number
+	/** Exact linked topology selected by the genesis initializer. Ordinary random planning leaves this absent. */
+	genesisInitializationTarget?: {
+		pair?: Address | undefined
+		pool?: Address | undefined
+		questionId?: string | undefined
+		universeId: string
+	}
 	allowHighRisk?: boolean
 	allowIrreversibleOperations?: boolean
 	/** Required before a plan may create a question, universe, or pool. */

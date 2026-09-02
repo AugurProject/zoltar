@@ -16,6 +16,18 @@ const options = {
 } as const
 
 describe('idempotent trading keeper evidence', () => {
+	test('targets the requested genesis pool when unrelated eligible topology exists', () => {
+		const snapshot = snapshotFixture()
+		const firstPool = snapshot.pools[0]
+		if (firstPool === undefined) throw new Error('Pool fixture missing')
+		const genesisPool = { ...firstPool, address: address(91), questionId: '78' }
+		snapshot.pools.push(genesisPool)
+		snapshot.pairs = []
+		const definition = TRADING_OPERATIONS.find(candidate => candidate.id === 'trading.pair.create')
+		const plan = definition?.buildPlan(snapshot, { ...options, genesisInitializationTarget: { pool: genesisPool.address, questionId: genesisPool.questionId, universeId: '0' } })
+		expect(plan?.metadata).toMatchObject({ pool: genesisPool.address })
+	})
+
 	test('accepts a successful no-log pair creation after a competitor creates the canonical pair', () => {
 		const snapshot = snapshotFixture()
 		snapshot.pairs = []

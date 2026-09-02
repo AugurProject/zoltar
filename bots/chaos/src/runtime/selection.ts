@@ -44,6 +44,62 @@ export function randomOperationPlans(evaluations: readonly EvaluatedOperation[],
 	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && (allowed === undefined || allowed.has(plan.definitionId)))
 }
 
+export type GenesisInitializationState = {
+	genesisUniversePresent: boolean
+	hasInitializedPair: boolean
+	hasPair: boolean
+	hasPool: boolean
+	hasQuestion: boolean
+	hasWalletVault: boolean
+	hasUniswapPool: boolean
+	hasUniswapSeeder: boolean
+	hasWeth: boolean
+	hasInitializedUniswapPool: boolean
+	hasSeededUniswapPool: boolean
+	tradingFactoryDeployed: boolean
+	tradingRouterDeployed: boolean
+}
+
+export const genesisInitializationDefinitionIds = new Set([
+	'zoltar.question.create-binary',
+	'statoblast.pool.deploy',
+	'statoblast.vault.deposit-rep',
+	'trading.genesis-uniswap.deploy-seeder',
+	'trading.genesis-uniswap.create-pool',
+	'trading.genesis-uniswap.initialize-pool',
+	'open-oracle.weth.wrap',
+	'trading.genesis-uniswap.seed-pool',
+	'trading.root.deploy-factory',
+	'trading.root.deploy-router',
+	'trading.pair.create',
+	'trading.pair.initialize-eth',
+])
+
+export function genesisInitializationDefinitionId(state: GenesisInitializationState) {
+	if (!state.genesisUniversePresent) return undefined
+	let definitionId: string | undefined
+	if (!state.hasQuestion) definitionId = 'zoltar.question.create-binary'
+	else if (!state.hasPool) definitionId = 'statoblast.pool.deploy'
+	else if (!state.hasWalletVault) definitionId = 'statoblast.vault.deposit-rep'
+	else if (!state.hasUniswapSeeder) definitionId = 'trading.genesis-uniswap.deploy-seeder'
+	else if (!state.hasUniswapPool) definitionId = 'trading.genesis-uniswap.create-pool'
+	else if (!state.hasInitializedUniswapPool) definitionId = 'trading.genesis-uniswap.initialize-pool'
+	else if (!state.hasWeth) definitionId = 'open-oracle.weth.wrap'
+	else if (!state.hasSeededUniswapPool) definitionId = 'trading.genesis-uniswap.seed-pool'
+	else if (!state.tradingFactoryDeployed) definitionId = 'trading.root.deploy-factory'
+	else if (!state.tradingRouterDeployed) definitionId = 'trading.root.deploy-router'
+	else if (!state.hasPair) definitionId = 'trading.pair.create'
+	else if (!state.hasInitializedPair) definitionId = 'trading.pair.initialize-eth'
+	return definitionId
+}
+
+export function genesisInitializationPlan(evaluations: readonly EvaluatedOperation[], state: GenesisInitializationState) {
+	const definitionId = genesisInitializationDefinitionId(state)
+	if (definitionId === undefined) return undefined
+	const plans = eligibleOperationPlans(evaluations)
+	return plans.find(candidate => candidate.definitionId === definitionId)
+}
+
 export function selectOperationPlan(evaluations: readonly EvaluatedOperation[], randomIndex: RandomIndex = cryptoRandomIndex, selectableOperationAllowlist?: readonly string[]): OperationPlan | undefined {
 	const urgent = urgentOperationPlans(evaluations)
 	if (urgent.length > 0) return urgent[0]

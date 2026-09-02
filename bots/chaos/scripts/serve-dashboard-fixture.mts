@@ -2,7 +2,6 @@ import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
 import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
 
 const now = Date.now()
-const dashboardPassword = 'dashboard visual fixture password'
 const scenario = process.argv[2] ?? 'baseline'
 if (scenario !== 'baseline' && scenario !== 'safety-recovery' && scenario !== 'private-relay-ready' && scenario !== 'private-relay-blocked') {
 	throw new Error('Dashboard fixture scenario must be baseline, safety-recovery, private-relay-ready, or private-relay-blocked')
@@ -47,6 +46,7 @@ function settings() {
 		strategy: {
 			allowHighRiskOperations: false,
 			allowIrreversibleOperations: false,
+			initializeGenesisUniverse: true,
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 			maximumEthPerOperation: '0.05',
 			maximumGasCostEth: '0.02',
@@ -209,7 +209,6 @@ const server = startDashboardServer(4193, {
 	}),
 	getState: state,
 	hostname: '127.0.0.1',
-	password: dashboardPassword,
 	setCancellation: () => {},
 	setCandidate: () => {},
 	setObligation: () => {},

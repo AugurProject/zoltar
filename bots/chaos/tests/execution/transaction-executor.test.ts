@@ -84,6 +84,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 		strategy: {
 			allowHighRiskOperations: true,
 			allowIrreversibleOperations: false,
+			initializeGenesisUniverse: false,
 			enabledEcosystems: ['statoblast'],
 			maximumEthPerOperationAttoEth: 1n,
 			maximumGasCostAttoEth: 1n,

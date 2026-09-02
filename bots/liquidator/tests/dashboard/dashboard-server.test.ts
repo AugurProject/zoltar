@@ -265,6 +265,10 @@ describe('liquidator dashboard server', () => {
 		expect(page.status).toBe(200)
 		const pageSource = await page.text()
 		expect(pageSource).toContain('Statoblast liquidator')
+		const favicon = await fetch(new URL('/favicon.svg', server.url))
+		expect(favicon.status).toBe(200)
+		expect(favicon.headers.get('content-type')).toBe('image/svg+xml')
+		expect(await favicon.text()).toBe(await Bun.file(new URL('../../src/dashboard/favicon.svg', import.meta.url)).text())
 		for (const route of ['overview', 'pools', 'markets', 'operations', 'settings']) {
 			const routedPage = await fetch(new URL(`/${route}`, server.url))
 			expect(routedPage.status).toBe(200)

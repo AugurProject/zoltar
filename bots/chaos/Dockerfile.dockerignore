@@ -9,6 +9,15 @@
 !shared/tsconfig.json
 !shared/ts/
 !shared/ts/**
+!solidity/
+!solidity/package.json
+!solidity/bun.lock
+!solidity/bunfig.toml
+!solidity/default-config.json
+!solidity/tsconfig.json
+!solidity/tsconfig-compile.json
+!solidity/contracts/**
+!solidity/ts/**
 !bots/shared/package.json
 !bots/shared/bun.lock
 !bots/shared/src/**

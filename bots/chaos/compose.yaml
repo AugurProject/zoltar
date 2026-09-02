@@ -10,8 +10,6 @@ services:
     environment:
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
-      # The entrypoint creates this owner-only secret in the private state volume.
-      ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password
       # flock coordinates containers on this Docker host through the shared volume.
       ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
     ports:

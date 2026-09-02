@@ -148,8 +148,10 @@ type Snapshot = {
 type Configuration = {
 	allowHighRiskOperations?: boolean | undefined
 	allowIrreversibleOperations?: boolean | undefined
+	initializeGenesisUniverse?: boolean | undefined
 	chainId?: string | number | undefined
 	configurationCommitIndeterminate?: boolean | undefined
+	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl?: string | undefined; rpcQuorum?: string | number | undefined } | undefined
 	enabledEcosystems: string[]
 	execute?: boolean | undefined
 	hasSigner?: boolean | undefined
@@ -296,6 +298,7 @@ const settingsFields = element('settings-fields', HTMLFieldSetElement)
 const executeInput = element('execute', HTMLInputElement)
 const highRiskInput = element('allow-high-risk', HTMLInputElement)
 const irreversibleInput = element('allow-irreversible', HTMLInputElement)
+const initializeGenesisInput = element('initialize-genesis-universe', HTMLInputElement)
 const allSelectableOperationsInput = element('all-selectable-operations', HTMLInputElement)
 const selectableOperationAllowlistInput = element('selectable-operation-allowlist', HTMLTextAreaElement)
 const minDelayInput = element('min-delay', HTMLInputElement)
@@ -657,15 +660,26 @@ function parseSnapshot(value: unknown): Snapshot {
 
 function parseConfiguration(value: unknown): Configuration {
 	const source = record(value) ?? {}
+	const connectivity = record(source['connectivity'])
 	const selectableOperationAllowlist = source['selectableOperationAllowlist']
 	return {
 		allowHighRiskOperations: booleanValue(source['allowHighRiskOperations']),
 		allowIrreversibleOperations: booleanValue(source['allowIrreversibleOperations']),
 		chainId: scalarValue(source['chainId']),
 		configurationCommitIndeterminate: booleanValue(source['configurationCommitIndeterminate']),
+		connectivity:
+			connectivity === undefined
+				? undefined
+				: {
+						publicRpcUrls: strings(connectivity['publicRpcUrls']),
+						quorumRpcUrls: strings(connectivity['quorumRpcUrls']),
+						readRpcUrl: stringValue(connectivity['readRpcUrl']),
+						rpcQuorum: scalarValue(connectivity['rpcQuorum']),
+					},
 		enabledEcosystems: strings(source['enabledEcosystems']),
 		execute: booleanValue(source['execute']),
 		hasSigner: booleanValue(source['hasSigner']),
+		initializeGenesisUniverse: booleanValue(source['initializeGenesisUniverse']),
 		maximumDelaySeconds: scalarValue(source['maximumDelaySeconds']),
 		maximumEthPerOperation: scalarValue(source['maximumEthPerOperation']),
 		maximumGasCostEth: scalarValue(source['maximumGasCostEth']),
@@ -1590,6 +1604,9 @@ function renderConfiguration(value: Configuration, force = false) {
 		}
 	} else {
 		if (value.rpcQuorum === 1 || value.rpcQuorum === 2) rpcQuorumInput.value = String(value.rpcQuorum)
+		readRpcUrlInput.value = value.connectivity?.readRpcUrl ?? ''
+		quorumRpcUrlsInput.value = value.connectivity?.quorumRpcUrls.join('\n') ?? ''
+		publicRpcUrlsInput.value = value.connectivity?.publicRpcUrls.join('\n') ?? ''
 		connectivityDraftRevision = value.revision
 		connectivityDraftConflict = false
 		saveConnectivityButton.disabled = false
@@ -1619,6 +1636,7 @@ function renderConfiguration(value: Configuration, force = false) {
 	executeInput.checked = value.execute === true
 	highRiskInput.checked = value.allowHighRiskOperations === true
 	irreversibleInput.checked = value.allowIrreversibleOperations === true
+	initializeGenesisInput.checked = value.initializeGenesisUniverse === true
 	const allSelectableOperations = value.selectableOperationAllowlist === null
 	allSelectableOperationsInput.checked = allSelectableOperations
 	selectableOperationAllowlistInput.value = Array.isArray(value.selectableOperationAllowlist) ? value.selectableOperationAllowlist.join('\n') : ''
@@ -1838,12 +1856,35 @@ function decimalAtto(value: string) {
 }
 
 let currentSectionLink: HTMLAnchorElement | undefined
-for (const link of document.querySelectorAll('.section-nav a')) {
+const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
+
+function showDashboardPage(pathname: string, push = false) {
+	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
+	document.body.dataset['page'] = page
+	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
+	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
+	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
+	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
+		window.requestAnimationFrame(() => {
+			navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
+		})
+	}
+	if (push) window.history.pushState({}, '', `/${page}`)
+	window.scrollTo({ top: 0 })
+}
+
+for (const link of sectionLinks) {
 	if ((link instanceof HTMLAnchorElement && new URL(link.href).pathname === window.location.pathname.replace(/\/$/, '')) || (window.location.pathname === '/' && link instanceof HTMLAnchorElement && new URL(link.href).pathname === '/overview')) {
 		link.setAttribute('aria-current', 'page')
 		currentSectionLink = link
 	}
+	link.addEventListener('click', event => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+		event.preventDefault()
+		showDashboardPage(new URL(link.href).pathname, true)
+	})
 }
+window.addEventListener('popstate', () => showDashboardPage(window.location.pathname))
 
 if (currentSectionLink !== undefined) {
 	const link = currentSectionLink
@@ -2113,13 +2154,13 @@ discardConnectivityButton.addEventListener('click', () => {
 	connectivityDraftDirty = false
 	connectivityDraftConflict = false
 	connectivityDraftRevision = configuration?.revision
-	readRpcUrlInput.value = ''
-	quorumRpcUrlsInput.value = ''
-	publicRpcUrlsInput.value = ''
+	readRpcUrlInput.value = configuration?.connectivity?.readRpcUrl ?? ''
+	quorumRpcUrlsInput.value = configuration?.connectivity?.quorumRpcUrls.join('\n') ?? ''
+	publicRpcUrlsInput.value = configuration?.connectivity?.publicRpcUrls.join('\n') ?? ''
 	if (configuration?.rpcQuorum === 1 || configuration?.rpcQuorum === 2) rpcQuorumInput.value = String(configuration.rpcQuorum)
 	saveConnectivityButton.disabled = false
 	discardConnectivityButton.disabled = true
-	connectivityStatus.textContent = 'RPC draft discarded. Re-enter the complete replacement set after reviewing the current configuration.'
+	connectivityStatus.textContent = 'RPC draft discarded. The saved endpoint set has been restored.'
 })
 connectivityForm.addEventListener('submit', event => {
 	event.preventDefault()
@@ -2158,9 +2199,6 @@ connectivityForm.addEventListener('submit', event => {
 			connectivityDraftDirty = false
 			connectivityDraftConflict = false
 			connectivityDraftRevision = undefined
-			readRpcUrlInput.value = ''
-			quorumRpcUrlsInput.value = ''
-			publicRpcUrlsInput.value = ''
 			connectivityStatus.textContent = 'Chain and RPCs passed server-side validation and were saved.'
 			await refresh()
 		} catch (error) {
@@ -2251,6 +2289,7 @@ settingsForm.addEventListener('submit', event => {
 					strategy: {
 						allowHighRiskOperations: highRiskInput.checked,
 						allowIrreversibleOperations: irreversibleInput.checked,
+						initializeGenesisUniverse: initializeGenesisInput.checked,
 						enabledEcosystems,
 						maximumEthPerOperation,
 						maximumGasCostEth,

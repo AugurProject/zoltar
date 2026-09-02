@@ -1417,6 +1417,30 @@ strategyForm.addEventListener('input', updateHealthPolicyPreview)
 
 const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
 
+function showDashboardPage(pathname: string, push = false) {
+	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
+	document.body.dataset['page'] = page
+	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
+	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
+	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
+	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
+		window.requestAnimationFrame(() => {
+			navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
+		})
+	}
+	if (push) window.history.pushState({}, '', `/${page}`)
+	window.scrollTo({ top: 0 })
+}
+
+for (const link of sectionLinks) {
+	link.addEventListener('click', event => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+		event.preventDefault()
+		showDashboardPage(new URL(link.href).pathname, true)
+	})
+}
+window.addEventListener('popstate', () => showDashboardPage(window.location.pathname))
+
 function secureExternalLinks(root: ParentNode) {
 	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
 	for (const link of links) {
@@ -1433,17 +1457,24 @@ new MutationObserver(records => {
 	}
 }).observe(document.body, { childList: true, subtree: true })
 
-function revealSectionLink(link: HTMLAnchorElement) {
-	const navigation = link.closest<HTMLElement>('.section-nav')
-	if (navigation === null) return
+let sectionNavigationAlignmentInitialized = false
+
+function revealSectionLink(_link: HTMLAnchorElement) {
+	const navigation = sectionLinks[0]?.closest<HTMLElement>('.section-nav')
+	if (navigation === undefined || navigation === null) return
 	const align = () => {
+		const link = sectionLinks.find(candidate => candidate.hasAttribute('aria-current'))
+		if (link === undefined) return
 		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
 	}
 	align()
 	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
-	window.addEventListener('load', align, { once: true })
-	window.addEventListener('resize', align)
-	new ResizeObserver(align).observe(navigation)
+	if (!sectionNavigationAlignmentInitialized) {
+		sectionNavigationAlignmentInitialized = true
+		window.addEventListener('load', align, { once: true })
+		window.addEventListener('resize', align)
+		new ResizeObserver(align).observe(navigation)
+	}
 	void document.fonts?.ready.then(align)
 }
 

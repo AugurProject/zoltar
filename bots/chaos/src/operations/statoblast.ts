@@ -354,7 +354,10 @@ const deployPool: OperationDefinition = {
 		if (poolDeploymentCapacityBlocker(snapshot, options) !== undefined) return undefined
 		const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
 		const binaryQuestions = snapshot.questions.filter(question => question.kind === 'binary')
-		const candidates = snapshot.universes.flatMap(universe => binaryQuestions.map(question => ({ question, universe }))).filter(candidate => canDeployOriginPool(candidate.universe) && !deployed.has(`${candidate.universe.id}:${candidate.question.id}`))
+		const candidates = snapshot.universes
+			.flatMap(universe => binaryQuestions.map(question => ({ question, universe })))
+			.filter(candidate => canDeployOriginPool(candidate.universe) && !deployed.has(`${candidate.universe.id}:${candidate.question.id}`))
+			.filter(candidate => options.genesisInitializationTarget === undefined || (candidate.universe.id === options.genesisInitializationTarget.universeId && candidate.question.id === options.genesisInitializationTarget.questionId))
 		const candidate = choose(candidates, mixSeed(options.seed, deployPool.id))
 		if (candidate === undefined) return undefined
 		const multiplier = 11_000n + BigInt(mixSeed(options.seed, 'pool-multiplier') % 9_001)
@@ -452,7 +455,10 @@ function vaultDepositCandidates(snapshot: EcosystemSnapshot, options: PlanningOp
 
 const depositVault: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const pool = choose(vaultDepositCandidates(snapshot, options), mixSeed(options.seed, depositVault.id))
+		const pool = choose(
+			vaultDepositCandidates(snapshot, options).filter(candidate => options.genesisInitializationTarget?.pool === undefined || candidate.address.toLowerCase() === options.genesisInitializationTarget.pool.toLowerCase()),
+			mixSeed(options.seed, depositVault.id),
+		)
 		if (pool === undefined) return undefined
 		const spend = repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep))
 		const steps = approvePool(snapshot, pool, spend)
