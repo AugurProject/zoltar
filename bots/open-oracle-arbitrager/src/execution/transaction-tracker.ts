@@ -1,7 +1,7 @@
 import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '#ethereum'
 import type { Configuration } from '#config/configuration'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
-import { attemptConfirmationRecovery, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
+import { attemptConfirmationRecovery, guardedExecutionStep, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
 import type { TransactionActivity } from '#state/operator-state'
 import { decimalWeth } from '#state/operator-state'
 import { mergeSubmissionFailures, assertSubmissionWindowOpen, SubmissionFailure, submitSignedTransaction, type SignedTransaction, type SubmittedTransaction, type SubmissionTargetResult } from '#execution/transaction-submission'
@@ -10,6 +10,8 @@ type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>
 
 export type TrackTransaction = (activity: TransactionActivity) => void
+
+export const receiptWaitAttemptMilliseconds = (pollMilliseconds: number) => Math.min(pollMilliseconds, 5_000)
 
 export type TrackedSubmission = SignedTransaction &
 	SubmittedTransaction & {
@@ -138,6 +140,7 @@ export async function waitForTrackedTransaction(
 	submission: TrackedSubmission,
 	track: TrackTransaction,
 	onReplacement: (replacement: TransactionReplacement) => Promise<unknown> | unknown = () => {},
+	isPaused: () => boolean = () => false,
 ) {
 	const account = wallet.account
 	const signMessage = account?.signMessage
@@ -145,18 +148,21 @@ export async function waitForTrackedTransaction(
 	let tracked = submission
 	const receipt = await waitForResolvedTransaction(
 		submission.hash,
-		parameters => wallet.waitForTransactionReceipt({ ...parameters, timeout: config.pollMilliseconds, transaction: submission.transaction }),
+		parameters => wallet.waitForTransactionReceipt({ ...parameters, timeout: receiptWaitAttemptMilliseconds(config.pollMilliseconds), transaction: submission.transaction }),
 		undefined,
 		async error => {
+			await guardedExecutionStep(isPaused, async () => {})
 			console.error(`transaction=${submission.hash} confirmationRetry=${errorMessage(error)}`)
 			track(trackedActivity(tracked, 'confirmation-unknown'))
 			const currentBlockNumber = await client.getBlockNumber()
+			await guardedExecutionStep(isPaused, async () => {})
 			if (tracked.lastValidBlockNumber !== undefined && currentBlockNumber >= tracked.lastValidBlockNumber) {
 				throw new Error(`Transaction ${submission.hash} was not confirmed in its parent-bound target block ${tracked.lastValidBlockNumber.toString()}`)
 			}
 			if (config.submission.mode !== 'private') return
 			await attemptConfirmationRecovery(
 				async () => {
+					await guardedExecutionStep(isPaused, async () => {})
 					const retry = await retryPrivateSubmissionWithinWindow({
 						currentBlockNumber,
 						lastValidBlockNumber: tracked.lastValidBlockNumber,
@@ -185,6 +191,7 @@ export async function waitForTrackedTransaction(
 					track(trackedActivity(tracked, 'pending'))
 				},
 				retryError => {
+					if (isExecutionPausedError(retryError)) throw retryError
 					console.error(`transaction=${submission.hash} relayResubmissionFailed=${errorMessage(retryError)}`)
 					tracked = {
 						...tracked,

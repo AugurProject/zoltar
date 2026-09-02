@@ -105,9 +105,10 @@ async function executorDeploymentReceipt(parameters: { clients: readonly { clien
 	)
 }
 
-async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
+async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; isStopping?: (() => boolean) | undefined; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
 	const deadline = Date.now() + timeoutMilliseconds
 	while (true) {
+		assertExecutorDeploymentActive(parameters.isStopping)
 		const receipt = await executorDeploymentReceipt(parameters)
 		if (receipt !== undefined) {
 			assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
@@ -207,6 +208,6 @@ export async function deployExecutorCreate2(parameters: {
 		assertExecutorDeploymentActive(parameters.isStopping)
 		await submitExecutorDeploymentTransaction({ account: account.address, publicRpcUrls: parameters.rpcUrls, publicSubmit: sendRawTransactionToRpc, serializedTransaction: intent.serializedTransaction, transactionHash: intent.transactionHash })
 	}
-	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: intent.transactionHash })
+	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, ...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }), transactionHash: intent.transactionHash })
 	return { address: plan.address, alreadyDeployed: false, transactionHash: intent.transactionHash as Hash }
 }

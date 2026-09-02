@@ -256,11 +256,18 @@ export async function processPositionLifecycle(
 	if (config.submission.mode === 'public') {
 		await persistPosition(lifecyclePosition)
 		const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind: lifecycleCall.kind, reportId: activePosition.reportId }, isPaused, track)
-		const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
-			persistPosition({
-				...lifecyclePosition,
-				lifecycleTransactionHashes: [replacement.transaction.hash],
-			}),
+		const { receipt } = await waitForTrackedTransaction(
+			client,
+			wallet,
+			config,
+			submission,
+			track,
+			replacement =>
+				persistPosition({
+					...lifecyclePosition,
+					lifecycleTransactionHashes: [replacement.transaction.hash],
+				}),
+			isPaused,
 		)
 		const observedPosition = {
 			...lifecyclePosition,
@@ -306,7 +313,14 @@ export async function processPositionLifecycle(
 				() => guardedExecutionStep(isPaused, async () => {}),
 			),
 	)
-	while ((await client.getBlockNumber()) < targetBlockNumber) await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
+	while (true) {
+		await guardedExecutionStep(isPaused, async () => {})
+		const currentBlockNumber = await client.getBlockNumber()
+		await guardedExecutionStep(isPaused, async () => {})
+		if (currentBlockNumber >= targetBlockNumber) break
+		await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
+	}
+	await guardedExecutionStep(isPaused, async () => {})
 	try {
 		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending, targetBlockNumber), persistPosition)
 	} catch (error) {

@@ -63,7 +63,11 @@ export function assertGasCostLimitForBaseFee(gasEstimate: bigint, baseFeePerGas:
 }
 
 export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
+	assertOperatorNotStopping(state)
 	if (state.paused) throw new Error('Operator paused before transaction submission')
+}
+
+function assertOperatorNotStopping(state: Pick<RuntimeState, 'paused'>) {
 	if (shutdownChecks.get(state)?.() ?? false) throw new OperatorStopping()
 }
 
@@ -191,11 +195,20 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		signMessage: account.signMessage,
 	})
 	const hash: Hex = signed.hash
-	await wallet.waitForTransactionReceipt({
-		hash,
-		pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
-		timeout: 180_000,
-	})
+	const receiptDeadline = Date.now() + 180_000
+	for (;;) {
+		try {
+			await wallet.waitForTransactionReceipt({
+				hash,
+				pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
+				timeout: Math.min(settings.runtime.pollMilliseconds, 5_000),
+			})
+			break
+		} catch (error) {
+			assertOperatorNotStopping(state)
+			if (Date.now() >= receiptDeadline) throw error
+		}
+	}
 	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash, pool)
 	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	if (receipt.status !== 'success') {

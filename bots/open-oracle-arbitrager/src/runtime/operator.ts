@@ -7,7 +7,7 @@ import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#mon
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { createSignerOperationGate } from '#execution/signer-operation-gate'
-import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, selectBestExecution } from '#execution/execution-orchestration'
+import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
 import { appendExecutionHistoryIfMissing, clearPollFailureMetadata, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
@@ -604,6 +604,12 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									})
 								}
 							} catch (error) {
+								if (isExecutionPausedError(error)) {
+									if (shutdown?.isRequested()) return true
+									state.lastPollAt = new Date().toISOString()
+									return completeSuccessfulPoll(state, nextError, config.once)
+								}
+								if (shutdown?.isRequested()) return true
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
 								nextError = message
@@ -645,6 +651,12 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									})
 								}
 							} catch (error) {
+								if (isExecutionPausedError(error)) {
+									if (shutdown?.isRequested()) return true
+									state.lastPollAt = new Date().toISOString()
+									return completeSuccessfulPoll(state, nextError, config.once)
+								}
+								if (shutdown?.isRequested()) return true
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
 								nextError = message
@@ -720,11 +732,19 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					}
 					let completedOpportunityCount = 0
 					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
+					let shutdownDuringHead = false
+					const stopHead = () => {
+						if (shutdown?.isRequested() !== true) return false
+						shutdownDuringHead = true
+						return true
+					}
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+						if (stopHead()) return
 						let configuredDexMarkets: Awaited<ReturnType<typeof observeConstantProductMarkets>>
 						try {
 							configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => readConfiguredDexPair(pair, { hash: blockHash, number: blockNumber }))
+							if (stopHead()) return
 						} catch (error) {
 							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
 							state.marketConsensus = undefined
@@ -732,6 +752,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						try {
 							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber))
+							if (stopHead()) return
 						} catch (error) {
 							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
 							state.marketConsensus = undefined
@@ -743,6 +764,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							.slice(-2_000)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
+						if (stopHead()) return
 						state.tokenAddresses = [...executionTokens]
 						state.tokenMarkets = await loadTokenMarkets(client, {
 							chainId: config.network.chain.id,
@@ -752,18 +774,22 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							weth: config.network.weth,
 							wallet: wallet?.account.address,
 						})
+						if (stopHead()) return
 						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
 						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
 						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
+						if (stopHead()) return
 						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
 						const balances = await contextualRpcRead('eth_call', requestClient => loadBalances(requestClient, wallet, config, pools, discoveredTokens))
+						if (stopHead()) return
 						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
 						const opportunities: OpportunitySnapshot[] = []
 						const candidates: ExecutionCandidate[] = []
 						const cycleDexObservations: MarketConsensusObservation[] = []
 						for (const report of reports.values()) {
+							if (stopHead()) return
 							if (report.settled) continue
 							try {
 								const reportId = report.latest.helper.reportId.toString()
@@ -795,6 +821,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 											reportId,
 										}),
 								)
+								if (stopHead()) return
 								if (evaluated !== undefined) {
 									cycleDexObservations.push(...evaluated.dexObservations)
 									opportunities.push(evaluated.opportunity)
@@ -968,6 +995,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									console.error(`historyPersistenceFailed=${message}`)
 								}
 							} catch (error) {
+								if (shutdown?.isRequested()) {
+									shutdownDuringHead = true
+									return
+								}
 								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
 								const message = errorMessage(error)
 								selected.opportunity.decision = executionFailureDecision(error)
@@ -981,6 +1012,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						completedOpportunityCount = opportunities.length
 						completedFinalityAnchor = await finalityAnchorForHead()
 					})
+					if (shutdownDuringHead || shutdown?.isRequested()) return true
 					if (completedFinalityAnchor === undefined) throw new Error('Successful scan did not produce a finality anchor')
 					cursor = withFinalityAnchor(completedCursor, completedFinalityAnchor.number, completedFinalityAnchor.hash)
 					const settledReportIds = new Set(
@@ -1021,6 +1053,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			},
 			config.once,
 			error => {
+				if (shutdown?.isRequested()) return
 				const message = errorMessage(error)
 				state.rpcEndpointHealth = readPool.snapshot()
 				state.lastError = message

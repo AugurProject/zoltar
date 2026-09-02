@@ -327,12 +327,19 @@ export async function executeDispute(
 					persistPosition(stagedPosition),
 				),
 		})
-		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
-			persistPosition({
-				...stagedPosition,
-				entryTransactionHash: replacement.transaction.hash,
-				entryTransactionHashes: [replacement.transaction.hash],
-			}),
+		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(
+			client,
+			wallet,
+			config,
+			submission,
+			track,
+			replacement =>
+				persistPosition({
+					...stagedPosition,
+					entryTransactionHash: replacement.transaction.hash,
+					entryTransactionHashes: [replacement.transaction.hash],
+				}),
+			isPaused,
 		)
 		const receiptPosition = {
 			...stagedPosition,
@@ -484,6 +491,7 @@ export async function executeDispute(
 					),
 			)
 		} catch (error) {
+			if (isExecutionPausedError(error)) throw error
 			const failedTargets: readonly SubmissionTargetResult[] =
 				error instanceof SubmissionFailure
 					? error.failedTargets
@@ -498,9 +506,14 @@ export async function executeDispute(
 		}
 		const pending = tracked.map(transaction => ({ ...transaction, ...submission }))
 		for (const transaction of pending) track(trackedActivity(transaction, 'pending'))
-		while ((await client.getBlockNumber()) < targetBlockNumber) {
+		while (true) {
+			await guardedExecutionStep(isPaused, async () => {})
+			const currentBlockNumber = await client.getBlockNumber()
+			await guardedExecutionStep(isPaused, async () => {})
+			if (currentBlockNumber >= targetBlockNumber) break
 			await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
 		}
+		await guardedExecutionStep(isPaused, async () => {})
 		let recoveredEntry: Awaited<ReturnType<typeof recoverPendingEntryWithQuorum>>
 		try {
 			recoveredEntry = await recoverPendingEntryWithQuorum(readClients, config, stagedPosition, tokenMetadata.decimals, targetBlockNumber)
