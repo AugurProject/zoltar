@@ -117,6 +117,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(page.headers.get('content-security-policy')).toContain("default-src 'self'")
 	const pageSource = await page.text()
 	expect(pageSource).toContain('OpenOracle Arbitrager')
+	const svgFavicon = await fetch(`${origin}/favicon.svg`)
+	expect(svgFavicon.status).toBe(200)
+	expect(svgFavicon.headers.get('content-type')).toBe('image/svg+xml')
+	expect(await svgFavicon.text()).toBe(await Bun.file(new URL('../../src/dashboard/favicon.svg', import.meta.url)).text())
 	for (const route of ['overview', 'operations', 'games', 'markets', 'settings']) {
 		const routedPage = await fetch(`${origin}/${route}`)
 		expect(routedPage.status).toBe(200)

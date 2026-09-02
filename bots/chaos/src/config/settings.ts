@@ -27,6 +27,7 @@ export type DeploymentSettings = {
 	securityPoolForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
+	uniswapV3Factory?: Address | undefined
 	weth: Address
 	zoltar: Address
 }
@@ -49,6 +50,7 @@ export type SchedulerSettings = {
 export type StrategySettings = {
 	allowHighRiskOperations: boolean
 	allowIrreversibleOperations: boolean
+	initializeGenesisUniverse: boolean
 	enabledEcosystems: readonly ChaosEcosystem[]
 	maximumEthPerOperationAttoEth: bigint
 	maximumGasCostAttoEth: bigint
@@ -139,6 +141,7 @@ const settingsFilesystem: SettingsFilesystem = {
 const settingsWriteQueues = new Map<string, Promise<void>>()
 
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
+const canonicalUniswapV3Factory = getAddress('0x1F98431c8aD98523631AE4a59f267346ea31F984')
 const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -270,7 +273,7 @@ function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connec
 
 function parseDeployment(value: unknown): DeploymentSettings {
 	const deployment = requiredRecord(value, 'deployment')
-	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
+	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', ...('uniswapV3Factory' in deployment ? ['uniswapV3Factory'] : []), 'weth', 'zoltar'] as const
 	assertExactKeys(deployment, keys, 'deployment')
 	return {
 		openOracle: getAddress(nonemptyString(deployment['openOracle'], 'deployment.openOracle')),
@@ -279,6 +282,7 @@ function parseDeployment(value: unknown): DeploymentSettings {
 		securityPoolForker: getAddress(nonemptyString(deployment['securityPoolForker'], 'deployment.securityPoolForker')),
 		tradingFactory: getAddress(nonemptyString(deployment['tradingFactory'], 'deployment.tradingFactory')),
 		tradingRouter: getAddress(nonemptyString(deployment['tradingRouter'], 'deployment.tradingRouter')),
+		uniswapV3Factory: deployment['uniswapV3Factory'] === undefined ? canonicalUniswapV3Factory : getAddress(nonemptyString(deployment['uniswapV3Factory'], 'deployment.uniswapV3Factory')),
 		weth: getAddress(nonemptyString(deployment['weth'], 'deployment.weth')),
 		zoltar: getAddress(nonemptyString(deployment['zoltar'], 'deployment.zoltar')),
 	}
@@ -358,7 +362,8 @@ function parseSelectableOperationAllowlist(value: unknown) {
 function parseStrategy(value: unknown): StrategySettings {
 	const strategy = requiredRecord(value, 'strategy')
 	const requiredKeys = ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'] as const
-	assertExactKeys(strategy, 'selectableOperationAllowlist' in strategy ? [...requiredKeys, 'selectableOperationAllowlist'] : requiredKeys, 'strategy')
+	const optionalKeys = [...('selectableOperationAllowlist' in strategy ? ['selectableOperationAllowlist'] : []), ...('initializeGenesisUniverse' in strategy ? ['initializeGenesisUniverse'] : [])]
+	assertExactKeys(strategy, [...requiredKeys, ...optionalKeys], 'strategy')
 	const maximumEthPerOperationAttoEth = parseDecimalAmount(strategy['maximumEthPerOperation'], 'strategy.maximumEthPerOperation')
 	const maximumGasCostAttoEth = parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth')
 	const maximumRepPerOperationAttoRep = parseDecimalAmount(strategy['maximumRepPerOperation'], 'strategy.maximumRepPerOperation')
@@ -368,6 +373,7 @@ function parseStrategy(value: unknown): StrategySettings {
 	return {
 		allowHighRiskOperations: boolean(strategy['allowHighRiskOperations'], 'strategy.allowHighRiskOperations'),
 		allowIrreversibleOperations: boolean(strategy['allowIrreversibleOperations'], 'strategy.allowIrreversibleOperations'),
+		initializeGenesisUniverse: strategy['initializeGenesisUniverse'] === undefined ? false : boolean(strategy['initializeGenesisUniverse'], 'strategy.initializeGenesisUniverse'),
 		enabledEcosystems: parseEcosystems(strategy['enabledEcosystems']),
 		maximumEthPerOperationAttoEth,
 		maximumGasCostAttoEth,
@@ -440,6 +446,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		strategy: {
 			allowHighRiskOperations: settings.strategy.allowHighRiskOperations,
 			allowIrreversibleOperations: settings.strategy.allowIrreversibleOperations,
+			initializeGenesisUniverse: settings.strategy.initializeGenesisUniverse,
 			enabledEcosystems: settings.strategy.enabledEcosystems,
 			maximumEthPerOperation: formatDecimalAmount(settings.strategy.maximumEthPerOperationAttoEth),
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),

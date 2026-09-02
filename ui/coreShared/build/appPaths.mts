@@ -39,7 +39,6 @@ export type UiAppPaths = {
 	readonly appEntrypoint: string
 	readonly workerEntrypoint: string
 	readonly coreSharedCssRoot: string
-	readonly faviconIco: string
 	readonly faviconSvg: string
 	readonly vendorBuildScript: string
 	readonly workersBuildScript: string
@@ -77,8 +76,7 @@ export function getUiAppPaths(appId: UiAppId): UiAppPaths {
 		appEntrypoint: path.join(appSourceRoot, 'index.ts'),
 		workerEntrypoint: path.join(appSourceRoot, 'simulation', 'tevmWorker.ts'),
 		coreSharedCssRoot: path.join(coreSharedRoot, 'css'),
-		faviconIco: path.join(coreSharedRoot, 'favicon.ico'),
-		faviconSvg: path.join(coreSharedRoot, 'favicon.svg'),
+		faviconSvg: path.join(appRoot, 'favicon.svg'),
 		vendorBuildScript: path.join(buildRoot, 'vendor.mts'),
 		workersBuildScript: path.join(buildRoot, 'workers.mts'),
 		testsBuildScript: path.join(buildRoot, 'tests.mts'),

@@ -14,13 +14,13 @@ import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts
 import type { CarryProofJournal } from '../monitoring/carry-proof-journal.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
+import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
-import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
+import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
@@ -803,7 +803,6 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				submissionPreflightChecks: checks.filter(check => check.kind === 'public-rpc'),
 			}
 		},
-		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
 		state,
 	})
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
@@ -1014,7 +1013,58 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					return settings.runtime.once
 				}
 				const candidates = randomOperationPlans(state.evaluations, settings.strategy.selectableOperationAllowlist)
-				const plan = candidates.length === 0 ? undefined : candidates[randomInteger(0, candidates.length)]
+				const initializerQuestion = [...scan.snapshot.questions]
+					.filter(question => question.kind === 'binary')
+					.sort((left, right) => {
+						if (BigInt(left.id) < BigInt(right.id)) return -1
+						return BigInt(left.id) > BigInt(right.id) ? 1 : 0
+					})[0]
+				const genesisPool = initializerQuestion === undefined ? undefined : scan.snapshot.pools.find(pool => pool.universeId === '0' && pool.questionId === initializerQuestion.id)
+				const genesisPair = genesisPool === undefined ? undefined : scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === genesisPool.address.toLowerCase())
+				const initializationState = {
+					genesisUniversePresent: scan.snapshot.universes.some(universe => universe.id === '0'),
+					hasInitializedPair: genesisPair !== undefined && BigInt(genesisPair.totalSupply) > 0n,
+					hasPair: genesisPair !== undefined,
+					hasPool: genesisPool !== undefined,
+					hasQuestion: initializerQuestion !== undefined,
+					hasWalletVault: genesisPool?.walletVaultRegistered === true,
+					hasUniswapPool: scan.snapshot.genesisUniswap?.pool !== undefined,
+					hasUniswapSeeder: scan.snapshot.genesisUniswap?.seeder ?? false,
+					hasWeth: BigInt(scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === scan.snapshot.deployments.weth.toLowerCase())?.balance ?? '0') > 1n,
+					hasInitializedUniswapPool: scan.snapshot.genesisUniswap?.initialized ?? false,
+					hasSeededUniswapPool: BigInt(scan.snapshot.genesisUniswap?.liquidity ?? '0') > 0n,
+					tradingFactoryDeployed: scan.snapshot.tradingDeployment?.factory ?? true,
+					tradingRouterDeployed: scan.snapshot.tradingDeployment?.router ?? true,
+				}
+				const initializationDefinitionId = settings.strategy.initializeGenesisUniverse ? genesisInitializationDefinitionId(initializationState) : undefined
+				const initializationEvaluation =
+					initializationDefinitionId === undefined
+						? undefined
+						: applyExecutionPolicy(
+								[
+									evaluateSelectableOperationDefinition(initializationDefinitionId, scan.snapshot, {
+										...planningOptions(settings, 0),
+										genesisInitializationTarget: {
+											...(genesisPair === undefined ? {} : { pair: genesisPair.address }),
+											...(genesisPool === undefined ? {} : { pool: genesisPool.address }),
+											...(initializerQuestion === undefined ? {} : { questionId: initializerQuestion.id }),
+											universeId: '0',
+										},
+									}),
+								],
+								settings,
+								scan.indexComplete,
+								scan.anchor.blockNumber.toString(),
+								scan.anchor.blockNumber.toString(),
+								BigInt(scan.snapshot.wallet.ethBalanceAttoEth),
+							)[0]
+				const initializationPlan = initializationEvaluation === undefined ? undefined : genesisInitializationPlan([initializationEvaluation], initializationState)
+				if (initializationDefinitionId !== undefined && initializationPlan === undefined) {
+					state.error = `Genesis initialization is waiting for ${initializationDefinitionId} to become eligible; unrelated random work is blocked`
+					await persistState(configuration, state)
+					return settings.runtime.once
+				}
+				const plan = initializationPlan ?? (candidates.length === 0 ? undefined : candidates[randomInteger(0, candidates.length)])
 				if (plan === undefined) {
 					recordActivity(state, {
 						message: 'No random operation is currently eligible',

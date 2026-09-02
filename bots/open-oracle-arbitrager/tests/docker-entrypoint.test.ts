@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
+const dockerignore = join(import.meta.dir, '..', 'Dockerfile.dockerignore')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')
 const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
 const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
@@ -47,6 +48,9 @@ describe('Docker entrypoint', () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
 		expect(source).toContain('cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
+		expect(source).not.toContain('ui/coreShared/favicon')
+		expect(source).toContain('COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/')
+		expect(await readFile(dockerignore, 'utf8')).not.toContain('ui/coreShared/favicon')
 	})
 
 	test('has a Linux-compatible shell shebang', async () => {

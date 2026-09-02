@@ -6,7 +6,28 @@ import * as contractAbis from '../../src/contracts/abi.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE, classifiedMethod, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 
-const { auctionAbi, coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi, liquidationApprovalRegistryAbi, openOracleAbi, questionDataAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, wethAbi, zoltarAbi } = contractAbis
+const {
+	auctionAbi,
+	coordinatorAbi,
+	erc1155Abi,
+	erc20Abi,
+	escalationGameAbi,
+	genesisUniswapSeederAbi,
+	liquidationApprovalRegistryAbi,
+	openOracleAbi,
+	questionDataAbi,
+	securityPoolAbi,
+	securityPoolFactoryAbi,
+	securityPoolForkerAbi,
+	shareTokenAbi,
+	tradingFactoryAbi,
+	tradingPairAbi,
+	tradingRouterAbi,
+	uniswapV3FactoryAbi,
+	uniswapV3PoolAbi,
+	wethAbi,
+	zoltarAbi,
+} = contractAbis
 
 const curatedAbiBindings = [
 	{ abi: questionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
@@ -37,6 +58,9 @@ const curatedAbiBindings = [
 	{ abi: tradingFactoryAbi, artifactSource: 'contracts/trading/TwoWayConstantProductFactory.sol', contract: 'TwoWayConstantProductFactory' },
 	{ abi: tradingPairAbi, artifactSource: 'contracts/trading/TwoWayConstantProductPair.sol', contract: 'TwoWayConstantProductPair' },
 	{ abi: tradingRouterAbi, artifactSource: 'contracts/trading/TwoWayConstantProductRouter.sol', contract: 'TwoWayConstantProductRouter' },
+	{ abi: uniswapV3FactoryAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3Factory' },
+	{ abi: uniswapV3PoolAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3PoolState' },
+	{ abi: genesisUniswapSeederAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'GenesisUniswapV3Seeder' },
 ] as const
 
 const expectedCanonicalManifest = [
@@ -358,7 +382,9 @@ describe('contract operation classification', () => {
 	})
 
 	test('classifies every mutating method in the hand-maintained execution ABIs', () => {
-		for (const { abi, contract } of curatedAbiBindings) {
+		for (const binding of curatedAbiBindings) {
+			if ('catalogSurface' in binding && binding.catalogSurface === false) continue
+			const { abi, contract } = binding
 			for (const item of abi) {
 				if (item.type !== 'function' || item.stateMutability === 'view' || item.stateMutability === 'pure') continue
 				expect(classifiedMethod(contract, item.name), `${contract}.${item.name}`).toBeDefined()

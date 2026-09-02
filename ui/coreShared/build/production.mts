@@ -156,7 +156,6 @@ export async function buildProductionBundle() {
 		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'index.css'), path.join(paths.appDistRoot, 'css', 'index.css')),
 		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'tokens.css'), path.join(paths.appDistRoot, 'css', 'tokens.css')),
 		...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css'].map(stylesheet => copyStaticAsset(path.join(paths.coreSharedCssRoot, stylesheet), path.join(paths.appDistRoot, 'css', stylesheet))),
-		copyStaticAsset(paths.faviconIco, path.join(paths.appDistRoot, 'favicon.ico')),
 		copyStaticAsset(paths.faviconSvg, path.join(paths.appDistRoot, 'favicon.svg')),
 		...(appId === 'trading'
 			? [

@@ -4,16 +4,8 @@ import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUS
 import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
-const dashboardPassword = 'correct horse battery staple'
-
-function dashboardAuthorization(password = dashboardPassword) {
-	return `Basic ${Buffer.from(`operator:${password}`).toString('base64')}`
-}
-
-function authenticatedFetch(input: string | URL | Request, init: RequestInit = {}, password = dashboardPassword) {
-	const headers = new Headers(init.headers)
-	headers.set('authorization', dashboardAuthorization(password))
-	return fetch(input, { ...init, headers })
+function dashboardFetch(input: string | URL | Request, init: RequestInit = {}) {
+	return fetch(input, init)
 }
 
 afterEach(() => {
@@ -25,7 +17,6 @@ function controller(overrides: Partial<Parameters<typeof startDashboardServer>[1
 		getConfiguration: () => ({ paused: true }),
 		getState: () => ({ paused: true }),
 		hostname: '127.0.0.1' as const,
-		password: dashboardPassword,
 		setCancellation: (value: unknown) => value,
 		setCandidate: (value: unknown) => value,
 		setConnectivity: (value: unknown) => value,
@@ -47,15 +38,15 @@ describe('chaos dashboard server', () => {
 		expect(health.status).toBe(200)
 		expect(await health.text()).toBe('ok')
 		expect(health.headers.get('cache-control')).toBe('no-store')
-		const readiness = await authenticatedFetch(new URL('/readyz', server.url))
+		const readiness = await dashboardFetch(new URL('/readyz', server.url))
 		expect(readiness.status).toBe(503)
 		expect(await readiness.json()).toMatchObject({ ready: false })
-		const metrics = await authenticatedFetch(new URL('/metrics', server.url))
+		const metrics = await dashboardFetch(new URL('/metrics', server.url))
 		expect(metrics.status).toBe(200)
 		expect(await metrics.text()).toContain('zoltar_chaos_ready 0')
 
 		for (const route of ['overview', 'catalog', 'ecosystem', 'activity', 'settings']) {
-			const response = await authenticatedFetch(new URL(`/${route}`, server.url))
+			const response = await dashboardFetch(new URL(`/${route}`, server.url))
 			expect(response.status).toBe(200)
 			expect(response.headers.get('cache-control')).toBe('no-store')
 			expect(response.headers.get('content-security-policy')).toContain("default-src 'self'")
@@ -64,7 +55,7 @@ describe('chaos dashboard server', () => {
 			expect(await response.text()).toContain(`<body data-page="${route}">`)
 		}
 
-		const overview = await (await authenticatedFetch(server.url)).text()
+		const overview = await (await dashboardFetch(server.url)).text()
 		expect(overview).toContain('<body data-page="overview">')
 		expect(overview).toContain('Operation catalog')
 		expect(overview).toContain('Ecosystem state')
@@ -82,37 +73,25 @@ describe('chaos dashboard server', () => {
 		expect(overview).toContain('data-ecosystem-toggle="open-oracle"')
 		expect(overview).not.toContain('fixture-private-key')
 
-		const sharedStyles = await authenticatedFetch(new URL('/operator-console.css', server.url))
+		const sharedStyles = await dashboardFetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
-		expect((await authenticatedFetch(new URL('/unknown', server.url))).status).toBe(404)
+		const favicon = await dashboardFetch(new URL('/favicon.svg', server.url))
+		expect(favicon.status).toBe(200)
+		expect(favicon.headers.get('content-type')).toBe('image/svg+xml')
+		expect(await favicon.text()).toBe(await Bun.file(new URL('../../src/dashboard/favicon.svg', import.meta.url)).text())
+		expect((await dashboardFetch(new URL('/unknown', server.url))).status).toBe(404)
 	})
 
-	test('requires basic authentication on loopback for every route and mutation API', async () => {
-		const password = 'another correct horse battery staple'
-		expect(() => startDashboardServer(0, controller({ password: undefined }))).toThrow('for every chaos dashboard binding')
-		expect(() => startDashboardServer(0, controller({ password: 'too-short' }))).toThrow('at least 16 characters')
-		const authenticatedController = controller({ password })
-		const server = startDashboardServer(0, authenticatedController)
+	test('serves the loopback dashboard without basic authentication', async () => {
+		const server = startDashboardServer(0, controller())
 		servers.push(server)
-		authenticatedController.password = undefined
 
 		expect((await fetch(new URL('/healthz', server.url))).status).toBe(200)
-		for (const path of ['/', '/overview', '/catalog', '/ecosystem', '/activity', '/settings', '/api/state', '/api/configuration', '/readyz', '/metrics']) {
-			const rejected = await fetch(new URL(path, server.url))
-			expect(rejected.status, path).toBe(401)
-			expect(rejected.headers.get('www-authenticate'), path).toContain('Basic')
-		}
-		for (const path of ['/api/connectivity', '/api/reconciliation/candidate', '/api/reconciliation/cancellation', '/api/reconciliation/obligation', '/api/paused', '/api/reconciliation/replacement', '/api/reconciliation/workflow', '/api/settings', '/api/signer']) {
-			const rejected = await fetch(new URL(path, server.url), { method: 'PUT' })
-			expect(rejected.status, path).toBe(401)
-			expect(rejected.headers.get('www-authenticate'), path).toContain('Basic')
-		}
-		const authorization = dashboardAuthorization(password)
-		const accepted = await fetch(server.url, { headers: { authorization } })
+		const accepted = await fetch(server.url)
 		expect(accepted.status).toBe(200)
 
-		const wrongAuthority = await fetch(server.url, { headers: { authorization, host: 'attacker.example' } })
+		const wrongAuthority = await fetch(server.url, { headers: { host: 'attacker.example' } })
 		expect(wrongAuthority.status).toBe(403)
 	})
 
@@ -131,7 +110,7 @@ describe('chaos dashboard server', () => {
 			connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545', rpcQuorum: 1 },
 			revision: 'revision',
 		}
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify(body),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
@@ -167,7 +146,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['http://reth:8545'], quorumRpcUrls: [], readRpcUrl: 'http://reth:8545', rpcQuorum: 1 },
 				revision: 'revision',
@@ -201,7 +180,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['http://anvil:8545'], quorumRpcUrls: [], readRpcUrl: 'http://anvil:8545', rpcQuorum: 1 },
 				revision: 'revision',
@@ -226,7 +205,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
 				revision: 'revision',
@@ -259,7 +238,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
 				revision: 'revision',
@@ -294,7 +273,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
 				revision: 'revision',
@@ -322,7 +301,7 @@ describe('chaos dashboard server', () => {
 			}),
 		)
 		servers.push(server)
-		const response = await authenticatedFetch(new URL('/api/connectivity', server.url), {
+		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
 			body: JSON.stringify({
 				connectivity: { publicRpcUrls: ['https://rpc.example'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example', rpcQuorum: 1 },
 				revision: 'revision',
@@ -374,10 +353,10 @@ describe('chaos dashboard server', () => {
 		const currentState = { ...state, lastScanAt: currentTimestamp, rpcEndpointHealth: state.rpcEndpointHealth.map(check => ({ ...check, checkedAt: currentTimestamp })) }
 		const server = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => currentState }))
 		servers.push(server)
-		const readyResponse = await authenticatedFetch(new URL('/readyz', server.url))
+		const readyResponse = await dashboardFetch(new URL('/readyz', server.url))
 		expect(readyResponse.status).toBe(200)
 		expect(await readyResponse.json()).toMatchObject({ blockers: [], ready: true })
-		const metrics = await (await authenticatedFetch(new URL('/metrics', server.url))).text()
+		const metrics = await (await dashboardFetch(new URL('/metrics', server.url))).text()
 		expect(metrics).toContain('zoltar_chaos_ready 1')
 		expect(metrics).toContain('zoltar_chaos_readiness_check{check="rpc"} 1')
 		expect(metrics).toContain('zoltar_chaos_readiness_check{check="submission"} 1')
@@ -386,8 +365,8 @@ describe('chaos dashboard server', () => {
 		const missingSubmissionState = { ...currentState, rpcEndpointHealth: currentState.rpcEndpointHealth.filter(check => check.kind === 'read-rpc') }
 		const missingSubmissionServer = startDashboardServer(0, controller({ getConfiguration: () => configuration, getState: () => missingSubmissionState }))
 		servers.push(missingSubmissionServer)
-		expect((await authenticatedFetch(new URL('/readyz', missingSubmissionServer.url))).status).toBe(503)
-		expect(await (await authenticatedFetch(new URL('/metrics', missingSubmissionServer.url))).text()).toContain('zoltar_chaos_readiness_check{check="submission"} 0')
+		expect((await dashboardFetch(new URL('/readyz', missingSubmissionServer.url))).status).toBe(503)
+		expect(await (await dashboardFetch(new URL('/metrics', missingSubmissionServer.url))).text()).toContain('zoltar_chaos_readiness_check{check="submission"} 0')
 
 		const blocked = publicChaosReadiness(
 			{
@@ -586,23 +565,20 @@ describe('chaos dashboard server', () => {
 		expect(publicChaosReadiness(state, configuration, now)).toMatchObject({ blockers: expect.arrayContaining(['scan']), maximumScanAgeSeconds: 156, ready: false, scanAgeSeconds: 157 })
 	})
 
-	test('rejects direct non-loopback exposure and requires authentication for container publication', () => {
+	test('rejects direct non-loopback exposure and permits loopback-only container publication', () => {
 		expect(() =>
 			startDashboardServer(
 				0,
 				controller({
 					hostname: '0.0.0.0',
-					password: 'correct horse battery staple',
 				}),
 			),
 		).toThrow('Non-loopback chaos dashboard exposure is disabled')
-		expect(() => startDashboardServer(0, controller({ hostname: '0.0.0.0', loopbackPublished: true, password: undefined }))).toThrow('for every chaos dashboard binding')
 		const server = startDashboardServer(
 			0,
 			controller({
 				hostname: '0.0.0.0',
 				loopbackPublished: true,
-				password: 'correct horse battery staple',
 			}),
 		)
 		servers.push(server)
@@ -625,28 +601,28 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const crossOrigin = await authenticatedFetch(new URL('/api/paused', server.url), {
+		const crossOrigin = await dashboardFetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: { 'content-type': 'application/json', origin: 'https://attacker.example' },
 			method: 'PUT',
 		})
 		expect(crossOrigin.status).toBe(403)
 
-		const wrongType = await authenticatedFetch(new URL('/api/paused', server.url), {
+		const wrongType = await dashboardFetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: { 'content-type': 'text/plain', origin: server.url.origin },
 			method: 'PUT',
 		})
 		expect(wrongType.status).toBe(400)
 
-		const tooLarge = await authenticatedFetch(new URL('/api/settings', server.url), {
+		const tooLarge = await dashboardFetch(new URL('/api/settings', server.url), {
 			body: JSON.stringify({ padding: 'x'.repeat(1024 * 1024) }),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
 		})
 		expect(tooLarge.status).toBe(400)
 
-		const signer = await authenticatedFetch(new URL('/api/signer', server.url), {
+		const signer = await dashboardFetch(new URL('/api/signer', server.url), {
 			body: JSON.stringify({ privateKey, remember: false }),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
@@ -659,7 +635,7 @@ describe('chaos dashboard server', () => {
 			intentHash: `0x${'22'.repeat(32)}`,
 			replacementHash: `0x${'33'.repeat(32)}`,
 		}
-		const queued = await authenticatedFetch(new URL('/api/reconciliation/replacement', server.url), {
+		const queued = await dashboardFetch(new URL('/api/reconciliation/replacement', server.url), {
 			body: JSON.stringify(replacement),
 			headers: {
 				'content-type': 'application/json',
@@ -684,7 +660,7 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const response = await authenticatedFetch(new URL('/api/settings', server.url), {
+		const response = await dashboardFetch(new URL('/api/settings', server.url), {
 			body: JSON.stringify({ patch: {}, revision: 'stale' }),
 			headers: {
 				'content-type': 'application/json',
@@ -722,7 +698,7 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const committedResponse = await authenticatedFetch(new URL('/api/settings', server.url), {
+		const committedResponse = await dashboardFetch(new URL('/api/settings', server.url), {
 			body: JSON.stringify({ patch: {}, revision: 'current' }),
 			headers: {
 				'content-type': 'application/json',
@@ -740,7 +716,7 @@ describe('chaos dashboard server', () => {
 		})
 		expect(JSON.stringify(committedBody)).not.toContain('sensitive')
 
-		const indeterminateResponse = await authenticatedFetch(new URL('/api/signer', server.url), {
+		const indeterminateResponse = await dashboardFetch(new URL('/api/signer', server.url), {
 			body: JSON.stringify({
 				privateKey: `0x${'11'.repeat(32)}`,
 				remember: true,
@@ -763,11 +739,11 @@ describe('chaos dashboard server', () => {
 		})
 		expect(JSON.stringify(indeterminateBody)).not.toContain('sensitive')
 
-		const latchedConfiguration = await authenticatedFetch(new URL('/api/configuration', server.url))
+		const latchedConfiguration = await dashboardFetch(new URL('/api/configuration', server.url))
 		expect(latchedConfiguration.status).toBe(200)
 		expect(await latchedConfiguration.json()).toMatchObject({ configurationCommitIndeterminate: true })
 
-		const blockedMutation = await authenticatedFetch(new URL('/api/paused', server.url), {
+		const blockedMutation = await dashboardFetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true, revision: 'current' }),
 			headers: {
 				'content-type': 'application/json',
@@ -814,14 +790,14 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const mutation = authenticatedFetch(new URL('/api/settings', server.url), {
+		const mutation = dashboardFetch(new URL('/api/settings', server.url), {
 			body: JSON.stringify({ patch: {}, revision: 'before-mutation' }),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
 		})
 		await mutationStarted
-		const configurationRead = authenticatedFetch(new URL('/api/configuration', server.url))
-		const stateRead = authenticatedFetch(new URL('/api/state', server.url))
+		const configurationRead = dashboardFetch(new URL('/api/configuration', server.url))
+		const stateRead = dashboardFetch(new URL('/api/state', server.url))
 		await Bun.sleep(20)
 		expect(configurationReadCount).toBe(0)
 		expect(stateReadCount).toBe(0)
@@ -862,13 +838,13 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const signerMutation = authenticatedFetch(new URL('/api/signer', server.url), {
+		const signerMutation = dashboardFetch(new URL('/api/signer', server.url), {
 			body: JSON.stringify({ privateKey: `0x${'11'.repeat(32)}`, remember: true, revision: 'current' }),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
 		})
 		await signerStarted
-		const queuedPause = authenticatedFetch(new URL('/api/paused', server.url), {
+		const queuedPause = dashboardFetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true, revision: 'current' }),
 			headers: { 'content-type': 'application/json', origin: server.url.origin },
 			method: 'PUT',
@@ -1151,7 +1127,7 @@ describe('chaos dashboard server', () => {
 		)
 		servers.push(server)
 
-		const response = await authenticatedFetch(new URL('/api/state', server.url))
+		const response = await dashboardFetch(new URL('/api/state', server.url))
 		expect(response.status).toBe(200)
 		const body = await response.json()
 		expect(Reflect.get(body, 'rpcHealth')).toEqual({
@@ -1334,11 +1310,12 @@ describe('chaos dashboard server', () => {
 		expect(Reflect.get(unspecifiedChain, 'rpcHealth')).toEqual({ status: 'not-configured' })
 	})
 
-	test('projects serialized settings without returning private keys or connectivity credentials', () => {
+	test('projects serialized settings with persisted connectivity but without private keys', () => {
 		const configuration = publicChaosConfiguration({
 			revision: 'sha256:revision',
+			rpcQuorum: 2,
 			settings: {
-				connectivity: { readRpcUrl: 'https://user:password@rpc.example' },
+				connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: ['https://second.example'], readRpcUrl: 'https://user:password@rpc.example', rpcQuorum: 2 },
 				network: { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' },
 				networkConfigured: true,
 				paused: true,
@@ -1365,6 +1342,7 @@ describe('chaos dashboard server', () => {
 			allowHighRiskOperations: true,
 			allowIrreversibleOperations: false,
 			chainId: 11_155_111,
+			connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: ['https://second.example'], readRpcUrl: 'https://user:password@rpc.example', rpcQuorum: 2 },
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 			execute: false,
 			hasSigner: true,
@@ -1380,10 +1358,11 @@ describe('chaos dashboard server', () => {
 			operationControls: {},
 			paused: true,
 			revision: 'sha256:revision',
+			rpcQuorum: 2,
 			selectableOperationAllowlist: ['open-oracle.weth.wrap'],
 			workflowValidForBlocks: 288,
 		})
-		expect(body).not.toContain('rpc.example')
+		expect(body).toContain('rpc.example')
 		expect(body).not.toContain('private/path')
 		expect(body).not.toContain('444444')
 	})

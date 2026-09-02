@@ -487,6 +487,7 @@ describe('chaos dashboard configuration boundary', () => {
 				strategy: {
 					allowHighRiskOperations: false,
 					allowIrreversibleOperations: false,
+					initializeGenesisUniverse: true,
 					enabledEcosystems: ['zoltar', 'open-oracle'],
 					maximumEthPerOperation: '0.01',
 					maximumGasCostEth: '0.005',
@@ -502,6 +503,7 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(candidate.settings.scheduler).toEqual({ maximumDelaySeconds: 180, minimumDelaySeconds: 90 })
 		expect(candidate.settings.strategy.enabledEcosystems).toEqual(['zoltar', 'open-oracle'])
 		expect(candidate.settings.strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap'])
+		expect(candidate.settings.strategy.initializeGenesisUniverse).toBe(true)
 	})
 
 	test('rejects a dashboard transition from single-reader dry run to live execution', () => {

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardRequestIsAuthenticated, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
@@ -10,7 +10,6 @@ export type ChaosDashboardController = {
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
 	loopbackPublished?: boolean
-	password?: string | undefined
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
 	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
@@ -95,6 +94,10 @@ function publicStrings(value: unknown) {
 				return safe === undefined ? [] : [safe]
 			})
 		: []
+}
+
+function configuredRpcUrls(value: unknown) {
+	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
 }
 
 function nullablePublicStrings(value: unknown) {
@@ -665,9 +668,11 @@ export function publicChaosConfiguration(value: unknown) {
 	const scheduler = record(settings['scheduler']) ?? settings
 	const strategy = record(settings['strategy']) ?? settings
 	const privateKey = settings['privateKey']
+	const connectivity = record(settings['connectivity'])
 	return compact({
 		allowHighRiskOperations: booleanField(strategy, 'allowHighRiskOperations'),
 		allowIrreversibleOperations: booleanField(strategy, 'allowIrreversibleOperations'),
+		initializeGenesisUniverse: booleanField(strategy, 'initializeGenesisUniverse'),
 		chainId: scalar(record(settings['network']) ?? {}, 'chainId'),
 		enabledEcosystems: publicStrings(strategy['enabledEcosystems']),
 		execute: booleanField(runtime, 'execute'),
@@ -682,6 +687,15 @@ export function publicChaosConfiguration(value: unknown) {
 		network: stringField(record(settings['network']) ?? {}, 'name'),
 		networkConfigured: booleanField(settings, 'networkConfigured'),
 		rpcQuorum: scalar(record(settings['connectivity']) ?? {}, 'rpcQuorum'),
+		connectivity:
+			connectivity === undefined
+				? undefined
+				: {
+						publicRpcUrls: configuredRpcUrls(connectivity['publicRpcUrls']),
+						quorumRpcUrls: configuredRpcUrls(connectivity['quorumRpcUrls']),
+						readRpcUrl: typeof connectivity['readRpcUrl'] === 'string' ? connectivity['readRpcUrl'] : undefined,
+						rpcQuorum: scalar(connectivity, 'rpcQuorum'),
+					},
 		operationControls: publicOperationControls(settings['operations'] ?? source['operationControls']),
 		paused: booleanField(settings, 'paused'),
 		rememberSigner: booleanField(source, 'rememberSigner'),
@@ -921,14 +935,9 @@ function indeterminateConfigurationFailure() {
 }
 
 export function startDashboardServer(port: number, controller: ChaosDashboardController) {
-	const dashboardPassword = controller.password
 	if (controller.hostname === '0.0.0.0' && controller.loopbackPublished !== true) {
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
-	if (dashboardPassword === undefined || dashboardPassword.length < 16) {
-		throw new Error('ZOLTAR_BOT_DASHBOARD_PASSWORD must contain at least 16 characters for every chaos dashboard binding, including loopback')
-	}
-	validateDashboardAuthentication(controller.hostname, dashboardPassword, controller.loopbackPublished)
 	const directory = import.meta.dir
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
@@ -957,9 +966,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/healthz') return new Response('ok', { headers: securityHeaders('text/plain; charset=utf-8') })
-			if (!dashboardRequestIsAuthenticated(request, dashboardPassword)) {
-				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
-			}
 			if (request.method === 'GET') {
 				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
 					try {
@@ -1006,6 +1012,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
 					}
 				}
+				if (url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
 				if (url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			}
 			if (request.method === 'PUT') {

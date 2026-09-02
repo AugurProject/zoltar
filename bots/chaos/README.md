@@ -69,31 +69,15 @@ Keep `paused: true` and `runtime.execute: false`, then validate and run:
   set -eu
   bun run typecheck
   bun run test
-  if [ -L .state/dashboard-password ] || { [ -e .state/dashboard-password ] && [ ! -f .state/dashboard-password ]; }; then
-    echo 'dashboard password path must be a regular file' >&2
-    exit 1
-  fi
-  if [ ! -e .state/dashboard-password ]; then
-    umask 077
-    od -An -N24 -tx1 /dev/urandom | tr -d ' \n' > .state/dashboard-password
-  fi
-  chmod 600 .state/dashboard-password
-  export ZOLTAR_BOT_DASHBOARD_PASSWORD="$(tr -d '\r\n' < .state/dashboard-password)"
   exec bun run run
 )
 ```
 
-Leave that command running. In a second terminal, return to `bots/chaos` and read the owner-only dashboard password:
-
-```sh
-cat .state/dashboard-password
-```
-
-Open <http://127.0.0.1:4193> and sign in as `operator` with that password. Load the private key through the write-only Settings control. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
+Leave that command running, then open <http://127.0.0.1:4193>. Load the private key through the write-only Settings control. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
 
 While paused and dry, verify that the displayed wallet address exactly matches the independently derived address. Only then fund it within the budget from step 2. Confirm the ETH, WETH, and universe-specific REP inventory on Overview. If the address differs, clear it, stop, preserve the old state unit, select a new unused state path, and restart with the intended signer; never delete state to work around signer scoping.
 
-Keep the dashboard loopback-only or place it behind an access-controlled encrypted SSH tunnel. `/healthz` is unauthenticated liveness only; authenticated `/readyz` and `/metrics` report execution readiness and its individual blockers. Use the dashboard as the only configuration writer while the process runs. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the exact endpoint and mutation guarantees.
+Keep the dashboard loopback-only or place it behind an access-controlled encrypted SSH tunnel. `/healthz`, `/readyz`, and `/metrics` report liveness and execution readiness without authentication. Use the dashboard as the only configuration writer while the process runs. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the exact endpoint and mutation guarantees.
 
 ### 5. Finish discovery and prove a dry canary
 
@@ -115,8 +99,8 @@ The [scheduler and execution controls](./OPERATOR_REFERENCE.md#scheduler-and-exe
 
 Pause first. Take a stopped encrypted backup of the complete `.state` unit, then configure conservative positive ETH and REP reserves, principal and gas caps, the proven canary allowlist, and any required private relay. Keep both high-risk gates off. The signer persistence choice determines the safe preflight:
 
-- **Saved signer:** enable live execution while paused, stop the process, and run `bun run doctor` against that persisted live-capable configuration. It must acquire both the state and signer locks and validate the durable stores, deployment, quorum, actual public-broadcast or signer-authenticated private-relay method, canonical topology, and signer funding. Restart paused. Before resuming, inspect the authenticated readiness report and require every check except the intentional pause to pass; this is where complete signer-scoped scan readiness is established. Reverify the signer, pending nonce, active workflow, index status, and safety-pause latch.
-- **Memory-only signer:** stopping drops the key, so a stopped `doctor` becomes keyless and cannot prove signer funding or signer-lock ownership. Loading the funded signer into the paused process acquires its signer-scoped lock. Enable live execution through the authenticated dashboard; that path retains the lock and rejects the change unless signer-scoped discovery is complete and the full configured ETH, REP, and gas funding envelope is available. The saved configuration is forced back to paused, keyless dry-run form, so a restart cannot execute. Before resuming, require every authenticated readiness check except the intentional pause to pass.
+- **Saved signer:** enable live execution while paused, stop the process, and run `bun run doctor` against that persisted live-capable configuration. It must acquire both the state and signer locks and validate the durable stores, deployment, quorum, actual public-broadcast or signer-authenticated private-relay method, canonical topology, and signer funding. Restart paused. Before resuming, inspect the readiness report and require every check except the intentional pause to pass; this is where complete signer-scoped scan readiness is established. Reverify the signer, pending nonce, active workflow, index status, and safety-pause latch.
+- **Memory-only signer:** stopping drops the key, so a stopped `doctor` becomes keyless and cannot prove signer funding or signer-lock ownership. Loading the funded signer into the paused process acquires its signer-scoped lock. Enable live execution through the loopback-only dashboard; that path retains the lock and rejects the change unless signer-scoped discovery is complete and the full configured ETH, REP, and gas funding envelope is available. The saved configuration is forced back to paused, keyless dry-run form, so a restart cannot execute. Before resuming, require every readiness check except the intentional pause to pass.
 
 After resume, `/readyz` returns HTTP 200 only while the bot is ready and idle. Require its named `submission` check to pass. Private mode supports only the official Flashbots relay matching the selected mainnet or Sepolia chain, or a loopback test relay; the [RPC and submission reference](./OPERATOR_REFERENCE.md#rpc-and-submission-configuration) owns the exact non-broadcasting control sequence and responses. A generic parser or gateway error is not sufficient evidence. Submission evidence is timestamped after the checks complete and refreshed at the final signing and broadcast boundaries; the bot refuses to sign or submit if it expires during the intervening anchor and nonce checks.
 
@@ -126,7 +110,7 @@ Do not assume resume creates a fresh wait: due random work or lifecycle recovery
 
 ## Operate and recover
 
-Monitor authenticated readiness, the durable countdown, signer inventory, active workflow, obligations, and Activity & recovery. If a dashboard mutation loses its response, reload and compare the current revision and state; never repeat it blindly. If the bot reports an indeterminate commit, stop and reconcile the owner configuration and runtime state before any further mutation.
+Monitor readiness, the durable countdown, signer inventory, active workflow, obligations, and Activity & recovery. If a dashboard mutation loses its response, reload and compare the current revision and state; never repeat it blindly. If the bot reports an indeterminate commit, stop and reconcile the owner configuration and runtime state before any further mutation.
 
 A pending nonce blocks novelty until its canonical result is known. Use only the audited replacement, cancellation, retry, or abandonment controls in Activity & recovery. Never replay a confirmed prerequisite or manually edit a workflow. A durable safety pause survives restart; correct the cause, inspect its audit entry, and resume deliberately. Exact recovery proofs, retry timing, and transaction finality are defined in [scheduler and execution controls](./OPERATOR_REFERENCE.md#scheduler-and-execution-controls).
 
@@ -138,7 +122,7 @@ For a consistent backup or restore:
 4. restore only while stopped, repair the service UID/GID and owner-only permissions, then start paused;
 5. verify signer, pending nonce, workflow, index, readiness, and safety-pause state before resume.
 
-State may contain a remembered key, dashboard password, signed transactions, and credentialed endpoints. Never move only one sidecar, delete corruption, or stage a backup in shared storage. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the canonical state-unit inventory and recovery boundaries.
+State may contain a remembered key, signed transactions, and credentialed endpoints. Never move only one sidecar, delete corruption, or stage a backup in shared storage. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the canonical state-unit inventory and recovery boundaries.
 
 ## Run with Docker
 
@@ -147,7 +131,6 @@ The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4
 ```sh
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build -d
-docker compose exec chaos sh -c 'cat .state/dashboard-password'
 docker compose logs --tail 100 chaos
 ```
 
@@ -167,7 +150,7 @@ docker compose run --rm --no-deps chaos bun run doctor
 docker compose start chaos
 ```
 
-After loading or remembering a signer, make changes only through the authenticated dashboard. For a saved-signer live preflight, pause and stop the service, run the same one-off `doctor` command, then restart paused and complete step 6's readiness checks.
+After loading or remembering a signer, make changes only through the loopback-only dashboard. For a saved-signer live preflight, pause and stop the service, run the same one-off `doctor` command, then restart paused and complete step 6's readiness checks.
 
 Any manually created container must mount `zoltar-chaos-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. This section owns the container-specific ownership and fencing guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
 

@@ -4,6 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
@@ -25,6 +26,7 @@ type BrowserSmokeState = {
 	body: string
 	height: number
 	hasMain: boolean
+	readyState: DocumentReadyState
 	title: string
 	width: number
 }
@@ -138,21 +140,24 @@ export async function waitForDevToolsPort({
 	maxAttempts,
 	pollMilliseconds,
 	readPort,
+	readStderr,
 	wait = Bun.sleep,
 }: {
 	readonly assertBrowserAvailable: () => void
 	readonly maxAttempts?: number
 	readonly pollMilliseconds: number
 	readonly readPort: () => Promise<number | undefined>
+	readonly readStderr?: () => string
 	readonly wait?: (milliseconds: number) => Promise<unknown>
 }): Promise<number | undefined> {
-	for (let attempt = 0; maxAttempts === undefined || attempt < maxAttempts; attempt++) {
-		assertBrowserAvailable()
-		const port = await readPort()
-		if (port !== undefined) return port
-		await wait(pollMilliseconds)
-	}
-	return undefined
+	return await waitForChromiumDevToolsPort({
+		assertBrowserAvailable,
+		...(maxAttempts === undefined ? {} : { maxAttempts }),
+		pollMilliseconds,
+		readPort,
+		...(readStderr === undefined ? {} : { readStderr }),
+		wait,
+	})
 }
 
 export function createBrowserSmokeCommandSender(socket: ChromiumCommandSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): ChromiumCommand {
@@ -212,6 +217,7 @@ export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: 
 	const explicitReadyStateReached = readyText !== undefined && includesText(readyText)
 	return (
 		state.hasMain &&
+		state.readyState === 'complete' &&
 		state.width === viewport.width &&
 		state.height === viewport.height &&
 		state.body !== '' &&
@@ -282,6 +288,7 @@ export async function createDevToolsSession(
 			assertBrowserAvailable: () => assertBrowserAvailable('waiting for the DevTools port'),
 			...(devToolsPortAttempts === undefined ? {} : { maxAttempts: devToolsPortAttempts }),
 			pollMilliseconds,
+			readStderr: () => stderrData,
 			readPort: async () => {
 				try {
 					return Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])
@@ -455,7 +462,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 		const mountTimeoutMilliseconds = options.mountTimeoutMilliseconds ?? MOUNT_TIMEOUT_MILLISECONDS
 		while (Date.now() - start < mountTimeoutMilliseconds) {
 			const result = (await send('Runtime.evaluate', {
-				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, title: document.title, width: window.innerWidth })`,
+				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, readyState: document.readyState, title: document.title, width: window.innerWidth })`,
 				returnByValue: true,
 			})) as { result?: { value?: string } }
 			const raw = result.result?.value

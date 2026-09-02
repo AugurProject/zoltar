@@ -13,6 +13,7 @@
 		"securityPoolForker": "0x1111111111111111111111111111111111111104",
 		"tradingFactory": "0x1111111111111111111111111111111111111107",
 		"tradingRouter": "0x1111111111111111111111111111111111111108",
+		"uniswapV3Factory": "0x1111111111111111111111111111111111111109",
 		"weth": "0x1111111111111111111111111111111111111106",
 		"zoltar": "0x1111111111111111111111111111111111111101"
 	},
@@ -50,6 +51,7 @@
 	"strategy": {
 		"allowHighRiskOperations": false,
 		"allowIrreversibleOperations": false,
+		"initializeGenesisUniverse": false,
 		"enabledEcosystems": ["zoltar", "statoblast", "open-oracle", "trading"],
 		"maximumEthPerOperation": "0.05",
 		"maximumGasCostEth": "0.02",

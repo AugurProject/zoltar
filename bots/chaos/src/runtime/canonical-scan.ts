@@ -15,6 +15,7 @@ import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationC
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import type { WalletBalanceState } from '../state/operator-state.ts'
 import { assertOperationEthFunding } from '../execution/safety.ts'
+import { genesisInitializationDefinitionIds } from './selection.ts'
 import { applyLiveNoveltyInventoryReadiness } from './live-readiness.ts'
 
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
@@ -214,6 +215,7 @@ export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPo
 			let discoveredTopology: CanonicalImmutableTopologyCache | undefined
 			let topologyChanged: boolean | undefined
 			const snapshot = await discoverEcosystemSnapshot({
+				allowMissingTradingDeployment: settings.strategy.initializeGenesisUniverse,
 				anchorBlockNumber: anchor.blockNumber,
 				client,
 				deployments: settings.deployment,
@@ -408,7 +410,8 @@ export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[],
 		if (!enabled.has(evaluation.definition.ecosystem)) {
 			blockers.push(`The ${evaluation.definition.ecosystem} ecosystem is disabled by policy`)
 		}
-		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && selectableOperationAllowlist !== undefined && !selectableOperationAllowlist.has(evaluation.definition.id)) {
+		const genesisInitializerExemption = settings.strategy.initializeGenesisUniverse && genesisInitializationDefinitionIds.has(evaluation.definition.id)
+		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && !genesisInitializerExemption && selectableOperationAllowlist !== undefined && !selectableOperationAllowlist.has(evaluation.definition.id)) {
 			blockers.push('The selectable operation definition is not in strategy.selectableOperationAllowlist')
 		}
 		if (settings.submission.mode === 'public' && evaluation.plan?.terminalSubmission !== undefined) {

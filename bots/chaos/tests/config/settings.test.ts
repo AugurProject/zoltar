@@ -116,7 +116,7 @@ describe('chaos-bot settings', () => {
 		expect(JSON.stringify(publicConfiguration)).not.toContain(privateKey)
 		const dashboardConfiguration = publicChaosConfiguration({ hasSigner: true, settings: publicConfiguration })
 		expect(dashboardConfiguration).toMatchObject({ chainId: 4_242_424_242, hasSigner: true, network: 'Zoltar Custom Chain Placeholder' })
-		expect(JSON.stringify(dashboardConfiguration)).not.toContain('read-primary.custom-chain')
+		expect(JSON.stringify(dashboardConfiguration)).toContain('read-primary.custom-chain')
 		expect(JSON.stringify(dashboardConfiguration)).not.toContain(settings.deployment.zoltar)
 
 		const profilePath = settingsProfilePathForNetwork('/tmp/operator.json', settings.network)

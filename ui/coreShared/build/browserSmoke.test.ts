@@ -11,6 +11,7 @@ const mountedState = {
 	body: 'Augur Statoblast\nSecurity Pools',
 	height: 844,
 	hasMain: true,
+	readyState: 'complete' as const,
 	title: 'Security Pools | Augur Statoblast',
 	width: 390,
 }
@@ -47,6 +48,10 @@ test('an explicit route-ready marker overrides stale bootstrap copy outside the 
 test('browser smoke readiness requires the exact requested CSS viewport', () => {
 	expect(isBrowserSmokeReady({ ...mountedState, width: 500 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 	expect(isBrowserSmokeReady({ ...mountedState, height: 701 }, 'Augur Statoblast', undefined, viewport)).toBe(false)
+})
+
+test('browser smoke readiness waits for the document load lifecycle', () => {
+	expect(isBrowserSmokeReady({ ...mountedState, readyState: 'interactive' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
 test('browser cleanup handles a Chromium process that already exited', async () => {
@@ -211,6 +216,21 @@ test.skipIf(process.platform === 'win32')('default initialization waits beyond t
 	await writeFakeChromium(executablePath, server.port, '0')
 	try {
 		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 5_000, pollMilliseconds: 1 })
+		await session.close()
+	} finally {
+		server.stop(true)
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
+test.skipIf(process.platform === 'win32')('DevTools discovery accepts Chromium stderr without a profile port file', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-stderr-port-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const server = createFakeDevToolsServer(0)
+	await writeFile(executablePath, `#!/bin/sh\nprintf 'DevTools listening on ws://127.0.0.1:' >&2\nsleep 0.05\nprintf '${server.port.toString()}/devtools/browser/example\\n' >&2\nexec sleep 60\n`)
+	await chmod(executablePath, 0o755)
+	try {
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 5_000, pollMilliseconds: 1, profileParentPath: fixtureRoot })
 		await session.close()
 	} finally {
 		server.stop(true)

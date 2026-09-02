@@ -4,6 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
@@ -82,7 +83,7 @@ for (const appId of UI_APP_IDS) {
 	const productionIndexPath = path.join(distRootPath, 'index.html')
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
-	const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
+	const productionFaviconPaths = [path.join(distRootPath, 'favicon.svg')]
 	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast trading'].filter(title => title !== expectedTitle)
@@ -152,6 +153,10 @@ for (const appId of UI_APP_IDS) {
 		for (const response of responses) {
 			expect(response.status).toBe(200)
 		}
+		const favicon = await fetch(`${baseUrl}/${appId}/favicon.svg`)
+		expect(favicon.status).toBe(200)
+		expect(favicon.headers.get('content-type')).toContain('image/svg+xml')
+		expect(await favicon.text()).toBe(await fs.readFile(appPaths.faviconSvg, 'utf8'))
 	})
 
 	test(`building ${appId} does not remove the other app's production output`, async () => {
@@ -208,29 +213,48 @@ function createChromiumStartupError(error: unknown, browserExit: string, stderr:
 	return new Error(`${message}\nChromium exit: ${browserExit}\n${diagnostic}`, { cause: error })
 }
 
-async function waitForDevToolsPort(portFilePath: string, browserProcess?: BrowserProcessStatus, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, clock: PollingClock = realtimePollingClock) {
+function captureChromiumStderr(stream: ReadableStream<Uint8Array>) {
+	let stderr = ''
+	const text = (async () => {
+		const reader = stream.getReader()
+		const decoder = new TextDecoder()
+		while (true) {
+			const chunk = await reader.read()
+			if (chunk.done) break
+			stderr += decoder.decode(chunk.value, { stream: true })
+		}
+		stderr += decoder.decode()
+		return stderr
+	})()
+	return { read: () => stderr, text }
+}
+
+async function waitForDevToolsPort(portFilePath: string, browserProcess?: BrowserProcessStatus, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, clock: PollingClock = realtimePollingClock, readStderr: () => string = () => '') {
 	const deadline = clock.now() + timeoutMilliseconds
 	let lastObservedState = 'port file not created'
-
-	while (clock.now() < deadline) {
-		const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
-		if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before publishing its DevTools port`)
-
-		try {
-			const contents = await fs.readFile(portFilePath, 'utf8')
-			const port = Number.parseInt(contents.split('\n')[0] ?? '', 10)
-			if (Number.isInteger(port) && port > 0) return port
-			lastObservedState = `invalid port file contents: ${JSON.stringify(contents)}`
-		} catch (error) {
-			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
-		}
-
-		const remainingMilliseconds = deadline - clock.now()
-		if (remainingMilliseconds <= 0) break
-		await clock.sleep(Math.min(25, remainingMilliseconds))
-	}
-
-	throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
+	const port = await waitForChromiumDevToolsPort({
+		assertBrowserAvailable: () => {
+			const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
+			if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before publishing its DevTools port`)
+			if (clock.now() >= deadline) throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
+		},
+		pollMilliseconds: 25,
+		readPort: async () => {
+			try {
+				const contents = await fs.readFile(portFilePath, 'utf8')
+				const candidate = Number.parseInt(contents.split('\n')[0] ?? '', 10)
+				if (Number.isInteger(candidate) && candidate > 0) return candidate
+				lastObservedState = `invalid port file contents: ${JSON.stringify(contents)}`
+			} catch (error) {
+				if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
+			}
+			return undefined
+		},
+		readStderr,
+		wait: async milliseconds => await clock.sleep(Math.min(milliseconds, Math.max(0, deadline - clock.now()))),
+	})
+	if (port === undefined) throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
+	return port
 }
 
 test('Chromium DevTools port discovery tolerates delayed startup', async () => {
@@ -255,6 +279,25 @@ test('Chromium DevTools port discovery tolerates delayed startup', async () => {
 	} finally {
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
+})
+
+test('Chromium DevTools port discovery accepts a chunked listening URL when the profile port file is absent', async () => {
+	let stderr = 'DevTools listening on ws://127.0.0.1:'
+	let probes = 0
+	const port = await waitForChromiumDevToolsPort({
+		assertBrowserAvailable: () => undefined,
+		pollMilliseconds: 0,
+		readPort: async () => {
+			probes += 1
+			return undefined
+		},
+		readStderr: () => stderr,
+		wait: async () => {
+			stderr += '36463/devtools/browser/example'
+		},
+	})
+	expect(port).toBe(36463)
+	expect(probes).toBe(1)
 })
 
 test('Chromium DevTools port discovery reports an early browser exit', async () => {
@@ -635,12 +678,13 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-production-browser-'))
 	const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stderr: 'pipe', stdout: 'ignore' })
-	const browserStderr = new Response(browser.stderr).text()
+	const browserStderrCapture = captureChromiumStderr(browser.stderr)
+	const browserStderr = browserStderrCapture.text
 	let devToolsConnected = false
 	let socket: WebSocket | undefined
 
 	try {
-		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser)
+		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, realtimePollingClock, browserStderrCapture.read)
 		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browser))
 		await waitForChromiumWebSocketOpen(socket, browser)
 		devToolsConnected = true
