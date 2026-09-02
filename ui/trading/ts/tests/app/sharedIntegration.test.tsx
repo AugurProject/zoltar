@@ -104,7 +104,7 @@ test('Trading force-refreshes the active environment after saving the active net
 		/>,
 	)
 	try {
-		await waitFor(() => expect(rendered.container.textContent).toContain('Deployment verified'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Ethereum Mainnet · conditional prices only'))
 		const queries = within(rendered.container)
 		await act(async () => fireEvent.click(queries.getByRole('button', { name: 'Settings' })))
 		const networkSelect = queries.getByRole('combobox', { name: 'RPC network' }) as HTMLSelectElement
