@@ -4,6 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
 import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
@@ -138,21 +139,24 @@ export async function waitForDevToolsPort({
 	maxAttempts,
 	pollMilliseconds,
 	readPort,
+	readStderr,
 	wait = Bun.sleep,
 }: {
 	readonly assertBrowserAvailable: () => void
 	readonly maxAttempts?: number
 	readonly pollMilliseconds: number
 	readonly readPort: () => Promise<number | undefined>
+	readonly readStderr?: () => string
 	readonly wait?: (milliseconds: number) => Promise<unknown>
 }): Promise<number | undefined> {
-	for (let attempt = 0; maxAttempts === undefined || attempt < maxAttempts; attempt++) {
-		assertBrowserAvailable()
-		const port = await readPort()
-		if (port !== undefined) return port
-		await wait(pollMilliseconds)
-	}
-	return undefined
+	return await waitForChromiumDevToolsPort({
+		assertBrowserAvailable,
+		...(maxAttempts === undefined ? {} : { maxAttempts }),
+		pollMilliseconds,
+		readPort,
+		...(readStderr === undefined ? {} : { readStderr }),
+		wait,
+	})
 }
 
 export function createBrowserSmokeCommandSender(socket: ChromiumCommandSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): ChromiumCommand {
@@ -282,6 +286,7 @@ export async function createDevToolsSession(
 			assertBrowserAvailable: () => assertBrowserAvailable('waiting for the DevTools port'),
 			...(devToolsPortAttempts === undefined ? {} : { maxAttempts: devToolsPortAttempts }),
 			pollMilliseconds,
+			readStderr: () => stderrData,
 			readPort: async () => {
 				try {
 					return Number((await fs.readFile(path.join(profilePath, 'DevToolsActivePort'), 'utf8')).split('\n')[0])

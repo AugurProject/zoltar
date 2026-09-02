@@ -218,6 +218,21 @@ test.skipIf(process.platform === 'win32')('default initialization waits beyond t
 	}
 })
 
+test.skipIf(process.platform === 'win32')('DevTools discovery accepts Chromium stderr without a profile port file', async () => {
+	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-stderr-port-'))
+	const executablePath = join(fixtureRoot, 'fake-chromium')
+	const server = createFakeDevToolsServer(0)
+	await writeFile(executablePath, `#!/bin/sh\nprintf 'DevTools listening on ws://127.0.0.1:' >&2\nsleep 0.05\nprintf '${server.port.toString()}/devtools/browser/example\\n' >&2\nexec sleep 60\n`)
+	await chmod(executablePath, 0o755)
+	try {
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 5_000, pollMilliseconds: 1, profileParentPath: fixtureRoot })
+		await session.close()
+	} finally {
+		server.stop(true)
+		await rm(fixtureRoot, { force: true, recursive: true })
+	}
+})
+
 test.skipIf(process.platform === 'win32')('page target discovery retries a transient refused connection', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-transient-connection-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
