@@ -1,4 +1,3 @@
-export const deploymentVerified = 'Deployment verified'
 export const conditionalPricesOnly = 'Conditional prices only'
 export const developerDocumentation = 'The complete developer and protocol documentation is included in'
 export const developerDocumentationPath = 'solidity/docs/trading/'
