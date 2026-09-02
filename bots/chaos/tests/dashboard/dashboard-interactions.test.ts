@@ -1121,6 +1121,7 @@ browserTest(
 						connectivityDisabled: document.querySelector('#connectivity-fields')?.disabled,
 						connectivityHelp: document.querySelector('#connectivity-fields .notice')?.textContent,
 						initializerHelp: document.querySelector('label[for="initialize-genesis-universe"] + p')?.textContent,
+						initializerHelpId: document.querySelector('#initialize-genesis-universe')?.getAttribute('aria-describedby'),
 						initializeGenesisUniverse: document.querySelector('#initialize-genesis-universe')?.checked,
 						selectableScopeHelp: document.querySelector('#selectable-operation-scope-help')?.textContent,
 						readRpcUrl: document.querySelector('#read-rpc-url')?.value,
@@ -1133,7 +1134,9 @@ browserTest(
 					catalogLink: { href: '/catalog', text: 'Operation catalog' },
 					connectivityDisabled: false,
 					connectivityHelp: "RPC checks run from the chaos-bot server. Docker service URLs such as http://reth:8545 work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.",
-					initializerHelp: 'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool and seed, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
+					initializerHelp:
+						'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
+					initializerHelpId: 'initialize-genesis-universe-help',
 					initializeGenesisUniverse: true,
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					selectableScopeHelp:

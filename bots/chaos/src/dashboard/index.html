@@ -473,9 +473,9 @@
 									<div class="switch-row">
 										<div>
 											<label for="initialize-genesis-universe">Initialize genesis universe</label>
-											<p>Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool and seed, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.</p>
+											<p id="initialize-genesis-universe-help">Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.</p>
 										</div>
-										<input id="initialize-genesis-universe" name="initializeGenesisUniverse" type="checkbox" />
+										<input id="initialize-genesis-universe" name="initializeGenesisUniverse" type="checkbox" aria-describedby="initialize-genesis-universe-help" />
 									</div>
 									<div class="switch-row">
 										<div>
