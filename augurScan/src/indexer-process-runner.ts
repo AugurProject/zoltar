@@ -30,17 +30,26 @@ export const terminationSignal = (): Promise<void> =>
 	})
 
 export const runIndexerProcess = async ({ runtimeConfig, initialize, start, recordStop, untilTerminated }: RunnerDependencies): Promise<void> => {
+	let terminationRequested = false
+	void untilTerminated.then(() => {
+		terminationRequested = true
+	})
 	const { database, networks, evidenceProvenance, indexerRunId } = await initialize(!runtimeConfig.disableIndexer)
 	const abortController = new AbortController()
-	const indexers = runtimeConfig.disableIndexer ? [] : start(networks, database, abortController.signal, { provenance: evidenceProvenance })
+	if (terminationRequested) abortController.abort()
+	const indexers =
+		runtimeConfig.disableIndexer || terminationRequested ? [] : start(networks, database, abortController.signal, { provenance: evidenceProvenance })
 
 	let shutdownPromise: Promise<void> | undefined
 	const shutdown = async (): Promise<void> => {
 		shutdownPromise ??= (async () => {
 			abortController.abort()
 			const outcomes = await Promise.allSettled(indexers)
-			await recordStop(database, indexerRunId)
-			await database.close()
+			try {
+				await recordStop(database, indexerRunId)
+			} finally {
+				await database.close()
+			}
 			const failure = outcomes.find((outcome) => outcome.status === 'rejected')
 			if (failure !== undefined) throw failure.reason
 		})()
@@ -55,10 +64,16 @@ export const runIndexerProcess = async ({ runtimeConfig, initialize, start, reco
 	}
 
 	try {
-		const outcomes = await Promise.allSettled(indexers)
-		const failure = outcomes.find((outcome) => outcome.status === 'rejected')
+		const completed = Promise.allSettled(indexers)
+		const result = await Promise.race([
+			completed.then((outcomes) => ({ kind: 'completed' as const, outcomes })),
+			untilTerminated.then(() => ({ kind: 'terminated' as const })),
+		])
 		await shutdown()
-		if (failure !== undefined) throw failure.reason
+		if (result.kind === 'completed') {
+			const failure = result.outcomes.find((outcome) => outcome.status === 'rejected')
+			if (failure !== undefined) throw failure.reason
+		}
 	} catch (error) {
 		await shutdown()
 		throw error

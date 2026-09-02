@@ -102,7 +102,14 @@ export async function submitContractTransaction(
 						signMessage,
 					})
 				}
-				return boundary === undefined ? submit() : journaledSubmission(boundary.persistPending, submit, boundary.beforeSubmit)
+				if (boundary === undefined) return submit()
+				const guardBoundary = () =>
+					guardedTransactionSubmission(
+						isPaused,
+						async () => await boundary.beforeSubmit(),
+						async () => {},
+					)
+				return journaledSubmission(boundary.persistPending, submit, guardBoundary)
 			},
 		)
 		const submission = { ...initial, ...result }

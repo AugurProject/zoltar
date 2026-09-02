@@ -7,6 +7,7 @@ import { errorMessage } from '#core/rpc-validation'
 import { operationalFailureDisposition, retryDelayMilliseconds } from '#monitoring/resilience'
 import { acquireExecutionSignerLock, acquirePositionJournalLock } from '#state/position-store'
 import { runOperator } from '../runtime/operator'
+import { createArbitragerShutdownController } from '../runtime/shutdown.ts'
 
 export { immediateReplacementAmounts, lifecycleExecutionFromLogs, replacementCreditExecutionFromLogs } from '#execution/recovery-support'
 export {
@@ -22,22 +23,28 @@ export {
 export { createExecutionLockManager, persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 
 async function main() {
+	using shutdown = createArbitragerShutdownController()
 	for (;;) {
+		if (shutdown.isRequested()) return
 		const config = await loadConfiguration()
+		if (shutdown.isRequested()) return
 		const lockManager = createExecutionLockManager(account => acquireExecutionSignerLock(config.network.chain.id, account))
 		try {
 			if (config.execute || config.ui) await lockManager.hold(acquirePositionJournalLock(config.positionFile))
+			if (shutdown.isRequested()) return
 			const initialSignerLock = !config.execute || config.privateKey === undefined ? undefined : await lockManager.acquireSigner(privateKeyToAccount(config.privateKey).address)
+			if (shutdown.isRequested()) return
 			let startupFailures = 0
 			for (;;) {
 				try {
-					if (await runOperator(config, lockManager, initialSignerLock)) break
+					if (await runOperator(config, lockManager, initialSignerLock, shutdown)) break
 					return
 				} catch (error) {
 					if (config.once || operationalFailureDisposition(error) === 'safety-paused') throw error
 					startupFailures += 1
 					console.error(`startupConnectivityDegraded=${errorMessage(error)}`)
-					await Bun.sleep(retryDelayMilliseconds(config.pollMilliseconds, startupFailures))
+					await shutdown.wait(retryDelayMilliseconds(config.pollMilliseconds, startupFailures))
+					if (shutdown.isRequested()) return
 				}
 			}
 		} finally {

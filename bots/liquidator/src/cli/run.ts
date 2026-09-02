@@ -9,7 +9,7 @@ import { availableExecutionObservations, liquidationExecutionSnapshotObservation
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { createPoolMonitorIndex, scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
@@ -84,6 +84,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					transport: readPool.transport,
 				})
 	const state = initialRuntimeState(settings.paused, wallet?.account.address, settings.network.chainId)
+	setExecutionShutdownCheck(state, shutdown.isRequested)
 	let poolMonitorIndexes = new Map<string, ReturnType<typeof createPoolMonitorIndex>>()
 	const poolMonitorIndexFor = (endpoint: string) => {
 		const key = `${settings.network.chainId.toString()}:${settings.deployment.securityPoolFactory.toLowerCase()}:${endpoint}`
@@ -622,18 +623,26 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
+				if (shutdown.isRequested()) {
+					await saveDurableState(settings.runtime.stateFile, state)
+					return true
+				}
 				if (!state.paused && settings.runtime.execute) {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
 					const activeWallet = wallet
 					if (
 						await recoveryWorkBlocksExecution(
 							state,
-							() => recoverPendingTransactions(settings, activeWallet, state, readPool),
+							() => recoverPendingTransactions(settings, activeWallet, state, readPool, shutdown.isRequested),
 							() => reconcilePendingStagedOperations(settings, activeWallet, state, readPool),
 						)
 					) {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+					}
+					if (shutdown.isRequested()) {
+						await saveDurableState(settings.runtime.stateFile, state)
+						return true
 					}
 					const missingDesiredPool = desiredPoolStatuses.find(status => status.address === getAddress('0x0000000000000000000000000000000000000000') && settings.approvedUniverses.includes(status.desired.universeId))
 					if (missingDesiredPool !== undefined && settings.strategy.allowAutomaticPoolCreation) {
@@ -679,6 +688,10 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				await saveDurableState(settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 			} catch (error) {
+				if (error instanceof OperatorStopping) {
+					await saveDurableState(settings.runtime.stateFile, state)
+					return true
+				}
 				if (error instanceof TransactionAwaitingCanonicalFinality) {
 					state.status = 'running'
 					await saveDurableState(settings.runtime.stateFile, state)

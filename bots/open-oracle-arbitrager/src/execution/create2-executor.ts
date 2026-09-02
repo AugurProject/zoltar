@@ -46,6 +46,10 @@ export function assertExecutorDeploymentReceipt(status: 'reverted' | 'success', 
 	if (status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${transactionHash}`)
 }
 
+export function assertExecutorDeploymentActive(isStopping: (() => boolean) | undefined) {
+	if (isStopping?.()) throw new Error('Operator stopping before executor deployment submission')
+}
+
 export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, account: Address, chainId: number, plan: ExecutorDeploymentPlan) {
 	if (intent.account.toLowerCase() !== account.toLowerCase() || intent.address.toLowerCase() !== plan.address.toLowerCase() || intent.chainId !== chainId || intent.salt.toLowerCase() !== plan.salt.toLowerCase()) {
 		throw new Error('Pending executor deployment intent does not match the active signer, chain, address, and salt')
@@ -128,7 +132,16 @@ async function waitForExecutorDeployment(parameters: { address: Address; clients
 	}
 }
 
-export async function deployExecutorCreate2(parameters: { chain: Chain; existingIntent?: ExecutorDeploymentIntent | undefined; persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined; privateKey: Hex; readRpcUrls?: readonly string[] | undefined; rpcUrls: readonly string[]; salt: unknown }) {
+export async function deployExecutorCreate2(parameters: {
+	chain: Chain
+	existingIntent?: ExecutorDeploymentIntent | undefined
+	isStopping?: (() => boolean) | undefined
+	persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined
+	privateKey: Hex
+	readRpcUrls?: readonly string[] | undefined
+	rpcUrls: readonly string[]
+	salt: unknown
+}) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)
@@ -191,6 +204,7 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 		await parameters.persistIntent(intent)
 	}
 	if (environment.code !== 'verified') {
+		assertExecutorDeploymentActive(parameters.isStopping)
 		await submitExecutorDeploymentTransaction({ account: account.address, publicRpcUrls: parameters.rpcUrls, publicSubmit: sendRawTransactionToRpc, serializedTransaction: intent.serializedTransaction, transactionHash: intent.transactionHash })
 	}
 	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: intent.transactionHash })

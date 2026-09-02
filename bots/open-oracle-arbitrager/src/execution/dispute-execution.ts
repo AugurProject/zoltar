@@ -9,6 +9,7 @@ import {
 	canonicalBlockHashWithQuorum,
 	fundingTransactionPlan,
 	guardedTransactionSubmission,
+	guardedExecutionStep,
 	guardedRiskSubmission,
 	isExecutionPausedError,
 	journaledSubmission,
@@ -475,7 +476,9 @@ export async function executeDispute(
 									transactions: serializedTransactions,
 								}),
 							async () => {
+								await guardedExecutionStep(isPaused, async () => {})
 								if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
+								await guardedExecutionStep(isPaused, async () => {})
 							},
 						),
 					),

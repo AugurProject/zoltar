@@ -2,7 +2,18 @@ import { encodeFunctionData, parseUnits, type Address, type Hex, zeroAddress } f
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/shared/openOracle'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
-import { attemptHasFinality, canonicalBlockHashWithQuorum, finalizeSubmittedLifecycleAttempt, guardedTransactionSubmission, journaledSubmission, lifecycleAllowanceMismatch, lifecycleAttemptNeedsRecovery, lifecycleLastValidBlockNumber, lifecycleWithdrawalMismatch } from '#execution/execution-orchestration'
+import {
+	attemptHasFinality,
+	canonicalBlockHashWithQuorum,
+	finalizeSubmittedLifecycleAttempt,
+	guardedExecutionStep,
+	guardedTransactionSubmission,
+	journaledSubmission,
+	lifecycleAllowanceMismatch,
+	lifecycleAttemptNeedsRecovery,
+	lifecycleLastValidBlockNumber,
+	lifecycleWithdrawalMismatch,
+} from '#execution/execution-orchestration'
 import { replacementCredit } from '#core/position-accounting'
 import { parseDecimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
@@ -24,7 +35,17 @@ export {
 	recoverPendingLifecycleWithQuorum,
 } from '#execution/position-recovery'
 
-export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
+export async function processPositionLifecycle(
+	client: ReadClient,
+	readClients: readonly ReadClient[],
+	wallet: WriteClient,
+	config: Configuration,
+	position: PositionRecord,
+	blockNumber: bigint,
+	persistPosition: (position: PositionRecord) => Promise<void>,
+	track: TrackTransaction,
+	isPaused: () => boolean = () => false,
+) {
 	const account = wallet.account
 	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
@@ -234,7 +255,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	} satisfies PositionRecord
 	if (config.submission.mode === 'public') {
 		await persistPosition(lifecyclePosition)
-		const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind: lifecycleCall.kind, reportId: activePosition.reportId }, () => false, track)
+		const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind: lifecycleCall.kind, reportId: activePosition.reportId }, isPaused, track)
 		const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
 				...lifecyclePosition,
@@ -265,7 +286,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		transactions: [signed.serializedTransaction],
 	})
 	await guardedTransactionSubmission(
-		() => false,
+		isPaused,
 		async () => {
 			if ((await currentBlockNumberWithQuorum(readClients, config, 'lifecycle submission head')) !== blockNumber) throw new Error('Position lifecycle bundle quote expired before submission')
 			const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'lifecycle submission', blockNumber)
@@ -282,6 +303,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 						targetBlockNumber,
 						transactions: [signed.serializedTransaction],
 					}),
+				() => guardedExecutionStep(isPaused, async () => {}),
 			),
 	)
 	while ((await client.getBlockNumber()) < targetBlockNumber) await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
