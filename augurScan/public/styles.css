@@ -1451,9 +1451,9 @@ button[aria-busy="true"]:disabled {
 }
 .feed-header,
 .log-row {
-	min-width: 1220px;
+	min-width: 960px;
 	display: grid;
-	grid-template-columns: 125px 116px minmax(175px, 0.85fr) minmax(205px, 1fr) minmax(260px, 1.65fr) 150px 130px;
+	grid-template-columns: 125px 116px minmax(190px, 1fr) minmax(210px, 1fr) 150px 130px;
 	align-items: center;
 	gap: 0.7rem;
 }
@@ -1485,6 +1485,32 @@ button[aria-busy="true"]:disabled {
 }
 .log-row:last-child {
 	border-bottom: 0;
+}
+.event-detail-drawer {
+	padding: 1rem;
+	border: 1px solid var(--line);
+	border-top: 0;
+	border-radius: 0 0 10px 10px;
+	border-bottom: 1px solid var(--line);
+	background: color-mix(in srgb, var(--cyan) 4%, #0d141c);
+	box-shadow: inset 3px 0 var(--cyan);
+}
+.event-detail-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 0.9rem;
+}
+.event-detail-header h3 {
+	margin: 0.15rem 0 0;
+	font-size: 1.1rem;
+}
+.event-detail-content .detail-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.event-detail-content .detail-card {
+	padding: 0.7rem;
 }
 .cell {
 	min-width: 0;
@@ -1542,12 +1568,6 @@ button[aria-busy="true"]:disabled {
 	color: #a9eee9;
 	font:
 		650 0.72rem / 1 ui-monospace,
-		monospace;
-}
-.summary {
-	color: #c5d0da;
-	font:
-		0.69rem / 1 ui-monospace,
 		monospace;
 }
 .feed-state {
@@ -1669,6 +1689,7 @@ dialog::backdrop {
 }
 .detail-card {
 	min-width: 0;
+	margin: 0;
 	padding: 0.85rem;
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -1693,15 +1714,12 @@ dialog::backdrop {
 		0.72rem / 1.55 ui-monospace,
 		monospace;
 }
-.detail-tools,
-.related-logs {
+.detail-tools {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.5rem;
 }
-.copy-button,
-.explorer-link,
-.related-log {
+.explorer-link {
 	min-height: 34px;
 	padding: 0.45rem 0.65rem;
 	color: var(--text);
@@ -1711,14 +1729,8 @@ dialog::backdrop {
 	font-size: 0.67rem;
 	text-decoration: none;
 }
-.copy-button:hover,
-.explorer-link:hover,
-.related-log:hover {
+.explorer-link:hover {
 	border-color: var(--cyan);
-}
-.related-log {
-	width: 100%;
-	text-align: left;
 }
 .arguments {
 	width: 100%;
@@ -1788,22 +1800,10 @@ dialog::backdrop {
 .contracts {
 	margin-top: 2.8rem;
 }
-.contracts-workspace {
-	display: grid;
-	grid-template-columns: minmax(300px, 0.75fr) minmax(360px, 1.25fr);
-	min-height: 480px;
-	overflow: hidden;
-	border: 1px solid var(--line);
-	border-radius: 12px;
-	background: rgba(16, 23, 32, 0.76);
-}
 .contract-list {
 	display: grid;
 	align-content: start;
-	min-height: 320px;
-	max-height: calc(100vh - 450px);
-	overflow-y: auto;
-	border-right: 1px solid var(--line);
+	gap: 1rem;
 }
 .contract-group {
 	display: grid;
@@ -1811,8 +1811,11 @@ dialog::backdrop {
 }
 .contract-group-rows {
 	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.8rem;
 	min-width: 0;
 	max-width: 100%;
+	padding: 0.8rem 0;
 }
 .contract-group-heading {
 	position: sticky;
@@ -1833,20 +1836,12 @@ dialog::backdrop {
 	width: 100%;
 	padding: 0.9rem 1rem;
 	color: var(--text);
-	border: 0;
-	border-bottom: 1px solid var(--line);
-	background: transparent;
+	border: 1px solid var(--line);
+	border-radius: 9px;
+	background: var(--panel);
 	text-align: left;
 }
-.contract-row:hover,
-.contract-row[aria-selected="true"] {
-	background: color-mix(in srgb, var(--cyan) 7%, var(--panel));
-}
-.contract-row[aria-selected="true"] {
-	box-shadow: inset 3px 0 var(--cyan);
-}
-.contract-row-head,
-.contract-detail-head {
+.contract-row-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1855,8 +1850,7 @@ dialog::backdrop {
 .contract-row strong {
 	font-size: 0.78rem;
 }
-.contract-row code,
-.contract-detail code {
+.contract-row code {
 	color: var(--muted);
 	font-size: 0.65rem;
 	overflow-wrap: anywhere;
@@ -1878,18 +1872,11 @@ dialog::backdrop {
 	color: var(--red);
 	border-color: color-mix(in srgb, var(--red) 38%, transparent);
 }
-.contract-detail {
-	padding: 1.2rem;
-}
-.contract-detail h3 {
-	margin: 0.2rem 0;
-	font-size: 1.25rem;
-}
-.contract-detail-grid {
+.contract-row-facts {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.7rem;
-	margin-top: 1.2rem;
+	gap: 0.6rem;
+	margin-top: 0.5rem;
 }
 .richlist-controls {
 	display: flex;
@@ -1924,7 +1911,7 @@ dialog::backdrop {
 .richlist-header,
 .rich-row-main {
 	display: grid;
-	grid-template-columns: minmax(320px, 1.5fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) minmax(130px, 0.8fr) minmax(175px, 1fr) minmax(125px, 0.75fr);
+	grid-template-columns: minmax(320px, 1.5fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) minmax(90px, 0.5fr) minmax(175px, 1fr);
 	align-items: center;
 	gap: 0.8rem;
 }
@@ -1992,11 +1979,13 @@ dialog::backdrop {
 }
 .rich-transactions {
 	width: auto;
-	padding: 0;
+	min-height: 44px;
+	padding: 0.4rem 0.55rem;
 	color: inherit;
 	text-align: left;
-	border: 0;
-	background: transparent;
+	border: 1px solid color-mix(in srgb, var(--cyan) 35%, var(--line));
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--cyan) 5%, transparent);
 	cursor: pointer;
 }
 .rich-transactions:hover strong,
@@ -2526,9 +2515,6 @@ dialog::backdrop {
 	.contracts {
 		margin-top: 2rem;
 	}
-	.contracts-workspace {
-		grid-template-columns: 1fr;
-	}
 	.contract-list {
 		display: grid;
 		max-height: none;
@@ -2546,14 +2532,12 @@ dialog::backdrop {
 	}
 	.contract-group-rows {
 		display: grid;
+		grid-template-columns: 1fr;
 		overflow: visible;
 	}
 	.contract-row {
 		min-width: 0;
 		border-right: 0;
-	}
-	.contract-detail-grid {
-		grid-template-columns: 1fr;
 	}
 	.richlist-heading,
 	.richlist-controls {
@@ -2610,11 +2594,11 @@ dialog::backdrop {
 	}
 	.feed-header,
 	.log-row {
-		min-width: 1180px;
+		min-width: 930px;
+		grid-template-columns: 125px 105px 185px 210px 135px 125px;
 	}
-	.feed-header,
-	.log-row {
-		grid-template-columns: 125px 105px 170px 205px 260px 135px 125px;
+	.event-detail-content .detail-grid {
+		grid-template-columns: 1fr;
 	}
 	.detail-grid {
 		grid-template-columns: 1fr;

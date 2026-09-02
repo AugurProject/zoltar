@@ -63,7 +63,7 @@
 				<p id="activity-summary" class="activity-summary">Waiting for activity</p>
 
 				<div class="feed-shell">
-					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Decoded detail</span><span>Transaction</span><span>msg.origin</span></div>
+					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Transaction</span><span>msg.origin</span></div>
 					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
@@ -154,7 +154,7 @@
 				</div>
 				<div id="richlist-status" class="system-status" role="status" aria-live="polite">Loading known addresses…</div>
 				<div class="richlist-shell">
-					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP tokens</span><span id="rich-native-heading">ETH / WETH</span><span>Sent transactions</span><span>Protocol involvement</span><span>Balance state</span></div>
+					<div class="richlist-header" aria-hidden="true"><span>Address</span><span>REP tokens</span><span id="rich-native-heading">ETH / WETH</span><span>Transactions</span><span>Protocol involvement</span></div>
 					<div id="richlist-rows" class="richlist-rows" aria-busy="true"></div>
 				</div>
 				<div class="richlist-footer">
@@ -174,15 +174,7 @@
 					</div>
 				</div>
 				<p id="contracts-status" class="system-status" role="status" aria-live="polite">Loading system contracts…</p>
-				<div class="contracts-workspace">
-					<div id="contract-list" class="contract-list" aria-busy="true"></div>
-					<article id="contract-detail" class="contract-detail" aria-live="polite">
-						<div class="state-placeholder">
-							<p class="eyebrow">Contract details</p>
-							<h3>Select a contract</h3>
-						</div>
-					</article>
-				</div>
+				<div id="contract-list" class="contract-list" aria-busy="true"></div>
 			</section>
 
 			<section id="address-profile" class="address-profile" aria-labelledby="address-profile-heading" hidden>

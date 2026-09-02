@@ -50,6 +50,7 @@ import {
 	createForegroundRefreshGate,
 	createLiveRouteRefreshCoordinator,
 	createSessionSnapshotCache,
+	decodedActionLabel,
 	demoTimelineEvidenceStatus,
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
@@ -96,6 +97,7 @@ import {
 	timelineEntityTypeLabel,
 	timelineOccurrenceFields,
 	transactionRetryMode,
+	urlWithoutLogDetail,
 } from './live-update.ts'
 
 declare global {
@@ -583,7 +585,6 @@ let richListRequestVersion = 0
 let richListPaginationIntentVersion = 0
 let contractItems: ContractRecord[] = []
 let contractRequestVersion = 0
-let selectedContractAddress: string | undefined
 let activeLog: ActivityRecord | undefined
 let pendingCanonicalLog: ActivityRecord | undefined
 let pendingCanonicalActivityCount: number | undefined
@@ -630,19 +631,32 @@ const canonicalIncompleteTitle = 'Chain update refresh incomplete'
 const canonicalIncompleteDetail = 'Showing the prior details. Retry the chain update refresh to confirm the current state.'
 
 const showCanonicalDialogStatus = (title: string, detail: string) => {
-	if (!dialog.open) return
-	$('#detail-canonical-title').textContent = title
-	$('#detail-canonical-detail').textContent = detail
-	$('#detail-canonical-retry').hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
-	$('#detail-canonical-status').hidden = false
+	if (dialog.open) {
+		$('#detail-canonical-title').textContent = title
+		$('#detail-canonical-detail').textContent = detail
+		$('#detail-canonical-retry').hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
+		$('#detail-canonical-status').hidden = false
+	}
+	const drawerStatus = document.querySelector<HTMLElement>('.event-detail-canonical-status')
+	if (drawerStatus) {
+		const message = element('div')
+		message.append(element('strong', '', title), element('span', '', detail))
+		const retry = element('button', 'secondary compact', 'Retry now')
+		retry.type = 'button'
+		retry.hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
+		retry.addEventListener('click', () => retryCanonicalRefresh(retry))
+		drawerStatus.replaceChildren(message, retry)
+		drawerStatus.hidden = false
+	}
 }
 
 const hideCanonicalDialogStatus = () => {
 	$('#detail-canonical-status').hidden = true
+	document.querySelector<HTMLElement>('.event-detail-canonical-status')?.setAttribute('hidden', '')
 }
 
 const syncCanonicalDialogStatus = () => {
-	if (!dialog.open) {
+	if (!dialog.open && !document.querySelector('.event-detail-drawer')) {
 		hideCanonicalDialogStatus()
 		return
 	}
@@ -3338,6 +3352,7 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	const selectedNetwork = latestNetworks.find((network) => String(network.chain_id) === requiredChainId())
 	const selectedNetworkScope = `Selected network · ${selectedNetwork?.name ?? `chain ${requiredChainId()}`} · chain ${requiredChainId()}`
 	const riskValue = data['risk']
+	const historical = asOf['historical'] === true || asOf['phase'] === 'historical'
 	if (riskValue !== undefined && !isRecord(riskValue)) throw new Error('Operations risk is malformed')
 	const risk = isRecord(riskValue) ? riskValue : {}
 	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
@@ -3358,7 +3373,6 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 			'Indexed timestamp',
 			asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000).replace('.000Z', 'Z'),
 		),
-		operationCard('Live updates', connection.classList.contains('live') ? 'Connected' : 'Reconnecting', 'Canonical commits only'),
 	)
 	const metrics = element('div', 'operations-metrics')
 	metrics.append(
@@ -3722,12 +3736,12 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 		completeStatus.setAttribute('aria-live', 'polite')
 		grid.append(completeStatus)
 	}
-	if (selected === 'overview') content.replaceChildren(freshness, metrics, grid)
+	if (selected === 'overview') content.replaceChildren(...(historical ? [freshness] : []), metrics, grid)
 	else {
-		const routeFreshness = element('p', 'operations-route-freshness')
-		routeFreshness.textContent = operationsRouteFreshness(asOf, connection.classList.contains('live'))
 		content.replaceChildren(
-			routeFreshness,
+			...(asOf['historical'] === true || asOf['phase'] === 'historical'
+				? [element('p', 'operations-route-freshness', operationsRouteFreshness(asOf, connection.classList.contains('live')))]
+				: []),
 			...(selected === 'timeline' ? [operationsTimelineFilters()] : selected === 'risk' ? [operationsRiskSnapshotFilter()] : []),
 			grid,
 		)
@@ -3879,6 +3893,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	const header = element('section', 'operations-detail-header')
 	const back = document.createElement('a')
 	const headerPresentation = operationsDetailHeaderPresentation(route.kind, asOf, connection.classList.contains('live'))
+	const historical = asOf['historical'] === true || asOf['phase'] === 'historical'
 	const catalogPath = headerPresentation.catalogPath
 	back.href = operationsHref(catalogPath)
 	back.textContent = headerPresentation.backLabel
@@ -3890,7 +3905,8 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 			? `OpenOracle report ${route.identity[1]}`
 			: `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`,
 	)
-	header.append(back, title, element('p', 'operations-route-freshness', headerPresentation.freshness))
+	header.append(back, title)
+	if (historical) header.append(element('p', 'operations-route-freshness', headerPresentation.freshness))
 
 	const summary = element('div', 'operations-metrics')
 	const snapshot = isRecord(data['snapshot']) ? data['snapshot'] : undefined
@@ -4765,11 +4781,10 @@ const rowFor = (log: ActivityRecord) => {
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Open ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
-	const summary = element('span', 'cell summary', log.summary)
 	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.className = 'cell cell-tx'
 	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link', compact: true })
-	row.append(chain, timestamp, contract, event, summary, tx, origin)
+	row.append(chain, timestamp, contract, event, tx, origin)
 	row.addEventListener('click', (clickEvent: MouseEvent) => {
 		if (clickEvent.target instanceof HTMLAnchorElement) return
 		openDetail(log)
@@ -5001,24 +5016,6 @@ const addressDetailCard = (
 	return card
 }
 
-const copyButton = (value: string | number | bigint, label: string) => {
-	const button = element('button', 'copy-button', `Copy ${label}`)
-	button.type = 'button'
-	button.setAttribute('aria-live', 'polite')
-	button.addEventListener('click', async () => {
-		try {
-			await navigator.clipboard.writeText(String(value))
-			button.textContent = 'Copied'
-		} catch (error) {
-			button.textContent = error instanceof Error ? 'Copy failed' : 'Copy unavailable'
-		}
-		setTimeout(() => {
-			button.textContent = `Copy ${label}`
-		}, 1200)
-	})
-	return button
-}
-
 const explorerLink = (base: string, type: string, value: string | number, label: string) => {
 	const link = element('a', 'explorer-link', label)
 	link.href = `${String(base).replace(/\/$/, '')}/${type}/${value}`
@@ -5165,27 +5162,69 @@ const decodedArgumentsTable = (
 interface DetailContextSnapshot {
 	scrollTop: number
 	focusIndex: number
+	focusKey?: string
+	focusKeyOccurrence?: number
 	focusTop?: number
 }
 
+const detailFocusKey = (node: HTMLElement): string =>
+	`${node.tagName}:${node instanceof HTMLAnchorElement ? node.href : ''}:${node.getAttribute('aria-label') ?? node.textContent ?? ''}`
+
+const closeEventDrawer = ({ clearUrl = true, restoreFocus = false } = {}) => {
+	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	const triggerKey = drawer?.dataset.triggerKey
+	detailContextVersion++
+	detailRequestVersion++
+	activeLog = undefined
+	pendingCanonicalLog = undefined
+	if (activeReorgRecovery !== undefined) activeReorgRecovery.logToRefresh = undefined
+	drawer?.remove()
+	if (clearUrl) clearDetailUrl()
+	if (restoreFocus && triggerKey)
+		[...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
+			.find((row) => row.dataset.liveKey === triggerKey)
+			?.querySelector<HTMLElement>('button')
+			?.focus({ preventScroll: true })
+}
+
 const captureDetailContext = (): DetailContextSnapshot => {
-	const focusable = [...detailContent.querySelectorAll<HTMLElement>('a, button, summary')]
+	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	if (!drawer) return { scrollTop: window.scrollY, focusIndex: -1 }
+	const focusable = [...drawer.querySelectorAll<HTMLElement>('a, button, summary')]
 	const focusIndex = document.activeElement instanceof HTMLElement ? focusable.indexOf(document.activeElement) : -1
 	return {
-		scrollTop: dialog.scrollTop,
+		scrollTop: window.scrollY,
 		focusIndex,
+		focusKey: focusIndex >= 0 ? detailFocusKey(requiredArrayItem(focusable, focusIndex, 'Focused detail control')) : undefined,
+		focusKeyOccurrence:
+			focusIndex >= 0
+				? focusable
+						.slice(0, focusIndex + 1)
+						.filter((candidate) => detailFocusKey(candidate) === detailFocusKey(requiredArrayItem(focusable, focusIndex, 'Focused detail control'))).length - 1
+				: undefined,
 		focusTop: focusIndex >= 0 ? requiredArrayItem(focusable, focusIndex, 'Focused detail control').getBoundingClientRect().top : undefined,
 	}
 }
 
 const restoreDetailContext = (snapshot: DetailContextSnapshot) => {
-	dialog.scrollTop = snapshot.scrollTop
+	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	if (!drawer) return
+	window.scrollTo({ top: snapshot.scrollTop })
 	if (snapshot.focusIndex < 0) return
-	const focusable = [...detailContent.querySelectorAll<HTMLElement>('a, button, summary')]
-	const nextFocus = focusable[snapshot.focusIndex]
+	const focusable = [...drawer.querySelectorAll<HTMLElement>('a, button, summary')]
+	const keyedCandidates = snapshot.focusKey ? focusable.filter((candidate) => detailFocusKey(candidate) === snapshot.focusKey) : []
+	const nextFocus = keyedCandidates[snapshot.focusKeyOccurrence ?? 0] ?? focusable[snapshot.focusIndex]
 	if (nextFocus === undefined) return
-	if (snapshot.focusTop !== undefined) dialog.scrollTop += nextFocus.getBoundingClientRect().top - snapshot.focusTop
+	if (snapshot.focusTop !== undefined) window.scrollBy(0, nextFocus.getBoundingClientRect().top - snapshot.focusTop)
 	nextFocus.focus({ preventScroll: true })
+}
+
+const detailContextIsUnchanged = (snapshot: DetailContextSnapshot): boolean => {
+	if (Math.abs(window.scrollY - snapshot.scrollTop) > 1) return false
+	if (snapshot.focusIndex < 0) return true
+	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	const focusable = drawer ? [...drawer.querySelectorAll<HTMLElement>('a, button, summary')] : []
+	return document.activeElement === focusable[snapshot.focusIndex]
 }
 
 const performOpenDetail = async (
@@ -5209,15 +5248,37 @@ const performOpenDetail = async (
 	activeAccount = undefined
 	activeAccountTransactions = undefined
 	activeAccountLoadMore = undefined
-	if (!dialog.open) dialog.showModal()
+	const existingDrawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	const drawer = existingDrawer ?? element('section', 'event-detail-drawer')
+	drawer.setAttribute('aria-label', 'Event details')
+	const drawerContent = existingDrawer?.querySelector<HTMLElement>('.event-detail-content') ?? element('div', 'event-detail-content')
+	if (!existingDrawer) {
+		const header = element('header', 'event-detail-header')
+		const heading = element('div')
+		heading.append(element('h3', '', 'Event details'))
+		const close = element('button', 'icon-button', '×')
+		close.type = 'button'
+		close.setAttribute('aria-label', 'Close event details')
+		close.addEventListener('click', () => closeEventDrawer({ restoreFocus: true }))
+		header.append(heading, close)
+		const canonicalStatus = element('div', 'detail-canonical-status event-detail-canonical-status')
+		canonicalStatus.hidden = true
+		canonicalStatus.setAttribute('role', 'status')
+		canonicalStatus.setAttribute('aria-live', 'polite')
+		drawer.append(header, canonicalStatus, drawerContent)
+	}
+	drawer.dataset.triggerKey = logKeyFor(log)
+	const feedShell = feed.closest<HTMLElement>('.feed-shell')
+	if (feedShell && drawer.previousElementSibling !== feedShell) feedShell.after(drawer)
 	syncCanonicalDialogStatus()
-	$('#detail-eyebrow').textContent = 'Log evidence'
-	$('#detail-title').textContent = 'Event details'
-	detailContent.setAttribute('aria-busy', String(refreshPresentation({ live }).busy))
+	drawerContent.setAttribute('aria-busy', String(refreshPresentation({ live }).busy))
 	if (!live) {
 		const loading = element('p', 'detail-status', 'Loading event details…')
 		loading.setAttribute('role', 'status')
-		detailContent.replaceChildren(loading, element('div', 'loading-line'))
+		drawerContent.replaceChildren(loading, element('div', 'loading-line'))
+		drawer.tabIndex = -1
+		drawer.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+		drawer.focus({ preventScroll: true })
 	}
 	const url = new URL(location.href)
 	url.searchParams.delete('account')
@@ -5231,25 +5292,26 @@ const performOpenDetail = async (
 		)
 			return false
 		activeLog = detail
+		const deployedContractAddress = typeof detail.receipt['contractAddress'] === 'string' ? detail.receipt['contractAddress'] : undefined
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Block', `#${number(detail.block_number)} · ${exactTimestamp(detail.block_timestamp)}`),
-			addressDetailCard('Contract', detail.emitter_address, { knownLabel: detail.contract_label, chainId: detail.chain_id, wide: true }),
-			detailCard('Contract identity', `${detail.contract_kind ?? 'unknown kind'} · ${detail.contract_provenance ?? 'unknown provenance'}`, true),
-			detailCard('Event signature', detail.event_signature ?? 'No matching ABI', true),
-			detailCard('Block hash', detail.block_hash, true),
+			addressDetailCard('Contract', detail.emitter_address, { knownLabel: detail.contract_label, chainId: detail.chain_id }),
+			detailCard('Contract identity', `${detail.contract_kind ?? 'unknown kind'} · ${detail.contract_provenance ?? 'unknown provenance'}`),
+			detailCard('Event signature', detail.event_signature ?? 'No matching ABI'),
+			detailCard('Block hash', detail.block_hash),
 			detailCard('Occurrence position', `transaction ${number(detail.transaction_index)} · log ${number(detail.log_index)}`),
-			detailCard('Transaction', detail.tx_hash, true),
+			detailCard('Transaction', detail.tx_hash),
 			addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
 			addressDetailCard('To', detail.to_address, { chainId: detail.chain_id }),
 			detailCard('Gas used', number(detail.gas_used)),
-			detailCard('Decoded action', detail.action_summary ?? 'No decoded calldata'),
+			detailCard(
+				'Decoded action',
+				decodedActionLabel(detail.action_summary, detail.to_address, detail.contract_label, detail.emitter_address, deployedContractAddress),
+			),
 		)
 		const tools = element('div', 'detail-card wide detail-tools')
 		tools.append(
-			copyButton(detail.block_hash, 'block hash'),
-			copyButton(detail.tx_hash, 'transaction hash'),
-			copyButton(detail.emitter_address, 'contract address'),
 			explorerLink(detail.explorer_base_url, 'block', detail.block_hash, 'Open block'),
 			explorerLink(detail.explorer_base_url, 'tx', detail.tx_hash, 'Open transaction'),
 			explorerLink(detail.explorer_base_url, 'address', detail.emitter_address, 'Open contract'),
@@ -5270,19 +5332,9 @@ const performOpenDetail = async (
 		const raw = element('div', 'detail-card wide')
 		raw.append(element('p', 'eyebrow', 'Complete raw transaction receipt'), element('pre', 'raw', JSON.stringify(detail.receipt, null, 2)))
 		grid.append(raw)
-		const related = element('div', 'detail-card wide')
-		related.append(element('p', 'eyebrow', 'Related logs in this transaction'))
-		const relatedList = element('div', 'related-logs')
-		for (const occurrence of detail.relatedLogs ?? []) {
-			const button = element('button', 'related-log', `#${number(occurrence.log_index)} · ${occurrence.event_name ?? 'Unknown event'} · ${occurrence.summary}`)
-			button.type = 'button'
-			button.addEventListener('click', () => openDetail({ ...detail, log_index: occurrence.log_index }))
-			relatedList.append(button)
-		}
-		related.append(relatedList)
-		grid.append(related)
-		detailContent.replaceChildren(grid)
-		if (previousContext) restoreDetailContext(previousContext)
+		const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext() : undefined
+		drawerContent.replaceChildren(grid)
+		if (contextToRestore) restoreDetailContext(contextToRestore)
 		if (canonicalRecovery) pendingCanonicalLog = undefined
 		return true
 	} catch (error) {
@@ -5293,8 +5345,8 @@ const performOpenDetail = async (
 			return false
 		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error instanceof Error ? error.status : undefined)
 		if (canonicalRecovery && !noncanonical && canonicalRefreshRequired) {
-			detailContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
-			if (previousContext) restoreDetailContext(previousContext)
+			drawerContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
+			if (previousContext && detailContextIsUnchanged(previousContext)) restoreDetailContext(previousContext)
 			return false
 		}
 		const alert = element('div', `detail-error${live ? ' detail-refresh-error' : ''}`)
@@ -5305,14 +5357,15 @@ const performOpenDetail = async (
 		retry.addEventListener('click', () => openDetail(log, { live: !noncanonical, canonicalRecovery }))
 		if (!noncanonical) alert.append(retry)
 		if (live && !noncanonical) {
-			detailContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
-			detailContent.prepend(alert)
-			if (previousContext) restoreDetailContext(previousContext)
-		} else detailContent.replaceChildren(alert)
+			const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext() : undefined
+			drawerContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
+			drawerContent.prepend(alert)
+			if (contextToRestore) restoreDetailContext(contextToRestore)
+		} else drawerContent.replaceChildren(alert)
 		if (noncanonical) pendingCanonicalLog = undefined
 		return noncanonical
 	} finally {
-		if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) detailContent.setAttribute('aria-busy', 'false')
+		if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) drawerContent.setAttribute('aria-busy', 'false')
 	}
 }
 
@@ -5328,7 +5381,7 @@ const openDetail = (log: ActivityRecord | LogReference, options: DetailOptions =
 
 const restorePendingCanonicalLog = async () => {
 	if (pendingCanonicalLog === undefined) return true
-	return await openDetail(pendingCanonicalLog, { live: dialog.open, canonicalRecovery: true })
+	return await openDetail(pendingCanonicalLog, { live: document.querySelector('.event-detail-drawer') !== null, canonicalRecovery: true })
 }
 
 const captureAccountDialogSnapshot = (): DialogSnapshot | undefined => {
@@ -5402,6 +5455,7 @@ const performOpenAccountTransactions = async (
 	const stagedSnapshot = canonicalRecovery ? restoreSnapshot : stagedLiveRefresh ? captureAccountDialogSnapshot() : undefined
 	const refreshPrevious = stagedRefresh ? liveSnapshot(detailContent, '.account-transaction[data-live-key]') : undefined
 	activeLog = undefined
+	document.querySelector('.event-detail-drawer')?.remove()
 	pendingCanonicalLog = undefined
 	if (restoreSnapshot === undefined && !live) {
 		pendingCanonicalAccount = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : account
@@ -5820,6 +5874,7 @@ const closeDetail = ({ preservePendingCanonicalAccount = false, preservePendingC
 	detailContextVersion++
 	detailRequestVersion++
 	activeLog = undefined
+	document.querySelector('.event-detail-drawer')?.remove()
 	activeAccount = undefined
 	activeAccountTransactions = undefined
 	activeAccountLoadMore = undefined
@@ -5839,8 +5894,7 @@ const closeDetail = ({ preservePendingCanonicalAccount = false, preservePendingC
 }
 
 const clearDetailUrl = () => {
-	const url = new URL(location.href)
-	url.searchParams.delete('log')
+	const url = urlWithoutLogDetail(new URL(location.href))
 	url.searchParams.delete('account')
 	history.replaceState(null, '', url)
 }
@@ -6088,68 +6142,10 @@ const stateHeader = (eyebrow: string, title: string, subtitle: string, kind: str
 const richBalance = (value: string | number | undefined, symbol: string, digits = 2) => exactUnit(value ?? '0', 18, symbol, digits)
 const richFieldLabel = (label: string) => element('span', 'sr-only rich-field-label', label)
 const nativeSymbol = (chainId = selectedChainId()) => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
-const syncContractUrl = (address: string) => {
-	const url = new URL(location.href)
-	if (address) url.searchParams.set('contract', address)
-	else url.searchParams.delete('contract')
-	history.replaceState(null, '', url)
-}
-
-const renderContractDetail = (contract: ContractRecord | undefined) => {
-	const detail = $('#contract-detail')
-	if (contract === undefined) {
-		detail.replaceChildren(element('div', 'state-placeholder', 'No contract is selected.'))
-		return
-	}
-	const status = contractDeploymentStatus(contract)
-	const head = element('div', 'contract-detail-head')
-	const identity = element('div')
-	identity.append(element('p', 'eyebrow', contract.kind), element('h3', '', contract.label), element('code', '', contract.address))
-	const statusNode = element('span', `deployment-status ${status.tone}`, status.label)
-	head.append(identity, statusNode)
-	const grid = element('div', 'contract-detail-grid')
-	grid.append(
-		detailCard(
-			'Deployment block',
-			contract.deployment_block === null || contract.deployment_block === undefined
-				? 'Not observed'
-				: `${contract.deployment_block_exact === false ? 'Search boundary ' : ''}#${number(contract.deployment_block)}`,
-		),
-		detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
-	)
-	const actions = element('div', 'detail-tools')
-	const copyAddress = copyButton(contract.address, 'address')
-	copyAddress.dataset.contractAction = 'copy-address'
-	const openContract = explorerLink(contract.explorer_base_url, 'address', contract.address, 'Open contract ↗')
-	openContract.dataset.contractAction = 'open-contract'
-	actions.append(copyAddress, openContract)
-	if (contract.deployment_block) {
-		const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, contractDeploymentBlockActionLabel(contract))
-		openDeployment.dataset.contractAction = 'open-deployment'
-		actions.append(openDeployment)
-	}
-	if (contract.discovery_tx_hash) {
-		const openDiscovery = explorerLink(contract.explorer_base_url, 'tx', contract.discovery_tx_hash, 'Open discovery transaction ↗')
-		openDiscovery.dataset.contractAction = 'open-discovery'
-		actions.append(openDiscovery)
-	}
-	detail.replaceChildren(head, grid, actions)
-}
-
 const renderContracts = () => {
 	const list = $('#contract-list')
-	const revealNarrowContractDetail = (moveFocus = false) => {
-		if (!window.matchMedia('(max-width: 900px)').matches) return
-		const detail = $('#contract-detail')
-		detail.scrollIntoView({ block: 'start' })
-		if (moveFocus) {
-			detail.tabIndex = -1
-			detail.focus({ preventScroll: true })
-		}
-	}
 	if (contractItems.length === 0) {
 		list.replaceChildren(element('div', 'state-placeholder', 'No system contracts are registered for this network.'))
-		renderContractDetail(undefined)
 		list.setAttribute('aria-busy', 'false')
 		return
 	}
@@ -6157,12 +6153,6 @@ const renderContracts = () => {
 	const displayedContractItems = [...contractItems].sort(
 		(left, right) => sectionOrder.indexOf(contractRegistrySection(left)) - sectionOrder.indexOf(contractRegistrySection(right)),
 	)
-	const requested = pageUrl.searchParams.get('contract')?.toLowerCase()
-	const selected =
-		contractItems.find((contract) => contract.address.toLowerCase() === selectedContractAddress?.toLowerCase()) ??
-		contractItems.find((contract) => contract.address.toLowerCase() === requested) ??
-		requiredArrayItem(displayedContractItems, 0, 'Default contract')
-	selectedContractAddress = selected.address
 	const scrollLeft = list.scrollLeft
 	const scrollTop = list.scrollTop
 	const focusedContractAddress =
@@ -6177,26 +6167,37 @@ const renderContracts = () => {
 		}),
 	)
 	const existingRows = new Map([...list.querySelectorAll<HTMLElement>('.contract-row[data-contract-address]')].map((row) => [row.dataset.contractAddress, row]))
-	const revealRequestedSelection = requested !== undefined && !existingRows.has(selected.address.toLowerCase())
-	const groupedRows = new Map<ContractRegistrySection, HTMLButtonElement[]>()
+	const groupedRows = new Map<ContractRegistrySection, HTMLElement[]>()
 	for (const contract of displayedContractItems) {
 		const status = contractDeploymentStatus(contract)
 		const addressKey = contract.address.toLowerCase()
-		const row = existingRows.get(addressKey) ?? element('button', 'contract-row')
-		if (!(row instanceof HTMLButtonElement)) throw new Error('Existing contract row has the wrong element type')
-		row.type = 'button'
+		const row = existingRows.get(addressKey) ?? element('article', 'contract-row')
 		row.dataset.contractAddress = addressKey
-		row.setAttribute('aria-selected', String(contract.address.toLowerCase() === selected.address.toLowerCase()))
 		const head = element('span', 'contract-row-head')
 		head.append(element('strong', '', contract.label), element('span', `deployment-status ${status.tone}`, status.label))
-		row.replaceChildren(head, element('code', '', contract.address), element('span', 'eyebrow', contract.kind))
-		row.onclick = (event) => {
-			selectedContractAddress = contract.address
-			syncContractUrl(contract.address)
-			for (const candidate of list.querySelectorAll<HTMLElement>('.contract-row')) candidate.setAttribute('aria-selected', String(candidate === row))
-			renderContractDetail(contract)
-			revealNarrowContractDetail(event.detail === 0)
+		const facts = element('div', 'contract-row-facts')
+		facts.append(
+			detailCard(
+				contract.deployment_block_exact === false ? 'Search boundary block' : 'Deployment block',
+				contract.deployment_block === null ? 'Not observed' : `#${number(contract.deployment_block)}`,
+			),
+			detailCard(contractDeploymentTimestampLabel(contract), contract.deployment_timestamp ? exactTimestamp(contract.deployment_timestamp) : 'Not observed'),
+		)
+		const actions = element('div', 'detail-tools')
+		const openContract = explorerLink(contract.explorer_base_url, 'address', contract.address, 'Open contract ↗')
+		openContract.dataset.contractAction = `${addressKey}:open-contract`
+		actions.append(openContract)
+		if (contract.deployment_block) {
+			const openDeployment = explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, contractDeploymentBlockActionLabel(contract))
+			openDeployment.dataset.contractAction = `${addressKey}:open-deployment`
+			actions.append(openDeployment)
 		}
+		if (contract.discovery_tx_hash) {
+			const openDiscovery = explorerLink(contract.explorer_base_url, 'tx', contract.discovery_tx_hash, 'Open discovery transaction ↗')
+			openDiscovery.dataset.contractAction = `${addressKey}:open-discovery`
+			actions.append(openDiscovery)
+		}
+		row.replaceChildren(head, element('code', '', contract.address), element('span', 'eyebrow', contract.kind), facts, actions)
 		const section = contractRegistrySection(contract)
 		const rows = groupedRows.get(section) ?? []
 		rows.push(row)
@@ -6220,32 +6221,9 @@ const renderContracts = () => {
 	}
 	list.scrollLeft = scrollLeft
 	list.scrollTop = scrollTop
-	syncContractUrl(selected.address)
-	renderContractDetail(selected)
-	if (revealRequestedSelection) {
-		const selectedRow = list.querySelector<HTMLElement>(`[data-contract-address="${selected.address.toLowerCase()}"]`)
-		const rowList = selectedRow?.closest<HTMLElement>('.contract-group-rows')
-		const selectedGroup = selectedRow?.closest<HTMLElement>('.contract-group')
-		if (
-			selectedRow !== null &&
-			selectedRow !== undefined &&
-			rowList !== null &&
-			rowList !== undefined &&
-			selectedGroup !== null &&
-			selectedGroup !== undefined
-		) {
-			const listBounds = list.getBoundingClientRect()
-			list.scrollTop += selectedGroup.getBoundingClientRect().top - listBounds.top
-			const rowBounds = selectedRow.getBoundingClientRect()
-			if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom)
-				list.scrollTop += rowBounds.top - listBounds.top - Math.max(0, (list.clientHeight - rowBounds.height) / 2)
-			const groupBounds = rowList.getBoundingClientRect()
-			rowList.scrollLeft += rowBounds.left - groupBounds.left - Math.max(0, (rowList.clientWidth - rowBounds.width) / 2)
-		}
-		revealNarrowContractDetail()
-	}
 	if (focusedAction !== undefined) document.querySelector<HTMLElement>(`[data-contract-action="${focusedAction}"]`)?.focus()
-	else if (focusedContractAddress !== undefined) list.querySelector<HTMLElement>(`[data-contract-address="${focusedContractAddress}"]`)?.focus()
+	else if (focusedContractAddress !== undefined)
+		list.querySelector<HTMLElement>(`[data-contract-address="${focusedContractAddress}"]`)?.querySelector<HTMLElement>('a')?.focus()
 	list.setAttribute('aria-busy', 'false')
 }
 
@@ -6299,9 +6277,8 @@ const loadContracts = (options: LoadOptions = {}): Promise<boolean> => {
 	return options.live === true ? contractRefreshGate.runBackground(operation) : contractRefreshGate.runForeground(operation)
 }
 
-const renderRichList = ({ live = false } = {}) => {
+const renderRichList = () => {
 	const rows = $('#richlist-rows')
-	const previousRows = liveSnapshot(rows, '.rich-row[data-live-key]')
 	const isInitialRender = rows.childElementCount === 0
 	const openDetailKeys = new Set([...rows.querySelectorAll<HTMLElement>('details[open][data-detail-key]')].map((details) => details.dataset.detailKey))
 	const focusedDetailKey =
@@ -6320,8 +6297,6 @@ const renderRichList = ({ live = false } = {}) => {
 		const repComplete = Number(item.sampled_rep_token_count) >= Number(item.rep_token_count)
 		const wethComplete = Number(item.sampled_weth_token_count) >= Number(item.weth_token_count)
 		const repTokens = Array.isArray(item.rep_balances) ? item.rep_balances : []
-		const wethTokens = Array.isArray(item.weth_balances) ? item.weth_balances : []
-		const nativeBalance = item.native_balance_detail
 		const itemNativeSymbol = nativeSymbol(item.chain_id)
 		const wallet = element('div', 'rich-wallet')
 		wallet.append(
@@ -6332,31 +6307,13 @@ const renderRichList = ({ live = false } = {}) => {
 		const transactions = element('button', 'rich-count rich-transactions')
 		transactions.type = 'button'
 		transactions.setAttribute('aria-label', `View ${number(item.transaction_count)} transactions sent by ${item.label ?? item.address}`)
-		transactions.append(
-			richFieldLabel('Sent transactions'),
-			element('strong', '', number(item.transaction_count)),
-			element('span', '', `${counted(item.interaction_count, 'observed interaction')} · View sent transactions`),
-		)
+		transactions.append(richFieldLabel('Transactions'), element('strong', '', number(item.transaction_count)))
 		transactions.addEventListener('click', () => openAccountTransactions(item))
 		const positions = element('div', 'rich-count')
 		positions.append(
 			richFieldLabel('Protocol involvement'),
 			element('strong', '', counted(item.pool_count, 'pool')),
 			element('span', '', `${counted(item.active_vault_count, 'active vault')} / ${counted(item.vault_count, 'known vault')}`),
-		)
-		const balanceState = element('div', 'rich-count')
-		balanceState.append(
-			richFieldLabel('Balance state'),
-			element('strong', '', item.oldest_balance_block ? `#${number(item.oldest_balance_block)}` : 'Pending'),
-			element(
-				'span',
-				'',
-				item.last_balance_refresh
-					? repComplete && wethComplete && hasNative
-						? age(item.last_balance_refresh)
-						: `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`
-					: 'Balance refresh queued',
-			),
 		)
 		const rep = element('div', 'rich-rep')
 		rep.append(richFieldLabel('REP tokens'))
@@ -6378,60 +6335,8 @@ const renderRichList = ({ live = false } = {}) => {
 			rep.append(tokenLine)
 		}
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
-		main.append(identity, rep, wallet, transactions, positions, balanceState)
+		main.append(identity, rep, wallet, transactions, positions)
 		article.append(main)
-		const details = element('details', 'rich-assets')
-		details.dataset.detailKey = `${itemKey}:assets`
-		details.open =
-			openDetailKeys.has(details.dataset.detailKey) ||
-			(isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
-		const summary = element(
-			'summary',
-			'',
-			`Balances · ${nativeBalance ? itemNativeSymbol : `${itemNativeSymbol} pending`} · ${wethTokens.length} WETH · ${repTokens.length} of ${number(item.sampled_rep_token_count)} sampled REP`,
-		)
-		details.append(summary)
-		const tokenGrid = element('div', 'rich-token-grid')
-		if (!nativeBalance && repTokens.length === 0 && wethTokens.length === 0)
-			tokenGrid.append(element('span', 'data-note', 'Balances have not been refreshed yet.'))
-		if (nativeBalance) {
-			const nativeCard = element('div', 'rich-token')
-			nativeCard.append(
-				element('strong', '', exactUnit(nativeBalance.balance, 18, itemNativeSymbol, 2)),
-				element('span', '', `${itemNativeSymbol} · block #${number(nativeBalance.blockNumber)}`),
-				element('code', 'rich-token-raw', `${nativeBalance.balance} base units`),
-			)
-			tokenGrid.append(nativeCard)
-		}
-		for (const [token, fallbackSymbol] of [
-			...wethTokens.map((token): [TokenBalanceRecord, string] => [token, 'WETH']),
-			...repTokens.map((token): [TokenBalanceRecord, string] => [token, 'REP']),
-		]) {
-			const tokenCard = element('div', 'rich-token')
-			const decimals = Number.isInteger(Number(token.decimals)) && Number(token.decimals) >= 0 && Number(token.decimals) <= 255 ? Number(token.decimals) : 18
-			const tokenAddress = protocolAddressLink(token.address, {
-				knownLabel: token.contractLabel,
-				chainId: item.chain_id,
-				className: 'rich-token-address address-link',
-			})
-			tokenCard.append(
-				element('strong', '', exactUnit(token.balance, decimals, token.symbol ?? fallbackSymbol, 2)),
-				element(
-					'span',
-					'',
-					`${fallbackSymbol === 'REP' && token.universeId !== null && token.universeId !== undefined ? `Universe ${shortIdentifier(token.universeId)} · ` : ''}block #${number(token.blockNumber)}`,
-				),
-				tokenAddress,
-				element('code', 'rich-token-raw', `${token.balance} base units`),
-			)
-			tokenGrid.append(tokenCard)
-		}
-		if (item.rep_balances_truncated)
-			tokenGrid.append(element('span', 'data-note', `Showing 100 of ${number(item.sampled_rep_token_count)} sampled REP token balances.`))
-		if (item.weth_balances_truncated)
-			tokenGrid.append(element('span', 'data-note', `Showing 100 of ${number(item.sampled_weth_token_count)} sampled WETH token balances.`))
-		details.append(tokenGrid)
-		article.append(details)
 		const poolAssociations = Array.isArray(item.pool_associations) ? item.pool_associations : []
 		const vaultPositions = Array.isArray(item.vault_positions) ? item.vault_positions : []
 		const involvement = element('details', 'rich-assets rich-involvement')
@@ -6472,14 +6377,13 @@ const renderRichList = ({ live = false } = {}) => {
 		if (poolAssociations.length < Number(item.pool_count) || vaultPositions.length < Number(item.vault_count))
 			involvementGrid.append(element('span', 'data-note', 'Showing the first 100 associations or positions.'))
 		involvement.append(involvementGrid)
-		article.append(involvement)
+		if (Number(item.pool_count) > 0 || Number(item.vault_count) > 0) article.append(involvement)
 		rows.append(article)
 	}
 	if (focusedDetailKey) {
 		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find((details) => details.dataset.detailKey === focusedDetailKey)
 		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
 	}
-	applyLiveChanges(rows, previousRows, { live, selector: '.rich-row[data-live-key]' })
 	rows.setAttribute('aria-busy', 'false')
 	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses`
 	$('#richlist-more').hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
@@ -6548,7 +6452,7 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		}
 		richListItems = replace ? result.items : [...richListItems, ...result.items]
 		richListTotal = result.total ?? richListItems.length
-		renderRichList({ live })
+		renderRichList()
 		status.hidden = true
 		paginationStatus.hidden = true
 		paginationStatus.replaceChildren()
@@ -6640,7 +6544,7 @@ const renderAddressProfile = (
 	if (isDemo) logParams.set('demo', '1')
 	const relatedLogs = element('a', 'explorer-link', 'View related logs')
 	relatedLogs.href = `/?${logParams}`
-	actions.append(copyButton(item.address, 'address'), relatedLogs, explorerLink(item.explorer_base_url, 'address', item.address, 'Open in Etherscan ↗'))
+	actions.append(relatedLogs, explorerLink(item.explorer_base_url, 'address', item.address, 'Open in Etherscan ↗'))
 	header.append(identity, actions)
 	setLiveRecord(header, 'identity', { label: item.label, kind: item.kind, address: item.address })
 	const metrics = element('div', 'state-stats address-profile-stats')
@@ -8269,6 +8173,7 @@ const resetSelectedNetworkContext = () => {
 	stateDetailRequestVersion++
 	activeReorgRecovery = undefined
 	activeLog = undefined
+	document.querySelector('.event-detail-drawer')?.remove()
 	pendingCanonicalLog = undefined
 	pendingCanonicalActivityCount = undefined
 	pendingCanonicalAccount = undefined
@@ -8303,9 +8208,7 @@ const resetSelectedNetworkContext = () => {
 	$('#entity-count').textContent = '—'
 	$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system state…'))
 	contractItems = []
-	selectedContractAddress = undefined
 	$('#contract-list').replaceChildren()
-	$('#contract-detail').replaceChildren(element('div', 'state-placeholder', 'Loading system contracts…'))
 	richListItems = []
 	richListTotal = 0
 	$('#richlist-rows').replaceChildren()
@@ -8423,7 +8326,7 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		live: true,
 		...activityRetention,
 	})
-	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && dialog.open)
+	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && document.querySelector('.event-detail-drawer'))
 		await openDetail(activeLog, { live: true })
 	const canonicalDetailRefreshed = contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined ? await restorePendingCanonicalLog() : true
 	const fullyRefreshed = contentRefreshed && canonicalDetailRefreshed
@@ -8451,7 +8354,7 @@ const refreshCanonicalViews = (title: string, detail: string) => {
 		chainId: requiredChainId(),
 		title,
 		detail,
-		logToRefresh: activeLog && dialog.open ? activeLog : undefined,
+		logToRefresh: activeLog && document.querySelector('.event-detail-drawer') ? activeLog : undefined,
 		accountToRefresh: activeAccount && dialog.open ? activeAccount : undefined,
 		accountDialogSnapshot: activeAccount && dialog.open ? captureAccountDialogSnapshot() : undefined,
 		pendingRefresh: false,
@@ -8492,10 +8395,10 @@ const refreshCanonicalViews = (title: string, detail: string) => {
 				if (recovery.pendingRefresh) continue
 				if (!refreshed) return false
 				let detailRefreshed = true
-				if (recovery.logToRefresh && dialog.open) {
+				if (recovery.logToRefresh && document.querySelector('.event-detail-drawer')) {
 					pendingCanonicalLog = recovery.logToRefresh
 					const restored = await restorePendingCanonicalLog()
-					detailRefreshed = restored || !dialog.open || recovery.logToRefresh === undefined
+					detailRefreshed = restored || !document.querySelector('.event-detail-drawer') || recovery.logToRefresh === undefined
 				}
 				if (recovery.accountToRefresh && dialog.open) {
 					pendingCanonicalAccount = recovery.accountToRefresh
@@ -8811,7 +8714,6 @@ const hydrateVisibleRoute = () => {
 		historyToBlock.value = pageUrl.searchParams.get('toBlock') ?? ''
 	}
 	if (isContracts) {
-		selectedContractAddress = pageUrl.searchParams.get('contract') ?? undefined
 		if (contractItems.length > 0) renderContracts()
 	}
 }
@@ -8840,6 +8742,7 @@ const navigateInPlace = async (url: URL, replace = false) => {
 	if (url.pathname === location.pathname && url.search === location.search) return
 	const navigation = ++navigationGeneration
 	stashOperationsRoute()
+	closeEventDrawer()
 	invalidateRouteRequests()
 	if (replace) history.replaceState(null, '', url)
 	else history.pushState(null, '', url)
@@ -8924,6 +8827,7 @@ document.addEventListener('click', (event) => {
 window.addEventListener('popstate', () => {
 	const navigation = ++navigationGeneration
 	stashOperationsRoute()
+	closeEventDrawer({ clearUrl: false })
 	invalidateRouteRequests()
 	pageUrl = new URL(location.href)
 	if (dialog.open) {

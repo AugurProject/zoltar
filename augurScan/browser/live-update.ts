@@ -347,6 +347,27 @@ export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>
 	}`
 }
 
+export const decodedActionLabel = (
+	actionSummary: string | null,
+	toAddress: string | null,
+	contractLabel: string | null,
+	emitterAddress?: string | null,
+	deployedContractAddress?: string | null,
+): string => {
+	if (toAddress !== null) return actionSummary ?? 'No decoded calldata'
+	const verifiedLabel =
+		contractLabel && emitterAddress && deployedContractAddress && emitterAddress.toLowerCase() === deployedContractAddress.toLowerCase()
+			? contractLabel
+			: undefined
+	return `Deploy ${verifiedLabel ?? 'contract'}`
+}
+
+export const urlWithoutLogDetail = (url: URL): URL => {
+	const next = new URL(url)
+	next.searchParams.delete('log')
+	return next
+}
+
 type OperationsDetailKind = 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading' | 'vault'
 
 const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string>> = {
