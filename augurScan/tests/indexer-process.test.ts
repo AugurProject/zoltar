@@ -29,7 +29,7 @@ runIndexerProcess({
 		{ cwd: projectRoot, stdout: 'pipe', stderr: 'pipe' },
 	)
 
-	await Bun.sleep(150)
+	await Bun.sleep(500)
 	const earlyExit = await Promise.race([child.exited.then((code) => ({ exited: true, code })), Bun.sleep(50).then(() => ({ exited: false as const }))])
 	expect(earlyExit).toEqual({ exited: false })
 
