@@ -76,6 +76,10 @@ describe('chaos dashboard server', () => {
 		const sharedStyles = await dashboardFetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
+		const favicon = await dashboardFetch(new URL('/favicon.svg', server.url))
+		expect(favicon.status).toBe(200)
+		expect(favicon.headers.get('content-type')).toBe('image/svg+xml')
+		expect(await favicon.text()).toBe(await Bun.file(new URL('../../src/dashboard/favicon.svg', import.meta.url)).text())
 		expect((await dashboardFetch(new URL('/unknown', server.url))).status).toBe(404)
 	})
 

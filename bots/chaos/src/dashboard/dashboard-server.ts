@@ -1012,7 +1012,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
 					}
 				}
-				if (url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, '..', '..', '..', '..', 'ui', 'coreShared', 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
+				if (url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
 				if (url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			}
 			if (request.method === 'PUT') {

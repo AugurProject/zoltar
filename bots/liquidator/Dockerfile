@@ -36,7 +36,6 @@ COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/
 COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts
 COPY bots/liquidator/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
 COPY bots/liquidator/src/ ./bots/liquidator/src/
-COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg
 RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
 	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state
 

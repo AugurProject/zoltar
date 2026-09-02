@@ -83,7 +83,7 @@ for (const appId of UI_APP_IDS) {
 	const productionIndexPath = path.join(distRootPath, 'index.html')
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
-	const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
+	const productionFaviconPaths = [path.join(distRootPath, 'favicon.svg')]
 	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast trading'].filter(title => title !== expectedTitle)
@@ -153,6 +153,10 @@ for (const appId of UI_APP_IDS) {
 		for (const response of responses) {
 			expect(response.status).toBe(200)
 		}
+		const favicon = await fetch(`${baseUrl}/${appId}/favicon.svg`)
+		expect(favicon.status).toBe(200)
+		expect(favicon.headers.get('content-type')).toContain('image/svg+xml')
+		expect(await favicon.text()).toBe(await fs.readFile(appPaths.faviconSvg, 'utf8'))
 	})
 
 	test(`building ${appId} does not remove the other app's production output`, async () => {

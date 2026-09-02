@@ -45,12 +45,19 @@ for (const appId of UI_APP_IDS) {
 		expect(paths.appIndexHtml).toBe(path.join(paths.appRoot, 'index.html'))
 		expect(paths.appEntrypoint).toBe(path.join(paths.appSourceRoot, 'index.ts'))
 		expect(paths.workerEntrypoint).toBe(path.join(paths.appSourceRoot, 'simulation', 'tevmWorker.ts'))
+		expect(paths.faviconSvg).toBe(path.join(paths.appRoot, 'favicon.svg'))
 
-		for (const existingPath of [paths.appIndexHtml, paths.appEntrypoint, paths.workerEntrypoint, paths.faviconIco, paths.faviconSvg, paths.coreSharedCssRoot, paths.sharedSourceRoot]) {
+		for (const existingPath of [paths.appIndexHtml, paths.appEntrypoint, paths.workerEntrypoint, paths.faviconSvg, paths.coreSharedCssRoot, paths.sharedSourceRoot]) {
 			expect(fs.existsSync(existingPath), `expected ${existingPath} to exist`).toBe(true)
 		}
 	})
 }
+
+test('each UI and bot application owns a distinct favicon', () => {
+	const faviconPaths = [...UI_APP_IDS.map(appId => getUiAppPaths(appId).faviconSvg), ...['chaos', 'liquidator', 'open-oracle-arbitrager'].map(botId => path.join(repositoryRoot, 'bots', botId, 'src', 'dashboard', 'favicon.svg'))]
+	const favicons = faviconPaths.map(faviconPath => fs.readFileSync(faviconPath, 'utf8'))
+	expect(new Set(favicons).size).toBe(faviconPaths.length)
+})
 
 test('getUiCoreSharedPaths resolves the repository root from ui/coreShared/build', () => {
 	const paths = getUiCoreSharedPaths()

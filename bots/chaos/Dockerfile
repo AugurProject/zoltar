@@ -46,7 +46,6 @@ COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts
 COPY bots/chaos/scripts/docker-entrypoint.sh ./bots/chaos/scripts/docker-entrypoint.sh
 COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts
 COPY bots/chaos/src/ ./bots/chaos/src/
-COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg
 RUN chmod 0755 bots/chaos/scripts/docker-entrypoint.sh \
 	&& install -d -m 0700 -o bun -g bun bots/chaos/.state \
 	&& install -d -m 0700 -o bun -g bun bots/chaos/.state/process-locks

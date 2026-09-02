@@ -49,8 +49,6 @@ COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
-COPY ./ui/coreShared/favicon.ico /source/ui/coreShared/favicon.ico
-COPY ./ui/coreShared/favicon.svg /source/ui/coreShared/favicon.svg
 RUN bun ./scripts/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
@@ -63,6 +61,7 @@ RUN bun ./scripts/install-frozen.mts ui/zoltar
 RUN bun ./ui/coreShared/build/vendor.mts zoltar
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
+COPY ./ui/zoltar/favicon.svg /source/ui/zoltar/favicon.svg
 COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
 RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
 
@@ -89,6 +88,7 @@ RUN bun ./scripts/install-frozen.mts ui/statoblast
 RUN bun ./ui/coreShared/build/vendor.mts statoblast
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
+COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
 RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
 
@@ -113,6 +113,7 @@ COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
 RUN bun ./scripts/install-frozen.mts ui/trading
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/trading/index.html /source/ui/trading/index.html
+COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
@@ -155,17 +156,14 @@ COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 # Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
 COPY --from=builder /source/ui/zoltar/dist/index.html /export/zoltar/index.html
-COPY --from=builder /source/ui/zoltar/dist/favicon.ico /export/zoltar/favicon.ico
 COPY --from=builder /source/ui/zoltar/dist/favicon.svg /export/zoltar/favicon.svg
 COPY --from=builder /source/ui/zoltar/dist/assets/ /export/zoltar/assets/
 COPY --from=builder /source/ui/zoltar/dist/css/ /export/zoltar/css/
 COPY --from=builder /source/ui/statoblast/dist/index.html /export/statoblast/index.html
-COPY --from=builder /source/ui/statoblast/dist/favicon.ico /export/statoblast/favicon.ico
 COPY --from=builder /source/ui/statoblast/dist/favicon.svg /export/statoblast/favicon.svg
 COPY --from=builder /source/ui/statoblast/dist/assets/ /export/statoblast/assets/
 COPY --from=builder /source/ui/statoblast/dist/css/ /export/statoblast/css/
 COPY --from=builder /source/ui/trading/dist/index.html /export/trading/index.html
-COPY --from=builder /source/ui/trading/dist/favicon.ico /export/trading/favicon.ico
 COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.svg
 COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
 COPY --from=builder /source/ui/trading/dist/assets/ /export/trading/assets/

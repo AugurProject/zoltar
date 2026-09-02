@@ -18,9 +18,6 @@
 !solidity/tsconfig-compile.json
 !solidity/contracts/**
 !solidity/ts/**
-!ui/
-!ui/coreShared/
-!ui/coreShared/favicon.svg
 !bots/shared/package.json
 !bots/shared/bun.lock
 !bots/shared/src/**

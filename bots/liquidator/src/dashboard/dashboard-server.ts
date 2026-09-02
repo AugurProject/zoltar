@@ -304,7 +304,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/favicon.svg') {
-				return new Response(Bun.file(join(import.meta.dir, '..', '..', '..', '..', 'ui', 'coreShared', 'favicon.svg')), { headers: headers('image/svg+xml') })
+				return new Response(Bun.file(join(import.meta.dir, 'favicon.svg')), { headers: headers('image/svg+xml') })
 			}
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') {
 				return new Response(undefined, { headers: headers('image/x-icon'), status: 204 })

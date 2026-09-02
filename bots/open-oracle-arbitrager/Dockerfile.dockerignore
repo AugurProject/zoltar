@@ -10,9 +10,6 @@
 !shared/tsconfig.json
 !shared/ts/
 !shared/ts/**
-!ui/
-!ui/coreShared/
-!ui/coreShared/favicon.svg
 !bots/
 !bots/open-oracle-arbitrager/
 !bots/open-oracle-arbitrager/package.json

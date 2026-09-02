@@ -48,8 +48,9 @@ describe('Docker entrypoint', () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
 		expect(source).toContain('cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
-		expect(source).toContain('COPY ui/coreShared/favicon.svg ./ui/coreShared/favicon.svg')
-		expect(await readFile(dockerignore, 'utf8')).toContain('!ui/coreShared/favicon.svg')
+		expect(source).not.toContain('ui/coreShared/favicon')
+		expect(source).toContain('COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/')
+		expect(await readFile(dockerignore, 'utf8')).not.toContain('ui/coreShared/favicon')
 	})
 
 	test('has a Linux-compatible shell shebang', async () => {
