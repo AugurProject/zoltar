@@ -38,6 +38,7 @@ import {
 	type ContractRegistrySection,
 	canonicalPageLimit,
 	canReuseNetworkStatusPresentation,
+	captureDisclosureState,
 	classifyLiveRecords,
 	collectCanonicalPages,
 	collectCursorCollections,
@@ -81,12 +82,14 @@ import {
 	operationsRouteFreshness,
 	paginatedSnapshotWasReplaced,
 	paginationRequestAllowed,
+	placeActivityDetailDrawer,
 	queuedPaginationPresentation,
 	reconcilePaginatedTotal,
 	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
 	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
+	restoreDisclosureState,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
 	runWithForegroundReservation,
@@ -98,6 +101,7 @@ import {
 	timelineOccurrenceFields,
 	transactionRetryMode,
 	urlWithoutLogDetail,
+	visibleActivityLogCount,
 } from './live-update.ts'
 
 declare global {
@@ -4892,7 +4896,12 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
 		)
 			return false
-		if (!append) feed.replaceChildren()
+		const activeDrawer = append ? undefined : document.querySelector<HTMLElement>('.event-detail-drawer')
+		const activeDrawerContext = activeDrawer?.contains(document.activeElement) ? captureDetailContext() : undefined
+		if (!append) {
+			activeDrawer?.remove()
+			feed.replaceChildren()
+		}
 		const refreshedKeys = new Set(
 			append
 				? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap((row) => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
@@ -4906,18 +4915,28 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			feed.append(row)
 		}
 		applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
+		const drawerReanchored = activeDrawer ? placeEventDrawer(activeDrawer, { allowOutsideShellFallback: false }) : false
+		if (activeDrawer && !drawerReanchored) {
+			detailContextVersion++
+			detailRequestVersion++
+			activeLog = undefined
+			pendingCanonicalLog = undefined
+			if (activeReorgRecovery !== undefined) activeReorgRecovery.logToRefresh = undefined
+			clearDetailUrl()
+		}
 		if (anchorKey !== undefined && anchorTop !== undefined) {
 			const currentAnchor = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find((row) => row.dataset.liveKey === anchorKey)
 			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 		}
+		if (drawerReanchored && activeDrawerContext) restoreDetailContext(activeDrawerContext)
 		nextCursor = payload.nextCursor
 		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
 		paginationStatus.hidden = true
 		paginationStatus.replaceChildren()
-		feedState.hidden = feed.childElementCount > 0
-		if (feed.childElementCount === 0) feedState.textContent = 'No project logs match these filters yet.'
-		$('#activity-summary').textContent =
-			feed.childElementCount === 0 ? 'No logs shown' : `${feed.childElementCount} log${feed.childElementCount === 1 ? '' : 's'} shown`
+		const visibleCount = visibleActivityLogCount(feed)
+		feedState.hidden = visibleCount > 0
+		if (visibleCount === 0) feedState.textContent = 'No project logs match these filters yet.'
+		$('#activity-summary').textContent = visibleCount === 0 ? 'No logs shown' : `${visibleCount} log${visibleCount === 1 ? '' : 's'} shown`
 		return true
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') return false
@@ -4930,14 +4949,16 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
 		const retryAction = () => (canonicalRefreshRequired ? requestRouteRefresh(1, true) : loadLogs({ append }))
 		if (append) {
-			feedState.hidden = feed.childElementCount > 0
-			$('#activity-summary').textContent = `${feed.childElementCount} logs shown · could not load more`
+			const visibleCount = visibleActivityLogCount(feed)
+			feedState.hidden = visibleCount > 0
+			$('#activity-summary').textContent = `${visibleCount} logs shown · could not load more`
 			renderRetryStatus(paginationStatus, `Could not load more activity; showing indexed logs: ${errorMessage(error)}`, retryAction)
 			moreButton.hidden = true
 		} else {
 			feedState.hidden = false
 			const message = element('span', '', hadRows ? `Showing last known activity: ${errorMessage(error)}` : `Activity unavailable: ${errorMessage(error)}`)
-			$('#activity-summary').textContent = hadRows ? `${feed.childElementCount} logs shown · refresh failed` : ''
+			const visibleCount = visibleActivityLogCount(feed)
+			$('#activity-summary').textContent = hadRows ? `${visibleCount} logs shown · refresh failed` : ''
 			const retry = element('button', 'state-retry', 'Retry')
 			retry.type = 'button'
 			retry.addEventListener('click', retryAction)
@@ -5211,6 +5232,25 @@ const restoreDetailContext = (snapshot: DetailContextSnapshot) => {
 	nextFocus.focus({ preventScroll: true })
 }
 
+const placeEventDrawer = (drawer: HTMLElement, { allowOutsideShellFallback = true } = {}): boolean => {
+	const feedShell = feed.closest<HTMLElement>('.feed-shell')
+	if (feedShell) drawer.style.width = `${feedShell.clientWidth}px`
+	else drawer.style.removeProperty('width')
+	if (placeActivityDetailDrawer(feed, drawer)) return true
+	if (allowOutsideShellFallback && feedShell && drawer.previousElementSibling !== feedShell) {
+		feedShell.after(drawer)
+		return true
+	}
+	return false
+}
+
+const collapsibleDetailCard = (title: string, disclosureKey: string, ...content: Node[]): HTMLDetailsElement => {
+	const card = element('details', 'detail-card detail-disclosure wide')
+	card.dataset.disclosureKey = disclosureKey
+	card.append(element('summary', '', title), ...content)
+	return card
+}
+
 const detailContextIsUnchanged = (snapshot: DetailContextSnapshot): boolean => {
 	if (Math.abs(window.scrollY - snapshot.scrollTop) > 1) return false
 	if (snapshot.focusIndex < 0) return true
@@ -5258,8 +5298,7 @@ const performOpenDetail = async (
 		drawer.append(header, canonicalStatus, drawerContent)
 	}
 	drawer.dataset.triggerKey = logKeyFor(log)
-	const feedShell = feed.closest<HTMLElement>('.feed-shell')
-	if (feedShell && drawer.previousElementSibling !== feedShell) feedShell.after(drawer)
+	placeEventDrawer(drawer)
 	syncCanonicalDialogStatus()
 	drawerContent.setAttribute('aria-busy', String(refreshPresentation({ live }).busy))
 	if (!live) {
@@ -5283,6 +5322,7 @@ const performOpenDetail = async (
 			return false
 		activeLog = detail
 		const deployedContractAddress = typeof detail.receipt['contractAddress'] === 'string' ? detail.receipt['contractAddress'] : undefined
+		const disclosureState = live ? captureDisclosureState(drawerContent) : {}
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Event signature', detail.event_signature ?? 'No matching ABI'),
@@ -5300,19 +5340,20 @@ const performOpenDetail = async (
 		argumentsCard.append(element('p', 'eyebrow', 'Decoded arguments'))
 		argumentsCard.append(decodedArgumentsTable(detail.argument_schema, detail.arguments, detail.display_arguments, detail.chain_id))
 		grid.append(argumentsCard)
-		const action = element('div', 'detail-card wide')
-		action.append(element('p', 'eyebrow', 'Transaction calldata and decoded action'))
+		const actionContent: Node[] = []
 		if (detail.action_arguments && Object.keys(detail.action_arguments).length > 0)
-			action.append(decodedArgumentsTable(detail.action_argument_schema, detail.action_arguments, detail.action_display_arguments, detail.chain_id))
-		action.append(
+			actionContent.push(decodedArgumentsTable(detail.action_argument_schema, detail.action_arguments, detail.action_display_arguments, detail.chain_id))
+		actionContent.push(
 			element('pre', 'raw', JSON.stringify({ input: detail.input, function: detail.function_signature, arguments: detail.action_arguments }, null, 2)),
 		)
-		grid.append(action)
-		const raw = element('div', 'detail-card wide')
-		raw.append(element('p', 'eyebrow', 'Complete raw transaction receipt'), element('pre', 'raw', JSON.stringify(detail.receipt, null, 2)))
-		grid.append(raw)
+		grid.append(collapsibleDetailCard('Transaction calldata and decoded action', 'transaction-action', ...actionContent))
+		grid.append(
+			collapsibleDetailCard('Complete raw transaction receipt', 'transaction-receipt', element('pre', 'raw', JSON.stringify(detail.receipt, null, 2))),
+		)
+		restoreDisclosureState(grid, disclosureState)
 		const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext() : undefined
 		drawerContent.replaceChildren(grid)
+		placeEventDrawer(drawer)
 		if (contextToRestore) restoreDetailContext(contextToRestore)
 		if (canonicalRecovery) pendingCanonicalLog = undefined
 		return true
@@ -7961,6 +8002,7 @@ const setStateTab = (type: StateTab, restoredEntityKey?: string) => {
 }
 
 const resetActivityFilterContext = () => {
+	if (document.querySelector('.event-detail-drawer')) closeEventDrawer()
 	feed.replaceChildren()
 	feed.setAttribute('aria-busy', 'true')
 	nextCursor = undefined
@@ -8051,6 +8093,10 @@ dialog.addEventListener('close', () => {
 	}
 	preservePendingOnDialogClose = false
 	clearDetailUrl()
+})
+window.addEventListener('resize', () => {
+	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	if (drawer) placeEventDrawer(drawer)
 })
 const isStateTab = (value: string | undefined | null): value is StateTab =>
 	value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
