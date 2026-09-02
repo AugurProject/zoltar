@@ -13,7 +13,7 @@ import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, type CoreDeployment } from '../protocol/deployment.js'
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.js'
 import { shortAddress } from '../lib/format.js'
-import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -54,8 +54,9 @@ function renderNotFoundRoute() {
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
 export async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
-	const core = coreDeployments[0]
-	if (core === undefined) throw new Error('No canonical network deployment is available')
+	const activeChainId = getActiveNetworkProfile().chain.id
+	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
+	if (core === undefined) throw new Error('No canonical deployment is available for the active network')
 	const plan = getTradingDeploymentPlan(core, 30)
 	const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
 	const client = createPublicClient(configuration)
@@ -73,7 +74,7 @@ export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, 
 	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
 	if (networkName !== undefined) return networkName
 	if (liveDeploymentStatus === 'unavailable') return appCopy.networkUnavailable
-	return 'Checking deployment'
+	return appCopy.checkingDeployment
 }
 
 function networkToneClass(liveDeploymentStatus: LiveDeploymentStatus) {
@@ -83,8 +84,8 @@ function networkToneClass(liveDeploymentStatus: LiveDeploymentStatus) {
 }
 
 function deploymentWalletLabel(state: DeploymentWalletState) {
-	if (state.connecting) return 'Connecting wallet…'
-	if (state.account === undefined) return 'Connect wallet'
+	if (state.connecting) return appCopy.connectingWallet
+	if (state.account === undefined) return appCopy.connectWallet
 	return <TradingAddressValue value={state.account} />
 }
 
@@ -145,7 +146,6 @@ export function App({
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
-		if (nextLocationKey === previousLocationKey) return
 		activeEnvironmentLocationRef.current = nextLocationKey
 		setLiveDeploymentStatus('loading')
 		setLiveConfiguration(undefined)
@@ -260,7 +260,7 @@ export function App({
 				simulationController={simulationController}
 				onEnvironmentChanged={refreshActiveEnvironment}
 				onRefresh={async () => window.location.reload()}
-				renderHeader={simulationBanner => (
+				renderHeader={(simulationBanner, settingsMenu) => (
 					<div class='site-chrome'>
 						{simulationBanner}
 						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
@@ -290,6 +290,7 @@ export function App({
 								</a>
 							</nav>
 							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
+								{settingsMenu}
 								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
 									<span />
 									{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}

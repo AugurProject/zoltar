@@ -107,6 +107,24 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(pageText).not.toContain('≈ 50.00 ETH')
 	})
 
+	test('derives displayed minting headroom from the configured UI price', async () => {
+		await renderLoadedPool({
+			repPerEthPrice: 1n * 10n ** 18n,
+			uiPriceOracle: 'uniswap',
+			securityPools: [
+				createSelectedPool({
+					lastOraclePrice: 5n * 10n ** 18n,
+					statoblastSecurityMultiplierBps: 20_000n,
+					totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
+				}),
+			],
+		})
+
+		const pageText = (document.body.textContent ?? '').replace(/\s+/g, ' ')
+		expect(pageText).toContain('≈ 50.00 ETH')
+		expect(pageText).not.toContain('≈ 10.00 ETH')
+	})
+
 	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
 		const renderOffMainnetOracleView = async (selectedPoolView: 'price-oracle' | 'staged-operations') =>
 			renderIntoDocument(

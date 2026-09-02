@@ -50,6 +50,7 @@ import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
 export function TradingSection({
 	accountState,
+	calculationPriceConfigured = false,
 	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
@@ -59,6 +60,7 @@ export function TradingSection({
 	onRedeemShares,
 	onTradingFormChange,
 	poolState,
+	repPerEthPrice,
 	tradingDetails,
 	selectedPool,
 	tradingActiveAction,
@@ -106,7 +108,8 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, selectedPool?.lastOraclePrice, selectedPool?.statoblastSecurityMultiplierBps)
+	const calculationRepPerEthPrice = calculationPriceConfigured ? repPerEthPrice : (repPerEthPrice ?? selectedPool?.lastOraclePrice)
+	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, calculationRepPerEthPrice, selectedPool?.statoblastSecurityMultiplierBps)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,

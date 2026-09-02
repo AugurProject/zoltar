@@ -5,7 +5,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import type { SimulationController } from '../../simulation/controller.js'
 
-import { fireEvent, within } from '../testUtils/queries'
+import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
@@ -101,6 +101,23 @@ describe('AppHeaderShell', () => {
 		} finally {
 			await rendered.cleanup()
 			appContent.remove()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('moves focus into settings and restores it when Escape closes the dialog', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
+		const rendered = await renderIntoDocument(<AppHeaderShell overview={<div>Overview</div>} simulationController={undefined} onRefresh={async () => undefined} />)
+		try {
+			const settingsButton = within(rendered.container).getByRole('button', { name: 'Settings' })
+			fireEvent.click(settingsButton)
+			const networkSelect = within(rendered.container).getByRole('combobox', { name: 'RPC network' })
+			await waitFor(() => expect(document.activeElement).toBe(networkSelect))
+			fireEvent.keyDown(document, { key: 'Escape' })
+			await waitFor(() => expect(within(rendered.container).queryByRole('dialog')).toBeNull())
+			expect(document.activeElement).toBe(settingsButton)
+		} finally {
+			await rendered.cleanup()
 			domEnvironment.cleanup()
 		}
 	})

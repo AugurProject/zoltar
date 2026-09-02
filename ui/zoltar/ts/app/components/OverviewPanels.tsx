@@ -63,6 +63,7 @@ export function OverviewPanels({
 	repPerEthFailure,
 	repPerEthPrice,
 	repPerEthSource,
+	repPerEthSourceLabel,
 	repPerEthSourceUrl,
 	repUsdcFailure,
 	repUsdcPrice,
@@ -213,7 +214,7 @@ export function OverviewPanels({
 							label={
 								<span className='metric-label-with-action'>
 									<span>
-										{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+										{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 									</span>
 									{isRepPricingUnavailable ? undefined : (
 										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>

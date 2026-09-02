@@ -518,6 +518,32 @@ void describe('TradingSection', () => {
 		expect(mintedAmount).toBe('1.25')
 	})
 
+	void test('uses the configured UI price for mint capacity and maximum mint amount', async () => {
+		let mintedAmount: string | undefined
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					accountState: createAccountState({ ethBalanceAttoEth: 10n * 10n ** 18n }),
+					onTradingFormChange: ({ completeSetAmount }) => {
+						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
+					},
+					repPerEthPrice: 10n * 10n ** 18n,
+					calculationPriceConfigured: true,
+					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 10n * 10n ** 18n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => {
+			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
+			fireEvent.click(maxButton)
+		})
+		expect(mintedAmount).toBe('0.5')
+	})
+
 	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup

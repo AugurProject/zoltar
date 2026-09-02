@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RPC_URL, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl } from '../lib/rpcConfig.js'
+import { DEFAULT_RPC_URL, readNetworkRpcUrls, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl, saveNetworkRpcUrl } from '../lib/rpcConfig.js'
 
 describe('rpc config', () => {
 	test('prefers explicit overrides over every other source', () => {
@@ -157,6 +157,25 @@ describe('rpc config', () => {
 		).toBe('https://storage.example')
 	})
 
+	test('stores and resolves separate RPC URLs for each network', () => {
+		const values = new Map<string, string>()
+		const storage = {
+			getItem: (key: string) => values.get(key) ?? null,
+			setItem: (key: string, value: string) => values.set(key, value),
+		}
+		saveNetworkRpcUrl('mainnet', 'https://mainnet.example', storage)
+		saveNetworkRpcUrl('sepolia', 'https://sepolia.example', storage)
+
+		expect(readNetworkRpcUrls(storage)).toEqual({ mainnet: 'https://mainnet.example', sepolia: 'https://sepolia.example' })
+		expect(resolveConfiguredRpcUrl({ fallbackRpcUrl: 'https://fallback.example', location: { search: '' }, networkId: 'mainnet', storage })).toBe('https://mainnet.example')
+		expect(resolveConfiguredRpcUrl({ fallbackRpcUrl: 'https://fallback.example', location: { search: '' }, networkId: 'sepolia', storage })).toBe('https://sepolia.example')
+	})
+
+	test('does not apply a legacy global RPC URL to a network-specific lookup', () => {
+		const storage = { getItem: (key: string) => (key === 'zoltar.rpcUrl' ? 'https://legacy.example' : null) }
+		expect(resolveConfiguredRpcUrl({ fallbackRpcUrl: 'https://mainnet-default.example', location: { search: '' }, networkId: 'mainnet', storage })).toBe('https://mainnet-default.example')
+	})
+
 	test('ignores storage access failures and falls back to the next source', () => {
 		expect(
 			resolveConfiguredRpcUrl({
@@ -166,7 +185,7 @@ describe('rpc config', () => {
 				},
 				storage: {
 					getItem: () => {
-						throw new Error('SecurityError')
+						throw new DOMException('Storage unavailable', 'SecurityError')
 					},
 				},
 			}),
@@ -188,6 +207,22 @@ describe('rpc config', () => {
 					location: { search: '' },
 				}),
 			).toBe('https://fallback.example')
+		} finally {
+			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+		}
+	})
+
+	test('propagates unexpected failures while acquiring global localStorage', () => {
+		const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		try {
+			Object.defineProperty(globalThis, 'localStorage', {
+				configurable: true,
+				get: () => {
+					throw new DOMException('Unexpected storage failure', 'InvalidStateError')
+				},
+			})
+			expect(() => resolveConfiguredRpcUrl({ fallbackRpcUrl: 'https://fallback.example', location: { search: '' } })).toThrow('Unexpected storage failure')
 		} finally {
 			if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
 			else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)

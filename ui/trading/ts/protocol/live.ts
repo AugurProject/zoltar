@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, getAddress, http, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { createWalletClient, custom, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import { ReputationToken_ReputationToken, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
@@ -74,9 +74,8 @@ export function settlementAvailability(market: MarketLifecycle, balances: Pick<L
 }
 
 export function createTradingPublicClient(configuration: DeploymentConfiguration) {
-	const backend = getActiveBackend()
-	if (backend.id === 'simulation') return backend.createReadClient()
-	return createPublicClient({ transport: http(configuration.rpcUrl) })
+	void configuration
+	return getActiveBackend().createReadClient()
 }
 
 export function createTradingWalletClient(provider: InjectedEthereum, account: Address) {

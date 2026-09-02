@@ -127,6 +127,7 @@ export function SecurityPoolWorkflowSection({
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	uiPriceOracle,
 	reporting,
 	selectedPoolView,
 	securityPoolOverviewActiveAction,
@@ -344,10 +345,11 @@ export function SecurityPoolWorkflowSection({
 		securityPoolOverviewResult,
 	})
 	const loadedSelectedPool = effectiveSelectedPool
-	const selectedPoolSummaryPool = buildSelectedPoolSummaryPool({
+	const selectedPoolSummaryPoolBase = buildSelectedPoolSummaryPool({
 		forkAuctionDetails: currentForkAuctionDetails,
 		selectedPool: loadedSelectedPool,
 	})
+	const selectedPoolSummaryPool = selectedPoolSummaryPoolBase
 	const selectedPoolParentPool = selectedPoolSummaryPool === undefined || selectedPoolSummaryPool.parent === zeroAddress ? undefined : securityPools.find(pool => sameAddress(pool.securityPoolAddress, selectedPoolSummaryPool.parent))
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
@@ -430,11 +432,12 @@ export function SecurityPoolWorkflowSection({
 						{marketDetails === undefined ? null : <Question className='selected-pool-hero-question' question={marketDetails} variant='preview' showTitle={false} />}
 					</div>
 					<SecurityPoolSummaryMetrics
+						calculationPriceConfigured={uiPriceOracle !== undefined}
+						calculationRepPerEthPrice={repPerEthPrice}
 						className='selected-pool-context-grid'
 						currentTimestamp={currentTimestamp}
 						pool={{
 							...selectedPoolSummaryPool,
-							lastOraclePrice: currentPoolOraclePrice ?? selectedPoolSummaryPool.lastOraclePrice,
 							lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
 						}}
 						showTotalBacking
@@ -460,7 +463,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolSummaryContent = (
 			<div className='selected-pool-context-summary'>
 				<div className='selected-pool-context-overview'>
-					<SecurityPoolSummaryMetrics metricVariant='context' pool={selectedPoolSummaryPool} showTotalBacking>
+					<SecurityPoolSummaryMetrics calculationPriceConfigured={uiPriceOracle !== undefined} calculationRepPerEthPrice={repPerEthPrice} metricVariant='context' pool={selectedPoolSummaryPool} showTotalBacking>
 						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
 							<MetricField label={securityPoolCopy.parentPool}>
 								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
@@ -818,7 +821,7 @@ export function SecurityPoolWorkflowSection({
 									/>
 								) : undefined}
 
-								{view === 'trading' ? <TradingSection {...trading} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} /> : undefined}
+								{view === 'trading' ? <TradingSection {...trading} calculationPriceConfigured={uiPriceOracle !== undefined} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} /> : undefined}
 
 								{view === 'reporting' ? (
 									<ReportingSection
@@ -965,6 +968,7 @@ export function SecurityPoolWorkflowSection({
 				repPerEthPrice={repPerEthPrice}
 				repPerEthSource={repPerEthSource}
 				repPerEthSourceUrl={repPerEthSourceUrl}
+				uiPriceOracle={uiPriceOracle}
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolLiquidationError={securityPoolLiquidationError}
