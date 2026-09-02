@@ -58,6 +58,8 @@ describe('chaos Docker packaging', () => {
 		expect(source).toContain('COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts')
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
 		expect(ignoreSource).toContain('!bots/chaos/scripts/validate-container-paths.mts')
+		expect(ignoreSource).toContain('!solidity/tsconfig.json')
+		expect(ignoreSource).toContain('!ui/coreShared/favicon.svg')
 		expect(source).toContain('USER bun')
 		expect(source).toContain('RUN bun ./scripts/check-runtime.mts')
 		expect(await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')).toContain("import { main } from '../src/cli/run.ts'")

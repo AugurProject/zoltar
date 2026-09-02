@@ -119,7 +119,7 @@ const deployGenesisUniswapSeeder: OperationDefinition = {
 			postconditions: ['The deterministic, stateless Uniswap V3 seeding helper has deployed code'],
 			risk: 'medium',
 			snapshot,
-			steps: [deploymentStep('deploy-genesis-uniswap-seeder', 'Deploy Uniswap V3 seeding helper', CANONICAL_PROXY_DEPLOYER, deployment.data, [])],
+			steps: [deploymentStep('deploy-genesis-uniswap-seeder', 'Deploy Uniswap V3 seeding helper', CANONICAL_PROXY_DEPLOYER, deployment.data, [{ kind: 'receipt-success' }])],
 		})
 	},
 	classification: 'selectable',
@@ -151,7 +151,7 @@ const createGenesisUniswapPool: OperationDefinition = {
 			postconditions: ['The configured Uniswap V3 factory returns the canonical genesis REP/WETH fee-tier pool'],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: uniswapV3FactoryAbi, args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE], evidence: [], functionName: 'createPool', id: 'create-genesis-uniswap-pool', label: 'Create REP/WETH pool', to: uniswapFactory, walletAssetDebits: [] })],
+			steps: [encodeStep({ abi: uniswapV3FactoryAbi, args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE], functionName: 'createPool', id: 'create-genesis-uniswap-pool', label: 'Create REP/WETH pool', to: uniswapFactory, walletAssetDebits: [] })],
 		})
 	},
 	classification: 'selectable',
@@ -178,7 +178,7 @@ const initializeGenesisUniswapPool: OperationDefinition = {
 			postconditions: ['The genesis REP/WETH pool has a 1:1 initial sqrt price'],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], evidence: [], functionName: 'initialize', id: 'initialize-genesis-uniswap-pool', label: 'Initialize REP/WETH pool', to: pool, walletAssetDebits: [] })],
+			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-genesis-uniswap-pool', label: 'Initialize REP/WETH pool', to: pool, walletAssetDebits: [] })],
 		})
 	},
 	classification: 'selectable',
@@ -222,7 +222,7 @@ const seedGenesisUniswapPool: OperationDefinition = {
 			encodeStep({
 				abi: genesisUniswapSeederAbi,
 				args: [pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
-				evidence: [],
+				evidence: [{ kind: 'receipt-success' }],
 				functionName: 'seed',
 				id: 'seed-genesis-uniswap-pool',
 				label: 'Seed REP/WETH liquidity',
