@@ -6,6 +6,7 @@ import {
 	ChainConfigurationError,
 	ChainContinuityError,
 	commitCanonicalRead,
+	commitSparseCanonicalBatch,
 	confirmCanonicalBlock,
 	contractDeploymentCandidateFrom,
 	contractDeploymentScanDue,
@@ -15,6 +16,7 @@ import {
 	deploymentReadBudget,
 	findEarliestAvailableLogProvider,
 	findEarliestAvailableStateBlock,
+	findSparseCanonicalAncestor,
 	indexerLogSources,
 	indexerOperationFailureReason,
 	indexerProgressMessage,
@@ -1004,13 +1006,11 @@ class NetworkIndexer {
 			this.#network.startBlock,
 		)
 		if (replayStart === undefined) return
-		const ancestor = manifestReplayAncestor(replayStart, this.#network.startBlock)
-		const ancestorHash = ancestor < 0n ? undefined : await this.#database.canonicalHash(this.#network.chainId, ancestor, this.#requireLease())
-		if (ancestor >= 0n && ancestorHash === undefined)
-			throw new DatabaseConsistencyError('Manifest backfill ancestor is unavailable', {
-				code: 'manifest-backfill-ancestor-missing',
-				ancestor,
-			})
+		const requestedAncestor = manifestReplayAncestor(replayStart, this.#network.startBlock)
+		const storedAncestor =
+			requestedAncestor < 0n ? undefined : await this.#database.canonicalCheckpointAtOrBefore(this.#network.chainId, requestedAncestor, this.#requireLease())
+		const ancestor = storedAncestor?.number ?? -1n
+		const ancestorHash = storedAncestor?.hash
 		await this.#assertLease()
 		await this.#database.rewind(this.#network.chainId, ancestor, ancestorHash, this.#requireLease(), 'manifest-reset', this.#provenance)
 		this.#indexingStartReported = false
@@ -1026,17 +1026,16 @@ class NetworkIndexer {
 		const remote = await this.#getBlockHeader(checkpoint.number)
 		if (remote.hash === checkpoint.hash) return
 		const floor = reorgSearchFloor(this.#network.startBlock, checkpoint.number, this.#network.confirmationDepth)
-		for (let number = checkpoint.number - 1n; number >= floor; number--) {
-			const [storedHash, block] = await Promise.all([
-				this.#database.canonicalHash(this.#network.chainId, number, this.#requireLease()),
-				this.#getBlockHeader(number),
-			])
-			if (storedHash !== undefined && storedHash === block.hash) {
-				await this.#assertLease()
-				await this.#database.rewind(this.#network.chainId, number, storedHash, this.#requireLease(), 'chain-reorg', this.#provenance)
-				return
-			}
-			if (number === 0n) break
+		const ancestor = await findSparseCanonicalAncestor(
+			checkpoint.number - 1n,
+			floor,
+			(blockNumber) => this.#database.canonicalCheckpointAtOrBefore(this.#network.chainId, blockNumber, this.#requireLease()),
+			async (blockNumber) => (await this.#getBlockHeader(blockNumber)).hash,
+		)
+		if (ancestor !== undefined) {
+			await this.#assertLease()
+			await this.#database.rewind(this.#network.chainId, ancestor.number, ancestor.hash, this.#requireLease(), 'chain-reorg', this.#provenance)
+			return
 		}
 		await this.#assertLease()
 		await this.#database.rewind(this.#network.chainId, -1n, undefined, this.#requireLease(), 'chain-reorg', this.#provenance)
@@ -1115,7 +1114,7 @@ class NetworkIndexer {
 		const observedHead = await this.#client.getBlockNumber()
 		if (!this.#stateBoundaryDiscovered && observedHead >= this.#network.startBlock) await this.#discoverStateStartBlock(observedHead)
 		const checkpoint = await this.#database.checkpoint(this.#network.chainId, this.#requireLease())
-		let nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
+		const nextBlock = checkpoint === undefined ? this.#network.startBlock : checkpoint.number + 1n
 		if (nextBlock > observedHead) {
 			if (checkpoint !== undefined) {
 				await this.#refreshRichListBalances(checkpoint.number, checkpoint.hash)
@@ -1152,20 +1151,13 @@ class NetworkIndexer {
 			readonly toBlock: bigint
 			readonly logs: readonly Log[]
 			readonly endBlockHash?: Hash
+			readonly endBlockHeader?: RpcBlockHeader
 			readonly scanInputs: readonly LogScanInput[]
 			readonly deploymentObservations: readonly ContractDeploymentObservation[]
 		}
-		let headers: readonly RpcBlockHeader[]
 		try {
 			segment = await this.#getNextLogSegment(nextBlock, observedHead, initialContracts)
-			const blockNumbers = Array.from(
-				{ length: bigintToSafeNumber(segment.toBlock - nextBlock + 1n, 'Log segment block count') },
-				(_, index) => nextBlock + BigInt(index),
-			)
-			headers = await mapLimit(blockNumbers, 20, (blockNumber) => this.#getBlockHeader(blockNumber))
-			const endHeader = headers.at(-1)
-			if (endHeader === undefined) throw new Error(`RPC did not return block ${segment.toBlock}`)
-			if (segment.endBlockHash !== undefined && endHeader.hash !== segment.endBlockHash)
+			if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash)
 				throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 		} catch (error) {
 			if (error instanceof ChainContinuityError) return false
@@ -1191,36 +1183,45 @@ class NetworkIndexer {
 		console.info(`[${this.#network.id}] fetched ${segment.logs.length} protocol log${segment.logs.length === 1 ? '' : 's'} for blocks #${nextBlock}-#${end}`)
 		const logsByBlock = new Map<bigint, Log[]>()
 		this.#mergeLogs(logsByBlock, segment.logs)
-		let expectedParentHash = checkpoint?.hash
-		if (expectedParentHash === undefined && requiresParentLookup(nextBlock, this.#network.startBlock)) {
-			expectedParentHash = (await this.#getBlockHeader(nextBlock - 1n)).hash
+		const headerPromises = new Map<bigint, Promise<RpcBlockHeader>>()
+		if (segment.endBlockHeader !== undefined) headerPromises.set(end, Promise.resolve(segment.endBlockHeader))
+		const headerAt = async (blockNumber: bigint): Promise<RpcBlockHeader> => {
+			const existing = headerPromises.get(blockNumber)
+			if (existing !== undefined) return await existing
+			const pending = this.#getBlockHeader(blockNumber)
+			headerPromises.set(blockNumber, pending)
+			return await pending
 		}
-		while (nextBlock <= end && !this.#signal.aborted) {
-			const header = headers[bigintToSafeNumber(nextBlock - batchStart, 'Block header offset')]
-			if (header === undefined) throw new Error(`RPC did not return block ${nextBlock}`)
+		const processedBlocks = new Set<bigint>()
+		const blocksToStore: IndexedBlock[] = []
+		let previousStoredNumber = checkpoint?.number
+		let previousStoredHash = checkpoint?.hash
+		while (!processedBlocks.has(end) && !this.#signal.aborted) {
+			const targetBlock = [...new Set([...logsByBlock.keys(), end])]
+				.filter((blockNumber) => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber))
+				.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0]
+			if (targetBlock === undefined) throw new Error(`Sparse log segment did not retain its end checkpoint at block ${end}`)
+			const header = await headerAt(targetBlock)
+			const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 			try {
 				indexed = await this.#indexBlock(
-					nextBlock,
+					targetBlock,
 					observedHead,
 					contracts,
 					tokenMetadata,
 					expectedParentHash,
 					header,
-					logsByBlock.get(nextBlock) ?? [],
+					logsByBlock.get(targetBlock) ?? [],
 					async (discoveredAddresses, discoveredContracts) => {
 						const coverage = await scanDiscoveredLogCoverage(
-							nextBlock,
+							targetBlock,
 							end,
 							discoveredAddresses,
 							discoveredContracts,
-							(addresses) => this.#getKnownLogs(nextBlock, addresses, discoveredContracts, header.hash),
+							(addresses) => this.#getKnownLogs(targetBlock, addresses, discoveredContracts, header.hash),
 							(fromBlock, toBlock, addresses) =>
-								this.#getAllLogs(fromBlock, toBlock, addresses, discoveredContracts, (blockNumber) => {
-									const expected = headers[bigintToSafeNumber(blockNumber - batchStart, 'Log block header offset')]
-									if (expected === undefined) throw new Error(`RPC did not return block ${blockNumber}`)
-									return expected.hash
-								}),
+								this.#getAllLogs(fromBlock, toBlock, addresses, discoveredContracts, async (blockNumber) => (await headerAt(blockNumber)).hash),
 						)
 						this.#mergeLogs(logsByBlock, coverage.remainingLogs)
 						return coverage.currentBlockLogs
@@ -1233,7 +1234,7 @@ class NetworkIndexer {
 				}
 				throw error
 			}
-			const isSegmentEnd = nextBlock === end
+			const isSegmentEnd = targetBlock === end
 			const block = isSegmentEnd
 				? {
 						...indexed.block,
@@ -1241,15 +1242,35 @@ class NetworkIndexer {
 						logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, end, this.#network.startBlock, batchStart),
 					}
 				: indexed.block
-			await this.#assertLease()
-			await this.#database.storeBlock(this.#network.chainId, block, this.#requireLease(), this.#provenance)
+			blocksToStore.push(block)
 			contracts = indexed.contracts
 			tokenMetadata = indexed.tokenMetadata
-			expectedParentHash = indexed.block.hash
-			nextBlock++
+			previousStoredNumber = targetBlock
+			previousStoredHash = indexed.block.hash
+			processedBlocks.add(targetBlock)
 		}
-		if (nextBlock > batchStart) {
-			const indexedThrough = nextBlock - 1n
+		if (processedBlocks.size > 0) {
+			const indexedEndHash = blocksToStore.at(-1)?.hash
+			if (indexedEndHash === undefined || (segment.endBlockHash !== undefined && indexedEndHash !== segment.endBlockHash)) {
+				await this.#reconcileReorg()
+				return false
+			}
+			const anchors = [...(checkpoint === undefined ? [] : [{ number: checkpoint.number, hash: checkpoint.hash }]), { number: end, hash: indexedEndHash }]
+			try {
+				await commitSparseCanonicalBatch(
+					anchors,
+					async (blockNumber) => (await this.#getBlockHeader(blockNumber)).hash,
+					async (validateBeforeCommit) => {
+						await this.#assertLease()
+						await this.#database.storeBlocks(this.#network.chainId, blocksToStore, this.#requireLease(), this.#provenance, validateBeforeCommit)
+					},
+				)
+			} catch (error) {
+				if (!(error instanceof ChainContinuityError)) throw error
+				await this.#reconcileReorg()
+				return false
+			}
+			const indexedThrough = end
 			this.#reportProgress(batchStart, indexedThrough, observedHead)
 			await this.#refreshContractDeployment(indexedThrough)
 		}
@@ -1350,6 +1371,7 @@ class NetworkIndexer {
 		readonly toBlock: bigint
 		readonly logs: readonly Log[]
 		readonly endBlockHash?: Hash
+		readonly endBlockHeader?: RpcBlockHeader
 		readonly scanInputs: readonly LogScanInput[]
 		readonly deploymentObservations: readonly ContractDeploymentObservation[]
 	}> {
@@ -1358,6 +1380,7 @@ class NetworkIndexer {
 			return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [], scanInputs: [], deploymentObservations: [] }
 		}
 		let endBlockHash: Hash | undefined
+		let endBlockHeader: RpcBlockHeader | undefined
 		let successfulPlan: DeploymentAwareLogPlan | undefined
 		const segment = await queryAdaptiveLogRange(
 			fromBlock,
@@ -1365,16 +1388,21 @@ class NetworkIndexer {
 			runtimeConfig.logScanRangeSize,
 			async (rangeStart, rangeEnd) => {
 				let plan: DeploymentAwareLogPlan | undefined
+				let rangeEndHeader: RpcBlockHeader | undefined
 				const contractMap = new Map(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
 				const range = await queryCanonicalLogRange(
 					rangeEnd,
-					async () => (await this.#getBlockHeader(rangeEnd)).hash,
+					async () => {
+						rangeEndHeader = await this.#getBlockHeader(rangeEnd)
+						return rangeEndHeader.hash
+					},
 					async () => {
 						plan = await this.#planDeploymentAwareLogScan(contracts, rangeStart, rangeEnd)
 						return await this.#queryLogs(rangeEnd, plan.inputs, contractMap)
 					},
 				)
 				endBlockHash = range.endBlockHash
+				endBlockHeader = rangeEndHeader
 				if (plan === undefined) throw new Error(`RPC did not plan log range through block ${rangeEnd}`)
 				successfulPlan = plan
 				return range.items
@@ -1391,6 +1419,7 @@ class NetworkIndexer {
 			toBlock: segment.toBlock,
 			logs: segment.items,
 			endBlockHash,
+			...(endBlockHeader === undefined ? {} : { endBlockHeader }),
 			scanInputs: successfulPlan.inputs,
 			deploymentObservations: successfulPlan.observations,
 		}
@@ -1401,7 +1430,7 @@ class NetworkIndexer {
 		toBlock: bigint,
 		addresses: readonly Address[],
 		contracts: ReadonlyMap<string, ContractMetadata>,
-		expectedBlockHash: (blockNumber: bigint) => Hash,
+		expectedBlockHash: (blockNumber: bigint) => Promise<Hash>,
 	): Promise<readonly Log[]> {
 		const logs: Log[] = []
 		let cursor = fromBlock
@@ -1412,7 +1441,7 @@ class NetworkIndexer {
 				runtimeConfig.logScanRangeSize,
 				async (rangeStart, rangeEnd) => {
 					const range = await this.#getLogs(rangeStart, rangeEnd, addresses, contracts)
-					if (range.endBlockHash !== expectedBlockHash(rangeEnd))
+					if (range.endBlockHash !== (await expectedBlockHash(rangeEnd)))
 						throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
 					return range.logs
 				},

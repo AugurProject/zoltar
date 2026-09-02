@@ -445,6 +445,33 @@ export const confirmCanonicalBlock = async (number: bigint, expectedHash: Hash, 
 	if (observedHash !== expectedHash) throw new ChainContinuityError(`Block ${number} changed while it was being indexed`)
 }
 
+export const findSparseCanonicalAncestor = async (
+	before: bigint,
+	floor: bigint,
+	checkpointAtOrBefore: (blockNumber: bigint) => Promise<{ readonly number: bigint; readonly hash: Hash } | undefined>,
+	lookup: (blockNumber: bigint) => Promise<Hash>,
+): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> => {
+	let stored = await checkpointAtOrBefore(before)
+	while (stored !== undefined) {
+		if ((await lookup(stored.number)) === stored.hash) return stored
+		if (stored.number <= floor) break
+		stored = await checkpointAtOrBefore(stored.number - 1n)
+	}
+	return undefined
+}
+
+export const commitSparseCanonicalBatch = async (
+	anchors: readonly { readonly number: bigint; readonly hash: Hash }[],
+	lookup: (blockNumber: bigint) => Promise<Hash>,
+	commit: (validateBeforeCommit: () => Promise<void>) => Promise<void>,
+): Promise<void> => {
+	const validate = async (): Promise<void> => {
+		for (const anchor of anchors) await confirmCanonicalBlock(anchor.number, anchor.hash, lookup)
+	}
+	await validate()
+	await commit(validate)
+}
+
 export const commitCanonicalRead = async <T>(
 	number: bigint,
 	expectedHash: Hash,
