@@ -186,6 +186,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(projectDirectory, 'src', 'core', 'strategy.ts')), { headers: securityHeaders('text/plain; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, '..', '..', '..', '..', 'ui', 'coreShared', 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/operator-console.css') {

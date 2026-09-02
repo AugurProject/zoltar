@@ -3,7 +3,6 @@
 set -eu
 
 settings_file='.state/operator.json'
-dashboard_password_file=${ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE:-}
 temporary_file=''
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
@@ -40,32 +39,6 @@ if [ -f "$settings_file" ]; then
 fi
 
 bun "$script_directory/validate-container-paths.mts" "$settings_file"
-
-if [ -n "$dashboard_password_file" ]; then
-	if [ -L "$dashboard_password_file" ]; then
-		echo 'chaos dashboard password file must not be a symbolic link' >&2
-		exit 1
-	fi
-	if [ ! -e "$dashboard_password_file" ]; then
-		umask 077
-		temporary_file=$(mktemp '.state/dashboard-password.XXXXXX')
-		od -An -N24 -tx1 /dev/urandom | tr -d ' \n' > "$temporary_file"
-		chmod 600 "$temporary_file"
-		mv "$temporary_file" "$dashboard_password_file"
-		temporary_file=''
-	fi
-	if [ ! -f "$dashboard_password_file" ]; then
-		echo 'chaos dashboard password file must be a regular file' >&2
-		exit 1
-	fi
-	chmod 600 "$dashboard_password_file"
-	ZOLTAR_BOT_DASHBOARD_PASSWORD=$(tr -d '\r\n' < "$dashboard_password_file")
-	if [ "${#ZOLTAR_BOT_DASHBOARD_PASSWORD}" -lt 16 ]; then
-		echo 'chaos dashboard password must contain at least 16 characters' >&2
-		exit 1
-	fi
-	export ZOLTAR_BOT_DASHBOARD_PASSWORD
-fi
 
 if [ "$#" -eq 3 ]; then
 	if [ "$1" = 'bun' ] && [ "$2" = 'run' ] && [ "$3" = 'run' ]; then

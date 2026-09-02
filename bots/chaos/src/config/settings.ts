@@ -49,6 +49,7 @@ export type SchedulerSettings = {
 export type StrategySettings = {
 	allowHighRiskOperations: boolean
 	allowIrreversibleOperations: boolean
+	initializeGenesisUniverse: boolean
 	enabledEcosystems: readonly ChaosEcosystem[]
 	maximumEthPerOperationAttoEth: bigint
 	maximumGasCostAttoEth: bigint
@@ -358,7 +359,8 @@ function parseSelectableOperationAllowlist(value: unknown) {
 function parseStrategy(value: unknown): StrategySettings {
 	const strategy = requiredRecord(value, 'strategy')
 	const requiredKeys = ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'] as const
-	assertExactKeys(strategy, 'selectableOperationAllowlist' in strategy ? [...requiredKeys, 'selectableOperationAllowlist'] : requiredKeys, 'strategy')
+	const optionalKeys = [...('selectableOperationAllowlist' in strategy ? ['selectableOperationAllowlist'] : []), ...('initializeGenesisUniverse' in strategy ? ['initializeGenesisUniverse'] : [])]
+	assertExactKeys(strategy, [...requiredKeys, ...optionalKeys], 'strategy')
 	const maximumEthPerOperationAttoEth = parseDecimalAmount(strategy['maximumEthPerOperation'], 'strategy.maximumEthPerOperation')
 	const maximumGasCostAttoEth = parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth')
 	const maximumRepPerOperationAttoRep = parseDecimalAmount(strategy['maximumRepPerOperation'], 'strategy.maximumRepPerOperation')
@@ -368,6 +370,7 @@ function parseStrategy(value: unknown): StrategySettings {
 	return {
 		allowHighRiskOperations: boolean(strategy['allowHighRiskOperations'], 'strategy.allowHighRiskOperations'),
 		allowIrreversibleOperations: boolean(strategy['allowIrreversibleOperations'], 'strategy.allowIrreversibleOperations'),
+		initializeGenesisUniverse: strategy['initializeGenesisUniverse'] === undefined ? false : boolean(strategy['initializeGenesisUniverse'], 'strategy.initializeGenesisUniverse'),
 		enabledEcosystems: parseEcosystems(strategy['enabledEcosystems']),
 		maximumEthPerOperationAttoEth,
 		maximumGasCostAttoEth,
@@ -440,6 +443,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		strategy: {
 			allowHighRiskOperations: settings.strategy.allowHighRiskOperations,
 			allowIrreversibleOperations: settings.strategy.allowIrreversibleOperations,
+			initializeGenesisUniverse: settings.strategy.initializeGenesisUniverse,
 			enabledEcosystems: settings.strategy.enabledEcosystems,
 			maximumEthPerOperation: formatDecimalAmount(settings.strategy.maximumEthPerOperationAttoEth),
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),

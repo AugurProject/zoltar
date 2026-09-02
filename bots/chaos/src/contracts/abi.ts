@@ -115,7 +115,6 @@ export const zoltarAbi = [
 		name: 'MigrationRepSplit',
 		type: 'event',
 	},
-	{ inputs: [], name: 'zoltarQuestionData', outputs: [{ name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'forkBurnDivisor', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [{ name: '', type: 'uint248' }], name: 'universes', outputs: universeComponents, stateMutability: 'view', type: 'function' },
 	{ inputs: [{ name: 'universeId', type: 'uint248' }], name: 'getForkThresholdAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },

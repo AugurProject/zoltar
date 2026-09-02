@@ -332,6 +332,7 @@ browserTest(
 					strategy: {
 						allowHighRiskOperations: false,
 						allowIrreversibleOperations: false,
+						initializeGenesisUniverse: true,
 						enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 						maximumEthPerOperation: '0.05',
 						maximumGasCostEth: '0.02',
@@ -1122,6 +1123,10 @@ browserTest(
 						executeHelp: document.querySelector('#execute-help')?.textContent,
 						connectivityDisabled: document.querySelector('#connectivity-fields')?.disabled,
 						connectivityHelp: document.querySelector('#connectivity-fields .notice')?.textContent,
+						initializerHelp: document.querySelector('label[for="initialize-genesis-universe"] + p')?.textContent,
+						initializeGenesisUniverse: document.querySelector('#initialize-genesis-universe')?.checked,
+						selectableScopeHelp: document.querySelector('#selectable-operation-scope-help')?.textContent,
+						readRpcUrl: document.querySelector('#read-rpc-url')?.value,
 						lede: document.querySelector('.settings-intro .lede')?.textContent,
 						locked: document.querySelector('#settings-fields')?.disabled,
 						pauseNote: document.querySelector('#settings-pause-note')?.textContent,
@@ -1130,7 +1135,12 @@ browserTest(
 				).toEqual({
 					catalogLink: { href: '/catalog', text: 'Operation catalog' },
 					connectivityDisabled: false,
-					connectivityHelp: 'RPC checks run from the chaos-bot server, which can reach local container services such as http://reth:8545. Saved endpoint URLs are not returned to the browser; enter the complete replacement set.',
+					connectivityHelp: "RPC checks run from the chaos-bot server. Docker service URLs such as http://reth:8545 work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.",
+					initializerHelp: 'For an empty genesis topology, continuously fills missing prerequisites in order: binary question, origin security pool, wallet vault, trading pair, and initial pair liquidity. These five operations bypass the selectable allowlist.',
+					initializeGenesisUniverse: true,
+					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
+					selectableScopeHelp:
+						'Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; its five ordered operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
@@ -1168,7 +1178,7 @@ browserTest(
 				await Bun.sleep(50)
 				expect(connectivityMutations.length).toBe(staleConnectivityMutationCount)
 				await cdp.evaluate("document.querySelector('#discard-connectivity')?.click()")
-				await waitFor("document.querySelector('#read-rpc-url')?.value === '' && document.querySelector('#save-connectivity')?.matches(':disabled') === false", `${viewport.label} stale RPC draft could not be explicitly discarded`)
+				await waitFor(`document.querySelector('#read-rpc-url')?.value === 'https://operator:${rpcSecret}@read-one.example/private' && document.querySelector('#save-connectivity')?.matches(':disabled') === false`, `${viewport.label} stale RPC draft could not restore the saved endpoint`)
 				const connectivityMutationCount = connectivityMutations.length + 1
 				await cdp.evaluate(`(() => {
 					const read = document.querySelector('#read-rpc-url')
@@ -1414,6 +1424,7 @@ browserTest(
 						strategy: {
 							allowHighRiskOperations: false,
 							allowIrreversibleOperations: false,
+							initializeGenesisUniverse: true,
 							enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 							maximumEthPerOperation: '0.05',
 							maximumGasCostEth: '0.02',
@@ -1454,6 +1465,7 @@ browserTest(
 						strategy: {
 							allowHighRiskOperations: false,
 							allowIrreversibleOperations: false,
+							initializeGenesisUniverse: true,
 							enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 							maximumEthPerOperation: '0.05',
 							maximumGasCostEth: '0.123456789012345678',

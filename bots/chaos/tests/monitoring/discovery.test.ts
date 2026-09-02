@@ -104,8 +104,6 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				throw new Error('Hostile token read reverted')
 			}
 			switch (parameters.functionName) {
-				case 'zoltarQuestionData':
-					return address(3)
 				case 'zoltar':
 					return graph.forkerZoltar ?? address(2)
 				case 'securityPoolFactory':
@@ -1503,6 +1501,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(fake.pinnedReads.every(block => block === anchor)).toBe(true)
 		expect(snapshot.anchor).toEqual({ baseFeePerGas: '1', blockHash: expectedHash, blockNumber: anchor.toString(), timestamp: '1000' })
 		expect(snapshot.wallet.tokens.every(token => token.openOracleInternalAllowanceToSelf === 0n.toString())).toBe(true)
+		expect(fake.contractReads.some(read => read.functionName === 'zoltarQuestionData')).toBe(false)
 		expect(fake.contractReads.filter(read => read.functionName === 'internalAllowance')).toHaveLength(snapshot.wallet.tokens.length)
 	})
 

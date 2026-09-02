@@ -47,6 +47,7 @@ function settings() {
 		strategy: {
 			allowHighRiskOperations: false,
 			allowIrreversibleOperations: false,
+			initializeGenesisUniverse: true,
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 			maximumEthPerOperation: '0.05',
 			maximumGasCostEth: '0.02',

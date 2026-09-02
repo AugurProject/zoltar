@@ -491,13 +491,11 @@ export function forkRepMigrationTarget(forkData: { auctionableAttoRepAtFork: big
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
-	const [questionData, forkerZoltar, tradingSecurityPoolFactory, routerFactory] = await drainConcurrent([
-		client.readContract({ abi: zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'zoltarQuestionData' }),
+	const [forkerZoltar, tradingSecurityPoolFactory, routerFactory] = await drainConcurrent([
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' }),
 		client.readContract({ abi: tradingRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' }),
 	])
-	requireGraphEdge(getAddress(questionData), deployments.questionData, 'Zoltar question-data edge')
 	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'SecurityPoolForker Zoltar edge')
 	requireGraphEdge(getAddress(tradingSecurityPoolFactory), deployments.securityPoolFactory, 'Trading factory security-pool-factory edge')
 	requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')

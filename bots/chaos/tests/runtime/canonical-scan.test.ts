@@ -327,6 +327,13 @@ describe('canonical scan policy', () => {
 
 		const continuation = applyExecutionPolicy([disabled], restricted, true, '10', '10', 10n ** 18n, 'durable-continuation')
 		expect(continuation).toEqual([disabled])
+
+		const initializing = structuredClone(restricted)
+		initializing.strategy.initializeGenesisUniverse = true
+		initializing.strategy.selectableOperationAllowlist = []
+		const initializer = applyExecutionPolicy([allowed, disabled], initializing, true, '10', '10', 10n ** 18n)
+		expect(initializer[0]).toEqual(allowed)
+		expect(initializer[1]?.eligibility.eligible).toBeFalse()
 	})
 
 	test('rechecks live ETH and canonical REP inventory after every scan without blocking lifecycle work', () => {

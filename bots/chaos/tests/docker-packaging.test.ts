@@ -40,7 +40,7 @@ describe('chaos Docker packaging', () => {
 		expect(source).toContain('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable')
 		expect(source).toContain('docker compose run --rm --no-deps chaos bun run doctor')
 		expect(source.indexOf('bun src/cli/doctor.ts --if-live-capable')).toBeLessThan(source.indexOf('docker compose up --build --force-recreate -d'))
-		expect(source).toContain('docker compose exec chaos sh -c "cat .state/dashboard-password"')
+		expect(source).not.toContain('dashboard-password')
 		expect(source).toContain('started with its persisted configuration')
 		expect(source).not.toContain('started in paused dry-run mode')
 		expect(source).toContain('exit /b 1')
@@ -74,7 +74,7 @@ describe('chaos Docker packaging', () => {
 		expect(source).toContain('chaos-state:/app/bots/chaos/.state')
 		expect(source).toContain('chaos-signer-locks:/app/bots/chaos/.state/process-locks')
 		expect(source).toContain('name: zoltar-chaos-signer-locks')
-		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: .state/dashboard-password')
+		expect(source).not.toContain('DASHBOARD_PASSWORD')
 		expect(source).toContain('ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks')
 		expect(source).toContain("fetch('http://127.0.0.1:4193/healthz')")
 		expect(source).not.toContain("fetch('http://127.0.0.1:4193/readyz')")
@@ -93,28 +93,6 @@ describe('chaos Docker packaging', () => {
 		expect(settings).toContain('"uiHost": "0.0.0.0"')
 		expect((await stat(join(directory, '.state'))).mode & 0o777).toBe(0o700)
 		expect((await stat(settingsFile)).mode & 0o777).toBe(0o600)
-	})
-
-	test('creates and loads an owner-only dashboard password without logging it', async () => {
-		const directory = await fixture()
-		const passwordFile = join(directory, '.state', 'dashboard-password')
-		const child = Bun.spawn([entrypoint, '/bin/true'], {
-			cwd: directory,
-			env: {
-				...process.env,
-				ZOLTAR_BOT_CONTAINER: 'true',
-				ZOLTAR_BOT_DASHBOARD_PASSWORD_FILE: passwordFile,
-				ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks',
-			},
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		expect(await child.exited).toBe(0)
-		const password = (await readFile(passwordFile, 'utf8')).trim()
-		expect(password).toMatch(/^[0-9a-f]{48}$/)
-		expect((await stat(passwordFile)).mode & 0o777).toBe(0o600)
-		expect(await new Response(child.stdout).text()).not.toContain(password)
-		expect(await new Response(child.stderr).text()).not.toContain(password)
 	})
 
 	test('preserves an existing configuration while restoring owner-only mode', async () => {

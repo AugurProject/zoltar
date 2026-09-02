@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { randomOperationPlans, selectOperationPlan, urgentOperationPlans } from '../../src/runtime/selection.ts'
+import { genesisInitializationPlan, randomOperationPlans, selectOperationPlan, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 
 function plan(id: string, priority: OperationPlan['priority'], deadlineTimestamp?: string): OperationPlan {
@@ -63,6 +63,13 @@ describe('chaos operation selection', () => {
 	test('keeps urgent lifecycle work selectable when the novelty allowlist is empty', () => {
 		const evaluations = [evaluation(plan('random', 'random')), evaluation(plan('urgent', 'urgent', '20'))]
 		expect(selectOperationPlan(evaluations, () => 0, [])?.id).toBe('urgent')
+	})
+
+	test('retries the earliest missing genesis prerequisite before later initialization work', () => {
+		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.vault.deposit-rep', 'random')), evaluation(plan('statoblast.pool.deploy', 'random'))]
+		expect(genesisInitializationPlan(evaluations, { genesisUniversePresent: true, hasInitializedPair: false, hasPair: false, hasPool: false, hasQuestion: true, hasWalletVault: false })?.definitionId).toBe('statoblast.pool.deploy')
+		expect(genesisInitializationPlan([evaluation(plan('trading.pair.create', 'random'))], { genesisUniversePresent: true, hasInitializedPair: false, hasPair: false, hasPool: true, hasQuestion: true, hasWalletVault: true })?.definitionId).toBe('trading.pair.create')
+		expect(genesisInitializationPlan(evaluations, { genesisUniversePresent: false, hasInitializedPair: false, hasPair: false, hasPool: false, hasQuestion: false, hasWalletVault: false })).toBeUndefined()
 	})
 
 	test('returns undefined when no operation has an eligible plan', () => {
