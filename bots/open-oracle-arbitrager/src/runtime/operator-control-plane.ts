@@ -76,6 +76,7 @@ export async function deployExecutorFromConnectivity(
 		chain: Configuration['network']['chain']
 		connectivity: ConnectivitySettings
 		existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
+		isStopping?: (() => boolean) | undefined
 		persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
 		privateKey: Hex
 		quorumRpcUrls: readonly string[]
@@ -90,6 +91,7 @@ export async function deployExecutorFromConnectivity(
 	return await deploy({
 		chain: parameters.chain,
 		existingIntent: parameters.existingIntent,
+		...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }),
 		persistIntent: parameters.persistIntent,
 		privateKey: parameters.privateKey,
 		readRpcUrls,
@@ -186,6 +188,7 @@ export function startOperatorControlPlane(parameters: {
 	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
 	getCursor: () => SyncCursor | undefined
 	lockManager: ExecutionLockManager | undefined
+	isStopping?: () => boolean
 	onNetworkProfileSwitch?: () => void
 	signerOperationGate: SignerOperationGate
 	state: OperatorState
@@ -481,6 +484,7 @@ export function startOperatorControlPlane(parameters: {
 			return { address: plan.address, salt: plan.salt }
 		},
 		deployExecutor: async value => {
+			if (parameters.isStopping?.()) throw new Error('Operator stopping before executor deployment')
 			if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('salt' in value)) throw new Error('Executor deployment requires only a CREATE2 salt')
 			requirePausedExecutorDeployment(config.execute, state.paused)
 			if (config.privateKey === undefined) throw new Error('Set an execution signer before deploying the executor')
@@ -512,6 +516,7 @@ export function startOperatorControlPlane(parameters: {
 						chain: config.network.chain,
 						connectivity: latest.settings.connectivity,
 						existingIntent,
+						...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }),
 						persistIntent: intent => persistExecutorDeploymentIntentForRecovery(intentPath, intent, parameters.deploymentRecovery),
 						privateKey,
 						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,

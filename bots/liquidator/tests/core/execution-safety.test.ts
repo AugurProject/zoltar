@@ -16,8 +16,10 @@ import {
 	planVaultMaintenance,
 	requirePendingStagedOperation,
 	requireSuccessfulStagedOperation,
+	setExecutionShutdownCheck,
 	validateReceiptExpectation,
 } from '../../src/execution/liquidation-executor.ts'
+import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedOperationRecoveryRanges, stagedRecoveryAnchorMatches } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
@@ -224,6 +226,14 @@ describe('liquidator execution safety', () => {
 	test('rechecks an operator pause at transaction boundaries', () => {
 		expect(() => assertExecutionActive({ paused: false })).not.toThrow()
 		expect(() => assertExecutionActive({ paused: true })).toThrow('Operator paused before transaction submission')
+	})
+	test('rechecks shutdown at every transaction boundary', () => {
+		const state = initialRuntimeState(false, undefined, 1)
+		let stopping = false
+		setExecutionShutdownCheck(state, () => stopping)
+		expect(() => assertExecutionActive(state)).not.toThrow()
+		stopping = true
+		expect(() => assertExecutionActive(state)).toThrow('Operator stopping before transaction submission')
 	})
 
 	test('continues successful polling unless once mode is enabled', () => {

@@ -1250,6 +1250,7 @@ class NetworkIndexer {
 			processedBlocks.add(targetBlock)
 		}
 		if (processedBlocks.size > 0) {
+			this.#signal.throwIfAborted()
 			const indexedEndHash = blocksToStore.at(-1)?.hash
 			if (indexedEndHash === undefined || (segment.endBlockHash !== undefined && indexedEndHash !== segment.endBlockHash)) {
 				await this.#reconcileReorg()
@@ -1261,8 +1262,13 @@ class NetworkIndexer {
 					anchors,
 					async (blockNumber) => (await this.#getBlockHeader(blockNumber)).hash,
 					async (validateBeforeCommit) => {
+						this.#signal.throwIfAborted()
 						await this.#assertLease()
-						await this.#database.storeBlocks(this.#network.chainId, blocksToStore, this.#requireLease(), this.#provenance, validateBeforeCommit)
+						await this.#database.storeBlocks(this.#network.chainId, blocksToStore, this.#requireLease(), this.#provenance, async () => {
+							this.#signal.throwIfAborted()
+							await validateBeforeCommit()
+							this.#signal.throwIfAborted()
+						})
 					},
 				)
 			} catch (error) {

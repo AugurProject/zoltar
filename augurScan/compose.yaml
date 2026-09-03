@@ -13,7 +13,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    stop_grace_period: 30s
+    stop_grace_period: 60s
 
   app:
     build:
@@ -34,7 +34,7 @@ services:
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
     ports:
       - "${AUGURSCAN_PORT:-3000}:3000"
-    stop_grace_period: 30s
+    stop_grace_period: 60s
 
   indexer:
     build:
@@ -66,7 +66,7 @@ services:
       RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
     volumes:
       - augurscan-logs:/var/log/augurscan
-    stop_grace_period: 30s
+    stop_grace_period: 60s
 
 volumes:
   augurscan-data:

@@ -17,6 +17,7 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 const MAX_UINT256 = 2n ** 256n - 1n
+const shutdownChecks = new WeakMap<object, () => boolean>()
 
 type Call = {
 	data: Hex
@@ -38,6 +39,13 @@ export class TransactionAwaitingCanonicalFinality extends Error {
 	}
 }
 
+export class OperatorStopping extends Error {
+	constructor() {
+		super('Operator stopping before transaction submission')
+		this.name = 'OperatorStopping'
+	}
+}
+
 export function requireFinalizedTransactionReceipt(label: string, hash: Hex, result: Awaited<ReturnType<typeof finalizedReceiptWithQuorum>>) {
 	if (result.receipt !== undefined) return result.receipt
 	if (!result.observed) throw new Error(`${label} receipt disappeared before canonical finality`)
@@ -55,7 +63,16 @@ export function assertGasCostLimitForBaseFee(gasEstimate: bigint, baseFeePerGas:
 }
 
 export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
+	assertOperatorNotStopping(state)
 	if (state.paused) throw new Error('Operator paused before transaction submission')
+}
+
+function assertOperatorNotStopping(state: Pick<RuntimeState, 'paused'>) {
+	if (shutdownChecks.get(state)?.() ?? false) throw new OperatorStopping()
+}
+
+export function setExecutionShutdownCheck(state: RuntimeState, isRequested: () => boolean) {
+	shutdownChecks.set(state, isRequested)
 }
 
 export async function assertMarketPriceStillAllowed(priceStillAllowed: () => boolean | Promise<boolean>) {
@@ -152,9 +169,10 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		status: 'pending',
 	})
 	await saveDurableState(settings.runtime.stateFile, state)
-	assertExecutionActive(state)
 	try {
+		assertExecutionActive(state)
 		await call.preSubmit?.()
+		assertExecutionActive(state)
 	} catch (error) {
 		state.pendingTransactions = state.pendingTransactions.filter(intent => intent.hash.toLowerCase() !== signed.hash.toLowerCase())
 		recordActivity(state, {
@@ -177,11 +195,20 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		signMessage: account.signMessage,
 	})
 	const hash: Hex = signed.hash
-	await wallet.waitForTransactionReceipt({
-		hash,
-		pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
-		timeout: 180_000,
-	})
+	const receiptDeadline = Date.now() + 180_000
+	for (;;) {
+		try {
+			await wallet.waitForTransactionReceipt({
+				hash,
+				pollingInterval: Math.min(settings.runtime.pollMilliseconds, 5_000),
+				timeout: Math.min(settings.runtime.pollMilliseconds, 5_000),
+			})
+			break
+		} catch (error) {
+			assertOperatorNotStopping(state)
+			if (Date.now() >= receiptDeadline) throw error
+		}
+	}
 	const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, hash, pool)
 	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	if (receipt.status !== 'success') {
