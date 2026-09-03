@@ -2348,6 +2348,35 @@ describe('network indexer lifecycle', () => {
 		expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
 	})
 
+	test('does not record a failure when shutdown arrives during recovery', async () => {
+		const controller = new AbortController()
+		let finishRecovery: (() => void) | undefined
+		const recovery = new Promise<void>((resolve) => {
+			finishRecovery = resolve
+		})
+		let failures = 0
+		const running = runNetworkLifecycle({
+			failure: async () => {
+				failures++
+			},
+			intervalMs: 1,
+			poll: async () => {
+				throw new Error('poll failed')
+			},
+			recover: async () => {
+				await recovery
+				return false
+			},
+			signal: controller.signal,
+			verify: async () => {},
+		})
+		await Bun.sleep(0)
+		controller.abort()
+		finishRecovery?.()
+		await running
+		expect(failures).toBe(0)
+	})
+
 	test('never runs an indexing operation against a mismatched fallback provider', async () => {
 		const operations: string[] = []
 		const providers = [

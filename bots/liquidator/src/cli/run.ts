@@ -9,7 +9,7 @@ import { availableExecutionObservations, liquidationExecutionSnapshotObservation
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
 import { createPoolMonitorIndex, scanPools } from '#monitoring/pool-monitor'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
@@ -84,6 +84,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					transport: readPool.transport,
 				})
 	const state = initialRuntimeState(settings.paused, wallet?.account.address, settings.network.chainId)
+	setExecutionShutdownCheck(state, shutdown.isRequested)
 	let poolMonitorIndexes = new Map<string, ReturnType<typeof createPoolMonitorIndex>>()
 	const poolMonitorIndexFor = (endpoint: string) => {
 		const key = `${settings.network.chainId.toString()}:${settings.deployment.securityPoolFactory.toLowerCase()}:${endpoint}`
@@ -524,7 +525,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					const settled = await Promise.allSettled(
 						endpoints.map(async endpoint => {
 							const endpointClient = createPublicClient({ chain: currentChain, transport: readPool.transportFor(endpoint) })
-							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint)) }
+							return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, settings, state.wallet, poolMonitorIndexFor(endpoint), shutdown.isRequested) }
 						}),
 					)
 					const available = availableExecutionObservations('liquidation execution snapshot', settled, liquidationExecutionSnapshotObservation, settings.connectivity.rpcQuorum)
@@ -533,8 +534,9 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					client = selected.client
 					primary = selected.scan
 				} else {
-					primary = await scanPools(client, settings, state.wallet, poolMonitorIndexFor(settings.connectivity.readRpcUrl))
+					primary = await scanPools(client, settings, state.wallet, poolMonitorIndexFor(settings.connectivity.readRpcUrl), shutdown.isRequested)
 				}
+				if (shutdown.isRequested()) return true
 				const scannedBlock = primary.block
 				const scannedBlockHash = scannedBlock.hash
 				const scannedBlockNumber = scannedBlock.number
@@ -565,13 +567,16 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.marketConsensusByAsset.clear()
 				const newMarketObservations = []
 				for (const configuration of activeMarketConfigurations) {
+					if (shutdown.isRequested()) return true
 					const asset = getAddress(configuration.assetAddress)
 					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
+					if (shutdown.isRequested()) return true
 					if (centralizedMarket !== undefined) state.centralizedMarketsByAsset.set(asset.toLowerCase(), centralizedMarket)
 					newMarketObservations.push(...centralizedMarketConsensusObservations(centralizedMarket))
 					let dexMarkets: Awaited<ReturnType<typeof observeConfiguredDex>>
 					try {
 						dexMarkets = await observeConfiguredDex(configuration, { hash: scannedBlockHash, number: scannedBlockNumber, timestamp: scannedBlock.timestamp })
+						if (shutdown.isRequested()) return true
 					} catch (error) {
 						state.marketObservations = discardDexMarketObservations(state.marketObservations)
 						state.marketConsensus = undefined
@@ -582,6 +587,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				}
 				try {
 					await requireCanonicalBlock(scannedBlockNumber, scannedBlockHash, async blockNumber => await canonicalBlockHash(settings, blockNumber, readPool))
+					if (shutdown.isRequested()) return true
 				} catch (error) {
 					state.marketObservations = discardDexMarketObservations(state.marketObservations)
 					state.marketConsensus = undefined
@@ -601,6 +607,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				state.marketConsensus = state.marketConsensusByAsset.get(rootUniverse.repToken.toLowerCase())
 				validateApprovedUniverseSelection(state.universes, settings.approvedUniverses)
 				const desiredPoolStatuses = await Promise.all(settings.desiredPools.map(desired => desiredPoolStatus(settings, desired, readPool)))
+				if (shutdown.isRequested()) return true
 				const deployedDesiredPools = desiredPoolStatuses.filter(status => status.address !== getAddress('0x0000000000000000000000000000000000000000'))
 				const desiredSelections = deployedDesiredPools.filter(status => !settings.selectedPools.some(pool => pool.toLowerCase() === status.address.toLowerCase()))
 				if (desiredSelections.length > 0) {
@@ -622,18 +629,26 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
 				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
+				if (shutdown.isRequested()) {
+					await saveDurableState(settings.runtime.stateFile, state)
+					return true
+				}
 				if (!state.paused && settings.runtime.execute) {
 					if (wallet === undefined) throw new Error('Live execution requires an active signer')
 					const activeWallet = wallet
 					if (
 						await recoveryWorkBlocksExecution(
 							state,
-							() => recoverPendingTransactions(settings, activeWallet, state, readPool),
+							() => recoverPendingTransactions(settings, activeWallet, state, readPool, shutdown.isRequested),
 							() => reconcilePendingStagedOperations(settings, activeWallet, state, readPool),
 						)
 					) {
 						await saveDurableState(settings.runtime.stateFile, state)
 						return shouldStopAfterSuccessfulCycle(settings.runtime.once)
+					}
+					if (shutdown.isRequested()) {
+						await saveDurableState(settings.runtime.stateFile, state)
+						return true
 					}
 					const missingDesiredPool = desiredPoolStatuses.find(status => status.address === getAddress('0x0000000000000000000000000000000000000000') && settings.approvedUniverses.includes(status.desired.universeId))
 					if (missingDesiredPool !== undefined && settings.strategy.allowAutomaticPoolCreation) {
@@ -679,6 +694,14 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				await saveDurableState(settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(settings.runtime.once)
 			} catch (error) {
+				if (shutdown.isRequested()) {
+					await saveDurableState(settings.runtime.stateFile, state)
+					return true
+				}
+				if (error instanceof OperatorStopping) {
+					await saveDurableState(settings.runtime.stateFile, state)
+					return true
+				}
 				if (error instanceof TransactionAwaitingCanonicalFinality) {
 					state.status = 'running'
 					await saveDurableState(settings.runtime.stateFile, state)
