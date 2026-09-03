@@ -1,17 +1,32 @@
 import { startIndexers } from './indexer.ts'
-import { type AugurScanProcessContext, initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
+import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
 
 type RuntimeSettings = {
 	readonly disableIndexer: boolean
 }
 
-type ProcessContext = Pick<AugurScanProcessContext, 'database' | 'networks' | 'evidenceProvenance' | 'indexerRunId'>
+type ProcessContext = {
+	readonly database: { close: () => Promise<void> }
+	readonly networks: readonly unknown[]
+	readonly evidenceProvenance: {
+		readonly indexerRunId: string
+		readonly abiSourceHash: string
+		readonly applicationSourceHash: string
+		readonly projectionSourceHash: string
+	}
+	readonly indexerRunId: string
+}
 
-type RunnerDependencies = {
+type RunnerDependencies<TContext extends ProcessContext> = {
 	readonly runtimeConfig: RuntimeSettings
-	readonly initialize: (indexerEnabled: boolean) => Promise<ProcessContext>
-	readonly start: typeof startIndexers
-	readonly recordStop: typeof recordProcessStop
+	readonly initialize: (indexerEnabled: boolean) => Promise<TContext>
+	readonly start: (
+		networks: TContext['networks'],
+		database: TContext['database'],
+		signal: AbortSignal,
+		options: { readonly provenance: TContext['evidenceProvenance'] },
+	) => readonly Promise<void>[]
+	readonly recordStop: (database: TContext['database'], indexerRunId: string) => Promise<void>
 	readonly untilTerminated: Promise<void>
 }
 
@@ -29,7 +44,13 @@ export const terminationSignal = (): Promise<void> =>
 		process.once('SIGTERM', finish)
 	})
 
-export const runIndexerProcess = async ({ runtimeConfig, initialize, start, recordStop, untilTerminated }: RunnerDependencies): Promise<void> => {
+export const runIndexerProcess = async <TContext extends ProcessContext>({
+	runtimeConfig,
+	initialize,
+	start,
+	recordStop,
+	untilTerminated,
+}: RunnerDependencies<TContext>): Promise<void> => {
 	let terminationRequested = false
 	void untilTerminated.then(() => {
 		terminationRequested = true

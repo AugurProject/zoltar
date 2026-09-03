@@ -45,7 +45,11 @@ test('signal-triggered shutdown aborts active indexers before recording and clos
 		terminate = resolve
 	})
 	const events: string[] = []
-	const database = { close: async () => events.push('close') }
+	const database = {
+		close: async () => {
+			events.push('close')
+		},
+	}
 	const running = runIndexerProcess({
 		runtimeConfig: { disableIndexer: false },
 		initialize: async () => ({
@@ -82,7 +86,11 @@ test('termination during initialization cleans up without starting indexers', as
 		terminate = resolve
 	})
 	const events: string[] = []
-	const database = { close: async () => events.push('close') }
+	const database = {
+		close: async () => {
+			events.push('close')
+		},
+	}
 	const running = runIndexerProcess({
 		runtimeConfig: { disableIndexer: false },
 		initialize: async () => {
@@ -98,7 +106,9 @@ test('termination during initialization cleans up without starting indexers', as
 			events.push('start')
 			return []
 		},
-		recordStop: async () => events.push('stop-recorded'),
+		recordStop: async () => {
+			events.push('stop-recorded')
+		},
 		untilTerminated,
 	})
 	terminate?.()
