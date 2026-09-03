@@ -124,10 +124,13 @@ const deployGenesisUniswapSeeder: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'GenesisUniswapV3Seeder',
-	description: 'Deterministically deploys the stateless helper used to mint the genesis REP/WETH position.',
+	description: 'Deterministically deploys the stateless helper used to mint canonical REP/WETH positions.',
 	discoveryInputs: ['deterministic helper deployment'],
 	ecosystem: 'trading',
-	evaluate: snapshot => eligible(snapshot.genesisUniswap?.proxy === true ? undefined : 'Canonical proxy deployer is unavailable', snapshot.genesisUniswap?.seeder === false ? undefined : 'Genesis Uniswap seeding helper is already deployed'),
+	evaluate: snapshot => {
+		const state = snapshot.genesisUniswap ?? snapshot.universeUniswap
+		return eligible(state?.proxy === true ? undefined : 'Canonical proxy deployer is unavailable', state?.seeder === false ? undefined : 'Uniswap seeding helper is already deployed')
+	},
 	id: 'trading.genesis-uniswap.deploy-seeder',
 	label: 'Deploy genesis Uniswap seeder',
 	method: 'fallback',
@@ -151,7 +154,18 @@ const createGenesisUniswapPool: OperationDefinition = {
 			postconditions: ['The configured Uniswap V3 factory returns the canonical genesis REP/WETH fee-tier pool'],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: uniswapV3FactoryAbi, args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE], functionName: 'createPool', id: 'create-genesis-uniswap-pool', label: 'Create REP/WETH pool', to: uniswapFactory, walletAssetDebits: [] })],
+			steps: [
+				encodeStep({
+					abi: uniswapV3FactoryAbi,
+					args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE],
+					evidence: [{ abi: 'function getPool(address tokenA,address tokenB,uint24 fee) view returns (address)', args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE.toString()], contract: uniswapFactory, expected: '0', functionName: 'getPool', kind: 'storage-postcondition', relation: 'greater-than' }],
+					functionName: 'createPool',
+					id: 'create-genesis-uniswap-pool',
+					label: 'Create REP/WETH pool',
+					to: uniswapFactory,
+					walletAssetDebits: [],
+				}),
+			],
 		})
 	},
 	classification: 'selectable',
@@ -202,8 +216,11 @@ const seedGenesisUniswapPool: OperationDefinition = {
 		const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
 		if (repInventory === undefined || wethInventory === undefined) return undefined
 		const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', 10n ** 15n)
+		const minimumRepReserve = optionAmount(options, 'minimumRepReserveAttoRep', 0n)
 		const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 15n)
-		const amount0 = [amount(repInventory.balance), maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+		const repBalance = amount(repInventory.balance)
+		const spendableRep = repBalance > minimumRepReserve ? repBalance - minimumRepReserve : 0n
+		const amount0 = [spendableRep, maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
 		const amount1 = [amount(wethInventory.balance), maximumWeth, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
 		if (amount0 === 0n || amount1 === 0n) return undefined
 		const seeder = genesisUniswapSeederDeployment().address
@@ -289,6 +306,197 @@ const seedGenesisUniswapPool: OperationDefinition = {
 	},
 	id: 'trading.genesis-uniswap.seed-pool',
 	label: 'Seed genesis REP/WETH pool',
+	method: 'seed',
+	risk: 'medium',
+}
+
+const childUniswapPool = (snapshot: EcosystemSnapshot, state: 'missing' | 'uninitialized' | 'unseeded', feasible: (repToken: Address) => boolean = () => true) =>
+	snapshot.universeUniswap?.pools
+		.filter(candidate => candidate.universeId !== '0')
+		.filter(candidate => {
+			if (state === 'missing') return candidate.pool === undefined
+			if (state === 'uninitialized') return candidate.pool !== undefined && !candidate.initialized
+			return candidate.pool !== undefined && candidate.initialized && amount(candidate.liquidity) === 0n
+		})
+		.filter(candidate => feasible(candidate.repToken))
+		.sort((left, right) => {
+			const leftId = amount(left.universeId)
+			const rightId = amount(right.universeId)
+			if (leftId < rightId) return -1
+			if (leftId > rightId) return 1
+			return 0
+		})[0]
+
+function universeUniswapSeedAmounts(snapshot: EcosystemSnapshot, options: PlanningOptions, repToken: Address) {
+	const repInventory = tokenInventory(snapshot, repToken)
+	const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
+	if (repInventory === undefined || wethInventory === undefined) return undefined
+	const maximumRep = optionAmount(options, 'maxRepSpendAttoRep', 10n ** 15n)
+	const minimumRepReserve = optionAmount(options, 'minimumRepReserveAttoRep', 0n)
+	const maximumWeth = optionAmount(options, 'maxEthSpendAttoEth', 10n ** 15n)
+	const repBalance = amount(repInventory.balance)
+	const spendableRep = repBalance > minimumRepReserve ? repBalance - minimumRepReserve : 0n
+	const repAmount = [spendableRep, maximumRep, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+	const wethAmount = [amount(wethInventory.balance), maximumWeth, 10n ** 15n].reduce((minimum, value) => (value < minimum ? value : minimum))
+	if (repAmount === 0n || wethAmount === 0n || (repAmount < wethAmount ? repAmount : wethAmount) / 2n === 0n) return undefined
+	return { repAmount, wethAmount }
+}
+
+const createUniverseUniswapPool: OperationDefinition = {
+	buildPlan(snapshot) {
+		const target = childUniswapPool(snapshot, 'missing')
+		if (target === undefined) return undefined
+		const factory = snapshot.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+		return planBase({
+			definitionId: createUniverseUniswapPool.id,
+			ecosystem: 'trading',
+			label: createUniverseUniswapPool.label,
+			metadata: { factory, fee: GENESIS_UNISWAP_FEE, rep: target.repToken, universeId: target.universeId, weth: snapshot.deployments.weth },
+			postconditions: ['The configured Uniswap V3 factory returns the canonical universe REP/WETH fee-tier pool'],
+			risk: 'medium',
+			snapshot,
+			steps: [
+				encodeStep({
+					abi: uniswapV3FactoryAbi,
+					args: [target.repToken, snapshot.deployments.weth, GENESIS_UNISWAP_FEE],
+					evidence: [{ abi: 'function getPool(address tokenA,address tokenB,uint24 fee) view returns (address)', args: [target.repToken, snapshot.deployments.weth, GENESIS_UNISWAP_FEE.toString()], contract: factory, expected: '0', functionName: 'getPool', kind: 'storage-postcondition', relation: 'greater-than' }],
+					functionName: 'createPool',
+					id: 'create-universe-uniswap-pool',
+					label: `Create universe ${target.universeId} REP/WETH pool`,
+					to: factory,
+					walletAssetDebits: [],
+				}),
+			],
+		})
+	},
+	classification: 'selectable',
+	contract: 'UniswapV3Factory',
+	description: 'Creates the fixed-fee REP/WETH pool for the lowest canonical child universe that does not have one.',
+	discoveryInputs: ['canonical universe REP tokens, configured WETH and authenticated Uniswap V3 factory'],
+	ecosystem: 'trading',
+	evaluate: snapshot => eligible(snapshot.universeUniswap?.factory === true ? undefined : 'Configured Uniswap V3 factory has no code', childUniswapPool(snapshot, 'missing') !== undefined ? undefined : 'Every discovered child-universe REP token already has a pool'),
+	id: 'trading.universe-uniswap.create-pool',
+	label: 'Create child-universe REP/WETH pool',
+	method: 'createPool',
+	risk: 'medium',
+}
+
+const initializeUniverseUniswapPool: OperationDefinition = {
+	buildPlan(snapshot) {
+		const target = childUniswapPool(snapshot, 'uninitialized')
+		if (target?.pool === undefined) return undefined
+		return planBase({
+			definitionId: initializeUniverseUniswapPool.id,
+			ecosystem: 'trading',
+			label: initializeUniverseUniswapPool.label,
+			metadata: { pool: target.pool, sqrtPriceX96: GENESIS_UNISWAP_SQRT_PRICE_X96.toString(), universeId: target.universeId },
+			postconditions: ['The canonical universe REP/WETH pool has the configured deterministic initial sqrt price'],
+			risk: 'medium',
+			snapshot,
+			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-universe-uniswap-pool', label: `Initialize universe ${target.universeId} REP/WETH pool`, to: target.pool, walletAssetDebits: [] })],
+		})
+	},
+	classification: 'selectable',
+	contract: 'UniswapV3Pool',
+	description: 'Initializes an authenticated child-universe REP/WETH pool at the deterministic 1:1 policy price.',
+	discoveryInputs: ['authenticated per-universe REP/WETH pool slot0'],
+	ecosystem: 'trading',
+	evaluate: snapshot => eligible(childUniswapPool(snapshot, 'uninitialized') !== undefined ? undefined : 'Every discovered child-universe REP/WETH pool is initialized'),
+	id: 'trading.universe-uniswap.initialize-pool',
+	label: 'Initialize child-universe REP/WETH pool',
+	method: 'initialize',
+	risk: 'medium',
+}
+
+const seedUniverseUniswapPool: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const target = childUniswapPool(snapshot, 'unseeded', repToken => universeUniswapSeedAmounts(snapshot, options, repToken) !== undefined)
+		if (target?.pool === undefined) return undefined
+		const seedAmounts = universeUniswapSeedAmounts(snapshot, options, target.repToken)
+		if (seedAmounts === undefined) return undefined
+		const { repAmount, wethAmount } = seedAmounts
+		const seeder = genesisUniswapSeederDeployment().address
+		const token0 = target.repToken.toLowerCase() < snapshot.deployments.weth.toLowerCase() ? target.repToken : snapshot.deployments.weth
+		const token1 = token0 === target.repToken ? snapshot.deployments.weth : target.repToken
+		const maximum0 = token0 === target.repToken ? repAmount : wethAmount
+		const maximum1 = token1 === target.repToken ? repAmount : wethAmount
+		const liquidity = (maximum0 < maximum1 ? maximum0 : maximum1) / 2n
+		if (liquidity === 0n) return undefined
+		const steps = []
+		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
+			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-universe-token0', label: 'Approve universe token0', to: token0, walletAssetDebits: [] }))
+		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
+			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-universe-token1', label: 'Approve universe token1', to: token1, walletAssetDebits: [] }))
+		steps.push(
+			encodeStep({
+				abi: genesisUniswapSeederAbi,
+				args: [target.pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
+				evidence: [{ kind: 'receipt-success' }],
+				functionName: 'seed',
+				id: 'seed-universe-uniswap-pool',
+				label: `Seed universe ${target.universeId} REP/WETH liquidity`,
+				to: seeder,
+				walletAssetDebits: [erc20WalletDebit(token0, maximum0, token0 === target.repToken ? 'rep' : 'weth'), erc20WalletDebit(token1, maximum1, token1 === target.repToken ? 'rep' : 'weth')],
+			}),
+		)
+		return planBase({
+			definitionId: seedUniverseUniswapPool.id,
+			ecosystem: 'trading',
+			label: seedUniverseUniswapPool.label,
+			maximumCleanupTransactionCount: 2,
+			metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool: target.pool, rep: target.repToken, seeder, token0, token1, universeId: target.universeId },
+			postconditions: ['The authenticated child-universe REP/WETH pool has nonzero active liquidity and exact approvals are consumed'],
+			risk: 'medium',
+			snapshot,
+			steps,
+		})
+	},
+	buildContinuationPlan(snapshot, options, context) {
+		const cleanup = () => {
+			const token0 = metadataAddress(context.previousPlan.metadata, 'token0')
+			const token1 = metadataAddress(context.previousPlan.metadata, 'token1')
+			const seeder = metadataAddress(context.previousPlan.metadata, 'seeder')
+			if (token0 === undefined || token1 === undefined || seeder === undefined) return undefined
+			const planned = new Set(context.previousPlan.steps.map(step => step.id))
+			const confirmed = new Set(context.confirmedStepIds)
+			const steps = [token0, token1].flatMap((token, index) =>
+				!planned.has(`approve-universe-token${index.toString()}`) || !confirmed.has(`approve-universe-token${index.toString()}`) || allowance(tokenInventory(snapshot, token), seeder) === 0n
+					? []
+					: [encodeStep({ abi: erc20Abi, args: [seeder, 0n], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)], functionName: 'approve', id: `revoke-universe-token${index.toString()}`, label: `Revoke universe token${index.toString()} allowance`, to: token, walletAssetDebits: [] })],
+			)
+			if (steps.length === 0) return undefined
+			return planBase({
+				continuationDisposition: 'cleanup-only',
+				definitionId: seedUniverseUniswapPool.id,
+				ecosystem: 'trading',
+				label: `Clean up ${seedUniverseUniswapPool.label}`,
+				metadata: context.previousPlan.metadata,
+				postconditions: ['Every confirmed workflow-created seeder allowance is zero'],
+				risk: 'medium',
+				snapshot,
+				steps,
+			})
+		}
+		if (context.continuationDisposition === 'cleanup-only') return cleanup()
+		const universeId = context.previousPlan.metadata['universeId']
+		const pool = metadataAddress(context.previousPlan.metadata, 'pool')
+		if (typeof universeId !== 'string' || pool === undefined || snapshot.universeUniswap === undefined) return cleanup()
+		const exactPools = snapshot.universeUniswap.pools.filter(candidate => candidate.universeId === universeId && candidate.pool?.toLowerCase() === pool.toLowerCase())
+		const refreshed = seedUniverseUniswapPool.buildPlan({ ...snapshot, universeUniswap: { ...snapshot.universeUniswap, pools: exactPools } }, options)
+		return refreshed !== undefined && JSON.stringify(refreshed.metadata) === JSON.stringify(context.previousPlan.metadata) ? refreshed : cleanup()
+	},
+	classification: 'selectable',
+	contract: 'GenesisUniswapV3Seeder',
+	description: 'Seeds a bounded full-range REP/WETH position for an authenticated child universe, owned by the operator wallet.',
+	discoveryInputs: ['authenticated per-universe pool liquidity, wallet REP/WETH balances and exact helper allowances'],
+	ecosystem: 'trading',
+	evaluate: (snapshot, options) =>
+		eligible(
+			snapshot.universeUniswap?.seeder === true ? undefined : 'Deploy the Uniswap seeder first',
+			childUniswapPool(snapshot, 'unseeded', repToken => universeUniswapSeedAmounts(snapshot, options, repToken) !== undefined) !== undefined ? undefined : 'No initialized child-universe REP/WETH pool without liquidity has spendable REP and WETH',
+		),
+	id: 'trading.universe-uniswap.seed-pool',
+	label: 'Seed child-universe REP/WETH pool',
 	method: 'seed',
 	risk: 'medium',
 }
@@ -1538,6 +1746,9 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	createGenesisUniswapPool,
 	initializeGenesisUniswapPool,
 	seedGenesisUniswapPool,
+	createUniverseUniswapPool,
+	initializeUniverseUniswapPool,
+	seedUniverseUniswapPool,
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),

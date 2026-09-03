@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, type Abi, type Address } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, type Abi, type Address } from '../support/bot-shared.ts'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
@@ -37,6 +37,51 @@ afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { force: true, recursive: true })))
 })
 
+test('discovers and authenticates fixed-fee REP/WETH pools for every canonical universe', async () => {
+	const uniswapFactory = address(40)
+	const genesisRep = address(10)
+	const childRep = address(11)
+	const genesisPool = address(41)
+	const childPool = address(42)
+	const fake = fakeClient(10n, hash(10), {
+		childOutcomesByUniverse: { '0': [1n] },
+		uniswapFactory,
+		uniswapPoolsByRep: {
+			[genesisRep.toLowerCase()]: { initialized: true, liquidity: 7n, pool: genesisPool },
+			[childRep.toLowerCase()]: { initialized: false, liquidity: 0n, pool: childPool },
+		},
+	})
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fake.client,
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
+		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+		wallet: address(1),
+	})
+	expect(snapshot.universeUniswap).toMatchObject({
+		factory: true,
+		pools: [
+			{ initialized: true, liquidity: '7', pool: genesisPool, repToken: genesisRep, universeId: '0' },
+			{ initialized: false, liquidity: '0', pool: childPool, repToken: childRep, universeId: '1' },
+		],
+	})
+})
+
+test('bounds concurrent per-universe Uniswap pool-state fan-out below the RPC queue limit', async () => {
+	const uniswapFactory = address(40)
+	const childOutcomes = Array.from({ length: 10 }, (_, index) => BigInt(index + 1))
+	const uniswapPoolsByRep = Object.fromEntries(Array.from({ length: 11 }, (_, index) => [address(10 + index).toLowerCase(), { initialized: true, liquidity: 1n, pool: address(100 + index) }]))
+	const fake = fakeClient(10n, hash(10), { childOutcomesByUniverse: { '0': childOutcomes }, delayUniswapPoolReads: true, uniswapFactory, uniswapPoolsByRep })
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fake.client,
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
+		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 11, maxVaultsPerPool: 10 },
+		wallet: address(1),
+	})
+	expect(snapshot.universeUniswap?.pools).toHaveLength(11)
+})
+
 async function temporaryStatePath() {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-discovery-'))
 	temporaryDirectories.push(directory)
@@ -60,6 +105,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 interface GraphOverrides {
 	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
+	delayUniswapPoolReads?: boolean
 	forkerZoltar?: Address
 	historicalBlockErrors?: readonly string[]
 	historicalBlockHashes?: Readonly<Record<string, `0x${string}`>>
@@ -77,6 +123,8 @@ interface GraphOverrides {
 	questionIds?: readonly bigint[]
 	routerFactory?: Address
 	tradingSecurityPoolFactory?: Address
+	uniswapFactory?: Address
+	uniswapPoolsByRep?: Readonly<Record<string, { initialized: boolean; liquidity: bigint; pool: Address }>>
 }
 
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
@@ -97,9 +145,16 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		async getChainId() {
 			return 31337
 		},
+		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
+			pinnedReads.push(parameters.blockNumber)
+			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
+		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
 			pinnedReads.push(parameters.blockNumber)
 			contractReads.push({ ...(parameters.args === undefined ? {} : { args: parameters.args }), functionName: parameters.functionName })
+			if (graph.delayUniswapPoolReads === true && ['factory', 'fee', 'liquidity', 'slot0', 'token0', 'token1'].includes(parameters.functionName) && Object.values(graph.uniswapPoolsByRep ?? {}).some(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())) {
+				await new Promise(resolve => setTimeout(resolve, 5))
+			}
 			if ((parameters.functionName === 'balanceOf' || parameters.functionName === 'allowance') && parameters.address !== undefined && poisonToken !== undefined && parameters.address.toLowerCase() === poisonToken.toLowerCase()) {
 				throw new Error('Hostile token read reverted')
 			}
@@ -109,7 +164,28 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'securityPoolFactory':
 					return graph.tradingSecurityPoolFactory ?? address(4)
 				case 'factory':
-					return graph.routerFactory ?? address(8)
+					return Object.values(graph.uniswapPoolsByRep ?? {}).some(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase()) ? graph.uniswapFactory : (graph.routerFactory ?? address(8))
+				case 'getPool': {
+					const rep = parameters.args?.[0]
+					if (typeof rep !== 'string') throw new Error('Uniswap REP token required')
+					return graph.uniswapPoolsByRep?.[rep.toLowerCase()]?.pool ?? address(0)
+				}
+				case 'token0':
+				case 'token1': {
+					const entry = Object.entries(graph.uniswapPoolsByRep ?? {}).find(([, candidate]) => candidate.pool.toLowerCase() === parameters.address.toLowerCase())
+					if (entry === undefined) throw new Error('Unknown Uniswap pool')
+					return parameters.functionName === 'token0' ? getAddress(entry[0]) : address(7)
+				}
+				case 'fee':
+					return 10_000n
+				case 'slot0': {
+					const entry = Object.values(graph.uniswapPoolsByRep ?? {}).find(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())
+					return [entry?.initialized === true ? 1n : 0n, 0, 0, 0, 0, 0, true]
+				}
+				case 'liquidity': {
+					const entry = Object.values(graph.uniswapPoolsByRep ?? {}).find(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())
+					return entry?.liquidity ?? 0n
+				}
 				case 'universes': {
 					const universeId = parameters.args?.[0]
 					if (typeof universeId !== 'bigint') throw new Error('Universe ID required')

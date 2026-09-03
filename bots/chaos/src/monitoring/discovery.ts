@@ -62,6 +62,7 @@ export type ChaosReadClient = PublicClient<Transport, Chain>
 
 export const DISCOVERY_RPC_CONCURRENCY = 12
 export const DISCOVERY_RPC_QUEUE_LIMIT = DISCOVERY_RPC_CONCURRENCY * 4
+const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
@@ -532,9 +533,7 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 	return { factory, router }
 }
 
-async function discoverGenesisUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint) {
-	const genesisRep = universes.find(universe => universe.id === '0')?.repToken
-	if (genesisRep === undefined) return { factory: false, initialized: false, liquidity: '0', proxy: false, seeder: false }
+async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint) {
 	const seeder = genesisUniswapSeederDeployment()
 	const uniswapFactory = context.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
 	const [factoryCode, proxyCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: CANONICAL_PROXY_DEPLOYER, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
@@ -543,22 +542,25 @@ async function discoverGenesisUniswap(context: EcosystemDiscoveryContext, univer
 	const authenticatedSeeder = seederCode !== undefined && seederCode !== '0x'
 	const authenticatedProxy = proxyCode !== undefined && proxyCode !== '0x'
 	const factory = factoryCode !== undefined && factoryCode !== '0x'
-	if (!factory) return { factory, initialized: false, liquidity: '0', proxy: authenticatedProxy, seeder: authenticatedSeeder }
-	const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [genesisRep, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
-	if (pool === zeroAddress) return { factory, initialized: false, liquidity: '0', proxy: authenticatedProxy, seeder: authenticatedSeeder }
-	const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token1' }),
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'fee' }),
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'slot0' }),
-		context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'liquidity' }),
-	])
-	requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Genesis Uniswap pool ${pool} factory edge`)
-	const expected = [genesisRep.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
-	const actual = [getAddress(token0).toLowerCase(), getAddress(token1).toLowerCase()].sort()
-	if (actual[0] !== expected[0] || actual[1] !== expected[1] || fee !== BigInt(GENESIS_UNISWAP_FEE)) throw new Error(`Genesis Uniswap pool ${pool} has unexpected immutable token or fee bindings`)
-	return { factory, initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, proxy: authenticatedProxy, seeder: authenticatedSeeder }
+	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
+		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
+		const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
+		if (pool === zeroAddress) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
+		const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token1' }),
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'fee' }),
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'slot0' }),
+			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'liquidity' }),
+		])
+		requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Universe ${universe.id} Uniswap pool ${pool} factory edge`)
+		const expected = [universe.repToken.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
+		const actual = [getAddress(token0).toLowerCase(), getAddress(token1).toLowerCase()].sort()
+		if (actual[0] !== expected[0] || actual[1] !== expected[1] || fee !== BigInt(GENESIS_UNISWAP_FEE)) throw new Error(`Universe ${universe.id} Uniswap pool ${pool} has unexpected immutable token or fee bindings`)
+		return { initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, repToken: universe.repToken, universeId: universe.id }
+	})
+	return { factory, pools, proxy: authenticatedProxy, seeder: authenticatedSeeder }
 }
 
 function fixedPointPower(value: bigint, exponent: bigint) {
@@ -1797,7 +1799,12 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
-	const genesisUniswap = context.allowMissingTradingDeployment ? await discoverGenesisUniswap(context, universes, blockNumber) : undefined
+	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.allowMissingTradingDeployment ? await discoverUniverseUniswap(context, universes, blockNumber) : undefined
+	const genesis = universeUniswap?.pools.find(pool => pool.universeId === '0')
+	const genesisUniswap =
+		context.allowMissingTradingDeployment && universeUniswap !== undefined
+			? { factory: universeUniswap.factory, initialized: genesis?.initialized ?? false, liquidity: genesis?.liquidity ?? '0', ...(genesis?.pool === undefined ? {} : { pool: genesis.pool }), proxy: universeUniswap.proxy, seeder: universeUniswap.seeder }
+			: undefined
 	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
 	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
@@ -1821,6 +1828,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		stagedOperations: staged,
 		tradingDeployment,
 		...(genesisUniswap === undefined ? {} : { genesisUniswap }),
+		...(universeUniswap === undefined ? {} : { universeUniswap }),
 		universes,
 		wallet: { address: context.wallet, ethBalanceAttoEth: ethBalanceAttoEth.toString(), lpTokens, openOracleEthCredit: openOracleEthCredit.toString(), shares, tokens },
 		warnings: canonicalDiscoveryWarnings(warnings),

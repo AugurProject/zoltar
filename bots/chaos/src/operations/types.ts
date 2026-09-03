@@ -381,6 +381,21 @@ export interface PairSnapshot {
 	walletLiquidity: string
 }
 
+export interface UniverseUniswapPoolSnapshot {
+	universeId: string
+	repToken: Address
+	initialized: boolean
+	liquidity: string
+	pool?: Address | undefined
+}
+
+export interface UniverseUniswapSnapshot {
+	factory: boolean
+	proxy: boolean
+	seeder: boolean
+	pools: UniverseUniswapPoolSnapshot[]
+}
+
 export interface EcosystemDeployments {
 	zoltar: Address
 	questionData: Address
@@ -413,6 +428,7 @@ export interface EcosystemSnapshot {
 	pairs: PairSnapshot[]
 	tradingDeployment?: { factory: boolean; router: boolean }
 	genesisUniswap?: { factory: boolean; initialized: boolean; liquidity: string; pool?: Address | undefined; proxy: boolean; seeder: boolean }
+	universeUniswap?: UniverseUniswapSnapshot
 	warnings: string[]
 }
 
