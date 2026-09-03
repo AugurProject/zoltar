@@ -3,6 +3,7 @@ name: zoltar-open-oracle-arbitrager
 services:
   arbitrager:
     restart: unless-stopped
+    stop_grace_period: 60s
     build:
       context: ../..
       dockerfile: bots/open-oracle-arbitrager/Dockerfile

@@ -132,7 +132,13 @@ export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wal
 	return { observed: true as const, receipt }
 }
 
-export async function recoverPendingTransactions(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, state: ReturnType<typeof initialRuntimeState>, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
+export async function recoverPendingTransactions(
+	settings: OperatorSettings,
+	wallet: WalletClient<Transport, Chain, Account>,
+	state: ReturnType<typeof initialRuntimeState>,
+	pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]),
+	isStopping: () => boolean = () => false,
+) {
 	for (const intent of [...state.pendingTransactions]) {
 		assertIntentSender(intent.sender, wallet.account.address)
 		if (parseTransaction(intent.serializedTransaction).chainId !== BigInt(settings.network.chainId)) {
@@ -199,6 +205,7 @@ export async function recoverPendingTransactions(settings: OperatorSettings, wal
 		}
 		if (!recoveredIntentCanBeResubmitted(intent)) throw new Error(`Price-dependent transaction ${intent.hash} cannot be resubmitted without fresh market evidence`)
 		if (wallet.account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
+		if (isStopping()) return true
 		await submitSignedTransaction({
 			address: intent.sender,
 			hash: intent.hash,

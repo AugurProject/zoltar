@@ -1,5 +1,16 @@
 import { expect, test } from 'bun:test'
-import { assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, assertExecutorDeploymentReceipt, deployExecutorCreate2, deterministicDeploymentProxy, deterministicDeploymentProxyCode, executorCodeStatus, executorDeploymentPlan, submitExecutorDeploymentTransaction } from '#execution/create2-executor'
+import {
+	assertExecutorDeploymentActive,
+	assertExecutorDeploymentEnvironment,
+	assertExecutorDeploymentIntent,
+	assertExecutorDeploymentReceipt,
+	deployExecutorCreate2,
+	deterministicDeploymentProxy,
+	deterministicDeploymentProxyCode,
+	executorCodeStatus,
+	executorDeploymentPlan,
+	submitExecutorDeploymentTransaction,
+} from '#execution/create2-executor'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
 import type { Hex } from '#ethereum'
@@ -24,6 +35,11 @@ test('rejects executor deployment while a different saved RPC quorum is pending'
 test('rechecks execution pause immediately before executor deployment', () => {
 	expect(() => requirePausedExecutorDeployment(true, false)).toThrow('Pause execution before deploying')
 	expect(() => requirePausedExecutorDeployment(true, true)).not.toThrow()
+})
+
+test('rechecks shutdown immediately before executor deployment broadcast', () => {
+	expect(() => assertExecutorDeploymentActive(() => false)).not.toThrow()
+	expect(() => assertExecutorDeploymentActive(() => true)).toThrow('Operator stopping before executor deployment submission')
 })
 
 test('derives a stable executor address and canonical proxy calldata from a bytes32 salt', () => {
