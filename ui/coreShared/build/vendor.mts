@@ -47,7 +47,6 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: '@noble/hashes', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: { webcrypto: 'webcrypto.js', sha3: 'sha3.js', utils: 'utils.js', _assert: 'utils.js', sha256: 'sha2.js', sha512: 'sha2.js', pbkdf2: 'pbkdf2.js', hmac: 'hmac.js', ripemd160: 'legacy.js' } },
 	{ packageName: '@noble/curves', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', p256: 'nist.js', p384: 'nist.js', p521: 'nist.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'utils.js', utils: 'utils.js' } },
 	{ packageName: '@scure/base', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
 	{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js', alternateEntrypoints: {} },
 	{ packageName: 'micro-eth-signer', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: 'micro-packed', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
