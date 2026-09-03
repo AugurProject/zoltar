@@ -141,7 +141,11 @@ describe('genesis initialization', () => {
 		const childInventory = snapshot.wallet.tokens.find(token => token.address === childRep)
 		if (childInventory === undefined) throw new Error('Child REP inventory missing')
 		childInventory.balance = '1010'
-		const reserveBound = evaluateSelectableOperationDefinition('trading.universe-uniswap.seed-pool', snapshot, { ...options, maxRepSpendAttoRep: '100', minimumRepReserveAttoRep: '1000' })
+		const reserveBound = evaluateSelectableOperationDefinition('trading.universe-uniswap.seed-pool', snapshot, {
+			...options,
+			maxRepSpendAttoRep: (100n).toString(),
+			minimumRepReserveAttoRep: (1_000n).toString(),
+		})
 		const repMaximumKey = reserveBound.plan?.metadata['token0'] === childRep ? 'maximum0' : 'maximum1'
 		expect(reserveBound.plan?.metadata[repMaximumKey]).toBe('10')
 	})
