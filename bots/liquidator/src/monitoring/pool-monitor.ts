@@ -490,12 +490,15 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 	})
 }
 
-export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex()) {
+export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex(), isStopping: () => boolean = () => false) {
 	const block = await client.getBlock()
+	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
 	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }
 	const universes = await loadUniverses(client, settings, snapshotBlock.number)
+	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	const deployments = await loadRelevantPoolDeployments(client, settings, snapshotBlock)
+	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	const relevantPoolKeys = new Set(deployments.map(deployment => deployment.securityPool.toLowerCase()))
 	for (const poolKey of monitorIndex.vaultsByPool.keys()) {
 		if (!relevantPoolKeys.has(poolKey)) monitorIndex.vaultsByPool.delete(poolKey)
@@ -505,7 +508,9 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	}
 	const loadedPools: PoolObservation[] = []
 	for (const deployment of deployments) {
+		if (isStopping()) throw new Error('Operator stopping during pool scan')
 		const pool = await loadPool(client, settings, deployment, wallet, monitorIndex, snapshotBlock)
+		if (isStopping()) throw new Error('Operator stopping during pool scan')
 		validatePoolUniverseRep(pool, universes)
 		loadedPools.push(pool)
 	}
@@ -517,6 +522,7 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	const walletRepByToken = new Map<string, bigint>()
 	if (wallet !== undefined) {
 		for (const token of [...new Map(pools.map(pool => [pool.repToken.toLowerCase(), pool.repToken])).values()]) {
+			if (isStopping()) throw new Error('Operator stopping during pool scan')
 			walletRepByToken.set(
 				token.toLowerCase(),
 				await client.readContract({
@@ -529,6 +535,7 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 			)
 		}
 	}
+	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	if ((await client.getBlock({ blockNumber: snapshotBlock.number })).hash?.toLowerCase() !== snapshotBlock.hash.toLowerCase()) throw new Error('Security pool snapshot changed during discovery')
 	return { block: snapshotBlock, pools, universes, walletRepByToken }
 }

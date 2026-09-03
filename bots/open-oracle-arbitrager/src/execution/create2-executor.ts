@@ -46,6 +46,10 @@ export function assertExecutorDeploymentReceipt(status: 'reverted' | 'success', 
 	if (status !== 'success') throw new Error(`CREATE2 executor deployment reverted: ${transactionHash}`)
 }
 
+export function assertExecutorDeploymentActive(isStopping: (() => boolean) | undefined) {
+	if (isStopping?.()) throw new Error('Operator stopping before executor deployment submission')
+}
+
 export async function assertExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, account: Address, chainId: number, plan: ExecutorDeploymentPlan) {
 	if (intent.account.toLowerCase() !== account.toLowerCase() || intent.address.toLowerCase() !== plan.address.toLowerCase() || intent.chainId !== chainId || intent.salt.toLowerCase() !== plan.salt.toLowerCase()) {
 		throw new Error('Pending executor deployment intent does not match the active signer, chain, address, and salt')
@@ -101,9 +105,10 @@ async function executorDeploymentReceipt(parameters: { clients: readonly { clien
 	)
 }
 
-async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
+async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; isStopping?: (() => boolean) | undefined; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
 	const deadline = Date.now() + timeoutMilliseconds
 	while (true) {
+		assertExecutorDeploymentActive(parameters.isStopping)
 		const receipt = await executorDeploymentReceipt(parameters)
 		if (receipt !== undefined) {
 			assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
@@ -128,7 +133,16 @@ async function waitForExecutorDeployment(parameters: { address: Address; clients
 	}
 }
 
-export async function deployExecutorCreate2(parameters: { chain: Chain; existingIntent?: ExecutorDeploymentIntent | undefined; persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined; privateKey: Hex; readRpcUrls?: readonly string[] | undefined; rpcUrls: readonly string[]; salt: unknown }) {
+export async function deployExecutorCreate2(parameters: {
+	chain: Chain
+	existingIntent?: ExecutorDeploymentIntent | undefined
+	isStopping?: (() => boolean) | undefined
+	persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined
+	privateKey: Hex
+	readRpcUrls?: readonly string[] | undefined
+	rpcUrls: readonly string[]
+	salt: unknown
+}) {
 	const plan = executorDeploymentPlan(parameters.salt)
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)
@@ -191,8 +205,9 @@ export async function deployExecutorCreate2(parameters: { chain: Chain; existing
 		await parameters.persistIntent(intent)
 	}
 	if (environment.code !== 'verified') {
+		assertExecutorDeploymentActive(parameters.isStopping)
 		await submitExecutorDeploymentTransaction({ account: account.address, publicRpcUrls: parameters.rpcUrls, publicSubmit: sendRawTransactionToRpc, serializedTransaction: intent.serializedTransaction, transactionHash: intent.transactionHash })
 	}
-	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: intent.transactionHash })
+	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, ...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }), transactionHash: intent.transactionHash })
 	return { address: plan.address, alreadyDeployed: false, transactionHash: intent.transactionHash as Hash }
 }
