@@ -3,6 +3,7 @@ name: zoltar-chaos
 services:
   chaos:
     restart: unless-stopped
+    stop_grace_period: 60s
     build:
       context: ../..
       dockerfile: bots/chaos/Dockerfile

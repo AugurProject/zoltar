@@ -826,8 +826,11 @@ export const runNetworkLifecycle = async ({ verify, poll, failure, recover, inte
 			caughtUp = await poll()
 			consecutiveFailures = 0
 		} catch (error) {
+			if (signal.aborted) return
 			if (error instanceof LeaseLostError || shouldRethrow?.(error) === true) throw error
-			if ((await recover?.(error)) === true) {
+			const recovered = await recover?.(error)
+			if (signal.aborted) return
+			if (recovered === true) {
 				consecutiveFailures = 0
 				caughtUp = false
 			} else {
@@ -1001,6 +1004,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 		let retryDelay: number | undefined
 		try {
 			lease = await acquire()
+			if (signal.aborted) continue
 			if (lease === undefined) {
 				consecutiveFailures = 0
 				wasStandby = true
@@ -1013,8 +1017,10 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				standbyReported = false
 				stage = 'verify'
 				await lease.assertHeld()
+				if (signal.aborted) continue
 				stage = 'seed'
 				await seed(lease)
+				if (signal.aborted) continue
 				const recoveredAfterFailures = consecutiveFailures
 				const acquiredAfterStandby = wasStandby
 				onEvent({
@@ -1033,9 +1039,11 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				stage = 'owned-run'
 				ownedRunStartedAt = now()
 				await runOwned(lease)
+				if (signal.aborted) continue
 				consecutiveFailures = 0
 			}
 		} catch (error) {
+			if (signal.aborted) continue
 			const failureStage = error instanceof IndexerOwnershipStageError ? error.stage : stage
 			if (failureStage === 'owned-run' && ownedRunStartedAt !== undefined && now() - ownedRunStartedAt >= Math.max(intervalMs * 4, 60_000))
 				consecutiveFailures = 0
