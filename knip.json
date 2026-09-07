@@ -1,7 +1,14 @@
 {
 	"workspaces": {
 		".": {
-			"entry": ["docs/charts/chartRuntime.ts!", "docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!", "scripts/**/*.test.ts", "bun-test-setup*.ts", "docs/{charts/virtualModules,runtime/globals}.d.ts!"],
+			"entry": [
+				"docs/charts/chartRuntime.ts!",
+				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
+				"scripts/**/*.test.ts",
+				"bun-test-setup*.ts",
+				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
+				"scripts/knip-baseline.mts"
+			],
 			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "scripts/**/*.{ts,mts}", "bun-test-setup*.ts"],
 			"ignoreDependencies": ["@preact/signals", "tevm"]
 		},

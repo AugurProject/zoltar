@@ -178,8 +178,8 @@
 		"ui:browser-smoke:statoblast": "bun ./ui/coreShared/build/browserSmoke.mts statoblast",
 		"ui:browser-smoke:trading": "bun ./ui/coreShared/build/browserSmoke.mts trading",
 		"ui:browser-smoke": "bun run ui:browser-smoke:zoltar && bun run ui:browser-smoke:statoblast && bun run ui:browser-smoke:trading",
-		"knip:production": "bun x knip --production --include files,exports,dependencies",
+		"knip:production": "bun x knip --production --include files,exports,dependencies --preprocessor ./scripts/knip-baseline.mts",
 		"compile-contracts:current": "cd solidity && bun run compile-contracts:current",
-		"knip:normal": "bun x knip"
+		"knip:normal": "bun x knip --preprocessor ./scripts/knip-baseline.mts"
 	}
 }
