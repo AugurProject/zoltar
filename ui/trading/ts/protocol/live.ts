@@ -12,10 +12,9 @@ import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfte
 import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { configuredFactory, configuredPair, configuredShareOperationRouter, receiveBasedExitArguments, shareTokenAbi } from './versionedAuthorization.js'
 
-export { encodeReceiveBasedExitRequest } from './versionedAuthorization.js'
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId } from './runtimeClients.js'
 export { publicErrorMessage } from './publicError.js'
-export { normalizeForkOutcomeIndexes, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from './settlement.js'
+export { settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from './settlement.js'
 export { simulateLiquidity, submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
 

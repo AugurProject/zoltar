@@ -3,7 +3,7 @@ import * as commonCopy from '../../copy/common.js'
 import * as liquidityCopy from '../../copy/liquidity.js'
 import type { TradingRoute } from '../../lib/routing.js'
 
-export function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
+function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
 	return simulationActive ? commonCopy.conditionalPricesOnly : commonCopy.formatNetworkConditionalPrices(chainName)
 }
 

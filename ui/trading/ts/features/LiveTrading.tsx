@@ -20,9 +20,9 @@ import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 import { SecurityPoolIdentityRows } from './LiveMarketIdentity.js'
-import * as liveCopy from '../copy/live.js'
+import { liveCopy } from '../copy/live.js'
 
-export { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from './live/routePresentation.js'
+export { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 
 const ignoreWalletSummaryChange = () => undefined
 

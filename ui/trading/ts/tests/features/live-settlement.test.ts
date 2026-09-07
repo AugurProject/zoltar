@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../../generated/contractArtifact.js'
-import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/LiveSettlementControls.js'
-import { normalizeForkOutcomeIndexes, simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
+import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/live/settlementQuote.js'
+import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { encodeReceiveBasedRedeemRequest } from '../../protocol/versionedAuthorization.js'
 
@@ -91,11 +91,6 @@ function isHexValue(value: unknown): value is Hex {
 }
 
 describe('live settlement contract encoding', () => {
-	test('sorts fork targets into the strict contract order and rejects duplicates', () => {
-		expect(normalizeForkOutcomeIndexes([99n, 12n, 42n])).toEqual([12n, 42n, 99n])
-		expect(() => normalizeForkOutcomeIndexes([12n, 12n])).toThrow('only once')
-	})
-
 	test('encodes and submits ShareToken migration with the ShareToken ABI', async () => {
 		const transactionData: Hex[] = []
 		const client = createWalletClient({
@@ -121,6 +116,7 @@ describe('live settlement contract encoding', () => {
 
 		const selectedScalarTargets = [99n, 42n, 12n]
 		const normalizedScalarTargets = [12n, 42n, 99n]
+		await expect(simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: [12n, 12n] })).rejects.toThrow('only once')
 		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: selectedScalarTargets })
 		const uiQuote = { ...quote, account, walletClient: client, inputRevision: 0 }
 		expect(quote.targetOutcomeIndexes).toEqual(normalizedScalarTargets)

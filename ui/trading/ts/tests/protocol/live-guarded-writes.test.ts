@@ -3,7 +3,7 @@ import { createPublicClient, createWalletClient, custom, decodeFunctionData, enc
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { createTradingPublicClient, encodeReceiveBasedExitRequest, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
+import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -121,10 +121,6 @@ test('creates live read clients from the configured active backend', () => {
 })
 
 describe('live guarded transaction writes', () => {
-	test('binds every receive-based exit identity and user bound into the callback payload', () => {
-		expect(encodeReceiveBasedExitRequest(market, 'YES', 10n, 13n, 8n, account, 900n)).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, 13n, 8n, account, account, 900n]]))
-	})
-
 	test('simulates and submits the exact same final receive-based exit payload', async () => {
 		const receiveRouter = `0x${'aa'.repeat(20)}` as Address
 		const versionTwoConfiguration = { ...configuration, receiveRouter, version: 2 as const }
@@ -156,7 +152,7 @@ describe('live guarded transaction writes', () => {
 		expect(shareCalls[2]).toBe(shareCalls[0])
 		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: shareCalls[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
-		expect(decodedTransfer.args[4]).toBe(encodeReceiveBasedExitRequest(market, 'YES', 10n, quote.maximumLongShares, quote.minimumEth, account, quote.deadline))
+		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline]]))
 	})
 
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {

@@ -1,8 +1,8 @@
 import { TradingAddressValue } from '../components/TradingAddress.js'
 import { shareBalanceScope, type LiveMarket } from '../protocol/live.js'
-import * as identityCopy from '../copy/identity.js'
+import { identityCopy } from '../copy/identity.js'
 
-export function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originUniverseId'>) {
+function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originUniverseId'>) {
 	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
 }
 

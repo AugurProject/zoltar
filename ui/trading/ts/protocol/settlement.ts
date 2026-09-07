@@ -19,7 +19,7 @@ function outcomeValue(outcome: ShareOutcome) {
 	return outcome === 'YES' ? 1n : 2n
 }
 
-export function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
+function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
 	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one fork target')
 	const normalized = [...targetOutcomeIndexes].sort((left, right) => {
 		if (left < right) return -1

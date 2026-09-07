@@ -16,8 +16,6 @@ import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulati
 import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 
-export { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from './live/useSettlementWorkflowController.js'
-
 export type LiveSettlementServices = Readonly<{
 	approveRouter: typeof approveRouter
 	createPublicClient(configuration: DeploymentConfiguration): PublicClient
