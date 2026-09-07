@@ -63,6 +63,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		require(permitAmountAttoRep == depositedAttoRep, 'Permit amount must equal accepted deposit');
 		address token = game.repToken();
 		try
 			IERC20PermitAuthorization(token).permit(msg.sender, address(this), permitAmountAttoRep, deadline, v, r, s)

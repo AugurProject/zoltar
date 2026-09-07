@@ -78,6 +78,7 @@ describe('Statoblast REP authorization entry points', () => {
 		await writeContractAndWait(ownerClient, () =>
 			ownerClient.writeContract({ abi: statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization.abi, address: escalationGame, functionName: 'depositRepOnOutcomeWithPermit', args: [QuestionOutcome.Yes, firstMaximum, firstAccepted, deadline, firstPermit.v, firstPermit.r, firstPermit.s] }),
 		)
+		fixture.strictEqualTypeSafe(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'allowance', args: [owner, escalationGame] }), 0n, 'atomic exact permit should leave no residual allowance')
 
 		const secondMaximum = nonDecisionThresholdAttoRep
 		const [secondAccepted] = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.Yes, secondMaximum] })
@@ -98,8 +99,14 @@ describe('Statoblast REP authorization entry points', () => {
 			message: { owner, spender: escalationGame, value: secondAccepted.toString(), nonce: secondPermitNonce.toString(), deadline: deadline.toString() },
 		})
 		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, escalationGame, secondAccepted, deadline, secondPermit.v, secondPermit.r, secondPermit.s] }))
-		await writeContractAndWait(ownerClient, () =>
+		await fixture.assert.rejects(
 			ownerClient.writeContract({ abi: statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization.abi, address: escalationGame, functionName: 'depositRepOnOutcomeWithPermit', args: [QuestionOutcome.Yes, secondMaximum, secondMaximum, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] }),
+			/accepted deposit|reverted/i,
+			'permit value must exactly equal the previewed accepted deposit',
+		)
+		fixture.strictEqualTypeSafe(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'allowance', args: [owner, escalationGame] }), secondAccepted, 'mismatched wrapper value must not consume the pre-submitted allowance')
+		await writeContractAndWait(ownerClient, () =>
+			ownerClient.writeContract({ abi: statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization.abi, address: escalationGame, functionName: 'depositRepOnOutcomeWithPermit', args: [QuestionOutcome.Yes, secondMaximum, secondAccepted, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] }),
 		)
 
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
