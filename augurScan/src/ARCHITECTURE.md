@@ -3,8 +3,8 @@
 The backend is organized by capability and keeps dependencies directed toward runtime-neutral evidence types:
 
 - `api/` owns HTTP validation, cursor parsing, response serialization, and route-family queries. `api.ts` is its public entry point.
-- `indexer/` owns provider checks, scan planning, canonical-chain fencing, lifecycle/ownership state, and discovery. `indexer.ts` retains the network runner and public entry point.
-- `database/` owns stored record contracts, history invalidation, lease/session handling, and transaction helpers. `database.ts` retains the database repository class and public entry point.
+- `indexer/` owns provider selection, ownership and replay lifecycle, canonical-chain synchronization, bounded log scanning, and block ingestion. Each stage is a focused layer in the network runner, while `indexer.ts` is the stable public entry point.
+- `database/` owns lease/session handling, network and contract catalog persistence, direct observations, history and checkpoint transitions, and atomic block persistence. Repository layers inherit one connection owner so transaction boundaries stay explicit, while `database.ts` is the stable public entry point.
 - `projections/` converts decoded evidence into typed state and domain projections. `projections.ts` is its public entry point.
 - `process-bootstrap.ts`, `server.ts`, and `indexer-process.ts` compose those capabilities into runnable processes.
 
