@@ -73,7 +73,7 @@
 						<h3>Each economic role has enough independent participants</h3>
 						<p>Trading, liquidation, escalation, migration, auction bidding, price correction, and settlement have enough non-colluding participants for the relevant action. Secondary-market trading is external to Statoblast.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Thin or controlled participation can remove price discovery, competitive bidding, or an opposing outcome deposit.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/zoltar.html#security">fork coordination</a>, and <a href="../explanation/truth-auctions.html#lifecycle">auction participation</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/truth-auctions.html#lifecycle">auction participation</a>.</p>
 					</li>
 					<li id="assumption-a04" value="4" data-assumption="A04">
 						<h3>Participants can mobilize REP to raise an alarm</h3>
@@ -101,7 +101,7 @@
 							<p class="equation-note">Compare one lineage’s continued-use value and secured value at the same pre-attack time.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Participants may rationally abandon, grief, or coordinate away from a lineage whose continued-use value is too small.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#security">fork security</a>, <a href="../explanation/statoblast.html#migration">fork migration</a>, and <a href="../explanation/statoblast.html#fees-capacity-liquidations">Statoblast security boundary</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">fork security</a>, <a href="../explanation/statoblast.html#forks-migration">fork migration</a>, and <a href="../explanation/statoblast.html#fees-capacity-liquidations">Statoblast security boundary</a>.</p>
 					</li>
 					<li id="assumption-a06" value="6" data-assumption="A06">
 						<h3>At least one executor advances every required public transition</h3>
@@ -141,7 +141,7 @@
 							<p class="equation-note">Parent and child values use the same origin lineage, valuation source, numeraire, and decision horizon. For multiplier <code>20_000 BPS</code>, aggregate child-lineage value must be at least twice parent-lineage value; multiplier <code>30_000 BPS</code> requires three times that value.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Value destruction or fragmentation can make a malicious or unnecessary fork cheaper than the harm it causes.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/zoltar.html#security">fork coordination</a>, and <a href="../explanation/statoblast.html#migration">pool migration</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/statoblast.html#forks-migration">pool migration</a>.</p>
 					</li>
 					<li id="assumption-a08" value="8" data-assumption="A08">
 						<h3>REP market capitalization approximates economic value</h3>
@@ -163,25 +163,25 @@
 							<p class="equation-note">When several branches remain plausibly truthful, document the value split instead of assuming one winner.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Coordination on a false branch, or durable fragmentation across branches, defeats the value-concentration security argument.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#security">Zoltar security</a> and <a href="../explanation/statoblast.html#child-outcome-resolution">child outcome resolution</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">Zoltar security</a> and <a href="../explanation/statoblast.html#forks-migration">child outcome resolution</a>.</p>
 					</li>
 					<li id="assumption-a10" value="10" data-assumption="A10">
 						<h3>Participants can access timely outcome evidence</h3>
 						<p>Users can obtain enough reliable real-world evidence before the relevant protocol deadline to judge which universe is truthfull.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Missing, delayed, or conflicting evidence can split honest capital or let a false local outcome become final.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#questions">question encoding</a>, <a href="../explanation/zoltar.html#invalid">invalid outcomes</a>, and <a href="../explanation/statoblast.html#child-outcome-resolution">child resolution</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#questions">question encoding</a>, <a href="../explanation/zoltar.html#encodings">invalid outcomes</a>, and <a href="../explanation/statoblast.html#forks-migration">child resolution</a>.</p>
 					</li>
 					<li id="assumption-a11" value="11" data-assumption="A11">
 						<h3>Migration is operationally practical</h3>
 						<p>Users, exchanges, interfaces, custodians, and other integrations are willing and able to migrate assets and state into the child universe or universes they support during the applicable windows.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Supported branches can remain illiquid or undercollateralized because economic claims and backing do not move there.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#splitting">REP splitting</a>, <a href="../explanation/statoblast.html#migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">operator migration guidance</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">operator migration guidance</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12" data-assumption="A12">
 						<h3>Truth auctions can convert supported child REP efficiently</h3>
 						<p>When repair is needed, enough demand can buy some supported-child REP for ETH at an acceptably small discount and operating cost. This does not assume that the full repair target is raised.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#auction">repair accounting</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
 					</li>
 					<li id="assumption-a13" value="13" data-assumption="A13">
 						<h3>REP is sufficiently liquid</h3>
@@ -305,7 +305,7 @@
 						<p>Keccak-256 remains collision- and preimage-resistant at the truncated widths used by the protocol, and CREATE2 identity remains sound. secp256k1 ECDSA signatures remain unforgeable with correct EOA signer recovery for Ethereum transactions and EIP-712 authorizations. OpenOracle's fixed Permit2 singleton additionally validates either an EOA signature or an ERC-1271 contract-account signature correctly.</p>
 						<p>OpenOracle fixes the Permit2 address, requires the exact permitted amount, sends the requested tokens to itself, and constructs the witness from the beneficiary, relayer, token owner, and intent. Permit2 defines the EIP-712 domain, deadline, permitted-amount ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature validation. Verification under <a href="#assumption-a23">A23</a> must cover the pinned Permit2 implementation at that fixed address.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Forged identities, colliding questions or universes, false carry proofs, forged EOA transactions, incorrect EOA recovery or ERC-1271 acceptance, or broken domain and nonce enforcement can violate otherwise-correct guards or authorize an unintended token transfer.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#universe-model">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="../../solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="../../solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic deployments</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#branching">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="../../solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="../../solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic deployments</a>.</p>
 					</li>
 					<li id="assumption-a28" value="28" data-assumption="A28">
 						<h3>Participants retain control of account authority</h3>
