@@ -745,8 +745,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function getVaultCount\(\) external view returns \(uint256\) \{\s*return vaultAddresses\.length;/)
 	assert.match(securityPool, /function getVaults\([\s\S]*vaultAddresses\[vaultCount - startIndex - index - 1\]/)
 	assert.match(securityPool, /function _registerVault\(address vault\) private \{\s*if \(vault == address\(0x0\) \|\| isKnownVault\[vault\]\) return;\s*isKnownVault\[vault\] = true;\s*vaultAddresses\.push\(vault\);\s*\}/)
-	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universes\[universeId\]\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amountAttoRep, msg\.sender, outcomeIndexes\)/)
-	assert.match(zoltar, /function splitRepInternal\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(recipient, amountAttoRep\)[\s\S]*emit MigrationRepSplit\(/)
+	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universes\[universeId\]\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amountAttoRep, outcomeIndexes\)/)
+	assert.match(zoltar, /function splitRepInternal\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(msg\.sender, amountAttoRep\)[\s\S]*emit MigrationRepSplit\(/)
 	assert.match(reputationToken, /function mint\(address account, uint256 valueAttoRep\)[\s\S]*_mint\(account, valueAttoRep\);[\s\S]*emit Mint\(account, valueAttoRep\)/)
 	assert.match(
 		contractInteractionReference,

@@ -60,6 +60,16 @@ test('shared dependency refresh syncs the installed package without requiring bu
 		})
 		expect(extraFileRefresh.exitCode).toBe(0)
 		await expect(readFile(path.join(consumerRootPath, 'node_modules/@zoltar/shared/js/removed.js'), 'utf8')).rejects.toThrow()
+		for (const mode of ['changed', 'missing'] as const) {
+			const constantsPath = path.join(consumerRootPath, 'node_modules/@zoltar/shared/js/constants.js')
+			if (mode === 'changed') await writeFile(constantsPath, 'export const stale = true\n')
+			else await rm(constantsPath)
+			const check = Bun.spawnSync([process.execPath, sharedRefreshScriptPath], { cwd: consumerRootPath, stdout: 'pipe', stderr: 'pipe' })
+			expect(check.exitCode).toBe(1)
+			const refresh = Bun.spawnSync([process.execPath, sharedRefreshScriptPath, '--refresh'], { cwd: consumerRootPath, stdout: 'pipe', stderr: 'pipe' })
+			expect(refresh.exitCode).toBe(0)
+			expect(await readFile(constantsPath, 'utf8')).toBe(sourceConstantsSource)
+		}
 	} finally {
 		await rm(consumerRootPath, { force: true, recursive: true })
 	}
