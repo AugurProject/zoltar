@@ -118,6 +118,19 @@ describe('universe selector', () => {
 		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
 	})
 
+	test('keeps trading context in an accessible mobile disclosure', async () => {
+		const rendered = await renderIntoDocument(<App />)
+		cleanupRendered = rendered.cleanup
+		const trigger = rendered.container.querySelector<HTMLButtonElement>('.trading-context-trigger')
+		const panel = rendered.container.querySelector<HTMLElement>('#trading-context-panel')
+		expect(trigger?.getAttribute('aria-controls')).toBe('trading-context-panel')
+		expect(trigger?.getAttribute('aria-expanded')).toBe('false')
+		expect(panel?.hidden).toBe(true)
+		await act(() => trigger?.click())
+		expect(trigger?.getAttribute('aria-expanded')).toBe('true')
+		expect(panel?.hidden).toBe(false)
+	})
+
 	test('shows wallet connection failures on live security-pool routes', async () => {
 		window.history.replaceState(undefined, '', `/#/security-pool/0x${'44'.repeat(20)}`)
 		const configuration: DeploymentConfiguration = {

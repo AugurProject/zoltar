@@ -108,6 +108,7 @@ export function App({
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
 	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
+	const [tradingContextOpen, setTradingContextOpen] = useState(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
 	const routeRef = useRef(route)
@@ -286,7 +287,10 @@ export function App({
 									{appCopy.help}
 								</a>
 							</nav>
-							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
+							<button class='trading-context-trigger' type='button' aria-controls='trading-context-panel' aria-expanded={tradingContextOpen} onClick={() => setTradingContextOpen(open => !open)}>
+								Trading context
+							</button>
+							<div id='trading-context-panel' class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`} hidden={!tradingContextOpen}>
 								{settingsMenu}
 								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
 									<span />

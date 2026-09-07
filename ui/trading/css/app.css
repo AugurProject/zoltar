@@ -11,10 +11,27 @@
 	--faint: #7d8b9b;
 	--accent: #d9ff76;
 	--accent-dark: #17220b;
-	--yes: #87d7a4;
-	--no: #7ea8e8;
+	--yes: var(--outcome-yes);
+	--no: var(--outcome-no);
+	--invalid: var(--outcome-invalid);
 	--warn: #f1c76f;
 	--bad: #ee8d8d;
+}
+
+.trading-context-trigger {
+	display: none;
+}
+
+@media (min-width: 1201px) {
+	.header-actions[hidden] {
+		display: flex;
+	}
+}
+
+@media (min-width: 521px) and (max-width: 1200px) {
+	.header-actions[hidden] {
+		display: grid;
+	}
 }
 
 html {
@@ -2049,5 +2066,203 @@ summary {
 	*::after {
 		animation-duration: 0.01ms !important;
 		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Augur Trading visual layer: compact, scan-first, and outcome-specific. */
+:root[data-product="trading"] {
+	--line: var(--border-default);
+	--line-strong: var(--border-strong);
+	--surface: var(--surface-section);
+	--surface-raised: var(--surface-interactive);
+	--muted: var(--text-muted);
+	--faint: var(--text-muted);
+	--accent-dark: color-mix(in srgb, var(--accent-trading) 10%, var(--surface-section));
+}
+
+:root[data-product="trading"] body {
+	font-size: var(--font-body);
+	background: radial-gradient(circle at 18% -12%, color-mix(in srgb, var(--accent-trading) 10%, transparent), transparent 34rem), var(--bg-deep);
+}
+
+:root[data-product="trading"] .site-header {
+	border-color: var(--border-default);
+	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+}
+
+:root[data-product="trading"]
+	:where(
+		.app-settings-menu label > span,
+		.deployment-settings summary,
+		.universe-selector select,
+		.network-pill,
+		.wallet-button,
+		.secondary-action,
+		.wallet-summary__address,
+		.wallet-summary__balances small,
+		.wallet-summary__balances strong,
+		.wallet-summary__details,
+		.wallet-summary__error,
+		.wallet-summary__retry,
+		.segmented button,
+		.side-picker small,
+		.execution-settings > small,
+		.trade-summary span,
+		.trade-summary small,
+		.trade-summary--unavailable p,
+		.quote__title,
+		.quote > p,
+		details p,
+		.operation-block p,
+		.metrics dt,
+		.fact-list dt,
+		.metrics dd,
+		.fact-list dd,
+		.transaction-message,
+		.transaction-hash,
+		details,
+		.coverage div,
+		.coverage p,
+		.warning,
+		.pool-mint-note,
+		.market-row__top,
+		.market-row p,
+		.market-row__pool dt,
+		.market-row__pool dd,
+		.market-row__metrics dt,
+		.market-row__metrics dd,
+		.row-action,
+		.uninitialized-state p,
+		.fork-source-step p,
+		.fork-question-summary span,
+		.fork-question-summary small,
+		.fork-target-count,
+		.fork-deployed-targets > span,
+		.fork-deployed-targets,
+		.quiet-action,
+		.coverage-meter div,
+		.coverage-meter small,
+		.muted,
+		.table-row,
+		.explanation-flow p,
+		.prose p
+	) {
+	font-size: 0.8125rem;
+}
+
+:root[data-product="trading"] :where(.wallet-summary__trigger, .universe-selector select) {
+	min-height: var(--touch-target-min);
+}
+
+:root[data-product="trading"] :where(.market-row, .live-market-button, .portfolio-groups > .operation-block) {
+	border-width: 0 0 1px;
+	border-radius: 0;
+	background: transparent;
+}
+
+:root[data-product="trading"] .live-market-button + .live-market-button {
+	margin-top: 0;
+}
+
+:root[data-product="trading"] .live-market-button[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--accent-trading) 9%, transparent);
+	box-shadow: inset 3px 0 var(--accent-trading);
+}
+
+:root[data-product="trading"] .probability__labels span:first-child,
+:root[data-product="trading"] .side-picker button[value="YES"][aria-pressed="true"] {
+	color: var(--outcome-yes);
+}
+
+:root[data-product="trading"] .probability__labels span:last-child,
+:root[data-product="trading"] .side-picker button[value="NO"][aria-pressed="true"] {
+	color: var(--outcome-no);
+}
+
+:root[data-product="trading"] .probability__yes {
+	background: var(--outcome-yes);
+}
+
+:root[data-product="trading"] .probability__track {
+	background: color-mix(in srgb, var(--outcome-no) 42%, var(--surface-raised));
+}
+
+:root[data-product="trading"] :where(.metrics dd, .fact-list dd, .trade-summary strong, .balance-strip strong) {
+	font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 520px) {
+	:root[data-product="trading"] .site-header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		min-height: 0;
+		padding: 0.5rem 1rem;
+	}
+
+	:root[data-product="trading"] .trading-context-trigger {
+		display: inline-flex;
+		grid-column: 2;
+		grid-row: 1;
+		align-items: center;
+		min-height: var(--touch-target-min);
+		padding: 0.5rem 0.7rem;
+		border: 1px solid var(--line-strong);
+		background: var(--surface-raised);
+		color: var(--text);
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .site-header nav {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: flex-start;
+		width: 100%;
+		padding: 0;
+		overflow-x: auto;
+		overscroll-behavior-inline: contain;
+	}
+
+	:root[data-product="trading"] .site-header nav a {
+		flex: 0 0 auto;
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .header-actions {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-row: 3;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: var(--space-2);
+		width: 100%;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+
+	:root[data-product="trading"] .header-actions[hidden] {
+		display: none;
+	}
+
+	:root[data-product="trading"] .header-actions > * {
+		grid-column: auto;
+		grid-row: auto;
+		max-width: 100%;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-summary {
+		grid-column: 1 / -1;
+		grid-row: auto;
+	}
+
+	:root[data-product="trading"] .market-row,
+	:root[data-product="trading"] .live-market-button {
+		width: 100%;
+		min-width: 0;
+	}
+
+	:root[data-product="trading"] .market-row__pool dl,
+	:root[data-product="trading"] .market-row__metrics,
+	:root[data-product="trading"] .balance-strip {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
