@@ -2,8 +2,8 @@ import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 export type IntegrityCursor = readonly [

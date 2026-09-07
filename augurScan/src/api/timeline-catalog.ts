@@ -1,8 +1,8 @@
 import type { SQL } from 'bun'
 import { stateCatalogRows, timelineCatalogRows, timelineRows } from '../repositories/timeline.ts'
 import { detailPage, paged, parseTimelineCatalogCursor, protocolCursorFor, protocolCursorForRequest, timelineCatalogCursorFor } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import { ApiRequestError, canonicalHistoryFilter, evmAddress, integer, json, POSTGRES_BIGINT_MAX, postgresBigint, routeInteger } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

@@ -2,8 +2,8 @@ import type { SQL } from 'bun'
 import { candlestickBuckets, fixedWindowTwap, swapAnalytics } from '../operations.ts'
 import { tradingDetailData } from '../repositories/trading-detail.ts'
 import { detailPage, paged, protocolCursorFor, protocolCursorForRequest } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import { json, jsonRecord, routeInteger } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const chainId = routeInteger(parts[0])
@@ -16,7 +16,12 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
-	const { events: rows, observations, summaries, lpPositions } = await tradingDetailData(sql, {
+	const {
+		events: rows,
+		observations,
+		summaries,
+		lpPositions,
+	} = await tradingDetailData(sql, {
 		chainId,
 		market,
 		asOfBlock: String(asOf['blockNumber']),

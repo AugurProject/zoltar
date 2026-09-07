@@ -1,10 +1,11 @@
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+
 export { ApiConflictError, ApiRequestError } from '../query-errors.ts'
+
 import { ApiRequestError } from '../query-errors.ts'
 import { snapshotBoundary } from './entity-details.ts'
 
 export { actionJsonColumns, decodedJsonColumns, json, jsonRecord, normalize, parsedJsonColumn } from './serializers.ts'
-import { actionJsonColumns } from './serializers.ts'
 
 export const integer = (value: string | null, name: string): number | undefined => {
 	if (value === null || value === '') return undefined

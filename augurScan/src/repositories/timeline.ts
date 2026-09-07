@@ -10,7 +10,14 @@ export type TimelineFilters = {
 	readonly toBlock: string
 	readonly canonical: 'canonical' | 'orphaned' | 'all'
 	readonly asOfBlock: string
-	readonly cursor: { readonly block: string; readonly log: number; readonly tx: string; readonly blockHash: string; readonly entityType: string; readonly identity: string }
+	readonly cursor: {
+		readonly block: string
+		readonly log: number
+		readonly tx: string
+		readonly blockHash: string
+		readonly entityType: string
+		readonly identity: string
+	}
 	readonly limit: number
 }
 
@@ -79,7 +86,15 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 
 export const timelineRows = async (
 	sql: SQL,
-	query: { readonly chainId: number; readonly entityType: string; readonly entityIdentity: string; readonly cursorBlock: string; readonly cursorLog: number; readonly cursorTx: string; readonly limit: number },
+	query: {
+		readonly chainId: number
+		readonly entityType: string
+		readonly entityIdentity: string
+		readonly cursorBlock: string
+		readonly cursorLog: number
+		readonly cursorTx: string
+		readonly limit: number
+	},
 ) =>
 	await sql`
 		SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline

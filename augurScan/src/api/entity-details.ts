@@ -2,7 +2,6 @@ import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
-import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 import {
 	ApiConflictError,
 	ApiRequestError,
@@ -14,6 +13,7 @@ import {
 	jsonRecord,
 	routeInteger,
 } from './shared.ts'
+import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
 	String(asOf['blockNumber']),

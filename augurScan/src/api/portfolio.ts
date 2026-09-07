@@ -1,8 +1,7 @@
 import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
-import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
+import { addressPortfolioRows, type RichListSort, richListRows } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import {
 	ApiConflictError,
 	ApiRequestError,
@@ -14,6 +13,7 @@ import {
 	json,
 	jsonRecord,
 } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

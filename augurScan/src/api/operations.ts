@@ -1,5 +1,4 @@
 import type { SQL } from 'bun'
-import { detailPage, paged, parseRiskCursor, protocolCursorFor, protocolCursorForRequest, riskCursorFor } from './entity-details.ts'
 import {
 	auctionCatalogData,
 	escalationCatalogData,
@@ -9,8 +8,9 @@ import {
 	reportCatalogData,
 	riskCatalogData,
 } from '../repositories/operations.ts'
-import { operationsAsOfForContinuations, operationsAsOfFromUrl } from './snapshot.ts'
+import { detailPage, paged, parseRiskCursor, protocolCursorFor, protocolCursorForRequest, riskCursorFor } from './entity-details.ts'
 import { ApiRequestError, integer, json, jsonRecord, postgresBigint } from './shared.ts'
+import { operationsAsOfForContinuations, operationsAsOfFromUrl } from './snapshot.ts'
 
 export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

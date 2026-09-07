@@ -2,8 +2,8 @@ import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { tradingCatalogRows } from '../repositories/trading-catalog.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import { ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export type OffsetCursor = readonly [number, string, string, string, string, string, string, string, string, number]
 

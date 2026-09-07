@@ -1,9 +1,8 @@
 import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
-import { snapshotBoundary } from './entity-details.ts'
 import { riskCatalogData } from '../repositories/operations.ts'
 import { riskHistoryRows } from '../repositories/risk.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
+import { snapshotBoundary } from './entity-details.ts'
 import {
 	ApiRequestError,
 	cursorTimestamp,
@@ -17,6 +16,7 @@ import {
 	postgresBigint,
 	routeInteger,
 } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 export type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]

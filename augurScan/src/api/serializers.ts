@@ -26,6 +26,7 @@ export const json = (value: unknown, status = 200): Response =>
 		status,
 		headers: { 'cache-control': 'no-store' },
 	})
-import { jsonRecord, parsedJsonColumn } from '../record-serialization.ts'
+
+import { parsedJsonColumn } from '../record-serialization.ts'
 
 export { jsonRecord, parsedJsonColumn } from '../record-serialization.ts'

@@ -280,9 +280,7 @@ export class ScannerDatabaseConnection {
 									await destroyReservedConnection(connection)
 								} catch (expectedConnectionCleanupError) {
 									cleanupError =
-										cleanupError === undefined
-											? expectedConnectionCleanupError
-											: new AggregateError([cleanupError, expectedConnectionCleanupError])
+										cleanupError === undefined ? expectedConnectionCleanupError : new AggregateError([cleanupError, expectedConnectionCleanupError])
 								}
 							if (!releaseConfirmed)
 								throw new IndexerLeaseReleaseError(

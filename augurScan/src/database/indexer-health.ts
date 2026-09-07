@@ -36,8 +36,7 @@ export const reconcileIndexerOwnership = (
 		else if (lockedBackendPid !== undefined) {
 			if (recorded === undefined) state = 'unknown'
 			else state = recordedBackendPid === lockedBackendPid && recorded['state'] === 'owned' && heartbeatFresh ? 'owned' : 'stale-owner'
-		}
-		else if (recorded?.['state'] === 'standby' || recorded?.['state'] === 'released') state = 'standby'
+		} else if (recorded?.['state'] === 'standby' || recorded?.['state'] === 'released') state = 'standby'
 		else state = 'unknown'
 		return {
 			chainId,

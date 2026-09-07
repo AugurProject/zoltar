@@ -2,7 +2,6 @@ import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './snapshot.ts'
 import {
 	ApiRequestError,
 	type CanonicalHistoryFilter,
@@ -17,6 +16,7 @@ import {
 	json,
 	jsonRecord,
 } from './shared.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 export type DirectObservationKind = 'all' | 'address-balance' | 'token-metadata'
