@@ -65,6 +65,19 @@ describe('trading against authoritative Zoltar contracts', () => {
 		return { shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting }
 	}
 
+	async function deployV2Venue() {
+		const factoryV2 = await deploy(factoryV2Artifact, [fixture.getInfraContractAddresses().securityPoolFactory, 30n])
+		const legacyRouter = await deploy(routerArtifact, [factoryV2])
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryV2Artifact.abi, address: factoryV2, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
+		const pairV2 = await fixture.client.readContract({ abi: factoryV2Artifact.abi, address: factoryV2, functionName: 'getPair', args: [fixture.securityPoolAddresses.securityPool] })
+		return { pair: pairV2, router: legacyRouter }
+	}
+
+	async function initializeV2Venue(pairV2: Address, routerV2: Address, value = 1n) {
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: fixture.statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'setApprovalForAll', args: [routerV2, true] }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: routerV2, functionName: 'initializeWithEth', args: [pairV2, 5_000n, 1n, account, 10n ** 12n], value }))
+	}
+
 	beforeAll(async () => {
 		const contracts = await compileArtifactsForTests()
 		factoryArtifact = contracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
@@ -117,34 +130,51 @@ describe('trading against authoritative Zoltar contracts', () => {
 	})
 
 	test('keeps LP removal open after the real question end time', async () => {
+		const v2 = await deployV2Venue()
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await initializeV2Venue(v2.pair, v2.router)
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await expect(fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
+		await expect(fixture.client.writeContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'swapExactInput', args: [true, 1n, 0n, account] })).rejects.toThrow('Question ended')
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account] }))
+		const v2Liquidity = await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'balanceOf', args: [account] })
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'removeLiquidity', args: [v2Liquidity, 1n, 1n, account, 10n ** 12n] }))
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
+		expect(await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
 		expect(await shareBalance(pair, 0n)).toBe(0n)
+		expect(await shareBalance(v2.pair, 0n)).toBe(0n)
 	})
 
 	test('reports the real finalized outcome and keeps raw LP removal available', async () => {
+		const v2 = await deployV2Venue()
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await initializeV2Venue(v2.pair, v2.router)
 		await fixture.finalizeQuestionAsYesWithoutFork()
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(5n)
+		expect(await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'tradingStatus' })).toBe(5n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account] }))
+		const v2Liquidity = await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'balanceOf', args: [account] })
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'removeLiquidity', args: [v2Liquidity, 1n, 1n, account, 10n ** 12n] }))
 	})
 
 	test('stops parent trading after a real universe fork while preserving LP removal', async () => {
+		const v2 = await deployV2Venue()
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
+		await initializeV2Venue(v2.pair, v2.router)
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await fixture.approveToken(fixture.client, fixture.addressString(fixture.GENESIS_REPUTATION_TOKEN), fixture.getZoltarAddress())
 		await fixture.forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(4n)
+		expect(await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'tradingStatus' })).toBe(4n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account] }))
+		const v2Liquidity = await fixture.client.readContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'balanceOf', args: [account] })
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairV2Artifact.abi, address: v2.pair, functionName: 'removeLiquidity', args: [v2Liquidity, 1n, 1n, account, 10n ** 12n] }))
 	})
 
 	test('V2 exits and redeems against the real SecurityPool with zero operator approval and exact slippage bounds', async () => {
