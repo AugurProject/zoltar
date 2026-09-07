@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
 	doesSecurityVaultExistOnchain,

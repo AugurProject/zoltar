@@ -2,7 +2,7 @@ import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import type { MarketFormState } from '../../../types/app.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { parseTimestampInput, tryParseTimestampInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { parseTimestampInput, tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {

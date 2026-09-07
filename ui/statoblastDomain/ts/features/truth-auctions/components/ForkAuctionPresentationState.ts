@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { estimateRepPurchased } from '../lib/truthAuctionBook.js'
 import type { ReadClient, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 

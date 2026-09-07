@@ -11,7 +11,7 @@ import { createSecurityPoolCreationTransactionIntent, createSecurityPoolCreation
 import { runWriteAction } from '@zoltar/ui-core-shared/lib/writeAction.js'
 import { createSecurityPoolParameters } from '../../markets/lib/marketCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
 import type { SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'

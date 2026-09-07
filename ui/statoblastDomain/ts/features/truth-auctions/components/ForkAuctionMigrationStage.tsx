@@ -12,7 +12,7 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '@zoltar/ui-zoltar-domain/fea
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ForkOutcomeMigrationSeedStatus } from '../hooks/useSelectedAuctionReadState.js'
 import { renderWorkflowMetricGrid } from './ForkAuctionPresentation.js'
-import { createActionAvailability } from '@zoltar/ui-core-shared/lib/actionAvailability.js'
+import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import type { ForkAuctionActionOptions } from './ForkAuctionActionSections.js'
 
 function getUnresolvedMigrationDetail({

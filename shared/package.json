@@ -49,9 +49,9 @@
 			"default": "./js/liquidation.js"
 		},
 		"./logScan": {
-			"types": "./ts/logScan.ts",
-			"bun": "./ts/logScan.ts",
-			"default": "./js/logScan.js"
+			"types": "./ts/evm/logScan.ts",
+			"bun": "./ts/evm/logScan.ts",
+			"default": "./js/evm/logScan.js"
 		},
 		"./truthAuctionTickMath": {
 			"types": "./ts/truthAuctionTickMath.ts",
@@ -78,8 +78,9 @@
 			"default": "./js/sortStringArrayByKeccak.js"
 		},
 		"./scalarOutcome": {
-			"types": "./ts/scalarOutcome.ts",
-			"default": "./js/scalarOutcome.js"
+			"types": "./ts/statoblast/scalarOutcome.ts",
+			"bun": "./ts/statoblast/scalarOutcome.ts",
+			"default": "./js/statoblast/scalarOutcome.js"
 		},
 		"./testing/scalarOutcomeParityFixtures": {
 			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",

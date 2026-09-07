@@ -25,7 +25,7 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import { UniverseLink } from '@zoltar/ui-zoltar-domain/features/universes/components/UniverseLink.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import {

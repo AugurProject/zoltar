@@ -17,7 +17,7 @@ import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from 
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
-import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
@@ -263,21 +263,23 @@ export function ZoltarMigrationSection({
 						/>
 					)}
 
-					{requiresApproval ? <TokenApprovalControl
-						actionLabel={zoltarCopy.preparingCurrentAmountLabel}
-						allowanceError={zoltarForkApproval.error}
-						allowanceLoading={zoltarForkApproval.loading}
-						approvedAmount={zoltarForkApproval.value}
-						disabled={!isOnActiveAppChain}
-						guardMessage={approvalGuardMessage}
-						onApprove={amount => onApproveZoltarForkRep(amount)}
-						pending={zoltarForkActiveAction === 'approve'}
-						pendingLabel={commonCopy.approvingRep}
-						requiredAmount={missingPreparationAmount}
-						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
-						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
-						tokenUnits={18}
-					/> : undefined}
+					{requiresApproval ? (
+						<TokenApprovalControl
+							actionLabel={zoltarCopy.preparingCurrentAmountLabel}
+							allowanceError={zoltarForkApproval.error}
+							allowanceLoading={zoltarForkApproval.loading}
+							approvedAmount={zoltarForkApproval.value}
+							disabled={!isOnActiveAppChain}
+							guardMessage={approvalGuardMessage}
+							onApprove={amount => onApproveZoltarForkRep(amount)}
+							pending={zoltarForkActiveAction === 'approve'}
+							pendingLabel={commonCopy.approvingRep}
+							requiredAmount={missingPreparationAmount}
+							resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
+							tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
+							tokenUnits={18}
+						/>
+					) : undefined}
 
 					{heldChildUniverses.length === 0 ? undefined : (
 						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>

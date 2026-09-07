@@ -24,7 +24,7 @@ import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
-import { tryParseTimestampInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ComponentChildren } from 'preact'
 
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
