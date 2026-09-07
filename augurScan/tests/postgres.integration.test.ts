@@ -890,6 +890,37 @@ postgresTest('destroys a lease session after backend loss and never reuses it as
 	}
 })
 
+postgresTest('terminates the expected lock holder when release runs on a different PostgreSQL backend', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const mismatchedSession = await database.sql.reserve()
+	const releaseChainId = chainId + 50 + process.pid
+	const mismatchedPid = Number((await mismatchedSession`SELECT pg_backend_pid() AS backend_pid`)[0]?.['backend_pid'])
+	let lease: IndexerLease | undefined
+	try {
+		lease = await database.tryAcquireIndexerLock(releaseChainId, mismatchedSession)
+		if (lease === undefined) throw new Error('backend-mismatch writer did not acquire its lock')
+		const expectedPid = lease.backendPid
+		expect(expectedPid).not.toBe(mismatchedPid)
+		await expect(lease.release()).rejects.toThrow('release of its expected PostgreSQL session was confirmed')
+		lease = undefined
+		const survivingLocks = await database.sql`
+			SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+				AND objid::bigint = ${releaseChainId} AND objsubid = 2 AND granted
+		`
+		expect(survivingLocks).toEqual([])
+		const replacement = await database.tryAcquireIndexerLock(releaseChainId)
+		if (replacement === undefined) throw new Error('replacement writer did not acquire the released lock')
+		expect(replacement.backendPid).not.toBe(expectedPid)
+		expect(replacement.backendPid).not.toBe(mismatchedPid)
+		await replacement.release()
+	} finally {
+		await lease?.release().catch(() => undefined)
+		await mismatchedSession.close({ timeout: 0 }).catch(() => undefined)
+		await database.close()
+	}
+})
+
 postgresTest('reconciles cross-process ownership heartbeats with the advisory-lock backend', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
@@ -928,6 +959,58 @@ postgresTest('reconciles cross-process ownership heartbeats with the advisory-lo
 		await lease?.release().catch(() => undefined)
 		await database.sql`DELETE FROM networks WHERE chain_id = ${ownershipChainId}`
 		await database.close()
+	}
+})
+
+postgresTest('prevents standby and stale release writers from clobbering a current owner', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const owner = new ScannerDatabase(postgresUrl)
+	const standby = new ScannerDatabase(postgresUrl)
+	const restarted = new ScannerDatabase(postgresUrl)
+	const ownershipChainId = chainId + 70 + process.pid
+	const network = {
+		id: `ownership-race-${ownershipChainId}`,
+		name: 'Ownership race diagnostics',
+		chainId: ownershipChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 0n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [],
+	} satisfies NetworkConfig
+	let ownerLease: IndexerLease | undefined
+	let restartedLease: IndexerLease | undefined
+	try {
+		await initializeSchema(owner.sql)
+		await owner.seedNetwork(network)
+		ownerLease = await owner.tryAcquireIndexerLock(ownershipChainId)
+		if (ownerLease === undefined) throw new Error('owner did not acquire its lock')
+		await owner.recordIndexerOwnership(ownershipChainId, network.id, 'owned', ownerLease.backendPid, undefined)
+		expect(await standby.tryAcquireIndexerLock(ownershipChainId)).toBeUndefined()
+		await standby.recordIndexerOwnership(ownershipChainId, network.id, 'standby', undefined, undefined)
+		let rows = await standby.sql`SELECT state, backend_pid FROM indexer_ownership WHERE chain_id = ${ownershipChainId}`
+		expect(rows).toEqual([{ state: 'owned', backend_pid: ownerLease.backendPid }])
+
+		const previousPid = ownerLease.backendPid
+		await ownerLease.release()
+		ownerLease = undefined
+		await owner.recordIndexerOwnership(ownershipChainId, network.id, 'released', previousPid, undefined)
+		restartedLease = await restarted.tryAcquireIndexerLock(ownershipChainId)
+		if (restartedLease === undefined) throw new Error('restarted owner did not acquire its lock')
+		await restarted.recordIndexerOwnership(ownershipChainId, network.id, 'owned', restartedLease.backendPid, undefined)
+		await owner.recordIndexerOwnership(ownershipChainId, network.id, 'released', previousPid, undefined)
+		rows = await owner.sql`SELECT state, backend_pid FROM indexer_ownership WHERE chain_id = ${ownershipChainId}`
+		expect(rows).toEqual([{ state: 'owned', backend_pid: restartedLease.backendPid }])
+
+		await restarted.recordIndexerOwnership(ownershipChainId, network.id, 'release-failed', restartedLease.backendPid, undefined)
+		const health = await owner.read(async (sql) => await readIndexerHealth(sql, (transaction) => owner.auditIntegrity(transaction), 60_000), 3_000)
+		expect(health.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('release-failed')
+	} finally {
+		await ownerLease?.release().catch(() => undefined)
+		await restartedLease?.release().catch(() => undefined)
+		await owner.sql`DELETE FROM networks WHERE chain_id = ${ownershipChainId}`
+		await Promise.all([owner.close(), standby.close(), restarted.close()])
 	}
 })
 
