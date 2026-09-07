@@ -39,12 +39,12 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        bun install --frozen-lockfile
-        (cd ui/coreShared && bun install --frozen-lockfile)
-        (cd ui/zoltar && bun install --frozen-lockfile)
-        (cd ui/statoblast && bun install --frozen-lockfile)
-        (cd ui/trading && bun install --frozen-lockfile)
-        (cd solidity && bun install --frozen-lockfile)
+        bun ./scripts/install-frozen.mts
+        bun ./scripts/install-frozen.mts ui/coreShared
+        bun ./scripts/install-frozen.mts ui/zoltar
+        bun ./scripts/install-frozen.mts ui/statoblast
+        bun ./scripts/install-frozen.mts ui/trading
+        bun ./scripts/install-frozen.mts solidity
 
     - name: Install bot workspace dependencies for dead code analysis
       if: github.job == 'knip'

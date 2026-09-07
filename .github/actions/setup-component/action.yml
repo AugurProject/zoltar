@@ -27,22 +27,21 @@ runs:
     - name: Install local dependency inputs
       shell: bash
       run: |
-        bun install --frozen-lockfile
+        bun ./scripts/install-frozen.mts
         if [[ "${{ inputs.directory }}" == "bots/open-oracle-arbitrager" || "${{ inputs.directory }}" == "bots/liquidator" ]]; then
-          (cd bots/shared && bun install --frozen-lockfile)
+          bun ./scripts/install-frozen.mts bots/shared
         fi
 
     - name: Install component dependencies
       shell: bash
-      working-directory: ${{ inputs.directory }}
-      run: bun install --frozen-lockfile
+      run: bun ./scripts/install-frozen.mts "${{ inputs.directory }}"
 
     - name: Install artifact-generation dependencies
       if: inputs.artifacts == 'true'
       shell: bash
       run: |
-        (cd ui/coreShared && bun install --frozen-lockfile)
-        (cd ui/zoltar && bun install --frozen-lockfile)
-        (cd ui/statoblast && bun install --frozen-lockfile)
-        (cd ui/trading && bun install --frozen-lockfile)
-        (cd solidity && bun install --frozen-lockfile)
+        bun ./scripts/install-frozen.mts ui/coreShared
+        bun ./scripts/install-frozen.mts ui/zoltar
+        bun ./scripts/install-frozen.mts ui/statoblast
+        bun ./scripts/install-frozen.mts ui/trading
+        bun ./scripts/install-frozen.mts solidity
