@@ -22,6 +22,27 @@ contract RetirementTokenMock {
 	}
 }
 
+contract RetirementOpenOracleMock {
+	mapping(address => mapping(address => mapping(address => uint256))) public internalAllowance;
+	mapping(address => mapping(address => uint256)) public tokenHolder;
+
+	function approveInternal(address spender, address token, uint256 amount) external {
+		internalAllowance[msg.sender][spender][token] = amount;
+	}
+
+	function creditNative(address owner) external payable {
+		tokenHolder[owner][address(0)] += msg.value;
+	}
+
+	function withdrawTo(address token, uint256 amount, address payable recipient) external {
+		require(token == address(0), 'Token');
+		require(tokenHolder[msg.sender][token] >= amount, 'Credit');
+		tokenHolder[msg.sender][token] -= amount;
+		(bool success,) = recipient.call{value: amount}('');
+		require(success, 'Transfer');
+	}
+}
+
 contract RetirementV3PoolMock {
 	struct Position {
 		uint128 liquidity;
@@ -34,6 +55,7 @@ contract RetirementV3PoolMock {
 	mapping(bytes32 => Position) public positions;
 	RetirementTokenMock public immutable token0;
 	RetirementTokenMock public immutable token1;
+	uint24 public constant fee = 3000;
 
 	constructor(RetirementTokenMock token0_, RetirementTokenMock token1_) {
 		token0 = token0_;

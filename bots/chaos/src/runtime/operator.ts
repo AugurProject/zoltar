@@ -22,7 +22,8 @@ import { createChaosDashboardController, restartSafeSettings, type Configuration
 import { resetPristineStateForDeploymentProfile } from './deployment-profile.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans, urgentOperationPlans } from './selection.ts'
-import { processRetirementCycle, retirementPositionsForScan } from './retirement-runner.ts'
+import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
+import { retirementPlanAllowed } from './retirement.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
@@ -283,13 +284,14 @@ export function rediscoverableExecutionFailure(state: RuntimeState, plan: Operat
 	return true
 }
 
-export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, workflow: DurableWorkflow, settings: OperatorSettings, anchorBlock: string): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
+export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, workflow: DurableWorkflow, settings: OperatorSettings, anchorBlock: string, retirementCleanup = false): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
 	const evaluate = (continuationDisposition: OperationContinuationDisposition | undefined) => {
 		const evaluation = reevaluateOperationContinuation(snapshot, durableWorkflowPlan(workflow), planningOptions(settings, workflow.planningSeed), {
 			confirmedStepIds: workflow.steps.filter(step => step.status === 'confirmed').map(step => step.id),
 			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
 		})
-		const result = applyExecutionPolicy([evaluation], settings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth), 'durable-continuation')[0]
+		const policySettings = retirementCleanup ? { ...settings, strategy: { ...settings.strategy, allowHighRiskOperations: true, allowIrreversibleOperations: false, enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const } } : settings
+		const result = applyExecutionPolicy([evaluation], policySettings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth), 'durable-continuation')[0]
 		if (result === undefined) throw new Error('Canonical continuation evaluation returned no result')
 		return result
 	}
@@ -420,8 +422,8 @@ export function lifecycleObstructions(state: Pick<RuntimeState, 'obligations' | 
 	return { automaticRetry, hard: undefined }
 }
 
-export function actionableUrgentLifecyclePlan(state: Pick<RuntimeState, 'evaluations' | 'obligations' | 'workflows'>) {
-	return urgentOperationPlans(state.evaluations).find(plan => obligationForPlan(state, plan) !== undefined)
+export function actionableUrgentLifecyclePlan(state: Pick<RuntimeState, 'evaluations' | 'obligations' | 'workflows'>, allow: (plan: OperationPlan) => boolean = () => true) {
+	return urgentOperationPlans(state.evaluations).find(plan => obligationForPlan(state, plan) !== undefined && allow(plan))
 }
 
 async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
@@ -884,6 +886,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
 				}
 				const retirementV3 = await retirementPositionsForScan({ blockNumber: scan.anchor.blockNumber, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
+				updateRetirementAssessment(scan, settings, state, retirementV3)
 				await persistState(configuration, state)
 				if (!scan.indexComplete || !scan.carryProofJournalComplete) {
 					backfillIncomplete = true
@@ -899,7 +902,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				}
 				const continuationWorkflow = continuationWorkflows[0]
 				if (continuationWorkflow !== undefined) {
-					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString())
+					if (!enforceRetirementContinuation(state, continuationWorkflow, operationHasCanonicalContinuationBuilder(continuationWorkflow.operationId))) {
+						await persistState(configuration, state)
+						return settings.runtime.once
+					}
+					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.classification === 'selectable')
 					const continuationEvaluation = continuationSelection.evaluation
 					if (continuationSelection.continuationDisposition !== undefined && continuationWorkflow.continuationDisposition !== continuationSelection.continuationDisposition) {
 						continuationWorkflow.continuationDisposition = continuationSelection.continuationDisposition
@@ -957,7 +964,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (state.scheduler.status !== 'paused') await scheduler.pause()
 					return settings.runtime.once
 				}
-				const actionableUrgent = actionableUrgentLifecyclePlan(state)
+				const actionableUrgent = actionableUrgentLifecyclePlan(state, plan => state.retirement.status === 'inactive' || retirementPlanAllowed(plan, scan.snapshot, state.retirement.policies))
 				if (actionableUrgent !== undefined && settings.runtime.execute) {
 					await ensureSubmissionPreflight(resources, settings)
 					state.rpcEndpointHealth = resourceHealth(resources)

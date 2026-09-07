@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import example from '../../config/operator.example.json'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/retirement-liquidity.ts'
 import {
@@ -6,17 +7,22 @@ import {
 	assessRetirement,
 	buildAllowanceRevocationPlan,
 	buildAssetSweepPlan,
+	buildNativeOpenOracleCreditPlan,
 	buildV3RetirementPlan,
 	operationAllowedDuringRetirement,
 	readV3PositionsWithQuorum,
 	reconcileV3PositionJournal,
-	recordCanonicalRecoveredBalances,
 	retirementPlanFromEvaluations,
 	type V3PositionObservation,
 } from '../../src/runtime/retirement.ts'
-import { initialDurableState, type DurableWorkflow } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '../../src/state/operator-state.ts'
 import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
+import { parseSettings } from '../../src/config/settings.ts'
+import { processRetirementCycle } from '../../src/runtime/retirement-runner.ts'
+import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
+import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
+import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
 
 const now = '2026-09-07T00:00:00.000Z'
 
@@ -56,6 +62,8 @@ function emptySnapshot() {
 	snapshot.wallet.shares = []
 	snapshot.wallet.lpTokens = []
 	snapshot.wallet.openOracleEthCredit = '0'
+	for (const pool of snapshot.pools) pool.vaults = []
+	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
 	snapshot.warnings = []
 	return snapshot
 }
@@ -124,7 +132,37 @@ describe('Drain & Retire state', () => {
 })
 
 describe('Drain & Retire planning', () => {
+	test('persists a canonical assessment before returning from a paused process cycle', async () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.ethBalanceAttoEth = '0'
+		const state = initialRuntimeState(true, snapshot.wallet.address, snapshot.chainId)
+		request(state.retirement)
+		let persistCount = 0
+		const result = await processRetirementCycle({
+			execute: async () => {
+				throw new Error('Paused retirement must not execute')
+			},
+			persist: async () => {
+				persistCount += 1
+			},
+			prepareExecution: async () => {
+				throw new Error('Paused retirement must not prepare execution')
+			},
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: true, carryProofJournalComplete: true, indexComplete: true, snapshot },
+			settings: parseSettings(example),
+			state,
+			v3: [],
+		})
+		expect(result).toBeFalse()
+		expect(persistCount).toBe(1)
+		expect(state.retirement.blockers).toEqual([])
+		expect(state.evaluations.filter(item => item.eligibility.eligible && item.plan !== undefined && operationAllowedDuringRetirement(item.plan.definitionId, state.retirement.policies)).map(item => item.plan?.definitionId)).toEqual([])
+		expect(state.retirement.status).toBe('drained')
+		expect(state.retirement.completionEvidence?.blockNumber).toBe('1')
+	})
+
 	test('blocks exposure-creating operations but permits recovery', () => {
+		expect(unclassifiedRetirementOperations(CHAOS_OPERATION_CATALOG.map(definition => definition.id))).toEqual([])
 		expect(operationAllowedDuringRetirement('statoblast.vault.deposit-rep', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(operationAllowedDuringRetirement('zoltar.universe.fork', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(operationAllowedDuringRetirement('statoblast.oracle.recover-report', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
@@ -171,6 +209,8 @@ describe('Drain & Retire planning', () => {
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {
 		const snapshot = emptySnapshot()
+		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '0', openOracleCredit: '0', openOracleInternalAllowanceToSelf: '1', symbol: 'TEST' }]
+		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-open-oracle-internal')
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-erc20')
 		snapshot.wallet.tokens = []
@@ -179,6 +219,34 @@ describe('Drain & Retire planning', () => {
 		snapshot.wallet.shares = []
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '1', balance: '0', pair: address(44) }]
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-lp')
+	})
+
+	test('withdraws native OpenOracle credit to exactly its sentinel', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.openOracleEthCredit = '9'
+		const withdrawal = buildNativeOpenOracleCreditPlan(snapshot, request(), 0)
+		expect(withdrawal).toMatchObject({ definitionId: 'retirement.open-oracle.withdraw-native', metadata: { amount: '8' } })
+		expect(withdrawal?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ expected: '1', functionName: 'tokenHolder' }))
+	})
+
+	test('enforces the configured unmatched-share loss against guaranteed output', () => {
+		const exit = plan('trading.position.exit')
+		exit.metadata = { maximumLong: '1000', minimumEthAttoEth: '970' }
+		const policies = { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true }
+		expect(retirementPlanFromEvaluations([evaluation(exit)], { ...policies, maximumExitLossBps: 250 })).toBeUndefined()
+		expect(retirementPlanFromEvaluations([evaluation(exit)], { ...policies, maximumExitLossBps: 300 })).toBe(exit)
+	})
+
+	test('does not hide retained WETH or pending V3 verification in a drained proof', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'WETH' }]
+		const retirement = request()
+		retirement.policies.unwrapWeth = false
+		retirement.positions = [position('pending-confirmation')]
+		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		expect(result.status).toBe('blocked')
+		expect(result.residuals).toContainEqual(expect.objectContaining({ amount: '3', category: 'operator-accepted' }))
+		expect(result.blockers).toContainEqual(expect.objectContaining({ category: 'ambiguous-position', id: retirement.positions[0]?.id }))
 	})
 
 	test('removes the full custom LP balance above ordinary chaos caps', () => {
@@ -227,6 +295,12 @@ describe('Drain & Retire planning', () => {
 		})
 		const waiting = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement: request(), snapshot, state, v3: [] })
 		expect(waiting).toMatchObject({ status: 'waiting', blockers: [{ category: 'temporarily-locked', nextEligibleAt: '2026-09-08T00:00:00.000Z' }] })
+		const delayed = state.obligations[0]
+		if (delayed === undefined) throw new Error('Delayed obligation fixture is missing')
+		delayed.status = 'pending'
+		delete delayed.notBefore
+		const actionable = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [evaluation(plan('statoblast.escalation.withdraw'))], retirement: request(), snapshot, state, v3: [] })
+		expect(actionable).toMatchObject({ action: { kind: 'existing-plan', plan: { definitionId: 'statoblast.escalation.withdraw' } }, status: 'draining' })
 		state.obligations = []
 		const retirement = request()
 		retirement.positions = [position('blocked')]
@@ -242,19 +316,37 @@ describe('Drain & Retire planning', () => {
 		applyRetirementAssessment(retirement, clean, hash(1), 1n, now)
 		expect(retirement.completionEvidence?.proof.pendingTransactions).toBe(0)
 
-		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: address(50), universeId: '1', yes: '0' }]
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Pool fixture is missing')
+		pool.questionOutcome = 1
+		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: pool.shareToken, universeId: pool.universeId, yes: '0' }]
 		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [], retirement, snapshot, state, v3: [] })
 		expect(residual.status).toBe('drained-with-residuals')
 	})
 
-	test('persists the latest canonical recovered wallet balances', () => {
+	test('persists cumulative canonical balance increases across recovery and sweeping', () => {
 		const snapshot = emptySnapshot()
-		snapshot.wallet.ethBalanceAttoEth = '12'
-		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'REP' }]
-		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '5', pair: address(41) }]
+		snapshot.wallet.ethBalanceAttoEth = '10'
+		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'REP' }]
+		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '2', pair: address(41) }]
 		const retirement = initialRetirementState()
 		recordCanonicalRecoveredBalances(retirement, snapshot)
-		expect(retirement.recoveredBalances).toEqual({ ETH: '12', [address(40)]: '7', [`LP:${address(41)}`]: '5' })
+		expect(retirement.recoveredBalances).toEqual({})
+		const token = snapshot.wallet.tokens[0]
+		const lpToken = snapshot.wallet.lpTokens[0]
+		if (token === undefined || lpToken === undefined) throw new Error('Recovery balance fixture is incomplete')
+		snapshot.wallet.ethBalanceAttoEth = '15'
+		token.balance = '7'
+		lpToken.balance = '5'
+		recordCanonicalRecoveredBalances(retirement, snapshot)
+		expect(retirement.recoveredBalances).toEqual({ ETH: '5', [address(40)]: '4', [`LP:${address(41)}`]: '3' })
+		snapshot.wallet.ethBalanceAttoEth = '12'
+		token.balance = '2'
+		recordCanonicalRecoveredBalances(retirement, snapshot)
+		snapshot.wallet.ethBalanceAttoEth = '18'
+		token.balance = '6'
+		recordCanonicalRecoveredBalances(retirement, snapshot)
+		expect(retirement.recoveredBalances).toEqual({ ETH: '11', [address(40)]: '8', [`LP:${address(41)}`]: '3' })
 	})
 
 	test('backfills confirmed seed workflows and blocks ambiguous older workflows', async () => {
@@ -304,18 +396,9 @@ describe('Drain & Retire planning', () => {
 		const pending = workflow('signed', 'pending')
 		reconcileV3PositionJournal(retirement, [workflow('confirmed', 'confirmed'), pending, workflow('failed', 'ambiguous')], 'profile:test', address(1), now)
 		expect(retirement.positions.map(candidate => candidate.status)).toEqual(['active', 'pending-confirmation', 'blocked'])
-		expect(
-			await readV3PositionsWithQuorum(
-				[
-					async () => {
-						throw new Error('pending positions must not be read')
-					},
-				],
-				1,
-				[retirement.positions[1] as DurableV3Position],
-				1n,
-			),
-		).toEqual([])
+		const pendingPosition = retirement.positions[1]
+		if (pendingPosition === undefined) throw new Error('Pending position was not journaled')
+		expect(await readV3PositionsWithQuorum([async candidate => ({ liquidity: 1n, position: candidate, tokensOwed0: 0n, tokensOwed1: 0n })], 1, [pendingPosition], 1n)).toHaveLength(1)
 		const seed = pending.steps[0]
 		if (seed === undefined) throw new Error('Seed workflow step is missing')
 		seed.status = 'confirmed'

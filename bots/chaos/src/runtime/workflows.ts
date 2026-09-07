@@ -439,6 +439,13 @@ export function workflowFailureHasTransaction(workflow: DurableWorkflow) {
 	return workflow.steps.some(step => step.status === 'failed' && step.transactionHash !== undefined)
 }
 
+export function retirementCleanupBlocker(workflow: DurableWorkflow, hasCanonicalContinuation: boolean) {
+	if (workflow.classification !== 'selectable') return undefined
+	if (!hasCanonicalContinuation) return `Partial selectable workflow ${workflow.label} has no safe cleanup-only continuation`
+	workflow.continuationDisposition = 'cleanup-only'
+	return undefined
+}
+
 export function markWorkflowForRediscovery(workflow: DurableWorkflow, error: unknown) {
 	if (workflowFailureHasTransaction(workflow)) {
 		throw new Error(`Workflow ${workflow.id} has a failed on-chain transaction and cannot be reset for rediscovery`)

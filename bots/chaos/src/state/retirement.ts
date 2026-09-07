@@ -65,9 +65,11 @@ export type DurableRetirementState = {
 	cancelledAt?: string | undefined
 	completionEvidence?: RetirementCompletionEvidence | undefined
 	finalSweepStartedAt?: string | undefined
+	lastObservedBalances: Record<string, string>
 	positions: DurableV3Position[]
 	profileReplacementOverride?: { acceptedAt: string; reason: string; targetProfileId: string } | undefined
 	recipient?: Address | undefined
+	/** Cumulative balance increases observed between canonical retirement scans. */
 	recoveredBalances: Record<string, string>
 	requestedAt?: string | undefined
 	status: RetirementStatus
@@ -87,6 +89,7 @@ export const DEFAULT_RETIREMENT_POLICIES: RetirementPolicies = {
 export function initialRetirementState(): DurableRetirementState {
 	return {
 		blockers: [],
+		lastObservedBalances: {},
 		positions: [],
 		recoveredBalances: {},
 		status: 'inactive',
@@ -222,7 +225,7 @@ function parseCompletionEvidence(value: unknown): RetirementCompletionEvidence {
 
 export function parseRetirementState(value: unknown): DurableRetirementState {
 	const retirement = record(value, 'retirement')
-	exactKeys(retirement, ['blockers', 'policies', 'positions', 'recoveredBalances', 'status'], ['cancelledAt', 'completionEvidence', 'finalSweepStartedAt', 'profileReplacementOverride', 'recipient', 'requestedAt', 'updatedAt'], 'retirement')
+	exactKeys(retirement, ['blockers', 'policies', 'positions', 'recoveredBalances', 'status'], ['cancelledAt', 'completionEvidence', 'finalSweepStartedAt', 'lastObservedBalances', 'profileReplacementOverride', 'recipient', 'requestedAt', 'updatedAt'], 'retirement')
 	const status = retirement['status']
 	if (!['inactive', 'requested', 'draining', 'waiting', 'blocked', 'drained', 'drained-with-residuals'].includes(String(status))) throw new Error('retirement.status is invalid')
 	if (!Array.isArray(retirement['blockers']) || !Array.isArray(retirement['positions'])) throw new Error('retirement blockers and positions must be arrays')
@@ -230,6 +233,8 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 	if (new Set(positions.map(position => position.id)).size !== positions.length) throw new Error('retirement.positions contains duplicate IDs')
 	const balances = record(retirement['recoveredBalances'], 'retirement.recoveredBalances')
 	const recoveredBalances = Object.fromEntries(Object.entries(balances).map(([asset, amount]) => [asset, unsigned(amount, `retirement.recoveredBalances.${asset}`)]))
+	const observed = retirement['lastObservedBalances'] === undefined ? {} : record(retirement['lastObservedBalances'], 'retirement.lastObservedBalances')
+	const lastObservedBalances = Object.fromEntries(Object.entries(observed).map(([asset, amount]) => [asset, unsigned(amount, `retirement.lastObservedBalances.${asset}`)]))
 	const blockers = retirement['blockers'].map((candidate, index): RetirementBlocker => {
 		const blocker = record(candidate, `retirement.blockers[${index.toString()}]`)
 		exactKeys(blocker, ['category', 'details', 'id'], ['nextEligibleAt'], `retirement.blockers[${index.toString()}]`)
@@ -248,6 +253,7 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 		...(retirement['cancelledAt'] === undefined ? {} : { cancelledAt: timestamp(retirement['cancelledAt'], 'retirement.cancelledAt') }),
 		...(retirement['completionEvidence'] === undefined ? {} : { completionEvidence: parseCompletionEvidence(retirement['completionEvidence']) }),
 		...(retirement['finalSweepStartedAt'] === undefined ? {} : { finalSweepStartedAt: timestamp(retirement['finalSweepStartedAt'], 'retirement.finalSweepStartedAt') }),
+		lastObservedBalances,
 		positions,
 		...(rawOverride === undefined ? {} : { profileReplacementOverride: { acceptedAt: timestamp(rawOverride['acceptedAt'], 'retirement.profileReplacementOverride.acceptedAt'), reason: String(rawOverride['reason']), targetProfileId: String(rawOverride['targetProfileId']) } }),
 		...(retirement['recipient'] === undefined ? {} : { recipient: getAddress(String(retirement['recipient'])) }),

@@ -13,6 +13,27 @@ export const retirementErc20TransferAbi = [
 
 export const retirementUniswapV3PositionAbi = [
 	{
+		inputs: [],
+		name: 'token0',
+		outputs: [{ name: '', type: 'address' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [],
+		name: 'token1',
+		outputs: [{ name: '', type: 'address' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [],
+		name: 'fee',
+		outputs: [{ name: '', type: 'uint24' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
 		inputs: [{ name: 'key', type: 'bytes32' }],
 		name: 'positions',
 		outputs: [

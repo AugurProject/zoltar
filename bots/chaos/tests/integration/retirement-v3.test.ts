@@ -7,7 +7,7 @@ import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
-import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildV3RetirementPlan, readV3Position } from '../../src/runtime/retirement.ts'
+import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan, buildV3RetirementPlan, readV3Position } from '../../src/runtime/retirement.ts'
 import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
 import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '../support/bot-shared.ts'
@@ -80,10 +80,46 @@ const poolAbi = [
 		type: 'function',
 	},
 ] as const
+const openOracleAbi = [
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'spender', type: 'address' },
+			{ name: 'token', type: 'address' },
+		],
+		name: 'internalAllowance',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'spender', type: 'address' },
+			{ name: 'token', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'approveInternal',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'owner', type: 'address' }], name: 'creditNative', outputs: [], stateMutability: 'payable', type: 'function' },
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'token', type: 'address' },
+		],
+		name: 'tokenHolder',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 
 let node: AnvilNode | undefined
 let tokenBytecode: Hex
 let poolBytecode: Hex
+let openOracleBytecode: Hex
 let compileDirectory: string | undefined
 
 async function compileFixture() {
@@ -101,6 +137,7 @@ async function compileFixture() {
 	}
 	tokenBytecode = await readBytecode('_RetirementTokenMock.bin')
 	poolBytecode = await readBytecode('_RetirementV3PoolMock.bin')
+	openOracleBytecode = await readBytecode('_RetirementOpenOracleMock.bin')
 }
 
 beforeAll(async () => {
@@ -126,9 +163,9 @@ async function deploy(client: ReturnType<typeof createWriteClient>, bytecode: He
 	return receipt.contractAddress
 }
 
-function durablePosition(pool: Address, owner: Address, token0: Address, token1: Address, id: string): DurableV3Position {
-	const positionKey = uniswapV3PositionKey(owner, -120, 120)
-	return { createdAt: new Date(0).toISOString(), creationWorkflowId: id, fee: 3_000, id: `${pool}:${positionKey}`, owner, pool, positionKey, profileId: 'integration', registeredBy: 'workflow', status: 'active', tickLower: -120, tickUpper: 120, token0, token1 }
+function durablePosition(pool: Address, owner: Address, token0: Address, token1: Address, id: string, tickLower = -120, tickUpper = 120): DurableV3Position {
+	const positionKey = uniswapV3PositionKey(owner, tickLower, tickUpper)
+	return { createdAt: new Date(0).toISOString(), creationWorkflowId: id, fee: 3_000, id: `${pool}:${positionKey}`, owner, pool, positionKey, profileId: 'integration', registeredBy: 'operator', status: 'active', tickLower, tickUpper, token0, token1 }
 }
 
 async function executePlan(client: ReturnType<typeof createWriteClient>, plan: ReturnType<typeof buildV3RetirementPlan>) {
@@ -144,17 +181,22 @@ describe('Drain & Retire on a local chain', () => {
 		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
 		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
 		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
-		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
+		const creationTransactionHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
+		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -60, 60, 20n, 1n, 2n], functionName: 'seed' })
 		await owner.writeContract({ abi: poolAbi, address: pool, args: [other.account.address, -120, 120, 90n, 5n, 6n], functionName: 'seed' })
-		const position = durablePosition(pool, owner.account.address, token0, token1, 'owner')
+		const position = { ...durablePosition(pool, owner.account.address, token0, token1, 'owner'), creationTransactionHash, registeredBy: 'workflow' as const }
 		const onChainKey = await owner.readContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120], functionName: 'positionKey' })
 		expect(position.positionKey).toBe(onChainKey)
 		const before = await readV3Position(owner, position, await owner.getBlockNumber())
 		expect(before).toMatchObject({ liquidity: 70n, tokensOwed0: 3n, tokensOwed1: 4n })
 		await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), before, 1))
 		expect(await readV3Position(owner, position, await owner.getBlockNumber())).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
-		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(73n)
-		expect(await owner.readContract({ abi: tokenAbi, address: token1, args: [owner.account.address], functionName: 'balanceOf' })).toBe(144n)
+		const secondPosition = durablePosition(pool, owner.account.address, token0, token1, 'owner-second', -60, 60)
+		const secondBefore = await readV3Position(owner, secondPosition, await owner.getBlockNumber())
+		await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), secondBefore, 1))
+		expect(await readV3Position(owner, secondPosition, await owner.getBlockNumber())).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
+		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(94n)
+		expect(await owner.readContract({ abi: tokenAbi, address: token1, args: [owner.account.address], functionName: 'balanceOf' })).toBe(186n)
 		const otherPosition = durablePosition(pool, other.account.address, token0, token1, 'other')
 		expect(await readV3Position(owner, otherPosition, await owner.getBlockNumber())).toMatchObject({ liquidity: 90n, tokensOwed0: 5n, tokensOwed1: 6n })
 	})
@@ -185,10 +227,28 @@ describe('Drain & Retire on a local chain', () => {
 		for (const step of revoke.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })
 		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address, spender], functionName: 'allowance' })).toBe(0n)
 
+		const oracle = await deploy(owner, openOracleBytecode, openOracleAbi)
+		await owner.writeContract({ abi: openOracleAbi, address: oracle, args: [owner.account.address, token0, 55n], functionName: 'approveInternal' })
+		snapshot.deployments.openOracle = oracle
+		snapshot.wallet.tokens = [{ address: token0, allowances: {}, balance: '0', openOracleCredit: '0', openOracleInternalAllowanceToSelf: '55', symbol: 'MOCK' }]
+		const revokeInternal = buildAllowanceRevocationPlan(snapshot, 4)
+		if (revokeInternal === undefined) throw new Error('Internal allowance revocation was not planned')
+		for (const step of revokeInternal.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })
+		expect(await owner.readContract({ abi: openOracleAbi, address: oracle, args: [owner.account.address, owner.account.address, token0], functionName: 'internalAllowance' })).toBe(0n)
+
+		await owner.writeContract({ abi: openOracleAbi, address: oracle, args: [owner.account.address], functionName: 'creditNative', value: 101n })
+		snapshot.wallet.openOracleEthCredit = '101'
+		const retirementWithRecipient = { ...initialRetirementState(), policies: { ...DEFAULT_RETIREMENT_POLICIES }, recipient, status: 'draining' as const }
+		const creditPlan = buildNativeOpenOracleCreditPlan(snapshot, retirementWithRecipient, 5)
+		if (creditPlan === undefined) throw new Error('Native OpenOracle credit withdrawal was not planned')
+		const creditRecipientBefore = await owner.getBalance({ address: recipient })
+		for (const step of creditPlan.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })
+		expect(await owner.readContract({ abi: openOracleAbi, address: oracle, args: [owner.account.address, address(0)], functionName: 'tokenHolder' })).toBe(1n)
+		expect((await owner.getBalance({ address: recipient })) - creditRecipientBefore).toBe(100n)
+
 		snapshot.wallet.tokens = []
 		snapshot.wallet.ethBalanceAttoEth = (5n * 10n ** 18n).toString()
-		const retirement = { ...initialRetirementState(), policies: { ...DEFAULT_RETIREMENT_POLICIES }, recipient, status: 'draining' as const }
-		const sweep = buildAssetSweepPlan(snapshot, retirement, 4, { maximumEthAttoEth: 10n ** 18n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
+		const sweep = buildAssetSweepPlan(snapshot, retirementWithRecipient, 6, { maximumEthAttoEth: 10n ** 18n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
 		if (sweep === undefined) throw new Error('Native sweep was not planned')
 		expect(sweep.definitionId).toBe('retirement.sweep.native-last')
 		const recipientBefore = await owner.getBalance({ address: recipient })

@@ -309,7 +309,24 @@ describe('chaos-bot durable state', () => {
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		const restored = await loadDurableState(path, 1)
 		expect(restored.version).toBe(4)
-		expect(restored.retirement).toMatchObject({ blockers: [], positions: [], status: 'inactive' })
+		expect(restored.retirement).toMatchObject({ blockers: [], lastObservedBalances: {}, positions: [], status: 'inactive' })
+	})
+
+	test('migrates balance evidence and restarts durably from every retirement phase', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		for (const status of ['requested', 'draining', 'waiting', 'blocked', 'drained', 'drained-with-residuals'] as const) {
+			state.retirement.status = status
+			state.retirement.lastObservedBalances = { ETH: '9' }
+			state.retirement.recoveredBalances = { ETH: '4' }
+			await saveDurableState(path, state)
+			const restored = await loadDurableState(path, 1)
+			expect(restored.retirement).toMatchObject({ lastObservedBalances: { ETH: '9' }, recoveredBalances: { ETH: '4' }, status })
+		}
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		delete stored.retirement['lastObservedBalances']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
 	})
 
 	test('preserves an interrupted scheduler marker until startup schedules a fresh wait', () => {
