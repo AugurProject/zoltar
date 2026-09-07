@@ -31,7 +31,7 @@ jobs:
         run: >-
           bun test --preload ./bun-test-setup-ui.ts --timeout 300000
           scripts/documentation-tools-runtime.test.ts
-          ui/coreShared/build/chromiumPath.test.ts
+          tooling/ui/chromiumPath.test.ts
           ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx
       - name: Exercise AugurScan lifecycle concurrency
         working-directory: augurScan

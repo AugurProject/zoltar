@@ -31,8 +31,8 @@ COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
 
 # Solidity contracts and TypeScript source
-COPY ./ui/coreShared/build/appPaths.mts /source/ui/coreShared/build/appPaths.mts
-COPY ./ui/coreShared/build/projectArtifacts.mts /source/ui/coreShared/build/projectArtifacts.mts
+COPY ./tooling/ui/appPaths.mts /source/tooling/ui/appPaths.mts
+COPY ./tooling/ui/projectArtifacts.mts /source/tooling/ui/projectArtifacts.mts
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
@@ -42,7 +42,7 @@ RUN mkdir -p /source/ui/coreShared/ts && bun run compile-contracts
 # Common UI build inputs.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
-COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
+COPY ./tooling/ui/ /source/tooling/ui/
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
@@ -58,20 +58,20 @@ FROM common-builder AS zoltar-builder
 COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
 COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
 RUN bun ./scripts/install-frozen.mts ui/zoltar
-RUN bun ./ui/coreShared/build/vendor.mts zoltar
+RUN bun ./tooling/ui/vendor.mts zoltar
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/zoltar/favicon.svg /source/ui/zoltar/favicon.svg
 COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
-RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
+RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts zoltar
 
 # Local runtime images contain only the selected application artifact.
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-zoltar
 
 WORKDIR /app
 COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appPaths.mts /app/appPaths.mts
 USER bun
 EXPOSE 8012
 ENV UI_APP=zoltar
@@ -85,19 +85,19 @@ FROM zoltar-builder AS statoblast-builder
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
 RUN bun ./scripts/install-frozen.mts ui/statoblast
-RUN bun ./ui/coreShared/build/vendor.mts statoblast
+RUN bun ./tooling/ui/vendor.mts statoblast
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
 COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
-RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
+RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts statoblast
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-statoblast
 
 WORKDIR /app
 COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appPaths.mts /app/appPaths.mts
 USER bun
 EXPOSE 8011
 ENV UI_APP=statoblast
@@ -117,15 +117,15 @@ COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-RUN bun ./ui/coreShared/build/vendor.mts trading
-RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
+RUN bun ./tooling/ui/vendor.mts trading
+RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading
 
 WORKDIR /app
 COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appPaths.mts /app/appPaths.mts
 USER bun
 EXPOSE 8080
 ENV UI_APP=trading

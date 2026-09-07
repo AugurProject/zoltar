@@ -74,7 +74,7 @@ runs:
           ui/coreShared/ts/abis.ts
           ui/coreShared/ts/contractArtifact.ts
           ui/trading/ts/generated/contractArtifact.ts
-        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/coreShared/build/projectArtifacts.mts') }}
+        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'tooling/ui/projectArtifacts.mts') }}
 
     - name: Cache UI vendor assets
       id: vendor-cache
@@ -84,7 +84,7 @@ runs:
           ui/zoltar/vendor
           ui/statoblast/vendor
           ui/trading/vendor
-        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'ui/coreShared/build/bundlerPaths.mts', 'ui/coreShared/build/vendor.mts') }}
+        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts') }}
 
     - name: Generate and verify generated artifacts
       if: inputs.verify-generated == 'true' || steps.shared-cache.outputs.cache-hit != 'true' || steps.contract-cache.outputs.cache-hit != 'true' || steps.vendor-cache.outputs.cache-hit != 'true'

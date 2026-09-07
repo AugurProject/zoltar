@@ -147,11 +147,11 @@ describe('split UI workflow paths', () => {
 	test('Trading-owned compile and test commands explicitly generate Trading artifacts', async () => {
 		const packageJson = JSON.parse(await readFile(rootPackagePath, 'utf8')) as { scripts?: Record<string, string> }
 		const tradingPackageJson = JSON.parse(await readFile(tradingPackagePath, 'utf8')) as { scripts?: Record<string, string> }
-		expect(packageJson.scripts?.['trading:compile']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
-		expect(packageJson.scripts?.['trading:test']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
-		expect(packageJson.scripts?.['tsc:app']).toStartWith('bun ./ui/coreShared/build/vendor.mts trading')
-		expect(packageJson.scripts?.['coverage:ui']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
-		expect(packageJson.scripts?.['coverage:typescript']).toContain('bun ./ui/coreShared/build/vendor.mts trading')
+		expect(packageJson.scripts?.['trading:compile']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['trading:test']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['tsc:app']).toStartWith('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:ui']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:typescript']).toContain('bun ./tooling/ui/vendor.mts trading')
 		expect(tradingPackageJson.scripts?.['test']).toStartWith('bun run generate')
 		expect(tradingPackageJson.scripts?.['watch']).toStartWith('bun run generate')
 	})

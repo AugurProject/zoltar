@@ -54,14 +54,14 @@ export type UiAppPaths = {
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 
 export function getUiAppPaths(appId: UiAppId): UiAppPaths {
-	const coreSharedRoot = path.resolve(directoryOfThisFile, '..')
-	const uiRoot = path.resolve(coreSharedRoot, '..')
-	const repositoryRoot = path.resolve(uiRoot, '..')
+	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
+	const uiRoot = path.join(repositoryRoot, 'ui')
+	const coreSharedRoot = path.join(uiRoot, 'coreShared')
 	const appRoot = path.join(uiRoot, appId)
 	const appSourceRoot = path.join(appRoot, 'ts')
 	const appGeneratedJsRoot = path.join(appRoot, 'js')
 	const appDistRoot = path.join(appRoot, 'dist')
-	const buildRoot = path.join(coreSharedRoot, 'build')
+	const buildRoot = directoryOfThisFile
 	return {
 		appId,
 		repositoryRoot,
@@ -83,16 +83,16 @@ export function getUiAppPaths(appId: UiAppId): UiAppPaths {
 		productionBuildScript: path.join(buildRoot, 'production.mts'),
 		projectArtifactsScript: path.join(buildRoot, 'projectArtifacts.mts'),
 		bundlerPathsScript: path.join(buildRoot, 'bundlerPaths.mts'),
-		devServerScript: path.join(coreSharedRoot, 'dev-server.ts'),
+		devServerScript: path.join(buildRoot, 'dev-server.ts'),
 		sharedSourceRoot: path.join(repositoryRoot, 'shared', 'ts'),
 		sharedGeneratedJsRoot: path.join(repositoryRoot, 'shared', 'js'),
 	}
 }
 
 export function getUiCoreSharedPaths() {
-	const coreSharedRoot = path.resolve(directoryOfThisFile, '..')
-	const uiRoot = path.resolve(coreSharedRoot, '..')
-	const repositoryRoot = path.resolve(uiRoot, '..')
+	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
+	const uiRoot = path.join(repositoryRoot, 'ui')
+	const coreSharedRoot = path.join(uiRoot, 'coreShared')
 	return {
 		repositoryRoot,
 		uiRoot,

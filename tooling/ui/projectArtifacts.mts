@@ -4,13 +4,14 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..', '..')
-const ABI_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'abis.ts')
+const REPOSITORY_ROOT_PATH = path.join(directoryOfThisFile, '..', '..')
+const UI_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'ui')
+const CORE_SHARED_ROOT_PATH = path.join(UI_ROOT_PATH, 'coreShared')
+const ABI_OUTPUT_PATH = path.join(CORE_SHARED_ROOT_PATH, 'ts', 'abis.ts')
 const ABI_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
-const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'contractArtifact.ts')
+const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(CORE_SHARED_ROOT_PATH, 'ts', 'contractArtifact.ts')
 const CONTRACT_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
-const TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, '..', 'trading', 'ts', 'generated', 'contractArtifact.ts')
+const TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'trading', 'ts', 'generated', 'contractArtifact.ts')
 
 type CompiledContract = {
 	readonly abi?: unknown
@@ -73,7 +74,7 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 	if (options.includeTrading !== true) return
 	const tradingContracts = Object.fromEntries(Object.entries(compiledArtifacts.contracts).filter(([filename]) => filename.startsWith('contracts/trading/')))
 	await fs.mkdir(path.dirname(artifactPaths.tradingContractArtifactOutputPath), { recursive: true })
-	await fs.writeFile(artifactPaths.tradingContractArtifactOutputPath, `// Generated from solidity/artifacts/Contracts.json by ui/coreShared/build/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
+	await fs.writeFile(artifactPaths.tradingContractArtifactOutputPath, `// Generated from solidity/artifacts/Contracts.json by tooling/ui/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)

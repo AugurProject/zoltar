@@ -262,7 +262,7 @@ export function classifyTypeScriptSource(filePath: string, source: string): Type
 
 	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
 	if (file.startsWith('shared/ts/')) return 'shared'
-	if (file.startsWith('scripts/') || file.startsWith('tooling/') || file.startsWith('ui/coreShared/build/') || file === 'ui/coreShared/dev-server.ts' || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
+	if (file.startsWith('scripts/') || file.startsWith('tooling/') || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
 	return undefined
 }
 

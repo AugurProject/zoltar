@@ -22,7 +22,7 @@ describe('standalone Docker Compose packaging', () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json')
 		expect(source).toContain('COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json')
-		expect(source).toContain('bun ../coreShared/build/production.mts trading')
+		expect(source).toContain('bun ../../tooling/ui/production.mts trading')
 		expect(source).toContain('AS local-runtime-trading')
 		expect(source).toContain('/source/ui/trading/dist/ /app/ui/trading/')
 	})

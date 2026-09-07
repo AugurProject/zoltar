@@ -1,7 +1,7 @@
 import * as http from 'node:http'
 import * as filesystem from 'node:fs/promises'
 import * as path from 'node:path'
-import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './build/appPaths.mts'
+import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const appId = parseUiAppIdFromProcess('the development server')
 const { appRoot: uiRootDirectory, repositoryRoot: repositoryRootDirectory } = getUiAppPaths(appId)

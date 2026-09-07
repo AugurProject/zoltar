@@ -32,8 +32,8 @@ describe('canonical test discovery', () => {
 		expect(canonicalFiles).toContain('scripts/testnetwork.test.ts')
 		expect(canonicalFiles).toContain('shared/ts/ethereum.test.ts')
 		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
-		expect(canonicalFiles).not.toContain('ui/coreShared/build/browserSmoke.test.ts')
-		expect(canonicalFiles).not.toContain('ui/coreShared/build/productionBuild.test.ts')
+		expect(canonicalFiles).not.toContain('tooling/ui/browserSmoke.test.ts')
+		expect(canonicalFiles).not.toContain('tooling/ui/productionBuild.test.ts')
 		expect(canonicalFiles).not.toContain('ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
 		expect(new Set(canonicalFiles).size).toBe(canonicalFiles.length)
@@ -48,8 +48,8 @@ describe('canonical test discovery', () => {
 
 		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun test '))
 		expect(smokeTestCommands).toEqual([
-			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/browserSmoke.test.ts',
-			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts',
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/browserSmoke.test.ts',
+			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts',
 			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts',
 		])
 		expect(smokeTestCommands.map(command => command.split(' ').at(-1)).sort()).toEqual([...EXPLICIT_TEST_TIER_FILES].sort())

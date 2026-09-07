@@ -3,7 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as ts from 'typescript'
-import { sharedBrowserArtifactRelativePaths } from '../../../scripts/sharedBrowserArtifacts.ts'
+import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
 import { assertSuccessfulBuilds, clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
 import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
@@ -22,9 +22,9 @@ const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSource
 const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
 const uiTruthAuctionBookPath = path.join(statoblastPaths.appSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
-const uiVendorBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'vendor.mts')
-const uiWatchBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'watch.mts')
-const uiWorkerBuildPath = path.join(coreSharedPaths.coreSharedRoot, 'build', 'workers.mts')
+const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
+const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')
+const uiWorkerBuildPath = path.join(import.meta.dir, 'workers.mts')
 const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
@@ -388,7 +388,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 test('watch build regression scanner catches indirect bare Bun commands', () => {
 	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'coreShared', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
 
-	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['ui/coreShared/build/bare-bun-fixture.mts:1:21'])
+	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['tooling/ui/bare-bun-fixture.mts:1:21'])
 })
 
 test('development import map maps browser dependency subpaths', () => {

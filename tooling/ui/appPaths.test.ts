@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
-const repositoryRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', '..')
+const repositoryRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 
 test('UI_APP_IDS lists exactly the supported applications', () => {
 	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading'])
@@ -59,7 +59,7 @@ test('each UI and bot application owns a distinct favicon', () => {
 	expect(new Set(favicons).size).toBe(faviconPaths.length)
 })
 
-test('getUiCoreSharedPaths resolves the repository root from ui/coreShared/build', () => {
+test('getUiCoreSharedPaths resolves the repository root from tooling/ui', () => {
 	const paths = getUiCoreSharedPaths()
 	expect(paths.repositoryRoot).toBe(repositoryRoot)
 	expect(paths.coreSharedTestSourceRoot).toBe(path.join(repositoryRoot, 'ui', 'coreShared', 'ts', 'tests'))

@@ -72,7 +72,7 @@ function assertBuildSucceeded(label: string, result: { success: boolean; logs: A
 }
 
 async function writeProductionIndexHtml(paths: UiAppPaths) {
-	const templatePath = path.join(paths.coreSharedRoot, 'build', 'index.production.html')
+	const templatePath = path.join(import.meta.dir, 'index.production.html')
 	let html = await fs.readFile(templatePath, 'utf8')
 	const appTitle = APP_TITLES[appId]
 	if (appTitle === undefined) throw new Error(`No production title recorded for ${appId}`)

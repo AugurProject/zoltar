@@ -93,8 +93,7 @@ describe('UI build dependency direction', () => {
 	})
 
 	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {
-		const { coreSharedRoot } = getUiCoreSharedPaths()
-		const watchSource = fs.readFileSync(`${coreSharedRoot}/build/watch.mts`, 'utf8')
+		const watchSource = fs.readFileSync(`${import.meta.dir}/watch.mts`, 'utf8')
 		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')")
 		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')")
 		expect(watchSource).toContain("spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:contracts']")

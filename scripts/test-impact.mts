@@ -60,24 +60,24 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
 		matches: filePath =>
-			filePath === 'ui/coreShared/build/production.mts' ||
-			filePath === 'ui/coreShared/build/appPaths.mts' ||
-			filePath === 'ui/coreShared/build/browserSmoke.mts' ||
+			filePath === 'tooling/ui/production.mts' ||
+			filePath === 'tooling/ui/appPaths.mts' ||
+			filePath === 'tooling/ui/browserSmoke.mts' ||
 			filePath === 'ui/coreShared/css/application-surfaces.css' ||
 			filePath === 'ui/statoblast/ts/features/security-pools/components/CollateralizationCircle.tsx',
 		ownedTestOptions: { timeout: 300_000 },
-		ownedTestPaths: ['ui/coreShared/build/browserSmoke.test.ts', 'ui/coreShared/build/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'],
+		ownedTestPaths: ['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'],
 	},
 	{
 		command: 'bun run test:browser:workflow',
 		reason: 'production browser workflow coverage changed',
-		matches: filePath => filePath === 'ui/coreShared/build/production.mts',
+		matches: filePath => filePath === 'tooling/ui/production.mts',
 		ownedTestOptions: {
 			environment: 'RUN_PRODUCTION_BROWSER_WORKFLOWS=1',
 			testNamePattern: "'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)'",
 			timeout: 600_000,
 		},
-		ownedTestPaths: ['ui/coreShared/build/productionBuild.test.ts'],
+		ownedTestPaths: ['tooling/ui/productionBuild.test.ts'],
 	},
 	{
 		command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
@@ -108,7 +108,7 @@ function directTestCommand(filePath: string) {
 	const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
 	if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) return `cd bots/${botMatch[1]} && bun test ${botMatch[2]}`
 	if (filePath.startsWith('solidity/ts/')) return `bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ${filePath}`
-	if (filePath.startsWith('ui/')) return `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ${filePath}`
+	if (filePath.startsWith('ui/') || filePath.startsWith('tooling/ui/')) return `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ${filePath}`
 	return `bun test ${filePath}`
 }
 

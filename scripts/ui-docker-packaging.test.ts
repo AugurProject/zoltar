@@ -8,7 +8,7 @@ const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', '
 const versionDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'version-deploy.yml')
 const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'coreShared', 'scripts', 'docker-entrypoint.sh')
 const rootPackage = join(import.meta.dir, '..', 'package.json')
-const staticServer = join(import.meta.dir, '..', 'ui', 'coreShared', 'build', 'dockerServe.mts')
+const staticServer = join(import.meta.dir, '..', 'tooling', 'ui', 'dockerServe.mts')
 
 describe('UI Docker packaging', () => {
 	test('only copies tracked build inputs and invokes existing UI build scripts', async () => {
@@ -21,11 +21,11 @@ describe('UI Docker packaging', () => {
 		}
 		expect(source).not.toContain('ui/coreShared/tsconfig.vendor.json')
 		expect(source).not.toContain('bun run vendor')
-		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts zoltar')
-		expect(source).toContain('bun ./ui/coreShared/build/vendor.mts statoblast')
+		expect(source).toContain('bun ./tooling/ui/vendor.mts zoltar')
+		expect(source).toContain('bun ./tooling/ui/vendor.mts statoblast')
 		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(source).toContain(`bun ./scripts/install-frozen.mts ui/${packageId}`)
 		expect(source).not.toMatch(/cd \/source\/ui\/\w+ && bun install/)
-		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('ui/coreShared/build')
+		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
 	})
 
 	test('builds local runtime images from only the selected application dependency stage', async () => {
@@ -38,8 +38,8 @@ describe('UI Docker packaging', () => {
 		expect(source).toContain('COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/')
 		expect(source).toContain('AS local-runtime-trading')
 		expect(source).toContain('COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/')
-		expect(source).toContain('COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts')
-		expect(source.indexOf('COPY ./ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(source.indexOf('RUN bun ./ui/coreShared/build/vendor.mts trading'))
+		expect(source).toContain('COPY --chown=bun:bun ./tooling/ui/appPaths.mts /app/appPaths.mts')
+		expect(source.indexOf('COPY ./ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(source.indexOf('RUN bun ./tooling/ui/vendor.mts trading'))
 	})
 
 	test('serves Zoltar and Statoblast on their dedicated container ports', async () => {

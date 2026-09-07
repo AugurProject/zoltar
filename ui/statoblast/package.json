@@ -30,13 +30,13 @@
 		"ws": "8.21.0"
 	},
 	"scripts": {
-		"generate": "bun ../coreShared/build/projectArtifacts.mts && bun ../coreShared/build/vendor.mts statoblast",
-		"vendor": "bun ../coreShared/build/vendor.mts statoblast",
-		"build:workers": "bun ../coreShared/build/workers.mts statoblast",
-		"build:tests": "bun ../coreShared/build/tests.mts statoblast",
+		"generate": "bun ../../tooling/ui/projectArtifacts.mts && bun ../../tooling/ui/vendor.mts statoblast",
+		"vendor": "bun ../../tooling/ui/vendor.mts statoblast",
+		"build:workers": "bun ../../tooling/ui/workers.mts statoblast",
+		"build:tests": "bun ../../tooling/ui/tests.mts statoblast",
 		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
-		"build:prod": "bun run generate && bun ../coreShared/build/production.mts statoblast",
-		"watch": "bun ../coreShared/build/watch.mts statoblast",
-		"serve": "bun ../coreShared/dev-server.ts statoblast"
+		"build:prod": "bun run generate && bun ../../tooling/ui/production.mts statoblast",
+		"watch": "bun ../../tooling/ui/watch.mts statoblast",
+		"serve": "bun ../../tooling/ui/dev-server.ts statoblast"
 	}
 }

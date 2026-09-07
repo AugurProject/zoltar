@@ -15,11 +15,11 @@ describe('test impact recommendations', () => {
 	})
 
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
-		expect(commandsFor(['ui/coreShared/build/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/coreShared/build/productionBuild.test.ts'])
-		expect(commandsFor(['ui/coreShared/build/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
+		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts'])
+		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/statoblast/ts/features/security-pools/components/CollateralizationCircle.tsx'])).toContain('bun run test:browser:smoke')
-		expect(commandsFor(['ui/coreShared/build/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
+		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {
@@ -88,8 +88,8 @@ describe('test impact recommendations', () => {
 	})
 
 	test('removes or rewrites browser tiers when their owned production-build test moves', () => {
-		const productionSource: ChangedFileEntry = { path: 'ui/coreShared/build/production.mts', status: 'modified' }
-		const productionTest = 'ui/coreShared/build/productionBuild.test.ts'
+		const productionSource: ChangedFileEntry = { path: 'tooling/ui/production.mts', status: 'modified' }
+		const productionTest = 'tooling/ui/productionBuild.test.ts'
 		expect(getTestImpactRecommendations([productionSource, { path: productionTest, status: 'deleted' }])).toEqual([])
 		expect(getTestImpactRecommendations([{ path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['cd bots/liquidator && bun test tests/productionBuild.test.ts'])
 		const combinedCommands = getTestImpactRecommendations([productionSource, { path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)

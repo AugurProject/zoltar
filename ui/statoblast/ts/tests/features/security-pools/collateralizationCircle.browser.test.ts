@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getChromiumPath, withChromiumTestLock } from '../../../../../coreShared/build/chromiumPath.js'
+import { getChromiumPath, withChromiumTestLock } from '../../../../../../tooling/ui/chromiumPath.js'
 
 type GaugeFitResult = {
 	clientWidth: number
