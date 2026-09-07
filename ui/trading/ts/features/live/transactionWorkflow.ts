@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 
-type TransactionOperation = 'share-approval' | 'trade'
+type TransactionOperation = 'share-approval' | 'trade' | 'settlement-approval' | 'settlement' | 'liquidity'
 
 export type TransactionContext = Readonly<{
 	account: Address
@@ -25,6 +25,7 @@ export type TransactionWorkflowState = (
 
 export type TransactionWorkflowEvent =
 	| Readonly<{ type: 'reset' }>
+	| Readonly<{ type: 'inputs-invalidated'; preserveConfirmed?: boolean }>
 	| Readonly<{ type: 'context-invalidated'; message: string }>
 	| Readonly<{ type: 'simulation-started'; context: TransactionContext }>
 	| Readonly<{ type: 'simulation-succeeded'; context: TransactionContext }>
@@ -53,9 +54,13 @@ function requireContext(state: TransactionWorkflowState, context: TransactionCon
 
 export function transactionWorkflowReducer(state: TransactionWorkflowState, event: TransactionWorkflowEvent): TransactionWorkflowState {
 	if (event.type === 'reset') return idleTransactionWorkflow
+	if (event.type === 'inputs-invalidated') {
+		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('Inputs cannot invalidate an active or uncertain transaction')
+		return event.preserveConfirmed === true && state.kind === 'confirmed' ? state : idleTransactionWorkflow
+	}
 	if (event.type === 'context-invalidated') return state.kind === 'idle' ? { kind: 'failed', message: event.message } : { ...state, notice: event.message }
 	if (event.type === 'simulation-started') {
-		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending') throw new Error('A simulation cannot replace an active transaction')
+		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('A simulation cannot replace an active or uncertain transaction')
 		return { kind: 'simulating', context: event.context }
 	}
 	if (event.type === 'simulation-succeeded') {
@@ -64,7 +69,7 @@ export function transactionWorkflowReducer(state: TransactionWorkflowState, even
 		return { kind: 'ready-to-submit', context: event.context }
 	}
 	if (event.type === 'operation-preparing') {
-		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending') throw new Error('An operation cannot replace an active transaction')
+		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending' || state.kind === 'uncertain') throw new Error('An operation cannot replace an active or uncertain transaction')
 		return { kind: 'preparing', context: event.context, operation: event.operation }
 	}
 	if (event.type === 'signature-requested') {
@@ -92,6 +97,8 @@ export function transactionWorkflowReducer(state: TransactionWorkflowState, even
 		if (state.kind !== 'pending') throw new Error('Only a pending broadcast can become uncertain')
 		return { kind: 'uncertain', context: event.context, operation: state.operation, transactionHash: state.transactionHash, reason: event.reason }
 	}
+	if (event.context !== undefined && state.kind !== 'idle') requireContext(state, event.context)
+	if (event.operation !== undefined && 'operation' in state && state.operation !== event.operation) throw new Error('Failure operation does not match the active operation')
 	return { kind: 'failed', ...(event.context === undefined ? {} : { context: event.context }), ...(event.operation === undefined ? {} : { operation: event.operation }), message: event.message }
 }
 
@@ -99,9 +106,28 @@ export type TransactionPhase = 'idle' | 'simulating' | 'ready' | 'preparing' | '
 
 export function transactionPhase(state: TransactionWorkflowState): TransactionPhase {
 	if (state.kind === 'ready-to-submit') return 'ready'
-	if (state.kind === 'awaiting-signature') return state.operation === 'share-approval' ? 'approval' : 'submitting'
-	if (state.kind === 'pending') return state.operation === 'share-approval' ? 'approval-pending' : 'pending'
-	if (state.kind === 'confirmed') return state.operation === 'share-approval' ? 'approval-confirmed' : 'confirmed'
+	if (state.kind === 'awaiting-signature') return transactionOperationIsApproval(state.operation) ? 'approval' : 'submitting'
+	if (state.kind === 'pending') return transactionOperationIsApproval(state.operation) ? 'approval-pending' : 'pending'
+	if (state.kind === 'confirmed') return transactionOperationIsApproval(state.operation) ? 'approval-confirmed' : 'confirmed'
 	if (state.kind === 'simulating' || state.kind === 'preparing' || state.kind === 'idle') return state.kind
 	return 'error'
+}
+
+function transactionOperationIsApproval(operation: TransactionOperation) {
+	return operation === 'share-approval' || operation === 'settlement-approval'
+}
+
+export function transactionWorkflowHash(state: TransactionWorkflowState) {
+	return state.kind === 'pending' || state.kind === 'confirmed' || state.kind === 'reverted' || state.kind === 'uncertain' ? state.transactionHash : undefined
+}
+
+export function transactionWorkflowError(state: TransactionWorkflowState, revertedMessage: string) {
+	if (state.notice !== undefined) return state.notice
+	if (state.kind === 'failed') return state.message
+	if (state.kind === 'reverted') return revertedMessage
+	return undefined
+}
+
+export function transactionWorkflowReceiptWarning(state: TransactionWorkflowState) {
+	return state.kind === 'uncertain' ? state.reason : undefined
 }
