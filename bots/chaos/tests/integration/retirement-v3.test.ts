@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
@@ -127,7 +128,7 @@ let compileDirectory: string | undefined
 async function compileFixture() {
 	compileDirectory = await mkdtemp(join(tmpdir(), 'chaos-retirement-solc-'))
 	const source = new URL('../fixtures/RetirementV3Pool.sol', import.meta.url).pathname
-	const solc = new URL('../../node_modules/.bin/solcjs', import.meta.url).pathname
+	const solc = fileURLToPath(import.meta.resolve('solc/solc.js'))
 	const process = Bun.spawn([solc, '--bin', '--optimize', '--output-dir', compileDirectory, source], { stderr: 'pipe', stdout: 'pipe' })
 	const exitCode = await process.exited
 	if (exitCode !== 0) throw new Error(`Retirement integration fixture compilation failed: ${await new Response(process.stderr).text()}`)
