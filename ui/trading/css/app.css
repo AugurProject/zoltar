@@ -87,7 +87,7 @@ body {
 	color: var(--text);
 }
 .app-settings-menu .field-help {
-	font-size: 0.8rem;
+	font-size: 0.8125rem;
 	color: var(--muted);
 }
 .app-settings-menu .field-error {
@@ -169,7 +169,7 @@ summary:focus-visible {
 .brand small {
 	color: var(--muted);
 	font:
-		10px / 1.4 ui-monospace,
+		12px / 1.4 ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -235,7 +235,7 @@ nav a[aria-current="page"] {
 	background: var(--surface-raised);
 	color: var(--text);
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 	text-transform: none;
 }
@@ -251,7 +251,7 @@ nav a[aria-current="page"] {
 	gap: 0.45rem;
 	color: var(--muted);
 	font:
-		11px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-decoration: none;
 }
@@ -281,7 +281,7 @@ nav a[aria-current="page"] {
 	background: var(--surface-raised);
 	color: var(--text);
 	cursor: pointer;
-	font-size: 12px;
+	font-size: 13px;
 }
 .wallet-button:disabled {
 	opacity: 0.58;
@@ -333,7 +333,7 @@ nav a[aria-current="page"] {
 }
 .wallet-summary__address {
 	color: var(--text);
-	font-size: 12px;
+	font-size: 13px;
 	white-space: nowrap;
 }
 .wallet-summary__address--compact {
@@ -363,7 +363,7 @@ nav a[aria-current="page"] {
 .wallet-summary__balances small {
 	color: var(--muted);
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-summary__balances strong {
@@ -372,7 +372,7 @@ nav a[aria-current="page"] {
 	color: var(--text);
 	overflow-wrap: anywhere;
 	font:
-		12px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-summary__details {
@@ -387,7 +387,7 @@ nav a[aria-current="page"] {
 	border: 1px solid var(--line-strong);
 	background: var(--surface-raised);
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__details,
 .wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__identity,
@@ -422,7 +422,7 @@ nav a[aria-current="page"] {
 .wallet-summary__error {
 	color: var(--warn);
 	font:
-		11px / 1.2 ui-monospace,
+		13px / 1.2 ui-monospace,
 		monospace;
 }
 .wallet-summary__failure {
@@ -439,7 +439,7 @@ nav a[aria-current="page"] {
 	color: var(--warn);
 	cursor: pointer;
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-button,
@@ -486,7 +486,7 @@ nav a[aria-current="page"] {
 .section-kicker {
 	color: var(--accent);
 	font:
-		10px / 1.2 ui-monospace,
+		12px / 1.2 ui-monospace,
 		monospace;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -500,7 +500,7 @@ nav a[aria-current="page"] {
 	white-space: nowrap;
 	color: var(--muted);
 	font:
-		11px / 1.2 ui-monospace,
+		13px / 1.2 ui-monospace,
 		monospace;
 }
 .status__dot {
@@ -565,7 +565,7 @@ nav a[aria-current="page"] {
 	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
-	font-size: 11px;
+	font-size: 13px;
 }
 .segmented button[aria-pressed="true"] {
 	background: var(--surface-raised);
@@ -606,7 +606,7 @@ nav a[aria-current="page"] {
 }
 .side-picker small {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .field {
 	display: grid;
@@ -635,7 +635,7 @@ nav a[aria-current="page"] {
 	padding: 0 0.35rem;
 	color: var(--text);
 	font:
-		600 11px ui-monospace,
+		600 13px ui-monospace,
 		monospace;
 }
 .execution-settings__fields {
@@ -650,7 +650,7 @@ nav a[aria-current="page"] {
 	display: block;
 	margin-top: 0.65rem;
 	color: var(--faint);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.4;
 }
 .field > input,
@@ -838,7 +838,7 @@ nav a[aria-current="page"] {
 .trade-summary span,
 .trade-summary small {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .trade-summary strong {
 	color: var(--accent);
@@ -858,7 +858,7 @@ nav a[aria-current="page"] {
 .trade-summary--unavailable p {
 	margin: 0;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .trade-summary--unavailable strong {
@@ -879,13 +879,13 @@ nav a[aria-current="page"] {
 	gap: 1rem;
 	padding-bottom: 0.8rem;
 	border-bottom: 1px solid var(--line);
-	font-size: 12px;
+	font-size: 13px;
 }
 .quote > p,
 details p,
 .operation-block p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.55;
 }
 .metrics,
@@ -906,7 +906,7 @@ details p,
 .fact-list dt {
 	min-width: 0;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	overflow-wrap: anywhere;
 }
 .metrics dd,
@@ -914,7 +914,7 @@ details p,
 	margin: 0;
 	text-align: right;
 	font:
-		12px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	overflow-wrap: anywhere;
 }
@@ -973,7 +973,7 @@ details p,
 	min-height: 1.4rem;
 	margin-top: 0.65rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .transaction-message--confirmed {
 	color: var(--yes);
@@ -989,7 +989,7 @@ details p,
 	border: 1px solid var(--line);
 	background: #0b1016;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .transaction-hash code {
 	color: var(--text);
@@ -998,7 +998,7 @@ details p,
 details {
 	margin-top: 0.75rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 summary {
 	cursor: pointer;
@@ -1014,11 +1014,11 @@ summary {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
-	font-size: 11px;
+	font-size: 13px;
 }
 .coverage p,
 .warning {
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .probability {
@@ -1029,7 +1029,7 @@ summary {
 	justify-content: space-between;
 	margin-bottom: 0.5rem;
 	font:
-		600 11px ui-monospace,
+		600 13px ui-monospace,
 		monospace;
 }
 .probability__labels span:first-child {
@@ -1060,7 +1060,7 @@ summary {
 	margin-top: 0.45rem;
 	color: var(--faint);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -1122,18 +1122,18 @@ summary {
 }
 .market-row__pool dt {
 	color: var(--muted);
-	font-size: 9px;
+	font-size: 13px;
 }
 .market-row__pool dd {
 	margin: 0;
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .pool-mint-note {
 	margin: -0.25rem 0 1rem;
 	color: var(--muted);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .pool-mint-note__address {
@@ -1145,7 +1145,7 @@ summary {
 	gap: 1rem;
 	color: var(--faint);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .market-row h2 {
@@ -1164,7 +1164,7 @@ summary {
 	margin: 0;
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .market-row__metrics {
@@ -1179,12 +1179,12 @@ summary {
 }
 .market-row__metrics dt {
 	color: var(--muted);
-	font-size: 10px;
+	font-size: 13px;
 }
 .market-row__metrics dd {
 	margin: 0;
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .row-action {
@@ -1197,7 +1197,7 @@ summary {
 	padding: 0 0.5rem;
 	white-space: nowrap;
 	font-family: inherit;
-	font-size: 11px;
+	font-size: 13px;
 	text-decoration: none;
 }
 .row-action:disabled {
@@ -1215,7 +1215,7 @@ summary {
 }
 .uninitialized-state p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .two-column {
 	display: grid;
@@ -1254,7 +1254,7 @@ summary {
 .fork-source-step p {
 	margin: 0 0 0.75rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .fork-migration-targets {
@@ -1272,7 +1272,7 @@ summary {
 .fork-deployed-targets > span {
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
@@ -1311,7 +1311,7 @@ summary {
 	display: block;
 	color: var(--yes);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .fork-target-status--missing {
@@ -1344,7 +1344,7 @@ summary {
 	gap: 0.5rem;
 	min-height: 44px;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .fork-deployed-targets {
 	display: flex;
@@ -1360,7 +1360,7 @@ summary {
 	background: transparent;
 	color: var(--text);
 	cursor: pointer;
-	font-size: 11px;
+	font-size: 13px;
 }
 .quiet-action:disabled {
 	color: #73808d;
@@ -1440,7 +1440,7 @@ summary {
 .balance-strip span {
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .balance-strip strong {
@@ -1455,7 +1455,7 @@ summary {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
-	font-size: 11px;
+	font-size: 13px;
 }
 .coverage-meter progress {
 	width: 100%;
@@ -1466,7 +1466,7 @@ summary {
 .coverage-meter small,
 .muted {
 	color: var(--muted);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.55;
 }
 .table-section {
@@ -1478,7 +1478,7 @@ summary {
 	gap: 1rem;
 	padding: 0.9rem 0;
 	border-top: 1px solid var(--line);
-	font-size: 11px;
+	font-size: 13px;
 }
 .table-row span {
 	color: var(--muted);
@@ -1508,7 +1508,7 @@ summary {
 .explanation-flow span {
 	color: var(--accent);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .explanation-flow h2 {
@@ -1520,7 +1520,7 @@ summary {
 .explanation-flow p,
 .prose p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.7;
 }
 .prose {
@@ -1583,14 +1583,16 @@ summary {
 	}
 	.site-header nav a {
 		display: inline-flex;
+		min-width: 44px;
 		min-height: 44px;
 		align-items: center;
+		justify-content: center;
 		padding: 0.5rem 0.42rem;
-		font-size: 12px;
+		font-size: 13px;
 	}
 	.network-pill {
 		max-width: 125px;
-		font-size: 11px;
+		font-size: 13px;
 		line-height: 1.2;
 	}
 	.universe-selector select {

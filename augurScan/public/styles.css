@@ -1609,7 +1609,7 @@ button[aria-busy="true"]:disabled {
 	padding: 3.4rem 1rem;
 	color: var(--muted);
 	text-align: center;
-	font-size: 0.8rem;
+	font-size: 0.8125rem;
 }
 .state-retry {
 	margin-left: 0.75rem;

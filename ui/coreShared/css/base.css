@@ -509,7 +509,7 @@ button.quiet:disabled {
 	min-width: var(--touch-target-min);
 	min-height: var(--touch-target-min);
 	padding: 0.35rem;
-	font-size: 0.8rem;
+	font-size: var(--font-label);
 	line-height: 1;
 }
 
