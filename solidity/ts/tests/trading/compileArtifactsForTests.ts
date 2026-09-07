@@ -1,9 +1,12 @@
 import {
 	trading_PredeploymentShareSink_PredeploymentShareSink,
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory,
+	trading_TwoWayConstantProductFactoryV2_TwoWayConstantProductFactoryV2,
 	trading_TwoWayConstantProductMath_TwoWayConstantProductMath,
 	trading_TwoWayConstantProductPair_TwoWayConstantProductPair,
+	trading_TwoWayConstantProductPairV2_TwoWayConstantProductPairV2,
 	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter,
+	trading_TwoWayConstantProductRouterV2_TwoWayConstantProductRouterV2,
 	trading_test_TradingProtocolMocks_TradingForceEth,
 	trading_test_TradingProtocolMocks_TradingMockCoreFactory,
 	trading_test_TradingProtocolMocks_TradingMockForker,
@@ -18,9 +21,12 @@ import {
 const tradingContracts = {
 	'contracts/trading/PredeploymentShareSink.sol': { PredeploymentShareSink: trading_PredeploymentShareSink_PredeploymentShareSink },
 	'contracts/trading/TwoWayConstantProductFactory.sol': { TwoWayConstantProductFactory: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory },
+	'contracts/trading/TwoWayConstantProductFactoryV2.sol': { TwoWayConstantProductFactoryV2: trading_TwoWayConstantProductFactoryV2_TwoWayConstantProductFactoryV2 },
 	'contracts/trading/TwoWayConstantProductMath.sol': { TwoWayConstantProductMath: trading_TwoWayConstantProductMath_TwoWayConstantProductMath },
 	'contracts/trading/TwoWayConstantProductPair.sol': { TwoWayConstantProductPair: trading_TwoWayConstantProductPair_TwoWayConstantProductPair },
+	'contracts/trading/TwoWayConstantProductPairV2.sol': { TwoWayConstantProductPairV2: trading_TwoWayConstantProductPairV2_TwoWayConstantProductPairV2 },
 	'contracts/trading/TwoWayConstantProductRouter.sol': { TwoWayConstantProductRouter: trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter },
+	'contracts/trading/TwoWayConstantProductRouterV2.sol': { TwoWayConstantProductRouterV2: trading_TwoWayConstantProductRouterV2_TwoWayConstantProductRouterV2 },
 	'contracts/trading/test/TradingProtocolMocks.sol': {
 		TradingForceEth: trading_test_TradingProtocolMocks_TradingForceEth,
 		TradingMockCoreFactory: trading_test_TradingProtocolMocks_TradingMockCoreFactory,
