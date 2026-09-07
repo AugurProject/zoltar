@@ -2698,6 +2698,21 @@ dialog::backdrop {
 	min-height: var(--control-height);
 }
 
+:where(
+		.operations-detail-header > a,
+		.operations-raw-evidence summary,
+		.operations-round-changes summary,
+		.chart-data-disclosure summary,
+		.detail-disclosure summary,
+		.rich-assets summary,
+		.account-transaction-action summary,
+		.explorer-link
+	) {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--control-height);
+}
+
 :where(.metric-value, .cell, td, time, code, .mono, [data-value]) {
 	font-variant-numeric: tabular-nums;
 }

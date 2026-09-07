@@ -109,7 +109,7 @@ main {
 
 .app-settings-menu label > span {
 	font-family: var(--font-family-mono);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 	color: var(--text-muted);
 }
 
@@ -579,7 +579,7 @@ button.quiet:disabled {
 
 .account-menu-network span {
 	color: var(--muted);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 }
 
 .detail {

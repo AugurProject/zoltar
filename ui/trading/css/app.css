@@ -74,7 +74,7 @@ body {
 	margin-bottom: 0.75rem;
 }
 .app-settings-menu label > span {
-	font-size: 0.75rem;
+	font-size: 0.8125rem;
 	color: var(--muted);
 }
 .app-settings-menu input,
@@ -614,13 +614,13 @@ nav a[aria-current="page"] {
 	margin: 1rem 0;
 	color: var(--muted);
 	font:
-		12px ui-monospace,
+		0.8125rem ui-monospace,
 		monospace;
 }
 .field small {
 	color: var(--faint);
 	font:
-		11px / 1.4 ui-sans-serif,
+		0.8125rem / 1.4 ui-sans-serif,
 		sans-serif;
 }
 .field small.error {
@@ -1761,7 +1761,7 @@ summary {
 	.wallet-summary--loading .wallet-summary__compact-loading {
 		display: block;
 		color: var(--muted);
-		font-size: 11px;
+		font-size: 0.8125rem;
 	}
 	.wallet-summary__details {
 		left: 0;
@@ -1796,13 +1796,13 @@ summary {
 	}
 	.wallet-summary__detail-balances small {
 		color: var(--muted);
-		font-size: 11px;
+		font-size: 0.8125rem;
 	}
 	.wallet-summary__detail-balances strong {
 		min-width: 0;
 		color: var(--text);
 		font:
-			12px / 1.25 ui-monospace,
+			0.8125rem / 1.25 ui-monospace,
 			monospace;
 		overflow-wrap: anywhere;
 	}

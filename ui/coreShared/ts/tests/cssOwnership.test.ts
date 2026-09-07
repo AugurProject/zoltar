@@ -37,3 +37,23 @@ test('the visual foundation defines readable type, touch, geometry, and product 
 	])
 		expect(tokens).toContain(declaration)
 })
+
+test('persistent operational text and AugurScan disclosures keep accessible minimums', () => {
+	const base = readStylesheet('base.css')
+	const controls = readStylesheet('controls-and-responsive.css')
+	const trading = readFileSync('ui/trading/css/app.css', 'utf8')
+	const augurScan = readFileSync('augurScan/public/styles.css', 'utf8')
+
+	expect(base).toMatch(/\.app-settings-menu label > span \{[^}]*font-size: var\(--font-label\);/s)
+	expect(base).toMatch(/\.account-menu-network span \{[^}]*font-size: var\(--font-label\);/s)
+	expect(controls).toMatch(/\.metric-inline-status \{[^}]*font-size: var\(--font-label\);/s)
+	expect(trading).toMatch(/\.field \{[^}]*0\.8125rem ui-monospace/s)
+	expect(trading).toMatch(/\.wallet-summary--loading \.wallet-summary__compact-loading \{[^}]*font-size: 0\.8125rem;/s)
+	expect(trading).toMatch(/\.wallet-summary__detail-balances small \{[^}]*font-size: 0\.8125rem;/s)
+	expect(trading).toMatch(/\.wallet-summary__detail-balances strong \{[^}]*0\.8125rem \/ 1\.25 ui-monospace/s)
+
+	for (const selector of ['.operations-detail-header > a', '.operations-raw-evidence summary', '.operations-round-changes summary', '.chart-data-disclosure summary', '.detail-disclosure summary', '.rich-assets summary', '.account-transaction-action summary', '.explorer-link']) {
+		expect(augurScan).toContain(selector)
+	}
+	expect(augurScan).toMatch(/\.explorer-link\s*\n\s*\) \{[^}]*min-height: var\(--control-height\);/s)
+})

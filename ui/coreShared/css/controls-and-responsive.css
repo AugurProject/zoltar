@@ -782,7 +782,7 @@
 	padding: 0.12rem 0.46rem;
 	border: 1px solid currentColor;
 	border-radius: 999px;
-	font-size: 0.72rem;
+	font-size: var(--font-label);
 	font-weight: 700;
 	letter-spacing: 0.08em;
 	line-height: 1.2;
