@@ -1,11 +1,12 @@
 import type { SQL } from 'bun'
+import { actionCatalog, contractCatalog, contractDetail, networkCatalog } from '../repositories/catalog.ts'
 import { addressIdentity, addressInteractions, addressTransactions } from './address-history.ts'
 import { directObservationsResponse } from './direct-observations.ts'
 import { eventEntityDetailResponse, forkDetailResponse, reportDetailResponse } from './entity-details.ts'
 import { historicalExport } from './exports.ts'
 import { integrityCatalogResponse } from './integrity.ts'
 import { listLogs, logDetail, provenanceHistory, reorganizationHistory } from './logs.ts'
-import { operationsAsOfForContinuations } from './operation-data.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import { domainCatalogResponse, operationsResponse } from './operations.ts'
 import { addressPortfolioResponse, richList } from './portfolio.ts'
 import { riskDetailResponse } from './risk.ts'
@@ -30,20 +31,13 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 	if (request.method !== 'GET') return json({ error: 'Read-only API' }, 405)
 	try {
 		if (url.pathname === '/api/v1/networks') {
-			const rows =
-				await sql`SELECT chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp, observed_block, finalized_block, phase, last_poll_at, last_success_at, failure_started_at, consecutive_failures, next_retry_at, last_reorg_at, last_reorg_depth, last_error, updated_at FROM networks ORDER BY chain_id`
+			const rows = await networkCatalog(sql)
 			return json({ items: rows, serverTime: new Date(), freshnessThresholdMs })
 		}
 		if (url.pathname === '/api/v1/contracts') {
 			const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 			if (chainId === undefined) throw new ApiRequestError('chainId is required')
-			const rows = await sql`
-				SELECT contract.*, network.explorer_base_url
-				FROM contracts contract
-				JOIN networks network USING (chain_id)
-				WHERE contract.chain_id = ${chainId} AND contract.canonical
-				ORDER BY (contract.deployment_block IS NOT NULL) DESC, contract.label, contract.address
-			`
+			const rows = await contractCatalog(sql, chainId)
 			return json({ items: rows.map((row: Record<string, unknown>) => decodedJsonColumns(row, actionJsonColumns)) })
 		}
 		if (url.pathname === '/api/v1/logs') return await listLogs(sql, url)
@@ -88,30 +82,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
 			const cursor = parseActionCursor(url.searchParams.get('cursor'), chainId)
 			const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 2 }])
-			const values: Array<string | number> = []
-			const clauses = ['t.canonical', 'block.canonical']
-			const bind = (value: string | number): string => {
-				values.push(value)
-				return `$${values.length}`
-			}
-			clauses.push(`a.chain_id = ${bind(chainId)}`)
-			if (cursor !== undefined)
-				clauses.push(
-					`(block.timestamp, t.block_number, t.transaction_index, a.block_hash, a.tx_hash) < (${bind(cursor[8])}::timestamptz, ${bind(cursor[9])}::bigint, ${bind(cursor[10])}, ${bind(cursor[11])}, ${bind(cursor[12])})`,
-				)
-			values.push(limit + 1)
-			const rows = await sql.unsafe(
-				`SELECT a.*, t.block_number, t.transaction_index, t.from_address, t.to_address, t.status, t.value,
-					block.timestamp AS block_timestamp, n.id AS network_id
-				FROM actions a
-				JOIN transactions t ON t.chain_id = a.chain_id AND t.block_hash = a.block_hash AND t.hash = a.tx_hash
-				JOIN blocks block ON block.chain_id = a.chain_id AND block.hash = a.block_hash
-				JOIN networks n ON n.chain_id = a.chain_id
-				WHERE ${clauses.join(' AND ')}
-				ORDER BY block.timestamp DESC, a.chain_id DESC, t.block_number DESC, t.transaction_index DESC, a.block_hash DESC, a.tx_hash DESC
-				LIMIT $${values.length}`,
-				values,
-			)
+			const rows = await actionCatalog(sql, chainId, limit, cursor)
 			const hasMore = rows.length > limit
 			const pageRows = rows.slice(0, limit)
 			return json({
@@ -127,12 +98,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			const chainId = routeInteger(chain)
 			if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address))
 				return json({ error: 'Invalid contract identifier' }, 400)
-			const rows = await sql`
-				SELECT contract.*, network.explorer_base_url
-				FROM contracts contract
-				JOIN networks network USING (chain_id)
-				WHERE contract.chain_id = ${chainId} AND contract.address = ${address.toLowerCase()} AND contract.canonical
-			`
+			const rows = await contractDetail(sql, chainId, address.toLowerCase())
 			return rows.length === 0 ? json({ error: 'Contract not found' }, 404) : json(rows[0])
 		}
 	} catch (error) {

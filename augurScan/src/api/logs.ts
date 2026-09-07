@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './operation-data.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import {
 	ApiRequestError,
 	actionJsonColumns,

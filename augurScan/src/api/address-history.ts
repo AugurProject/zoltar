@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { operationsAsOf } from './operation-data.ts'
+import { operationsAsOf } from '../repositories/operations.ts'
 import {
 	ApiConflictError,
 	ApiRequestError,

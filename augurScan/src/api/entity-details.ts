@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
-import { operationsAsOfForContinuations } from './operation-data.ts'
+import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 import {
 	ApiConflictError,
 	ApiRequestError,
@@ -13,14 +13,6 @@ import {
 	jsonRecord,
 	routeInteger,
 } from './shared.ts'
-
-export const snapshotBoundaryMatches = (parts: readonly unknown[], offset: number, asOf: Record<string, unknown>): boolean =>
-	parts[offset] === String(asOf['blockNumber']) &&
-	parts[offset + 1] === String(asOf['blockHash']) &&
-	parts[offset + 2] === String(asOf['invalidationId']) &&
-	parts[offset + 3] === String(asOf['abiSourceHash']) &&
-	parts[offset + 4] === String(asOf['applicationSourceHash']) &&
-	parts[offset + 5] === String(asOf['projectionSourceHash'])
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
 	String(asOf['blockNumber']),

@@ -1,7 +1,6 @@
 import type { SQL } from 'bun'
 import { auctionLifecycle, ESCALATION_OUTCOME, poolCapacity, reportLifecycle, vaultRisk } from '../operations.ts'
-import { snapshotBoundaryMatches } from './entity-details.ts'
-import { ApiConflictError, ApiRequestError, jsonRecord, postgresBigint } from './shared.ts'
+import { ApiRequestError, jsonRecord } from '../api/shared.ts'
 
 export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
 	const rows =
@@ -58,33 +57,33 @@ export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string
 	}
 }
 
-export const operationsAsOfFromUrl = async (sql: SQL, chainId: number, url: URL): Promise<Record<string, unknown>> =>
-	await operationsAsOf(sql, chainId, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
-
-export type SnapshotCursorReference = { readonly parts: readonly unknown[]; readonly offset: number }
-
-export const operationsAsOfForContinuations = async (
-	sql: SQL,
-	chainId: number,
-	cursors: readonly SnapshotCursorReference[],
-	requestedAtBlock?: string,
-): Promise<Record<string, unknown>> => {
-	const first = cursors[0]
-	const cursorBlock = first === undefined ? undefined : first.parts[first.offset]
-	if (cursorBlock !== undefined && typeof cursorBlock !== 'string') throw new ApiRequestError('cursor snapshot block is invalid')
-	if (requestedAtBlock !== undefined && cursorBlock !== undefined && requestedAtBlock !== cursorBlock)
-		throw new ApiRequestError('cursor does not match the requested snapshot block')
-	let asOf: Record<string, unknown>
-	try {
-		asOf = await operationsAsOf(sql, chainId, requestedAtBlock ?? cursorBlock)
-	} catch (error) {
-		if (cursorBlock !== undefined && error instanceof ApiRequestError && error.message === 'atBlock is outside retained canonical coverage')
-			throw new ApiConflictError('Indexed state changed; restart pagination')
-		throw error
-	}
-	for (const cursor of cursors)
-		if (!snapshotBoundaryMatches(cursor.parts, cursor.offset, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	return asOf
+export const operationsOverviewSupplement = async (sql: SQL, chainId: number, snapshotBlock: string) => {
+	const [prices, recentChanges, totals] = await Promise.all([
+		sql`SELECT coordinator_address AS source_contract, event_name AS source_event, rep_per_eth_1e18::text AS value,
+			block_number::text AS block_number, settlement_timestamp AS observed_timestamp
+			FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+			ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 1`,
+		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
+			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
+			WHERE timeline.chain_id = ${chainId} AND timeline.canonical AND timeline.block_number <= ${snapshotBlock}
+			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
+				timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC LIMIT 30`,
+		sql`SELECT
+			(SELECT count(DISTINCT (open_oracle_address, report_id)) FROM open_oracle_report_events
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS reports,
+			(SELECT count(DISTINCT game_address) FROM escalation_game_events
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS escalations,
+			(SELECT count(DISTINCT auction_address) FROM truth_auction_events
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS auctions,
+			(SELECT count(DISTINCT pool_address) FROM pools
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS pools,
+			(SELECT count(DISTINCT (pool_address, vault_address)) FROM vault_snapshots
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS vaults,
+			(SELECT count(DISTINCT pair_address) FROM amm_markets
+				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS markets,
+			(SELECT count(*) FROM chain_reorganizations WHERE chain_id = ${chainId})::integer AS reorganizations`,
+	])
+	return { prices, recentChanges, totals: totals[0] }
 }
 
 export const reportCatalogData = async (

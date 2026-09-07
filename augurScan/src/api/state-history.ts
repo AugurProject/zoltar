@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { ETH_QUOTE_DECIMALS, USDC_QUOTE_DECIMALS } from '../operations.ts'
-import { snapshotBoundaryMatches } from './entity-details.ts'
-import { operationsAsOf } from './operation-data.ts'
+import { snapshotBoundaryMatches } from './snapshot.ts'
+import { operationsAsOf } from '../repositories/operations.ts'
 import { ApiConflictError, ApiRequestError, integer, json, postgresBigint, routeInteger } from './shared.ts'
 import { offsetCursorFor, offsetPage, rejectRawSnapshotOffset } from './trading-catalog.ts'
 

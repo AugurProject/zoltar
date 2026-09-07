@@ -5,48 +5,26 @@ import {
 	escalationCatalogData,
 	forkCatalogData,
 	forkCatalogTotal,
-	operationsAsOfForContinuations,
-	operationsAsOfFromUrl,
+	operationsOverviewSupplement,
 	reportCatalogData,
 	riskCatalogData,
-} from './operation-data.ts'
+} from '../repositories/operations.ts'
+import { operationsAsOfForContinuations, operationsAsOfFromUrl } from './snapshot.ts'
 import { ApiRequestError, integer, json, jsonRecord, postgresBigint } from './shared.ts'
 
 export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
 	const asOf = await operationsAsOfFromUrl(sql, chainId, url)
-	const [reports, escalations, auctions, risk, prices, recentChanges, forks, totals] = await Promise.all([
+	const [reports, escalations, auctions, risk, supplement, forks] = await Promise.all([
 		reportCatalogData(sql, chainId, asOf),
 		escalationCatalogData(sql, chainId, String(asOf['blockNumber'])),
 		auctionCatalogData(sql, chainId, asOf),
 		riskCatalogData(sql, chainId, { snapshotBlock: String(asOf['blockNumber']) }),
-		sql`SELECT coordinator_address AS source_contract, event_name AS source_event, rep_per_eth_1e18::text AS value,
-			block_number::text AS block_number, settlement_timestamp AS observed_timestamp
-			FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])}
-			ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 1`,
-		sql`SELECT timeline.*, block.timestamp AS block_timestamp FROM protocol_timeline_entries timeline
-			JOIN blocks block ON block.chain_id = timeline.chain_id AND block.hash = timeline.block_hash
-			WHERE timeline.chain_id = ${chainId} AND timeline.canonical AND timeline.block_number <= ${String(asOf['blockNumber'])}
-			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
-				timeline.block_hash DESC, timeline.entity_type DESC, timeline.entity_identity DESC LIMIT 30`,
+		operationsOverviewSupplement(sql, chainId, String(asOf['blockNumber'])),
 		forkCatalogData(sql, chainId, String(asOf['blockNumber'])),
-		sql`SELECT
-			(SELECT count(DISTINCT (open_oracle_address, report_id)) FROM open_oracle_report_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS reports,
-			(SELECT count(DISTINCT game_address) FROM escalation_game_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS escalations,
-			(SELECT count(DISTINCT auction_address) FROM truth_auction_events
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS auctions,
-			(SELECT count(DISTINCT pool_address) FROM pools
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS pools,
-			(SELECT count(DISTINCT (pool_address, vault_address)) FROM vault_snapshots
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS vaults,
-			(SELECT count(DISTINCT pair_address) FROM amm_markets
-				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${String(asOf['blockNumber'])})::integer AS markets,
-			(SELECT count(*) FROM chain_reorganizations WHERE chain_id = ${chainId})::integer AS reorganizations`,
 	])
-	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, prices, recentChanges, forks, totals: totals[0] } })
+	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks } })
 }
 
 export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'escalations' | 'auctions' | 'risk' | 'forks'): Promise<Response> => {

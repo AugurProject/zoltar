@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { candlestickBuckets, fixedWindowTwap, swapAnalytics } from '../operations.ts'
 import { detailPage, paged, protocolCursorFor, protocolCursorForRequest } from './entity-details.ts'
-import { operationsAsOfForContinuations } from './operation-data.ts'
+import { operationsAsOfForContinuations } from './snapshot.ts'
 import { json, jsonRecord, routeInteger } from './shared.ts'
 
 export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
