@@ -20,6 +20,7 @@ import {
 	scannerDatabaseOptions,
 } from '../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../src/ethereum.ts'
+import { readIndexerHealth } from '../src/indexer-health.ts'
 import { LiveBus } from '../src/live.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
@@ -464,7 +465,7 @@ postgresTest('rejects incomplete, altered, and extended layouts despite a curren
 	}
 })
 
-postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identities and source provenance', async () => {
+postgresTest('migrates v1 canonical and orphan timeline evidence through current identities, provenance, and ownership state', async () => {
 	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
 	const database = new ScannerDatabase(postgresUrl)
 	const migrationChainId = chainId + 20 + process.pid
@@ -480,7 +481,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identitie
 		await initializeSchema(database.sql)
 		await database.sql`DELETE FROM networks WHERE chain_id = ${migrationChainId}`
 		await database.sql.unsafe(
-			'DROP TABLE public.address_balance_observations, public.token_metadata_observations, public.entity_state_observations, public.history_invalidation_causes, public.action_interpretations, public.log_interpretations, public.history_invalidation_occurrences, public.chain_reorganizations, public.indexer_runs, public.augurscan_schema_migrations',
+			'DROP TABLE public.indexer_ownership, public.address_balance_observations, public.token_metadata_observations, public.entity_state_observations, public.history_invalidation_causes, public.action_interpretations, public.log_interpretations, public.history_invalidation_occurrences, public.chain_reorganizations, public.indexer_runs, public.augurscan_schema_migrations',
 		)
 		await database.sql.unsafe(
 			'ALTER TABLE public.entity_state_snapshots DROP COLUMN indexer_run_id, DROP COLUMN abi_source_hash, DROP COLUMN application_source_hash, DROP COLUMN projection_source_hash',
@@ -638,6 +639,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence to v2 identitie
 		`
 
 		await initializeSchema(database.sql)
+		expect((await database.sql`SELECT to_regclass('public.indexer_ownership')::text AS relation`)[0]?.['relation']).toBe('indexer_ownership')
 		const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 		expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 		const migratedTimeline = await database.sql`
@@ -859,6 +861,72 @@ postgresTest('drains lease operations queued before release and rejects later wo
 		await lease?.release().catch(() => undefined)
 		await database.sql`DELETE FROM networks WHERE chain_id = ${releaseChainId}`
 		await blocker.close()
+		await database.close()
+	}
+})
+
+postgresTest('destroys a lease session after backend loss and never reuses it as an unlocked pooled client', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const terminator = new ScannerDatabase(postgresUrl)
+	const releaseChainId = chainId + 40 + process.pid
+	let lease: IndexerLease | undefined
+	try {
+		await initializeSchema(database.sql)
+		lease = await database.tryAcquireIndexerLock(releaseChainId)
+		if (lease === undefined) throw new Error('lease-loss writer did not acquire its lock')
+		const terminatedPid = lease.backendPid
+		expect((await terminator.sql`SELECT pg_terminate_backend(${terminatedPid}) AS terminated`)[0]?.['terminated']).toBe(true)
+		await expect(lease.release()).rejects.toThrow('Indexer lease unlock failed')
+		lease = undefined
+		const replacement = await database.tryAcquireIndexerLock(releaseChainId)
+		if (replacement === undefined) throw new Error('replacement writer did not acquire the released lock')
+		expect(replacement.backendPid).not.toBe(terminatedPid)
+		await replacement.release()
+	} finally {
+		await lease?.release().catch(() => undefined)
+		await terminator.close()
+		await database.close()
+	}
+})
+
+postgresTest('reconciles cross-process ownership heartbeats with the advisory-lock backend', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const ownershipChainId = chainId + 60 + process.pid
+	const network = {
+		id: `ownership-${ownershipChainId}`,
+		name: 'Ownership diagnostics',
+		chainId: ownershipChainId,
+		rpcUrls: ['http://127.0.0.1:8545'],
+		startBlock: 0n,
+		explorerBaseUrl: 'https://example.invalid',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [],
+	} satisfies NetworkConfig
+	let lease: IndexerLease | undefined
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork(network)
+		lease = await database.tryAcquireIndexerLock(ownershipChainId)
+		if (lease === undefined) throw new Error('ownership writer did not acquire its lock')
+		await database.recordIndexerOwnership(ownershipChainId, network.id, 'owned', lease.backendPid, undefined)
+		const owned = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		expect(owned.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('owned')
+
+		await database.sql`UPDATE indexer_ownership SET heartbeat_at = now() - interval '2 minutes' WHERE chain_id = ${ownershipChainId}`
+		const stale = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		expect(stale.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('stale-owner')
+
+		await lease.release()
+		lease = undefined
+		await database.recordIndexerOwnership(ownershipChainId, network.id, 'released', undefined, undefined)
+		const standby = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		expect(standby.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('standby')
+	} finally {
+		await lease?.release().catch(() => undefined)
+		await database.sql`DELETE FROM networks WHERE chain_id = ${ownershipChainId}`
 		await database.close()
 	}
 })
