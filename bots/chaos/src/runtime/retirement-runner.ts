@@ -50,6 +50,13 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 	return assessment
 }
 
+export function updateV3PositionStatus(observation: V3PositionObservation, blockNumber: bigint) {
+	observation.position.lastCheckedAtBlock = blockNumber.toString()
+	if (observation.liquidity > 0n) observation.position.status = 'active'
+	else if (observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n) observation.position.status = 'collect-only'
+	else if (observation.position.status !== 'pending-confirmation' || (observation.position.registeredBy === 'workflow' && observation.position.creationTransactionHash !== undefined)) observation.position.status = 'closed'
+}
+
 export async function retirementPositionsForScan(parameters: { blockNumber: bigint; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
 	const { blockNumber, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
@@ -67,12 +74,7 @@ export async function retirementPositionsForScan(parameters: { blockNumber: bigi
 			state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
 		}
 	}
-	for (const observation of observations) {
-		observation.position.lastCheckedAtBlock = blockNumber.toString()
-		if (observation.liquidity > 0n) observation.position.status = 'active'
-		else if (observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n) observation.position.status = 'collect-only'
-		else if (observation.position.status !== 'pending-confirmation') observation.position.status = 'closed'
-	}
+	for (const observation of observations) updateV3PositionStatus(observation, blockNumber)
 	return observations
 }
 

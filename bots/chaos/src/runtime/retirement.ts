@@ -386,6 +386,11 @@ function retainedAssetResiduals(snapshot: EcosystemSnapshot, retirement: Durable
 		}
 		if (BigInt(token.openOracleCredit) === 1n) residuals.push({ amount: '1', asset: `${token.address}:OpenOracle`, category: 'mandatory-sentinel', reason: 'OpenOracle retains a mandatory one-unit credit sentinel' })
 	}
+	if (!retirement.policies.migrateExistingClaims) {
+		for (const universe of snapshot.universes.filter(candidate => BigInt(candidate.migrationBalance) > 0n)) {
+			residuals.push({ amount: universe.migrationBalance, asset: `migration:${universe.id}`, category: 'irreversible-burn', reason: 'Parent REP was already burned into a migration balance, but claim-linked migration was disabled by retirement policy' })
+		}
+	}
 	if (BigInt(snapshot.wallet.openOracleEthCredit) === 1n) residuals.push({ amount: '1', asset: 'ETH:OpenOracle', category: 'mandatory-sentinel', reason: 'OpenOracle retains a mandatory one-unit native-credit sentinel' })
 	return residuals
 }
@@ -418,9 +423,10 @@ function classifyShares(snapshot: EcosystemSnapshot) {
 	return { blockers, residuals }
 }
 
-function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot) {
-	let count = snapshot.wallet.tokens.filter(token => BigInt(token.openOracleCredit) > 1n).length
+function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: DurableRetirementState) {
+	let count = snapshot.wallet.tokens.filter(token => BigInt(token.openOracleCredit) > 1n).length + snapshot.wallet.lpTokens.filter(token => BigInt(token.balance) > 0n).length
 	if (BigInt(snapshot.wallet.openOracleEthCredit) > 1n) count += 1
+	if (retirement.policies.migrateExistingClaims) count += snapshot.universes.filter(universe => BigInt(universe.migrationBalance) > 0n).length
 	for (const pool of snapshot.pools) {
 		const vault = pool.vaults.find(candidate => candidate.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
 		if (vault !== undefined && BigInt(vault.claimableFeesAttoEth) > 0n) count += 1
@@ -472,7 +478,7 @@ export function assessRetirement(parameters: {
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'blocked')) blockers.push({ category: 'ambiguous-position', details: `Ownership could not be proven for ${position.pool}`, id: position.id })
 	for (const position of parameters.retirement.positions.filter(candidate => candidate.status === 'pending-confirmation')) blockers.push({ category: 'ambiguous-position', details: `Position ${position.id} is awaiting canonical pool and ownership verification`, id: position.id })
 	const residuals = [...shareClassification.residuals, ...retainedAssetResiduals(parameters.snapshot, parameters.retirement)]
-	const canonicalClaims = canonicalClaimableAssetCount(parameters.snapshot)
+	const canonicalClaims = canonicalClaimableAssetCount(parameters.snapshot, parameters.retirement)
 	if (canonicalClaims > 0 && claimPlan === undefined && nativeCreditPlan === undefined) blockers.push({ category: 'operator-action', details: 'Canonical claimable assets exist but no safe retirement plan is currently executable', id: 'claimable-assets-without-plan' })
 	const proof: RetirementProofCounts = {
 		actionableObligations,

@@ -19,7 +19,7 @@ import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '
 import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { parseSettings } from '../../src/config/settings.ts'
-import { processRetirementCycle } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
 import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
@@ -198,6 +198,16 @@ describe('Drain & Retire planning', () => {
 		await expect(readV3PositionsWithQuorum([reader(5n), reader(9n)], 2, [current], 100n)).rejects.toThrow('No RPC quorum')
 	})
 
+	test('closes a canonically confirmed zeroed workflow position after restart', () => {
+		const current = position('pending-confirmation')
+		current.creationTransactionHash = hash(44)
+		updateV3PositionStatus({ liquidity: 0n, position: current, tokensOwed0: 0n, tokensOwed1: 0n }, 101n)
+		expect(current).toMatchObject({ lastCheckedAtBlock: '101', status: 'closed' })
+		const unconfirmed = position('pending-confirmation')
+		updateV3PositionStatus({ liquidity: 0n, position: unconfirmed, tokensOwed0: 0n, tokensOwed1: 0n }, 102n)
+		expect(unconfirmed.status).toBe('pending-confirmation')
+	})
+
 	test('does not equate an empty plan with completion when approvals remain', () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
@@ -247,6 +257,23 @@ describe('Drain & Retire planning', () => {
 		expect(result.status).toBe('blocked')
 		expect(result.residuals).toContainEqual(expect.objectContaining({ amount: '3', category: 'operator-accepted' }))
 		expect(result.blockers).toContainEqual(expect.objectContaining({ category: 'ambiguous-position', id: retirement.positions[0]?.id }))
+	})
+
+	test('does not hide custom LP or existing migration claims from completion', () => {
+		const snapshot = emptySnapshot()
+		const retirement = request()
+		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '3', pair: address(81) }]
+		let result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		expect(result).toMatchObject({ proof: { claimableAssets: 1 }, status: 'blocked' })
+		snapshot.wallet.lpTokens = []
+		const universe = snapshot.universes[0]
+		if (universe === undefined) throw new Error('Universe fixture is missing')
+		universe.migrationBalance = '4'
+		result = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		expect(result).toMatchObject({ residuals: [{ amount: '4', category: 'irreversible-burn' }], status: 'drained-with-residuals' })
+		retirement.policies.migrateExistingClaims = true
+		result = assessRetirement({ blockHash: hash(3), blockNumber: 3n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		expect(result).toMatchObject({ proof: { claimableAssets: 1 }, status: 'blocked' })
 	})
 
 	test('removes the full custom LP balance above ordinary chaos caps', () => {
