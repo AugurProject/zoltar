@@ -3,7 +3,7 @@ import { formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, format
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink, TradingAddressValue } from '../components/TradingAddress.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk, marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref, type TradingRoute } from '../lib/routing.js'
@@ -19,6 +19,7 @@ import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatT
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
+import { SecurityPoolIdentityRows } from './LiveMarketIdentity.js'
 
 export { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from './live/routePresentation.js'
 
@@ -46,49 +47,6 @@ function questionOutcomeLabel(outcome: number) {
 	if (outcome === 2) return 'NO'
 	if (outcome === 3) return 'None (unresolved)'
 	return `Unknown outcome ${outcome}`
-}
-
-export function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originUniverseId'>) {
-	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
-}
-
-function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
-	const scope = shareBalanceScope(market)
-	const identity = marketUniverseIdentity(market)
-	return (
-		<>
-			<div>
-				<dt>Security pool address</dt>
-				<dd>
-					<TradingAddressValue value={scope.pool} />
-				</dd>
-			</div>
-			<div>
-				<dt>Share token address</dt>
-				<dd>
-					<TradingAddressValue value={scope.shareToken} />
-				</dd>
-			</div>
-			<div>
-				<dt>Current universe ID</dt>
-				<dd>{identity.currentUniverseId.toString()}</dd>
-			</div>
-			<div>
-				<dt>Market lineage origin universe ID</dt>
-				<dd>{identity.originUniverseId?.toString() ?? 'Unavailable'}</dd>
-			</div>
-			<div>
-				<dt>Question ID</dt>
-				<dd>{market.questionId.toString()}</dd>
-			</div>
-			<div>
-				<dt>Outcome token IDs</dt>
-				<dd>
-					INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
-				</dd>
-			</div>
-		</>
-	)
 }
 
 export function PairInitializationAction({ market, nowSeconds, onSelect = () => undefined }: { market: LiveMarket; nowSeconds: bigint; onSelect?(market: LiveMarket): void }) {

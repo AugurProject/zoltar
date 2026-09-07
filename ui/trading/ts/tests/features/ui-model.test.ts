@@ -3,7 +3,7 @@ import { getAddress } from '@zoltar/shared/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
 import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
-import { marketUniverseIdentity } from '../../features/LiveTrading.js'
+import { marketUniverseIdentity } from '../../features/LiveMarketIdentity.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
