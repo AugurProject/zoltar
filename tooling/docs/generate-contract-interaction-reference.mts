@@ -22,6 +22,7 @@ import {
 } from './contract-reference-metadata.mts'
 
 assertDeclarationCheckerRegression()
+assertProductionSoliditySourceClassifierRegression()
 await ensureContractArtifactsAreCurrent()
 const productionSoliditySourceFingerprint = await getProductionSoliditySourceFingerprint()
 assert.equal(productionSoliditySourceFingerprint, expectedProductionSoliditySourceFingerprint, 'Production Solidity source changed; re-audit every affected contract behavior against the documentation, then update the pinned source fingerprint')
@@ -402,9 +403,13 @@ function computeStateChangingAbiFingerprint(declarations: string[]): string {
 }
 
 async function getProductionSoliditySourceFingerprint(): Promise<string> {
-	const sourcePaths = (await listSoliditySourcePaths('solidity/contracts')).filter(sourcePath => !sourcePath.startsWith('solidity/contracts/test/'))
+	const sourcePaths = (await listSoliditySourcePaths('solidity/contracts')).filter(isProductionSoliditySourcePath)
 	const sources = await Promise.all(sourcePaths.map(async sourcePath => ({ source: await readFile(sourcePath, 'utf8'), sourcePath })))
 	return computeSourceContentFingerprint(sources)
+}
+
+function isProductionSoliditySourcePath(sourcePath: string): boolean {
+	return !sourcePath.split('/').includes('test')
 }
 
 async function listSoliditySourcePaths(directory: string): Promise<string[]> {
@@ -600,4 +605,10 @@ function assertDeclarationCheckerRegression(): void {
 	assert.notDeepEqual(getPublicStateChangingDeclarations('abstract contract Empty {\nfunction added() external {}\n}'), [])
 	assert.throws(() => assertEventDeclaration('function SystemStateSet() external {}', { name: 'SystemStateSet' }, 'event fixture'), /event fixture must declare exactly one event SystemStateSet/)
 	assert.throws(() => assertEventDeclaration('event UniverseForked(uint256 value);', { name: 'DeployChild' }, 'intended event source'), /intended event source must declare exactly one event DeployChild/)
+}
+
+function assertProductionSoliditySourceClassifierRegression(): void {
+	assert.equal(isProductionSoliditySourcePath('solidity/contracts/SecurityPool.sol'), true)
+	assert.equal(isProductionSoliditySourcePath('solidity/contracts/test/SecurityPoolHarness.sol'), false)
+	assert.equal(isProductionSoliditySourcePath('solidity/contracts/trading/test/TwoWayConstantProductMathHarness.sol'), false)
 }
