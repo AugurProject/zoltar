@@ -405,18 +405,18 @@ export const diagramGraphSpecs = {
 			section(
 				'system-decision-outcomes',
 				[
-					node('decision', 'Decision point', 'gold', ['local winner or non-decision']),
-					node('universe-fork', 'Universe fork elsewhere', 'red', ['interrupts this pool']),
+					node('decision', 'Decision point', 'gold', ['local winner or own-question non-decision']),
+					node('universe-fork', 'Universe fork elsewhere', 'red', ['interrupts only an unresolved operational pool']),
 					node('local', 'Local settlement', 'green', ['redeem winning shares']),
-					node('fork', 'Fork + migration', 'gold', ['child pools per outcome']),
+					node('fork', 'Fork + migration', 'gold', ["children follow the fork question's valid answers"]),
 					node('auction', 'Truth auction', 'gold', ['if collateral is short']),
 					node('child', 'Operational child', 'green', ['fixed outcome may settle']),
 					node('recursive', 'Unresolved child', 'slate', ['recursive continuation']),
 				],
 				[
 					edge('system-decision-local', 'decision', 'local', 'local winner'),
-					edge('system-decision-fork', 'decision', 'fork', 'non-decision'),
-					edge('system-universe-fork', 'universe-fork', 'fork', 'interrupt pool'),
+					edge('system-decision-fork', 'decision', 'fork', 'own-question non-decision'),
+					edge('system-universe-fork', 'universe-fork', 'fork', 'unresolved operational pool'),
 					edge('system-fork-auction', 'fork', 'auction', 'backing short'),
 					edge('system-fork-child', 'fork', 'child', 'backing sufficient'),
 					edge('system-auction-child', 'auction', 'child', 'repair settles'),

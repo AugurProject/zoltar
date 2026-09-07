@@ -23,7 +23,7 @@
 				<dt id="binding-capital">Binding capital</dt><dd>The median of the three outcome balances that determines the Escalation Game's scheduled deadline.</dd>
 				<dt id="non-decision-threshold">Non-decision threshold</dt><dd>The balance that two outcomes must each reach for the Escalation Game to enter local non-decision.</dd>
 				<dt id="fork-threshold">Fork threshold</dt><dd>The amount of parent-universe REP that a fork initiator supplies and burns to begin a fork, derived by <code>getForkThresholdAttoRep</code> from that universe's theoretical REP supply. See <a href="../explanation/zoltar.html#accounting">migration accounting</a>.</dd>
-				<dt id="migration-balance">Migration balance</dt><dd>Parent REP burned or committed into a reusable, branch-specific entitlement to mint child REP during a fork.</dd>
+				<dt id="migration-balance">Migration balance</dt><dd>A parent-universe credit created when REP is burned or committed for a fork. The same credited amount can be minted independently in each valid child, while per-child accounting prevents an account from consuming more than that amount in any one child.</dd>
 				<dt id="child-rep">Child REP</dt><dd>REP minted for one child universe. Its ledger and economic value are separate from parent and sibling REP.</dd>
 				<dt id="truth-auction">Truth Auction</dt><dd>A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall. It does not select truth.</dd>
 				<dt id="open-oracle">OpenOracle</dt><dd>An economically contestable price-reporting contract used by Statoblast for fresh REP/ETH prices, not market outcomes.</dd>
