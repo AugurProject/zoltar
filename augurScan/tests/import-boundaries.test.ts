@@ -16,3 +16,21 @@ test('keeps API, database, projection, and indexer capability boundaries directe
 	sources.set('src/projections.ts', "import { handleApi } from './api.ts'")
 	expect(importBoundaryViolations(sources).map(({ file }) => file)).toEqual(['src/server.ts', 'src/api/routes.ts', 'src/database.ts', 'src/projections.ts'])
 })
+
+test('keeps extracted indexer and database capabilities behind their public facades', () => {
+	const sources = new Map([
+		['src/indexer.ts', "export { NetworkIndexer } from './indexer/block-ingestion.ts'"],
+		['src/indexer/block-ingestion.ts', "import { NetworkIndexerLogScanner } from './log-scanner.ts'"],
+		['src/database.ts', "export { ScannerDatabase } from './database/block-persistence.ts'"],
+		['src/database/block-persistence.ts', "import { ScannerHistoryRepository } from './history-repository.ts'"],
+	])
+	expect(importBoundaryViolations(sources)).toEqual([])
+
+	sources.set('src/server.ts', "import { NetworkIndexer } from './indexer/block-ingestion.ts'")
+	sources.set('src/api/routes.ts', "import { ScannerHistoryRepository } from '../database/history-repository.ts'")
+	expect(importBoundaryViolations(sources).map(({ file, reason }) => ({ file, reason }))).toEqual([
+		{ file: 'src/server.ts', reason: 'Indexer capabilities must be consumed through src/indexer.ts' },
+		{ file: 'src/api/routes.ts', reason: 'API parsing and routing must not depend on indexer or persistence implementations' },
+		{ file: 'src/api/routes.ts', reason: 'Database capabilities must be consumed through src/database.ts' },
+	])
+})
