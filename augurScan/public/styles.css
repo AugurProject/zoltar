@@ -1533,9 +1533,10 @@ button[aria-busy="true"]:disabled {
 	padding: 0.7rem;
 }
 .detail-disclosure summary {
-	display: list-item;
+	display: inline-flex;
+	align-items: center;
 	width: fit-content;
-	min-height: 36px;
+	min-height: var(--control-height);
 	padding: 0.1rem 0;
 	color: var(--cyan);
 	cursor: pointer;
@@ -1707,8 +1708,8 @@ dialog::backdrop {
 	border-bottom: 1px solid var(--line);
 }
 .icon-button {
-	width: 38px;
-	height: 38px;
+	width: var(--control-height);
+	height: var(--control-height);
 	color: var(--muted);
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -2965,12 +2966,20 @@ dialog::backdrop {
 	.product-nav {
 		grid-column: 1 / -1;
 		grid-row: 2;
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 0;
+		overflow-x: visible;
 	}
 
 	.product-nav a {
 		min-height: var(--control-height);
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
+		min-width: 0;
+		padding-inline: 0.2rem;
+		text-align: center;
 		font-size: 0.8125rem;
 	}
 

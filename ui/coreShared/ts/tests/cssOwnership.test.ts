@@ -78,6 +78,8 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	expect(trading).toMatch(/\.wallet-summary--loading \.wallet-summary__compact-loading \{[^}]*font-size: 0\.8125rem;/s)
 	expect(trading).toMatch(/\.wallet-summary__detail-balances small \{[^}]*font-size: 0\.8125rem;/s)
 	expect(trading).toMatch(/\.wallet-summary__detail-balances strong \{[^}]*0\.8125rem \/ 1\.25 ui-monospace/s)
+	expect(trading).toMatch(/\.wallet-summary__retry \{[^}]*min-height: 44px;/s)
+	expect(trading).toMatch(/\.primary-link \{[^}]*min-height: 44px;/s)
 	expect(trading).toMatch(/\.eyebrow,\s*\.section-kicker \{[^}]*12px \/ 1\.2 ui-monospace/s)
 	expect(trading).toMatch(/\.status \{[^}]*13px \/ 1\.2 ui-monospace/s)
 	expect(trading).toMatch(/nav a \{[^}]*min-width: 44px;[^}]*min-height: 44px;/s)
