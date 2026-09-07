@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { affectedProjects, componentProjects, projects, repositoryTaskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { affectedProjects, componentProjects, projects, projectTaskNames, repositoryTaskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
 
@@ -27,7 +27,8 @@ test('registry records every independently checked component, including chaos', 
 
 test('registry tasks carry explicit working directories and canonical root task groups', () => {
 	for (const project of projects)
-		for (const task of Object.values(project.tasks)) {
+		for (const taskName of projectTaskNames) {
+			const task = project.tasks[taskName]
 			if (task === undefined) continue
 			expect(task.cwd === '.' || task.cwd === project.path).toBe(true)
 		}

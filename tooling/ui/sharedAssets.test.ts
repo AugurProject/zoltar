@@ -384,7 +384,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 })
 
 test('watch build regression scanner catches indirect bare Bun commands', () => {
-	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'ui', 'coreShared', 'build', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
+	const fixtureSourceFile = parseModule(path.join(repositoryRootPath, 'tooling', 'ui', 'bare-bun-fixture.mts'), ["const BUN_COMMAND = 'bun'", "spawn(BUN_COMMAND, ['x', 'tsc'])", "runSharedBuildStep([BUN_COMMAND, 'run', 'shared:build'])"].join('\n'))
 
 	expect(collectBareBunStringLiterals(fixtureSourceFile)).toEqual(['tooling/ui/bare-bun-fixture.mts:1:21'])
 })
@@ -407,8 +407,8 @@ test('development import map maps browser dependency subpaths', () => {
 			expect(imports['@zoltar/shared/openOracle']).toBeUndefined()
 		}
 	}
-	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('build/watch.mts zoltar')
-	expect(rootPackageJson.scripts?.['app:watch:statoblast']).toContain('build/watch.mts statoblast')
+	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('tooling/ui/watch.mts zoltar')
+	expect(rootPackageJson.scripts?.['app:watch:statoblast']).toContain('tooling/ui/watch.mts statoblast')
 	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
@@ -498,8 +498,7 @@ test('project artifact generation writes Trading output only when explicitly req
 
 for (const appId of UI_APP_IDS) {
 	test(`development import map resolves all static imports reachable from the ${appId} dev entrypoint`, () => {
-		const appPaths = appPathsById.get(appId)
-		if (appPaths === undefined) throw new Error(`No path information recorded for ${appId}.`)
+		const appPaths = getUiAppPaths(appId)
 		const imports = readDevelopmentImportMap(appId)
 		const pendingPaths = [path.join(appPaths.appSourceRoot, 'index.dev.ts')]
 		const visitedPaths = new Set<string>()
