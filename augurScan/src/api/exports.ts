@@ -14,7 +14,7 @@ import {
 	postgresBigint,
 } from './shared.ts'
 
-export type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
+type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
 export type HistoricalExportCursor = readonly [
 	version: 1,
 	dataset: HistoricalExportDataset,
@@ -32,7 +32,7 @@ export type HistoricalExportCursor = readonly [
 	lastKey: readonly string[],
 ]
 
-export const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly unknown[]): key is readonly string[] => {
+const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly unknown[]): key is readonly string[] => {
 	if (!key.every((item) => typeof item === 'string')) return false
 	if (dataset === 'logs')
 		return (
@@ -91,7 +91,7 @@ export const parseHistoricalExportCursor = (value: string | null): HistoricalExp
 	}
 }
 
-export const historicalExportCursorFor = (snapshot: readonly unknown[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])
+const historicalExportCursorFor = (snapshot: readonly unknown[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])
 
 export const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

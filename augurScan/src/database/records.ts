@@ -94,12 +94,12 @@ export type AddressActivity = {
 	readonly role: 'sender' | 'referenced'
 }
 
-export type RichListAsset = {
+type RichListAsset = {
 	readonly address: Address
 	readonly kind: 'rep' | 'weth'
 }
 
-export type RichListBalanceIdentity = {
+type RichListBalanceIdentity = {
 	readonly owner: Address
 	readonly assetAddress: Address
 	readonly assetKind: 'native' | 'rep' | 'weth'

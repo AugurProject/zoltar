@@ -19,9 +19,9 @@ import {
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
-export type DirectObservationKind = 'all' | 'address-balance' | 'token-metadata'
+type DirectObservationKind = 'all' | 'address-balance' | 'token-metadata'
 
-export type DirectObservationSnapshot = {
+type DirectObservationSnapshot = {
 	readonly kind: DirectObservationKind
 	readonly address?: string
 	readonly canonical: CanonicalHistoryFilter
@@ -30,7 +30,7 @@ export type DirectObservationSnapshot = {
 	readonly total: string
 }
 
-export type DirectObservationCursor = readonly [
+type DirectObservationCursor = readonly [
 	version: 1,
 	chainId: number,
 	domain: 'direct-observations',
@@ -47,7 +47,7 @@ export type DirectObservationCursor = readonly [
 	id: string,
 ]
 
-export const parseDirectObservationCursor = (value: string | null, chainId: number): DirectObservationCursor | undefined => {
+const parseDirectObservationCursor = (value: string | null, chainId: number): DirectObservationCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
@@ -91,7 +91,7 @@ export const parseDirectObservationCursor = (value: string | null, chainId: numb
 	}
 }
 
-export const directObservationCursorFor = (
+const directObservationCursorFor = (
 	chainId: number,
 	snapshot: DirectObservationSnapshot,
 	asOf: Record<string, unknown>,
@@ -113,7 +113,7 @@ export const directObservationCursorFor = (
 	] satisfies DirectObservationCursor)
 }
 
-export const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
+const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
 	try {
 		const parsed = JSON.parse(value) as unknown
 		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('shape')

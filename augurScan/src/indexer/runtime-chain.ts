@@ -16,7 +16,7 @@ export const queryCanonicalLogRange = async <T>(
 export type ChainProvider = { readonly getChainId: () => Promise<number> }
 export type RpcProvider = ChainProvider & { readonly client: PublicClient; readonly endpoint: string; readonly number: number }
 
-export const rpcEndpointLabel = (rpcUrl: string): string => {
+const rpcEndpointLabel = (rpcUrl: string): string => {
 	const url = new URL(rpcUrl)
 	const hostnameParts = url.hostname.split('.')
 	const isLocalOrIp = url.hostname === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname) || url.hostname.includes(':')

@@ -2,9 +2,9 @@ import { getAddress, isAddress } from '../ethereum.ts'
 import { unixSecondsToDate } from '../time.ts'
 import type { StoredLog } from '../types.ts'
 
-export type AtomicValue = string
+type AtomicValue = string
 
-export type QuestionProjection = {
+type QuestionProjection = {
 	type: 'question'
 	questionId: string
 	createdTimestamp: Date
@@ -19,7 +19,7 @@ export type QuestionProjection = {
 	outcomeOptions: readonly string[]
 }
 
-export type PoolProjection = {
+type PoolProjection = {
 	type: 'pool'
 	poolAddress: string
 	parentAddress: string
@@ -34,7 +34,7 @@ export type PoolProjection = {
 	initialSettlementCollateralAttoEth: AtomicValue
 }
 
-export type PoolSnapshotProjection = {
+type PoolSnapshotProjection = {
 	type: 'poolSnapshot'
 	poolAddress: string
 	reason: number
@@ -52,7 +52,7 @@ export type PoolSnapshotProjection = {
 	currentRetentionRate: string
 }
 
-export type VaultSnapshotProjection = {
+type VaultSnapshotProjection = {
 	type: 'vaultSnapshot'
 	poolAddress: string
 	vaultAddress: string
@@ -65,9 +65,9 @@ export type VaultSnapshotProjection = {
 	resultingFeeEligibleCapacityOwnershipAttoRep: AtomicValue
 }
 
-export type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
+type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
 
-export type UniverseProjection = {
+type UniverseProjection = {
 	type: 'universe'
 	universeId: string
 	eventName: string
@@ -82,7 +82,7 @@ export type UniverseProjection = {
 	theoreticalSupplyAttoRep?: AtomicValue
 }
 
-export type AmmMarketProjection = {
+type AmmMarketProjection = {
 	type: 'ammMarket'
 	pairAddress: string
 	poolAddress: string
@@ -91,7 +91,7 @@ export type AmmMarketProjection = {
 	feeBps: string
 }
 
-export type AmmPriceProjection = {
+type AmmPriceProjection = {
 	type: 'ammPrice'
 	pairAddress: string
 	yesReserveAttoShares: AtomicValue
@@ -100,7 +100,7 @@ export type AmmPriceProjection = {
 	conditionalNoBps: string
 }
 
-export type RepEthPriceProjection = {
+type RepEthPriceProjection = {
 	type: 'repEthPrice'
 	coordinatorAddress: string
 	eventName: 'RepEthPriceSet' | 'PriceReported'
@@ -109,7 +109,7 @@ export type RepEthPriceProjection = {
 	settlementTimestamp?: Date
 }
 
-export type UniswapMarketProjection = {
+type UniswapMarketProjection = {
 	type: 'uniswapMarket'
 	venue: 'v2' | 'v3' | 'v4'
 	marketId: string
@@ -121,7 +121,7 @@ export type UniswapMarketProjection = {
 	hooksAddress?: string
 }
 
-export type UniswapPriceProjection = {
+type UniswapPriceProjection = {
 	type: 'uniswapPrice'
 	venue: 'v2' | 'v3' | 'v4'
 	marketId: string
@@ -156,46 +156,46 @@ export type Projection =
 	| UniswapPriceProjection
 	| DomainEventProjection
 
-export const record = (value: unknown, name: string): Record<string, unknown> => {
+const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
 	return value as Record<string, unknown>
 }
 
-export const string = (value: unknown, name: string): string => {
+const string = (value: unknown, name: string): string => {
 	if (typeof value !== 'string') throw new Error(`${name} must be a string`)
 	return value
 }
 
-export const integerString = (value: unknown, name: string): string => {
+const integerString = (value: unknown, name: string): string => {
 	const result = string(value, name)
 	if (!/^-?\d+$/.test(result)) throw new Error(`${name} must be an integer string`)
 	return result
 }
 
-export const address = (value: unknown, name: string): string => {
+const address = (value: unknown, name: string): string => {
 	const result = string(value, name)
 	if (!isAddress(result)) throw new Error(`${name} must be an address`)
 	return getAddress(result).toLowerCase()
 }
 
-export const bytes32 = (value: unknown, name: string): string => {
+const bytes32 = (value: unknown, name: string): string => {
 	const result = string(value, name).toLowerCase()
 	if (!/^0x[0-9a-f]{64}$/.test(result)) throw new Error(`${name} must be a bytes32 value`)
 	return result
 }
 
-export const timestamp = (value: unknown, name: string): Date => {
+const timestamp = (value: unknown, name: string): Date => {
 	const seconds = BigInt(integerString(value, name))
 	if (seconds < 0n) throw new Error(`${name} is outside the supported timestamp range`)
 	return unixSecondsToDate(seconds, name)
 }
 
-export const strings = (value: unknown, name: string): readonly string[] => {
+const strings = (value: unknown, name: string): readonly string[] => {
 	if (!Array.isArray(value)) throw new Error(`${name} must be a string array`)
 	return value.map((item) => string(item, name))
 }
 
-export const poolStateFields: Readonly<Record<string, readonly string[]>> = {
+const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	AwaitingForkContinuationSet: ['awaitingForkContinuation'],
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],

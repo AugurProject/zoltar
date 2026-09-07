@@ -32,8 +32,8 @@ export const requireRpcBlockHeader = (block: Block, blockNumber: bigint): RpcBlo
 	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp }
 }
 
-export const RPC_CONCURRENCY = 5
-export const RPC_MAX_PENDING = 100
+const RPC_CONCURRENCY = 5
+const RPC_MAX_PENDING = 100
 
 export const erc20MetadataAbi = parseAbi([
 	'function decimals() view returns (uint8)',
@@ -77,14 +77,14 @@ export type TokenMetadataCalls = {
 	readonly symbol: () => Promise<string>
 }
 
-export const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError'])
+const unavailableMetadataErrors = new Set(['AbiDecodingError', 'ContractFunctionRevertedError', 'ContractFunctionZeroDataError'])
 export const prunedTokenMetadataError = 'Historical state pruned'
 
-export const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
+const isUnavailableMetadataCall = (error: unknown): boolean => errorChainIncludes(error, unavailableMetadataErrors)
 
-export type MetadataCallResult<T> = { readonly status: 'available'; readonly value: T } | { readonly status: 'pruned' } | { readonly status: 'unavailable' }
+type MetadataCallResult<T> = { readonly status: 'available'; readonly value: T } | { readonly status: 'pruned' } | { readonly status: 'unavailable' }
 
-export const metadataCall = async <T>(call: () => Promise<T>): Promise<MetadataCallResult<T>> => {
+const metadataCall = async <T>(call: () => Promise<T>): Promise<MetadataCallResult<T>> => {
 	try {
 		return { status: 'available', value: await call() }
 	} catch (error) {

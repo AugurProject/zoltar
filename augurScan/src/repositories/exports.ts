@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 
 type CanonicalHistoryFilter = 'canonical' | 'orphaned' | 'all'
 
-export type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
+type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
 
 export type HistoricalExportQuery = {
 	readonly dataset: HistoricalExportDataset

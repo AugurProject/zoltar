@@ -19,9 +19,9 @@ import {
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
-export type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]
-export type RiskEventPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string]
-export type RiskLiquidationPosition = readonly [
+type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]
+type RiskEventPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string]
+type RiskLiquidationPosition = readonly [
 	blockNumber: string,
 	logIndex: number,
 	txHash: string,
@@ -29,13 +29,13 @@ export type RiskLiquidationPosition = readonly [
 	entityType: string,
 	entityIdentity: string,
 ]
-export type RiskHistoryPositions = {
+type RiskHistoryPositions = {
 	readonly state?: RiskStatePosition
 	readonly accounting?: RiskEventPosition
 	readonly lifecycle?: RiskEventPosition
 	readonly liquidations?: RiskLiquidationPosition
 }
-export type RiskHistoryCursor = readonly [
+type RiskHistoryCursor = readonly [
 	version: 1,
 	chainId: number,
 	domain: 'risk-history',
@@ -50,13 +50,13 @@ export type RiskHistoryCursor = readonly [
 	positions: RiskHistoryPositions,
 ]
 
-export const riskEventPosition = (value: unknown): RiskEventPosition | undefined => {
+const riskEventPosition = (value: unknown): RiskEventPosition | undefined => {
 	if (!Array.isArray(value) || value.length !== 4 || !isPostgresBigint(value[0]) || !isPostgresInteger(value[1])) return undefined
 	if (typeof value[2] !== 'string' || !/^0x[0-9a-f]{64}$/.test(value[2]) || typeof value[3] !== 'string' || !/^0x[0-9a-f]{64}$/.test(value[3])) return undefined
 	return [value[0], value[1], value[2], value[3]]
 }
 
-export const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined => {
+const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const fields = jsonRecord(value)
 	const stateValue = fields['state']
@@ -97,7 +97,7 @@ export const riskHistoryPositions = (value: unknown): RiskHistoryPositions | und
 	}
 }
 
-export const parseRiskHistoryCursor = (value: string | null, chainId: number, identity: string): RiskHistoryCursor | undefined => {
+const parseRiskHistoryCursor = (value: string | null, chainId: number, identity: string): RiskHistoryCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
@@ -137,7 +137,7 @@ export const parseRiskHistoryCursor = (value: string | null, chainId: number, id
 	}
 }
 
-export const riskHistoryCursorFor = (
+const riskHistoryCursorFor = (
 	chainId: number,
 	identity: string,
 	asOf: Record<string, unknown>,

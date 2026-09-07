@@ -5,7 +5,7 @@ export { ApiConflictError, ApiRequestError } from '../query-errors.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { snapshotBoundary } from './entity-details.ts'
 
-export { actionJsonColumns, decodedJsonColumns, json, jsonRecord, normalize, parsedJsonColumn } from './serializers.ts'
+export { actionJsonColumns, decodedJsonColumns, json, jsonRecord, normalize } from './serializers.ts'
 
 export const integer = (value: string | null, name: string): number | undefined => {
 	if (value === null || value === '') return undefined
@@ -28,7 +28,7 @@ export const evmAddress = (value: string | null, name: string): string | undefin
 	return result
 }
 
-export const isExactIsoTimestamp = (value: string): boolean => {
+const isExactIsoTimestamp = (value: string): boolean => {
 	if (!/^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false
 	const parsed = new Date(value)
 	return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value
@@ -51,7 +51,7 @@ export const cursorTimestamp = (value: unknown): string => {
 }
 
 export const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-export const POSTGRES_INTEGER_MAX = 2_147_483_647
+const POSTGRES_INTEGER_MAX = 2_147_483_647
 export const isPostgresInteger = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= POSTGRES_INTEGER_MAX
 export const isPostgresIntegerString = (value: unknown): value is string =>
 	typeof value === 'string' && /^\d+$/.test(value) && BigInt(value) <= BigInt(POSTGRES_INTEGER_MAX)
@@ -81,7 +81,7 @@ export type LogCursor = readonly [
 	blockHash: string,
 ]
 
-export const isLogCursor = (parts: readonly unknown[]): parts is LogCursor =>
+const isLogCursor = (parts: readonly unknown[]): parts is LogCursor =>
 	parts.length === 17 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
@@ -256,7 +256,7 @@ export type ActionCursor = readonly [
 	txHash: string,
 ]
 
-export const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
+const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
 	parts.length === 13 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&

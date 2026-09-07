@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import type { IntegrityIssue } from './records.ts'
 
-export type IndexerOwnershipState = 'owned' | 'standby' | 'release-failed' | 'stale-owner' | 'unknown'
+type IndexerOwnershipState = 'owned' | 'standby' | 'release-failed' | 'stale-owner' | 'unknown'
 
 export type IndexerOwnershipDiagnostic = {
 	readonly chainId: number

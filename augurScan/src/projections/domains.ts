@@ -7,7 +7,7 @@ export type EventDomainDefinition = {
 	readonly identityFields?: readonly string[]
 }
 
-export const definitions = (
+const definitions = (
 	domain: DomainEventProjection['domain'],
 	entityType: string,
 	eventNames: readonly string[],
@@ -18,7 +18,7 @@ export const definitions = (
 // This is the scanner's explicit semantic taxonomy. It intentionally excludes
 // generic ERC approvals/transfers while covering every protocol lifecycle event
 // emitted by the contracts represented in the operations views.
-export const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
+const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
 	...definitions('system', 'reputation-token', ['TheoreticalSupplySet', 'Mint', 'Burn']),
@@ -143,7 +143,7 @@ export const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 
 export const semanticEventNames = Object.freeze(Object.keys(eventDomains).sort())
 
-export const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
+const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
 	const eventName = log.decoded.name
 	const data = log.decoded.arguments
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined

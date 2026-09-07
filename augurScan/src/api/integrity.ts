@@ -6,7 +6,7 @@ import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNega
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
-export type IntegrityCursor = readonly [
+type IntegrityCursor = readonly [
 	version: 1,
 	chainId: number,
 	domain: 'integrity-catalog',
@@ -23,7 +23,7 @@ export type IntegrityCursor = readonly [
 	id: string,
 ]
 
-export const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityCursor | undefined => {
+const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
@@ -68,7 +68,7 @@ export const parseIntegrityCursor = (value: string | null, chainId: number): Int
 	}
 }
 
-export const integrityCursorFor = (
+const integrityCursorFor = (
 	chainId: number,
 	snapshotId: string,
 	total: number,

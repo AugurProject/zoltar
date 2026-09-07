@@ -19,7 +19,7 @@ import {
 
 export const databaseFailureMessage = 'Database request failed; retrying'
 export const rpcQueueSaturatedMessage = 'RPC queue saturated; retrying'
-export const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
+const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 export const leaseFailureNames = new Set([...databaseFailureNames, 'LeaseLostError'])
 
 export const isLocalIndexerFailure = (error: unknown): boolean =>
@@ -85,7 +85,7 @@ export const safeIndexerFailure = (error: unknown): string => {
 	return 'RPC request failed; retrying'
 }
 
-export const safeErrorNames = new Set([
+const safeErrorNames = new Set([
 	'AbortError',
 	'ChainConfigurationError',
 	'ChainContinuityError',
@@ -113,11 +113,11 @@ export const safeErrorNames = new Set([
 	'UnknownRpcError',
 ])
 
-export const safeErrorIdentifier = (value: unknown): string | undefined => (typeof value === 'string' && safeErrorNames.has(value) ? value : undefined)
+const safeErrorIdentifier = (value: unknown): string | undefined => (typeof value === 'string' && safeErrorNames.has(value) ? value : undefined)
 
-export const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
+const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
 
-export const safeErrorCode = (value: unknown): string | undefined => {
+const safeErrorCode = (value: unknown): string | undefined => {
 	if (
 		typeof value === 'number' &&
 		Number.isSafeInteger(value) &&
@@ -127,7 +127,7 @@ export const safeErrorCode = (value: unknown): string | undefined => {
 	return typeof value === 'string' && (/^HTTP_[1-5][0-9]{2}$/.test(value) || safeNamedErrorCodes.has(value)) ? value : undefined
 }
 
-export const safeStandardRpcMessages = new Map([
+const safeStandardRpcMessages = new Map([
 	['parse error', 'Parse error'],
 	['invalid request', 'Invalid Request'],
 	['method not found', 'Method not found'],
@@ -135,7 +135,7 @@ export const safeStandardRpcMessages = new Map([
 	['internal error', 'Internal error'],
 ])
 
-export const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, string>> = {
+const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, string>> = {
 	'block-range': 'provider rejected the requested block range',
 	'rate-limit': 'provider rate limit exceeded',
 	'response-size': 'provider response size limit exceeded',
@@ -145,16 +145,16 @@ export const safeRpcCategoryMessages: Readonly<Record<RpcDescriptionCategory, st
 	'too-many-results': 'provider returned too many results',
 }
 
-export const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
+const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 	if (typeof value !== 'string') return undefined
 	const normalized = normalizedRpcDescription(value)
 	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, '')) ?? safeRpcProviderMessage(value)
 }
 
-export const safeRpcRequestMethod = (value: unknown): string | undefined =>
+const safeRpcRequestMethod = (value: unknown): string | undefined =>
 	typeof value === 'string' && /^(?:eth|net|web3)_[A-Za-z0-9_]+$/u.test(value) ? value : undefined
 
-export const rpcRequestMethodFrom = (error: unknown): string | undefined => {
+const rpcRequestMethodFrom = (error: unknown): string | undefined => {
 	const seen = new Set<unknown>()
 	let current: unknown = error
 	while (typeof current === 'object' && current !== null && !seen.has(current)) {
@@ -166,7 +166,7 @@ export const rpcRequestMethodFrom = (error: unknown): string | undefined => {
 	return undefined
 }
 
-export const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean): string => {
+const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean): string => {
 	const saturation = rpcQueueSaturationFrom(error)
 	if (saturation !== undefined)
 		return `RpcQueueSaturatedError; active ${saturation.active}; queued ${saturation.pending}; maximum queued ${saturation.maximumPending}; high-water mark ${saturation.highWaterMark}; saturation count ${saturation.saturationCount}`
@@ -248,7 +248,7 @@ export const safeIndexerFailureReason = (error: unknown): string => indexerFailu
 
 export const rpcIndexerFailureReason = (error: unknown): string => indexerFailureReason(error, true)
 
-export const rpcFailureReason = (error: unknown, rpcNumber: number): string => `RPC #${rpcNumber}: ${rpcIndexerFailureReason(error)}`
+const rpcFailureReason = (error: unknown, rpcNumber: number): string => `RPC #${rpcNumber}: ${rpcIndexerFailureReason(error)}`
 
 export type RpcDiagnosticProvider = Pick<RpcProvider, 'endpoint' | 'number'>
 
@@ -267,7 +267,7 @@ export const createRpcDiagnosticContext = (initialProvider: RpcDiagnosticProvide
 export const indexerOperationFailureReason = (error: unknown, rpcNumber: number, source: 'rpc' | 'storage'): string =>
 	source === 'rpc' ? rpcFailureReason(error, rpcNumber) : safeIndexerFailureReason(error)
 
-export const deploymentReadTimeoutError = (): Error => {
+const deploymentReadTimeoutError = (): Error => {
 	const error = new Error('Contract deployment history read timed out')
 	error.name = 'TimeoutError'
 	return error

@@ -38,10 +38,10 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	})
 }
 
-export type PortfolioCollection = 'forks' | 'lp' | 'reports'
-export type PortfolioCursor = readonly [number, string, PortfolioCollection, string, string, string, string, string, string, number, number]
+type PortfolioCollection = 'forks' | 'lp' | 'reports'
+type PortfolioCursor = readonly [number, string, PortfolioCollection, string, string, string, string, string, string, number, number]
 
-export const parsePortfolioCursor = (
+const parsePortfolioCursor = (
 	value: string | null,
 	chainId: number,
 	address: string,
@@ -78,7 +78,7 @@ export const parsePortfolioCursor = (
 	}
 }
 
-export const portfolioCursorFor = (
+const portfolioCursorFor = (
 	chainId: number,
 	address: string,
 	kind: PortfolioCollection,

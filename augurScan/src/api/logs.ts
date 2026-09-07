@@ -89,7 +89,7 @@ export const logDetail = async (sql: SQL, parts: readonly string[], url: URL): P
 	})
 }
 
-export type ReorganizationCursor = readonly [
+type ReorganizationCursor = readonly [
 	version: 1,
 	chainId: number,
 	snapshotBlock: string,
@@ -102,7 +102,7 @@ export type ReorganizationCursor = readonly [
 	id: string,
 ]
 
-export const isReorganizationCursor = (parts: readonly unknown[]): parts is ReorganizationCursor =>
+const isReorganizationCursor = (parts: readonly unknown[]): parts is ReorganizationCursor =>
 	parts.length === 10 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
@@ -115,7 +115,7 @@ export const isReorganizationCursor = (parts: readonly unknown[]): parts is Reor
 	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9])
 
-export const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
+const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
 	if (value === null) return undefined
 	let parts: unknown[]
 	try {
@@ -129,7 +129,7 @@ export const parseReorganizationCursor = (value: string | null, chainId: number)
 	return parts
 }
 
-export const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
 	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['cursor_detected_at']), String(row['id'])] satisfies ReorganizationCursor)
 
 export const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
@@ -156,9 +156,9 @@ export const reorganizationHistory = async (sql: SQL, url: URL): Promise<Respons
 	})
 }
 
-export type ProvenanceCursor = readonly [version: 1, startedAt: string, runId: string]
+type ProvenanceCursor = readonly [version: 1, startedAt: string, runId: string]
 
-export const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefined => {
+const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)

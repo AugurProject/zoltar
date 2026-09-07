@@ -56,7 +56,7 @@ export const parseRiskCursor = (value: string | null, chainId: number, kind: 'po
 export const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string =>
 	encodeOpaqueCursor([chainId, kind, ...snapshotBoundary(asOf), key] satisfies RiskCursor)
 
-export const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
+const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)
@@ -197,7 +197,7 @@ export const timelineCatalogCursorFor = (chainId: number, filterIdentity: string
 		'v2',
 	] satisfies TimelineCatalogCursor)
 
-export const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
+const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
 	return await latestEntitySnapshot(sql, chainId, entityType, entityIdentity)
 }
 

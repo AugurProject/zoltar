@@ -29,4 +29,4 @@ export const json = (value: unknown, status = 200): Response =>
 
 import { parsedJsonColumn } from '../record-serialization.ts'
 
-export { jsonRecord, parsedJsonColumn } from '../record-serialization.ts'
+export { jsonRecord } from '../record-serialization.ts'

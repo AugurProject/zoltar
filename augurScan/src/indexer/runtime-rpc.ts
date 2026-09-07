@@ -29,7 +29,7 @@ export const normalizedRpcDescription = (value: string): string =>
 		.trim()
 		.toLowerCase()
 
-export const withoutAnsiControlSequences = (value: string): string => {
+const withoutAnsiControlSequences = (value: string): string => {
 	const characters: string[] = []
 	for (let index = 0; index < value.length; index++) {
 		if (value.codePointAt(index) === 0x1b && value[index + 1] === '[') {
@@ -56,14 +56,14 @@ export const singleLineErrorDescription = (value: string): string =>
 		.replace(/\s+/gu, ' ')
 		.trim()
 
-export const classifiedRpcDescription = (value: string): string =>
+const classifiedRpcDescription = (value: string): string =>
 	normalizedRpcDescription(value)
 		.replace(/[^\p{L}\p{N}]+/gu, ' ')
 		.trim()
 
 export type RpcDescriptionCategory = 'block-range' | 'rate-limit' | 'response-size' | 'result-limit' | 'timeout' | 'too-many-logs' | 'too-many-results'
 
-export const rpcDescriptionCategory = (value: string): RpcDescriptionCategory | undefined => {
+const rpcDescriptionCategory = (value: string): RpcDescriptionCategory | undefined => {
 	const description = classifiedRpcDescription(value)
 	if (
 		description.includes('rate limit') ||

@@ -108,7 +108,7 @@ export const captureDirectObservationInvalidation = async (
 	`
 }
 
-export const derivedProjectionTables = [
+const derivedProjectionTables = [
 	'questions',
 	'pools',
 	'pool_snapshots',
@@ -265,7 +265,7 @@ export type IndexerLease = {
 
 export type PersistedIndexerOwnershipState = 'owned' | 'standby' | 'released' | 'release-failed' | 'unknown'
 
-export const pendingLeaseOperations = new WeakMap<object, Promise<void>>()
+const pendingLeaseOperations = new WeakMap<object, Promise<void>>()
 
 export const runSerializedIndexerLeaseOperation = async <T>(lease: object, operation: () => Promise<T>): Promise<T> => {
 	const previous = pendingLeaseOperations.get(lease) ?? Promise.resolve()

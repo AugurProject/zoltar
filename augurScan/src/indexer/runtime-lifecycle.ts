@@ -13,7 +13,7 @@ export type NetworkLifecycle = {
 	readonly shouldRethrow?: (error: unknown) => boolean
 }
 
-export class IndexerOwnershipStageError extends Error {
+class IndexerOwnershipStageError extends Error {
 	override name = 'IndexerOwnershipStageError'
 
 	constructor(
@@ -86,7 +86,7 @@ export type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'> & { read
 
 export type OwnershipStage = 'acquire' | 'verify' | 'seed' | 'record-ownership' | 'owned-run' | 'record-failure' | 'release'
 
-export type IndexerOwnershipEvent =
+type IndexerOwnershipEvent =
 	| {
 			readonly type: 'failure'
 			readonly stage: OwnershipStage
@@ -99,7 +99,7 @@ export type IndexerOwnershipEvent =
 	| { readonly type: 'release-failed'; readonly backendPid?: number }
 	| { readonly type: 'standby' }
 
-export type IndexerOwnershipStatus = {
+type IndexerOwnershipStatus = {
 	readonly networkId: string
 	readonly active: boolean
 	readonly backendPid?: number
@@ -110,7 +110,7 @@ export type IndexerOwnershipStatus = {
 	readonly lastFailureStage?: OwnershipStage
 }
 
-export const ownershipStatuses = new Map<string, IndexerOwnershipStatus>()
+const ownershipStatuses = new Map<string, IndexerOwnershipStatus>()
 
 export const nextIndexerOwnershipStatus = (
 	networkId: string,
@@ -163,10 +163,7 @@ export const recordOwnershipEvent = (networkId: string, event: IndexerOwnershipE
 	ownershipStatuses.set(networkId, nextIndexerOwnershipStatus(networkId, ownershipStatuses.get(networkId), event))
 }
 
-export const indexerOwnershipStatuses = (): readonly IndexerOwnershipStatus[] =>
-	[...ownershipStatuses.values()].sort((left, right) => left.networkId.localeCompare(right.networkId))
-
-export const ownershipFailureReason = (error: unknown): string => {
+const ownershipFailureReason = (error: unknown): string => {
 	const reason = safeIndexerFailureReason(error)
 	const seen = new Set<unknown>()
 	let current: unknown = error
