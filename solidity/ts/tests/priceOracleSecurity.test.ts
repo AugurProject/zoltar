@@ -1,7 +1,18 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import {
+	getOpenOracleGameTuple,
+	getOpenOracleHelperTuple,
+	hashOpenOracleStatePreimage,
+	OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT,
+	OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION,
+	OPEN_ORACLE_FLAG_STORE_ALL,
+	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
+	OPEN_ORACLE_FLAG_TIME_TYPE,
+	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
+	type OpenOracleStatePreimage,
+} from '@zoltar/shared/openOracle'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/shared/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -424,6 +435,45 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(replayed.activeStagedOperationCount, activeStagedOperationCount, `${context}: active operation count replay mismatch`)
 		assert.strictEqual(replayed.pendingSettlementOperationCount, pendingSettlementOperationCount, `${context}: pending settlement count replay mismatch`)
 	}
+
+	test.each([
+		{ expectedFlags: OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL, label: 'block', timeType: false },
+		{ expectedFlags: OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL, label: 'timestamp', timeType: true },
+	] as const)('coordinator keeps the exact legacy $label-clock flag template and settlement economics', async ({ expectedFlags, timeType }) => {
+		const constructorArgs = getOracleCoordinatorConstructorArgs()
+		constructorArgs[9] = 2
+		constructorArgs[14] = timeType
+		const coordinator = await deployContract(encodeOracleCoordinatorDeployData(constructorArgs))
+		await client.writeContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: coordinator,
+			functionName: 'setSecurityPool',
+			args: [securityPool],
+		})
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialAttoWeth = 1_000n
+		const requestCost = await getRequestPriceCostAttoEth(client, coordinator)
+		await requestPriceWithValue(client, coordinator, requestCost, proposedRepPerEthPrice, requestedInitialAttoWeth)
+		const reportId = await getPendingReportId(client, coordinator)
+		const report = (await loadOpenOracleEventState(client, reportId)).latest
+		const optionalFlags = OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION
+
+		assert.strictEqual(report.game.flags, expectedFlags, 'coordinator report flags should remain exactly 6 or 7')
+		assert.strictEqual(report.game.flags & optionalFlags, 0n, 'coordinator must not silently enable any new optional behavior')
+		assert.ok(report.game.currentAmount1 >= requestedInitialAttoWeth, 'coordinator should honor the requested WETH floor')
+		assert.strictEqual(report.game.currentAmount2, report.game.currentAmount1, 'one REP per ETH should preserve matching report notionals')
+		assert.strictEqual(report.game.feePercentage, BigInt(ORACLE_FEE_PERCENTAGE), 'coordinator fee economics should remain unchanged')
+		assert.strictEqual(report.game.protocolFee, BigInt(ORACLE_PROTOCOL_FEE), 'coordinator protocol-fee economics should remain unchanged')
+
+		if (timeType) {
+			await mockWindow.setTime(report.game.reportTimestamp + report.game.settlementTime - 1n)
+		} else {
+			await mockWindow.request({ method: 'evm_mine', params: [] })
+		}
+		await openOracleSettle(client, reportId)
+		assert.strictEqual(await getPendingReportId(client, coordinator), 0n, 'settlement callback should clear the coordinator report')
+		assert.strictEqual(await getLastPrice(client, coordinator), proposedRepPerEthPrice, 'settlement should publish the same REP/ETH price')
+	})
 
 	test('coordinator dynamically sizes the minimum WETH report side from the current base fee', async () => {
 		const sizingConfigurationAbi = [
@@ -2254,5 +2304,84 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(afterDeadlineLog.args.operation, BigInt(OperationType.WithdrawRep))
 		assert.strictEqual(afterDeadlineLog.args.success, false, 'the operation should expire one second after its deadline')
 		assert.strictEqual(afterDeadlineLog.args.errorMessage, 'staged operation expired')
+	})
+
+	test('same-block execute and expire ordering assigns every deadline instant to one phase', async () => {
+		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
+		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
+		const selfOperationTimeoutSeconds = 60n
+		const manualOperationId = 5n
+		await fillPendingSettlementOperationList(costAttoEth, queuedOperationCostAttoEth, selfOperationTimeoutSeconds)
+		await queueStagedOperation(OperationType.WithdrawRep, client.account.address, 1n, selfOperationTimeoutSeconds)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		const stagedOperation = await getStagedOperation(client, priceOracle, manualOperationId)
+		const settlementTime = await client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'settlementTime',
+			args: [],
+		})
+		const deadline = stagedOperation[5] + settlementTime + stagedOperation[6]
+		const executeData = encodeFunctionData({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'executeStagedOperation',
+			args: [manualOperationId],
+		})
+		const expireData = encodeFunctionData({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'expireStagedOperation',
+			args: [manualOperationId],
+		})
+		const executor = client.account.address
+		const expirer = addressString(TEST_ADDRESSES[1])
+		const rawRequest = async (method: string, params: readonly unknown[]) => await mockWindow.requestRaw({ method, params })
+		const queueTransaction = async (from: Address, data: Hex) => {
+			const hash = await rawRequest('eth_sendTransaction', [{ data, from, gas: '0x17d7840', gasPrice: '0x0', to: priceOracle }])
+			if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Direct staged-operation transaction returned an invalid hash')
+			return hash
+		}
+		const receiptStatus = async (hash: string) => {
+			const receipt = await rawRequest('eth_getTransactionReceipt', [hash])
+			if (typeof receipt !== 'object' || receipt === null) throw new Error(`Missing staged-operation receipt for ${hash}`)
+			const status = Reflect.get(receipt, 'status')
+			if (status === '0x1') return 'success'
+			if (status === '0x0') return 'reverted'
+			throw new Error(`Invalid staged-operation receipt status for ${hash}`)
+		}
+		const mineCompetitors = async (timestamp: bigint, executeFirst: boolean) => {
+			await rawRequest('anvil_setAutomine', [false])
+			try {
+				await rawRequest('evm_setNextBlockTimestamp', [`0x${timestamp.toString(16)}`])
+				const firstHash = executeFirst ? await queueTransaction(executor, executeData) : await queueTransaction(expirer, expireData)
+				const secondHash = executeFirst ? await queueTransaction(expirer, expireData) : await queueTransaction(executor, executeData)
+				await rawRequest('evm_mine', [])
+				const firstStatus = await receiptStatus(firstHash)
+				const secondStatus = await receiptStatus(secondHash)
+				return executeFirst ? { executeStatus: firstStatus, expireStatus: secondStatus } : { executeStatus: secondStatus, expireStatus: firstStatus }
+			} finally {
+				await rawRequest('anvil_setAutomine', [true])
+			}
+		}
+
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+		const before = await mineCompetitors(deadline - 1n, false)
+		assert.deepStrictEqual(before, { executeStatus: 'success', expireStatus: 'reverted' }, 'one second before equality only execution may consume the operation')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'valid execution should consume the operation')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const executeFirstAtEquality = await mineCompetitors(deadline, true)
+		assert.deepStrictEqual(executeFirstAtEquality, { executeStatus: 'success', expireStatus: 'reverted' }, 'execution ordered first at equality should consume the operation')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const expireFirstAtEquality = await mineCompetitors(deadline, false)
+		assert.deepStrictEqual(expireFirstAtEquality, { executeStatus: 'success', expireStatus: 'reverted' }, 'expiry ordered first at equality must fail before execution consumes the operation')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'equality execution should consume the operation exactly once')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		const after = await mineCompetitors(deadline + 1n, true)
+		assert.deepStrictEqual(after, { executeStatus: 'success', expireStatus: 'reverted' }, 'after equality the execution entrypoint records expiry and consumes before a second expiry attempt')
+		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'expired execution should consume the operation exactly once')
 	})
 })

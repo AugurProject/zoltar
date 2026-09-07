@@ -1064,7 +1064,25 @@ describe('chaos operation catalog', () => {
 		expect(blockClockPlan?.deadlineTimestamp).toBeUndefined()
 		expect(blockClockPlan?.lastValidBlockNumber).toBe('394')
 		expect(blockClockPlan?.metadata).toMatchObject({ deadlineBlock: '394', reportId: '42' })
+		for (const optionalFlag of [16, 32, 64]) {
+			indexed.flags = 6 | optionalFlag
+			const optionalBlockClockPlan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
+			expect(optionalBlockClockPlan?.deadlineTimestamp).toBeUndefined()
+			expect(optionalBlockClockPlan?.lastValidBlockNumber).toBe('394')
+		}
 
+		indexed.flags = 7
+		indexed.reportTimestamp = '1999999500'
+		indexed.settlementTime = '4000'
+		for (const optionalFlag of [0, 16, 32, 64]) {
+			indexed.flags = 7 | optionalFlag
+			const optionalTimestampClockPlan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
+			expect(optionalTimestampClockPlan?.deadlineTimestamp).toBe('2000003500')
+			expect(optionalTimestampClockPlan?.lastValidBlockNumber).toBeUndefined()
+		}
+
+		indexed.flags = 6
+		indexed.reportTimestamp = '95'
 		indexed.settlementTime = '31'
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')).toBeUndefined()
 		for (const token of snapshot.wallet.tokens) token.allowances[snapshot.deployments.openOracle] = '1000000000000000000000000'

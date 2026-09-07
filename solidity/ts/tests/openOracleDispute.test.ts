@@ -335,7 +335,10 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		)
 	})
 
-	test('supports settlement eligibility, flexible escalation, and halt-only fees as independent opt-ins', async () => {
+	test.each([
+		{ label: 'timestamp', timeType: true },
+		{ label: 'block', timeType: false },
+	] as const)('stores $label-clock settlement eligibility on report and dispute when that flag alone is enabled', async ({ timeType }) => {
 		await installCurrentOpenOracle()
 		await prepareReporter(reporter)
 		await prepareReporter(disputer)
@@ -345,7 +348,8 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			functionName: 'nextReportId',
 			args: [],
 		})
-		const flags = FLAGS | OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION
+		const clockFlags = timeType ? FLAGS : FLAGS & ~OPEN_ORACLE_FLAG_TIME_TYPE
+		const flags = clockFlags | OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY
 		await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(flags) })
 		const reported = (await loadOpenOracleEventState(reporter, reportId)).latest
 		expect(
@@ -357,11 +361,14 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			}),
 		).toBe(reported.game.reportTimestamp + SETTLEMENT_TIME)
 
-		await mockWindow.setTime(reported.game.reportTimestamp + DISPUTE_DELAY - 1n)
-		const previousReporterCredit = await getHeldBalance(reporter.account.address, reported.game.token1)
-		await disputeReport(disputer, reportId, 1_400n, 900n, reported)
+		if (timeType) {
+			await mockWindow.setTime(reported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		} else {
+			for (let block = 1n; block < DISPUTE_DELAY; block += 1n) await mockWindow.request({ method: 'evm_mine', params: [] })
+		}
+		await disputeReport(disputer, reportId, 1_200n, 900n, reported)
 		const disputed = (await loadOpenOracleEventState(reporter, reportId)).latest
-		expect(disputed.game.currentAmount1).toBe(1_400n)
+		expect(disputed.game.currentAmount1).toBe(1_200n)
 		expect(
 			await reporter.readContract({
 				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
@@ -370,7 +377,56 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 				args: [reportId],
 			}),
 		).toBe(disputed.game.reportTimestamp + SETTLEMENT_TIME)
-		expect((await getHeldBalance(reporter.account.address, reported.game.token1)) - previousReporterCredit).toBe(2n * AMOUNT1)
+	})
+
+	test('flexible escalation accepts the standard lower bound and halt upper bound but rejects values outside them', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+
+		const createFlexibleReportAtDisputeTime = async () => {
+			const reportId = await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'nextReportId',
+				args: [],
+			})
+			await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(FLAGS | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION) })
+			const state = (await loadOpenOracleEventState(reporter, reportId)).latest
+			await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
+			return { reportId, state }
+		}
+
+		let report = await createFlexibleReportAtDisputeTime()
+		await disputeReport(disputer, report.reportId, 1_200n, 900n, report.state)
+		expect((await loadOpenOracleEventState(reporter, report.reportId)).latest.game.currentAmount1).toBe(1_200n)
+
+		report = await createFlexibleReportAtDisputeTime()
+		await disputeReport(disputer, report.reportId, 1_500n, 900n, report.state)
+		expect((await loadOpenOracleEventState(reporter, report.reportId)).latest.game.currentAmount1).toBe(1_500n)
+
+		report = await createFlexibleReportAtDisputeTime()
+		await assertCustomError(() => disputeReport(disputer, report.reportId, 1_199n, 900n, report.state), 'InvalidAmount1')
+		await assertCustomError(() => disputeReport(disputer, report.reportId, 1_501n, 900n, report.state), 'InvalidAmount1')
+	})
+
+	test('halt-only fees skip pre-halt fees and charge them once the prior report is at the halt', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+
+		const preHaltReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(FLAGS | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT) })
+		const preHaltReported = (await loadOpenOracleEventState(reporter, preHaltReportId)).latest
+		await mockWindow.setTime(preHaltReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const preHaltReporterCredit = await getHeldBalance(reporter.account.address, preHaltReported.game.token1)
+		await disputeReport(disputer, preHaltReportId, 1_200n, 900n, preHaltReported)
+		expect((await getHeldBalance(reporter.account.address, preHaltReported.game.token1)) - preHaltReporterCredit).toBe(2n * AMOUNT1)
 
 		const haltReportId = await reporter.readContract({
 			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
@@ -388,6 +444,12 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const haltPreviousReporterCredit = await getHeldBalance(reporter.account.address, haltReported.game.token1)
 		await disputeReport(disputer, haltReportId, AMOUNT1 + 1n, 900n, haltReported)
 		expect((await getHeldBalance(reporter.account.address, haltReported.game.token1)) - haltPreviousReporterCredit).toBe(2n * AMOUNT1 + (AMOUNT1 * (FEE_PERCENTAGE + PROTOCOL_FEE)) / 10_000_000n)
+	})
+
+	test('legacy flags preserve eligibility, escalation, and fee behavior when no new optional bit is set', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
 
 		const legacyReportId = await reporter.readContract({
 			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
@@ -404,6 +466,12 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 				args: [legacyReportId],
 			}),
 		).toBe(0n)
+		const legacyReported = (await loadOpenOracleEventState(reporter, legacyReportId)).latest
+		await mockWindow.setTime(legacyReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const reporterCredit = await getHeldBalance(reporter.account.address, legacyReported.game.token1)
+		await assertCustomError(() => disputeReport(disputer, legacyReportId, 1_400n, 900n, legacyReported), 'InvalidAmount1')
+		await disputeReport(disputer, legacyReportId, 1_200n, 900n, legacyReported)
+		expect((await getHeldBalance(reporter.account.address, legacyReported.game.token1)) - reporterCredit).toBe(2n * AMOUNT1 + (AMOUNT1 * (FEE_PERCENTAGE + PROTOCOL_FEE)) / 10_000_000n)
 	})
 
 	test('dispute validates every reachable custom-error transition guard', async () => {
