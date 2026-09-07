@@ -2,12 +2,12 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { resolveRpcLogPath } from '../src/config.ts'
-import { runSerializedIndexerLeaseOperation } from '../src/database.ts'
-import { databaseJsonText } from '../src/database-json.ts'
-import { safeIndexerFailureReason } from '../src/indexer-runtime.ts'
-import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog, timestampedLogArguments } from '../src/logging.ts'
-import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
+import { resolveRpcLogPath } from '../../src/config.ts'
+import { runSerializedIndexerLeaseOperation } from '../../src/database.ts'
+import { databaseJsonText } from '../../src/database-json.ts'
+import { safeIndexerFailureReason } from '../../src/indexer-runtime.ts'
+import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog, timestampedLogArguments } from '../../src/logging.ts'
+import { RpcRequestMethodError } from '../../src/rpc-request-queue.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -58,7 +58,7 @@ describe('AugurScan runtime logging', () => {
 		const directory = await temporaryDirectory()
 		try {
 			process.chdir(directory)
-			expect(resolveRpcLogPath(undefined)).toBe(path.resolve(import.meta.dir, '../logs/rpc.jsonl'))
+			expect(resolveRpcLogPath(undefined)).toBe(path.resolve(import.meta.dir, '../../logs/rpc.jsonl'))
 			const configuredPath = path.join(directory, 'configured-rpc.jsonl')
 			expect(resolveRpcLogPath(configuredPath)).toBe(configuredPath)
 		} finally {

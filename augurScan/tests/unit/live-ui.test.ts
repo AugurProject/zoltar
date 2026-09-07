@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
-import { requiredElementRole } from '../browser/dom-elements.ts'
+import { requiredElementRole } from '../../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityDetailAnchorIndex,
@@ -76,7 +76,7 @@ import {
 	transactionRetryMode,
 	urlWithoutLogDetail,
 	visibleActivityLogCount,
-} from '../browser/live-update.ts'
+} from '../../browser/live-update.ts'
 
 test('retains every distinct catalog record across a delayed 251-record live refresh', async () => {
 	const first = Array.from({ length: 100 }, (_, index) => ({ auction_address: `0x${index.toString(16).padStart(40, '0')}` }))

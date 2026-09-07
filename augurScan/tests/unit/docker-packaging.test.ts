@@ -2,13 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
-const rootDockerIgnore = join(import.meta.dir, '..', '..', '.dockerignore')
-const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
-const composeFile = join(import.meta.dir, '..', 'compose.yaml')
-const readmeFile = join(import.meta.dir, '..', 'README.md')
-const schemaFile = join(import.meta.dir, '..', 'schema.sql')
-const rootGitIgnore = join(import.meta.dir, '..', '..', '.gitignore')
+const windowsLauncher = join(import.meta.dir, '..', '..', 'start.bat')
+const rootDockerIgnore = join(import.meta.dir, '..', '..', '..', '.dockerignore')
+const dockerfile = join(import.meta.dir, '..', '..', 'Dockerfile')
+const composeFile = join(import.meta.dir, '..', '..', 'compose.yaml')
+const readmeFile = join(import.meta.dir, '..', '..', 'README.md')
+const schemaFile = join(import.meta.dir, '..', '..', 'schema.sql')
+const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {

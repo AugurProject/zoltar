@@ -10,10 +10,10 @@ import {
 	parseAbi,
 	toHex,
 	zeroAddress,
-} from '../src/ethereum.ts'
-import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, referencedAddressesFrom, tokenAddressesFrom } from '../src/metadata.ts'
-import { projectionsFrom } from '../src/projections.ts'
-import type { StoredLog, TokenMetadata } from '../src/types.ts'
+} from '../../src/ethereum.ts'
+import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, referencedAddressesFrom, tokenAddressesFrom } from '../../src/metadata.ts'
+import { projectionsFrom } from '../../src/projections.ts'
+import type { StoredLog, TokenMetadata } from '../../src/types.ts'
 
 const account = getAddress('0x1111111111111111111111111111111111111111')
 const childToken = getAddress('0x2222222222222222222222222222222222222222')

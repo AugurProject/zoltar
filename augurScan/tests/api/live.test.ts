@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import type { LiveEvent } from '../src/database.ts'
-import { liveStreamResponse } from '../src/http.ts'
-import { LiveBus } from '../src/live.ts'
+import type { LiveEvent } from '../../src/database.ts'
+import { liveStreamResponse } from '../../src/http.ts'
+import { LiveBus } from '../../src/live.ts'
 
 const decoder = new TextDecoder()
 const streamFrom = (bus: LiveBus, lastEventId?: number): ReadableStream<Uint8Array> => {

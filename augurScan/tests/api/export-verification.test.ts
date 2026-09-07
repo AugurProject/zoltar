@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { exportRequestScope, verifyExportPage } from '../src/export-verification.ts'
+import { exportRequestScope, verifyExportPage } from '../../src/export-verification.ts'
 
 const hash = (digit: string): string => `0x${digit.repeat(64)}`
 const logScope = exportRequestScope('logs', '1', 'all', '0', '10')

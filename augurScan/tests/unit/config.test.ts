@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import path from 'node:path'
-import mainnetDeployment from '../../docs/mainnet-deployment-addresses.json'
-import sepoliaDeployment from '../../docs/sepolia-deployment-addresses.json'
-import mainnetManifest from '../config/manifests/mainnet.json'
-import sepoliaManifest from '../config/manifests/sepolia.json'
-import { loadNetworks, parseManifestValue } from '../src/config.ts'
+import mainnetDeployment from '../../../docs/mainnet-deployment-addresses.json'
+import sepoliaDeployment from '../../../docs/sepolia-deployment-addresses.json'
+import mainnetManifest from '../../config/manifests/mainnet.json'
+import sepoliaManifest from '../../config/manifests/sepolia.json'
+import { loadNetworks, parseManifestValue } from '../../src/config.ts'
 
-const projectRoot = path.resolve(import.meta.dir, '..')
+const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
 const originalNetworks = process.env['NETWORKS']
 const originalMainnetRpc = process.env['MAINNET_RPC_URL']

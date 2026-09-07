@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { bundledComposeSourceUrl } from '../src/deployment-verification.ts'
+import { bundledComposeSourceUrl } from '../../src/deployment-verification.ts'
 
 const configuration = (url?: string): Record<string, unknown> => ({
 	services: {

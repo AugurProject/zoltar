@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { createConcurrencyGate } from '../src/limits.ts'
+import { createConcurrencyGate } from '../../src/limits.ts'
 
 test('rejects excess concurrent work and recovers capacity after completion', async () => {
 	let release: (() => void) | undefined

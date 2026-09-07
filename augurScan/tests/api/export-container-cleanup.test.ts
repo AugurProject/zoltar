@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const cleanupScript = path.join(projectRoot, 'scripts', 'export-container-cleanup.sh')
 
 const runFailureHarness = async (failure: 'readiness' | 'transport' | 'verifier') => {

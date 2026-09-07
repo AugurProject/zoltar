@@ -12,7 +12,7 @@ import {
 	reportRoundChanges,
 	swapAnalytics,
 	vaultRisk,
-} from '../src/operations.ts'
+} from '../../src/operations.ts'
 
 test('uses Solidity BinaryOutcome ordering for escalation catalog totals', () => {
 	expect(ESCALATION_OUTCOME).toEqual({ invalid: '0', yes: '1', no: '2' })

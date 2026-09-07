@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { directObservationTotal, handleApi, parseHistoricalExportCursor } from '../src/api.ts'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../src/cursor-codec.ts'
+import { directObservationTotal, handleApi, parseHistoricalExportCursor } from '../../src/api.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor } from '../../src/cursor-codec.ts'
 
 const databases: SQL[] = []
 

@@ -2,9 +2,9 @@ import { expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { contractSourceHash } from '../scripts/project-metadata-source.ts'
-import { effectiveAbiSourceHash } from '../src/abi-provenance.ts'
-import { sourceProvenance } from '../src/provenance.ts'
+import { contractSourceHash } from '../../scripts/project-metadata-source.ts'
+import { effectiveAbiSourceHash } from '../../src/abi-provenance.ts'
+import { sourceProvenance } from '../../src/provenance.ts'
 
 test('fingerprints the complete effective ABI decoder deterministically', () => {
 	const catalog = { Zoltar: { abi: [{ name: 'QuestionCreated', type: 'event' }] } }

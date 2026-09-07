@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../browser/chart-values.ts'
+import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from '../../browser/chart-values.ts'
 
 test('uses consistent nonnegative bounds for an all-zero price series', () => {
 	expect(chartValueBounds([0], undefined)).toEqual({ minimum: 0, maximum: 1 })

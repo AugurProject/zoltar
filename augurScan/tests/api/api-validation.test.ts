@@ -20,7 +20,7 @@ import {
 	operationsCatalogRecords,
 	operationsRiskPagination,
 	operationsRiskRecords,
-} from '../browser/api-validation.ts'
+} from '../../browser/api-validation.ts'
 
 const operationsAsOf = {
 	blockNumber: '12',

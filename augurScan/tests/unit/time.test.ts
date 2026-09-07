@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, unixSecondsToDate } from '../src/time.ts'
+import { bigintToSafeNumber, unixSecondsToDate } from '../../src/time.ts'
 
 describe('bigintToSafeNumber', () => {
 	test('preserves safe integer bounds and rejects values outside them', () => {

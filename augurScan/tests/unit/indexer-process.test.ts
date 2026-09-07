@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import path from 'node:path'
-import { runIndexerProcess } from '../src/indexer-process-runner.ts'
+import { runIndexerProcess } from '../../src/indexer-process-runner.ts'
 
-const projectRoot = path.resolve(import.meta.dir, '..')
+const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
 test('keeps a disabled indexer process alive until termination without starting indexers', async () => {
 	const child = Bun.spawn(

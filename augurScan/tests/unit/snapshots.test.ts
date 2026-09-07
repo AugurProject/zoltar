@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { getAddress } from '../src/ethereum.ts'
-import { normalizeSnapshotTarget, type StateRead, sampleEntityStateWithRead } from '../src/snapshots.ts'
+import { getAddress } from '../../src/ethereum.ts'
+import { normalizeSnapshotTarget, type StateRead, sampleEntityStateWithRead } from '../../src/snapshots.ts'
 
 const pool = getAddress('0x1111111111111111111111111111111111111111')
 

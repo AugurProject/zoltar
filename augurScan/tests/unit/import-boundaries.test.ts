@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { importBoundaryViolations } from '../scripts/import-boundaries.ts'
+import { importBoundaryViolations } from '../../scripts/import-boundaries.ts'
 
 test('keeps API, database, projection, and indexer capability boundaries directed', () => {
 	const sources = new Map([

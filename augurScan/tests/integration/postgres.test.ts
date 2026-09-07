@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { isAccountTransactionValue, isLogDetailValue, isRecord } from '../browser/api-validation.ts'
-import { handleApi } from '../src/api.ts'
-import { decodeOpaqueCursor } from '../src/cursor-codec.ts'
+import { isAccountTransactionValue, isLogDetailValue, isRecord } from '../../browser/api-validation.ts'
+import { handleApi } from '../../src/api.ts'
+import { decodeOpaqueCursor } from '../../src/cursor-codec.ts'
 import {
 	assertBlockAppend,
 	assertContractDeploymentObservation,
@@ -18,13 +18,13 @@ import {
 	ScannerDatabase,
 	type StoredTransaction,
 	scannerDatabaseOptions,
-} from '../src/database.ts'
-import { getAddress, keccak256, stringToHex, zeroAddress } from '../src/ethereum.ts'
-import { readIndexerHealth } from '../src/indexer-health.ts'
-import { LiveBus } from '../src/live.ts'
-import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../src/schema.ts'
-import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../src/types.ts'
-import { uniswapV4PoolId } from '../src/uniswap.ts'
+} from '../../src/database.ts'
+import { getAddress, keccak256, stringToHex, zeroAddress } from '../../src/ethereum.ts'
+import { readIndexerHealth } from '../../src/indexer-health.ts'
+import { LiveBus } from '../../src/live.ts'
+import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema.ts'
+import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../../src/types.ts'
+import { uniswapV4PoolId } from '../../src/uniswap.ts'
 
 const postgresUrl = process.env['POSTGRES_TEST_URL']
 const postgresTest = postgresUrl === undefined ? test.skip : test

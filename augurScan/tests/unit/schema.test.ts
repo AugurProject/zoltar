@@ -11,7 +11,7 @@ import {
 	schemaLayoutsMatch,
 	UNSUPPORTED_POSTGRES_VERSION_MESSAGE,
 	UNSUPPORTED_SCHEMA_MESSAGE,
-} from '../src/schema.ts'
+} from '../../src/schema.ts'
 
 test('accepts the PostgreSQL release used to generate the schema fingerprint across official image distributions', () => {
 	expect(SUPPORTED_POSTGRES_VERSION_NUM).toBe('170011')
@@ -42,7 +42,7 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 })
 
 test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
-	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
+	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
 	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION}`)
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
 	const previous = expectedSchemaLayout(schema, '2')
@@ -99,7 +99,7 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 })
 
 test('fingerprints schema files checked out with Windows line endings', async () => {
-	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
+	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
 	expect(expectedSchemaLayout(schema.replaceAll('\n', '\r\n'), CURRENT_SCHEMA_VERSION)).toEqual(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION))
 })
 
@@ -126,7 +126,7 @@ test('reports the exact schema fingerprint differences without database contents
 })
 
 test('keeps the supported migration additive and backfills retained evidence', async () => {
-	const migration = await Bun.file(new URL('../migrations/002-historical-integrity.sql', import.meta.url)).text()
+	const migration = await Bun.file(new URL('../../migrations/002-historical-integrity.sql', import.meta.url)).text()
 	expect(migration).toContain('CREATE TABLE public.chain_reorganizations')
 	expect(migration).toContain('ADD COLUMN applied_abi_source_hash')
 	expect(migration).toContain('ADD COLUMN applied_application_source_hash')
@@ -151,7 +151,7 @@ test('keeps the supported migration additive and backfills retained evidence', a
 })
 
 test('adds durable indexer ownership through an additive migration', async () => {
-	const migration = await Bun.file(new URL('../migrations/003-indexer-ownership.sql', import.meta.url)).text()
+	const migration = await Bun.file(new URL('../../migrations/003-indexer-ownership.sql', import.meta.url)).text()
 	expect(migration).toContain('CREATE TABLE public.indexer_ownership')
 	expect(migration).toContain("'release-failed'::text")
 	expect(migration).toContain('REFERENCES public.indexer_runs(id)')

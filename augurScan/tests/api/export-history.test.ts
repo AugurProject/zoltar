@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const exportScript = path.join(projectRoot, 'scripts', 'export-history.sh')
 
 test('runs and verifies every export page before stopping the isolated container', async () => {

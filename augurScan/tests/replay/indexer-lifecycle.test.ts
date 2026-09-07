@@ -9,8 +9,8 @@ import {
 	manifestContractSetChanged,
 	ScannerDatabase,
 	type StoredTransaction,
-} from '../src/database.ts'
-import { readRichListBalance } from '../src/direct-observations.ts'
+} from '../../src/database.ts'
+import { readRichListBalance } from '../../src/direct-observations.ts'
 import {
 	type Address,
 	createPublicClient,
@@ -24,7 +24,7 @@ import {
 	parseAbi,
 	RpcError,
 	toHex,
-} from '../src/ethereum.ts'
+} from '../../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -77,7 +77,7 @@ import {
 	waitForIndexerDelay,
 	withRpcRequestQueue,
 	withVerifiedProvider,
-} from '../src/indexer.ts'
+} from '../../src/indexer.ts'
 import {
 	ChainConfigurationError,
 	commitSparseCanonicalBatch,
@@ -94,11 +94,11 @@ import {
 	readHistoricalCodeWithPermanentFallback,
 	readWithPrunedStateFallback,
 	scanDiscoveredLogCoverage,
-} from '../src/indexer-runtime.ts'
-import { RpcRequestMethodError } from '../src/rpc-request-queue.ts'
-import { unixSecondsToDate } from '../src/time.ts'
-import type { ContractMetadata, StoredLog, TokenMetadata } from '../src/types.ts'
-import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../src/uniswap.ts'
+} from '../../src/indexer-runtime.ts'
+import { RpcRequestMethodError } from '../../src/rpc-request-queue.ts'
+import { unixSecondsToDate } from '../../src/time.ts'
+import type { ContractMetadata, StoredLog, TokenMetadata } from '../../src/types.ts'
+import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../../src/uniswap.ts'
 
 const tokenMetadata: TokenMetadata = {
 	address: '0x1000000000000000000000000000000000000001',
@@ -184,7 +184,7 @@ const parseRpcRequestBody = (value: unknown): { readonly id: number | string | n
 
 describe('network indexer lifecycle', () => {
 	test('keeps private runtime plumbing out of the public indexer facade', async () => {
-		const indexerFacade = await import('../src/indexer.ts')
+		const indexerFacade = await import('../../src/indexer.ts')
 		const privateRuntimeNames = [
 			'databaseFailureMessage',
 			'jsonEvidence',
