@@ -10,8 +10,8 @@ import { retirementCleanupBlocker } from './workflows.ts'
 
 type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot'>
 
-export function enforceRetirementContinuation(state: RuntimeState, workflow: DurableWorkflow, hasCanonicalContinuation: boolean) {
-	if (state.retirement.status === 'inactive' || workflow.classification !== 'selectable') return true
+export function enforceRetirementContinuation(state: RuntimeState, workflow: DurableWorkflow, hasCanonicalContinuation: boolean, operationAllowed: boolean) {
+	if (state.retirement.status === 'inactive' || operationAllowed) return true
 	const blocker = retirementCleanupBlocker(workflow, hasCanonicalContinuation)
 	if (blocker === undefined) return true
 	state.retirement.status = 'blocked'

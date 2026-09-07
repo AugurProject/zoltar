@@ -440,8 +440,7 @@ export function workflowFailureHasTransaction(workflow: DurableWorkflow) {
 }
 
 export function retirementCleanupBlocker(workflow: DurableWorkflow, hasCanonicalContinuation: boolean) {
-	if (workflow.classification !== 'selectable') return undefined
-	if (!hasCanonicalContinuation) return `Partial selectable workflow ${workflow.label} has no safe cleanup-only continuation`
+	if (!hasCanonicalContinuation) return `Partial workflow ${workflow.label} has no safe cleanup-only continuation`
 	workflow.continuationDisposition = 'cleanup-only'
 	return undefined
 }

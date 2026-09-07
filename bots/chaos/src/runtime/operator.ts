@@ -902,11 +902,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				}
 				const continuationWorkflow = continuationWorkflows[0]
 				if (continuationWorkflow !== undefined) {
-					if (!enforceRetirementContinuation(state, continuationWorkflow, operationHasCanonicalContinuationBuilder(continuationWorkflow.operationId))) {
+					const continuationPlan = durableWorkflowPlan(continuationWorkflow)
+					if (!enforceRetirementContinuation(state, continuationWorkflow, operationHasCanonicalContinuationBuilder(continuationWorkflow.operationId), state.retirement.status === 'inactive' || retirementPlanAllowed(continuationPlan, scan.snapshot, state.retirement.policies))) {
 						await persistState(configuration, state)
 						return settings.runtime.once
 					}
-					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.classification === 'selectable')
+					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.continuationDisposition === 'cleanup-only')
 					const continuationEvaluation = continuationSelection.evaluation
 					if (continuationSelection.continuationDisposition !== undefined && continuationWorkflow.continuationDisposition !== continuationSelection.continuationDisposition) {
 						continuationWorkflow.continuationDisposition = continuationSelection.continuationDisposition
@@ -928,12 +929,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					}
 					await ensureSubmissionPreflight(resources, settings)
 					state.rpcEndpointHealth = resourceHealth(resources)
-					const continuationPlan = durableWorkflowPlan(continuationWorkflow)
+					const refreshedContinuationPlan = durableWorkflowPlan(continuationWorkflow)
 					const obligation = state.obligations.find(candidate => candidate.workflowId === continuationWorkflow.id)
 					if (obligation === undefined) {
-						await executeRandomContinuation(configuration, state, resources, continuationPlan, shutdown.isRequested)
+						await executeRandomContinuation(configuration, state, resources, refreshedContinuationPlan, shutdown.isRequested)
 					} else {
-						await executeLifecyclePlan(configuration, state, resources, continuationPlan, shutdown.isRequested)
+						await executeLifecyclePlan(configuration, state, resources, refreshedContinuationPlan, shutdown.isRequested)
 					}
 					return settings.runtime.once
 				}

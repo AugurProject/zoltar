@@ -942,6 +942,10 @@ describe('chaos operator runtime', () => {
 		const selection = evaluatePolicySafeContinuation(snapshot, workflow, { ...settings, strategy: { ...settings.strategy, enabledEcosystems: [] } }, snapshot.anchor.blockNumber, true)
 		expect(workflow.continuationDisposition).toBe('cleanup-only')
 		expect(selection.evaluation.plan?.steps.every(step => step.id.startsWith('revoke-'))).toBeTrue()
+		workflow.classification = 'lifecycle-obligation'
+		workflow.continuationDisposition = undefined
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
 	})
 
 	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {
