@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 
-export const CHANGED_FILE_DIFF_FILTER = 'ACMRTUXB'
-export const TEST_PLAN_DIFF_FILTER = `${CHANGED_FILE_DIFF_FILTER}D`
+const CHANGED_FILE_DIFF_FILTER = 'ACMRTUXB'
+const TEST_PLAN_DIFF_FILTER = `${CHANGED_FILE_DIFF_FILTER}D`
 
 export type ChangedFileEntry = {
 	path: string

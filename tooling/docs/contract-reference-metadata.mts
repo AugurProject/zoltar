@@ -1,4 +1,4 @@
-export type Interaction = {
+type Interaction = {
 	call: string
 	caller: string
 	declarations: ContractDeclaration[]

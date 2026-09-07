@@ -1,10 +1,10 @@
-export const projectTypes = ['library', 'contracts', 'ui-domain', 'ui-app', 'service', 'bot', 'documentation'] as const
-export type ProjectType = (typeof projectTypes)[number]
+const projectTypes = ['library', 'contracts', 'ui-domain', 'ui-app', 'service', 'bot', 'documentation'] as const
+type ProjectType = (typeof projectTypes)[number]
 
 export const projectTaskNames = ['setup', 'build', 'test', 'lint', 'typecheck', 'knip', 'dependency-update'] as const
 export type ProjectTaskName = (typeof projectTaskNames)[number]
 
-export type ProjectTask = {
+type ProjectTask = {
 	readonly command: readonly string[]
 	readonly cwd: string
 	readonly inputs: readonly string[]
@@ -285,7 +285,7 @@ export function topologicallySortedProjects(registry: readonly Project[] = proje
 	return ordered
 }
 
-export function ownerProject(filePath: string, registry: readonly Project[] = projects): Project | undefined {
+function ownerProject(filePath: string, registry: readonly Project[] = projects): Project | undefined {
 	return [...registry].sort((left, right) => right.path.length - left.path.length).find(project => filePath === project.path || filePath.startsWith(`${project.path}/`))
 }
 

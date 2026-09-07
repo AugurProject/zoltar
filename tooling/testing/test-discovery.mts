@@ -1,12 +1,12 @@
 import { existsSync, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
-export const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', 'shared/ts', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
-export const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
-export const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
-export const TEST_DOMAINS = ['all', 'application', 'solidity'] as const
+const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', 'shared/ts', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
+const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
+const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
+const TEST_DOMAINS = ['all', 'application', 'solidity'] as const
 export type TestDomain = (typeof TEST_DOMAINS)[number]
-export const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
+const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
 export const EXPLICIT_TEST_TIER_FILES = new Set(['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'])
 export const MAXIMUM_TEST_PARALLELISM = 2
 
@@ -56,7 +56,7 @@ export function isTestDomain(value: string): value is TestDomain {
 	return TEST_DOMAINS.some(domain => domain === value)
 }
 
-export function getTestRootsForDomain(domain: TestDomain) {
+function getTestRootsForDomain(domain: TestDomain) {
 	if (domain === 'application') return APPLICATION_TEST_ROOTS
 	if (domain === 'solidity') return SOLIDITY_TEST_ROOTS
 	return TEST_ROOTS
@@ -71,7 +71,7 @@ export type WeightedTestFile = {
 	weight: number
 }
 
-export type TestShard = {
+type TestShard = {
 	index: number
 	files: string[]
 	weight: number

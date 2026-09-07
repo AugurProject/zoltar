@@ -3,9 +3,9 @@ import * as path from 'node:path'
 
 export const TEST_TIMING_HISTORY_VERSION = 1
 export const MAXIMUM_TIMING_SAMPLES = 5
-export const MINIMUM_REGRESSION_HISTORY_SAMPLES = 3
-export const MINIMUM_TIMING_REGRESSION_SECONDS = 10
-export const MAXIMUM_TIMING_REGRESSION_RATIO = 0.5
+const MINIMUM_REGRESSION_HISTORY_SAMPLES = 3
+const MINIMUM_TIMING_REGRESSION_SECONDS = 10
+const MAXIMUM_TIMING_REGRESSION_RATIO = 0.5
 
 export type TestTimingHistory = {
 	fingerprintsByFile?: Record<string, string>
@@ -21,7 +21,7 @@ export type TestTimingObservation = {
 	testFiles: string[]
 }
 
-export type TestTimingRegression = {
+type TestTimingRegression = {
 	baselineSeconds: number
 	currentSeconds: number
 	filePath: string
@@ -100,7 +100,7 @@ export function createTestTimingObservation(junitXml: string, elapsedSeconds: nu
 	}
 }
 
-export function estimateObservationFileSeconds(observation: TestTimingObservation) {
+function estimateObservationFileSeconds(observation: TestTimingObservation) {
 	const testCaseTotal = observation.testFiles.reduce((total, filePath) => total + (observation.testCaseSecondsByFile[filePath] ?? 0), 0)
 	const scale = testCaseTotal > observation.elapsedSeconds && testCaseTotal > 0 ? observation.elapsedSeconds / testCaseTotal : 1
 	const unreportedSeconds = Math.max(0, observation.elapsedSeconds - testCaseTotal * scale)
@@ -151,7 +151,7 @@ export function mergeTestTimingHistory(previous: TestTimingHistory | undefined, 
 	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile, ...(Object.keys(fingerprintsByFile).length === 0 ? {} : { fingerprintsByFile }) }
 }
 
-export function median(values: readonly number[]) {
+function median(values: readonly number[]) {
 	if (values.length === 0) return undefined
 	const sorted = [...values].sort((left, right) => left - right)
 	const middle = Math.floor(sorted.length / 2)

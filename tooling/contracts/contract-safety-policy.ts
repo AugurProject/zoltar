@@ -14,7 +14,7 @@ export type ExactLayoutPair = {
 	reason: string
 }
 
-export type StorageAnchor = {
+type StorageAnchor = {
 	label: string
 	slot: string
 	offset: number

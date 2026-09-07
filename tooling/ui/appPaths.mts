@@ -6,7 +6,7 @@ export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
 export type UiPackageId = 'coreShared' | 'zoltarDomain' | 'statoblastDomain' | 'tradingDomain' | UiAppId
 
-export const UI_PACKAGE_DIRECTORY_BY_ID: Readonly<Record<UiPackageId, string>> = {
+const UI_PACKAGE_DIRECTORY_BY_ID: Readonly<Record<UiPackageId, string>> = {
 	coreShared: 'coreShared',
 	statoblast: 'statoblast',
 	statoblastDomain: 'statoblastDomain',
