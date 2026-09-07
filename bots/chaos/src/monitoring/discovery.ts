@@ -964,6 +964,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	}
 	return await mapWithConcurrency(entries, DISCOVERY_RPC_CONCURRENCY, async ({ id, operation }): Promise<StagedOperationSnapshot> => {
 		const operationType = bigintToSafeNumber(operation.operation)
+		const targetVault = pool.vaults.find(vault => sameAddress(vault.address, operation.targetVault)) ?? (await discoverVault(client, pool.address, pool.escalationGame, getAddress(operation.targetVault), blockNumber))
 		let executionExpectedSuccess = false
 		let executionExpectedResult: Hex = '0x'
 		let liquidationMinimumReceiverHealthFactorBps = 0n
@@ -1014,8 +1015,6 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 							snapshot: {
 								targetBackingUnits: operation.snapshotTargetBackingUnits,
 								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
-								totalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
-								totalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
 							},
 							targetVault: operation.targetVault,
 						},
@@ -1066,10 +1065,10 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
 			snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
-			snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep.toString(),
-			snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth.toString(),
-			snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep.toString(),
-			snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits.toString(),
+			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
+			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
+			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,
+			snapshotTotalRepBackingUnits: pool.totalRepBackingUnits,
 			targetVault: getAddress(operation.targetVault),
 			validForSeconds: operation.validForSeconds.toString(),
 		}

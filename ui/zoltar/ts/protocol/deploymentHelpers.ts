@@ -162,7 +162,6 @@ export const getSecurityPoolFactoryByteCode = ({
 				shareTokenFactory,
 				uniformPriceDualCapBatchAuctionFactory,
 				priceOracleManagerAndOperatorQueuerFactory,
-				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 				securityPoolOperationsDelegate,

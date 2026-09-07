@@ -12,6 +12,7 @@ const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-gam
 const invariantsHtml = normalizeHtmlSource(await readFile('docs/reference/invariants.html', 'utf8'))
 const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liquidations.html', 'utf8'))
 const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanation/open-oracle.html', 'utf8'))
+const contractArchitecture = normalizeHtmlSource(await readFile('docs/explanation/contract-architecture.html', 'utf8'))
 const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/explanation/zoltar.html', 'utf8'))
 const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanation/statoblast.html', 'utf8'))
 const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
@@ -139,7 +140,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(priceCoordinator, /event LiquidationRouteStaged\([\s\S]*address indexed operator,[\s\S]*address indexed receiverVault,[\s\S]*uint256 reservedDebtAttoEth[\s\S]*\);/)
 	assert.match(contractInteractionReference, /LiquidationApprovalRegistry[\s\S]*permitLiquidationApproval\(params, signature\)[\s\S]*revokeLiquidationApproval\(approvalId\)[\s\S]*invalidateLiquidationApprovalNonce\(newNonce\)[\s\S]*reserve\(operationId/)
 	assert.match(liquidationApprovalRegistry, /EIP712Domain\(string name,string version,uint256 chainId,address verifyingContract\)/)
-	assert.match(contractInteractionReference, /exactly `max\(1 REP, theoretical REP supply \/ 10,000,000\)`[\s\S]*zero configured vault REP floor[\s\S]*theoretical REP supply \/ 100,000[\s\S]*nonzero constructor value is the exact override[\s\S]*security-bond debt floor defaults to 1 ETH/)
+	assert.match(contractInteractionReference, /as `max\(1 REP, theoretical REP supply \/ 10,000,000\)`[\s\S]*zero configured vault REP floor[\s\S]*theoretical REP supply \/ 100,000[\s\S]*nonzero constructor value is the exact override[\s\S]*security-bond debt floor defaults to 1 ETH/)
 	assert.doesNotMatch(contractInteractionReference, /max\(1 REP, configured floor, theoretical REP supply \/ 10,000,000\)/)
 	assert.match(operatorReference, /effective escalation deposit is exactly `max\(1 REP, theoretical REP supply \/ 10,000,000\)`/)
 	assert.doesNotMatch(operatorReference, /max\(1 REP, configured floor, theoretical REP supply \/ 10,000,000\)/)
@@ -306,18 +307,16 @@ function assertAuditFindingRemediations(): void {
 	for (const boundaryName of ['one second before', 'exactly at', 'one second after']) {
 		assert.ok(escalationGameForkThresholdTest.includes(boundaryName), `Escalation fork-threshold regression must cover ${boundaryName} game end`)
 	}
-	assert.match(truthAuctionInterface, /event EthRefundDeferred\(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth\);/, 'Truth-auction interface must declare the deferred-refund delta and resulting balance')
-	assert.match(truthAuctionInterface, /event PendingEthRefundWithdrawn\(address indexed bidder, uint256 amountAttoEth\);/, 'Truth-auction interface must declare successful deferred-refund withdrawals')
-	assert.match(truthAuction, /REFUND_PUSH_GAS_LIMIT = 30_000;/, 'Truth-auction push refunds must retain the documented explicit CALL gas argument')
-	const normalizedRefundGasDocs = `${normalizedAuctionDesign} ${invariantsHtml} ${contractInteractionReference} ${contractReferenceGenerator}`.replaceAll(/<[^>]+>/g, '')
-	assert.doesNotMatch(normalizedRefundGasDocs, /(?:at most|forwards at most|limited to) 30,000 gas/i, 'Refund documentation must not confuse the explicit CALL gas argument with the larger stipend-inclusive callback maximum')
+	assert.match(truthAuctionInterface, /event EthRefundCredited\(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth\);/, 'Truth-auction interface must declare the refund-credit delta and resulting balance')
+	assert.match(truthAuctionInterface, /event PendingEthRefundWithdrawn\(address indexed bidder, uint256 amountAttoEth\);/, 'Truth-auction interface must declare successful credited-refund withdrawals')
+	assert.doesNotMatch(truthAuction, /REFUND_PUSH_GAS_LIMIT|_payOrDeferRefund/, 'Truth-auction settlement must not retain the callback-based push-refund path')
 	assert.match(
 		securityPoolForker,
 		/function _getTruthAuctionCap\([\s\S]*Math\.ceilDiv\(data\.migratedAttoRep, SecurityPoolUtils\.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR\)[\s\S]*Math\.mulDiv\(migratedPoolRepRetentionAttoRep, combinedAuctionableAttoRep, poolAuctionableRepAtForkAttoRep, Math\.Rounding\.Ceil\)[\s\S]*function _finalizeBackingUnitsAfterAuction\([\s\S]*uint256 incumbentRepAfterAttoRep =[\s\S]*Math\.mulDiv\(poolRepBeforeAttoRep, combinedRepBeforeAttoRep - repPurchasedAttoRep, combinedRepBeforeAttoRep\)[\s\S]*if \(incumbentRepAfterAttoRep == 0\)[\s\S]*auctionRepBackingUnitsPerAttoRep = SecurityPoolUtils\.PRICE_PRECISION;[\s\S]*Math\.ceilDiv\(poolRepAfterAttoRep, incumbentRepAfterAttoRep\)/,
 		'Truth-auction REP backing units must reserve positive migrated claims and use bounded child-local scaling',
 	)
 	assert.doesNotMatch(normalizedAuctionDesign, /(?:all the REP in the vaults have been auctioned off|old REP vault holders have been wiped)/i, 'Truth Auction must not claim that every underfunded auction sells all REP or wipes prior vault holders')
-	assert.match(contractReferenceGenerator, /settleAuctionBids[\s\S]*EthRefundDeferred[\s\S]*claimAuctionProceeds[\s\S]*EthRefundDeferred/, 'Generated public wrapper rows must expose possible deferred-refund signals')
+	assert.match(contractReferenceGenerator, /settleAuctionBids[\s\S]*EthRefundCredited[\s\S]*claimAuctionProceeds[\s\S]*EthRefundCredited/, 'Generated public wrapper rows must expose refund-credit signals')
 }
 
 function assertInvariantCatalogOwnership(): void {
@@ -368,7 +367,7 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	assert.match(capacityOwnershipEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
 	assert.match(vaultEntry, /href="\.\.\/\.\.\/solidity\/contracts\/statoblast\/SecurityPool\.sol"><code>_registerVault<\/code><\/a>/)
 	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
-	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefundsAttoEth<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*deferred <code>pendingEthRefundsAttoEth<\/code>/)
+	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefundsAttoEth<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*credited <code>pendingEthRefundsAttoEth<\/code>/)
 }
 
 function assertZoltarForkDepths(): void {
@@ -557,9 +556,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /getVaultCount`, `getVaults`/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`/)
 	assert.match(operatorReference, /factory has no owner role and no later `resumeFromFork` relay/)
-	assert.match(securityPoolFactory, /_initialEscalationGameDepositAttoRep == 1e18[\s\S]*zoltar\.getNonDecisionThresholdAttoRep\(universeId\) > _getInitialEscalationDepositAttoRep\(reputationToken\)/)
 	assert.match(securityPoolFactory, /SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*reputationToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
-	assert.match(securityPoolFactory, /initialEscalationGameDepositAttoRep = _initialEscalationGameDepositAttoRep/)
+	assert.doesNotMatch(securityPoolFactory, /initialEscalationGameDepositAttoRep/, 'Factory must not duplicate the pool-derived escalation deposit')
 	assert.match(securityPool, /initialEscalationGameDepositAttoRep = SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*repToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
 	assert.match(securityPoolUtils, /function calculateInitialEscalationDepositAttoRep\([\s\S]*theoreticalSupplyAttoRep \/ 10_000_000[\s\S]*supplyBasedDepositAttoRep < 1e18 \? 1e18 : supplyBasedDepositAttoRep/)
 	assert.match(securityPoolUtils, /function calculateMinimumVaultRepDepositAttoRep\([\s\S]*configuredMinimumAttoRep == 0 \? theoreticalSupplyAttoRep \/ 100_000 : configuredMinimumAttoRep/)
@@ -578,7 +576,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Accepts auction ETH during forker-controlled auction finalization/)
 	assert.doesNotMatch(contractInteractionReference, /Accepts auction ETH during forker-controlled finalization and settlement/)
 	assert.match(contractInteractionReference, /auction `AuctionFinalized` is followed by forker `TruthAuctionFinalized` and pool accounting checkpoints/)
-	assert.match(operatorReference, /Caller and trust boundaries[\s\S]*SecurityPoolEventEmitter[\s\S]*recognized pool or forker address/)
+	assert.match(operatorReference, /SecurityPoolEventEmitter[\s\S]*SecurityPoolStorage[\s\S]*emitPoolAccountingCheckpoint[\s\S]*emitVaultAccountingCheckpoint[\s\S]*SecurityPoolForkEventEmitter[\s\S]*SecurityPoolForkerStorage[\s\S]*emitForkSnapshotEvents/)
+	assert.match(contractArchitecture, /SecurityPoolEventEmitter<\/code> reads the typed <code>SecurityPoolStorage[\s\S]*pool and vault accounting checkpoints from the pool address[\s\S]*SecurityPoolForkEventEmitter[\s\S]*SecurityPoolForkerStorage[\s\S]*fork snapshots from the forker address/)
 	assert.match(deploymentStatus, /DeploymentAddressesSet\(address\[\] deploymentAddresses\)/)
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)
 	assert.match(contractInteractionReference, /startFromFork\(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep\)[\s\S]*does not start the remaining clock until `resumeFromFork`/)
@@ -591,9 +590,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /initializeForkCarrySnapshotWithResolutionBalances\(\.\.\.\)[\s\S]*no prior snapshot[\s\S]*Installs the immutable inherited peaks, leaf counts, carry totals, resolution balances, and normalized nullifier roots/)
 	assert.match(
 		contractInteractionReference,
-		/Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership, latest-positive-deposit target preference metadata, and vault bad debt into one child pool/,
+		/Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers REP-denominated capacity ownership and vault bad debt into one child pool[\s\S]*Deposit-target instructions remain available from parent events and are not migrated as persistent vault state/,
 	)
 	assert.doesNotMatch(contractInteractionReference, /transfers REP-denominated capacity ownership, target health factor/)
+	assert.doesNotMatch(contractInteractionReference, /latest-positive-deposit target preference metadata/)
 	assert.match(contractInteractionReference, /optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state/)
 	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds dispute-staked REP backing nor authorizes carried proofs/)
 	assert.match(contractInteractionReference, /external fork interrupted the game[\s\S]*winners settle in the child by carried proof[\s\S]*unresolved parent escalation-deposit accounting cleanup is optional/)
@@ -602,7 +602,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function withdrawFromEscalationGame\([\s\S]*for \(uint256 index = 0; index < depositIndexes\.length; index\+\+\)[\s\S]*_registerVault\(beneficiaryVault\)/)
 	assert.match(contractInteractionReference, /withdrawFromEscalationGame\(outcome, depositIndexes\)[\s\S]*An empty list returns after the outer lifecycle checks without settlement, state change, or event[\s\S]*No event for an empty list/)
 	assert.match(contractInteractionReference, /withdrawForkedEscalationDeposits\(outcome, proofs\)[\s\S]*An empty list returns after the outer lifecycle checks without proof verification, state change, or event[\s\S]*No event for an empty list/)
-	assert.match(contractInteractionReference, /Before finalization, refunds only provably losing bids/)
+	assert.match(contractInteractionReference, /Before finalization, settles only provably losing bids/)
 	assert.match(contractInteractionReference, /Auction owner \(`SecurityPoolForker`\) only; public callers use `settleAuctionBids`/)
 	assert.match(contractInteractionReference, /Only a positive migration amount with at least one selected outcome checks the eight-week window, existing child `ForkMigration` state/)
 	assert.match(contractInteractionReference, /child pool is not already deployed/)
@@ -685,20 +685,48 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
 	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order/)
 	assert.match(truthAuction, /function finalize\(\) external \{[\s\S]*payable\(owner\)\.call\{\s*value:\s*raisedAttoEthToSend\s*\}\(''\)[\s\S]*require\(sent, 'Auction failed to send raised ETH to the owner'\)/)
-	assert.match(truthAuction, /function withdrawBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_payOrDeferRefund\(withdrawFor, totalRefundAttoEth\)/)
-	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_payOrDeferRefund\(bidder, totalRefundAttoEth\)/)
-	assert.match(truthAuction, /function _payOrDeferRefund\([\s\S]*if \(amountAttoEth == 0\) return;[\s\S]*payable\(bidder\)\.call\{\s*value:\s*amountAttoEth,\s*gas:\s*REFUND_PUSH_GAS_LIMIT\s*\}\(''\)[\s\S]*pendingEthRefundsAttoEth\[bidder\] = pendingAmountAttoEth;[\s\S]*emit EthRefundDeferred\(/)
+	assert.match(truthAuction, /function withdrawBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_creditRefund\(withdrawFor, totalRefundAttoEth\)/)
+	assert.ok(isRecord(compiledContractArtifacts))
+	const compiledContracts = compiledContractArtifacts['contracts']
+	assert.ok(isRecord(compiledContracts))
+	const truthAuctionSourceArtifact = compiledContracts['contracts/statoblast/UniformPriceDualCapBatchAuction.sol']
+	assert.ok(isRecord(truthAuctionSourceArtifact))
+	const truthAuctionArtifact = truthAuctionSourceArtifact['UniformPriceDualCapBatchAuction']
+	assert.ok(isRecord(truthAuctionArtifact))
+	const truthAuctionAbi = truthAuctionArtifact['abi']
+	assert.ok(Array.isArray(truthAuctionAbi))
+	const withdrawBidsAbi = truthAuctionAbi.find(entry => isRecord(entry) && entry['type'] === 'function' && entry['name'] === 'withdrawBids')
+	assert.ok(isRecord(withdrawBidsAbi))
+	const withdrawBidsOutputs = withdrawBidsAbi['outputs']
+	assert.ok(Array.isArray(withdrawBidsOutputs))
+	assert.deepEqual(
+		withdrawBidsOutputs.map(output => {
+			assert.ok(isRecord(output))
+			return output['name']
+		}),
+		['totalFilledAttoRep', 'totalRefundAttoEth', 'totalProRataAllocation', 'totalSecondaryProRataAllocation'],
+	)
+	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_creditRefund\(bidder, totalRefundAttoEth\)/)
+	assert.match(truthAuction, /function _creditRefund\([\s\S]*if \(amountAttoEth == 0\) return;[\s\S]*pendingEthRefundsAttoEth\[bidder\] = pendingAmountAttoEth;[\s\S]*emit EthRefundCredited\(/)
 	assert.match(
 		truthAuction,
-		/function withdrawPendingEthRefund\(\) external \{[\s\S]*pendingEthRefundsAttoEth\[msg\.sender\] = 0;[\s\S]*emit PendingEthRefundWithdrawn\(msg\.sender, amountAttoEth\);[\s\S]*payable\(msg\.sender\)\.call\{\s*value:\s*amountAttoEth\s*\}\(''\)[\s\S]*require\(sent, 'Auction failed to withdraw deferred ETH refund'\)/,
+		/function withdrawPendingEthRefund\(\) external \{[\s\S]*pendingEthRefundsAttoEth\[msg\.sender\] = 0;[\s\S]*emit PendingEthRefundWithdrawn\(msg\.sender, amountAttoEth\);[\s\S]*payable\(msg\.sender\)\.call\{\s*value:\s*amountAttoEth\s*\}\(''\)[\s\S]*require\(sent, 'Auction failed to withdraw credited ETH refund'\)/,
 	)
-	assert.match(contractInteractionReference, /refundLosingBids\(tickIndices\)[\s\S]*attempts an immediate gas-bounded ETH refund[\s\S]*gas-exhausted pushes are recorded in `pendingEthRefundsAttoEth` without restoring the bid[\s\S]*An empty list changes no bids and makes no external call/)
+	assert.match(contractInteractionReference, /refundLosingBids\(tickIndices\)[\s\S]*credits their ETH to `pendingEthRefundsAttoEth` without calling the bidder/)
+	for (const refundEntrypoint of ['settleAuctionBids', 'claimAuctionProceeds', 'refundLosingBids', 'refundLosingBidsFor']) {
+		assert.match(contractInteractionReference, new RegExp(`${refundEntrypoint}\\([\\s\\S]*?one aggregate .EthRefundCredited. per call when total credited ETH is positive`), `${refundEntrypoint} must document aggregate refund-credit event cardinality`)
+	}
+	assert.doesNotMatch(contractInteractionReference, /EthRefundCredited[^.]*for every positive refund/)
 	assert.match(contractInteractionReference, /finalize\(\)[\s\S]*owner accepts the proceeds ETH call, including zero value[\s\S]*A rejected call reverts finalization and its event/)
 	assert.match(
 		contractInteractionReference,
-		/withdrawBids\(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal\)[\s\S]*gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP, capacity-ownership, and bad-debt settlement[\s\S]*An empty list returns four zeros without changing bids, emitting events, or calling the beneficiary/,
+		/withdrawBids\(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal\)[\s\S]*adds the aggregate `totalRefundAttoEth` to the beneficiary pull-payment balance without calling recipient code[\s\S]*An empty list returns four zeros without changing bids or emitting events/,
 	)
-	assert.match(contractInteractionReference, /withdrawPendingEthRefund\(\)[\s\S]*emits its withdrawal before transferring without the push-refund gas cap[\s\S]*callback-created deferrals follow the clear in log order[\s\S]*A rejected pull reverts the transfer, clear, and event[\s\S]*`PendingEthRefundWithdrawn`/)
+	assert.match(
+		contractInteractionReference,
+		/withdrawBids\(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal\)[\s\S]*totalFilledAttoRep[\s\S]*totalRefundAttoEth[\s\S]*totalProRataAllocation[\s\S]*totalSecondaryProRataAllocation[\s\S]*one `EthRefundCredited` for the call when aggregate `totalRefundAttoEth` is positive/,
+	)
+	assert.match(contractInteractionReference, /withdrawPendingEthRefund\(\)[\s\S]*emits its withdrawal before transferring[\s\S]*A rejected pull reverts the transfer, clear, and event[\s\S]*callback reentry observe a zero balance[\s\S]*`PendingEthRefundWithdrawn`/)
 	assert.match(truthAuction, /function startAuction\([\s\S]*block\.timestamp <= type\(uint48\)\.max/)
 	assert.match(truthAuction, /function submitBid\([\s\S]*msg\.value <= type\(uint128\)\.max/)
 	assert.match(truthAuction, /function _appendBid\([\s\S]*cumulativeBidAttoEth <= type\(uint128\)\.max/)
@@ -724,7 +752,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /function _claimAuctionProceeds\([\s\S]*require\(data\.truthAuction\.finalized\(\), 'Not final'\)[\s\S]*data\.truthAuction\.withdrawBids\([\s\S]*SecurityPoolForkerVaultMigrationDelegate\.creditAuctionProceeds/)
 	assert.match(
 		contractInteractionReference,
-		/claimAuctionProceeds\(securityPool, vault, tickIndices\)[\s\S]*For an empty list, the underlying auction withdrawal returns four zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events[\s\S]*no event for an empty list/,
+		/claimAuctionProceeds\(securityPool, vault, tickIndices\)[\s\S]*For an empty list, the underlying auction withdrawal returns four zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, changing state, or emitting events[\s\S]*no event for an empty list/,
 	)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amountAttoRep = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amountAttoRep == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amountAttoRep\)/)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
@@ -764,9 +792,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(performLiquidationRow, /EscalationClaimMoved|Claim checkpoint pending|Claim move failed/)
 	assert.match(
 		performLiquidationRow,
-		/In ABI order,[\s\S]*operationId[\s\S]*operator[\s\S]*receiverVault[\s\S]*targetVault[\s\S]*requestedDebtAttoEth[\s\S]*snapshot[\s\S]*minimumReceiverHealthFactorBps[\s\S]*minLiquidationPriceDistanceBps[\s\S]*nested snapshot contains[\s\S]*targetBackingUnits[\s\S]*targetCapacityOwnershipAttoRep[\s\S]*totalPoolHeldAttoRep[\s\S]*totalRepBackingUnits/,
+		/In ABI order,[\s\S]*operationId[\s\S]*operator[\s\S]*receiverVault[\s\S]*targetVault[\s\S]*requestedDebtAttoEth[\s\S]*snapshot[\s\S]*minimumReceiverHealthFactorBps[\s\S]*minLiquidationPriceDistanceBps[\s\S]*nested snapshot contains only[\s\S]*targetBackingUnits[\s\S]*targetCapacityOwnershipAttoRep/,
 	)
-	assert.match(performLiquidationRow, /target backing and capacity-ownership snapshot fields must match[\s\S]*pool-total snapshot fields are reconstruction evidence[\s\S]*execution uses live pool totals/)
+	assert.match(performLiquidationRow, /two target snapshot fields must match[\s\S]*execution reads current pool totals/)
+	assert.doesNotMatch(performLiquidationRow, /totalPoolHeldAttoRep|totalRepBackingUnits/)
 	assert.match(performLiquidationRow, /live target backing, dispute-staked REP, and open interest[\s\S]*minLiquidationPriceDistanceBps/)
 	assert.match(operatorReference, /Liquidation distance[\s\S]*minLiquidationPriceDistanceBps[\s\S]*SecurityPoolOperationsDelegate\.sol/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
@@ -826,10 +855,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /setAwaitingForkContinuation\(shouldAwait\)[\s\S]*No lifecycle or value-change guard[\s\S]*`AwaitingForkContinuationSet`, including for a repeated value/)
 	assert.match(securityPool, /function setSystemState\(SystemState newState\) external onlyForker \{\s*systemState = newState;\s*emit SystemStateSet\(systemState\)/)
 	assert.match(contractInteractionReference, /setSystemState\(newState\)[\s\S]*No transition or value-change guard[\s\S]*`SystemStateSet`, including for a repeated state/)
-	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?lastDepositTargetHealthFactorBpsByVault\[vault\] = lastDepositTargetHealthFactorBps;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
+	assert.match(securityPool, /function configureVault\([\s\S]*?\) external onlyForker \{[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.CapacityOwnershipChange, vault\)/)
+	assert.doesNotMatch(securityPool, /lastDepositTargetHealthFactorBpsByVault/, 'Deposit targets must remain event history rather than persistent pool storage')
 	assert.match(
 		contractInteractionReference,
-		/configureVault\(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/,
+		/configureVault\(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth\)[\s\S]*no lifecycle or value-change guard[\s\S]*Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state/,
 	)
 	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newDenominator\) external onlyForker \{\s*totalRepBackingUnits = newDenominator;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
 	assert.match(contractInteractionReference, /setTotalRepBackingUnits\(newDenominator\)[\s\S]*No lifecycle or value-change guard[\s\S]*`TotalRepBackingUnitsSet`, including for zero or a repeated value/)
@@ -923,6 +953,8 @@ function assertContractInteractionDistinctions(): void {
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
 	}
+	assert.match(securityPoolEventEmitter, /contract SecurityPoolEventEmitter is SecurityPoolStorage/)
+	assert.match(securityPoolEventEmitter, /contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents/)
 	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 totalPoolHeldRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedAttoRep\s*\) external payable/)
 	assert.match(
 		securityPoolForker,

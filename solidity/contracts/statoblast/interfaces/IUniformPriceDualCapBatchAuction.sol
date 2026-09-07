@@ -20,9 +20,9 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 	/// @notice One bid's complete settlement or pre-finalization refund. ETH fields use attoETH, REP fields use
 	/// attoREP, and `bidUsedAttoEth + refundAttoEth` equals `originalBidAmountAttoEth`.
 	event BidSettled(address indexed bidder, int256 indexed tick, uint256 indexed bidIndex, uint256 originalBidAmountAttoEth, uint256 bidUsedAttoEth, uint256 attoRepFilled, uint256 refundAttoEth, BidSettlementStatus status);
-	/// @notice A bounded-gas push refund that fails remains escrowed for later pull withdrawal.
-	event EthRefundDeferred(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth);
-	/// @notice A bidder's complete deferred ETH refund balance was cleared before its successful pull callback.
+	/// @notice A settlement call's aggregate positive ETH refund is credited without calling bidder code.
+	event EthRefundCredited(address indexed bidder, uint256 amountAttoEth, uint256 pendingAmountAttoEth);
+	/// @notice The bidder's complete credited ETH refund balance was cleared before its authorized pull callback.
 	event PendingEthRefundWithdrawn(address indexed bidder, uint256 amountAttoEth);
 }
 

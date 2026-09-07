@@ -1436,9 +1436,6 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetCapacityOwnershipAttoRep, storedOperation[8], 'capacity ownership')
-		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, storedOperation[10], 'queued dispute-staked REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalPoolHeldAttoRep, storedOperation[11], 'queued REP snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTotalRepBackingUnits, storedOperation[12], 'queued denominator snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,

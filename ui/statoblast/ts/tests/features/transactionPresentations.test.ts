@@ -216,13 +216,13 @@ describe('transaction presentations', () => {
 
 	test('describes truth-auction claim settlement as REP plus auctioned capacity ownership', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
-		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned capacity ownership, assigning the remaining capacity ownership; refund-only rows returned locked ETH.')
+		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned capacity ownership, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.')
 	})
 
 	test('describes finalized refund-only settlement without capacity ownership assignment', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds', { settlementMode: 'refund' }))
 		expect(presentation.title).toBe('Settle Finalized Refunds')
-		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning REP backing units or Auctioned capacity ownership.')
+		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or Auctioned capacity ownership.')
 	})
 
 	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {

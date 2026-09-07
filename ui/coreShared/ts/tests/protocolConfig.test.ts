@@ -6,7 +6,6 @@ import { DEFAULT_PROTOCOL_CONFIG, MAINNET_PROTOCOL_CONFIG, getMainnetProtocolCon
 const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const FORK_BURN_ENV = 'ZOLTAR_FORK_BURN_DIVISOR'
 const FORK_THRESHOLD_ENV = 'ZOLTAR_FORK_THRESHOLD_DIVISOR'
-const INITIAL_ESCALATION_DEPOSIT_ENV = 'ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT'
 
 function getProcessEnv(name: string) {
 	const processValue = Reflect.get(globalThis, 'process')
@@ -31,14 +30,12 @@ function setProcessEnv(name: string, value: string | undefined) {
 
 const originalForkBurnDivisor = getProcessEnv(FORK_BURN_ENV)
 const originalForkThresholdDivisor = getProcessEnv(FORK_THRESHOLD_ENV)
-const originalInitialEscalationDeposit = getProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV)
 const originalGlobalProtocolConfig = Reflect.get(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY)
 
 describe('protocolConfig', () => {
 	afterEach(() => {
 		setProcessEnv(FORK_BURN_ENV, originalForkBurnDivisor)
 		setProcessEnv(FORK_THRESHOLD_ENV, originalForkThresholdDivisor)
-		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, originalInitialEscalationDeposit)
 		if (originalGlobalProtocolConfig === undefined) {
 			Reflect.deleteProperty(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY)
 			return
@@ -49,10 +46,8 @@ describe('protocolConfig', () => {
 	test('getProtocolConfig resolves defaults, environment values, global overrides, and explicit overrides in precedence order', () => {
 		setProcessEnv(FORK_BURN_ENV, '7')
 		setProcessEnv(FORK_THRESHOLD_ENV, '23')
-		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, '4')
 		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
 			forkBurnDivisor: '9',
-			initialEscalationGameDepositAttoRep: DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
 		})
 
 		expect(
@@ -63,15 +58,12 @@ describe('protocolConfig', () => {
 			...DEFAULT_PROTOCOL_CONFIG,
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDepositAttoRep: 10n ** 18n,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 0n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDepositAttoRep: 2n })).toThrow('initialEscalationGameDepositAttoRep must equal 1 REP')
 		expect(validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: 0n }).minimumVaultRepDepositAttoRep).toBe(0n)
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, minimumVaultRepDepositAttoRep: -1n })).toThrow('minimumVaultRepDepositAttoRep cannot be negative')
 	})
@@ -96,10 +88,6 @@ describe('protocolConfig', () => {
 			forkThresholdDivisor: MAINNET_PROTOCOL_CONFIG.forkThresholdDivisor.toString(),
 		})
 
-		expect(
-			getMainnetProtocolConfig({
-				initialEscalationGameDepositAttoRep: MAINNET_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep.toString(),
-			}),
-		).toEqual(MAINNET_PROTOCOL_CONFIG)
+		expect(getMainnetProtocolConfig()).toEqual(MAINNET_PROTOCOL_CONFIG)
 	})
 })
