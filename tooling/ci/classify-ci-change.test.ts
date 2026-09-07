@@ -9,20 +9,20 @@ const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedSco
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
 	[['README.md'], ['docs']],
-	[['shared/ts/trading/math.ts'], ['core', 'trading', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan']],
+	[['shared/ts/trading/math.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
 	[['bots/chaos/src/run.ts'], ['chaos']],
 	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'chaos', 'arbitrager', 'liquidator']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
-	[['shared/ts/ethereum.ts'], ['core', 'trading', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan']],
+	[['shared/ts/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
-	[['solidity/contracts/Zoltar.sol'], ['core', 'trading', 'chaos', 'arbitrager', 'liquidator', 'infrastructure']],
+	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['reth/compose.yaml'], ['infrastructure']],
 	[
 		['solidity/contracts/trading/TwoWayConstantProductPair.sol', 'bots/liquidator/src/run.ts'],
-		['core', 'trading', 'chaos', 'arbitrager', 'liquidator', 'infrastructure'],
+		['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs'],
 	],
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))

@@ -30,13 +30,7 @@ Protocol documentation lives in [docs/documentation.html](https://augurproject.g
 
 ## Setup
 
-On a fresh checkout, start with the root dependency install:
-
-```bash
-bun install --frozen-lockfile
-```
-
-Then run the full bootstrap:
+On a fresh checkout, run the complete bootstrap:
 
 ```bash
 bun run setup
@@ -44,11 +38,10 @@ bun run setup
 
 Important:
 
-- `bun run setup` is the fastest way to get to a working repo after the root install.
+- `bun run setup` installs every independent package from its own frozen lockfile exactly once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
 - Repository install helpers automatically use Bun 1.3.14 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
-- If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
 
 ## Local Development
 
@@ -260,12 +253,14 @@ Run the full test suite:
 bun run test
 ```
 
-Run the normal change-scoped formatting and repository checks, then print the affected test plan:
+Run the normal affected-project checks and print the narrower test-plan explanation:
 
 ```bash
-bun run check:changed
+bun run check:affected
 bun run test:plan
 ```
+
+Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents.
 
 Run the complete local validation suite used for CI/release parity:
 
@@ -273,7 +268,7 @@ Run the complete local validation suite used for CI/release parity:
 bun run validate
 ```
 
-CI component selection, dependency expansion, generated directories, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
+`bun run validate` runs the root suite, every independent package `check` command, formatting, repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
 
 Run the launch-focused fork, auction, and exit invariant gate:
 

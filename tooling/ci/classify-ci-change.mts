@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
-import { affectedProjects, componentProjects, projects } from '../repo/projects.ts'
+import { affectedProjects, ciScopes as registeredCiScopes, componentProjects, projectForPath, projects, taskInputMatches } from '../repo/projects.ts'
 
-export const ciScopes = ['docs', 'core', 'trading', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'infrastructure'] as const
+export const ciScopes = registeredCiScopes()
 export type CiScope = (typeof ciScopes)[number]
 type PackageMatrixEntry = { readonly package: string; readonly directory: string; readonly artifacts: boolean }
 export type CiChangeClassification = {
@@ -27,34 +27,22 @@ const packageEntries = new Map<CiScope, PackageMatrixEntry>(
 	}),
 )
 const rootDocumentation = new Set(['AGENTS.md', 'LICENSE', 'README.md'])
-const rootInfrastructure = new Set(['reth', 'testnetwork'])
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
 
 function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (rootDocumentation.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
-	if (filePath.startsWith('bots/shared/')) return 'bot-shared'
-	if (filePath.startsWith('bots/chaos/')) return 'chaos'
-	if (filePath.startsWith('bots/open-oracle-arbitrager/')) return 'arbitrager'
-	if (filePath.startsWith('bots/liquidator/')) return 'liquidator'
-	if (filePath.startsWith('augurScan/')) return 'augur-scan'
-	if (filePath.startsWith('shared/') || filePath.startsWith('ui/')) return 'core'
-	if (filePath.startsWith('solidity/')) return 'infrastructure'
 	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || filePath.startsWith('tooling/') || rootGlobalFiles.has(filePath)) return 'full'
-	if ([...rootInfrastructure].some(path => filePath === path || filePath.startsWith(`${path}/`))) return 'infrastructure'
-	return 'full'
+	return projectForPath(filePath)?.ci?.scope ?? 'full'
 }
 
 function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[], full: boolean): Set<CiScope> {
 	if (full) return new Set(ciScopes)
 	const result = new Set(direct)
 	for (const project of affectedProjects(filePaths, projects)) {
-		const scope = project.ci?.componentName === undefined ? undefined : project.ci.scope
+		const scope = project.ci?.scope
 		if (scope !== undefined && ciScopes.includes(scope as CiScope)) result.add(scope as CiScope)
 	}
-	// The separately tiered Trading domain consumes shared and contract inputs.
-	if (filePaths.some(filePath => filePath.startsWith('shared/'))) result.add('trading')
-	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading'] as const) result.add(scope)
 	return result
 }
 export function getCiChangedFiles(baseRef: string, cwd: string = process.cwd()): string[] {
@@ -89,20 +77,9 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	const expandedScopes = ordered(expanded)
 	const packageMatrix = expandedScopes.flatMap(scope => packageEntries.get(scope) ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
-	const augurScanIntegration =
-		forcedFull ||
-		(expandedScopes.includes('augur-scan') &&
-			changedFiles.some(
-				filePath =>
-					filePath.startsWith('shared/') ||
-					filePath === 'augurScan/schema.sql' ||
-					filePath.startsWith('augurScan/migrations/') ||
-					filePath.startsWith('augurScan/config/') ||
-					filePath.startsWith('augurScan/src/') ||
-					filePath.startsWith('augurScan/tests/') ||
-					filePath.startsWith('augurScan/scripts/') ||
-					['augurScan/package.json', 'augurScan/bun.lock', 'augurScan/tsconfig.json'].includes(filePath),
-			))
+	const augurScan = projects.find(project => project.id === 'augur-scan')
+	if (augurScan === undefined) throw new Error('The project registry must contain augur-scan')
+	const augurScanIntegration = forcedFull || changedFiles.some(filePath => taskInputMatches('integration', filePath, augurScan))
 	let reason = 'Selected direct scopes and expanded their verified local consumers.'
 	if (forcedFull) reason = 'A global or unknown path requires the full ordinary CI matrix.'
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'

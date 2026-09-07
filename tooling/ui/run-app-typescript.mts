@@ -1,17 +1,13 @@
 import * as process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { projectById, repositoryTaskProjects } from '../repo/projects.ts'
+import { taskProjects } from '../repo/projects.ts'
 
 export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
 const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
-const UI_TYPESCRIPT_PROJECTS = repositoryTaskProjects.typecheck
-	.filter(projectId => projectId.startsWith('ui-'))
-	.map(projectId => {
-		const project = projectById(projectId)
-		if (project === undefined) throw new Error(`Unknown UI TypeScript project ${projectId}`)
-		return `${project.path}/tsconfig.json`
-	})
+const UI_TYPESCRIPT_PROJECTS = taskProjects('typecheck')
+	.filter(project => project.path.startsWith('ui/'))
+	.map(project => `${project.path}/tsconfig.json`)
 
 type NodeOptionToken = {
 	readonly isValid: boolean

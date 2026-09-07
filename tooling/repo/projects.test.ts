@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { affectedProjects, componentProjects, projects, projectTaskNames, repositoryTaskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { affectedProjects, componentProjects, projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
 
@@ -25,15 +25,19 @@ test('registry records every independently checked component, including chaos', 
 	expect(() => validateProjectRegistry(projects)).not.toThrow()
 })
 
-test('registry tasks carry explicit working directories and canonical root task groups', () => {
+test('registry tasks carry explicit working directories and derive canonical task groups', () => {
 	for (const project of projects)
 		for (const taskName of projectTaskNames) {
 			const task = project.tasks[taskName]
 			if (task === undefined) continue
 			expect(task.cwd === '.' || task.cwd === project.path).toBe(true)
 		}
-	expect(repositoryTaskProjects.setup).toContain('ui-trading')
-	expect(repositoryTaskProjects.build.at(-1)).toBe('ui-trading')
-	expect(repositoryTaskProjects.test).toContain('chaos')
-	expect(repositoryTaskProjects['dependency-update']).toContain('ui-core')
+	expect(taskProjects('setup').map(project => project.id)).toContain('ui-trading')
+	expect(projectsInTaskGroup('build', 'ui').at(-1)?.id).toBe('ui-trading')
+	expect(taskProjects('test').map(project => project.id)).toContain('chaos')
+	expect(taskProjects('dependency-update').map(project => project.id)).toContain('ui-core')
+})
+
+test('dependency closure follows registry edges without hard-coded package lists', () => {
+	expect(projectDependencyClosure(['chaos']).map(project => project.id)).toEqual(['shared', 'contracts', 'bot-shared', 'chaos'])
 })

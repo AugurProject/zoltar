@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { componentProjects } from './projects.ts'
+import { componentProjects, projects, taskProjects, validateProjectRegistryFiles } from './projects.ts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '../..')
 const ignoredDirectories = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
@@ -30,4 +30,22 @@ test('every independently checked package has a component CI route', async () =>
 		if (!routedDirectories.has(packageDirectory)) missing.push(packageDirectory)
 	}
 	expect(missing, 'packages with a check script but no component CI route').toEqual([])
+})
+
+test('registry owns every independent package and its setup exactly once', async () => {
+	const manifestDirectories = (await findPackageManifests()).map(manifest => (manifest === 'package.json' ? '.' : path.posix.dirname(manifest))).sort()
+	const registeredPackageDirectories = projects
+		.filter(project => project.path === '.' || manifestDirectories.includes(project.path))
+		.map(project => project.path)
+		.sort()
+	expect(registeredPackageDirectories).toEqual(manifestDirectories)
+	expect(
+		taskProjects('setup')
+			.map(project => project.path)
+			.sort(),
+	).toEqual(manifestDirectories)
+})
+
+test('registry paths, local dependencies, cache inputs, and generated outputs are valid', () => {
+	expect(() => validateProjectRegistryFiles(repositoryRoot)).not.toThrow()
 })

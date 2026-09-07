@@ -14,6 +14,10 @@ test('project task plans preserve dependency order and explicit working director
 	])
 })
 
+test('project task plans derive their default membership from task support', () => {
+	expect(createProjectTaskPlan('build', undefined, registry).map(entry => entry.projectId)).toEqual(['domain', 'app'])
+})
+
 test('project task plans reject unknown projects and unsupported tasks', () => {
 	expect(() => createProjectTaskPlan('build', ['missing'], registry)).toThrow('Unknown project')
 	expect(() => createProjectTaskPlan('test', ['app'], registry)).toThrow('does not support test')

@@ -33,20 +33,13 @@ jobs:
           bun run ui:build:apps
           bun ./tooling/repo/install-frozen.mts ui/statoblast
           bun run ci:preflight:current
+      - name: Read canonical UI artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - uses: actions/upload-artifact@v4
         with:
           name: domain-production-ui
-          path: |
-            ui/coreShared/js
-            ui/zoltarDomain/js
-            ui/statoblastDomain/js
-            ui/tradingDomain/js
-            ui/zoltar/js
-            ui/statoblast/js
-            ui/trading/js
-            ui/zoltar/dist
-            ui/statoblast/dist
-            ui/trading/dist
+          path: ${{ steps.projects.outputs.ui_artifact_outputs }}
           if-no-files-found: error
           retention-days: 1
 
@@ -67,14 +60,7 @@ jobs:
           name: domain-production-ui
           path: ui
       - name: Refresh split UI package installs
-        run: |
-          bun ./tooling/repo/install-frozen.mts ui/coreShared
-          bun ./tooling/repo/install-frozen.mts ui/zoltarDomain
-          bun ./tooling/repo/install-frozen.mts ui/statoblastDomain
-          bun ./tooling/repo/install-frozen.mts ui/tradingDomain
-          bun ./tooling/repo/install-frozen.mts ui/zoltar
-          bun ./tooling/repo/install-frozen.mts ui/statoblast
-          bun ./tooling/repo/install-frozen.mts ui/trading
+        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - uses: actions/cache/restore@v5
         with:
           path: .ci/test-timings-application.json
