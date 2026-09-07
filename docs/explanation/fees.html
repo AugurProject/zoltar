@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Open Interest Fees</title>
+		<title>Protocol fees</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -14,7 +14,6 @@
 			</header>
 			<section>
 				<p>Vault owners provide REP-backed security capacity, maintain vault health, and may need to participate in reporting and migration. In return, fee-eligible capacity ownership earns a share of the time-based fees charged to outstanding complete-set collateral.</p>
-				<p>Complete-set holders pay through gradual decay of their pool's recorded settlement collateral. Fee-eligible vault owners earn in proportion to capacity ownership. State-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault's claim.</p>
 				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned capacity ownership. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
 				<p>Retention follows a piecewise heuristic. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
 				<p>At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>

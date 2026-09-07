@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Contract Interaction Map</title>
+		<title>Contract architecture</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -246,16 +246,6 @@
 						<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>
 					</li>
 				</ul>
-			</section>
-			<section id="actors-and-boundaries">
-				<h2>Actors, custody, and one operation</h2>
-				<p>The protocol consists of several participants with distinct responsibilities. Market creators configure security pools, traders mint and hold complete sets and outcome shares, vault owners provide REP backing, liquidators repair under-collateralized vaults, auction bidders recapitalize child pools after forks, keepers execute permissionless maintenance operations, and indexers reconstruct protocol state from emitted events.</p>
-
-				<p>Each contract handles a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator runs price-sensitive operations that need a REP/ETH price. Zoltar manages universes, questions, REP, and forks. An operation may involve several contracts, but that does not move every asset or piece of state between them.</p>
-
-				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Each contract changes only the state it manages, while emitted events let external indexers reconstruct the operation.</p>
-
-				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the custody and responsibility boundaries described above remain stable across deployments.</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
