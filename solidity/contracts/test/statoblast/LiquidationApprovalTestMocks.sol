@@ -52,6 +52,28 @@ contract Erc1271LiquidationReceiverMock is IERC1271 {
 }
 
 contract CoarseLiquidationRoundingHarness is SecurityPoolOperationsDelegate {
+	function configureBadDebtParticipants(address targetVault, address receiverVault, uint256 targetBadDebtAttoEth, uint256 receiverBadDebtAttoEth) external {
+		settlementCollateralAttoEth = 100;
+		feeEligibleCapacityOwnershipAttoRep = 100;
+		totalCapacityOwnershipAttoRep = 100;
+		totalRepBackingUnits = 1_010;
+		statoblastSecurityMultiplierBps = 20_000;
+		minimumSecurityBondDebtAttoEth = 1;
+		minimumVaultRepDepositAttoRep = 1;
+		securityVaults[targetVault].repBackingUnits = 10;
+		securityVaults[targetVault].capacityOwnershipAttoRep = 50;
+		securityVaults[receiverVault].repBackingUnits = 1_000;
+		securityVaults[receiverVault].capacityOwnershipAttoRep = 50;
+		_setVaultBadDebtAttoEth(targetVault, targetBadDebtAttoEth);
+		_setVaultBadDebtAttoEth(receiverVault, receiverBadDebtAttoEth);
+		totalBadDebtAttoEth = targetBadDebtAttoEth + receiverBadDebtAttoEth;
+	}
+
+	function advanceBadDebtGeneration() external {
+		totalBadDebtAttoEth = 0;
+		badDebtGeneration++;
+	}
+
 	function configure(address targetVault, address receiverVault) external {
 		settlementCollateralAttoEth = 1;
 		feeEligibleCapacityOwnershipAttoRep = 2;

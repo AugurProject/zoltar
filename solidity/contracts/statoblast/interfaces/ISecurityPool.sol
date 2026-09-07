@@ -172,6 +172,7 @@ interface ISecurityPool {
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external;
 
+	function getFeeEpochEndTime() external view returns (uint256);
 	function updateSettlementCollateral() external;
 	function updateRetentionRate() external;
 	function updateVaultFees(address vault) external;

@@ -18,9 +18,14 @@ import { getForkActivationTime } from '../../testSupport/simulator/utils/contrac
 import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { rpow } from '../../testSupport/simulator/utils/bigint'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 
 describe('Statoblast: truth auction', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
+	const poolStorageLayout = normalizeStorageLayout(getContractOutput(loadContractsJson(`${import.meta.dir}/..`), 'contracts/statoblast/SecurityPool.sol', 'SecurityPool'))
+	const feeEpochStorage = poolStorageLayout.find(entry => entry.label === 'feeEpochEndTime')
+	if (feeEpochStorage === undefined) throw new Error('SecurityPool storage layout is missing feeEpochEndTime')
+	const feeEpochEndTimeStorageSlot = BigInt(feeEpochStorage.slot)
 
 	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
 
@@ -873,8 +878,10 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), legitimateCollateral, 'forced ETH must remain outside protocol-accounted collateral')
 			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), forcedBalance, 'forced ETH should remain an unaccounted pool surplus')
 
+			const feesBeforeCheckpoint = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await redeemFees(client, yesSecurityPool.securityPool, addressString(TEST_ADDRESSES[6]))
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), legitimateCollateral, 'zero-fee redemption must not reclassify forced ETH as collateral')
+			const checkpointFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - feesBeforeCheckpoint
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), legitimateCollateral - checkpointFeeDelta, 'fee checkpointing must not reclassify forced ETH as collateral')
 		})
 
 		test('forced ETH during bidding stays outside collateral while auction proceeds remain accounted', async () => {
@@ -1560,6 +1567,7 @@ describe('Statoblast: truth auction', () => {
 			const migratedFeesAtIndexOne = migratedCapacityOwnershipAttoRep / PRICE_PRECISION
 			const aggregateOnlyReserveAttoEth = PRICE_PRECISION
 			const migratedVaultFeeIndexSlot = getMappingStorageSlot(client.account.address, 16n) + 3n
+			const feeEpochEndTime = (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'getPoolAccountingSnapshot', args: [] })).lastUpdatedFeeAccumulator
 			await mockWindow.addStateOverrides({
 				[yesSecurityPool.securityPool]: {
 					stateDiff: {
@@ -1567,6 +1575,7 @@ describe('Statoblast: truth auction', () => {
 						[formatStorageSlot(11n)]: auctionFeesAtIndexOne + migratedFeesAtIndexOne + aggregateOnlyReserveAttoEth,
 						[formatStorageSlot(13n)]: auctionedCapacityOwnershipAttoRep + migratedCapacityOwnershipAttoRep,
 						[formatStorageSlot(20n)]: BigInt(SystemState.PoolForked),
+						[formatStorageSlot(feeEpochEndTimeStorageSlot)]: feeEpochEndTime,
 						[formatStorageSlot(migratedVaultFeeIndexSlot)]: 0n,
 					},
 				},
@@ -2363,13 +2372,15 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep > 0n, true, 'capacity ownership')
 			strictEqualTypeSafe(totalAttoRepPurchased > 0n, true, 'test setup should leave finalized auction REP for the bidder to claim')
 
+			const childFeesBeforeClaim = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await claimAuctionProceeds(settlementCaller, yesSecurityPool.securityPool, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
+			const claimFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - childFeesBeforeClaim
 
 			const targetVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			const targetRepAfterClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, targetVaultAfterClaim.repBackingUnits)
 
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation, 'claim timing should not change child collateral totals after liquidation')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralAfterLiquidation - claimFeeDelta, 'claim timing should change child collateral only by current fees after liquidation')
 			strictEqualTypeSafe(await getTotalCapacityOwnershipAttoRep(client, yesSecurityPool.securityPool), childCapacityOwnershipAttoRepAfterLiquidation, 'capacity ownership')
 			strictEqualTypeSafe(targetRepAfterClaim - targetRepAfterLiquidation, totalAttoRepPurchased, 'the original bidder should still receive the full finalized auction REP after their migrated vault was liquidated')
 			strictEqualTypeSafe(targetVaultAfterClaim.capacityOwnershipAttoRep - targetVaultAfterLiquidation.capacityOwnershipAttoRep, forkDataBeforeClaim.auctionedCapacityOwnershipAttoRep, 'capacity ownership')
@@ -2377,6 +2388,9 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(liquidatorVaultAfterClaim.capacityOwnershipAttoRep, liquidatorVaultAfterLiquidation.capacityOwnershipAttoRep, 'capacity ownership')
 
 			await mockWindow.advanceTime(DAY)
+			await mockWindow.addStateOverrides({
+				[yesSecurityPool.securityPool]: { stateDiff: { [formatStorageSlot(feeEpochEndTimeStorageSlot)]: (await client.getBlock()).timestamp } },
+			})
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			await updateVaultFees(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
 			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'capacity ownerships')
@@ -2487,6 +2501,10 @@ describe('Statoblast: truth auction', () => {
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			await mockWindow.advanceTime(DAY)
+			const feeEpochEndTime = (await client.getBlock()).timestamp
+			await mockWindow.addStateOverrides({
+				[yesSecurityPool.securityPool]: { stateDiff: { [formatStorageSlot(feeEpochEndTimeStorageSlot)]: feeEpochEndTime } },
+			})
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			await updateVaultFees(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			approximatelyEqual(await getTotalAccruedFees(client, yesSecurityPool.securityPool), await getTotalClaimableVaultFeesAttoEth(client, yesSecurityPool.securityPool), 1n, 'capacity ownership')
@@ -2530,7 +2548,9 @@ describe('Statoblast: truth auction', () => {
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			strictEqualTypeSafe(participantVault.feeIndex, migratedVaultBeforeClaim.feeIndex, 'newly auction-funded vaults should inherit the current child-pool fee index')
+			const feeIndexAfterClaim = (await client.readContract({ address: yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getPoolAccountingSnapshot', args: [] })).feeIndex
+			assert.ok(feeIndexAfterClaim >= migratedVaultBeforeClaim.feeIndex, 'the child fee index must not move backward while the claim is mined')
+			strictEqualTypeSafe(participantVault.feeIndex, feeIndexAfterClaim, 'newly auction-funded vaults should inherit the current child-pool fee index')
 			const [associatedRepPerCapacityBps, poolHeldRepPerCapacityBps] = await client.readContract({
 				address: yesSecurityPool.securityPool,
 				abi: statoblast_SecurityPool_SecurityPool.abi,

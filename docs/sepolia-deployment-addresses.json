@@ -22,7 +22,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x8DB352C8E81fa2AB364B98e87fA018179c188239"
+			"address": "0x51485Fa0618eaeC9608f7712a0fBd69002eA6D13"
 		},
 		{
 			"id": "weth",
@@ -52,7 +52,7 @@
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x132bE08534a074242Be03FD46558f97AC8891048"
+			"address": "0x9DBbCa339c705e0d9B29787cc7b955B568050821"
 		},
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
@@ -67,7 +67,7 @@
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0xB5D404abEEB1F68CDe11FB6c17a75010170941E3"
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
 		},
 		{
 			"id": "openOracle",
@@ -77,7 +77,7 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x3d4D0c4cACbbae0E3d4B885ce21360158Fa501C9"
+			"address": "0xCceb832cA43Aa70AD2Ea5F91eE40EC7C4e1D7088"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
@@ -87,7 +87,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xa88a22dAD9F1a5B256c61AC1939BB463D0d2Ea83"
+			"address": "0xaF685816b64F0C9Ed3D428eF48C6CF97bFDce52A"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -102,14 +102,14 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xC4D579Acb7DDb5ae5751da7F7310D3c3B9CDfe26"
+			"address": "0x6828b76fBEeC4c380e732F70c6bee5191f268F1d"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xa88a22dAD9F1a5B256c61AC1939BB463D0d2Ea83"
+			"address": "0xaF685816b64F0C9Ed3D428eF48C6CF97bFDce52A"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -124,12 +124,12 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xC4D579Acb7DDb5ae5751da7F7310D3c3B9CDfe26"
+			"address": "0x6828b76fBEeC4c380e732F70c6bee5191f268F1d"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0xB5D404abEEB1F68CDe11FB6c17a75010170941E3"
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
 		},
 		{
 			"id": "escalationGameProofVerifier",

@@ -1,5 +1,5 @@
 {
-  "sourceHash": "ceeb0d05ba3cc832b58dc701b7d26f47a54869d241b72735a9917e7d1eb820d4",
+  "sourceHash": "54378bcaef11168da10d61dc84661bb7a47712a962a937b6f9b6b93b51265ef7",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -17825,6 +17825,19 @@
         },
         {
           "inputs": [],
+          "name": "getFeeEpochEndTime",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "getPoolAccountingSnapshot",
           "outputs": [
             {
@@ -23854,6 +23867,79 @@
             {
               "internalType": "uint256",
               "name": "badDebtAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract IShareToken",
+              "name": "shareToken",
+              "type": "address"
+            },
+            {
+              "internalType": "uint248",
+              "name": "universeId",
+              "type": "uint248"
+            },
+            {
+              "internalType": "address",
+              "name": "redeemer",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amountAttoShares",
+              "type": "uint256"
+            }
+          ],
+          "name": "redeemCompleteSet",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "settlementCollateralRedeemedAttoEth",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "contract IShareToken",
+              "name": "shareToken",
+              "type": "address"
+            },
+            {
+              "internalType": "contract ISecurityPoolForker",
+              "name": "forker",
+              "type": "address"
+            },
+            {
+              "internalType": "uint248",
+              "name": "universeId",
+              "type": "uint248"
+            },
+            {
+              "internalType": "address",
+              "name": "redeemer",
+              "type": "address"
+            }
+          ],
+          "name": "redeemShares",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "winningSharesBurnedAttoShares",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "settlementCollateralRedeemedAttoEth",
               "type": "uint256"
             }
           ],
@@ -31922,6 +32008,19 @@
         {
           "inputs": [],
           "name": "getCurrentMintingCapacityAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "getFeeEpochEndTime",
           "outputs": [
             {
               "internalType": "uint256",

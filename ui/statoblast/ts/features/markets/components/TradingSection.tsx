@@ -114,7 +114,7 @@ export function TradingSection({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
 		feeEligibleCapacityOwnershipAttoRep: selectedPool?.feeEligibleCapacityOwnershipAttoRep,
-		feeEndTimestamp: selectedPool?.marketDetails.endTime,
+		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
 		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: selectedPool?.feeAccrualState?.lastUpdatedFeeAccumulator,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,

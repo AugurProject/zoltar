@@ -138,6 +138,8 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolOperationsDelegate', 'performBundledLiquidation', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall; a direct call uses isolated delegate storage.'),
 	entry('SecurityPoolOperationsDelegate', 'resumeForkedEscalationGame', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool resumption entrypoint.'),
 	entry('SecurityPoolOperationsDelegate', 'setVaultCapacity', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall during a checked vault deposit.'),
+	entry('SecurityPoolOperationsDelegate', 'redeemCompleteSet', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool complete-set redemption entrypoint.'),
+	entry('SecurityPoolOperationsDelegate', 'redeemShares', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool winning-share redemption entrypoint.'),
 	entry('SecurityPoolOperationsDelegate', 'createCompleteSet', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool complete-set entrypoint.'),
 	entry('SecurityPoolOperationsDelegate', 'setValidatedSettlementCollateral', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall after collateral validation.'),
 	entry('SecurityPoolForkEventEmitter', 'emitForkSnapshotEvents', 'excluded-dangerous', undefined, 'Direct calls can emit unauthenticated lookalike protocol events; only a canonical forker delegatecall is meaningful.'),

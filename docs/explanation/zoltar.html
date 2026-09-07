@@ -163,24 +163,24 @@
 					<h2>3. Fork Thresholds and REP Economics</h2>
 					<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 				</div>
-				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThresholdAttoRep</code>: the parent universe's theoretical REP supply divided by the configured threshold divisor, rounded down. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
+				<p>To trigger a Zoltar fork, the caller must commit the <code>forkThresholdAttoRep</code>: the parent universe's live theoretical REP supply divided by the configured threshold divisor, rounded up. This keeps the fork cost positive for every nonzero-supply universe. The REP threshold and haircut are the intended admission cost for a fork, including unnecessary forks that impose migration work on applications using that universe.</p>
 				<p>Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.</p>
 				<div class="equation" id="eq-zoltar-fork-threshold">
-					<math display="block" aria-label="fork threshold equals the rounded-down total theoretical REP supply divided by fork threshold divisor" data-source="forkThresholdAttoRep = ⌊totalTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌋">
+					<math display="block" aria-label="fork threshold equals the rounded-up live theoretical REP supply divided by fork threshold divisor" data-source="forkThresholdAttoRep = ⌈liveTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌉">
 						<mrow>
 							<mi>forkThresholdAttoRep</mi>
 							<mo>=</mo>
 							<mrow>
-								<mo form="prefix" stretchy="true">⌊</mo>
+								<mo form="prefix" stretchy="true">⌈</mo>
 								<mfrac>
-									<mi>totalTheoreticalRepSupplyAttoRep</mi>
+									<mi>liveTheoreticalRepSupplyAttoRep</mi>
 									<mi>forkThresholdDivisor</mi>
 								</mfrac>
-								<mo form="postfix" stretchy="true">⌋ </mo>
+								<mo form="postfix" stretchy="true">⌉ </mo>
 							</mrow>
 						</mrow>
 					</math>
-					<p class="equation-note">With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
+					<p class="equation-note">With the default divisor of <code>20</code>, this is approximately 5% of live theoretical REP supply, subject to integer ceiling.</p>
 				</div>
 				<p>Triggering a fork removes the full fork threshold from the parent universe. `forkUniverse` removes `forkThresholdAttoRep` of parent REP and reduces the parent universe's theoretical REP supply by the same amount.</p>
 

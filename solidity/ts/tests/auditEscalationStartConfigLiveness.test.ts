@@ -74,7 +74,9 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the liveness PoC must isolate a 40 REP tracked-supply boundary',
 		)
 		assert.strictEqual(await readNonDecisionThreshold(), reportBond, 'the live non-decision threshold must equal the 1 REP start bond')
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n), /Escalation threshold too low/)
+		// A newly deployed pool must use the same reduced live supply for its bond,
+		// so the tracked threshold remains safely above that pool's start bond.
+		await deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n)
 
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)
