@@ -2,7 +2,7 @@ import * as process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
-const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url))
+const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
 const UI_TYPESCRIPT_PROJECTS = ['ui/coreShared/tsconfig.json', 'ui/zoltarDomain/tsconfig.json', 'ui/statoblastDomain/tsconfig.json', 'ui/tradingDomain/tsconfig.json', 'ui/zoltar/tsconfig.json', 'ui/statoblast/tsconfig.json', 'ui/trading/tsconfig.json'] as const
 

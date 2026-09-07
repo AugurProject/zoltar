@@ -49,5 +49,5 @@
 		}
 	},
 	"ignoreDependencies": ["better-typescript-lib", "@preact/signals", "tevm", "@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "funtypes", "solc-0-8-28"],
-	"ignoreUnresolved": ["./bun-test-setup-ui.ts", "../../scripts/sharedBrowserArtifacts.ts"]
+	"ignoreUnresolved": ["./bun-test-setup-ui.ts"]
 }

@@ -4,7 +4,7 @@ import * as url from 'node:url'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
-import { sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
+import { sharedBrowserArtifactRelativePaths } from '../tooling/ui/sharedBrowserArtifacts.ts'
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRoot = path.join(scriptDirectory, '..')

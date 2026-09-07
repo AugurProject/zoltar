@@ -6,7 +6,7 @@ export const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', '
 export { preactSingletonDependencyPaths }
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..')
+const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 
 export async function ensureUiPreactSingleton(rootPath = repositoryRootPath) {
 	for (const packageId of uiPackageIds) shareUiPreactRuntime(path.join(rootPath, 'ui', packageId))

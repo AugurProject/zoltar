@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import * as path from 'node:path'
-import { shareUiPreactRuntime } from './share-ui-preact-runtime.mjs'
+import { shareUiPreactRuntime } from '../tooling/ui/share-ui-preact-runtime.mjs'
 
 const installDirectory = process.argv[2] === undefined ? process.cwd() : path.resolve(process.cwd(), process.argv[2])
 const packageJsonPath = path.join(installDirectory, 'package.json')

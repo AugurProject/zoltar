@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const repositoryRoot = join(import.meta.dir, '..')
+const repositoryRoot = join(import.meta.dir, '..', '..')
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')

@@ -2,13 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 
-const dockerfile = join(import.meta.dir, '..', 'ui', 'Dockerfile')
-const dockerignore = join(import.meta.dir, '..', '.dockerignore')
-const ipfsDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'ipfs-deploy.yml')
-const versionDeployWorkflow = join(import.meta.dir, '..', '.github', 'workflows', 'version-deploy.yml')
-const publisherEntrypoint = join(import.meta.dir, '..', 'ui', 'coreShared', 'scripts', 'docker-entrypoint.sh')
-const rootPackage = join(import.meta.dir, '..', 'package.json')
-const staticServer = join(import.meta.dir, '..', 'tooling', 'ui', 'dockerServe.mts')
+const repositoryRoot = join(import.meta.dir, '..', '..')
+const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
+const dockerignore = join(repositoryRoot, '.dockerignore')
+const ipfsDeployWorkflow = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')
+const versionDeployWorkflow = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
+const publisherEntrypoint = join(repositoryRoot, 'ui', 'coreShared', 'scripts', 'docker-entrypoint.sh')
+const rootPackage = join(repositoryRoot, 'package.json')
+const staticServer = join(repositoryRoot, 'tooling', 'ui', 'dockerServe.mts')
 
 describe('UI Docker packaging', () => {
 	test('only copies tracked build inputs and invokes existing UI build scripts', async () => {

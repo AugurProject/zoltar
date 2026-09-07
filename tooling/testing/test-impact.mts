@@ -52,7 +52,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		matches: filePath => filePath === '.coverage-policy.json' || filePath === 'tooling/testing/coverage-report.mts' || filePath === 'tooling/testing/run-typescript-coverage.mts' || filePath === 'tooling/testing/run-solidity-bytecode-coverage.mts',
 	},
 	{
-		command: 'bun test scripts/ui-split-workflows.test.ts',
+		command: 'bun test tooling/ui/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
 		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === '.github/workflows/browser-workflow.yml' || filePath === '.github/workflows/coverage.yml' || filePath === '.github/workflows/test-domains.yml' || filePath === '.github/workflows/test-stability.yml' || filePath === 'workflow/coverage.yml',
 	},

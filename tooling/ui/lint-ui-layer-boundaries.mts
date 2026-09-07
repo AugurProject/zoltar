@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
 
-const projectRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
+const projectRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'zoltar', 'statoblast', 'trading'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const repositoryRoot = join(import.meta.dir, '..')
+const repositoryRoot = join(import.meta.dir, '..', '..')
 
 const apps = [
 	{ id: 'zoltar', port: 8012 },
