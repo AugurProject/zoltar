@@ -157,7 +157,7 @@ function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedPro
 	if (state.profileId === expectedProfileId) return false
 	if (!isPristineBootstrapState(state)) {
 		const retirementAllowsReplacement = state.retirement.status === 'drained' || (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId === expectedProfileId)
-		if (!retirementAllowsReplacement) throw new Error(`Durable state ${stateFile} contains signer, workflow, obligation, recovery, or audit history for deployment profile ${state.profileId}; drain it first or configure a distinct state file for ${expectedProfileId}`)
+		if (!retirementAllowsReplacement) throw new Error(`Durable state ${stateFile} contains signer, workflow, obligation, recovery, or audit history for deployment profile ${state.profileId}; drain it first or configure a distinct state file for the new deployment profile ${expectedProfileId}`)
 	}
 	resetRuntimeStateForProfile(state, expectedProfileId, paused, wallet)
 	return true
