@@ -1815,9 +1815,13 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					const contract = parameters.contracts[index]
 					if (contract === undefined) throw new Error('Missing multicall contract response')
 					const abiItem = getNamedFunctionAbi(contract.abi, contract.functionName, contract.args)
-					return {
-						result: decodeFunctionOutput(abiItem, entry.returnData as Hex),
-						status: 'success',
+					try {
+						return {
+							result: decodeFunctionOutput(abiItem, entry.returnData as Hex),
+							status: 'success',
+						}
+					} catch (error) {
+						return { error, status: 'failure' }
 					}
 				}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 			}

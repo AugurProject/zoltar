@@ -886,11 +886,13 @@ export function useLiveTradingController({
 
 	function selectMarket(market: LiveMarket) {
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
-		balanceRequests.invalidate()
+		if (selected?.pool.toLowerCase() !== market.pool.toLowerCase()) {
+			balanceRequests.invalidate()
+			setBalances(undefined)
+			setBalanceState(account === undefined ? 'disconnected' : 'loading')
+			setBalanceError(undefined)
+		}
 		simulationRequests.invalidate()
-		setBalances(undefined)
-		setBalanceState(account === undefined ? 'disconnected' : 'loading')
-		setBalanceError(undefined)
 		setSelectedPool(market.pool)
 		setQuote(undefined)
 		setState('idle')

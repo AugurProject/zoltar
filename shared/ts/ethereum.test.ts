@@ -2979,6 +2979,51 @@ describe('shared ethereum compatibility layer', () => {
 		})
 	}
 
+	for (const allowFailure of [true, false] as const) {
+		test(`multicall isolates undecodable entries only when allowFailure is ${allowFailure.toString()}`, async () => {
+			const data = encodeAbiParameters(
+				[
+					{
+						type: 'tuple[]',
+						components: [
+							{ name: 'success', type: 'bool' },
+							{ name: 'returnData', type: 'bytes' },
+						],
+					},
+				],
+				[
+					[
+						[true, encodeAbiParameters([{ type: 'uint256' }], [7n])],
+						[true, '0x'],
+						[true, '0x1234'],
+						[true, encodeAbiParameters([{ type: 'uint256' }], [9n])],
+					],
+				],
+			)
+			const client = createPublicClient({ transport: custom(createProvider(() => data, [])) })
+			const result = client.multicall({
+				allowFailure,
+				contracts: Array.from({ length: 4 }, () => ({ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [OWNER_ADDRESS] as const, functionName: 'balanceOf' })),
+				multicallAddress: MULTICALL_ADDRESS,
+			})
+			if (!allowFailure) {
+				await expect(result).rejects.toThrow()
+				return
+			}
+			await expect(result).resolves.toEqual([
+				{ status: 'success', result: 7n },
+				{ status: 'failure', error: expect.any(Error) },
+				{ status: 'failure', error: expect.any(Error) },
+				{ status: 'success', result: 9n },
+			])
+		})
+
+		test(`multicall rejects malformed aggregate data when allowFailure is ${allowFailure.toString()}`, async () => {
+			const client = createPublicClient({ transport: custom(createProvider(() => '0x1234', [])) })
+			await expect(client.multicall({ allowFailure, contracts: [{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [OWNER_ADDRESS], functionName: 'balanceOf' }], multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow()
+		})
+	}
+
 	test('wallet client uses rpc sendTransaction for json-rpc accounts and raw signing for local accounts', async () => {
 		const remoteCalls: { method: string; params: unknown }[] = []
 		const remoteProvider = createProvider(({ method, params }) => {
