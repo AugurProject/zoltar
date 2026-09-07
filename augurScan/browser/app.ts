@@ -4774,18 +4774,17 @@ const rowFor = (log: ActivityRecord) => {
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
 	const blockLink = explorerLink(log.explorer_base_url, 'block', log.block_number, `#${number(log.block_number)}`)
-	blockLink.className = 'address-link'
+	blockLink.className = 'address-link activity-target'
 	chain.append(blockLink, openCue)
 	const timestamp = element('time', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
 	timestamp.dataset.time = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
-	const contract = element('span', 'cell')
 	const contractLink = explorerLink(log.explorer_base_url, 'address', log.emitter_address, log.contract_label ?? short(log.emitter_address, 10, 8))
-	contractLink.className = 'contract-name address-link'
+	contractLink.className = 'cell address-link activity-target activity-contract-link'
 	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
-	contract.append(
-		contractLink,
+	contractLink.replaceChildren(
+		element('span', 'contract-name', log.contract_label ?? short(log.emitter_address, 10, 8)),
 		element('span', 'contract-address', short(log.emitter_address)),
 		element('span', 'contract-category', log.contract_kind ?? 'Protocol contract'),
 	)
@@ -4793,15 +4792,15 @@ const rowFor = (log: ActivityRecord) => {
 	event.type = 'button'
 	event.setAttribute('aria-label', `Open ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
 	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
-	tx.className = 'cell cell-tx'
-	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link', compact: true })
+	tx.className = 'cell cell-tx activity-target'
+	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link activity-target', compact: true })
 	const integrity = element(
 		'span',
 		`cell log-integrity ${log.canonical ? 'is-canonical' : 'is-noncanonical'}`,
 		log.canonical ? (log.finalized ? 'Final canonical' : 'Canonical') : 'Noncanonical',
 	)
 	integrity.title = `Decode status: ${log.decode_status}`
-	row.append(chain, timestamp, contract, event, tx, origin, integrity)
+	row.append(chain, timestamp, contractLink, event, tx, origin, integrity)
 	row.addEventListener('click', (clickEvent: MouseEvent) => {
 		if (clickEvent.target instanceof HTMLAnchorElement) return
 		openDetail(log)
@@ -4952,7 +4951,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		const visibleCount = visibleActivityLogCount(feed)
 		feedState.hidden = visibleCount > 0
 		if (visibleCount === 0) feedState.textContent = 'No project logs match these filters yet.'
-		$('#activity-summary').textContent = visibleCount === 0 ? 'No logs shown' : `${visibleCount} log${visibleCount === 1 ? '' : 's'} shown`
+		$('#activity-summary').textContent = visibleCount === 0 ? '' : `${visibleCount} log${visibleCount === 1 ? '' : 's'} shown`
 		return true
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') return false

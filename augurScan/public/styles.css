@@ -1554,6 +1554,14 @@ button[aria-busy="true"]:disabled {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+.activity-target {
+	min-width: 0;
+	min-height: var(--control-height);
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	white-space: nowrap;
+}
 .chain-block {
 	display: flex;
 	align-items: center;
@@ -1563,6 +1571,7 @@ button[aria-busy="true"]:disabled {
 		monospace;
 }
 .chain-block > :first-child {
+	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1586,6 +1595,31 @@ button[aria-busy="true"]:disabled {
 .contract-name {
 	font-size: 0.8125rem;
 	font-weight: 650;
+}
+.activity-contract-link {
+	flex-wrap: wrap;
+	align-content: center;
+	column-gap: 0.35rem;
+	text-decoration: none;
+}
+.activity-contract-link > * {
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.activity-contract-link .contract-name {
+	text-decoration: underline;
+	text-decoration-color: color-mix(in srgb, var(--cyan) 55%, transparent);
+	text-underline-offset: 0.2em;
+}
+.activity-contract-link .contract-address {
+	margin-left: 0;
+}
+.activity-contract-link .contract-category {
+	flex-basis: 100%;
+	margin-top: 0;
 }
 .contract-address {
 	margin-left: 0.35rem;
