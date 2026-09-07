@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '783f39dcbfecb00949b9b4bc562177457dc0c94edc0d96b4ee14390783925bfa'
+export const expectedProductionSoliditySourceFingerprint = 'cde3d26bb3b93d8c90ada9da488bde6f9d224ec78113f7fc3d1ba4b59ea25571'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -57,6 +57,7 @@ export const eventSourceByName: Record<string, string> = {
 	ChildPoolLinked: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
 	PoolHeldRepSweptToChild: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	ChildRepSplit: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
+	ChildReputationTokenInitialized: 'solidity/contracts/Zoltar.sol',
 	ClaimAuctionProceeds: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	ClaimDeposit: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
@@ -109,6 +110,7 @@ export const eventSourceByName: Record<string, string> = {
 	QuestionCreated: 'solidity/contracts/ZoltarQuestionData.sol',
 	RepRedeemedFromVault: 'solidity/contracts/statoblast/SecurityPool.sol',
 	RepBurned: 'solidity/contracts/Zoltar.sol',
+	ReputationTokenInitialized: 'solidity/contracts/ReputationToken.sol',
 	RepEthPriceSet: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	ForkContinuationResidualRepBurned: 'solidity/contracts/statoblast/EscalationGameState.sol',
@@ -132,6 +134,8 @@ export const eventSourceByName: Record<string, string> = {
 	VaultLiquidated: 'solidity/contracts/statoblast/SecurityPool.sol',
 	VaultEscrowUpdated: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	VaultUnresolvedTotalsExported: 'solidity/contracts/statoblast/EscalationGameState.sol',
+	AuthorizationCanceled: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
+	AuthorizationUsed: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
 }
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
@@ -176,6 +180,11 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
+		name: 'ChildReputationTokenInitialized',
+		parameters: 'uint248 indexed universeId,ReputationToken indexed reputationToken,uint256 indexed repNumber',
+		sourcePath: 'solidity/contracts/Zoltar.sol',
+	},
+	{
 		name: 'SecurityPoolRegistered',
 		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,ISecurityPool securityPool',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
@@ -217,11 +226,26 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameForker.sol',
 	},
 	{ name: 'TheoreticalSupplySet', parameters: 'uint256 totalTheoreticalSupplyAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
+	{
+		name: 'ReputationTokenInitialized',
+		parameters: 'uint248 indexed universeId,uint256 indexed repNumber,string name,string symbol,uint256 totalTheoreticalSupplyAttoRep',
+		sourcePath: 'solidity/contracts/ReputationToken.sol',
+	},
 	{ name: 'Mint', parameters: 'address indexed account,uint256 valueAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
 	{
 		name: 'Burn',
 		parameters: 'address indexed account,uint256 valueAttoRep,uint256 totalTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
+	},
+	{
+		name: 'AuthorizationUsed',
+		parameters: 'address indexed authorizer,bytes32 indexed nonce',
+		sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
+	},
+	{
+		name: 'AuthorizationCanceled',
+		parameters: 'address indexed authorizer,bytes32 indexed nonce',
+		sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
 	},
 	{
 		name: 'AwaitingForkContinuationSet',
@@ -330,7 +354,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'b75943e2fff5b833f695d6811b9b752ee17cbe35fd8b25dd2549fcbb00998bf8'
+export const referencedEventAbiFingerprint = 'f9989bc588d62f188f0f5e266fe06a751d9aafce752cd552380f2bb35d52897b'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -343,15 +367,27 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/Zoltar.sol': {
 		addRepToMigrationBalance: ['public(uint248,uint256)'],
+		addRepToMigrationBalanceWithAuthorization: ['external(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+		addRepToMigrationBalanceWithPermit: ['external(uint248,uint256,uint256,uint8,bytes32,bytes32)'],
 		burnRep: ['external(uint248,uint256)'],
+		burnRepWithAuthorization: ['external(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+		burnRepWithPermit: ['external(uint248,uint256,uint256,uint8,bytes32,bytes32)'],
 		deployChild: ['public(uint248,uint256)'],
 		forkUniverse: ['public(uint248,uint256)'],
+		forkUniverseWithAuthorization: ['external(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+		forkUniverseWithPermit: ['external(uint248,uint256,uint256,uint8,bytes32,bytes32)'],
 		splitMigrationRep: ['public(uint248,uint256,uint256[])'],
 	},
 	'solidity/contracts/ReputationToken.sol': {
 		burn: ['external(address,uint256)'],
+		initialize: ['external(uint248,uint256,uint256)'],
 		mint: ['external(address,uint256)'],
-		setMaxTheoreticalSupplyAttoRep: ['external(uint256)'],
+	},
+	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': {
+		cancelAuthorization: ['external(address,bytes32,uint8,bytes32,bytes32)'],
+		permit: ['external(address,address,uint256,uint256,uint8,bytes32,bytes32)'],
+		receiveWithAuthorization: ['external(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+		transferWithAuthorization: ['external(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
 	},
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': {
 		deployChildSecurityPool: ['external(ISecurityPool,IShareToken,uint248,uint256,uint256,uint256,uint256)'],
@@ -479,8 +515,8 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
-	'solidity/contracts/ReputationToken.sol': 'b3e68791ded4f7fd9cc70785bdd3c55d5ec7fde5ad64b7fbe8aee03d5d273e3b',
-	'solidity/contracts/Zoltar.sol': '6479e6b24905f8f3299e486703df934aa7811152a9d20517596da64cbcd4b471',
+	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
+	'solidity/contracts/Zoltar.sol': '8d588dcdad4b8a646f0fcb6304891cab250b0b9ae7c694a9cf4c2fb4cde73e8a',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': '22346007107d60d8dac5545122037fa8bc457ac604c733c03edd992276604e85',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -499,6 +535,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '618aed7f3f8bdfd50267b9d7533db3f489f45715f1cd448f5107f67631814d34',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '2a3339ca5db0ccabc2bc10318ff3baf52273b90837f01683d3e5147a13fd2d0d',
+	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
@@ -542,12 +579,12 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '023e5a38bcf613044e07d23e84095e1125be871017388a0c5a6cf7a41958b350',
+		compiledAbiFingerprint: '58a39fda8fd00d2448a493854e8dbfb9d7cd8f3178f80614b3d53f6057bb6950',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: '1916e3480c70c4ccd5962f4b8069988d7dc36f0ea89337ebe04b8bca089d1492',
+		readAbiFingerprint: 'c908994972ca4e8bcf1a44c288dcc830dc9a8bbb1e0a6f85a55f051d96703887',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getBoundAuthorizationNonce` to reconstruct universe and migration state or prepare a recipient-bound authorization. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -559,8 +596,9 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'getChildUniverseId' },
 			{ name: 'getDeployedChildUniverses' },
 			{ name: 'getMigrationRepBalanceAttoRep' },
+			{ name: 'getBoundAuthorizationNonce' },
 		],
-		readStorageDeclarations: [{ name: 'universes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
+		readStorageDeclarations: [{ name: 'universes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }, { name: 'childReputationTokenCount' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
@@ -572,6 +610,22 @@ export const contractReferences: ContractReference[] = [
 				signals: '`UniverseForked`',
 			},
 			{
+				call: '`forkUniverseWithPermit(universeId, questionId, deadline, v, r, s)`',
+				caller: 'Genesis REP holder supplying an ERC-2612 signature',
+				effect: 'Attempts the exact fork-threshold permit and then performs the same fork as `forkUniverse`; an already mined permit remains usable when the exact allowance is present.',
+				declarations: [{ name: 'forkUniverseWithPermit' }],
+				preconditions: 'The universe uses genesis REP; the permit is valid or an existing allowance covers the threshold; ordinary fork prerequisites still hold.',
+				signals: '`Approval`, then `UniverseForked` and token transfer events',
+			},
+			{
+				call: '`forkUniverseWithAuthorization(owner, universeId, questionId, validAfter, validBefore, nonce, v, r, s)`',
+				caller: 'Any relayer presenting the REP owner\'s valid ERC-3009 authorization',
+				effect: 'Receives exactly the fork threshold into Zoltar under an operation- and owner-bound nonce, burns it, and credits the named owner with migration REP.',
+				declarations: [{ name: 'forkUniverseWithAuthorization' }],
+				preconditions: 'The REP token supports ERC-3009; authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary fork prerequisites hold.',
+				signals: '`AuthorizationUsed`, `UniverseForked`, and token transfer events',
+			},
+			{
 				call: '`burnRep(universeId, amountAttoRep)`',
 				caller: 'Any REP holder; the caller can burn only its own balance',
 				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.',
@@ -580,12 +634,28 @@ export const contractReferences: ContractReference[] = [
 				signals: '`RepBurned` and the token burn or transfer event',
 			},
 			{
+				call: '`burnRepWithPermit(universeId, amountAttoRep, deadline, v, r, s)`',
+				caller: 'Genesis REP holder supplying an ERC-2612 signature',
+				effect: 'Attempts an exact-amount permit and burns the caller\'s REP without migration credit.',
+				declarations: [{ name: 'burnRepWithPermit' }],
+				preconditions: 'The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; ordinary burn prerequisites hold.',
+				signals: '`Approval`, `RepBurned`, and token transfer events',
+			},
+			{
+				call: '`burnRepWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)`',
+				caller: 'Any relayer presenting the REP owner\'s valid ERC-3009 authorization',
+				effect: 'Receives and burns exactly the signed amount under an operation- and owner-bound nonce.',
+				declarations: [{ name: 'burnRepWithAuthorization' }],
+				preconditions: 'The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary burn prerequisites hold.',
+				signals: '`AuthorizationUsed`, `RepBurned`, and token transfer events',
+			},
+			{
 				call: '`deployChild(universeId, outcomeIndex)`',
 				caller: 'Anyone',
 				effect: 'Deploys the deterministic child REP token and initializes the child universe.',
 				declarations: [{ name: 'deployChild' }],
 				preconditions: 'Parent forked; outcome is well formed; child is not already deployed.',
-				signals: '`DeployChild`',
+				signals: '`TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized`',
 			},
 			{
 				call: '`addRepToMigrationBalance(universeId, amountAttoRep)`',
@@ -594,6 +664,22 @@ export const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'addRepToMigrationBalance' }],
 				preconditions: 'Universe forked; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`MigrationRepAdded`',
+			},
+			{
+				call: '`addRepToMigrationBalanceWithPermit(universeId, amountAttoRep, deadline, v, r, s)`',
+				caller: 'Genesis REP holder supplying an ERC-2612 signature',
+				effect: 'Attempts an exact-amount permit, sinks the caller\'s parent REP, and adds the amount to its migration balance.',
+				declarations: [{ name: 'addRepToMigrationBalanceWithPermit' }],
+				preconditions: 'The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; the universe is forked.',
+				signals: '`Approval`, `MigrationRepAdded`, and token transfer events',
+			},
+			{
+				call: '`addRepToMigrationBalanceWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)`',
+				caller: 'Any relayer presenting the REP owner\'s valid ERC-3009 authorization',
+				effect: 'Receives and sinks the signed amount under an operation- and owner-bound nonce, then credits the named owner\'s migration balance.',
+				declarations: [{ name: 'addRepToMigrationBalanceWithAuthorization' }],
+				preconditions: 'The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and the universe is forked.',
+				signals: '`AuthorizationUsed`, `MigrationRepAdded`, and token transfer events',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
@@ -607,11 +693,11 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '14cee3c68c22f454d0d83f16aad27d40b686fa8abc7fb0220c03ba19ba609f64',
+		compiledAbiFingerprint: '13ddc463c15993eab7862efc6371b2401eae8fb3edc9c947cb10d42eb26d6493',
 		name: 'ReputationToken',
-		purpose: 'Implements universe-specific ERC-20 REP and enforces the supply ceiling maintained by Zoltar.',
-		readAbiFingerprint: '1385406a6e5989eb754a8adeb36f946309659127e088734528cdffa7f8bbe7c8',
-		readSurface: 'Use `getTotalTheoreticalSupplyAttoRep`, `zoltar`, and the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads.',
+		purpose: 'Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar.',
+		readAbiFingerprint: '45de6b2cbe737531d3b96d234678d2005f7801f9df527506e9abcd47da18eaee',
+		readSurface: 'Use `getTotalTheoreticalSupplyAttoRep`, `zoltar`, `universeId`, `repNumber`, the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads, and authorization reads `nonces`, `DOMAIN_SEPARATOR`, and `authorizationState`.',
 		readDeclarations: [
 			{ name: 'getTotalTheoreticalSupplyAttoRep' },
 			{ name: 'name', sourcePath: 'solidity/contracts/ERC20.sol' },
@@ -620,17 +706,20 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'totalSupply', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'allowance', sourcePath: 'solidity/contracts/ERC20.sol' },
+			{ name: 'nonces', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' },
+			{ name: 'DOMAIN_SEPARATOR', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' },
+			{ name: 'authorizationState', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' },
 		],
-		readStorageDeclarations: [{ name: 'zoltar' }],
+		readStorageDeclarations: [{ name: 'zoltar' }, { name: 'universeId' }, { name: 'repNumber' }],
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 		interactions: [
 			{
-				call: '`setMaxTheoreticalSupplyAttoRep(totalTheoreticalSupplyAttoRep)`',
+				call: '`initialize(universeId, totalTheoreticalSupplyAttoRep, repNumber)`',
 				caller: '`Zoltar` only',
-				effect: 'Sets the child token theoretical-supply ceiling used to bound subsequent migration mints.',
-				declarations: [{ name: 'setMaxTheoreticalSupplyAttoRep' }],
-				preconditions: 'Called by Zoltar as part of child-universe creation; theoretical supply does not exceed 11 million REP.',
-				signals: '`TheoreticalSupplySet`',
+				effect: 'Atomically assigns the child universe, global display sequence, name, symbol, and theoretical-supply ceiling used to bound migration mints.',
+				declarations: [{ name: 'initialize' }],
+				preconditions: 'Called once by Zoltar as part of child-universe creation; universe, REP number, and theoretical supply are nonzero; supply does not exceed 11 million REP.',
+				signals: '`TheoreticalSupplySet` and `ReputationTokenInitialized`',
 			},
 			{
 				call: '`mint(account, valueAttoRep)`',
@@ -672,6 +761,38 @@ export const contractReferences: ContractReference[] = [
 				preconditions: 'Source and destination are nonzero; source has sufficient balance; caller has sufficient allowance, including when caller equals source.',
 				signals: '`Transfer` only',
 			},
+			{
+				call: '`permit(owner, spender, value, deadline, v, r, s)`',
+				caller: 'Anyone presenting the owner\'s valid ERC-2612 signature',
+				effect: 'Sets the signed allowance and advances the owner\'s permit nonce.',
+				declarations: [{ name: 'permit', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' }],
+				preconditions: 'Deadline has not passed; signature matches the current chain, token domain, owner, spender, value, and nonce.',
+				signals: '`Approval`',
+			},
+			{
+				call: '`transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s)`',
+				caller: 'Anyone presenting the source\'s valid ERC-3009 signature',
+				effect: 'Consumes the authorization nonce and transfers the exact signed amount to the signed recipient.',
+				declarations: [{ name: 'transferWithAuthorization', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' }],
+				preconditions: 'The strict validity window is open; the nonce is unused; signature fields and source balance are valid.',
+				signals: '`AuthorizationUsed` and `Transfer`',
+			},
+			{
+				call: '`receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s)`',
+				caller: 'The signed recipient presenting the source\'s valid ERC-3009 signature',
+				effect: 'Consumes the authorization nonce and transfers the exact signed amount to the caller-bound recipient.',
+				declarations: [{ name: 'receiveWithAuthorization', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' }],
+				preconditions: 'Caller equals the signed recipient; the strict validity window is open; the nonce is unused; signature fields and source balance are valid.',
+				signals: '`AuthorizationUsed` and `Transfer`',
+			},
+			{
+				call: '`cancelAuthorization(authorizer, nonce, v, r, s)`',
+				caller: 'Anyone presenting the authorizer\'s valid ERC-3009 cancellation signature',
+				effect: 'Marks the authorization nonce as consumed without transferring tokens.',
+				declarations: [{ name: 'cancelAuthorization', sourcePath: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol' }],
+				preconditions: 'The nonce is unused and the cancellation signature matches the authorizer.',
+				signals: '`AuthorizationCanceled`',
+			},
 		],
 	},
 	{
@@ -705,12 +826,12 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '40e6156bd7342b3cc82d9cadf42184ed910915f1a364ad920e83e4f7602f45e3',
+		compiledAbiFingerprint: '9684ea3ba073675f3e7227919749e16f50710d1dfc17bd076add11966cd417b1',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '97ff6a11dad11d4bfb856f6671c54914ca66ccd8e4814489dfd9ea23e442d97a',
+		readAbiFingerprint: 'b7a6c1289cc9bc887647c35998a13f11a95f5458c4a5f6edf1e3ea2e4876f0c5',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Aggregate and per-vault bad debt describe only the current collateral-claim generation; `getPoolAccountingSnapshot` exposes its `badDebtGeneration`. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. `lastDepositTargetHealthFactorBpsByVault` is deposit-instruction metadata, not a vault health measurement. Use `getVaultCapacityBackingFactorsBps` for current associated and pool-held REP-per-capacity ratios, `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity, and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-`None` outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting getters include `totalCapacityOwnershipAttoRep`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Aggregate and per-vault bad debt describe only the current collateral-claim generation; `getPoolAccountingSnapshot` exposes its `badDebtGeneration`. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. `lastDepositTargetHealthFactorBpsByVault` is deposit-instruction metadata, not a vault health measurement. Use `getVaultCapacityBackingFactorsBps` for current associated and pool-held REP-per-capacity ratios, `getCurrentMintingCapacityAttoEth` for price-converted aggregate capacity, and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved`. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-`None` outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 		securityBoundary:
 			'Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -741,6 +862,7 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'priceOracleManagerAndOperatorQueuer' },
 			{ name: 'openOracle' },
 			{ name: 'escalationGameFactory' },
+			{ name: 'eventEmitter' },
 			{ name: 'escalationGame', sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol' },
 			{ name: 'questionData' },
 			{ name: 'securityPoolForker' },
