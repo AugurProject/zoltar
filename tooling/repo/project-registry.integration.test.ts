@@ -55,7 +55,7 @@ test('local installation and CI use the package-manager Bun version', async () =
 	if (typeof rootManifest !== 'object' || rootManifest === null) throw new Error('package.json must contain an object')
 	const packageManager = Reflect.get(rootManifest, 'packageManager')
 	if (typeof packageManager !== 'string') throw new Error('package.json must declare packageManager')
-	const bunVersion = packageManager.match(/^bun@(?<version>\d+\.\d+\.\d+)$/)?.groups?.version
+	const bunVersion = packageManager.match(/^bun@(?<version>\d+\.\d+\.\d+)$/)?.groups?.['version']
 	if (bunVersion === undefined) throw new Error(`Unsupported packageManager declaration: ${packageManager}`)
 
 	const installSource = await fs.readFile(path.join(repositoryRoot, 'tooling/repo/install-frozen.mts'), 'utf8')
