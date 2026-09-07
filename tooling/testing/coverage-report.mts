@@ -355,7 +355,7 @@ export function classifyTypeScriptSource(filePath: string, source: string): Type
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, scriptKind)
 	if (!sourceFile.statements.some(hasRuntimeStatement)) return undefined
 
-	if (/^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
+	if (/^ui\/(?:coreShared|zoltarDomain|statoblastDomain|tradingDomain|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
 	if (file.startsWith('shared/ts/')) return 'shared'
 	if (file.startsWith('scripts/') || file.startsWith('tooling/') || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
 	return undefined
