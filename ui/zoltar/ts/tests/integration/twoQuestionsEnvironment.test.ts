@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
-import { loadZoltarUniverseSummary, loadAllZoltarQuestions } from '../../protocol/index.js'
+import { loadZoltarUniverseSummary, loadAllZoltarQuestions } from '@zoltar/ui-zoltar-domain/protocol/index.js'
 
 void describe('two-question simulation backend', () => {
 	let backend: SimulationBackend
