@@ -248,10 +248,16 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 	})
 	const rawOverride = retirement['profileReplacementOverride'] === undefined ? undefined : record(retirement['profileReplacementOverride'], 'retirement.profileReplacementOverride')
 	if (rawOverride !== undefined) exactKeys(rawOverride, ['acceptedAt', 'reason', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
+	const completionEvidence = retirement['completionEvidence'] === undefined ? undefined : parseCompletionEvidence(retirement['completionEvidence'])
+	const terminal = status === 'drained' || status === 'drained-with-residuals'
+	if (terminal && completionEvidence === undefined) throw new Error(`Retirement status ${String(status)} requires completion evidence`)
+	if (!terminal && completionEvidence !== undefined) throw new Error(`Retirement status ${String(status)} cannot retain completion evidence`)
+	if (status === 'drained' && completionEvidence !== undefined && completionEvidence.residuals.length !== 0) throw new Error('Retirement status drained requires zero residuals')
+	if (status === 'drained-with-residuals' && completionEvidence !== undefined && completionEvidence.residuals.length === 0) throw new Error('Retirement status drained-with-residuals requires at least one residual')
 	return {
 		blockers,
 		...(retirement['cancelledAt'] === undefined ? {} : { cancelledAt: timestamp(retirement['cancelledAt'], 'retirement.cancelledAt') }),
-		...(retirement['completionEvidence'] === undefined ? {} : { completionEvidence: parseCompletionEvidence(retirement['completionEvidence']) }),
+		...(completionEvidence === undefined ? {} : { completionEvidence }),
 		...(retirement['finalSweepStartedAt'] === undefined ? {} : { finalSweepStartedAt: timestamp(retirement['finalSweepStartedAt'], 'retirement.finalSweepStartedAt') }),
 		lastObservedBalances,
 		positions,
