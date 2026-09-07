@@ -1,7 +1,12 @@
+import { chainSpecificPath, assertCompatibleProfileProcessMode } from '../../../shared/src/config/profiles.ts'
+import { renameAndSyncDirectory } from '../../../shared/src/config/durable-replacement.ts'
+export { chainSpecificPath } from '../../../shared/src/config/profiles.ts'
+import { requiredRecord, boolean, integer, nonemptyString, parseDecimalAmount } from '../../../shared/src/config/validation.ts'
+export { parseDecimalAmount } from '../../../shared/src/config/validation.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -145,34 +150,12 @@ const canonicalUniswapV3Factory = getAddress('0x1F98431c8aD98523631AE4a59f267346
 const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
-function requiredRecord(value: unknown, label: string): JsonRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as JsonRecord
-}
-
 function assertExactKeys(value: JsonRecord, keys: readonly string[], label: string) {
 	const allowed = new Set(keys)
 	const unknown = Object.keys(value).filter(key => !allowed.has(key))
 	const missing = keys.filter(key => !(key in value))
 	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
 	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function boolean(value: unknown, label: string) {
-	if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean`)
-	return value
-}
-
-function integer(value: unknown, label: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
-		throw new Error(`${label} must be an integer from ${minimum.toString()} through ${maximum.toString()}`)
-	}
-	return value
-}
-
-function nonemptyString(value: unknown, label: string) {
-	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
-	return value
 }
 
 function customNetworkName(value: unknown) {
@@ -203,14 +186,6 @@ function unsignedIntegerString(value: unknown, label: string) {
 	const parsed = BigInt(value)
 	if (parsed >= 1n << 256n) throw new Error(`${label} must fit in a uint256`)
 	return parsed
-}
-
-export function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {
-		throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	}
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * unit + BigInt(fraction.padEnd(18, '0'))
 }
 
 export function formatDecimalAmount(value: bigint) {
@@ -535,13 +510,7 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 				}
 				if (revision(current) !== expectedRevision) throw configurationRevisionConflict()
 			}
-			await filesystem.rename(temporaryPath, resolvedPath)
-			const directoryHandle = await filesystem.open(dirname(resolvedPath), 'r')
-			try {
-				await directoryHandle.sync()
-			} finally {
-				await directoryHandle.close()
-			}
+			await renameAndSyncDirectory(temporaryPath, resolvedPath, filesystem)
 		} catch (error) {
 			await filesystem.rm(temporaryPath, { force: true })
 			throw error
@@ -553,12 +522,6 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 	settingsWriteQueues.set(resolvedPath, tracked)
 	await tracked
 	return savedRevision
-}
-
-export function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
 }
 
 export function settingsProfilePath(path: string, network: NetworkName) {
@@ -619,12 +582,6 @@ async function assertProfileCandidates(path: string, candidates: readonly Profil
 				throw new Error('Chain profiles with different chain IDs must use distinct durable state paths')
 			}
 		}
-	}
-}
-
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
 	}
 }
 

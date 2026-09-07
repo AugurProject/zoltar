@@ -1,5 +1,9 @@
+import { requiredRecord as record, boolean, integer, nonemptyString as string, parseDecimalAmount } from '../../../shared/src/config/validation.ts'
+export { parseDecimalAmount } from '../../../shared/src/config/validation.ts'
+import { chainSpecificPath, assertCompatibleProfileProcessMode } from '../../../shared/src/config/profiles.ts'
+import { renameAndSyncDirectory } from '../../../shared/src/config/durable-replacement.ts'
 import { createHash, randomBytes } from 'node:crypto'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
@@ -108,8 +112,6 @@ export type OperatorSettings = {
 	version: 1
 }
 
-type JsonRecord = Record<string, unknown>
-
 type SettingsFileHandle = {
 	close: () => Promise<unknown>
 	sync: () => Promise<unknown>
@@ -134,32 +136,6 @@ const settingsFilesystem: SettingsFilesystem = {
 
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 const UNIT = 10n ** 18n
-
-function record(value: unknown, label: string): JsonRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as JsonRecord
-}
-
-function boolean(value: unknown, label: string) {
-	if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean`)
-	return value
-}
-
-function integer(value: unknown, label: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum.toString()} through ${maximum.toString()}`)
-	return value
-}
-
-function string(value: unknown, label: string) {
-	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
-	return value
-}
-
-export function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * UNIT + BigInt(fraction.padEnd(18, '0'))
-}
 
 export function formatDecimalAmount(value: bigint) {
 	const whole = value / UNIT
@@ -421,25 +397,13 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 		await handle.writeFile(contents, { encoding: 'utf8' })
 		await handle.sync()
 		await handle.close()
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
+		await renameAndSyncDirectory(temporaryPath, path, filesystem)
 	} catch (error) {
 		await handle.close().catch(() => undefined)
 		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 	return revision(contents)
-}
-
-function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
 }
 
 export function settingsProfilePath(path: string, network: NetworkName) {
@@ -472,12 +436,6 @@ async function assertSettingsProfileCandidates(path: string, candidates: readonl
 		for (const target of candidatePaths.slice(index + 1)) {
 			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && persistentPathIdentitiesMatch(current.statePath, target.statePath)) throw new Error('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
 		}
-	}
-}
-
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
 	}
 }
 

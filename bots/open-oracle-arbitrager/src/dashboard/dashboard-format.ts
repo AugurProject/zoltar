@@ -1,3 +1,4 @@
+import { blockAgeLabel as sharedBlockAgeLabel } from '../../../shared/src/dashboard/block-age.js'
 import type { OpportunitySnapshot, PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
 
@@ -50,22 +51,6 @@ export function singleFlight<T>(operation: () => Promise<T>) {
 			inFlight = undefined
 		})
 		return inFlight
-	}
-}
-
-export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new AbortController()
-	let timeout: ReturnType<typeof setTimeout> | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) clearTimeout(timeout)
 	}
 }
 
@@ -173,12 +158,7 @@ export function pollRetryStatus(timing: PollRetryTiming, nowMilliseconds = Date.
 }
 
 export function blockAgeLabel(blockTimestamp: string | undefined, nowMilliseconds = Date.now()) {
-	if (blockTimestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(blockTimestamp)) return 'timestamp unavailable'
-	const timestampMilliseconds = Number(blockTimestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds) || !Number.isFinite(nowMilliseconds)) return 'timestamp unavailable'
-	const differenceSeconds = Math.floor(Math.abs(nowMilliseconds - timestampMilliseconds) / 1_000)
-	const label = compactDuration(differenceSeconds)
-	return nowMilliseconds >= timestampMilliseconds ? `seen ${label} ago` : `${label} ahead of local clock`
+	return sharedBlockAgeLabel(blockTimestamp, compactDuration, nowMilliseconds)
 }
 
 export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {

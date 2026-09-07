@@ -192,6 +192,10 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	element(window, 'refresh-button', window.HTMLButtonElement).click()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator blocked')
+	expect(element(window, 'centralized-market-status', window.HTMLElement).textContent).toBe('No market sources configured')
+	expect(element(window, 'centralized-market-source-count', window.HTMLElement).textContent).toBe('0 CEX')
+	expect(element(window, 'dex-market-price', window.HTMLElement).textContent).toBe('—')
+	expect(element(window, 'guarded-market-price', window.HTMLElement).textContent).toBe('—')
 	expect(element(window, 'attention-badge', window.HTMLElement).textContent).toBe('1 action')
 
 	capable = true

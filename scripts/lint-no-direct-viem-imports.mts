@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs'
+import { collectSourceFiles, readSource, projectPath } from './lint-source-files.mts'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
@@ -11,7 +11,6 @@ type DirectViemImportFinding = {
 }
 
 const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
-const sourceFileExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
 const ignoredPathPrefixes = [
 	'.git',
 	'coverage',
@@ -34,48 +33,11 @@ const ignoredPathPrefixes = [
 const ignoredFiles = new Set(['solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts'])
 
 function toProjectPath(filePath: string): string {
-	return path.relative(repositoryRoot, filePath).replaceAll('\\', '/')
-}
-
-function shouldIgnore(relativePath: string): boolean {
-	if (ignoredFiles.has(relativePath)) return true
-	if (relativePath.split('/').includes('node_modules')) return true
-	for (const prefix of ignoredPathPrefixes) {
-		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true
-	}
-	return false
-}
-
-function shouldCheck(filePath: string): boolean {
-	if (!sourceFileExtensions.has(path.extname(filePath))) return false
-	const relativePath = toProjectPath(filePath)
-	return !shouldIgnore(relativePath)
+	return projectPath(repositoryRoot, filePath)
 }
 
 function isBlockedEthereumDependencySpecifier(specifier: string): boolean {
 	return specifier === 'abitype' || specifier.startsWith('abitype/') || specifier === 'viem' || specifier.startsWith('viem/')
-}
-
-function scriptKindFor(extension: string): ts.ScriptKind {
-	if (extension === '.tsx') return ts.ScriptKind.TSX
-	if (extension === '.jsx') return ts.ScriptKind.JSX
-	if (['.js', '.mjs', '.cjs'].includes(extension)) return ts.ScriptKind.JS
-	return ts.ScriptKind.TS
-}
-
-async function collectFiles(directory: string, files: string[] = []): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	for (const entry of entries) {
-		const fullPath = path.join(directory, entry.name)
-		const relativePath = toProjectPath(fullPath)
-		if (entry.isDirectory()) {
-			if (shouldIgnore(relativePath)) continue
-			await collectFiles(fullPath, files)
-			continue
-		}
-		if (entry.isFile() && shouldCheck(fullPath)) files.push(fullPath)
-	}
-	return files
 }
 
 function findDirectViemImportFindings(sourceFile: ts.SourceFile): DirectViemImportFinding[] {
@@ -140,13 +102,11 @@ const blockedImportFixtures = [
 if (blockedImportFixtures.some(fixture => findDirectViemImportFindings(fixture).length !== 1)) throw new Error('Direct Ethereum dependency lint did not inspect every supported source form')
 
 async function main() {
-	const files = await collectFiles(repositoryRoot)
+	const files = await collectSourceFiles(repositoryRoot, ignoredPathPrefixes, ignoredFiles)
 	const findings: DirectViemImportFinding[] = []
 
 	for (const filePath of files) {
-		const text = await fs.readFile(filePath, 'utf8')
-		const extension = path.extname(filePath)
-		const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, scriptKindFor(extension))
+		const sourceFile = await readSource(filePath)
 		findings.push(...findDirectViemImportFindings(sourceFile))
 	}
 

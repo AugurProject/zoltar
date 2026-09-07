@@ -1,3 +1,6 @@
+import { blockAgeLabel } from '../../../shared/src/dashboard/block-age.js'
+import { marketPresentation } from '../../../shared/src/dashboard/market-presentation.js'
+import { fetchJson, requestWithTimeout, responseError } from '../../../shared/src/dashboard/requests.js'
 import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 type Activity = {
 	at: string
@@ -235,21 +238,7 @@ function renderBlockStatus(snapshot = currentSnapshot) {
 		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
-	const timestamp = snapshot.lastScannedTimestamp
-	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestampMilliseconds = Number(timestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
-	const age = compactDuration(differenceSeconds)
-	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
+	blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · ${blockAgeLabel(snapshot.lastScannedTimestamp, compactDuration)}`
 	headerBlockStatus.textContent = blockStatus.textContent
 }
 
@@ -280,28 +269,10 @@ function setMutationControlsEnabled(enabled: boolean) {
 	}
 }
 
-async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new window.AbortController()
-	let timeout: number | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = window.setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) window.clearTimeout(timeout)
-	}
-}
-
 async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<T> {
-	const response = await (timeoutMilliseconds === undefined ? fetch(path, options) : requestWithTimeout(signal => fetch(path, { ...options, signal }), timeoutMilliseconds))
-	const value: unknown = await response.json()
+	const { response, value } = await fetchJson(path, options, timeoutMilliseconds)
 	if (!response.ok) {
-		const error = typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
-		const message = typeof error === 'string' ? error : `Request failed with HTTP ${response.status.toString()}`
+		const message = responseError(value) ?? `Request failed with HTTP ${response.status.toString()}`
 		throw new Error(message)
 	}
 	return value as T
@@ -483,17 +454,17 @@ function renderRecovery(snapshot: Snapshot) {
 
 function renderCentralizedMarket(snapshot: Snapshot) {
 	const market = snapshot.centralizedMarket
-	const consensus = snapshot.marketConsensus
-	updateText(dexMarketPrice, consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
-	updateText(guardedMarketPrice, consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
-	updateText(dexMarketBidDepth, consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
-	updateText(dexMarketAskDepth, consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
+	const presentation = marketPresentation(market, snapshot.marketConsensus)
+	updateText(dexMarketPrice, presentation.dexPrice)
+	updateText(guardedMarketPrice, presentation.guardedPrice)
+	updateText(dexMarketBidDepth, presentation.dexBidDepth)
+	updateText(dexMarketAskDepth, presentation.dexAskDepth)
+	updateText(centralizedMarketStatus, presentation.status)
+	updateText(centralizedMarketPrice, presentation.price)
+	updateText(centralizedMarketBidDepth, presentation.bidDepth)
+	updateText(centralizedMarketAskDepth, presentation.askDepth)
+	updateText(centralizedMarketSourceCount, presentation.sourceCount)
 	if (market === undefined) {
-		updateText(centralizedMarketStatus, consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
-		updateText(centralizedMarketPrice, '—')
-		updateText(centralizedMarketBidDepth, '—')
-		updateText(centralizedMarketAskDepth, '—')
-		updateText(centralizedMarketSourceCount, consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 		const row = document.createElement('tr')
 		const empty = cell('Add public exchange sources in the operator configuration.')
 		empty.colSpan = 6
@@ -502,11 +473,6 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 		centralizedMarketRows.replaceChildren(row)
 		return
 	}
-	updateText(centralizedMarketStatus, consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
-	updateText(centralizedMarketPrice, market.priceRepPerEth)
-	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
-	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
-	updateText(centralizedMarketSourceCount, consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 	centralizedMarketRows.replaceChildren(
 		...market.observations.map(observation => {
 			const row = document.createElement('tr')

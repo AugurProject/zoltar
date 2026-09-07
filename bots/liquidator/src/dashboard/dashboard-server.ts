@@ -1,3 +1,4 @@
+import { dashboardHeaders as headers, dashboardJson as json, closingDashboardJson as closingJson } from '../../../shared/src/dashboard/responses.js'
 import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -24,27 +25,6 @@ export type DashboardController = {
 }
 
 const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoints before changing chain-specific settings'
-
-function headers(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		'content-type': contentType,
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-	}
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, {
-		headers: headers('application/json; charset=utf-8'),
-		status,
-	})
-}
-
-function closingJson(value: unknown) {
-	return Response.json(value, { headers: { ...headers('application/json; charset=utf-8'), connection: 'close' } })
-}
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)

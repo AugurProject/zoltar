@@ -1,3 +1,5 @@
+import { marketPresentation } from '../../../shared/src/dashboard/market-presentation.js'
+import { fetchJson, requestWithTimeout, responseError } from '../../../shared/src/dashboard/requests.js'
 import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
@@ -17,7 +19,6 @@ import {
 	persistedConnectivity,
 	pollRetryStatus,
 	requiredSignerPrivateKey,
-	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
@@ -318,11 +319,9 @@ async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
 }
 
 async function api<T>(path: string, init?: RequestInit) {
-	const response = await fetch(path, init)
-	const value: unknown = await response.json()
+	const { response, value } = await fetchJson(path, init)
 	if (!response.ok) {
-		if (typeof value === 'object' && value !== null && 'error' in value && typeof value.error === 'string') throw new Error(value.error)
-		throw new Error(`Request failed with status ${response.status.toString()}`)
+		throw new Error(responseError(value) ?? `Request failed with status ${response.status.toString()}`)
 	}
 	return value as T
 }
@@ -736,25 +735,20 @@ function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('centralized-market-body')
 	body.replaceChildren()
 	const market = snapshot.centralizedMarket
-	const consensus = snapshot.marketConsensus
-	setText('dex-market-price', consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—')
-	setText('guarded-market-price', consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—')
-	setText('dex-market-bid-depth', consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
-	setText('dex-market-ask-depth', consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
+	const presentation = marketPresentation(market, snapshot.marketConsensus)
+	setText('dex-market-price', presentation.dexPrice)
+	setText('guarded-market-price', presentation.guardedPrice)
+	setText('dex-market-bid-depth', presentation.dexBidDepth)
+	setText('dex-market-ask-depth', presentation.dexAskDepth)
+	setText('centralized-market-status', presentation.status)
+	setText('centralized-market-price', presentation.price)
+	setText('centralized-market-bid-depth', presentation.bidDepth)
+	setText('centralized-market-ask-depth', presentation.askDepth)
+	setText('centralized-market-source-count', presentation.sourceCount)
 	if (market === undefined) {
-		setText('centralized-market-status', consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
-		setText('centralized-market-price', '—')
-		setText('centralized-market-bid-depth', '—')
-		setText('centralized-market-ask-depth', '—')
-		setText('centralized-market-source-count', consensus === undefined ? '0 CEX' : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 		element('centralized-market-empty').hidden = false
 		return
 	}
-	setText('centralized-market-status', consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
-	setText('centralized-market-price', market.priceRepPerEth)
-	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
-	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
-	setText('centralized-market-source-count', consensus === undefined ? `${market.observations.length.toString()} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`)
 	for (const observation of market.observations) {
 		body.append(row([observation.exchangeId, observation.repMarket, observation.priceRepPerEth, `${observation.bidDepthEth} ETH`, `${observation.askDepthEth} ETH`, new Date(observation.observedAt).toLocaleTimeString()], ['Exchange', 'Market', 'REP / ETH', 'Bid depth', 'Ask depth', 'Observed']))
 	}

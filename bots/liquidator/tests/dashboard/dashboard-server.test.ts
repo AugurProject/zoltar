@@ -129,6 +129,10 @@ describe('liquidator dashboard server', () => {
 		servers.push(server)
 
 		const response = await fetch(new URL('/api/state', server.url))
+		expect(response.headers.get('cache-control')).toBe('no-store')
+		expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8')
+		expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff')
 		const body = await response.text()
 		const snapshot: unknown = JSON.parse(body)
 		if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) throw new Error('Expected public dashboard snapshot')

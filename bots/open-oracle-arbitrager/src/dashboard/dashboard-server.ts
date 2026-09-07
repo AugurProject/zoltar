@@ -1,3 +1,4 @@
+import { dashboardHeaders as securityHeaders, dashboardJson as json, closingDashboardJson as closingJson } from '../../../shared/src/dashboard/responses.js'
 import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -32,27 +33,6 @@ const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoint
 
 async function requireConfiguredChain(controller: DashboardController) {
 	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, {
-		headers: securityHeaders('application/json; charset=utf-8'),
-		status,
-	})
-}
-
-function closingJson(value: unknown) {
-	return Response.json(value, { headers: { ...securityHeaders('application/json; charset=utf-8'), connection: 'close' } })
-}
-
-function securityHeaders(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		'content-type': contentType,
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-	}
 }
 
 function errorMessage(error: unknown) {
@@ -143,7 +123,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const projectDirectory = join(directory, '..', '..')
 	const documentationDirectory = join(projectDirectory, 'docs')
 	const browserEntrypoint = join(directory, 'dashboard.ts')
-	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
+	const browserFormatEntrypoint = join(directory, 'dashboard-format.ts')
 	const dashboardPages = new Set(['overview', 'operations', 'games', 'markets', 'settings'])
 	const dashboardPage = async (pathname: string) => {
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
@@ -151,7 +131,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const source = await Bun.file(join(directory, 'index.html')).text()
 		return source.replace('<body>', `<body data-page="${page}">`)
 	}
-	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
 	validateDashboardAuthentication(hostname, controller.password, controller.loopbackPublished, controller.publicAuthority)
 	let acceptedAuthorities: ReadonlySet<string> = new Set()
@@ -212,8 +191,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				})
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard-format.js') {
-				const source = await browserFormatSource.text()
-				return new Response(transpiler.transformSync(source), {
+				return new Response(await buildDashboardScript(browserFormatEntrypoint), {
 					headers: securityHeaders('text/javascript; charset=utf-8'),
 				})
 			}

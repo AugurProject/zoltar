@@ -39,6 +39,7 @@
 		"ws": "8.21.0"
 	},
 	"scripts": {
+		"duplication:report": "bun ./scripts/duplication-report.mts",
 		"preinstall": "bun ./scripts/link-shared-node-modules.mts",
 		"refresh:shared-dependencies": "bun ./scripts/ensure-shared-package-fresh.mts --refresh && cd solidity && bun ../scripts/ensure-shared-package-fresh.mts --refresh && cd ../ui/coreShared && bun ../../scripts/ensure-shared-package-fresh.mts --refresh && cd ../zoltar && bun ../../scripts/ensure-shared-package-fresh.mts --refresh && cd ../statoblast && bun ../../scripts/ensure-shared-package-fresh.mts --refresh && cd ../trading && bun ../../scripts/ensure-shared-package-fresh.mts --refresh && cd ../.. && bun ./scripts/ensure-ui-preact-singleton.mts",
 		"check:shared-dependencies": "bun run refresh:shared-dependencies",

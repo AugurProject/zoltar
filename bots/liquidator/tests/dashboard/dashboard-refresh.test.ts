@@ -150,7 +150,12 @@ function state(
 	}
 }
 
-async function dashboard(initialConfiguration = mainnetConfiguration(), initialState = state('rpc secret at /api/internal'), initialStateRequestFailure = false, initialConfigurationRequestFailure = false) {
+async function dashboard(
+	initialConfiguration = mainnetConfiguration(),
+	initialState: ReturnType<typeof state> & { centralizedMarket?: { reliable: boolean; reasons: string[]; priceRepPerEth: string; bidDepthEth: string; askDepthEth: string; observations: unknown[] } } = state('rpc secret at /api/internal'),
+	initialStateRequestFailure = false,
+	initialConfigurationRequestFailure = false,
+) {
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
@@ -973,4 +978,22 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.pauseRequests.length).toBeGreaterThan(0)
 		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
 	})
+})
+
+test('renders shared market values through the liquidator DOM with absent DEX evidence', async () => {
+	const market = { reliable: false, reasons: ['stale'], priceRepPerEth: '1.000000000000000001', bidDepthEth: '2', askDepthEth: '3', observations: [] }
+	const page = await dashboard(configuration(), { ...state(), centralizedMarket: market })
+	await page.refresh()
+	const text = (id: string) => page.window.document.getElementById(id)?.textContent
+	expect(text('centralized-market-price')).toBe('1.000000000000000001')
+	expect(text('centralized-market-status')).toBe('stale')
+	expect(text('centralized-market-bid-depth')).toBe('2 ETH')
+	expect(text('centralized-market-ask-depth')).toBe('3 ETH')
+	expect(text('centralized-market-source-count')).toBe('0 CEX')
+	expect(text('dex-market-price')).toBe('—')
+	page.setSnapshot(state())
+	await page.refresh()
+	expect(text('centralized-market-price')).toBe('—')
+	expect(text('centralized-market-bid-depth')).toBe('—')
+	expect(text('centralized-market-status')).toBe('No market sources configured')
 })

@@ -1,6 +1,8 @@
+import { chainSpecificPath, assertCompatibleProfileProcessMode } from '../../../shared/src/config/profiles.ts'
+import { renameAndSyncDirectory } from '../../../shared/src/config/durable-replacement.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '#ethereum'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
 import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
@@ -295,12 +297,6 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 	}
 }
 
-function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
-}
-
 export function operatorProfilePath(path: string, network: NetworkName) {
 	return `${path}.${network}.profile`
 }
@@ -335,12 +331,6 @@ async function assertOperatorProfileCandidates(path: string, candidates: readonl
 		for (const target of candidatePaths.slice(index + 1)) {
 			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && target.durablePaths.some(targetPath => identitiesContainMatch(current.durablePaths, targetPath))) throw new Error('Mainnet and Sepolia profiles must use distinct durable journal paths')
 		}
-	}
-}
-
-function assertCompatibleProfileProcessMode(current: PersistedOperatorSettings, target: PersistedOperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
 	}
 }
 
@@ -457,13 +447,7 @@ export async function saveOperatorSettings(path: string, settings: PersistedOper
 			}
 			if (revision(currentContents) !== expectedRevision) throw configurationRevisionConflict()
 		}
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
+		await renameAndSyncDirectory(temporaryPath, path, filesystem)
 	} catch (error) {
 		await filesystem.rm(temporaryPath, { force: true })
 		throw error

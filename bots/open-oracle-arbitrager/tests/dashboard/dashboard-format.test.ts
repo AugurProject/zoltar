@@ -1,3 +1,4 @@
+import { requestWithTimeout } from '../../../shared/src/dashboard/requests.ts'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '#ethereum'
 import {
@@ -16,7 +17,6 @@ import {
 	persistedConnectivity,
 	pollRetryStatus,
 	requiredSignerPrivateKey,
-	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
 	singleFlight,
@@ -217,4 +217,25 @@ describe('dashboard exact ETH formatting', () => {
 
 test('hides JSON parser internals when the state response is unreadable', () => {
 	expect(statePollingFailureMessage(new SyntaxError('Unexpected token U in JSON'))).toBe('The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.')
+})
+
+test('cleans successful and synchronously failed deadline requests without later aborting', async () => {
+	let observed: AbortSignal | undefined
+	expect(
+		await requestWithTimeout(async signal => {
+			observed = signal
+			return 7
+		}, 5),
+	).toBe(7)
+	await Bun.sleep(15)
+	expect(observed?.aborted).toBe(false)
+	const failure = new Error('synchronous request failure')
+	await expect(
+		requestWithTimeout(signal => {
+			observed = signal
+			throw failure
+		}, 5),
+	).rejects.toBe(failure)
+	await Bun.sleep(15)
+	expect(observed?.aborted).toBe(false)
 })

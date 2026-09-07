@@ -1,3 +1,5 @@
+import { buildDashboardScript } from '../../../shared/src/dashboard/assets.ts'
+import { dashboardHeaders, dashboardJson } from '../../../shared/src/dashboard/responses.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
@@ -25,19 +27,16 @@ const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'activity', 
 
 function securityHeaders(contentType: string) {
 	return {
-		'cache-control': 'no-store',
+		...dashboardHeaders(contentType),
 		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
-		'content-type': contentType,
 		'cross-origin-resource-policy': 'same-origin',
 		'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
 		'x-frame-options': 'DENY',
 	}
 }
 
 function json(value: unknown, status = 200) {
-	return Response.json(value, { headers: securityHeaders('application/json; charset=utf-8'), status })
+	return dashboardJson(value, status, securityHeaders('application/json; charset=utf-8'))
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -939,8 +938,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
 	const directory = import.meta.dir
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
-	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
+	const browserEntrypoint = join(directory, 'dashboard.ts')
 	let authority = ''
 	let configurationCommitIndeterminate = false
 	let mutationBarrier = Promise.resolve()
@@ -990,7 +988,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/operator-console.css') {
 					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				}
-				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
+				if (url.pathname === '/dashboard.js') return new Response(await buildDashboardScript(browserEntrypoint), { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
 						await mutationBarrier

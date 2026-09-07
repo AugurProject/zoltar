@@ -1,3 +1,4 @@
+import { parseDecimalAmount } from '../../src/config/settings.ts'
 import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -524,3 +525,52 @@ describe('chaos-bot settings', () => {
 		await expect(loadSettings(alias)).rejects.toThrow('must not be a symbolic link')
 	})
 })
+
+test('decimal validation contract retains exact precision and rejects noncanonical inputs', () => {
+	expect(parseDecimalAmount('9007199254740993.000000000000000001', 'Amount')).toBe(9007199254740993000000000000000001n)
+	expect(parseDecimalAmount('0', 'Amount')).toBe(0n)
+	for (const value of [0, undefined, null, '', ' 1', '01', '-1', '1.', '1e2', '1.0000000000000000001']) {
+		expect(() => parseDecimalAmount(value, 'Amount')).toThrow('Amount must be a non-negative decimal with at most 18 places')
+	}
+})
+
+for (const failure of ['rename', 'directory sync']) {
+	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
+		const events: string[] = []
+		const problem = new Error(failure)
+		const filesystem: SettingsFilesystem = {
+			mkdir: async () => undefined,
+			open: async (_path, flags) => ({
+				chmod: async () => undefined,
+				readFile: async () => {
+					throw new Error('Unexpected handle read')
+				},
+				stat: async () => {
+					throw new Error('Unexpected handle stat')
+				},
+				close: async () => {
+					events.push(`${flags}:close`)
+				},
+				sync: async () => {
+					if (flags === 'r' && failure === 'directory sync') throw problem
+				},
+				writeFile: async () => undefined,
+			}),
+			readFile: async () => {
+				throw new Error('Unexpected revision read')
+			},
+			rename: async () => {
+				events.push('rename')
+				if (failure === 'rename') throw problem
+			},
+			rm: async (path, options) => {
+				expect(path.endsWith('.tmp')).toBe(true)
+				expect(options).toEqual({ force: true })
+				events.push('rm')
+			},
+		}
+		await expect(saveSettings('/state/operator.json', parseSettings(await storedExample()), undefined, filesystem)).rejects.toBe(problem)
+		expect(events.includes('r:close')).toBe(failure === 'directory sync')
+		expect(events.at(-1)).toBe('rm')
+	})
+}

@@ -1,3 +1,4 @@
+import { fetchJson } from '../../../shared/src/dashboard/requests.ts'
 type RepBalance = {
 	balance?: string | number | undefined
 	symbol?: string | undefined
@@ -706,8 +707,9 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 		let response: Response
 		let value: unknown
 		try {
-			response = await fetch(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal: controller.signal })
-			value = await response.json()
+			const result = await fetchJson(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal: controller.signal })
+			response = result.response
+			value = result.value
 		} catch (error) {
 			if (init?.method !== 'PUT') throw error
 			const unknown = new Error(error instanceof DOMException && error.name === 'AbortError' ? 'The mutation timed out and may have committed.' : 'The mutation response was lost and the change may have committed.')
@@ -736,6 +738,25 @@ function node<Tag extends keyof HTMLElementTagNameMap>(tag: Tag, className?: str
 	if (className !== undefined) value.className = className
 	if (text !== undefined) value.textContent = text
 	return value
+}
+
+function onClipboardCopy(copy: HTMLButtonElement, value: string, feedback: { pending: () => void; success: () => void; failure: () => void }) {
+	copy.addEventListener('click', () => {
+		copy.disabled = true
+		feedback.pending()
+		const clipboard = navigator.clipboard
+		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
+		void write.then(
+			() => {
+				copy.disabled = false
+				feedback.success()
+			},
+			() => {
+				copy.disabled = false
+				feedback.failure()
+			},
+		)
+	})
 }
 
 let identifierSequence = 0
@@ -777,25 +798,20 @@ function compactIdentifier(value: string, type: string) {
 		disclosure.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} full ${type}: ${value}`)
 	}
 	disclosure.addEventListener('click', () => setExpanded(full.hidden))
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.className = 'identifier-feedback'
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback error'
-				feedback.textContent = 'Copy failed; full value shown'
-				setExpanded(true)
-			},
-		)
+	onClipboardCopy(copy, value, {
+		pending: () => {
+			feedback.className = 'identifier-feedback'
+			feedback.textContent = 'Copying…'
+		},
+		success: () => {
+			feedback.className = 'identifier-feedback success'
+			feedback.textContent = 'Copied'
+		},
+		failure: () => {
+			feedback.className = 'identifier-feedback error'
+			feedback.textContent = 'Copy failed; full value shown'
+			setExpanded(true)
+		},
 	})
 	wrapper.append(display, copy, disclosure, feedback, full)
 	return wrapper
@@ -810,23 +826,18 @@ function copyableOperationId(value: string) {
 	const feedback = node('small', 'operation-id-feedback')
 	feedback.setAttribute('aria-live', 'polite')
 	feedback.setAttribute('role', 'status')
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback error'
-				feedback.textContent = 'Copy failed; select the ID shown'
-			},
-		)
+	onClipboardCopy(copy, value, {
+		pending: () => {
+			feedback.textContent = 'Copying…'
+		},
+		success: () => {
+			feedback.className = 'operation-id-feedback success'
+			feedback.textContent = 'Copied'
+		},
+		failure: () => {
+			feedback.className = 'operation-id-feedback error'
+			feedback.textContent = 'Copy failed; select the ID shown'
+		},
 	})
 	wrapper.append(identifier, copy, feedback)
 	return wrapper

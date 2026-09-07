@@ -1,6 +1,6 @@
+import { collectSourceFiles, readSource } from './lint-source-files.mts'
 import * as path from 'node:path'
 import * as url from 'node:url'
-import { promises as fs } from 'node:fs'
 import * as ts from 'typescript'
 
 type CatchFinding = {
@@ -12,7 +12,6 @@ type CatchFinding = {
 
 const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
 const projectRoot = path.join(repositoryRoot, '..')
-const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
 const ignoredPathPrefixes = [
 	'.git',
 	'node_modules',
@@ -36,36 +35,6 @@ const ignoredPathPrefixes = [
 	'coverage',
 ]
 const ignoredFiles = new Set(['solidity/ts/testSupport/simulator/types/wire-types.js'])
-
-function shouldIgnore(relativePath: string): boolean {
-	if (ignoredFiles.has(relativePath)) return true
-	if (relativePath.split('/').includes('node_modules')) return true
-	for (const prefix of ignoredPathPrefixes) {
-		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true
-	}
-	return false
-}
-
-function shouldCheck(filePath: string): boolean {
-	if (!sourceFileExtensions.has(path.extname(filePath))) return false
-	const relativePath = path.relative(projectRoot, filePath).replaceAll('\\', '/')
-	return !shouldIgnore(relativePath)
-}
-
-async function collectFiles(directory: string, files: string[] = []): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	for (const entry of entries) {
-		const fullPath = path.join(directory, entry.name)
-		const relativePath = path.relative(projectRoot, fullPath).replaceAll('\\', '/')
-		if (entry.isDirectory()) {
-			if (shouldIgnore(relativePath)) continue
-			await collectFiles(fullPath, files)
-			continue
-		}
-		if (entry.isFile() && shouldCheck(fullPath)) files.push(fullPath)
-	}
-	return files
-}
 
 function catchBindingIsReferenced(block: ts.Block, bindingName: string) {
 	let referenced = false
@@ -153,12 +122,11 @@ function findCatchFindings(sourceFile: ts.SourceFile): CatchFinding[] {
 }
 
 async function main(): Promise<void> {
-	const files = await collectFiles(projectRoot)
+	const files = await collectSourceFiles(projectRoot, ignoredPathPrefixes, ignoredFiles)
 	const catchFindings: CatchFinding[] = []
 
 	for (const filePath of files) {
-		const text = await fs.readFile(filePath, 'utf8')
-		const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, path.extname(filePath).endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+		const sourceFile = await readSource(filePath, true)
 		catchFindings.push(...findCatchFindings(sourceFile))
 	}
 
