@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames } from './mutation-support.mts'
+import { access, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, MUTATION_SMOKE_CASES } from './mutation-support.mts'
+
+const repositoryRoot = join(import.meta.dir, '..', '..')
 
 describe('mutation smoke support', () => {
 	test('replaces exactly one intended source fragment', () => {
@@ -9,6 +13,17 @@ describe('mutation smoke support', () => {
 	test('rejects stale and ambiguous mutation definitions', () => {
 		expect(() => applyExactMutation('unchanged', { from: 'missing', name: 'stale', to: 'mutant' })).toThrow('did not match')
 		expect(() => applyExactMutation('target target', { from: 'target', name: 'ambiguous', to: 'mutant' })).toThrow('more than once')
+	})
+
+	test('keeps every mutation source and focused test path current', async () => {
+		for (const mutation of MUTATION_SMOKE_CASES) {
+			const testPath = mutation.testCommand.find(argument => argument.endsWith('.test.ts'))
+			expect(testPath).toBeDefined()
+			if (testPath === undefined) throw new Error(`Mutation ${mutation.name} must name its focused test`)
+			await Promise.all([access(join(repositoryRoot, mutation.filePath)), access(join(repositoryRoot, testPath))])
+			const source = await readFile(join(repositoryRoot, mutation.filePath), 'utf8')
+			expect(applyExactMutation(source, mutation)).not.toBe(source)
+		}
 	})
 
 	test('counts only assertion failures as killed mutants', () => {

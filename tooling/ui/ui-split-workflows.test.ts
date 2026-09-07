@@ -42,6 +42,16 @@ const workflowSteps = (job: unknown) => {
 	if (!Array.isArray(steps)) throw new Error('workflow job steps must be a sequence')
 	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
 }
+const workflowTestPaths = (workflow: Record<string, unknown>) =>
+	Object.values(workflowJobs(workflow)).flatMap(job =>
+		workflowSteps(job).flatMap(step => {
+			const command = step['run']
+			if (typeof command !== 'string') return []
+			const workingDirectory = step['working-directory']
+			if (workingDirectory !== undefined && typeof workingDirectory !== 'string') throw new Error('workflow working-directory must be a string')
+			return [...command.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.test\.(?:ts|tsx))(?=\s|$)/gu)].map(match => join(workingDirectory ?? '', match[1] ?? '').replaceAll('\\', '/'))
+		}),
+	)
 describe('split UI workflow paths', () => {
 	test('CI validates test ownership before scope-dependent jobs', async () => {
 		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
@@ -141,7 +151,9 @@ describe('split UI workflow paths', () => {
 
 		const stabilityWorkflow = await readWorkflow(testStabilityWorkflowPath)
 		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
-		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('indexer-lifecycle.test.ts'))).toBe(true)
+		const stabilityTestPaths = workflowTestPaths(stabilityWorkflow).sort()
+		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
+		await Promise.all(stabilityTestPaths.map(testPath => access(join(repositoryRoot, testPath))))
 		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('without retries'))).toBe(true)
 	})
 

@@ -16,7 +16,7 @@ The codebase is split into these main areas:
 - `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
-- `tooling/` contains typed repository metadata plus CI, contract-safety, and UI build/development orchestration; `scripts/` retains focused compatibility and generation entry points
+- `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
 - `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
 
 The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching domain package, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent domain packages from importing runnable applications or applications from importing one another.
@@ -25,7 +25,7 @@ Protocol documentation lives in [docs/documentation.html](https://augurproject.g
 
 ## Prerequisites
 
-- Bun 1.3.14 (the version pinned by `packageManager` and CI)
+- Bun 1.4.2 (the version pinned by `packageManager` and CI)
 - Node.js 20+ for the repository-wide TypeScript check
 
 ## Setup
@@ -39,7 +39,7 @@ bun run setup
 Important:
 
 - `bun run setup` installs every independent package from its own frozen lockfile exactly once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
-- Repository install helpers automatically use Bun 1.3.14 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
+- Repository install helpers automatically use Bun 1.4.2 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
 
