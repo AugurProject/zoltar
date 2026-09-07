@@ -91,15 +91,15 @@
 		},
 		{
 			"path": "explanation/statoblast.html",
-			"title": "Statoblast protocol",
-			"summary": "A binary prediction market protocol",
+			"title": "How Statoblast works",
+			"summary": "A market lifecycle from creation through local resolution or fork migration to redemption.",
 			"section": "explanation",
 			"topic": "Protocol",
 			"keywords": ["Statoblast", "markets", "security pools", "overview"]
 		},
 		{
 			"path": "explanation/zoltar.html",
-			"title": "Zoltar and branching truth",
+			"title": "Zoltar and branching universes",
 			"summary": "Universes, question encoding, global forks, and REP splitting.",
 			"section": "explanation",
 			"topic": "Protocol",
@@ -115,15 +115,15 @@
 		},
 		{
 			"path": "explanation/escalation-game.html",
-			"title": "Escalation game architecture",
-			"summary": "Module boundaries, authority, proof flow, and accounting responsibilities.",
+			"title": "Escalation Game",
+			"summary": "Local dispute escalation, deadlines, fork conditions, proofs, and claims.",
 			"section": "explanation",
 			"topic": "Architecture",
-			"keywords": ["EscalationGame", "modules", "authority", "accounting"]
+			"keywords": ["Escalation Game", "disputes", "deadlines", "accounting"]
 		},
 		{
 			"path": "explanation/liquidations.html",
-			"title": "Capacity and delegated liquidation",
+			"title": "Vault liquidation",
 			"summary": "Dynamic capacity, liquidation roles, bounded receiver approvals, and reservation lifecycle.",
 			"section": "explanation",
 			"topic": "Economics",
@@ -139,7 +139,7 @@
 		},
 		{
 			"path": "explanation/truth-auctions.html",
-			"title": "Truth auction economics",
+			"title": "Truth auctions",
 			"summary": "Auction clearing, settlement, and weak-demand loss allocation.",
 			"section": "explanation",
 			"topic": "Economics",
@@ -147,7 +147,7 @@
 		},
 		{
 			"path": "explanation/open-oracle.html",
-			"title": "OpenOracle integration",
+			"title": "Why Statoblast uses OpenOracle",
 			"summary": "REP/ETH price oracle for Statoblast.",
 			"section": "explanation",
 			"topic": "Architecture",
