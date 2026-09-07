@@ -13,7 +13,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('AugurScan decomposition is owned by Lane B.', [
-		['augurScan/src/indexer.ts', 1840],
+		['augurScan/src/indexer.ts', 1433],
 		['augurScan/src/database.ts', 1673],
 		['augurScan/src/projections.ts', 701],
 	]),
