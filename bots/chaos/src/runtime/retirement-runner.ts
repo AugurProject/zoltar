@@ -31,7 +31,8 @@ export function retirementEvaluationsForScan(scan: RetirementScan, settings: Ope
 export function updateRetirementAssessment(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState, v3: readonly V3PositionObservation[]) {
 	if (state.retirement.status === 'inactive') return undefined
 	state.evaluations = retirementEvaluationsForScan(scan, settings, state)
-	recordCanonicalRecoveredBalances(state.retirement, scan.snapshot)
+	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete
+	if (canonicalScanComplete) recordCanonicalRecoveredBalances(state.retirement, scan.snapshot)
 	const assessment = assessRetirement({
 		blockHash: scan.anchor.blockHash,
 		blockNumber: scan.anchor.blockNumber,
@@ -41,7 +42,7 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 		snapshot: scan.snapshot,
 		state,
 		v3,
-		canonicalScanComplete: scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete,
+		canonicalScanComplete,
 		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
 	})
 	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber)
