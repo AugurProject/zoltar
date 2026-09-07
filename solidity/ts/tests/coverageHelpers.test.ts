@@ -493,7 +493,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		if (isCoverageEnabled()) {
 			await flushSolidityBytecodeCoverageForTest()
 			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
-			const constructorAssignmentLine = await findLineNumberByExactSource('contracts/DeploymentStatusOracle.sol', 'deploymentAddresses = _deploymentAddresses;')
+			const constructorAssignmentLine = await findLineNumberByExactSource('solidity/contracts/DeploymentStatusOracle.sol', 'deploymentAddresses = _deploymentAddresses;')
 			assert.ok((deploymentStatusCoverage.lineHits[constructorAssignmentLine.toString()] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
 		}
 	})
