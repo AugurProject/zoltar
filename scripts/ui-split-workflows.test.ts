@@ -181,7 +181,7 @@ describe('split UI workflow paths', () => {
 		expect(setupAction).toContain("hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock')")
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
-		expect(dockerfile).toContain('ARG BUN_VERSION=1.3.14')
+		expect(dockerfile).toContain('ARG BUN_VERSION=1.4.2')
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}

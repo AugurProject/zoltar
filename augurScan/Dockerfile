@@ -1,9 +1,9 @@
-FROM oven/bun:1.3.14-alpine AS dependencies
+FROM oven/bun:1.4.2-alpine AS dependencies
 WORKDIR /workspace
 COPY augurScan/package.json augurScan/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1.3.14-alpine AS browser-build
+FROM oven/bun:1.4.2-alpine AS browser-build
 WORKDIR /workspace/augurScan
 COPY augurScan/package.json augurScan/bun.lock ./
 RUN bun install --frozen-lockfile
@@ -12,7 +12,7 @@ COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public
 RUN bun run build
 
-FROM oven/bun:1.3.14-alpine AS runtime
+FROM oven/bun:1.4.2-alpine AS runtime
 WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=dependencies /workspace/node_modules ./node_modules

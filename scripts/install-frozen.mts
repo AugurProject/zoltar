@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import * as path from 'node:path'
 import { shareUiPreactRuntime } from './share-ui-preact-runtime.mjs'
 
@@ -110,7 +110,61 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 	}
 }
 
-const exitStatus = process.platform === 'win32' ? runWindowsInstallWithoutSharedCacheCopy() : runInstall(['install', '--frozen-lockfile'])
-if (exitStatus === 0) shareUiPreactRuntime(installDirectory)
+const linkLocalZoltarDependencies = () => {
+	const packageJson = readPackageJson()
+	for (const dependencies of [packageJson.dependencies, packageJson.devDependencies, packageJson.optionalDependencies]) {
+		for (const [dependencyName, dependencySource] of Object.entries(dependencies ?? {})) {
+			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
+			const sourcePath = path.resolve(installDirectory, dependencySource.slice('file:'.length))
+			const installedPath = path.join(installDirectory, 'node_modules', ...dependencyName.split('/'))
+			mkdirSync(path.dirname(installedPath), { recursive: true })
+			rmSync(installedPath, { force: true, recursive: true })
+			symlinkSync(sourcePath, installedPath, 'dir')
+		}
+	}
+}
+
+const unlinkLocalZoltarDependencies = () => {
+	const packageJson = readPackageJson()
+	for (const dependencies of [packageJson.dependencies, packageJson.devDependencies, packageJson.optionalDependencies]) {
+		for (const [dependencyName, dependencySource] of Object.entries(dependencies ?? {})) {
+			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
+			const installedPath = path.join(installDirectory, 'node_modules', ...dependencyName.split('/'))
+			if (existsSync(installedPath) && lstatSync(installedPath).isSymbolicLink()) unlinkSync(installedPath)
+		}
+	}
+}
+
+const runNonWindowsInstallWithoutLocalDependencies = () => {
+	const packageJson = readPackageJson()
+	let changed = false
+	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
+		for (const [dependencyName, dependencySource] of Object.entries(packageJson[dependencySection] ?? {})) {
+			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
+			delete packageJson[dependencySection]?.[dependencyName]
+			changed = true
+		}
+	}
+	if (!changed) return runInstall(['install', '--frozen-lockfile'])
+	const originalPackageJson = readFileSync(packageJsonPath, 'utf8')
+	writeFileAtomic(packageJsonBackupPath, originalPackageJson)
+	writePackageJson(packageJson)
+	try {
+		return runInstall(['install', '--no-save'])
+	} finally {
+		restoreInstallBackups()
+	}
+}
+
+if (process.platform !== 'win32') {
+	const preflightStatus = runInstall(['install', '--frozen-lockfile', '--lockfile-only'])
+	if (preflightStatus !== 0) process.exit(preflightStatus)
+	unlinkLocalZoltarDependencies()
+}
+const exitStatus = process.platform === 'win32' ? runWindowsInstallWithoutSharedCacheCopy() : runNonWindowsInstallWithoutLocalDependencies()
+if (exitStatus === 0) {
+	if (process.platform !== 'win32') linkLocalZoltarDependencies()
+	shareUiPreactRuntime(installDirectory)
+}
 
 process.exit(exitStatus)
