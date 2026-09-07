@@ -1,1 +1,1 @@
-export { getQuestionId, type QuestionIdentityData } from '@zoltar/shared/questionId'
+export { assertQuestionCreatedEvent, getQuestionId, type QuestionIdentityData } from '@zoltar/shared/questionId'

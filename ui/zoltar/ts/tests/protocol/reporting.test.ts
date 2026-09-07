@@ -26,8 +26,8 @@ const questionComponents = [
 	{ name: 'displayValueMax', type: 'int256' },
 	{ name: 'answerUnit', type: 'string' },
 ] as const
-const reportingQuestion = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-const reportingQuestionId = getQuestionId({ answerUnit: '', description: 'Description', displayValueMax: 100n, displayValueMin: 0n, endTime: 2n, numTicks: 2n, startTime: 1n, title: 'Question' }, ['Yes', 'No'])
+const reportingQuestion = ['Question', 'Description', 1n, 2n, 0n, 0n, 0n, ''] as const
+const reportingQuestionId = getQuestionId({ answerUnit: '', description: 'Description', displayValueMax: 0n, displayValueMin: 0n, endTime: 2n, numTicks: 0n, startTime: 1n, title: 'Question' }, ['Yes', 'No'])
 const reportingQuestionLog = {
 	data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [10n, reportingQuestion, ['Yes', 'No']]),
 	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(reportingQuestionId, { size: 32 })],
@@ -36,7 +36,7 @@ const getReportingQuestionLogs = async () => [reportingQuestionLog]
 let reportingChainIdentity = 0n
 
 function reportingBlockHash(chainIdentity: bigint, blockNumber: bigint): Hex {
-	return `0x${((chainIdentity << 64n) + blockNumber).toString(16).padStart(64, '0')}`
+	return `0x${((0x7265706f7274696en << 128n) + (chainIdentity << 64n) + blockNumber).toString(16).padStart(64, '0')}`
 }
 
 function createReportingBlockLoader() {
@@ -348,7 +348,7 @@ describe('reporting protocol client', () => {
 		const client = {
 			getBlock: createReportingBlockLoader(),
 			getLogs: getReportingQuestionLogs,
-			getCode: async () => '0x' as Hex,
+			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -377,7 +377,7 @@ describe('reporting protocol client', () => {
 		const client = {
 			getBlock: createReportingBlockLoader(),
 			getLogs: getReportingQuestionLogs,
-			getCode: async () => '0x' as Hex,
+			getCode: async request => (request.address === escalationGameAddress ? ('0x' as Hex) : ('0x1234' as Hex)),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -425,7 +425,7 @@ describe('reporting protocol client', () => {
 		const client = {
 			getBlock: createReportingBlockLoader(),
 			getLogs: getReportingQuestionLogs,
-			getCode: async () => '0x' as Hex,
+			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)

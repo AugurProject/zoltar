@@ -300,6 +300,7 @@ export const questionDataAbi = [
 		stateMutability: 'pure',
 		type: 'function',
 	},
+	{ inputs: [{ name: '', type: 'uint256' }], name: 'questionCreatedTimestamp', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
 			{ components: questionComponents, name: 'questionData', type: 'tuple' },

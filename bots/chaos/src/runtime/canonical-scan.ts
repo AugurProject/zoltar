@@ -10,7 +10,16 @@ import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, carryProofDeploymentPro
 import { carryProofJournalDigest, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
-import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, topologyCheckpointRequiresSave, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
+import {
+	immutableTopologyCacheExceedsConfiguredResidentLimits,
+	loadImmutableTopologyCache,
+	saveImmutableTopologyCache,
+	topologyCheckpointRequiresSave,
+	validateImmutableTopologyCache,
+	type CanonicalImmutableTopologyCache,
+	type ImmutableTopologyIdentity,
+	type ImmutableTopologyResidentLimits,
+} from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import type { WalletBalanceState } from '../state/operator-state.ts'
@@ -456,7 +465,7 @@ export function blockExecutableEvaluations(evaluations: readonly EvaluatedOperat
 }
 
 export function discoveryCoverageIsComplete(warnings: readonly string[]) {
-	return !warnings.some(warning => /\bdiscovery\b.*\btruncated\b/i.test(warning))
+	return !warnings.some(warning => /\bdiscovery\b.*(?:\btruncated\b|\bpaused\b|\bremains unavailable\b|\bexceeded\b)/i.test(warning))
 }
 
 export function unavailableOperationCatalog(reason: string): EvaluatedOperation[] {

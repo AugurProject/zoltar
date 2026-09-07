@@ -626,7 +626,6 @@
 		["exports", "ui/statoblast/ts/protocol/deployment.ts", "", "EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES"],
 		["exports", "ui/statoblast/ts/protocol/deployment.ts", "", "STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID"],
 		["exports", "ui/statoblast/ts/protocol/deployment.ts", "", "assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes"],
-		["exports", "ui/statoblast/ts/protocol/deployment.ts", "", "getStatoblastDeploymentStatusOracleStepAddresses"],
 		["exports", "ui/statoblast/ts/simulation/index.ts", "", "getStatoblastScenarioDescription"],
 		["exports", "ui/statoblast/ts/simulation/index.ts", "", "getStatoblastScenarioLabel"],
 		["exports", "ui/statoblast/ts/simulation/index.ts", "", "isStatoblastScenario"],

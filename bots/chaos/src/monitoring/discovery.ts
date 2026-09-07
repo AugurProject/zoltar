@@ -23,6 +23,8 @@ import {
 } from '../contracts/abi.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
 import { logRangeLimitError } from '@zoltar/bot-shared/monitoring/block-sync'
+import { assertQuestionCreatedEvent } from '@zoltar/bot-shared/protocol/question-id'
+import { getChildUniverseId } from '@zoltar/bot-shared/protocol/universe-id'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
@@ -75,7 +77,7 @@ const DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION = 4_096
 const DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION = IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES
 const MAXIMUM_TOPOLOGY_LOG_RANGE = 10_000n
 
-async function loadBoundedEventHistory<T>(parameters: { acceptPage?: (page: readonly T[]) => boolean; fetchRange: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>; fromBlock: bigint; maximumLogs: number; toBlock: bigint }) {
+async function loadBoundedEventHistory<T>(parameters: { acceptPage?: (page: readonly T[]) => boolean; fetchRange: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>; fromBlock: bigint; maximumLogs: number; toBlock: bigint; validatePage?: (page: readonly T[]) => Promise<void> }) {
 	const logs: T[] = []
 	if (parameters.fromBlock > parameters.toBlock) return { logs, minimumCount: logs.length, overflow: false }
 	for (let fromBlock = parameters.fromBlock; fromBlock <= parameters.toBlock; ) {
@@ -94,6 +96,7 @@ async function loadBoundedEventHistory<T>(parameters: { acceptPage?: (page: read
 			}
 			const remaining = parameters.maximumLogs - logs.length
 			if (page.length <= remaining) {
+				await parameters.validatePage?.(page)
 				if (parameters.acceptPage?.(page) === false) return { logs, minimumCount: logs.length + 1, overflow: true }
 				logs.push(...page)
 				fromBlock = toBlock + 1n
@@ -103,6 +106,7 @@ async function loadBoundedEventHistory<T>(parameters: { acceptPage?: (page: read
 				toBlock = fromBlock + (toBlock - fromBlock) / 2n
 				continue
 			}
+			await parameters.validatePage?.(page.slice(0, remaining + 1))
 			return { logs, minimumCount: logs.length + remaining + 1, overflow: true }
 		}
 	}
@@ -744,6 +748,13 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		fromBlock: replayFromBlock,
 		maximumLogs: Math.max(0, limits.maxUniverses - 1 - cachedChildCount),
 		toBlock: blockNumber,
+		validatePage: async page => {
+			await mapWithConcurrency(page, DISCOVERY_RPC_CONCURRENCY, async log => {
+				if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
+				const contractChildId = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [log.args.universeId, log.args.outcomeIndex], blockNumber, functionName: 'getChildUniverseId' })
+				if (contractChildId !== log.args.childUniverseId || getChildUniverseId(log.args.universeId, log.args.outcomeIndex) !== log.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+			})
+		},
 	})
 	if (childHistory.overflow) {
 		const observedCount = cachedChildCount + childHistory.minimumCount
@@ -760,11 +771,6 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		return []
 	}
 	const childLogs = childHistory.logs
-	await mapWithConcurrency(childLogs, DISCOVERY_RPC_CONCURRENCY, async log => {
-		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
-		const expectedChildId = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [log.args.universeId, log.args.outcomeIndex], blockNumber, functionName: 'getChildUniverseId' })
-		if (expectedChildId !== log.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
-	})
 	const childrenByParent = new Map<bigint, Array<{ childUniverseId: bigint; outcomeIndex: bigint }>>()
 	for (const log of childLogs) {
 		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
@@ -921,6 +927,18 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		fromBlock: replayFromBlock,
 		maximumLogs: Math.max(0, limits.maxQuestions - topology.questions.length),
 		toBlock: blockNumber,
+		validatePage: async page => {
+			await mapWithConcurrency(page, DISCOVERY_RPC_CONCURRENCY, async log => {
+				if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
+				const [contractQuestionId, contractCreatedTimestamp] = await Promise.all([
+					client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [log.args.questionData, log.args.outcomeOptions], blockNumber, functionName: 'getQuestionId' }),
+					client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [log.args.questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
+				])
+				if (contractQuestionId !== log.args.questionId) throw new Error(`QuestionCreated event ${log.args.questionId.toString()} has a mismatched deterministic question ID`)
+				if (contractCreatedTimestamp !== log.args.createdTimestamp) throw new Error(`QuestionCreated event ${log.args.questionId.toString()} has a mismatched creation timestamp`)
+				assertQuestionCreatedEvent(log.args.questionData, log.args.outcomeOptions, log.args.questionId, log.args.createdTimestamp)
+			})
+		},
 	})
 	const logs = history.logs
 	if (history.overflow) {
@@ -946,11 +964,6 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		warnings.push(`Question discovery paused because at least ${count.toString()} creation events exceed the configured ${limits.maxQuestions.toString()}-entry resident limit`)
 		return []
 	}
-	await mapWithConcurrency(logs, DISCOVERY_RPC_CONCURRENCY, async log => {
-		if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
-		const expectedQuestionId = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [log.args.questionData, log.args.outcomeOptions], blockNumber, functionName: 'getQuestionId' })
-		if (expectedQuestionId !== log.args.questionId) throw new Error(`QuestionCreated event ${log.args.questionId.toString()} has a mismatched deterministic question ID`)
-	})
 	const questions = [
 		...topology.questions,
 		...logs.map(log => {
@@ -1198,7 +1211,8 @@ async function discoverPools(
 	for (const routes of childProgressByPool.values()) routes.sort((left, right) => compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex))
 	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'securityPoolDeploymentCount' })
 	const questionCursor = topology.discoveryCursors.questions
-	const dependenciesComplete = questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && !warnings.some(warning => /Universe discovery.*truncated/i.test(warning))
+	const universeCursor = topology.discoveryCursors.universeChildren
+	const dependenciesComplete = questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && universeCursor.retentionMode === 'resident' && universeCursor.nextIndex === universeCursor.canonicalCount
 	let cursor = topology.discoveryCursors.poolDeployments
 	assertRegistryCountNotRegressed(cursor, count, 'Security-pool registry')
 	const retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxPools) && dependenciesComplete ? 'resident' : 'overflow'
@@ -1258,6 +1272,8 @@ async function discoverPools(
 		const cachedDeployment = deploymentIndex < cachedDeploymentCount
 		const authenticatedUniverse = universeById.get(deployment.universeId)
 		if (authenticatedUniverse === undefined) throw new Error(`Pool ${address} references undiscovered universe ${deployment.universeId}`)
+		const poolQuestion = questionById.get(deployment.questionId)
+		if (poolQuestion === undefined) throw new Error(`Pool ${address} references undiscovered question ${deployment.questionId}`)
 		const [
 			repToken,
 			shareToken,
@@ -1509,10 +1525,8 @@ async function discoverPools(
 		const walletVault = vaults.find(vault => sameAddress(vault.address, wallet))
 		if (walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
 		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault.repBackingUnits), totalRepBackingUnits, poolRepBalanceAttoRep)
-		const poolQuestion = questionById.get(questionId.toString())
 		const forkQuestion = questionById.get(universe.forkQuestionId)
-		let feeEndTimestamp: bigint | undefined
-		if (universe !== undefined && poolQuestion !== undefined) feeEndTimestamp = BigInt(universe.forkTime) === 0n ? BigInt(poolQuestion.endTime) : BigInt(universe.forkTime)
+		const feeEndTimestamp = BigInt(universe.forkTime) === 0n ? BigInt(poolQuestion.endTime) : BigInt(universe.forkTime)
 		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp)
 		const unresolvedEscalationMigrationReadyOutcomes: string[] = []
 		if (inspectEveryVault && forkData.unresolvedEscalationAtFork) {
@@ -1883,6 +1897,14 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		discoverQuestions(context, blockNumber, scanFromBlock, limits, topology, topologyMutation, warnings),
 		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
+	const questionCursor = topology.discoveryCursors.questions
+	const universeCursor = topology.discoveryCursors.universeChildren
+	if (questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && universeCursor.retentionMode === 'resident' && universeCursor.nextIndex === universeCursor.canonicalCount) {
+		const questionIds = new Set(questions.map(question => question.id))
+		for (const universe of universes) {
+			if (universe.forkQuestionId !== '0' && !questionIds.has(universe.forkQuestionId)) throw new Error(`Universe ${universe.id} references undiscovered fork question ${universe.forkQuestionId}`)
+		}
+	}
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
 	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.allowMissingTradingDeployment ? await discoverUniverseUniswap(context, universes, blockNumber) : undefined
@@ -1918,6 +1940,19 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		universes,
 		wallet: { address: context.wallet, ethBalanceAttoEth: ethBalanceAttoEth.toString(), lpTokens, openOracleEthCredit: openOracleEthCredit.toString(), shares, tokens },
 		warnings: canonicalDiscoveryWarnings(warnings),
+	}
+	const confirmedBlock = await context.client.getBlock({ blockNumber })
+	if (
+		confirmedBlock.hash === null ||
+		confirmedBlock.hash === undefined ||
+		confirmedBlock.number !== blockNumber ||
+		confirmedBlock.baseFeePerGas === null ||
+		confirmedBlock.baseFeePerGas === undefined ||
+		confirmedBlock.hash.toLowerCase() !== block.hash.toLowerCase() ||
+		confirmedBlock.baseFeePerGas !== block.baseFeePerGas ||
+		confirmedBlock.timestamp !== block.timestamp
+	) {
+		throw new Error(`Canonical discovery anchor ${blockNumber.toString()} changed during discovery`)
 	}
 	context.recordTopologyCache?.(
 		{

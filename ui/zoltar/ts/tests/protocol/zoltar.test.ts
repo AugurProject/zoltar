@@ -184,6 +184,14 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.childUniverses).toEqual([])
 	})
 
+	test('rejects a forked universe whose required question creation event is missing', async () => {
+		const client = createReadClient({
+			multicallResponses: [[REP_TOKEN, [0n, 123n, 2n, zeroAddress, 77n], 15n, 5n, 5n]],
+			readContractHandlers: { getTotalTheoreticalSupplyAttoRep: async () => 222n },
+		})
+		await expect(loadZoltarUniverseSummary(client, 8n)).rejects.toThrow('Required QuestionCreated event is missing for question 123')
+	})
+
 	test('rejects a scalar child event with a mismatched deterministic universe ID', async () => {
 		const scalarQuestion = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units'] as const
 		const scalarQuestionId = getQuestionId(questionObject(scalarQuestion), [])

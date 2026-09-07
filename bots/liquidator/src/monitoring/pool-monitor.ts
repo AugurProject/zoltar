@@ -1,5 +1,5 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { createCanonicalLogLoader, fetchLogsWithAdaptiveRanges, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/bot-shared/monitoring/block-sync'
+import { createCanonicalLogLoader, encodedLogByteLength, fetchLogsWithAdaptiveRanges, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
 import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
@@ -19,8 +19,14 @@ const loadCanonicalChildLogs = createCanonicalLogLoader({
 	loadBlockAnchor: async (client: ReadClient, blockNumber?: bigint) => requiredCanonicalBlockAnchor(await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })),
 	loadCacheIdentity: async (client: ReadClient) => (await client.getBlock({ blockNumber: 0n })).hash,
 	loadStartBlock: async (client: ReadClient, address: Address, toBlock?: bigint) => await findContractDeploymentBlock(client, address, toBlock),
+	maximumBytes: 32 * 1024 * 1024,
 	maximumItems: 10_000,
 	maximumRange: MAXIMUM_DEPLOYMENT_LOG_RANGE,
+	measureItem: encodedLogByteLength,
+	validateItem: log => {
+		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
+		assertDeterministicChildUniverseId(log.args.universeId, log.args.outcomeIndex, log.args.childUniverseId)
+	},
 })
 
 type PoolDeployment = {

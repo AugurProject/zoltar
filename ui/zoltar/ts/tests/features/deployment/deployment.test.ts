@@ -189,7 +189,7 @@ void describe('deployment helpers', () => {
 		expect(multicall3Step?.address).toBe(getMulticall3Address())
 	})
 
-	void test('loadDeploymentStatusSnapshot returns the proxy deployer when the oracle is missing', async () => {
+	void test('loadDeploymentStatusSnapshot returns the proxy deployer when later deployment steps are missing', async () => {
 		const snapshot = await loadDeploymentStatusSnapshot(readClient)
 
 		expect(snapshot.applicationDeploymentComplete).toBe(false)

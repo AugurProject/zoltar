@@ -20,7 +20,7 @@ import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportin
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
-import { loadMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
+import { loadRequiredMarketDetails } from '@zoltar/ui-zoltar/protocol/zoltar.js'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
 
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
@@ -486,7 +486,7 @@ async function loadSecurityPoolDetails(
 				args: [],
 			},
 		]),
-		loadMarketDetails(client, questionId),
+		loadRequiredMarketDetails(client, questionId),
 		shouldLoadVaults
 			? loadSecurityPoolVaultSummaries(client, securityPoolAddress, {
 					...(options.accountAddress === undefined ? {} : { accountAddress: options.accountAddress }),

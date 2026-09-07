@@ -168,4 +168,49 @@ describe('canonical log indexes', () => {
 		expect(index.items).toEqual([])
 		expect(index.anchor).toBeUndefined()
 	})
+
+	test('refetches a range after fetched log validation fails', async () => {
+		const index = createCanonicalLogIndex<string>()
+		let fetchCount = 0
+		let corrected = false
+		const parameters = {
+			fetchRange: async () => {
+				fetchCount += 1
+				return [corrected ? 'authenticated' : 'malformed']
+			},
+			key: 'questions',
+			loadBlockAnchor: async (blockNumber = 1n) => ({ blockHash: `chain:${blockNumber.toString()}`, blockNumber }),
+			maximumItems: 10,
+			maximumRange: 10_000n,
+			startBlock: 1n,
+			validateItem: (item: string) => {
+				if (item !== 'authenticated') throw new Error('Fetched log failed authentication')
+			},
+		}
+
+		await expect(refreshCanonicalLogIndex(index, parameters)).rejects.toThrow('Fetched log failed authentication')
+		expect(index.items).toEqual([])
+		expect(index.anchor).toBeUndefined()
+		corrected = true
+		expect(await refreshCanonicalLogIndex(index, parameters)).toEqual(['authenticated'])
+		expect(fetchCount).toBe(2)
+	})
+
+	test('fails closed before retaining a log history beyond its byte limit', async () => {
+		const index = createCanonicalLogIndex<string>()
+		await expect(
+			refreshCanonicalLogIndex(index, {
+				fetchRange: async () => ['oversized'],
+				key: 'questions',
+				loadBlockAnchor: async (blockNumber = 1n) => ({ blockHash: `chain:${blockNumber.toString()}`, blockNumber }),
+				maximumBytes: 8,
+				maximumItems: 10,
+				maximumRange: 10_000n,
+				measureItem: item => item.length,
+				startBlock: 1n,
+			}),
+		).rejects.toThrow('exceeds the configured 8-byte limit')
+		expect(index.items).toEqual([])
+		expect(index.anchor).toBeUndefined()
+	})
 })

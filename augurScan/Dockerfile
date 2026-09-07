@@ -25,6 +25,8 @@ COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compo
 COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts
 COPY augurScan/src ./augurScan/src
 COPY shared/ts/ethereum.ts ./shared/ts/ethereum.ts
+COPY shared/ts/questionId.ts ./shared/ts/questionId.ts
+COPY shared/ts/universeId.ts ./shared/ts/universeId.ts
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000

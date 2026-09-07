@@ -1,31 +1,135 @@
 {
-	"network": { "chainId": 11155111, "chainIdHex": "0xaa36a7", "genesisRepTokenAddress": "0x13CD80A6741A6349d2FeBDd65991108eCfD4f283", "id": "sepolia", "name": "Sepolia", "wethAddress": "0x65156FD21726b8efcB627fa38c506E3f3542F601" },
-	"protocolConfig": { "forkBurnDivisor": "5", "forkThresholdDivisor": "20", "minimumSecurityBondDebtAttoEth": "1000000000000000000", "minimumVaultRepDepositAttoRep": "0" },
+	"network": {
+		"chainId": 11155111,
+		"chainIdHex": "0xaa36a7",
+		"genesisRepTokenAddress": "0x13CD80A6741A6349d2FeBDd65991108eCfD4f283",
+		"id": "sepolia",
+		"name": "Sepolia",
+		"wethAddress": "0x65156FD21726b8efcB627fa38c506E3f3542F601"
+	},
+	"protocolConfig": {
+		"forkBurnDivisor": "5",
+		"forkThresholdDivisor": "20",
+		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
+		"minimumVaultRepDepositAttoRep": "0"
+	},
 	"deploymentSteps": [
-		{ "id": "proxyDeployer", "label": "Proxy Deployer", "address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12" },
-		{ "id": "weth", "label": "Wrapped Ether", "address": "0x65156FD21726b8efcB627fa38c506E3f3542F601" },
-		{ "id": "reputationToken", "label": "Genesis Reputation Token", "address": "0x13CD80A6741A6349d2FeBDd65991108eCfD4f283" },
-		{ "id": "multicall3", "label": "Multicall3", "address": "0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108" },
-		{ "id": "scalarOutcomes", "label": "ScalarOutcomes", "address": "0x9AdECC476DdF3a0E89B7540302758123308B03A0" },
-		{ "id": "zoltarQuestionData", "label": "ZoltarQuestionData", "address": "0x2645A9c9408eA1b3314cd24D02E6611ee2c3Fd18" },
-		{ "id": "zoltar", "label": "Zoltar", "address": "0x1324DbE25B58B6C2e0C9c513611ebC44F45e2A8f" },
-		{ "id": "uniformPriceDualCapBatchAuctionFactory", "label": "UniformPriceDualCapBatchAuctionFactory", "address": "0x50b3Fc6D3351016BBC71cECAF2C0b661a84924B2" },
-		{ "id": "securityPoolUtils", "label": "SecurityPoolUtils", "address": "0x8186ddBc1464Bf279f208A66170ba96D6726f00d" },
-		{ "id": "securityPoolOperationsDelegate", "label": "Security Pool Operations Delegate", "address": "0x476B2031aaBa0136B793da959eef734EbeA02738" },
-		{ "id": "openOracle", "label": "OpenOracle", "address": "0x529dcaC57677451CBfe766d88CcC133D082500df" },
-		{ "id": "shareTokenFactory", "label": "ShareTokenFactory", "address": "0x9ee06858FfCb732660e8E172FAD12Ed30a3a2Af4" },
-		{ "id": "priceOracleManagerAndOperatorQueuerFactory", "label": "OpenOracle Price Coordinator Factory", "address": "0x6b091445042a0d42c8b4023190Fc590519aea7D1" },
-		{ "id": "securityPoolForker", "label": "Security Pool Forker", "address": "0xA1C13aB84D88818d4DA431391F2C267249931034" },
-		{ "id": "escalationGameClaimDelegate", "label": "Escalation Claim Checkpoint Delegate", "address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f" },
-		{ "id": "escalationGameFactory", "label": "Escalation Game Factory", "address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c" },
-		{ "id": "securityPoolFactory", "label": "Security Pool Factory", "address": "0xED1dF01e3Acd94539b277dB6e9b99F810Df4E7ca" }
+		{
+			"id": "proxyDeployer",
+			"label": "Proxy Deployer",
+			"address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12"
+		},
+		{
+			"id": "weth",
+			"label": "Wrapped Ether",
+			"address": "0x65156FD21726b8efcB627fa38c506E3f3542F601"
+		},
+		{
+			"id": "reputationToken",
+			"label": "Genesis Reputation Token",
+			"address": "0x13CD80A6741A6349d2FeBDd65991108eCfD4f283"
+		},
+		{
+			"id": "multicall3",
+			"label": "Multicall3",
+			"address": "0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108"
+		},
+		{
+			"id": "scalarOutcomes",
+			"label": "ScalarOutcomes",
+			"address": "0x9AdECC476DdF3a0E89B7540302758123308B03A0"
+		},
+		{
+			"id": "zoltarQuestionData",
+			"label": "ZoltarQuestionData",
+			"address": "0x2645A9c9408eA1b3314cd24D02E6611ee2c3Fd18"
+		},
+		{
+			"id": "zoltar",
+			"label": "Zoltar",
+			"address": "0xdd3D274A8abEB370B66462b76A2d0C7204d88615"
+		},
+		{
+			"id": "uniformPriceDualCapBatchAuctionFactory",
+			"label": "UniformPriceDualCapBatchAuctionFactory",
+			"address": "0x50b3Fc6D3351016BBC71cECAF2C0b661a84924B2"
+		},
+		{
+			"id": "securityPoolUtils",
+			"label": "SecurityPoolUtils",
+			"address": "0x8186ddBc1464Bf279f208A66170ba96D6726f00d"
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "Security Pool Operations Delegate",
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
+		},
+		{
+			"id": "openOracle",
+			"label": "OpenOracle",
+			"address": "0x529dcaC57677451CBfe766d88CcC133D082500df"
+		},
+		{
+			"id": "shareTokenFactory",
+			"label": "ShareTokenFactory",
+			"address": "0xBd581E4Adb6022e1063D65fb37e6644414e80487"
+		},
+		{
+			"id": "priceOracleManagerAndOperatorQueuerFactory",
+			"label": "OpenOracle Price Coordinator Factory",
+			"address": "0x6b091445042a0d42c8b4023190Fc590519aea7D1"
+		},
+		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0xfB55C335baef51c87d6FbEc9C0562f0A43c75c5C"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "Escalation Claim Checkpoint Delegate",
+			"address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0xBa4789AAC918C6CCDb68d6ba9A8daB24f9913Eb7"
+		}
 	],
 	"derivedContracts": [
-		{ "id": "securityPoolForker", "label": "Security Pool Forker", "address": "0xA1C13aB84D88818d4DA431391F2C267249931034" },
-		{ "id": "escalationGameClaimDelegate", "label": "Escalation Claim Checkpoint Delegate", "address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f" },
-		{ "id": "escalationGameFactory", "label": "Escalation Game Factory", "address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c" },
-		{ "id": "securityPoolFactory", "label": "Security Pool Factory", "address": "0xED1dF01e3Acd94539b277dB6e9b99F810Df4E7ca" },
-		{ "id": "securityPoolOperationsDelegate", "label": "Security Pool Operations Delegate", "address": "0x476B2031aaBa0136B793da959eef734EbeA02738" },
-		{ "id": "escalationGameProofVerifier", "label": "Escalation Game Proof Verifier", "address": "0x8C648789566Ae350f147228e46aBE8bB63540Ffd" }
+		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0xfB55C335baef51c87d6FbEc9C0562f0A43c75c5C"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "Escalation Claim Checkpoint Delegate",
+			"address": "0x26CA07838f50Fd03d9b586f8780F42De9877286f"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0x594Baa70146fBB9c29d9cBaE51102a699a10707c"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0xBa4789AAC918C6CCDb68d6ba9A8daB24f9913Eb7"
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "Security Pool Operations Delegate",
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
+		},
+		{
+			"id": "escalationGameProofVerifier",
+			"label": "Escalation Game Proof Verifier",
+			"address": "0x8C648789566Ae350f147228e46aBE8bB63540Ffd"
+		}
 	]
 }

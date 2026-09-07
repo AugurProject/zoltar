@@ -544,10 +544,13 @@ describe('canonical scan policy', () => {
 		expect(completeOperationCoverage(coverage).filter(operation => operation.definition.method === 'claimAuctionProceeds')).toHaveLength(1)
 	})
 
-	test('fails closed when any bounded discovery collection is truncated', () => {
+	test('fails closed for every incomplete bounded-discovery status and recovers when coverage is complete', () => {
 		expect(discoveryCoverageIsComplete([])).toBeTrue()
 		expect(discoveryCoverageIsComplete(['Pool discovery truncated at 100 entries'])).toBeFalse()
 		expect(discoveryCoverageIsComplete(['Share-inventory discovery truncated because planned fan-out exceeds its aggregate limit'])).toBeFalse()
+		expect(discoveryCoverageIsComplete(['Universe discovery paused at block 123 after reaching the 100-universe limit'])).toBeFalse()
+		expect(discoveryCoverageIsComplete(['Universe discovery remains unavailable at block 123 after reaching the 100-universe limit'])).toBeFalse()
+		expect(discoveryCoverageIsComplete(['Question discovery exceeded the bounded byte budget at block 123'])).toBeFalse()
 		expect(discoveryCoverageIsComplete(['A non-coverage advisory'])).toBeTrue()
 	})
 

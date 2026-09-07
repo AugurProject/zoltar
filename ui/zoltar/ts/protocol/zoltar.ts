@@ -1,8 +1,8 @@
 import { decodeEventLog, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { createCanonicalLogLoader, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
+import { createCanonicalLogLoader, encodedLogByteLength, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
+import { assertQuestionCreatedEvent } from '@zoltar/shared/questionId'
 import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
 import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
@@ -22,22 +22,46 @@ const ANSWER_OPTION_ABI = [
 ] as const
 
 const MAXIMUM_EVENT_LOG_RANGE = 10_000n
+const MAXIMUM_EVENT_LOG_BYTES = 32 * 1024 * 1024
 const questionCreatedEvent = ZoltarQuestionData_ZoltarQuestionData.abi.find((entry): entry is Extract<(typeof ZoltarQuestionData_ZoltarQuestionData.abi)[number], { type: 'event'; name: 'QuestionCreated' }> => entry.type === 'event' && entry.name === 'QuestionCreated')
 if (questionCreatedEvent === undefined) throw new Error('QuestionCreated event missing from ABI')
 const deployChildEvent = Zoltar_Zoltar.abi.find((entry): entry is Extract<(typeof Zoltar_Zoltar.abi)[number], { type: 'event'; name: 'DeployChild' }> => entry.type === 'event' && entry.name === 'DeployChild')
 if (deployChildEvent === undefined) throw new Error('DeployChild event missing from ABI')
 
-const canonicalEventLoader = <Event extends typeof questionCreatedEvent | typeof deployChildEvent>(event: Event) =>
+function requireEventTopics(topics: readonly `0x${string}`[]) {
+	const [signature, ...arguments_] = topics
+	if (signature === undefined) throw new Error('Event log is missing its signature topic')
+	return [signature, ...arguments_] as const
+}
+
+function decodeQuestionCreatedLog(log: Readonly<{ data: `0x${string}`; topics: readonly `0x${string}`[] }>) {
+	const decoded = decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: requireEventTopics(log.topics) })
+	if (decoded.eventName !== 'QuestionCreated') throw new Error('QuestionCreated event query returned an unexpected event')
+	assertQuestionCreatedEvent(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId, decoded.args.createdTimestamp)
+	return decoded.args
+}
+
+function decodeDeployChildLog(log: Readonly<{ data: `0x${string}`; topics: readonly `0x${string}`[] }>) {
+	const decoded = decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: requireEventTopics(log.topics) })
+	if (decoded.eventName !== 'DeployChild') throw new Error('DeployChild event query returned an unexpected event')
+	if (getChildUniverseId(decoded.args.universeId, decoded.args.outcomeIndex) !== decoded.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+	return decoded.args
+}
+
+const canonicalEventLoader = <Log extends Readonly<{ data: string; topics: readonly string[] }>>(fetchRange: (client: ReadClient, address: Address, range: Readonly<{ fromBlock: bigint; toBlock: bigint }>) => Promise<readonly Log[]>, validateItem: (log: Log) => void) =>
 	createCanonicalLogLoader({
-		fetchRange: async (client: ReadClient, address: Address, range) => await client.getLogs({ address, event, fromBlock: range.fromBlock, toBlock: range.toBlock }),
+		fetchRange,
 		loadBlockAnchor: async (client: ReadClient, blockNumber?: bigint) => requiredCanonicalBlockAnchor(await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })),
 		loadCacheIdentity: async (client: ReadClient) => (await client.getBlock({ blockNumber: 0n })).hash,
 		loadStartBlock: async (client: ReadClient, address: Address, toBlock?: bigint) => await findContractDeploymentBlock(client, address, toBlock),
+		maximumBytes: MAXIMUM_EVENT_LOG_BYTES,
 		maximumItems: 10_000,
 		maximumRange: MAXIMUM_EVENT_LOG_RANGE,
+		measureItem: encodedLogByteLength,
+		validateItem,
 	})
-const loadCanonicalQuestionCreatedLogs = canonicalEventLoader(questionCreatedEvent)
-const loadCanonicalDeployChildLogs = canonicalEventLoader(deployChildEvent)
+const loadCanonicalQuestionCreatedLogs = canonicalEventLoader(async (client, address, range) => await client.getLogs({ address, event: questionCreatedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }), decodeQuestionCreatedLog)
+const loadCanonicalDeployChildLogs = canonicalEventLoader(async (client, address, range) => await client.getLogs({ address, event: deployChildEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }), decodeDeployChildLog)
 
 function requireBigintArray(value: unknown, context: string): bigint[] {
 	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
@@ -52,17 +76,7 @@ function getDeploymentStepAddress(id: 'zoltar' | 'zoltarQuestionData') {
 
 async function loadQuestionEvents(client: ReadClient) {
 	const logs = await loadCanonicalQuestionCreatedLogs(client, getDeploymentStepAddress('zoltarQuestionData'))
-	return logs.flatMap(log => {
-		try {
-			const decoded = decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'QuestionCreated') return []
-			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
-			return [decoded.args]
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			return []
-		}
-	})
+	return logs.map(decodeQuestionCreatedLog)
 }
 
 function marketDetailsFromQuestionEvent(created: Awaited<ReturnType<typeof loadQuestionEvents>>[number]): MarketDetails {
@@ -90,6 +104,12 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 	const created = (await loadQuestionEvents(client)).find(event => event.questionId === questionId)
 	if (created === undefined) return { answerUnit: '', createdAt: 0n, description: '', displayValueMax: 0n, displayValueMin: 0n, endTime: 0n, exists: false, marketType: 'binary', outcomeLabels: [], numTicks: 0n, questionId: getQuestionIdHex(questionId), startTime: 0n, title: '' }
 	return marketDetailsFromQuestionEvent(created)
+}
+
+export async function loadRequiredMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
+	const marketDetails = await loadMarketDetails(client, questionId)
+	if (!marketDetails.exists) throw new Error(`Required QuestionCreated event is missing for question ${questionId.toString()}`)
+	return marketDetails
 }
 
 export async function loadAllZoltarQuestions(client: ReadClient): Promise<MarketDetails[]> {
@@ -171,22 +191,11 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined
 	if (hasForked && forkQuestionId > 0n) {
-		const marketDetails = await loadMarketDetails(client, forkQuestionId)
+		const marketDetails = await loadRequiredMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
 		if (marketDetails.marketType === 'scalar') {
 			const logs = await loadCanonicalDeployChildLogs(client, zoltarAddress)
-			const deployed = logs.flatMap(log => {
-				try {
-					const decoded = decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: log.topics })
-					return decoded.eventName === 'DeployChild' && decoded.args.universeId === universeId ? [decoded.args] : []
-				} catch (error) {
-					if (!isIgnorableLogDecodeError(error)) throw error
-					return []
-				}
-			})
-			for (const child of deployed) {
-				if (getChildUniverseId(child.universeId, child.outcomeIndex) !== child.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
-			}
+			const deployed = logs.map(decodeDeployChildLog).filter(event => event.universeId === universeId)
 			const outcomeIndexes = deployed.map(event => event.outcomeIndex)
 			const childUniverseIds = deployed.map(event => event.childUniverseId)
 			const childUniverseTuples = requireUniverseTupleArray(

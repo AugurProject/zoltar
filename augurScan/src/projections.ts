@@ -1,4 +1,5 @@
-import { encodeAbiParameters, getAddress, isAddress, keccak256 } from './ethereum.ts'
+import { getAddress, isAddress } from './ethereum.ts'
+import { assertQuestionCreatedEvent, getChildUniverseId } from './protocol-identities.ts'
 import { unixSecondsToDate } from './time.ts'
 import type { StoredLog } from './types.ts'
 
@@ -195,55 +196,6 @@ const strings = (value: unknown, name: string): readonly string[] => {
 	return value.map((item) => string(item, name))
 }
 
-const deterministicQuestionId = (data: Record<string, unknown>, outcomes: readonly string[]) => {
-	const questionData = {
-		title: string(data['title'], 'title'),
-		description: string(data['description'], 'description'),
-		startTime: BigInt(integerString(data['startTime'], 'startTime')),
-		endTime: BigInt(integerString(data['endTime'], 'endTime')),
-		numTicks: BigInt(integerString(data['numTicks'], 'numTicks')),
-		displayValueMin: BigInt(integerString(data['displayValueMin'], 'displayValueMin')),
-		displayValueMax: BigInt(integerString(data['displayValueMax'], 'displayValueMax')),
-		answerUnit: string(data['answerUnit'], 'answerUnit'),
-	}
-	if (outcomes.length > 0) {
-		const metadataDigest = keccak256(
-			encodeAbiParameters([{ type: 'string' }, { type: 'string' }, { type: 'string[]' }], [questionData.title, questionData.description, outcomes]),
-		)
-		return BigInt(
-			keccak256(
-				encodeAbiParameters([{ type: 'uint48' }, { type: 'uint48' }, { type: 'bytes32' }], [questionData.startTime, questionData.endTime, metadataDigest]),
-			),
-		)
-	}
-	return BigInt(
-		keccak256(
-			encodeAbiParameters(
-				[
-					{
-						type: 'tuple',
-						components: [
-							{ name: 'title', type: 'string' },
-							{ name: 'description', type: 'string' },
-							{ name: 'startTime', type: 'uint48' },
-							{ name: 'endTime', type: 'uint48' },
-							{ name: 'numTicks', type: 'uint120' },
-							{ name: 'displayValueMin', type: 'int256' },
-							{ name: 'displayValueMax', type: 'int256' },
-							{ name: 'answerUnit', type: 'string' },
-						],
-					},
-					{ type: 'string[]' },
-				],
-				[questionData, outcomes],
-			),
-		),
-	)
-}
-
-const deterministicChildUniverseId = (parentUniverseId: bigint, outcomeIndex: bigint) =>
-	BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, outcomeIndex]))) & ((1n << 248n) - 1n)
-
 const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	AwaitingForkContinuationSet: ['awaitingForkContinuation'],
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
@@ -264,12 +216,27 @@ const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 		const data = record(args['questionData'], 'questionData')
 		const outcomeOptions = strings(args['outcomeOptions'], 'outcomeOptions')
 		const questionId = BigInt(integerString(args['questionId'], 'questionId'))
-		if (deterministicQuestionId(data, outcomeOptions) !== questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+		const createdTimestamp = BigInt(integerString(args['createdTimestamp'], 'createdTimestamp'))
+		assertQuestionCreatedEvent(
+			{
+				answerUnit: string(data['answerUnit'], 'answerUnit'),
+				description: string(data['description'], 'description'),
+				displayValueMax: BigInt(integerString(data['displayValueMax'], 'displayValueMax')),
+				displayValueMin: BigInt(integerString(data['displayValueMin'], 'displayValueMin')),
+				endTime: BigInt(integerString(data['endTime'], 'endTime')),
+				numTicks: BigInt(integerString(data['numTicks'], 'numTicks')),
+				startTime: BigInt(integerString(data['startTime'], 'startTime')),
+				title: string(data['title'], 'title'),
+			},
+			outcomeOptions,
+			questionId,
+			createdTimestamp,
+		)
 		return [
 			{
 				type: 'question',
 				questionId: questionId.toString(),
-				createdTimestamp: timestamp(args['createdTimestamp'], 'createdTimestamp'),
+				createdTimestamp: unixSecondsToDate(createdTimestamp, 'createdTimestamp'),
 				title: string(data['title'], 'title'),
 				description: string(data['description'], 'description'),
 				startTime: timestamp(data['startTime'], 'startTime'),
@@ -512,7 +479,7 @@ const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 		const childUniverseId = BigInt(integerString(args['childUniverseId'], 'childUniverseId'))
 		const parentUniverseId = BigInt(integerString(args['universeId'], 'universeId'))
 		const outcomeIndex = BigInt(integerString(args['outcomeIndex'], 'outcomeIndex'))
-		if (deterministicChildUniverseId(parentUniverseId, outcomeIndex) !== childUniverseId)
+		if (getChildUniverseId(parentUniverseId, outcomeIndex) !== childUniverseId)
 			throw new Error('DeployChild event has a mismatched deterministic child universe ID')
 		return [
 			{

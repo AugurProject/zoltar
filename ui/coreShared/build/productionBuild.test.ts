@@ -25,6 +25,13 @@ beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
 		const productionEnvironment = { ...process.env }
 		delete productionEnvironment['UI_BUILD_ENABLE_SIMULATION']
+		const preparation = Bun.spawnSync([process.execPath, 'run', 'ui:build:apps'], {
+			cwd: repositoryRootPath,
+			env: productionEnvironment,
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		if (preparation.exitCode !== 0) throw new Error(`UI production build preparation failed\n${new TextDecoder().decode(preparation.stdout)}${new TextDecoder().decode(preparation.stderr)}`)
 		for (const appId of UI_APP_IDS) {
 			const appPaths = appPathsById.get(appId)
 			if (appPaths === undefined) throw new Error(`No path information recorded for ${appId}.`)
@@ -39,7 +46,7 @@ beforeAll(async () => {
 			expect(appBundle).not.toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
 			await expect(fs.access(path.join(appPaths.appDistAssetsRoot, 'tevmWorker.worker.js'))).rejects.toThrow()
 		}
-		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
+		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod:current'], {
 			cwd: repositoryRootPath,
 			env: { ...process.env, UI_BUILD_ENABLE_SIMULATION: '1' },
 			stderr: 'pipe',

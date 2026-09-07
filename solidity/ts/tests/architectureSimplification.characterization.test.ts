@@ -19,7 +19,10 @@ describe('deletion-first architecture characterization', () => {
 		const questionFunctions = functionNames(ZoltarQuestionData_ZoltarQuestionData.abi)
 		const zoltarFunctions = functionNames(Zoltar_Zoltar.abi)
 		expect(questionFunctions).toContain('getQuestionId')
+		expect(questionFunctions).not.toContain('getQuestions')
+		expect(questionFunctions).not.toContain('getOutcomeLabels')
 		expect(zoltarFunctions).toContain('getChildUniverseId')
+		expect(zoltarFunctions).not.toContain('getDeployedChildUniverses')
 	})
 
 	test('branch-neutral Zoltar exposes no canonical-child selection or deletion entry point', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, type Hex, keccak256 } from '../src/ethereum.ts'
 import { projectionsFrom, semanticEventNames } from '../src/projections.ts'
+import { assertQuestionCreatedEvent, getChildUniverseId } from '../src/protocol-identities.ts'
 import type { StoredLog } from '../src/types.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
@@ -43,6 +44,37 @@ const log = (name: string, argumentsValue: Record<string, unknown>, address = po
 })
 
 describe('state projections', () => {
+	test('matches canonical categorical, scalar, and child protocol IDs', () => {
+		expect(() => assertQuestionCreatedEvent(questionData, questionOutcomes, questionId, 1n)).not.toThrow()
+		const scalarData = { ...questionData, answerUnit: 'units', displayValueMax: 10n, numTicks: 10n }
+		const scalarExpected = BigInt(
+			keccak256(
+				encodeAbiParameters(
+					[
+						{
+							components: [
+								{ name: 'title', type: 'string' },
+								{ name: 'description', type: 'string' },
+								{ name: 'startTime', type: 'uint48' },
+								{ name: 'endTime', type: 'uint48' },
+								{ name: 'numTicks', type: 'uint120' },
+								{ name: 'displayValueMin', type: 'int256' },
+								{ name: 'displayValueMax', type: 'int256' },
+								{ name: 'answerUnit', type: 'string' },
+							],
+							type: 'tuple',
+						},
+						{ type: 'string[]' },
+					],
+					[scalarData, []],
+				),
+			),
+		)
+		expect(() => assertQuestionCreatedEvent(scalarData, [], scalarExpected, 1n)).not.toThrow()
+		const childExpected = BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [7n, 2n]))) & ((1n << 248n) - 1n)
+		expect(getChildUniverseId(7n, 2n)).toBe(childExpected)
+	})
+
 	test('keeps every semantic taxonomy entry backed by the pinned ABI catalog', async () => {
 		const catalog = (await Bun.file(new URL('../config/abis.json', import.meta.url)).json()) as {
 			contracts: Record<string, { abi: Array<{ type?: unknown; name?: unknown }> }>
@@ -79,6 +111,43 @@ describe('state projections', () => {
 				}),
 			),
 		).toThrow('mismatched deterministic question ID')
+	})
+
+	test('rejects a scalar question event with a reversed protocol time range', () => {
+		const scalarData = { ...questionData, answerUnit: 'units', displayValueMax: 10n, endTime: 1000n, numTicks: 10n, startTime: 1100n }
+		const scalarQuestionId = BigInt(
+			keccak256(
+				encodeAbiParameters(
+					[
+						{
+							components: [
+								{ name: 'title', type: 'string' },
+								{ name: 'description', type: 'string' },
+								{ name: 'startTime', type: 'uint48' },
+								{ name: 'endTime', type: 'uint48' },
+								{ name: 'numTicks', type: 'uint120' },
+								{ name: 'displayValueMin', type: 'int256' },
+								{ name: 'displayValueMax', type: 'int256' },
+								{ name: 'answerUnit', type: 'string' },
+							],
+							type: 'tuple',
+						},
+						{ type: 'string[]' },
+					],
+					[scalarData, []],
+				),
+			),
+		)
+		expect(() =>
+			projectionsFrom(
+				log('QuestionCreated', {
+					questionId: scalarQuestionId.toString(),
+					createdTimestamp: '1000',
+					questionData: Object.fromEntries(Object.entries(scalarData).map(([key, value]) => [key, typeof value === 'bigint' ? value.toString() : value])),
+					outcomeOptions: [],
+				}),
+			),
+		).toThrow('invalid question time range')
 	})
 
 	test('captures complete pool and vault accounting snapshots', () => {

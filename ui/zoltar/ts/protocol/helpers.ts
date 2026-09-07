@@ -12,13 +12,6 @@ export type StagedOperationTuple = {
 	operation: IntegerLike
 	targetVault: Address
 }
-export type DeployedChildUniverseTuple = {
-	forkQuestionId: bigint
-	forkTime: bigint
-	forkingOutcomeIndex: bigint
-	parentUniverseId: bigint
-	reputationToken: Address
-}
 type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
 
 export function bigintToAddress(value: bigint): Address {
@@ -82,15 +75,6 @@ function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
 
 export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {
 	if (Array.isArray(value) && value.every(isStagedOperationTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUniverseTuple {
-	return isObjectRecord(value) && typeof value['forkQuestionId'] === 'bigint' && typeof value['forkTime'] === 'bigint' && typeof value['forkingOutcomeIndex'] === 'bigint' && typeof value['parentUniverseId'] === 'bigint' && typeof value['reputationToken'] === 'string'
-}
-
-export function requireDeployedChildUniverseTupleArray(value: unknown, context: string): DeployedChildUniverseTuple[] {
-	if (Array.isArray(value) && value.every(isDeployedChildUniverseTuple)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 

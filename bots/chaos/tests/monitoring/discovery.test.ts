@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, type Abi, type Address } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, keccak256, type Abi, type Address } from '../support/bot-shared.ts'
+import { getQuestionId } from '@zoltar/bot-shared/protocol/question-id'
+import { getChildUniverseId } from '@zoltar/bot-shared/protocol/universe-id'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
@@ -67,7 +69,7 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 		factory: true,
 		pools: [
 			{ initialized: true, liquidity: '7', pool: genesisPool, repToken: genesisRep, universeId: '0' },
-			{ initialized: false, liquidity: '0', pool: childPool, repToken: childRep, universeId: '1' },
+			{ initialized: false, liquidity: '0', pool: childPool, repToken: childRep, universeId: getChildUniverseId(0n, 1n).toString() },
 		],
 	})
 })
@@ -118,6 +120,9 @@ interface GraphOverrides {
 	invalidDeterministicQuestionId?: boolean
 	invalidDeterministicChildId?: boolean
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
+	questionDescription?: string
+	questionCreatedTimestamp?: bigint
+	replacementAnchorHash?: `0x${string}`
 	poolDeployments?: readonly {
 		parent: Address
 		priceOracleManagerAndOperatorQueuer: Address
@@ -128,6 +133,7 @@ interface GraphOverrides {
 		universeId: bigint
 	}[]
 	questionIds?: readonly bigint[]
+	rootForkQuestionId?: bigint
 	maximumTopologyLogRange?: bigint
 	topologyEventBlockNumbers?: readonly bigint[]
 	routerFactory?: Address
@@ -136,11 +142,38 @@ interface GraphOverrides {
 	uniswapPoolsByRep?: Readonly<Record<string, { initialized: boolean; liquidity: bigint; pool: Address }>>
 }
 
+function fakeQuestion(seed: bigint, graph: GraphOverrides) {
+	const outcomeOptions = [...(graph.outcomeLabelsByQuestion?.[seed.toString()] ?? ['Yes', 'No'])]
+	const categorical = outcomeOptions.length > 0
+	const questionData = { answerUnit: '', description: graph.questionDescription ?? 'Description', displayValueMax: 0n, displayValueMin: 0n, endTime: 2_000n, numTicks: categorical ? 0n : 2n, startTime: 1_000n, title: `Question ${seed.toString()}` }
+	const canonicalQuestionId = getQuestionId(questionData, outcomeOptions)
+	return { canonicalQuestionId, outcomeOptions, questionData, questionId: canonicalQuestionId + (graph.invalidDeterministicQuestionId === true ? 1n : 0n) }
+}
+
+function fakeChildUniverseId(parentUniverseId: bigint, outcomeIndex: bigint, graph: GraphOverrides) {
+	return getChildUniverseId(parentUniverseId, outcomeIndex) + (graph.invalidDeterministicChildId === true ? 1n : 0n)
+}
+
+function fakeChildRoutes(graph: GraphOverrides) {
+	return Object.entries(graph.childOutcomesByUniverse ?? {}).flatMap(([parentUniverseId, outcomes]) => outcomes.map(outcomeIndex => ({ outcomeIndex, parentUniverseId: BigInt(parentUniverseId) })))
+}
+
+function descendingOutcomeOptions(values: readonly string[]) {
+	return [...values].sort((left, right) => {
+		const leftHash = BigInt(keccak256(encodeAbiParameters([{ type: 'string' }], [left])))
+		const rightHash = BigInt(keccak256(encodeAbiParameters([{ type: 'string' }], [right])))
+		if (leftHash > rightHash) return -1
+		if (leftHash < rightHash) return 1
+		return 0
+	})
+}
+
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
 	const pinnedReads: Array<bigint | undefined> = []
 	const contractReads: Array<{ args?: readonly unknown[]; functionName: string }> = []
 	const logReads: Array<{ event: string | undefined; fromBlock: bigint | undefined; toBlock: bigint | undefined }> = []
 	let requestedBlock: bigint | undefined
+	let anchorBlockReads = 0
 	const implementation = {
 		async getBalance(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
@@ -149,10 +182,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		async getBlock(parameters?: { blockNumber?: bigint }) {
 			requestedBlock = parameters?.blockNumber
 			const number = parameters?.blockNumber ?? anchorBlockNumber
+			if (number === anchorBlockNumber) anchorBlockReads += 1
 			if (graph.historicalBlockErrors?.includes(number.toString()) === true) throw new Error(`Historical block ${number.toString()} unavailable`)
 			let canonicalHash = hash(Number(number))
 			if (number === 0n) canonicalHash = hash(10_000 + testChainIdentity)
-			else if (number === anchorBlockNumber) canonicalHash = blockHash
+			else if (number === anchorBlockNumber) canonicalHash = anchorBlockReads > 1 && graph.replacementAnchorHash !== undefined ? graph.replacementAnchorHash : blockHash
 			return { baseFeePerGas: graph.baseFeePerGas === undefined ? 1n : graph.baseFeePerGas, hash: graph.historicalBlockHashes?.[number.toString()] ?? canonicalHash, number, timestamp: 1_000n }
 		},
 		async getChainId() {
@@ -178,7 +212,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 							? [
 									{
 										args: {
-											childUniverseId: BigInt(universeId) === 0n ? outcomeIndex : BigInt(universeId) * 100n + outcomeIndex,
+											childUniverseId: fakeChildUniverseId(BigInt(universeId), outcomeIndex, graph),
 											outcomeIndex,
 											universeId: BigInt(universeId),
 										},
@@ -189,20 +223,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				)
 			}
 			if (parameters.event?.name === 'QuestionCreated') {
-				return (graph.questionIds ?? []).flatMap((questionId, index) =>
-					inRequestedRange(index)
-						? [
-								{
-									args: {
-										createdTimestamp: 900n,
-										outcomeOptions: [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])],
-										questionData: { answerUnit: 'shares', description: 'Description', displayValueMax: 1n, displayValueMin: 0n, endTime: 2_000n, numTicks: 2n, startTime: 1_000n, title: `Question ${questionId.toString()}` },
-										questionId,
-									},
-								},
-							]
-						: [],
-				)
+				return (graph.questionIds ?? []).flatMap((seed, index) => {
+					if (!inRequestedRange(index)) return []
+					const question = fakeQuestion(seed, graph)
+					return [{ args: { createdTimestamp: graph.questionCreatedTimestamp ?? 900n, outcomeOptions: question.outcomeOptions, questionData: question.questionData, questionId: question.questionId } }]
+				})
 			}
 			throw new Error(`Unexpected log read ${parameters.event?.name ?? 'without an event'}`)
 		},
@@ -223,13 +248,15 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (typeof questionData !== 'object' || questionData === null || !('title' in questionData) || typeof questionData.title !== 'string') throw new Error('Malformed getQuestionId test input')
 					const suffix = questionData.title.match(/^Question (\d+)$/)?.[1]
 					if (suffix === undefined) throw new Error('Question test title does not encode its ID')
-					return BigInt(suffix) + (graph.invalidDeterministicQuestionId === true ? 1n : 0n)
+					return fakeQuestion(BigInt(suffix), graph).questionId
 				}
+				case 'questionCreatedTimestamp':
+					return 900n
 				case 'getChildUniverseId': {
 					const parentUniverseId = parameters.args?.[0]
 					const outcomeIndex = parameters.args?.[1]
 					if (typeof parentUniverseId !== 'bigint' || typeof outcomeIndex !== 'bigint') throw new Error('Child route test inputs are required')
-					return (parentUniverseId === 0n ? outcomeIndex : parentUniverseId * 100n + outcomeIndex) + (graph.invalidDeterministicChildId === true ? 1n : 0n)
+					return fakeChildUniverseId(parentUniverseId, outcomeIndex, graph)
 				}
 				case 'securityPoolFactory':
 					return graph.tradingSecurityPoolFactory ?? address(4)
@@ -259,7 +286,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'universes': {
 					const universeId = parameters.args?.[0]
 					if (typeof universeId !== 'bigint') throw new Error('Universe ID required')
-					return [0n, 0n, universeId, address(10 + Number(universeId)), 0n]
+					if (universeId === 0n && graph.rootForkQuestionId !== undefined) return [1n, graph.rootForkQuestionId, 0n, address(10), 0n]
+					const routes = fakeChildRoutes(graph)
+					const childIndex = routes.findIndex(route => getChildUniverseId(route.parentUniverseId, route.outcomeIndex) === universeId)
+					const route = routes[childIndex]
+					return [0n, 0n, route?.outcomeIndex ?? 0n, address(10 + (childIndex < 0 ? 0 : childIndex + 1)), route?.parentUniverseId ?? 0n]
 				}
 				case 'getForkThresholdAttoRep':
 					return 100n
@@ -317,6 +348,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 	const coordinator = address(21)
 	const shareToken = address(22)
 	const truthAuction = address(23)
+	const questionId = fakeQuestion(101n, {}).canonicalQuestionId
 	const vaults = overrides.vaults ?? (walletVaultRegistered ? [address(1)] : [])
 	const contractReads: string[] = []
 	const base = fakeClient(10n, hash(10), {
@@ -324,7 +356,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 			{
 				parent: address(0),
 				priceOracleManagerAndOperatorQueuer: coordinator,
-				questionId: 101n,
+				questionId,
 				securityPool: pool,
 				shareToken,
 				truthAuction,
@@ -349,7 +381,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'universeId':
 					return 0n
 				case 'questionId':
-					return 101n
+					return questionId
 				case 'escalationGame':
 					return address(0)
 				case 'truthAuction':
@@ -837,6 +869,49 @@ describe('anchored ecosystem discovery', () => {
 		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery paused'))).toBeTrue()
 	})
 
+	test('records a durable paused pool cursor when child discovery overflows before pool authentication', async () => {
+		const poolDeployment = {
+			parent: address(0),
+			priceOracleManagerAndOperatorQueuer: address(21),
+			questionId: 1n,
+			securityPool: address(20),
+			shareToken: address(22),
+			truthAuction: address(23),
+			universeId: 0n,
+		}
+		const fake = fakeClient(10n, hash(1), { childOutcomesByUniverse: { '0': [1n, 2n, 3n] }, poolDeployments: [poolDeployment] })
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 },
+			recordTopologyCache: value => {
+				checkpoint = value
+			},
+			wallet: address(1),
+		})
+		expect(snapshot.pools).toEqual([])
+		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery paused'))).toBeTrue()
+		expect(snapshot.warnings.some(warning => warning.startsWith('Pool discovery truncated while prerequisite question or universe topology is incomplete'))).toBeTrue()
+		expect(checkpoint?.discoveryCursors.universeChildren).toMatchObject({ canonicalCount: '2', nextIndex: '2', retentionMode: 'overflow' })
+		expect(checkpoint?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '1', nextIndex: '1', retentionMode: 'overflow' })
+		expect(fake.contractReads.some(read => read.functionName === 'repToken')).toBeFalse()
+	})
+
+	test('rejects authenticated pool and fork references whose question creation events are missing', async () => {
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const limits = { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 2 }
+		const pool = address(20)
+		const missingPoolQuestion = fakeClient(10n, hash(1), {
+			poolDeployments: [{ parent: address(0), priceOracleManagerAndOperatorQueuer: address(21), questionId: 123n, securityPool: pool, shareToken: address(22), truthAuction: address(23), universeId: 0n }],
+		})
+		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missingPoolQuestion.client, deployments, limits, wallet: address(1) })).rejects.toThrow(`Pool ${pool} references undiscovered question 123`)
+
+		const missingForkQuestion = fakeClient(10n, hash(2), { rootForkQuestionId: 456n })
+		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missingForkQuestion.client, deployments, limits, wallet: address(1) })).rejects.toThrow('Universe 0 references undiscovered fork question 456')
+	})
+
 	test('replays overflowed child discovery after the universe limit increases', async () => {
 		const graph = { childOutcomesByUniverse: { '0': [1n, 2n, 3n] } }
 		const first = fakeClient(10n, hash(10), graph)
@@ -861,7 +936,7 @@ describe('anchored ecosystem discovery', () => {
 			topologyCache: checkpoint,
 			wallet: address(1),
 		})
-		expect(recovered.universes.map(universe => universe.id)).toEqual(['0', '1', '2', '3'])
+		expect(recovered.universes.map(universe => universe.id)).toEqual(['0', ...[1n, 2n, 3n].map(outcomeIndex => getChildUniverseId(0n, outcomeIndex).toString())])
 	})
 
 	test('bounds event replay across multiple ranges and persists overflow as a restart-safe execution stop', async () => {
@@ -908,12 +983,12 @@ describe('anchored ecosystem discovery', () => {
 			topologyCache: checkpoint,
 			wallet: address(1),
 		})
-		expect(recovered.questions.map(question => question.id)).toEqual(['101', '102', '103', '104'])
+		expect(recovered.questions.map(question => question.id)).toEqual(questionIds.map(seed => fakeQuestion(seed, {}).canonicalQuestionId.toString()))
 	})
 
 	test('stops question replay before later ranges when aggregate labels exceed the resident envelope', async () => {
 		const questionIds = [101n, 102n, 103n, 104n]
-		const labels = Array.from({ length: 4_096 }, (_, index) => `L${index.toString()}`)
+		const labels = descendingOutcomeOptions(Array.from({ length: 4_096 }, (_, index) => `L${index.toString()}`))
 		const fake = fakeClient(30_001n, hash(30_001), {
 			outcomeLabelsByQuestion: Object.fromEntries(questionIds.map(questionId => [questionId.toString(), labels])),
 			questionIds,
@@ -940,7 +1015,7 @@ describe('anchored ecosystem discovery', () => {
 			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
 			wallet: address(1),
 		})
-		expect(snapshot.questions.map(question => question.id)).toEqual(['101'])
+		expect(snapshot.questions.map(question => question.id)).toEqual([fakeQuestion(101n, {}).canonicalQuestionId.toString()])
 		expect(fake.logReads.some(read => read.fromBlock !== undefined && read.toBlock !== undefined && read.toBlock - read.fromBlock + 1n > 3n)).toBeTrue()
 		expect(fake.logReads.filter(read => read.event === 'QuestionCreated').some(read => read.fromBlock !== undefined && read.toBlock !== undefined && read.toBlock - read.fromBlock + 1n <= 3n)).toBeTrue()
 	})
@@ -969,6 +1044,52 @@ describe('anchored ecosystem discovery', () => {
 				wallet: address(1),
 			}),
 		).rejects.toThrow('mismatched deterministic child universe ID')
+	})
+
+	test('authenticates overflow witnesses before recording durable topology cursors', async () => {
+		const cases = [
+			{
+				expected: 'mismatched deterministic question ID',
+				expectedIdentityReadsAtMost: 2,
+				graph: { invalidDeterministicQuestionId: true, questionIds: [101n, 102n] },
+				identityFunction: 'getQuestionId',
+				limits: { maxQuestions: 1 },
+			},
+			{
+				expected: 'mismatched deterministic child universe ID',
+				expectedIdentityReadsAtMost: 2,
+				graph: { childOutcomesByUniverse: { '0': Array.from({ length: 1_000 }, (_, index) => BigInt(index + 1)) }, invalidDeterministicChildId: true },
+				identityFunction: 'getChildUniverseId',
+				limits: { maxUniverses: 2 },
+			},
+			{
+				expected: 'mismatched deterministic question ID',
+				expectedIdentityReadsAtMost: 1,
+				graph: { invalidDeterministicQuestionId: true, questionDescription: 'x'.repeat(33 * 1024 * 1024), questionIds: [101n] },
+				identityFunction: 'getQuestionId',
+				limits: { maxQuestions: 2 },
+			},
+		] as const
+		for (const candidate of cases) {
+			const fake = fakeClient(2n, hash(2), candidate.graph)
+			let checkpoint: CanonicalImmutableTopologyCache | undefined
+			await expect(
+				discoverEcosystemSnapshot({
+					anchorBlockNumber: 2n,
+					client: fake.client,
+					deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+					limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3, ...candidate.limits },
+					recordTopologyCache: value => {
+						checkpoint = value
+					},
+					wallet: address(1),
+				}),
+			).rejects.toThrow(candidate.expected)
+			expect(checkpoint).toBeUndefined()
+			const identityReads = fake.contractReads.filter(read => read.functionName === candidate.identityFunction)
+			expect(identityReads.length).toBeGreaterThan(0)
+			expect(identityReads.length).toBeLessThanOrEqual(candidate.expectedIdentityReadsAtMost)
+		}
 	})
 
 	test('advances oversized counted-registry cursors across restarts while retaining no historical topology', async () => {
@@ -1013,7 +1134,8 @@ describe('anchored ecosystem discovery', () => {
 			expect(fake.contractReads.filter(read => read.functionName === 'getQuestions')).toHaveLength(0)
 			expect(fake.contractReads.filter(read => read.functionName === 'securityPoolDeploymentsRange')).toHaveLength(1)
 			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(0)
-			expect(fake.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(0)
+			const timestampReads = fake.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')
+			expect(timestampReads.length).toBeLessThanOrEqual(4)
 			await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint, limits)
 			previousAnchor = anchor
 		}
@@ -1115,7 +1237,7 @@ describe('anchored ecosystem discovery', () => {
 	})
 
 	test('loads large categorical outcome metadata from the creation event', async () => {
-		const labels = Array.from({ length: 512 }, (_, index) => `Outcome ${index.toString()}`)
+		const labels = descendingOutcomeOptions(Array.from({ length: 512 }, (_, index) => `Outcome ${index.toString()}`))
 		const fake = fakeClient(10n, hash(1), {
 			outcomeLabelsByQuestion: { '101': labels },
 			questionIds: [101n],
@@ -1131,7 +1253,7 @@ describe('anchored ecosystem discovery', () => {
 
 	test('rejects creation events beyond the configured outcome-label limit', async () => {
 		const fake = fakeClient(10n, hash(1), {
-			outcomeLabelsByQuestion: { '101': Array.from({ length: 513 }, (_, index) => `Outcome ${index.toString()}`) },
+			outcomeLabelsByQuestion: { '101': descendingOutcomeOptions(Array.from({ length: 513 }, (_, index) => `Outcome ${index.toString()}`)) },
 			questionIds: [101n],
 		})
 		await expect(
@@ -1142,7 +1264,7 @@ describe('anchored ecosystem discovery', () => {
 				limits: { maxOutcomeLabelsPerQuestion: 512 },
 				wallet: address(1),
 			}),
-		).rejects.toThrow('Question 101 exceeds the configured 512-label discovery limit')
+		).rejects.toThrow('exceeds the configured 512-label discovery limit')
 	})
 
 	test('rejects outcome labels that exceed the configured UTF-8 byte budget', async () => {
@@ -1158,7 +1280,7 @@ describe('anchored ecosystem discovery', () => {
 				limits: { maxOutcomeLabelUtf8BytesPerQuestion: 1 },
 				wallet: address(1),
 			}),
-		).rejects.toThrow('Question 101 exceeds the configured outcome-label byte limit')
+		).rejects.toThrow('exceeds the configured outcome-label byte limit')
 	})
 
 	test('discovers and persists an escaped outcome label at the shared UTF-8 byte boundary', async () => {
@@ -1235,8 +1357,8 @@ describe('anchored ecosystem discovery', () => {
 			topologyCache: checkpoint,
 			wallet: address(1),
 		})
-		expect(snapshot.questions.map(question => question.id)).toEqual(['101', '102', '103', '104'])
-		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2', '3', '4'])
+		expect(snapshot.questions.map(question => question.id)).toEqual([101n, 102n, 103n, 104n].map(seed => fakeQuestion(seed, {}).canonicalQuestionId.toString()))
+		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', ...[1n, 2n, 3n, 4n].map(outcomeIndex => getChildUniverseId(0n, outcomeIndex).toString())])
 		expect(next.contractReads.filter(read => read.functionName === 'forkBurnDivisor')).toHaveLength(1)
 		expect(nextCheckpoint?.anchor).toEqual({ blockHash: hash(11), blockNumber: '11' })
 		expect(extendedChanged).toBe(true)
@@ -1782,6 +1904,40 @@ describe('anchored ecosystem discovery', () => {
 				wallet: address(1),
 			}),
 		).rejects.toThrow('does not match quorum anchor')
+	})
+
+	test('rejects an anchor that changes during discovery without recording topology', async () => {
+		const fake = fakeClient(10n, hash(1), { questionIds: [101n], replacementAnchorHash: hash(2) })
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				recordTopologyCache: value => {
+					checkpoint = value
+				},
+				wallet: address(1),
+			}),
+		).rejects.toThrow('changed during discovery')
+		expect(checkpoint).toBeUndefined()
+	})
+
+	test('rejects a creation timestamp that disagrees with pinned question state', async () => {
+		const fake = fakeClient(10n, hash(1), { questionCreatedTimestamp: 901n, questionIds: [101n] })
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 10n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				recordTopologyCache: value => {
+					checkpoint = value
+				},
+				wallet: address(1),
+			}),
+		).rejects.toThrow('mismatched creation timestamp')
+		expect(checkpoint).toBeUndefined()
 	})
 
 	test('requires the provider block to match the quorum EIP-1559 base fee', async () => {

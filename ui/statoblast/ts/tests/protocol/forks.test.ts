@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, getAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { depositRepToVaultToSecurityPool } from '../../protocol/securityVault.js'
 import { finalizeSecurityPoolTruthAuction } from '../../protocol/truthAuctionActions.js'
 import { migrateSharesFromUniverse } from '../../protocol/trading.js'
 import { loadForkAuctionDetails } from '@zoltar/ui-zoltar/protocol/forks.js'
-import { getForkOutcomeKey } from '@zoltar/ui-zoltar/protocol/helpers.js'
+import { getForkOutcomeKey, getQuestionId } from '@zoltar/ui-zoltar/protocol/helpers.js'
 import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -15,6 +15,23 @@ const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2
 const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
+const questionComponents = [
+	{ name: 'title', type: 'string' },
+	{ name: 'description', type: 'string' },
+	{ name: 'startTime', type: 'uint48' },
+	{ name: 'endTime', type: 'uint48' },
+	{ name: 'numTicks', type: 'uint120' },
+	{ name: 'displayValueMin', type: 'int256' },
+	{ name: 'displayValueMax', type: 'int256' },
+	{ name: 'answerUnit', type: 'string' },
+] as const
+const forkQuestionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+const forkQuestionId = getQuestionId({ answerUnit: '', description: 'Description', displayValueMax: 100n, displayValueMin: 0n, endTime: 2n, numTicks: 2n, startTime: 1n, title: 'Question' }, [])
+const forkQuestionLog = {
+	data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [1n, forkQuestionTuple, []]),
+	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(forkQuestionId, { size: 32 })],
+}
+const getForkQuestionLogs = async () => [forkQuestionLog]
 
 function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void) {
 	return createMockWriteClient(onSendTransaction, async request => {
@@ -78,10 +95,11 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails keeps the default root-pool fork outcome unset and inactive', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionId = forkQuestionId
+		const questionTuple = forkQuestionTuple
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
@@ -107,10 +125,11 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails rejects malformed fork data instead of casting tuple reads', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionId = forkQuestionId
+		const questionTuple = forkQuestionTuple
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
@@ -129,11 +148,12 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
-		const questionId = 1n
+		const questionId = forkQuestionId
 		const forkActivationTime = 1_000n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionTuple = forkQuestionTuple
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
@@ -159,13 +179,14 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails preserves finalized underfunded auction fields from the multicall tuple', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionId = forkQuestionId
+		const questionTuple = forkQuestionTuple
 		const finalizedClearingTick = 12n
 		const syntheticThreshold = 7n * 10n ** 17n
 		const underfundedWinningAttoEth = 9n * 10n ** 18n
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
@@ -196,11 +217,12 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionId = forkQuestionId
+		const questionTuple = forkQuestionTuple
 		const noWinningPrefixThreshold = 2n * 10n ** 18n
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {
@@ -231,10 +253,11 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails surfaces own-fork migration diagnostics only for own-fork pools', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const questionId = forkQuestionId
+		const questionTuple = forkQuestionTuple
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
+			getLogs: getForkQuestionLogs,
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'questionId') {

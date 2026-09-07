@@ -2,6 +2,11 @@ export type LogRange = Readonly<{ fromBlock: bigint; toBlock: bigint }>
 
 export type CanonicalBlockAnchor = Readonly<{ blockHash: string; blockNumber: bigint }>
 
+export function encodedLogByteLength(log: Readonly<{ data: string; topics: readonly string[] }>) {
+	const encodedByteLength = (value: string) => (value.startsWith('0x') ? value.length - 2 : value.length) / 2
+	return encodedByteLength(log.data) + log.topics.reduce((total, topic) => total + encodedByteLength(topic), 0)
+}
+
 export type CanonicalLogIndex<Log> = {
 	anchor: CanonicalBlockAnchor | undefined
 	items: Log[]
@@ -61,10 +66,21 @@ export function logRangeLimitError(error: unknown) {
 	})
 }
 
-export async function fetchLogsWithAdaptiveRanges<Log>(fromBlock: bigint, toBlock: bigint, maximumRange: bigint, fetchRange: (logRange: LogRange) => Promise<readonly Log[]>, maximumItems = Number.MAX_SAFE_INTEGER): Promise<Log[]> {
+export async function fetchLogsWithAdaptiveRanges<Log>(
+	fromBlock: bigint,
+	toBlock: bigint,
+	maximumRange: bigint,
+	fetchRange: (logRange: LogRange) => Promise<readonly Log[]>,
+	maximumItems = Number.MAX_SAFE_INTEGER,
+	maximumBytes = Number.MAX_SAFE_INTEGER,
+	measureItem: (item: Log) => number = () => 0,
+	validateItem?: (item: Log) => void,
+): Promise<Log[]> {
 	if (maximumRange < 1n) throw new Error('maximumRange must be positive')
 	if (!Number.isSafeInteger(maximumItems) || maximumItems < 0) throw new Error('maximumItems must be a non-negative safe integer')
+	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0) throw new Error('maximumBytes must be a non-negative safe integer')
 	const logs: Log[] = []
+	let retainedBytes = 0
 	let nextBlock = fromBlock
 	let requestedBlocks = maximumRange
 	while (nextBlock <= toBlock) {
@@ -73,14 +89,22 @@ export async function fetchLogsWithAdaptiveRanges<Log>(fromBlock: bigint, toBloc
 		const range = { fromBlock: nextBlock, toBlock: nextBlock + attemptedBlocks - 1n }
 		try {
 			const page = await fetchRange(range)
-			if (page.length > maximumItems - logs.length) {
+			const pageBytes = page.reduce((total, item) => {
+				const itemBytes = measureItem(item)
+				if (!Number.isSafeInteger(itemBytes) || itemBytes < 0) throw new Error('Canonical log item size must be a non-negative safe integer')
+				return total + itemBytes
+			}, 0)
+			if (page.length > maximumItems - logs.length || pageBytes > maximumBytes - retainedBytes) {
 				if (attemptedBlocks > 1n) {
 					requestedBlocks = (attemptedBlocks + 1n) / 2n
 					continue
 				}
-				throw new Error(`Canonical log history exceeds the configured ${maximumItems.toString()}-item limit`)
+				if (page.length > maximumItems - logs.length) throw new Error(`Canonical log history exceeds the configured ${maximumItems.toString()}-item limit`)
+				throw new Error(`Canonical log history exceeds the configured ${maximumBytes.toString()}-byte limit`)
 			}
+			for (const item of page) validateItem?.(item)
 			logs.push(...page)
+			retainedBytes += pageBytes
 			nextBlock = range.toBlock + 1n
 			requestedBlocks = maximumRange
 		} catch (error) {
@@ -103,6 +127,9 @@ export async function refreshCanonicalLogIndex<Log>(
 			loadBlockAnchor: (blockNumber?: bigint) => Promise<CanonicalBlockAnchor>
 			maximumRange: bigint
 			maximumItems: number
+			maximumBytes?: number
+			measureItem?: (item: Log) => number
+			validateItem?: (item: Log) => void
 		} & ({ loadStartBlock: (toBlock: bigint) => Promise<bigint | undefined>; startBlock?: never } | { loadStartBlock?: never; startBlock: bigint })
 	>,
 ): Promise<Log[]> {
@@ -145,7 +172,12 @@ export async function refreshCanonicalLogIndex<Log>(
 				}
 			}
 			const fromBlock = index.anchor === undefined ? effectiveStartBlock : index.anchor.blockNumber + 1n
-			const appended = fromBlock > latest.blockNumber ? [] : await fetchLogsWithAdaptiveRanges(fromBlock, latest.blockNumber, parameters.maximumRange, parameters.fetchRange, parameters.maximumItems - index.items.length)
+			const measureItem = parameters.measureItem
+			const retainedBytes = measureItem === undefined ? 0 : index.items.reduce((total, item) => total + measureItem(item), 0)
+			const appended =
+				fromBlock > latest.blockNumber
+					? []
+					: await fetchLogsWithAdaptiveRanges(fromBlock, latest.blockNumber, parameters.maximumRange, parameters.fetchRange, parameters.maximumItems - index.items.length, (parameters.maximumBytes ?? Number.MAX_SAFE_INTEGER) - retainedBytes, parameters.measureItem, parameters.validateItem)
 			const latestAfterFetch = await parameters.loadBlockAnchor(latest.blockNumber)
 			const currentAfterFetch = currentAnchor === undefined ? undefined : await parameters.loadBlockAnchor(currentAnchor.blockNumber)
 			if (latestAfterFetch.blockHash !== latest.blockHash || (currentAnchor !== undefined && currentAfterFetch?.blockHash !== currentAnchor.blockHash)) {
@@ -176,6 +208,9 @@ export function createCanonicalLogLoader<Owner extends object, Key extends strin
 			loadCacheIdentity?: (owner: Owner) => Promise<string | undefined>
 			maximumRange: bigint
 			maximumItems: number
+			maximumBytes?: number
+			measureItem?: (item: Log) => number
+			validateItem?: (item: Log) => void
 		} & ({ loadStartBlock: (owner: Owner, key: Key, toBlock?: bigint) => Promise<bigint | undefined>; startBlock?: never } | { loadStartBlock?: never; startBlock: bigint })
 	>,
 ) {
@@ -212,6 +247,9 @@ export function createCanonicalLogLoader<Owner extends object, Key extends strin
 			loadBlockAnchor: async blockNumber => await parameters.loadBlockAnchor(owner, blockNumber ?? toBlock),
 			maximumRange: parameters.maximumRange,
 			maximumItems: parameters.maximumItems,
+			...(parameters.maximumBytes === undefined ? {} : { maximumBytes: parameters.maximumBytes }),
+			...(parameters.measureItem === undefined ? {} : { measureItem: parameters.measureItem }),
+			...(parameters.validateItem === undefined ? {} : { validateItem: parameters.validateItem }),
 			...(parameters.loadStartBlock === undefined ? { startBlock: parameters.startBlock } : { loadStartBlock: async (latestBlock: bigint) => await parameters.loadStartBlock(owner, key, toBlock ?? latestBlock) }),
 		})
 	}

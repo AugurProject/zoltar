@@ -3,7 +3,7 @@
 		".": {
 			"entry": [
 				"docs/charts/chartRuntime.ts!",
-				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
+				"docs/runtime/{auctionClearing,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
 				"scripts/**/*.test.ts",
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",

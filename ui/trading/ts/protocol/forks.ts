@@ -2,7 +2,6 @@ import { decodeEventLog, getAddress, zeroAddress, type Address, type PublicClien
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/scalarOutcome'
 import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
 import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
 import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from './eventValidation.js'
@@ -40,13 +39,8 @@ async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMa
 async function loadScalarTargets(client: PublicClient, zoltar: Address, questionData: Address, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, questionId: bigint, anchor: Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>) {
 	const logs = await loadCanonicalDeployChildLogs(client, zoltar, anchor.blockNumber)
 	const children = logs.flatMap(log => {
-		try {
-			const decoded = decodeEventLog({ abi: zoltarForkAbi, data: log.data, topics: log.topics })
-			return decoded.eventName === 'DeployChild' && decoded.args.universeId === market.universeId ? [decoded.args] : []
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			return []
-		}
+		const decoded = decodeEventLog({ abi: zoltarForkAbi, data: log.data, topics: log.topics })
+		return decoded.eventName === 'DeployChild' && decoded.args.universeId === market.universeId ? [decoded.args] : []
 	})
 	for (const child of children) {
 		assertDeployChildId(child.universeId, child.outcomeIndex, child.childUniverseId)
@@ -89,15 +83,10 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 	const anchor = requiredCanonicalBlockAnchor(await client.getBlock())
 	const questionLogs = await loadCanonicalQuestionCreatedLogs(client, questionData, anchor.blockNumber)
 	const created = questionLogs.flatMap(log => {
-		try {
-			const decoded = decodeEventLog({ abi: forkQuestionAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'QuestionCreated') return []
-			assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId)
-			return decoded.args.questionId === forkQuestionId ? [decoded.args] : []
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			return []
-		}
+		const decoded = decodeEventLog({ abi: forkQuestionAbi, data: log.data, topics: log.topics })
+		if (decoded.eventName !== 'QuestionCreated') return []
+		assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId, decoded.args.createdTimestamp)
+		return decoded.args.questionId === forkQuestionId ? [decoded.args] : []
 	})[0]
 	if (created === undefined) throw new Error('Fork question creation event is unavailable')
 	const { title, numTicks, displayValueMin, displayValueMax, answerUnit } = created.questionData

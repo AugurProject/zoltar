@@ -5,7 +5,6 @@ import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { fetchLogsWithAdaptiveRanges, findContractDeploymentBlock } from '@zoltar/shared/logScan'
 import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
 import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from './eventValidation.js'
@@ -312,17 +311,12 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 async function loadLiveQuestionFields(client: PublicClient, questionData: Address, questionId: bigint) {
 	const logs = await loadCanonicalQuestionCreatedLogs(client, questionData)
 	for (const log of logs) {
-		try {
-			const decoded = decodeEventLog({ abi: questionDataAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'QuestionCreated') continue
-			assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId)
-			if (decoded.args.questionId !== questionId) continue
-			const { title, description, endTime } = decoded.args.questionData
-			return { title, description, endTime }
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			continue
-		}
+		const decoded = decodeEventLog({ abi: questionDataAbi, data: log.data, topics: log.topics })
+		if (decoded.eventName !== 'QuestionCreated') continue
+		assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId, decoded.args.createdTimestamp)
+		if (decoded.args.questionId !== questionId) continue
+		const { title, description, endTime } = decoded.args.questionData
+		return { title, description, endTime }
 	}
 	throw new Error(`Question ${questionId.toString()} creation event is unavailable`)
 }

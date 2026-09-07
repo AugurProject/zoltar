@@ -9,7 +9,7 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getEscalationSideLabel, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp, requireSecurityVaultTupleArray } from './helpers.js'
 import { executeForkAuctionAction, readSecurityPoolUniverseId } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
-import { loadMarketDetails } from './zoltar.js'
+import { loadRequiredMarketDetails } from './zoltar.js'
 import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, compareBigintAscending, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
@@ -582,7 +582,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThresholdAttoRep] = await Promise.all([
-		loadMarketDetails(client, questionId),
+		loadRequiredMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
 		loadViewerReportingVaultState(client, securityPoolAddress, accountAddress),

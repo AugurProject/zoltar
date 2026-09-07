@@ -10,7 +10,7 @@ import { requireForkDataView } from './forkData.js'
 import { executeForkAuctionAction } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { getDeploymentSteps } from './deployment.js'
-import { loadMarketDetails } from './zoltar.js'
+import { loadRequiredMarketDetails } from './zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
@@ -149,7 +149,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		client.getBlock(),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
-	const marketDetails = await loadMarketDetails(client, questionId)
+	const marketDetails = await loadRequiredMarketDetails(client, questionId)
 	const { auctionableAttoRepAtFork, truthAuctionStartedAt, migratedAttoRep, auctionedCapacityOwnershipAttoRep, forkOwnSecurityPool, forkOutcomeIndex, forkActivationTime } = requireForkDataView(forkData)
 	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtForkAttoRep, escalationChildRepPerSelectedOutcomeAttoRep, escrowSourceRepAtForkAttoRep] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)

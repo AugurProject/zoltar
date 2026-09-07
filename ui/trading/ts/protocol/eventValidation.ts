@@ -1,9 +1,9 @@
-import { getQuestionId, type QuestionIdentityData } from '@zoltar/shared/questionId'
+import { assertQuestionCreatedEvent, type QuestionIdentityData } from '@zoltar/shared/questionId'
 import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 
-export function assertQuestionCreatedId(questionData: QuestionIdentityData, outcomeOptions: readonly string[], questionId: bigint) {
-	if (getQuestionId(questionData, outcomeOptions) !== questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+export function assertQuestionCreatedId(questionData: QuestionIdentityData, outcomeOptions: readonly string[], questionId: bigint, createdTimestamp: bigint) {
+	assertQuestionCreatedEvent(questionData, outcomeOptions, questionId, createdTimestamp)
 }
 
 export function assertDeployChildId(universeId: bigint, outcomeIndex: bigint, childUniverseId: bigint) {

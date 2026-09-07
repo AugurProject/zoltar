@@ -46,6 +46,23 @@ describe('Docker packaging', () => {
 		expect(runtimeStage).not.toContain('COPY augurScan/package.json augurScan/bun.lock ./\n')
 	})
 
+	test('packages every shared TypeScript module imported by runtime source', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.4.2-alpine AS runtime'))
+		const modules = new Set<string>()
+		for await (const relativePath of new Bun.Glob('src/**/*.ts').scan({ cwd: join(import.meta.dir, '..') })) {
+			const runtimeSource = await readFile(join(import.meta.dir, '..', relativePath), 'utf8')
+			for (const match of runtimeSource.matchAll(/['"]\.\.\/\.\.\/shared\/ts\/([^'"]+)\.ts['"]/gu)) {
+				const module = match[1]
+				if (module !== undefined) modules.add(module)
+			}
+		}
+		expect([...modules].sort()).toEqual(['ethereum', 'questionId', 'universeId'])
+		for (const module of modules) {
+			expect(runtimeStage).toContain(`COPY shared/ts/${module}.ts ./shared/ts/${module}.ts`)
+		}
+	})
+
 	test('persists the rotating RPC exchange log in a dedicated writable volume', async () => {
 		const dockerfileSource = await readFile(dockerfile, 'utf8')
 		const composeSource = await readFile(composeFile, 'utf8')

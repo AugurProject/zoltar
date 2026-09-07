@@ -3,6 +3,7 @@ import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256,
 import { getQuestionId } from '@zoltar/shared/questionId'
 import { getChildUniverseId, loadForkMigrationContext } from '../../protocol/forks.js'
 import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from '../../protocol/eventValidation.js'
+import { loadCanonicalQuestionCreatedLogs } from '../../protocol/eventLogs.js'
 import { discoverLiveUniverseMarketPage } from '../../protocol/live.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)
@@ -66,7 +67,7 @@ type RpcLog = Readonly<{
 
 let chainIdentity = 0
 
-function publicClient(callHandler: (callSelector: string) => Promise<string> | string, logs: readonly RpcLog[] = [], currentBlockHash?: () => string) {
+function publicClient(callHandler: (callSelector: string) => Promise<string> | string, logs: readonly RpcLog[] | (() => readonly RpcLog[]) = [], currentBlockHash?: () => string) {
 	chainIdentity += 1
 	const blockHash = `0x${chainIdentity.toString(16).padStart(64, '0')}`
 	return createPublicClient({
@@ -84,7 +85,8 @@ function publicClient(callHandler: (callSelector: string) => Promise<string> | s
 					const requestedAddress = typeof filter === 'object' && filter !== null ? Reflect.get(filter, 'address') : undefined
 					const requestedTopics = typeof filter === 'object' && filter !== null ? Reflect.get(filter, 'topics') : undefined
 					const topicZero = Array.isArray(requestedTopics) && typeof requestedTopics[0] === 'string' ? requestedTopics[0].toLowerCase() : undefined
-					return logs.filter(log => (typeof requestedAddress !== 'string' || log.address.toLowerCase() === requestedAddress.toLowerCase()) && (topicZero === undefined || log.topics[0]?.toLowerCase() === topicZero))
+					const currentLogs = typeof logs === 'function' ? logs() : logs
+					return currentLogs.filter(log => (typeof requestedAddress !== 'string' || log.address.toLowerCase() === requestedAddress.toLowerCase()) && (topicZero === undefined || log.topics[0]?.toLowerCase() === topicZero))
 				}
 				throw new Error(`Unexpected RPC method: ${method}`)
 			},
@@ -160,9 +162,35 @@ describe('fork protocol helpers', () => {
 	})
 
 	test('authenticates question and child discovery events with shared validators', () => {
-		expect(() => assertQuestionCreatedId(questionDataFor('Question'), ['Yes', 'No'], 99n)).toThrow('mismatched deterministic question ID')
+		expect(() => assertQuestionCreatedId(questionDataFor('Question'), ['Yes', 'No'], 99n, 900n)).toThrow('mismatched deterministic question ID')
+		const categorical = questionDataFor('Question')
+		const categoricalId = getQuestionId(categorical, ['Yes', 'No'])
+		expect(() => assertQuestionCreatedId({ ...categorical, numTicks: 2n }, ['Yes', 'No'], categoricalId, 900n)).toThrow('nonzero ticks')
+		expect(() => assertQuestionCreatedId({ ...categorical, displayValueMax: 1n }, ['Yes', 'No'], categoricalId, 900n)).toThrow('nonzero display range')
+		expect(() => assertQuestionCreatedId({ ...categorical, answerUnit: 'shares' }, ['Yes', 'No'], categoricalId, 900n)).toThrow('nonempty answer unit')
+		expect(() => assertQuestionCreatedId(categorical, ['Yes', 'No'], categoricalId, 0n)).toThrow('invalid creation timestamp')
 		expect(() => assertDeployChildId(0n, 1n, 99n)).toThrow('mismatched deterministic child universe ID')
 		expect(() => assertDeployChildRoute(2n, 0n, shareToken, 1n, 0n, shareToken)).toThrow('does not match its DeployChild route')
+	})
+
+	test('does not cache a deterministic-ID-valid event with invalid categorical fields', async () => {
+		const outcomes = ['Yes', 'No'] as const
+		const validQuestionId = getQuestionId(questionDataFor('Cache boundary'), outcomes)
+		const invalid = questionCreatedLog('Cache boundary', outcomes, 2n, 0n, 0n, '', validQuestionId)
+		const valid = questionCreatedLog('Cache boundary', outcomes)
+		let logReads = 0
+		const client = publicClient(
+			() => {
+				throw new Error('Question log cache test must not call a contract')
+			},
+			() => {
+				logReads += 1
+				return logReads === 1 ? [invalid] : [valid]
+			},
+		)
+		await expect(loadCanonicalQuestionCreatedLogs(client, questionData)).rejects.toThrow('nonzero ticks')
+		expect(await loadCanonicalQuestionCreatedLogs(client, questionData)).toHaveLength(1)
+		expect(logReads).toBe(2)
 	})
 
 	test('rejects forged child IDs and stored routes through primary live discovery', async () => {
@@ -214,7 +242,13 @@ describe('fork protocol helpers', () => {
 
 	test('loads categorical branches from QuestionCreated metadata', async () => {
 		let canonicalPoolRead = 0
-		const labels = Array.from({ length: 32 }, (_, index) => `Choice ${index + 1}`)
+		const labels = Array.from({ length: 32 }, (_, index) => `Choice ${index + 1}`).sort((left, right) => {
+			const leftHash = BigInt(keccak256(encodeAbiParameters([{ type: 'string' }], [left])))
+			const rightHash = BigInt(keccak256(encodeAbiParameters([{ type: 'string' }], [right])))
+			if (leftHash > rightHash) return -1
+			if (leftHash < rightHash) return 1
+			return 0
+		})
 		const forkQuestionId = getQuestionId(questionDataFor('Categorical fork'), labels)
 		const client = publicClient(
 			callSelector => {
@@ -234,8 +268,8 @@ describe('fork protocol helpers', () => {
 		expect(context.title).toBe('Categorical fork')
 		expect(context.availableTargets).toHaveLength(33)
 		expect(context.availableTargets[0]).toMatchObject({ outcomeIndex: 0n, label: 'Invalid', canonicalPool: undefined })
-		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 1n, label: 'Choice 1', canonicalPool })
-		expect(context.availableTargets.at(-1)).toMatchObject({ outcomeIndex: 32n, label: 'Choice 32', canonicalPool: undefined })
+		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 1n, label: labels[0], canonicalPool })
+		expect(context.availableTargets.at(-1)).toMatchObject({ outcomeIndex: 32n, label: labels.at(-1), canonicalPool: undefined })
 	})
 
 	test('loads deployed scalar children from DeployChild events', async () => {

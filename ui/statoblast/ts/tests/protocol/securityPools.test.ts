@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, encodeAbiParameters, getAddress, keccak256, toHex, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getQuestionId } from '@zoltar/shared/questionId'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '../../protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '../../protocol/trading.js'
@@ -13,6 +14,28 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
+const questionComponents = [
+	{ name: 'title', type: 'string' },
+	{ name: 'description', type: 'string' },
+	{ name: 'startTime', type: 'uint48' },
+	{ name: 'endTime', type: 'uint48' },
+	{ name: 'numTicks', type: 'uint120' },
+	{ name: 'displayValueMin', type: 'int256' },
+	{ name: 'displayValueMax', type: 'int256' },
+	{ name: 'answerUnit', type: 'string' },
+] as const
+const poolQuestion = { answerUnit: '', description: 'Description', displayValueMax: 0n, displayValueMin: 0n, endTime: 2n, numTicks: 0n, startTime: 1n, title: 'Question' }
+const poolQuestionTuple = [poolQuestion.title, poolQuestion.description, poolQuestion.startTime, poolQuestion.endTime, poolQuestion.numTicks, poolQuestion.displayValueMin, poolQuestion.displayValueMax, poolQuestion.answerUnit] as const
+const poolQuestionOutcomes = ['Yes', 'No'] as const
+const poolQuestionId = getQuestionId(poolQuestion, poolQuestionOutcomes)
+const poolQuestionLog = {
+	data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [1n, poolQuestionTuple, poolQuestionOutcomes]),
+	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(poolQuestionId, { size: 32 })],
+}
+
+function createPoolDetailsLoaderClient(parameters: Parameters<typeof createMockLoaderClient>[0]) {
+	return createMockLoaderClient({ ...parameters, getLogs: parameters.getLogs ?? (async () => [poolQuestionLog]) })
+}
 const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCapacityOwnershipAttoRep = 0n, feeEligibleCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep) => ({
 	settlementCollateralAttoEth,
 	currentRetentionRate: 0n,
@@ -34,7 +57,7 @@ describe('securityPools protocol client', () => {
 		let escalationGame = zeroAddress
 		let forkContinuation = false
 		const questionDataAddress = getAddress('0x00000000000000000000000000000000000000d1')
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
 			readContract: async request => {
 				switch (request.functionName) {
@@ -69,7 +92,7 @@ describe('securityPools protocol client', () => {
 		const requestedEvents: unknown[] = []
 		const deploySecurityPoolEvent = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find(entry => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from generated ABI')
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async request => (request?.blockNumber === 0n ? { hash: `0x${'01'.repeat(32)}` as const, number: 0n, timestamp: 0n } : { hash: headHash, number: 20_000n, timestamp: 0n }),
 			getLogs: async (request?: object) => {
 				const fromBlock = request === undefined ? undefined : Reflect.get(request, 'fromBlock')
@@ -99,7 +122,7 @@ describe('securityPools protocol client', () => {
 		const originalHash = `0x${'11'.repeat(32)}` as const
 		const replacementHash = `0x${'22'.repeat(32)}` as const
 		let blockReads = 0
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async request => {
 				if (request?.blockNumber === 0n) return { hash: `0x${'01'.repeat(32)}` as const, number: 0n, timestamp: 0n }
 				blockReads += 1
@@ -120,7 +143,7 @@ describe('securityPools protocol client', () => {
 		const pageSize = 3
 		const expectedStartIndex = BigInt(pageIndex) * BigInt(pageSize)
 		const deploymentRangeCalls: unknown[][] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async () => [],
 			readContract: async request => {
@@ -139,8 +162,8 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
-		const questionId = 1n
-		const client = createMockLoaderClient({
+		const questionId = poolQuestionId
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -189,8 +212,8 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage rejects malformed fork data instead of casting tuple reads', async () => {
-		const questionId = 1n
-		const client = createMockLoaderClient({
+		const questionId = poolQuestionId
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const firstContract = request.contracts[0]
@@ -227,10 +250,10 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage does not infer parent fork activity from other pools on the same page', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -289,10 +312,10 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadAllSecurityPools infers parent fork activity when a loaded child points to it', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e1')
 		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e2')
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -351,12 +374,12 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadAllSecurityPools batches vault summary tuple reads through multicall', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')] as const
 		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
 		const loadedVaultAddresses: Address[] = []
 		let securityVaultSummaryBatchCount = 0
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -433,12 +456,12 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
 		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -495,16 +518,16 @@ describe('securityPools protocol client', () => {
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
 		expect(pool.vaultCount).toBe(5n)
 		expect(pool.totalPoolHeldAttoRep).toBe(100n)
-		expect(pool.questionId).toBe('0x1')
+		expect(pool.questionId).toBe(`0x${poolQuestionId.toString(16)}`)
 	})
 
 	test('loadSecurityPoolPage scans past exited known vaults to fill actionable previews', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
 		const currentVaultAddress = knownVaultAddresses[3]
 		if (currentVaultAddress === undefined) throw new Error('Expected a current vault address')
 		const getVaultsCalls: [bigint, bigint][] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -568,7 +591,7 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
 			getAddress(
 				`0x${BigInt(index + 1)
@@ -577,7 +600,7 @@ describe('securityPools protocol client', () => {
 			),
 		)
 		const getVaultsCalls: [bigint, bigint][] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -633,7 +656,7 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage keeps the connected account after later positions fill the preview cap', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const knownVaultAddresses = [
 			getAddress('0x00000000000000000000000000000000000000c1'),
 			getAddress('0x00000000000000000000000000000000000000c2'),
@@ -649,7 +672,7 @@ describe('securityPools protocol client', () => {
 		if (firstPreviewVaultAddress === undefined || secondPreviewVaultAddress === undefined || accountAddress === undefined || thirdPreviewVaultAddress === undefined) throw new Error('Expected current vault addresses')
 		const currentVaultAddresses = new Set([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
 		const getVaultsCalls: [bigint, bigint][] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -708,10 +731,10 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadSecurityPoolPage marks empty browse-page vault sets as already loaded', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -769,10 +792,10 @@ describe('securityPools protocol client', () => {
 	})
 
 	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {
-		const questionId = 1n
+		const questionId = poolQuestionId
 		const getVaultCalls: Address[] = []
 		const vaultSummaryCalls: Address[] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
 				const contracts = request.contracts
@@ -869,7 +892,7 @@ describe('securityPools protocol client', () => {
 	test.each([77n, 200n, 2n ** 256n - 1n])('loadSecurityPoolMintCapacity reads the pool fee horizon %s', async feeEndTimestamp => {
 		const requestedFunctionNames: string[] = []
 		const requestedAddresses: Address[] = []
-		const client = createMockLoaderClient({
+		const client = createPoolDetailsLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(99n),
 			multicall: createMulticallStub(async request => {
 				for (const contract of request.contracts) {
