@@ -68,18 +68,14 @@ export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number, v
 		args: [factoryAddress],
 	})
 	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
-	const receiveRouterData = version === 2
-		? encodeDeployData({ abi: routerContractV2.abi, bytecode: `0x${routerContractV2.evm.bytecode.object}`, args: [factoryAddress] })
-		: undefined
+	const receiveRouterData = version === 2 ? encodeDeployData({ abi: routerContractV2.abi, bytecode: `0x${routerContractV2.evm.bytecode.object}`, args: [factoryAddress] }) : undefined
 	const receiveRouterAddress = receiveRouterData === undefined ? undefined : getCreate2Address({ bytecode: receiveRouterData, from: core.proxyDeployer, salt: zeroSalt })
 	return {
 		core,
 		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
 		feeBps: checkedFeeBps,
 		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
-		...(receiveRouterAddress === undefined || receiveRouterData === undefined
-			? {}
-			: { receiveRouter: { address: receiveRouterAddress, data: receiveRouterData, dependencies: ['factory'], id: 'receiveRouter' as const, label: 'Approval-free trading router' } }),
+		...(receiveRouterAddress === undefined || receiveRouterData === undefined ? {} : { receiveRouter: { address: receiveRouterAddress, data: receiveRouterData, dependencies: ['factory'], id: 'receiveRouter' as const, label: 'Approval-free trading router' } }),
 		version,
 	}
 }
@@ -119,10 +115,7 @@ async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>,
 
 async function validateReceiveRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
 	if (plan.receiveRouter === undefined) return
-	const [receiveFactory, version] = await Promise.all([
-		client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'factory' }),
-		client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'IMPLEMENTATION_VERSION' }),
-	])
+	const [receiveFactory, version] = await Promise.all([client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'factory' }), client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'IMPLEMENTATION_VERSION' })])
 	if (getAddress(receiveFactory) !== plan.factory.address || version !== 2n) throw new Error('Approval-free router capability does not match the V2 deployment')
 }
 
