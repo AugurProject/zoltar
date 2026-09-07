@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import ts from 'typescript'
 import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../../shared/ts/protocolConfig'
@@ -62,6 +63,7 @@ const sepoliaRepAllocations = await readFile('shared/ts/deployment/sepoliaRepAll
 const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 
+await assertNoNarrativeDocumentationSnapshots()
 assertEscalationContinuationReference()
 assertDisputeStakedReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
@@ -83,6 +85,77 @@ assertLifecycleReferences()
 assertContractInteractionDistinctions()
 assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
+
+async function assertNoNarrativeDocumentationSnapshots(): Promise<void> {
+	const validatorPaths = ['tooling/docs/check-docs-examples.mts', 'tooling/docs/check-docs-reference-values.mts']
+	for (const validatorPath of validatorPaths) {
+		const validatorSource = await readFile(validatorPath, 'utf8')
+		assert.deepEqual(findNarrativeDocumentationAssertions(validatorSource, validatorPath), [], `${validatorPath} must validate documentation structure, formulas, generated data, or executable behavior without freezing narrative prose`)
+	}
+
+	const paraphraseFriendlyFixture = `assert.match(html, /id="purpose"/)`
+	const formulaFixture = `assert.match(openOracleIntegration, /data-source="amount = principal \\cdot rate"/)`
+	const narrativeFixture = `assert.match(html, /The mechanism always follows this exact sentence/)`
+	assert.deepEqual(findNarrativeDocumentationAssertions(paraphraseFriendlyFixture, 'paraphrase-fixture.mts'), [])
+	assert.deepEqual(findNarrativeDocumentationAssertions(formulaFixture, 'formula-fixture.mts'), [])
+	assert.equal(findNarrativeDocumentationAssertions(narrativeFixture, 'narrative-fixture.mts').length, 1)
+}
+
+function findNarrativeDocumentationAssertions(source: string, sourcePath: string): string[] {
+	const sourceFile = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+	const violations: string[] = []
+	const visit = (node: ts.Node): void => {
+		if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'assert') {
+			const assertionName = node.expression.name.text
+			if ((assertionName === 'match' || assertionName === 'doesNotMatch') && node.arguments.length >= 2 && isStaticDocumentationExpression(node.arguments[0])) {
+				const pattern = node.arguments[1]?.getText(sourceFile) ?? ''
+				if (!isStructuredDocumentationPattern(pattern)) violations.push(`${sourcePath}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}`)
+			}
+			if (assertionName === 'ok' && node.arguments.length > 0 && isNarrativeDocumentationIncludes(node.arguments[0], sourceFile)) {
+				violations.push(`${sourcePath}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1}`)
+			}
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(sourceFile)
+	return violations
+}
+
+function isStaticDocumentationExpression(expression: ts.Expression | undefined): boolean {
+	if (expression === undefined) return false
+	if (ts.isIdentifier(expression)) {
+		return new Set([
+			'html',
+			'invariantsHtml',
+			'liquidationHtml',
+			'openOracleIntegration',
+			'whitepaperStatoblast',
+			'operatorReference',
+			'contractInteractionReference',
+			'openOracleHtml',
+			'auctionDesignHtml',
+			'statoblastHtml',
+			'requestCostEquation',
+		]).has(expression.text) || /(?:Entry|Row)$/.test(expression.text)
+	}
+	return ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'blockWithId'
+}
+
+function isStructuredDocumentationPattern(pattern: string): boolean {
+	if (/(?:data-source=|<mi>|<mn>)/.test(pattern)) return true
+	if (/<(?:section|details) id=/.test(pattern) && !pattern.includes('[\\s\\S]')) return true
+	return /(?:id|href|class)=/.test(pattern) && !pattern.includes(' ')
+}
+
+function isNarrativeDocumentationIncludes(expression: ts.Expression | undefined, sourceFile: ts.SourceFile): boolean {
+	if (!expression || !ts.isCallExpression(expression) || !ts.isPropertyAccessExpression(expression.expression) || expression.expression.name.text !== 'includes') return false
+	if (!isStaticDocumentationExpression(expression.expression.expression)) return false
+	const argument = expression.arguments[0]
+	if (argument === undefined) return false
+	const argumentText = argument.getText(sourceFile)
+	if (/^[`'"][A-Za-z_]\w*\([^`'"\n]*\)[`'"]$/.test(argumentText) || argumentText.includes('${') || argumentText.includes('/')) return false
+	return /\s/.test(argumentText.slice(1, -1))
+}
 
 function assertEscalationContinuationReference(): void {
 	assert.match(html, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
