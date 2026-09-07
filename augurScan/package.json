@@ -17,7 +17,8 @@
 		"test:integration": "bun test tests/postgres.integration.test.ts",
 		"typecheck": "cd .. && bun install --frozen-lockfile && cd augurScan && bun x tsc --noEmit",
 		"check:ethereum-imports": "bun scripts/check-ethereum-imports.ts",
-		"check": "bun run check:ethereum-imports && bun run metadata:check && bun x biome check .",
+		"check:boundaries": "bun scripts/check-import-boundaries.ts",
+		"check": "bun run check:ethereum-imports && bun run check:boundaries && bun run metadata:check && bun x biome check .",
 		"format": "bun x biome check --write ."
 	},
 	"dependencies": {
