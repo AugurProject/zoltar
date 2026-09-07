@@ -451,7 +451,7 @@ export function assessRetirement(parameters: {
 	v3: readonly V3PositionObservation[]
 	sweepLimits?: { maximumEthAttoEth: bigint; maximumRepAttoRep: bigint; minimumEthReserveAttoEth: bigint } | undefined
 	planning?: PlanningOptions | undefined
-	canonicalScanComplete?: boolean | undefined
+	canonicalScanComplete: boolean
 }): RetirementAssessment {
 	const partialWorkflows = parameters.state.workflows.filter(workflow => !['abandoned', 'completed', 'failed'].includes(workflow.status)).length
 	const actionableObligations = parameters.state.obligations.filter(obligation => !['abandoned', 'completed', 'deferred'].includes(obligation.status)).length
@@ -464,7 +464,7 @@ export function assessRetirement(parameters: {
 	const approvals = knownApprovalCount(parameters.snapshot)
 	const shareClassification = classifyShares(parameters.snapshot)
 	const blockers: RetirementBlocker[] = [...parameters.retirement.blockers.filter(blocker => blocker.category === 'ambiguous-position' && blocker.id.startsWith('v3-workflow:')), ...shareClassification.blockers]
-	if (parameters.canonicalScanComplete === false) blockers.push({ category: 'incomplete-discovery', details: 'The canonical lifecycle, carry-proof, or topology scan is incomplete', id: 'canonical-scan-incomplete' })
+	if (!parameters.canonicalScanComplete) blockers.push({ category: 'incomplete-discovery', details: 'The canonical lifecycle, carry-proof, or topology scan is incomplete', id: 'canonical-scan-incomplete' })
 	if (parameters.snapshot.warnings.length !== 0) blockers.push({ category: 'incomplete-discovery', details: parameters.snapshot.warnings.join('; '), id: 'canonical-scan-warnings' })
 	for (const obligation of parameters.state.obligations.filter(candidate => candidate.status === 'deferred')) {
 		blockers.push({ category: 'temporarily-locked', details: `${obligation.label} is not yet eligible`, id: obligation.id, ...(obligation.notBefore === undefined ? {} : { nextEligibleAt: obligation.notBefore }) })

@@ -102,6 +102,6 @@ export function operationAllowedDuringRetirement(operationId: string, policies: 
 	const disposition = dispositions.get(operationId)
 	if (disposition === 'recovery') return true
 	if (disposition === 'claim-linked-migration') return policies.migrateExistingClaims
-	if (disposition === 'unmatched-exit') return policies.exitUnmatchedShares && policies.maximumExitLossBps >= 100
+	if (disposition === 'unmatched-exit') return policies.exitUnmatchedShares
 	return false
 }

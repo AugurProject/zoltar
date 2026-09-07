@@ -168,8 +168,7 @@ describe('Drain & Retire planning', () => {
 		expect(operationAllowedDuringRetirement('statoblast.oracle.recover-report', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
 		expect(operationAllowedDuringRetirement('trading.shares.migrate', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
 		expect(operationAllowedDuringRetirement('trading.shares.migrate', { ...DEFAULT_RETIREMENT_POLICIES, migrateExistingClaims: true })).toBeTrue()
-		expect(operationAllowedDuringRetirement('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 99 })).toBeFalse()
-		expect(operationAllowedDuringRetirement('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 100 })).toBeTrue()
+		expect(operationAllowedDuringRetirement('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 0 })).toBeTrue()
 	})
 
 	test('selects recovery deterministically and one workflow at a time', () => {
@@ -212,7 +211,7 @@ describe('Drain & Retire planning', () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		const state = initialDurableState(31337)
-		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement: request(), snapshot, state, v3: [] })
+		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state, v3: [] })
 		expect(result.status).toBe('draining')
 		expect(result.proof.knownApprovals).toBe(1)
 	})
@@ -253,7 +252,7 @@ describe('Drain & Retire planning', () => {
 		const retirement = request()
 		retirement.policies.unwrapWeth = false
 		retirement.positions = [position('pending-confirmation')]
-		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
 		expect(result.status).toBe('blocked')
 		expect(result.residuals).toContainEqual(expect.objectContaining({ amount: '3', category: 'operator-accepted' }))
 		expect(result.blockers).toContainEqual(expect.objectContaining({ category: 'ambiguous-position', id: retirement.positions[0]?.id }))
@@ -263,16 +262,16 @@ describe('Drain & Retire planning', () => {
 		const snapshot = emptySnapshot()
 		const retirement = request()
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '3', pair: address(81) }]
-		let result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		let result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
 		expect(result).toMatchObject({ proof: { claimableAssets: 1 }, status: 'blocked' })
 		snapshot.wallet.lpTokens = []
 		const universe = snapshot.universes[0]
 		if (universe === undefined) throw new Error('Universe fixture is missing')
 		universe.migrationBalance = '4'
-		result = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		result = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
 		expect(result).toMatchObject({ residuals: [{ amount: '4', category: 'irreversible-burn' }], status: 'drained-with-residuals' })
 		retirement.policies.migrateExistingClaims = true
-		result = assessRetirement({ blockHash: hash(3), blockNumber: 3n, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		result = assessRetirement({ blockHash: hash(3), blockNumber: 3n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
 		expect(result).toMatchObject({ proof: { claimableAssets: 1 }, status: 'blocked' })
 	})
 
@@ -320,25 +319,27 @@ describe('Drain & Retire planning', () => {
 			updatedAt: now,
 			workflowId: 'workflow:missing',
 		})
-		const waiting = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement: request(), snapshot, state, v3: [] })
+		const waiting = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state, v3: [] })
 		expect(waiting).toMatchObject({ status: 'waiting', blockers: [{ category: 'temporarily-locked', nextEligibleAt: '2026-09-08T00:00:00.000Z' }] })
 		const delayed = state.obligations[0]
 		if (delayed === undefined) throw new Error('Delayed obligation fixture is missing')
 		delayed.status = 'pending'
 		delete delayed.notBefore
-		const actionable = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [evaluation(plan('statoblast.escalation.withdraw'))], retirement: request(), snapshot, state, v3: [] })
+		const actionable = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [evaluation(plan('statoblast.escalation.withdraw'))], retirement: request(), snapshot, state, v3: [] })
 		expect(actionable).toMatchObject({ action: { kind: 'existing-plan', plan: { definitionId: 'statoblast.escalation.withdraw' } }, status: 'draining' })
 		state.obligations = []
 		const retirement = request()
 		retirement.positions = [position('blocked')]
-		expect(assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state, v3: [] }).status).toBe('blocked')
+		expect(assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] }).status).toBe('blocked')
 	})
 
 	test('records exact completion proof and residual completion separately', () => {
 		const snapshot = emptySnapshot()
 		const state = initialDurableState(31337)
 		const retirement = request()
-		const clean = assessRetirement({ blockHash: hash(1), blockNumber: 1n, evaluations: [], retirement, snapshot, state, v3: [] })
+		const incomplete = assessRetirement({ blockHash: hash(0), blockNumber: 0n, canonicalScanComplete: false, evaluations: [], retirement, snapshot, state, v3: [] })
+		expect(incomplete).toMatchObject({ blockers: [{ id: 'canonical-scan-incomplete' }], status: 'blocked' })
+		const clean = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
 		expect(clean.status).toBe('drained')
 		applyRetirementAssessment(retirement, clean, hash(1), 1n, now)
 		expect(retirement.completionEvidence?.proof.pendingTransactions).toBe(0)
@@ -347,7 +348,7 @@ describe('Drain & Retire planning', () => {
 		if (pool === undefined) throw new Error('Pool fixture is missing')
 		pool.questionOutcome = 1
 		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: pool.shareToken, universeId: pool.universeId, yes: '0' }]
-		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, evaluations: [], retirement, snapshot, state, v3: [] })
+		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
 		expect(residual.status).toBe('drained-with-residuals')
 	})
 
