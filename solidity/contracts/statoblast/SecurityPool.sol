@@ -192,8 +192,8 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function updateSettlementCollateral() public {
-		uint256 forkTime = zoltar.getForkTime(universeId);
-		uint256 feeEndDate = _getFeeEpochEndTime(forkTime);
+		uint256 feeEndDate = getFeeEpochEndTime();
+		feeEpochEndTime = feeEndDate;
 		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
@@ -216,22 +216,19 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
 	}
 
-	function _getFeeEpochEndTime(uint256 forkTime) private returns (uint256) {
+	function getFeeEpochEndTime() public view returns (uint256) {
+		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (feeEpochEndTime != type(uint256).max) {
-			if (forkTime != 0 && feeEpochEndTime == questionData.getQuestionEndDate(questionId))
-				feeEpochEndTime = forkTime;
+			if (forkTime != 0 && address(parent) == address(0x0)) return forkTime;
 			return feeEpochEndTime;
 		}
+		uint256 endTime = feeEpochEndTime;
 		if (address(escalationGame) != address(0x0)) {
 			uint256 escalationEndTime = escalationGame.getEscalationGameEndDate();
-			if (
-				escalationEndTime != type(uint256).max &&
-				block.timestamp > escalationEndTime &&
-				isEscalationResolved()
-			) feeEpochEndTime = escalationEndTime;
+			if (escalationEndTime != type(uint256).max && block.timestamp > escalationEndTime && isEscalationResolved())
+				endTime = escalationEndTime;
 		}
-		if (forkTime != 0 && forkTime < feeEpochEndTime) feeEpochEndTime = forkTime;
-		return feeEpochEndTime == type(uint256).max ? block.timestamp : feeEpochEndTime;
+		return forkTime != 0 && forkTime < endTime ? forkTime : endTime;
 	}
 
 	function updateRetentionRate() public {
@@ -770,7 +767,8 @@ contract SecurityPool is SecurityPoolStorage {
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setValidatedSettlementCollateral, (newSettlementCollateralAttoEth)));
 		lastUpdatedFeeAccumulator = block.timestamp;
-		feeEpochEndTime = type(uint256).max;
+		feeEpochEndTime =
+			hasInheritedForkOutcome && address(escalationGame) == address(0x0) ? block.timestamp : type(uint256).max;
 		_clearFeeIndexRemainder();
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));
 	}

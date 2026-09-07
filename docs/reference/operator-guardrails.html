@@ -149,7 +149,7 @@
 						</tr>
 						<tr>
 							<td>Fee accrual clamp</td>
-							<td>While the initial pool's universe remains unforked, its provisional fee cutoff is the question end time. A universe fork replaces that cutoff with the fork timestamp, whether the fork is before or after the question end. Finalizing a child opens a new epoch at that finalization timestamp even though the child reuses the ended parent question; the child epoch is later fixed at its local escalation-game resolution time or at a subsequent universe fork time.</td>
+							<td>While the initial pool's universe remains unforked, its provisional fee cutoff is the question end time. A universe fork replaces that cutoff with the fork timestamp, whether the fork is before or after the question end. A child with a fixed outcome and no continuation game stops accruing fees at finalization. Other children open a new epoch at finalization, ending at local escalation-game resolution or a subsequent universe fork.</td>
 							<td><a href="../../solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 						</tr>
 						<tr>

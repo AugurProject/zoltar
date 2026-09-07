@@ -4,7 +4,7 @@ import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, splitMigration
 import { sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
-describe('Audit PoC: child-pool fee epoch', () => {
+describe('Child-pool fee epoch regression', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const {
 		DAY,
@@ -32,6 +32,7 @@ describe('Audit PoC: child-pool fee epoch', () => {
 		getTotalClaimableVaultFeesAttoEth,
 		getZoltarAddress,
 		getZoltarForkThreshold,
+		initiateSecurityPoolFork,
 		migrateRepToZoltar,
 		migrateVault,
 		migrateVaultWithUnresolvedEscalation,
@@ -45,6 +46,35 @@ describe('Audit PoC: child-pool fee epoch', () => {
 		updateSettlementCollateral,
 		updateVaultFees,
 	} = fixture
+
+	test('resolved child without a continuation game preserves collateral after activation', async () => {
+		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, 0n, questionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const childUniverse = getChildUniverseId(0n, QuestionOutcome.Yes)
+		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
+		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
+		await startTruthAuction(client, child.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational, 'fully migrated child should activate')
+		strictEqualTypeSafe(await getSecurityPoolsEscalationGame(client, child.securityPool), addressString(0n), 'resolved child needs no continuation game')
+		const activationCheckpoint = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'lastUpdatedFeeAccumulator' })
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), activationCheckpoint, 'resolved child horizon should be its activation checkpoint')
+		const collateral = await getSettlementCollateralAttoEth(client, child.securityPool)
+		const fees = await getTotalAccruedFees(client, child.securityPool)
+		assert.ok(collateral > 0n, 'activated child should hold settlement collateral')
+		for (let checkpoint = 0; checkpoint < 2; checkpoint++) {
+			await mockWindow.advanceTime(DAY)
+			await updateSettlementCollateral(client, child.securityPool)
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, child.securityPool), collateral, 'resolved child collateral should remain unchanged')
+			strictEqualTypeSafe(await getTotalAccruedFees(client, child.securityPool), fees, 'resolved child should accrue no further fees')
+		}
+	})
 
 	test('external-fork child without an auction charges mint and redemption during its continuation epoch', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
@@ -66,6 +96,7 @@ describe('Audit PoC: child-pool fee epoch', () => {
 
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await updateSettlementCollateral(client, child.securityPool)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
 		const mintedShares = 2n * 10n ** 18n
 		await createCompleteSet(client, child.securityPool, mintedShares)
 		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
@@ -113,6 +144,7 @@ describe('Audit PoC: child-pool fee epoch', () => {
 		await updateSettlementCollateral(client, child.securityPool)
 		assert.ok((await getSettlementCollateralAttoEth(client, child.securityPool)) < collateralBefore, 'resumed own-fork child must accrue before resolution')
 		await mockWindow.setTime(gameEnd + 1n)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), gameEnd, 'view should expose resolution cutoff before checkpointing')
 		await updateSettlementCollateral(client, child.securityPool)
 		const accruedAtResolution = await getTotalAccruedFees(client, child.securityPool)
 		await mockWindow.advanceTime(DAY)
