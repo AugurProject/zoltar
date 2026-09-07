@@ -1,6 +1,17 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES } from '@zoltar/shared/openOracle'
+import {
+	getOpenOracleGameTuple,
+	getOpenOracleHelperTuple,
+	hashOpenOracleStatePreimage,
+	OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT,
+	OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION,
+	OPEN_ORACLE_FLAG_STORE_ALL,
+	OPEN_ORACLE_FLAG_STORE_PRICE,
+	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
+	OPEN_ORACLE_FLAG_TIME_TYPE,
+	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
+} from '@zoltar/shared/openOracle'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -108,6 +119,21 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const contractAddress = receipt.contractAddress
 		if (contractAddress === null || contractAddress === undefined) throw new Error('rejecting ETH receiver deployment address is unavailable')
 		return contractAddress
+	}
+
+	const installCurrentOpenOracle = async () => {
+		const hash = await reporter.sendTransaction({
+			data: encodeDeployData({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				bytecode: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+			}),
+		})
+		const receipt = await reporter.waitForTransactionReceipt({ hash })
+		const contractAddress = receipt.contractAddress
+		if (contractAddress === null || contractAddress === undefined) throw new Error('OpenOracle deployment address is unavailable')
+		const currentCode = await reporter.getCode({ address: contractAddress })
+		if (currentCode === undefined || currentCode === '0x') throw new Error('OpenOracle runtime bytecode is unavailable')
+		await mockWindow.addStateOverrides({ [openOracle]: { code: hexToBytes(currentCode) } })
 	}
 
 	const submitReport = async (
@@ -307,6 +333,77 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			reportFundingBefore,
 			'underfunded report must not transfer or credit collateral',
 		)
+	})
+
+	test('supports settlement eligibility, flexible escalation, and halt-only fees as independent opt-ins', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+		const reportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		const flags = FLAGS | OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION
+		await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(flags) })
+		const reported = (await loadOpenOracleEventState(reporter, reportId)).latest
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [reportId],
+			}),
+		).toBe(reported.game.reportTimestamp + SETTLEMENT_TIME)
+
+		await mockWindow.setTime(reported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const previousReporterCredit = await getHeldBalance(reporter.account.address, reported.game.token1)
+		await disputeReport(disputer, reportId, 1_400n, 900n, reported)
+		const disputed = (await loadOpenOracleEventState(reporter, reportId)).latest
+		expect(disputed.game.currentAmount1).toBe(1_400n)
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [reportId],
+			}),
+		).toBe(disputed.game.reportTimestamp + SETTLEMENT_TIME)
+		expect((await getHeldBalance(reporter.account.address, reported.game.token1)) - previousReporterCredit).toBe(2n * AMOUNT1)
+
+		const haltReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter, {
+			...getReportParameters(reporter),
+			escalationHalt: AMOUNT1,
+			flags: Number(FLAGS | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT),
+		})
+		const haltReported = (await loadOpenOracleEventState(reporter, haltReportId)).latest
+		await mockWindow.setTime(haltReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const haltPreviousReporterCredit = await getHeldBalance(reporter.account.address, haltReported.game.token1)
+		await disputeReport(disputer, haltReportId, AMOUNT1 + 1n, 900n, haltReported)
+		expect((await getHeldBalance(reporter.account.address, haltReported.game.token1)) - haltPreviousReporterCredit).toBe(2n * AMOUNT1 + (AMOUNT1 * (FEE_PERCENTAGE + PROTOCOL_FEE)) / 10_000_000n)
+
+		const legacyReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter)
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [legacyReportId],
+			}),
+		).toBe(0n)
 	})
 
 	test('dispute validates every reachable custom-error transition guard', async () => {
