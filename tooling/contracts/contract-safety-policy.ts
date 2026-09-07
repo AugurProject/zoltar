@@ -44,8 +44,8 @@ export const contractSafetyPolicy = {
 		{
 			sourcePath: 'contracts/statoblast/EscalationGame.sol',
 			contractName: 'EscalationGame',
-			maximumBytes: 24_227,
-			reason: 'The runtime is above 98% of the EIP-170 limit.',
+			maximumBytes: 24_286,
+			reason: 'The reviewed 59-byte growth dispatches the two narrowly scoped atomic REP authorization deposit entrypoints; 290 bytes of EIP-170 headroom remain.',
 		},
 		{
 			sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
@@ -70,8 +70,8 @@ export const contractSafetyPolicy = {
 		{
 			sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 			contractName: 'EscalationGameFactory',
-			maximumBytes: 44_429,
-			reason: 'Embedded child creation code puts initcode above 90% of the EIP-3860 limit.',
+			maximumBytes: 45_672,
+			reason: 'The factory embeds the reviewed atomic-authorization EscalationGame creation code; 3,480 bytes of EIP-3860 headroom remain.',
 		},
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
