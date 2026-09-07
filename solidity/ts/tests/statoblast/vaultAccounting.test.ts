@@ -3,6 +3,7 @@ import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityP
 import { createCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
+import { encodeAbiParameters, getAddress, isHex, keccak256, type Hex } from '@zoltar/shared/ethereum'
 
 const depositRepToVaultEvent = {
 	inputs: [
@@ -27,6 +28,15 @@ const vaultDepositTargetHealthFactorRecordedEvent = {
 } as const
 
 const MAX_UINT256 = 2n ** 256n - 1n
+
+function splitSignature(signature: Hex) {
+	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
+	return { r: `0x${signature.slice(2, 66)}` as Hex, s: `0x${signature.slice(66, 130)}` as Hex, v: Number.parseInt(signature.slice(130, 132), 16) }
+}
+
+function functionSelector(signature: string) {
+	return keccak256(new TextEncoder().encode(signature)).slice(0, 10) as Hex
+}
 
 describe('Statoblast: vault accounting', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
@@ -225,6 +235,104 @@ describe('Statoblast: vault accounting', () => {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.ok(vault.repBackingUnits > 0n, 'permit fallback deposit should credit the signer vault')
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'allowance', args: [client.account.address, securityPoolAddresses.securityPool] }), 0n, 'exact fallback allowance should be fully consumed')
+	})
+
+	test('valid atomic permit deposits REP into the signer vault', async () => {
+		const accounts = await mockWindow.request({ method: 'eth_accounts' })
+		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
+		const owner = getAddress(accounts[0])
+		const ownerClient = createWriteClient(mockWindow, BigInt(owner), 0)
+		const depositAmount = repDeposit
+		const token = addressString(GENESIS_REPUTATION_TOKEN)
+		await transferRepToAddress(client, owner, depositAmount)
+		const deadline = 9_000_000_000n
+		const nonce = await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'nonces', args: [owner] })
+		const signatureValue = await mockWindow.request({
+			method: 'eth_signTypedData_v4',
+			params: [
+				owner,
+				JSON.stringify({
+					domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+					primaryType: 'Permit',
+					types: {
+						Permit: [
+							{ name: 'owner', type: 'address' },
+							{ name: 'spender', type: 'address' },
+							{ name: 'value', type: 'uint256' },
+							{ name: 'nonce', type: 'uint256' },
+							{ name: 'deadline', type: 'uint256' },
+						],
+					},
+					message: { owner, spender: securityPoolAddresses.securityPool, value: depositAmount.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
+				}),
+			],
+		})
+		if (typeof signatureValue !== 'string' || !isHex(signatureValue)) throw new Error('Permit signature missing')
+		const signature = splitSignature(signatureValue)
+		const before = await getSecurityVault(client, securityPoolAddresses.securityPool, owner)
+		await writeContractAndWait(ownerClient, () => ownerClient.writeContract({ abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositRepToVaultWithPermit', args: [depositAmount, 10_000n, deadline, signature.v, signature.r, signature.s] }))
+		const after = await getSecurityVault(client, securityPoolAddresses.securityPool, owner)
+		assert.ok(after.repBackingUnits > before.repBackingUnits, 'atomic permit deposit should credit the signer vault')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'allowance', args: [owner, securityPoolAddresses.securityPool] }), 0n, 'exact permit allowance should be consumed')
+	})
+
+	test('relayed ERC-3009 vault deposits bind pool identity, question, amount, health factor, and owner credit', async () => {
+		const accounts = await mockWindow.request({ method: 'eth_accounts' })
+		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
+		const owner = getAddress(accounts[0])
+		const relayer = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const token = addressString(GENESIS_REPUTATION_TOKEN)
+		const depositAmount = repDeposit
+		await transferRepToAddress(client, owner, depositAmount)
+		const targetHealthFactorBps = 12_500n
+		const nonce = `0x${'71'.repeat(32)}` as Hex
+		const validBefore = 9_000_000_000n
+		const operationHash = keccak256(
+			encodeAbiParameters(
+				[{ type: 'bytes4' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+				[functionSelector('depositRepToVaultWithAuthorization(address,uint256,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'), owner, genesisUniverse, questionId, depositAmount, targetHealthFactorBps],
+			),
+		)
+		const boundNonce = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'address' }], [nonce, operationHash, owner]))
+		const signatureValue = await mockWindow.request({
+			method: 'eth_signTypedData_v4',
+			params: [
+				owner,
+				JSON.stringify({
+					domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+					primaryType: 'ReceiveWithAuthorization',
+					types: {
+						ReceiveWithAuthorization: [
+							{ name: 'from', type: 'address' },
+							{ name: 'to', type: 'address' },
+							{ name: 'value', type: 'uint256' },
+							{ name: 'validAfter', type: 'uint256' },
+							{ name: 'validBefore', type: 'uint256' },
+							{ name: 'nonce', type: 'bytes32' },
+						],
+					},
+					message: { from: owner, to: securityPoolAddresses.securityPool, value: depositAmount.toString(), validAfter: '0', validBefore: validBefore.toString(), nonce: boundNonce },
+				}),
+			],
+		})
+		if (typeof signatureValue !== 'string' || !isHex(signatureValue)) throw new Error('Authorization signature missing')
+		const signature = splitSignature(signatureValue)
+		await assert.rejects(
+			relayer.writeContract({ abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositRepToVaultWithAuthorization', args: [owner, depositAmount, targetHealthFactorBps + 1n, 0n, validBefore, nonce, signature.v, signature.r, signature.s] }),
+			/invalid signer|reverted/i,
+			'altered health factor must invalidate the operation-bound authorization',
+		)
+		const ownerBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, owner)
+		const relayerBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, relayer.account.address)
+		const relayerRepBefore = await getERC20Balance(client, token, relayer.account.address)
+		await writeContractAndWait(relayer, () =>
+			relayer.writeContract({ abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositRepToVaultWithAuthorization', args: [owner, depositAmount, targetHealthFactorBps, 0n, validBefore, nonce, signature.v, signature.r, signature.s] }),
+		)
+		const ownerAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, owner)
+		const relayerAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, relayer.account.address)
+		assert.ok(ownerAfter.repBackingUnits > ownerBefore.repBackingUnits, 'owner vault should receive the relayed deposit credit')
+		assert.strictEqual(relayerAfter.repBackingUnits, relayerBefore.repBackingUnits, 'relayer vault must receive no credit')
+		assert.strictEqual(await getERC20Balance(client, token, relayer.account.address), relayerRepBefore, 'relay must not route REP to the relayer')
 	})
 
 	test('supports a backing-only REP top-up without changing capacity ownership', async () => {
