@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getSelectedVaultOwnerForRoutePoolChange, shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '../../app/useAppRouteEffects.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
-import { getDeploymentSteps } from '../../protocol/deployment.js'
+import { getDeploymentSteps } from '@zoltar/ui-statoblast-domain/protocol/deployment.js'
 
 describe('app route effects', () => {
 	test('injects the complete Statoblast deployment plan into shared onchain state', () => {

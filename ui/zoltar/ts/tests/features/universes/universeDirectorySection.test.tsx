@@ -7,7 +7,7 @@ import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { UniverseDirectorySection } from '../../../features/universes/components/UniverseDirectorySection.js'
+import { UniverseDirectorySection } from '@zoltar/ui-zoltar-domain/features/universes/components/UniverseDirectorySection.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {

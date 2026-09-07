@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
-import type { ReportingFormState } from '@zoltar/ui-zoltar/types/app.js'
+import type { ReportingFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type {
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
@@ -30,7 +30,7 @@ import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
-import type { ReportingRouteContentProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { ReportingRouteContentProps } from '@zoltar/ui-zoltar-domain/features/types.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 

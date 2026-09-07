@@ -5,7 +5,7 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
+import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
@@ -294,4 +294,4 @@ export {
 	createPoolOracleTransactionIntent,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
-} from '@zoltar/ui-zoltar/features/transactionPresentations.js'
+} from '@zoltar/ui-zoltar-domain/features/transactionPresentations.js'

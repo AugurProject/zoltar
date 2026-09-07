@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { getUiAppDependencyOrder, getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
+import { getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const appId = parseUiAppIdFromProcess('the UI watch process')
 const appPaths = getUiAppPaths(appId)
@@ -19,7 +19,7 @@ const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 
 const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = appPaths.projectArtifactsScript
 const BUNDLER_PATHS_BUILD_PATH = appPaths.bundlerPathsScript
-const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => path.join(appPaths.uiRoot, packageId))
+const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => getUiPackageRoot(appPaths.uiRoot, packageId))
 const TYPE_SCRIPT_OUTPUT_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'js'))
 const TYPE_SCRIPT_SOURCE_PATHS = TYPE_SCRIPT_PROJECT_ROOT_PATHS.map(projectRoot => path.join(projectRoot, 'ts'))
 const VENDOR_BUILD_PATH = appPaths.vendorBuildScript

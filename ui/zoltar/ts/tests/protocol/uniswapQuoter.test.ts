@@ -20,7 +20,7 @@ import {
 	quoteRepForEth,
 	quoteRepForUsdcV4WithSource,
 	quoteTokenForEth,
-} from '../../protocol/uniswapQuoter.js'
+} from '@zoltar/ui-zoltar-domain/protocol/uniswapQuoter.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'

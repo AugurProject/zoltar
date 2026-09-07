@@ -29,7 +29,7 @@ import {
 	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
-} from '../../../features/markets/lib/trading.js'
+} from '@zoltar/ui-statoblast-domain/features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

@@ -10,9 +10,9 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installRepPriceQuoterForTesting } from '../../../features/open-oracle/hooks/useRepPrices.js'
+import { installRepPriceQuoterForTesting } from '@zoltar/ui-zoltar-domain/features/open-oracle/hooks/useRepPrices.js'
 
-type UseRepPrices = typeof import('../../../features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
+type UseRepPrices = typeof import('@zoltar/ui-zoltar-domain/features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
 
 function createHarness(useRepPrices: UseRepPrices) {
 	return function RepPricesHarness() {

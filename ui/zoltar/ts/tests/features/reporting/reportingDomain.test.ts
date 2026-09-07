@@ -22,7 +22,7 @@ import {
 	isReportingClosed,
 	previewReportingContribution,
 	projectEscalationEndTime,
-} from '../../../features/reporting/lib/reportingDomain.js'
+} from '@zoltar/ui-zoltar-domain/features/reporting/lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const ATTO_REP = 10n ** 18n

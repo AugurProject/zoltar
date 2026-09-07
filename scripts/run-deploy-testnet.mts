@@ -11,15 +11,15 @@ const deploymentEntrypoint = path.join(repositoryRoot, 'scripts', 'deploy-testne
 const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 const uiSourceRoots: Readonly<Record<string, string>> = {
 	'@zoltar/ui-core-shared': path.join(repositoryRoot, 'ui', 'coreShared', 'ts'),
-	'@zoltar/ui-statoblast': path.join(repositoryRoot, 'ui', 'statoblast', 'ts'),
-	'@zoltar/ui-zoltar': path.join(repositoryRoot, 'ui', 'zoltar', 'ts'),
+	'@zoltar/ui-statoblast-domain': path.join(repositoryRoot, 'ui', 'statoblastDomain', 'ts'),
+	'@zoltar/ui-zoltar-domain': path.join(repositoryRoot, 'ui', 'zoltarDomain', 'ts'),
 }
 
 export function resolveHeadlessUiSource(specifier: string): string | undefined {
 	const packageEntry = Object.entries(uiSourceRoots).find(([packageName]) => specifier.startsWith(`${packageName}/`))
 	if (packageEntry === undefined) return undefined
 	const [packageName, sourceRoot] = packageEntry
-	const relativeSourcePath = specifier.slice(packageName.length + 1).replace(/\.js$/u, '')
+	const relativeSourcePath = specifier.slice(packageName.length + 1).replace(/\.(?:js|ts|tsx)$/u, '')
 	for (const extension of ['.ts', '.tsx']) {
 		const candidate = path.resolve(sourceRoot, `${relativeSourcePath}${extension}`)
 		if (!candidate.startsWith(`${sourceRoot}${path.sep}`)) throw new Error(`Headless deployment import escapes its UI source package: ${specifier}`)

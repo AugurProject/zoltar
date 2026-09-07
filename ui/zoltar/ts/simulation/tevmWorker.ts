@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-import { getDeploymentSteps } from '../protocol/deployment.js'
-import { getZoltarAddress } from '../protocol/zoltarDeploymentHelpers.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar-domain/protocol/deployment.js'
+import { getZoltarAddress } from '@zoltar/ui-zoltar-domain/protocol/zoltarDeploymentHelpers.js'
 import type { SimulationEngineDependencies } from '@zoltar/ui-core-shared/simulation/tevmEngine.js'
 import { applyZoltarScenario } from './zoltarScenarios.js'
 

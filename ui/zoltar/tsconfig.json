@@ -8,6 +8,9 @@
 			],
 			"@zoltar/ui-core-shared/*": [
 				"../coreShared/js/*"
+			],
+			"@zoltar/ui-zoltar-domain/*": [
+				"../zoltarDomain/js/*"
 			]
 		},
 		"rootDir": "./ts",

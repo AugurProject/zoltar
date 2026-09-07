@@ -1,0 +1,76 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@zoltar/ui-trading-domain",
+      "dependencies": {
+        "@zoltar/shared": "file:../../shared",
+      },
+      "devDependencies": {
+        "better-typescript-lib": "2.11.0",
+        "bun-types": "1.3.11",
+        "typescript": "5.8.2",
+      },
+    },
+  },
+  "packages": {
+    "@noble/curves": ["@noble/curves@2.4.0", "", { "dependencies": { "@noble/hashes": "2.4.0" } }, "sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew=="],
+
+    "@noble/hashes": ["@noble/hashes@2.2.0", "", {}, "sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg=="],
+
+    "@scure/base": ["@scure/base@2.0.0", "", {}, "sha512-3E1kpuZginKkek01ovG8krQ0Z44E3DHPjc5S2rjJw9lZn3KSQOs8S7wqikF/AH7iRanHypj85uGyxk0XAyC37w=="],
+
+    "@types/node": ["@types/node@26.4.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA=="],
+
+    "@typescript/lib-decorators": ["@better-typescript-lib/decorators@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-ZL90jrzAhnvDr/fbpJt3CgGZdWvAeoAWznp56/mHJRKrCwsaJ9uCPqU09D21FJkWsmZ2jkz+mwBI9+e5dzwFvg=="],
+
+    "@typescript/lib-dom": ["@better-typescript-lib/dom@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-tt0ZgcgxqwRL3oWa2xgtBnq7zJjBXqrtwQo6hvHEwsKNA5SD65FVrC+b1zTFTGvTLURGDIlq1kn3cB2quurVAA=="],
+
+    "@typescript/lib-es2015": ["@better-typescript-lib/es2015@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-Xtg8WhxWAvBawWBOsAF3XurOHa18A7nvqYdfGYz4EXfrDvw32nod6zjf0it7/sDwcGIcms6wyRZyLkI4RP7e8Q=="],
+
+    "@typescript/lib-es2016": ["@better-typescript-lib/es2016@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-RFLgskFU2rt/5esIcWibJu8n9a4EjmP6hCh5kqULb+w5J0eE9gXnhU6IZ685+spY2nPw991IYwnUP5idtfiGjQ=="],
+
+    "@typescript/lib-es2017": ["@better-typescript-lib/es2017@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-bgCJrI6h3d6jvZsnzsbdH7/HVAV2GYrbtiUnBxV/ZTJ+VDiHdSI8CvsjIAVYHmrzLDC7FBTU+B+O8YhQ+fsehA=="],
+
+    "@typescript/lib-es2018": ["@better-typescript-lib/es2018@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-8rwLcK9SqzO6bCsa6fQkCrYtFMAs8b5Oz+Rhuh/RmKD/Ja6XvkuXvsA8k+Zf6LjzEc/1aHk3ooQaoPeyh5wVIw=="],
+
+    "@typescript/lib-es2019": ["@better-typescript-lib/es2019@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-S16xjOz1GJ1N9c7cdk+jywkkKjagQI8ojP9wBABU4876rv6Ng64iYVBG6IOpPcQ3eSIbnWSZVk4h4kCyJt1sKA=="],
+
+    "@typescript/lib-es2020": ["@better-typescript-lib/es2020@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-TZMzKXvPXrxT25nhuA43uUbpBagwi5jjxfBcMPZQwbDfFAemO0oa96tQCw8L5oKxN/uxFLhRZuEwLRLVrtcjFw=="],
+
+    "@typescript/lib-es2021": ["@better-typescript-lib/es2021@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-TCc6rj/uj3SHO9SPmsUqT3uRuZgFF2+ZLsKmA6+vQZDDVBQnelQHuooUhUWz49dh9TzntEI46x+yXen+UHfBGw=="],
+
+    "@typescript/lib-es2022": ["@better-typescript-lib/es2022@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-Gu5MihDWyEgEd7gXXmMmh2lwyZDPlJIEU8v7Mfeqlk7BfYmS4Raww7f1WYGlXT01zAUELE9vOQdOb+jWG+9N1A=="],
+
+    "@typescript/lib-es2023": ["@better-typescript-lib/es2023@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-Ezo4X5hM5bZx9LTPwexvpn1dq+JO+Od6P661pVjMoFA1eUm13SxGox2YIeISFAnWmJyLrcA9ZDr9+1cYlbeZzA=="],
+
+    "@typescript/lib-es2024": ["@better-typescript-lib/es2024@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-1Gix0YIF/NkCid7W+/bOMivG3vIUYfOfpUNx94UDRmkTHTQa3/Vu/X2Mjes8Cu60fBhcfscMBC6QY0emStK79w=="],
+
+    "@typescript/lib-es5": ["@better-typescript-lib/es5@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-Efdc4z0hL+HQvcKmsuKtypYcwREUjm1U17eE9J3oXQ2icjR6bAD5IEgFX2gSV2/Ad1KGeBS9gakLxYvDP1G0eQ=="],
+
+    "@typescript/lib-es6": ["@better-typescript-lib/es6@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-zjl9jCTXwWx0QRSv5ILADM1wEgLq40VzBFURVHXg0D8LYv2KYVA7ICdcJZ2/DxoLhaukJm42mllRPjr/Bylw/A=="],
+
+    "@typescript/lib-esnext": ["@better-typescript-lib/esnext@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-NTWWr05QE2/oes0xEiy84on87gzzEWyk0vwPTVgcuWvgtBwDe9sIeGJQSO4vfc7ZP+s3FPBqeSPiAlB7rZi68w=="],
+
+    "@typescript/lib-scripthost": ["@better-typescript-lib/scripthost@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-XwpujOfKtEn0oXodg8Rzm7ULu4OscK0l88ozWp4/q114k5vVd/1d90Q8nEIlB2RR8eqcGNkBG+Tcaj0qiaaJ1A=="],
+
+    "@typescript/lib-webworker": ["@better-typescript-lib/webworker@2.11.0", "", { "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-9jdYsSj7YWGixeVok7xZSV+OHpOxMBEcuw+zPHj2462LS812Xq2Vs5Kk00PoFjVXolgQm6naXDG1Wa+x445BPQ=="],
+
+    "@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
+
+    "better-typescript-lib": ["better-typescript-lib@2.11.0", "", { "dependencies": { "@typescript/lib-decorators": "npm:@better-typescript-lib/decorators@2.11.0", "@typescript/lib-dom": "npm:@better-typescript-lib/dom@2.11.0", "@typescript/lib-es2015": "npm:@better-typescript-lib/es2015@2.11.0", "@typescript/lib-es2016": "npm:@better-typescript-lib/es2016@2.11.0", "@typescript/lib-es2017": "npm:@better-typescript-lib/es2017@2.11.0", "@typescript/lib-es2018": "npm:@better-typescript-lib/es2018@2.11.0", "@typescript/lib-es2019": "npm:@better-typescript-lib/es2019@2.11.0", "@typescript/lib-es2020": "npm:@better-typescript-lib/es2020@2.11.0", "@typescript/lib-es2021": "npm:@better-typescript-lib/es2021@2.11.0", "@typescript/lib-es2022": "npm:@better-typescript-lib/es2022@2.11.0", "@typescript/lib-es2023": "npm:@better-typescript-lib/es2023@2.11.0", "@typescript/lib-es2024": "npm:@better-typescript-lib/es2024@2.11.0", "@typescript/lib-es5": "npm:@better-typescript-lib/es5@2.11.0", "@typescript/lib-es6": "npm:@better-typescript-lib/es6@2.11.0", "@typescript/lib-esnext": "npm:@better-typescript-lib/esnext@2.11.0", "@typescript/lib-scripthost": "npm:@better-typescript-lib/scripthost@2.11.0", "@typescript/lib-webworker": "npm:@better-typescript-lib/webworker@2.11.0" }, "peerDependencies": { "typescript": ">=4.5.2" } }, "sha512-dwaPodcG5lVepyeoEmwRSpRqKWOso5CRktnMcPKlE4jjcHLGjkBhZXIMe6EFD9ALG/Ru3kwOO1t6TNNQ6Pf1Jw=="],
+
+    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "micro-eth-signer": ["micro-eth-signer@0.18.1", "", { "dependencies": { "@noble/curves": "^2.0.0", "@noble/hashes": "^2.0.0", "micro-packed": "^0.8.0" } }, "sha512-vXKhCZxrytpl+dXR9JeaE41ZVFndi7wCKc1Jd22smOMAeDErvRcXaTxhYUf1yQxis4n2kIdv/pH7iuf+5/cj+Q=="],
+
+    "micro-packed": ["micro-packed@0.8.0", "", { "dependencies": { "@scure/base": "2.0.0" } }, "sha512-AKb8znIvg9sooythbXzyFeChEY0SkW0C6iXECpy/ls0e5BtwXO45J9wD9SLzBztnS4XmF/5kwZknsq+jyynd/A=="],
+
+    "typescript": ["typescript@5.8.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ=="],
+
+    "undici-types": ["undici-types@8.3.0", "", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
+
+    "@noble/curves/@noble/hashes": ["@noble/hashes@2.4.0", "", {}, "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA=="],
+  }
+}

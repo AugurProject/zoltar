@@ -4,8 +4,8 @@ import { useErc20AllowanceLoader, useErc20BalanceLoader } from '@zoltar/ui-core-
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/ethereum'
-import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
-import { approveErc20 } from '@zoltar/ui-zoltar/protocol/tokenActions.js'
+import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/openOracle.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-domain/protocol/tokenActions.js'
 import {
 	depositRepToVaultToSecurityPool,
 	isSecurityPoolVaultAdmissionClosed,
@@ -30,7 +30,7 @@ import { parseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/lib/integerInput.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
 import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.js'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar/features/open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'

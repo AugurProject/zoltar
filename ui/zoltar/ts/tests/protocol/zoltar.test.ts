@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../protocol/zoltar.js'
+import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-domain/protocol/zoltar.js'
 
 const QUESTION_TUPLE_BINARY = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 100n, '']
 const QUESTION_TUPLE_SCALAR = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units']

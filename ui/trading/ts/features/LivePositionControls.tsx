@@ -3,7 +3,7 @@ import { bigintToSafeNumber, formatEthPerShare, formatOutcomeAmount, formatShare
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
+import { maximumInsuredExit } from '@zoltar/ui-trading-domain'
 import * as workflowCopy from '../copy/workflows.js'
 import * as appCopy from '../copy/app.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'

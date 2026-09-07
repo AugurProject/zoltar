@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as tradingCopy from '@zoltar/ui-zoltar/copy/trading.js'
+import * as tradingCopy from '@zoltar/ui-zoltar-domain/copy/trading.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
@@ -15,14 +15,14 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { RankedBarList } from '@zoltar/ui-core-shared/components/RankedBarList.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { ShareMigrationTargetsSection } from '@zoltar/ui-zoltar/features/universes/components/ShareMigrationTargetsSection.js'
+import { ShareMigrationTargetsSection } from '@zoltar/ui-zoltar-domain/features/universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
-import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
+import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
 	calculateMintingCapacityAttoEth,

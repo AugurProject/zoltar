@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installZoltarRouting } from '../../lib/routing.js'
+import { installZoltarRouting } from '@zoltar/ui-zoltar-domain/lib/routing.js'
 
 describe('Zoltar App route validation', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -31,10 +31,10 @@ describe('Zoltar App route validation', () => {
 		mock.module('@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js', () => ({ ProtocolAppFrame: ({ children }: { children: unknown }) => <div>{children}</div> }))
 		mock.module('@zoltar/ui-core-shared/app/components/RouteSubNavigation.js', () => ({ RouteSubNavigation: () => <div>subnav</div> }))
 		mock.module('../../app/components/AppRouteContent.js', () => ({ AppRouteContent: ({ route: activeRoute }: { route: string }) => <div>{`route:${activeRoute}`}</div> }))
-		mock.module('../../app/components/OverviewPanels.js', () => ({ OverviewPanels: () => <div>overview</div> }))
+		mock.module('@zoltar/ui-zoltar-domain/features/overview/OverviewPanels.js', () => ({ OverviewPanels: () => <div>overview</div> }))
 		mock.module('../../app/hooks/useAppRouteEffects.js', () => ({ useAppRouteEffects: () => undefined }))
-		mock.module('../../features/deployment/hooks/useDeploymentFlow.js', () => ({ useDeploymentFlow: () => ({ errorMessage: undefined }) }))
-		mock.module('../../features/deployment/lib/deploymentRoute.js', () => ({ buildDeploymentRouteContentProps: () => ({}) }))
+		mock.module('@zoltar/ui-zoltar-domain/features/deployment/hooks/useDeploymentFlow.js', () => ({ useDeploymentFlow: () => ({ errorMessage: undefined }) }))
+		mock.module('@zoltar/ui-zoltar-domain/features/deployment/lib/deploymentRoute.js', () => ({ buildDeploymentRouteContentProps: () => ({}) }))
 		mock.module('@zoltar/ui-core-shared/app/hooks/useHashRoute.js', () => ({ useHashRoute: () => ({ navigate: () => undefined, route }) }))
 		mock.module('@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js', () => ({
 			useProtocolOnchainRuntime: () => ({
@@ -72,7 +72,7 @@ describe('Zoltar App route validation', () => {
 				walletScopedHookConfig: {},
 			}),
 		}))
-		mock.module('../../features/questions/hooks/useQuestionCreation.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js', () => ({
 			useQuestionCreation: () => ({
 				approveZoltarForkRep: async () => undefined,
 				createChildUniverse: async () => undefined,

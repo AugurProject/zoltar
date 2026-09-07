@@ -23,9 +23,9 @@ import {
 	isSupportedSelectedPoolView,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
-} from '../../../features/security-pools/lib/securityPoolWorkflow.js'
-import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/security-pools/lib/securityVault.js'
+} from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolWorkflow.js'
+import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/openOracle.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {

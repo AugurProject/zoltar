@@ -13,7 +13,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
-import type { OverviewPanelsProps, RepPriceFailure } from '../../features/types.js'
+import type { OverviewPanelsProps, RepPriceFailure } from '../types.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'

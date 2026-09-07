@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
-import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
+import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-domain/protocol/activeProtocolAddresses.js'
 import {
 	bigintToAddress,
 	getEscalationSideLabel,
@@ -22,7 +22,7 @@ import {
 	requireEscalationGameTuple,
 	requireUniverseTupleArray,
 	requireSecurityVaultTupleArray,
-} from '../../protocol/helpers.js'
+} from '@zoltar/ui-zoltar-domain/protocol/helpers.js'
 
 const questionData = {
 	title: 'Test question',

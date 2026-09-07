@@ -4,12 +4,24 @@ import * as url from 'node:url'
 
 export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
-export type UiPackageId = 'coreShared' | UiAppId
+export type UiPackageId = 'coreShared' | 'zoltarDomain' | 'statoblastDomain' | 'tradingDomain' | UiAppId
+
+export const UI_PACKAGE_DIRECTORY_BY_ID: Readonly<Record<UiPackageId, string>> = {
+	coreShared: 'coreShared',
+	statoblast: 'statoblast',
+	statoblastDomain: 'statoblastDomain',
+	trading: 'trading',
+	tradingDomain: 'tradingDomain',
+	zoltar: 'zoltar',
+	zoltarDomain: 'zoltarDomain',
+}
 
 export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] {
-	if (appId === 'trading') return ['coreShared', 'zoltar', 'statoblast', 'trading']
-	return appId === 'statoblast' ? ['coreShared', 'zoltar', 'statoblast'] : ['coreShared', 'zoltar']
+	if (appId === 'trading') return ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'trading']
+	return appId === 'statoblast' ? ['coreShared', 'zoltarDomain', 'statoblastDomain', 'statoblast'] : ['coreShared', 'zoltarDomain', 'zoltar']
 }
+
+export const getUiPackageRoot = (uiRoot: string, packageId: UiPackageId) => path.join(uiRoot, UI_PACKAGE_DIRECTORY_BY_ID[packageId])
 
 export function isUiAppId(candidate: string): candidate is UiAppId {
 	return (UI_APP_IDS as readonly string[]).includes(candidate)

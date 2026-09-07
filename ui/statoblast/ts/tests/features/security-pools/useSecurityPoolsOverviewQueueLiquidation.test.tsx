@@ -10,8 +10,8 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
-import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
-import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar/features/types.js'
+import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-domain/features/types.js'
 import type { LiquidationApprovalDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>

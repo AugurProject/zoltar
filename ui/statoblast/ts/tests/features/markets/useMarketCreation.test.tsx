@@ -10,10 +10,10 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { MarketFormState } from '@zoltar/ui-zoltar/types/app.js'
-import type { UseMarketCreationDependencies } from '../../../features/markets/hooks/useMarketCreation.js'
+import type { MarketFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
+import type { UseMarketCreationDependencies } from '@zoltar/ui-statoblast-domain/features/markets/hooks/useMarketCreation.js'
 
-type UseMarketCreation = typeof import('../../../features/markets/hooks/useMarketCreation.js')['useMarketCreation']
+type UseMarketCreation = typeof import('@zoltar/ui-statoblast-domain/features/markets/hooks/useMarketCreation.js')['useMarketCreation']
 type UseMarketCreationState = ReturnType<UseMarketCreation>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -79,7 +79,7 @@ describe('useMarketCreation', () => {
 		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
 		}
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
 				setZoltarForkQuestionId,
@@ -160,7 +160,7 @@ describe('useMarketCreation', () => {
 		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
 		}
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
 				setZoltarForkQuestionId,
@@ -240,7 +240,7 @@ describe('useMarketCreation', () => {
 		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
 		}
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions,
 				setZoltarForkQuestionId,
@@ -311,7 +311,7 @@ describe('useMarketCreation', () => {
 	test('shows a rendered error source when global transaction admission rejects creation', async () => {
 		const createMarketTransaction = mock(async () => ({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary' as const, questionId: '0x0b' }))
 		const onTransactionFinished = mock(() => undefined)
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
@@ -346,7 +346,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('preserves an anonymous question draft when a wallet connects', async () => {
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -396,7 +396,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('keeps the anonymous draft when the connected account already has a draft', async () => {
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -440,7 +440,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('keeps the anonymous draft when copying it to connected storage fails', async () => {
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -509,7 +509,7 @@ describe('useMarketCreation', () => {
 			marketType: 'scalar' as const,
 			questionId: '0x0b',
 		}))
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -627,7 +627,7 @@ describe('useMarketCreation', () => {
 
 	test('keeps another universe draft visible when an in-flight question succeeds in the original universe', async () => {
 		const pendingCreate = createDeferred<MarketCreationResult & { hash: Hash }>()
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -707,7 +707,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('ignores corrupt or unavailable question draft storage without blocking form use', async () => {
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
 				loadZoltarQuestions: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
@@ -790,7 +790,7 @@ describe('useMarketCreation', () => {
 
 	test('hides completed market creation state after the environment changes', async () => {
 		const result: MarketCreationResult & { hash: Hash } = { createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' }
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
@@ -832,7 +832,7 @@ describe('useMarketCreation', () => {
 
 	test('returns no created question when the environment changes before completion', async () => {
 		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
@@ -882,7 +882,7 @@ describe('useMarketCreation', () => {
 		const firstDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		const secondDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		let requestCount = 0
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
@@ -957,7 +957,7 @@ describe('useMarketCreation', () => {
 		const onTransactionPresented = mock(() => undefined)
 		const onTransactionSubmitted = mock(() => undefined)
 		const refreshState = mock(async () => undefined)
-		mock.module('@zoltar/ui-zoltar/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
 		}))
 		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)

@@ -1,4 +1,4 @@
-import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-zoltar/protocol/oracleTiming.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-zoltar-domain/protocol/oracleTiming.js'
 
 export type UiPriceOracle = 'uniswap' | 'open-oracle' | 'open-oracle-fallback'
 

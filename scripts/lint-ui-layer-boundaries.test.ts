@@ -35,6 +35,18 @@ test('allows dependencies within protocol and shared UI libraries', () => {
 	expect(findings).toEqual([])
 })
 
+test('keeps runnable applications as dependency leaves behind domain APIs', () => {
+	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar/protocol/core.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/core.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-domain/protocol/index.js'")).toEqual([])
+})
+
+test('prevents domain packages from reaching back into applications', () => {
+	const findings = findUiLayerBoundaryViolations('ui/statoblastDomain/ts/protocol/example.ts', "import { App } from '@zoltar/ui-zoltar/app/App.js'")
+	expect(findings.map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+})
+
 test('rejects test imports that bypass mirrored ownership', () => {
 	const cases = [
 		['ui/zoltar/ts/tests/root.test.ts', "import { client } from '../protocol/client.js'"],

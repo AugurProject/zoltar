@@ -1,10 +1,10 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createMarketParameters, createSecurityPoolParameters, validateMarketForm } from '../../../features/markets/lib/marketCreation.js'
+import { createMarketParameters, createSecurityPoolParameters, validateMarketForm } from '@zoltar/ui-statoblast-domain/features/markets/lib/marketCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
-import type { MarketFormState, SecurityPoolFormState } from '@zoltar/ui-zoltar/types/app.js'
+import type { MarketFormState, SecurityPoolFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
 
 void describe('market creation helpers', () => {
 	const noopDeploy = async () => '0x0000000000000000000000000000000000000000000000000000000000000000' as const

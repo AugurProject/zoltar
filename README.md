@@ -8,17 +8,18 @@ This repository contains two protocol layers:
 The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
-- `ui/coreShared/` contains the shared Preact primitives, application-shell framework, simulation engine, and per-app build tooling used by all three interfaces
+- `ui/coreShared/` contains runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces
+- `ui/zoltarDomain/`, `ui/statoblastDomain/`, and `ui/tradingDomain/` expose reusable product-domain APIs without application bootstrap, routing, or pages
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
 - `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
-- `tooling/` contains typed repository metadata plus CI and contract-safety orchestration; `scripts/` retains focused compatibility and generation entry points
+- `tooling/` contains typed repository metadata plus CI, contract-safety, and UI build/development orchestration; `scripts/` retains focused compatibility and generation entry points
 - `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
 
-Each interface package (`ui/zoltar`, `ui/statoblast`, `ui/trading`) keeps route-specific code under `ts/features`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. Imports point inward along `coreShared ← Zoltar ← Statoblast ← Trading`; shared packages never import an application that consumes them.
+The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching domain package, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent domain packages from importing runnable applications or applications from importing one another.
 
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 

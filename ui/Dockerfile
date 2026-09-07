@@ -52,6 +52,23 @@ COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
 RUN bun ./scripts/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
+# Build reusable domain packages before any dependency-leaf application.
+COPY ./ui/zoltarDomain/package.json /source/ui/zoltarDomain/package.json
+COPY ./ui/zoltarDomain/bun.lock /source/ui/zoltarDomain/bun.lock
+COPY ./ui/zoltarDomain/tsconfig.json /source/ui/zoltarDomain/tsconfig.json
+COPY ./ui/zoltarDomain/ts/ /source/ui/zoltarDomain/ts/
+RUN bun ./scripts/install-frozen.mts ui/zoltarDomain && cd /source/ui/zoltarDomain && bun run build
+COPY ./ui/statoblastDomain/package.json /source/ui/statoblastDomain/package.json
+COPY ./ui/statoblastDomain/bun.lock /source/ui/statoblastDomain/bun.lock
+COPY ./ui/statoblastDomain/tsconfig.json /source/ui/statoblastDomain/tsconfig.json
+COPY ./ui/statoblastDomain/ts/ /source/ui/statoblastDomain/ts/
+RUN bun ./scripts/install-frozen.mts ui/statoblastDomain && cd /source/ui/statoblastDomain && bun run build
+COPY ./ui/tradingDomain/package.json /source/ui/tradingDomain/package.json
+COPY ./ui/tradingDomain/bun.lock /source/ui/tradingDomain/bun.lock
+COPY ./ui/tradingDomain/tsconfig.json /source/ui/tradingDomain/tsconfig.json
+COPY ./ui/tradingDomain/ts/ /source/ui/tradingDomain/ts/
+RUN bun ./scripts/install-frozen.mts ui/tradingDomain && cd /source/ui/tradingDomain && bun run build
+
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
@@ -79,8 +96,8 @@ ENV PORT=8012
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/dockerServe.mts" ]
 
-# Build Statoblast on top of its Zoltar dependency, without Trading.
-FROM zoltar-builder AS statoblast-builder
+# Build Statoblast as an application leaf.
+FROM common-builder AS statoblast-builder
 
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
@@ -105,8 +122,8 @@ ENV PORT=8011
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/dockerServe.mts" ]
 
-# Trading is the only application that reaches the complete UI dependency DAG.
-FROM statoblast-builder AS trading-builder
+# Build Trading as an application leaf.
+FROM common-builder AS trading-builder
 
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
@@ -132,8 +149,11 @@ ENV UI_APP=trading
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/dockerServe.mts" ]
 
-# The publisher intentionally includes every application.
-FROM trading-builder AS builder
+# The publisher intentionally includes every independently built application.
+FROM common-builder AS builder
+COPY --from=zoltar-builder /source/ui/zoltar/dist/ /source/ui/zoltar/dist/
+COPY --from=statoblast-builder /source/ui/statoblast/dist/ /source/ui/statoblast/dist/
+COPY --from=trading-builder /source/ui/trading/dist/ /source/ui/trading/dist/
 
 # -------------------------------------------------
 # Publisher: Upload the production UI to host IPFS

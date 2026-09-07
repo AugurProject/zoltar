@@ -5,22 +5,20 @@ import * as path from 'node:path'
 import * as ts from 'typescript'
 import { sharedBrowserArtifactRelativePaths } from '../../scripts/sharedBrowserArtifacts.ts'
 import { assertSuccessfulBuilds, clearVendorOutput, vendor } from './vendor.mts'
-import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, getUiPackageRoot } from './appPaths.mts'
 import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
 
 const coreSharedPaths = getUiCoreSharedPaths()
-const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
-const zoltarPaths = appPathsById.get('zoltar')
-const statoblastPaths = appPathsById.get('statoblast')
-if (zoltarPaths === undefined || statoblastPaths === undefined) throw new Error('Failed to resolve the UI application paths.')
 const repositoryRootPath = coreSharedPaths.repositoryRoot
 const uiRootPath = coreSharedPaths.uiRoot
-const uiProtocolPaths = [path.join(zoltarPaths.appSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarPaths.appSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastPaths.appSourceRoot, 'protocol', 'trading.ts')]
-const uiDeploymentHelpersPath = path.join(zoltarPaths.appSourceRoot, 'protocol', 'deploymentHelpers.ts')
-const uiReportingDomainPath = path.join(zoltarPaths.appSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
+const zoltarDomainSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'zoltarDomain'), 'ts')
+const statoblastDomainSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'statoblastDomain'), 'ts')
+const uiProtocolPaths = [path.join(zoltarDomainSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarDomainSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastDomainSourceRoot, 'protocol', 'trading.ts')]
+const uiDeploymentHelpersPath = path.join(zoltarDomainSourceRoot, 'protocol', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(zoltarDomainSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
 const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'lib', 'sepoliaDeploymentConfig.ts')
 const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
-const uiTruthAuctionBookPath = path.join(statoblastPaths.appSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
+const uiTruthAuctionBookPath = path.join(statoblastDomainSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
 const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
-import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps, getStatoblastDeploymentStatusOracleStepAddresses, STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID } from '../../protocol/deployment.js'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps, getStatoblastDeploymentStatusOracleStepAddresses, STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID } from '@zoltar/ui-statoblast-domain/protocol/deployment.js'
 
 const simulationProfile = createSimulationProfile({ genesisRepTokenAddress: '0x1000000000000000000000000000000000000001', wethAddress: '0x2000000000000000000000000000000000000002' })
 
@@ -33,7 +33,7 @@ describe('statoblast deployment steps', () => {
 			// The oracle address is derived from its init bytecode, which embeds the
 			// monitored contract list. The statoblast list includes extra
 			// statoblast contracts, so the address must differ from the zoltar-only one.
-			const zoltarOracle = (await import('@zoltar/ui-zoltar/protocol/deployment.js')).getDeploymentSteps(profile).find(step => step.id === 'deploymentStatusOracle')
+			const zoltarOracle = (await import('@zoltar/ui-zoltar-domain/protocol/deployment.js')).getDeploymentSteps(profile).find(step => step.id === 'deploymentStatusOracle')
 			if (zoltarOracle === undefined) throw new Error('Missing zoltar oracle step')
 			expect(oracleStep.address === zoltarOracle.address).toBe(false)
 		}

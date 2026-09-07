@@ -10,7 +10,7 @@ import {
 	getZoltarDeploymentStatusOracleStepAddresses,
 	loadDeploymentStatusOracleMaskAtAddress,
 	withExpectedDeploymentRuntimeCodeHashes,
-} from '@zoltar/ui-zoltar/protocol/deployment.js'
+} from '@zoltar/ui-zoltar-domain/protocol/deployment.js'
 import {
 	getInfraContractAddresses,
 	getEscalationGameFactoryByteCode,
@@ -20,7 +20,7 @@ import {
 	getSecurityPoolOperationsDelegateByteCode,
 	getSecurityPoolOperationsDelegateRuntimeCode,
 	getShareTokenFactoryByteCode,
-} from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
+} from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
@@ -29,9 +29,9 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 
-export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar/protocol/deployment.js'
+export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-domain/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x08ab4e84d9d88edd1d398d2554b85e1f1b969bb6a815370cc8dbae60a93d4360',

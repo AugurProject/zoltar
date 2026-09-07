@@ -11,7 +11,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-type UseSecurityPoolCreation = typeof import('../../../features/security-pools/hooks/useSecurityPoolCreation.js')['useSecurityPoolCreation']
+type UseSecurityPoolCreation = typeof import('@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js')['useSecurityPoolCreation']
 type UseSecurityPoolCreationState = ReturnType<UseSecurityPoolCreation>
 
 type MarketIdLoadResult = MarketDetails
@@ -63,7 +63,7 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 }
 
 function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
-	mock.module('../../../protocol/index.js', () => ({
+	mock.module('@zoltar/ui-statoblast-domain/protocol/index.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
 		createSecurityPool:
 			createSecurityPool ??

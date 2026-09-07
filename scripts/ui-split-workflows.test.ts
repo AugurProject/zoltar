@@ -24,7 +24,8 @@ const developerDocumentation = [
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
 ]
-const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
+const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'zoltar', 'statoblast', 'trading'] as const
+const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarDomain/package.json', 'ui/statoblastDomain/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const requireRecord = (value: unknown, label: string) => {
@@ -57,7 +58,7 @@ describe('split UI workflow paths', () => {
 		const prepareSteps = workflowSteps(jobs['prepare'])
 		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
 		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
-		const uploadedPaths = ['ui/coreShared/js', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/trading/js', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
+		const uploadedPaths = ['ui/coreShared/js', 'ui/zoltarDomain/js', 'ui/statoblastDomain/js', 'ui/tradingDomain/js', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/trading/js', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
 		expect(
 			String(uploadOptions['path'])
 				.split('\n')
@@ -77,7 +78,7 @@ describe('split UI workflow paths', () => {
 			.split('\n')
 			.map(command => command.trim())
 			.filter(Boolean)
-		expect(new Set(installCommands)).toEqual(new Set(['coreShared', 'zoltar', 'statoblast', 'trading'].map(packageId => `bun ./scripts/install-frozen.mts ui/${packageId}`)))
+		expect(new Set(installCommands)).toEqual(new Set(uiPackageIds.map(packageId => `bun ./scripts/install-frozen.mts ui/${packageId}`)))
 	})
 
 	test('CI isolates the production browser workflow', async () => {
@@ -164,7 +165,7 @@ describe('split UI workflow paths', () => {
 		expect(preflightIndex).toBeGreaterThan(buildIndex)
 
 		const deployWorkflow = await readFile(deployTestnetWorkflowPath, 'utf8')
-		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
+		for (const packageId of uiPackageIds) {
 			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
 		}
 		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
@@ -186,17 +187,17 @@ describe('split UI workflow paths', () => {
 
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
 		const setupAction = await readFile(setupActionPath, 'utf8')
-		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
+		for (const appId of uiPackageIds) {
 			expect(setupAction).toContain(`(cd ui/${appId} && bun install --frozen-lockfile)`)
 		}
 		expect(setupAction).toContain("hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock')")
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
 		expect(dockerfile).toContain('ARG BUN_VERSION=1.3.14')
-		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
+		for (const appId of uiPackageIds) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}
-		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(dockerfile).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
+		for (const appId of uiPackageIds) expect(dockerfile).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {

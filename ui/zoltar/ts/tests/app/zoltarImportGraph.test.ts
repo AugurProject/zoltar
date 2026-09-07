@@ -13,7 +13,7 @@ const zoltarAppShell = resolve(zoltarSourceRoot, '../index.html')
 function resolveZoltarImport(importer: string, specifier: string) {
 	let unresolved: string
 	if (specifier.startsWith('.')) unresolved = resolve(dirname(importer), specifier)
-	else if (specifier.startsWith('@zoltar/ui-zoltar/')) unresolved = resolve(zoltarSourceRoot, specifier.slice('@zoltar/ui-zoltar/'.length))
+	else if (specifier.startsWith('@zoltar/ui-zoltar-domain/')) unresolved = resolve(zoltarSourceRoot, specifier.slice('@zoltar/ui-zoltar-domain/'.length))
 	else if (specifier.startsWith('@zoltar/ui-core-shared/')) unresolved = resolve(coreSharedSourceRoot, specifier.slice('@zoltar/ui-core-shared/'.length))
 	else if (specifier.startsWith('@zoltar/ui-')) throw new Error(`Cross-application UI import from ${importer}: ${specifier}`)
 	else return undefined

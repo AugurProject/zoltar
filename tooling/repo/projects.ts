@@ -1,4 +1,4 @@
-export const projectTypes = ['library', 'contracts', 'ui-tooling', 'ui-app', 'service', 'bot', 'documentation'] as const
+export const projectTypes = ['library', 'contracts', 'ui-domain', 'ui-app', 'service', 'bot', 'documentation'] as const
 export type ProjectType = (typeof projectTypes)[number]
 
 export type ProjectTaskName = 'setup' | 'build' | 'test' | 'lint' | 'typecheck' | 'knip' | 'dependency-update'
@@ -67,17 +67,44 @@ export const projects: readonly Project[] = [
 	{
 		id: 'ui-core',
 		path: 'ui/coreShared',
-		type: 'ui-tooling',
+		type: 'library',
 		dependencies: ['shared', 'contracts'],
 		tasks: { build: packageTask('ui/coreShared', 'tsc', ['ui/coreShared/js']), typecheck: packageTask('ui/coreShared', 'tsc') },
 		generatedDirectories: ['ui/coreShared/js'],
 		ci: { scope: 'core' },
 	},
 	{
+		id: 'ui-zoltar-domain',
+		path: 'ui/zoltarDomain',
+		type: 'ui-domain',
+		dependencies: ['shared', 'contracts', 'ui-core'],
+		tasks: { build: packageTask('ui/zoltarDomain', 'build', ['ui/zoltarDomain/js']), typecheck: packageTask('ui/zoltarDomain', 'typecheck') },
+		generatedDirectories: ['ui/zoltarDomain/js'],
+		ci: { scope: 'core' },
+	},
+	{
+		id: 'ui-statoblast-domain',
+		path: 'ui/statoblastDomain',
+		type: 'ui-domain',
+		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-domain'],
+		tasks: { build: packageTask('ui/statoblastDomain', 'build', ['ui/statoblastDomain/js']), typecheck: packageTask('ui/statoblastDomain', 'typecheck') },
+		generatedDirectories: ['ui/statoblastDomain/js'],
+		ci: { scope: 'core' },
+	},
+	{
+		id: 'ui-trading-domain',
+		path: 'ui/tradingDomain',
+		type: 'ui-domain',
+		dependencies: ['shared'],
+		tasks: { build: packageTask('ui/tradingDomain', 'build', ['ui/tradingDomain/js']), typecheck: packageTask('ui/tradingDomain', 'typecheck') },
+		generatedDirectories: ['ui/tradingDomain/js'],
+		ci: { scope: 'core' },
+	},
+	{
 		id: 'ui-zoltar',
 		path: 'ui/zoltar',
 		type: 'ui-app',
-		dependencies: ['ui-core'],
+		dependencies: ['ui-core', 'ui-zoltar-domain'],
 		tasks: { build: packageTask('ui/zoltar', 'build', ['ui/zoltar/js']), typecheck: packageTask('ui/zoltar', 'build') },
 		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor'],
 		ci: { scope: 'core' },
@@ -86,7 +113,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-statoblast',
 		path: 'ui/statoblast',
 		type: 'ui-app',
-		dependencies: ['ui-core', 'ui-zoltar'],
+		dependencies: ['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain'],
 		tasks: { build: packageTask('ui/statoblast', 'build', ['ui/statoblast/js']), typecheck: packageTask('ui/statoblast', 'build') },
 		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor'],
 		ci: { scope: 'core' },
@@ -95,7 +122,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-trading',
 		path: 'ui/trading',
 		type: 'ui-app',
-		dependencies: ['ui-core', 'ui-zoltar', 'ui-statoblast'],
+		dependencies: ['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain'],
 		tasks: { build: packageTask('ui/trading', 'build', ['ui/trading/js']), test: packageTask('ui/trading', 'test'), typecheck: packageTask('ui/trading', 'build') },
 		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor'],
 		ci: { scope: 'core' },

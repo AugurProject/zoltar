@@ -12,18 +12,24 @@ function readRootPackageJson(): PackageJson {
 }
 
 describe('UI build dependency direction', () => {
-	test('ui:build:apps compiles coreShared before the dependent apps', () => {
+	test('ui:build:apps compiles domain packages before the dependency-leaf applications', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildAppsScript = scripts['ui:build:apps']
 		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
 		const coreSharedIndex = buildAppsScript.indexOf('coreShared')
+		const zoltarDomainIndex = buildAppsScript.indexOf('zoltarDomain')
+		const statoblastDomainIndex = buildAppsScript.indexOf('statoblastDomain')
+		const tradingDomainIndex = buildAppsScript.indexOf('tradingDomain')
 		const zoltarIndex = buildAppsScript.indexOf('zoltar && bun run build')
 		const statoblastIndex = buildAppsScript.indexOf('statoblast && bun run build')
 		expect(coreSharedIndex).toBeGreaterThanOrEqual(0)
-		expect(zoltarIndex).toBeGreaterThan(coreSharedIndex)
-		expect(statoblastIndex).toBeGreaterThan(zoltarIndex)
+		expect(zoltarDomainIndex).toBeGreaterThan(coreSharedIndex)
+		expect(statoblastDomainIndex).toBeGreaterThan(zoltarDomainIndex)
+		expect(tradingDomainIndex).toBeGreaterThan(statoblastDomainIndex)
+		expect(zoltarIndex).toBeGreaterThan(tradingDomainIndex)
+		expect(statoblastIndex).toBeGreaterThan(tradingDomainIndex)
 		const tradingIndex = buildAppsScript.indexOf('trading && bun run build')
-		expect(tradingIndex).toBeGreaterThan(statoblastIndex)
+		expect(tradingIndex).toBeGreaterThan(tradingDomainIndex)
 	})
 
 	test('app serve/watch scripts build the full DAG before starting', () => {
@@ -67,29 +73,41 @@ describe('UI build dependency direction', () => {
 		}
 	})
 
-	test('package dependency direction stays coreShared <- zoltar <- statoblast <- trading', () => {
+	test('applications depend on domain packages and no application depends on another application', () => {
 		const { uiRoot } = getUiCoreSharedPaths()
 		const coreSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/coreShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
+		const zoltarDomainPackage = JSON.parse(fs.readFileSync(`${uiRoot}/zoltarDomain/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
+		const statoblastDomainPackage = JSON.parse(fs.readFileSync(`${uiRoot}/statoblastDomain/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
+		const tradingDomainPackage = JSON.parse(fs.readFileSync(`${uiRoot}/tradingDomain/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const zoltarPackage = JSON.parse(fs.readFileSync(`${uiRoot}/zoltar/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const statoblastPackage = JSON.parse(fs.readFileSync(`${uiRoot}/statoblast/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const tradingPackage = JSON.parse(fs.readFileSync(`${uiRoot}/trading/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 
 		for (const dependency of ['@zoltar/ui-zoltar', '@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(coreSharedPackage.dependencies?.[dependency]).toBeUndefined()
+		expect(zoltarDomainPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
+		expect(statoblastDomainPackage.dependencies?.['@zoltar/ui-zoltar-domain']).toBeDefined()
+		expect(tradingDomainPackage.dependencies?.['@zoltar/shared']).toBeDefined()
 		expect(zoltarPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
+		expect(zoltarPackage.dependencies?.['@zoltar/ui-zoltar-domain']).toBeDefined()
 		for (const dependency of ['@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(zoltarPackage.dependencies?.[dependency]).toBeUndefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
-		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
+		expect(statoblastPackage.dependencies?.['@zoltar/ui-statoblast-domain']).toBeDefined()
+		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar-domain']).toBeDefined()
+		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-trading']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
-		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeDefined()
-		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar-domain']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast-domain']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-trading-domain']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
+		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/trading']).toBeUndefined()
 	})
 
 	test('watch mode starts every TypeScript project required by the selected app', () => {
-		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltar'])
-		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltar', 'statoblast'])
-		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltar', 'statoblast', 'trading'])
+		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltarDomain', 'zoltar'])
+		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltarDomain', 'statoblastDomain', 'statoblast'])
+		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'trading'])
 	})
 
 	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {

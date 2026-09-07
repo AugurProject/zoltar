@@ -38,6 +38,9 @@ jobs:
           name: domain-production-ui
           path: |
             ui/coreShared/js
+            ui/zoltarDomain/js
+            ui/statoblastDomain/js
+            ui/tradingDomain/js
             ui/zoltar/js
             ui/statoblast/js
             ui/trading/js
@@ -66,6 +69,9 @@ jobs:
       - name: Refresh split UI package installs
         run: |
           bun ./scripts/install-frozen.mts ui/coreShared
+          bun ./scripts/install-frozen.mts ui/zoltarDomain
+          bun ./scripts/install-frozen.mts ui/statoblastDomain
+          bun ./scripts/install-frozen.mts ui/tradingDomain
           bun ./scripts/install-frozen.mts ui/zoltar
           bun ./scripts/install-frozen.mts ui/statoblast
           bun ./scripts/install-frozen.mts ui/trading

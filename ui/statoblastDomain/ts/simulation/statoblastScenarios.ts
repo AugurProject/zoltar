@@ -1,6 +1,6 @@
 import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
-import { approveErc20 } from '@zoltar/ui-zoltar/protocol/tokenActions.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-domain/protocol/tokenActions.js'
 import * as protocol from '../protocol/index.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 

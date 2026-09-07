@@ -25,12 +25,12 @@ async function expectNoTemporaryBundle(testRoot: string) {
 
 test('headless deployment bundling resolves UI-owned protocol modules without UI installs', () => {
 	expect(resolveHeadlessUiSource('@zoltar/ui-core-shared/contractArtifact.js')).toEndWith(path.join('ui', 'coreShared', 'ts', 'contractArtifact.ts'))
-	expect(resolveHeadlessUiSource('@zoltar/ui-zoltar/protocol/deployment.js')).toEndWith(path.join('ui', 'zoltar', 'ts', 'protocol', 'deployment.ts'))
-	expect(resolveHeadlessUiSource('@zoltar/ui-statoblast/protocol/deployment.js')).toEndWith(path.join('ui', 'statoblast', 'ts', 'protocol', 'deployment.ts'))
+	expect(resolveHeadlessUiSource('@zoltar/ui-zoltar-domain/protocol/deployment.js')).toEndWith(path.join('ui', 'zoltarDomain', 'ts', 'protocol', 'deployment.ts'))
+	expect(resolveHeadlessUiSource('@zoltar/ui-statoblast-domain/protocol/deployment.js')).toEndWith(path.join('ui', 'statoblastDomain', 'ts', 'protocol', 'deployment.ts'))
 })
 
 test('headless deployment bundling rejects package traversal', () => {
-	expect(() => resolveHeadlessUiSource('@zoltar/ui-zoltar/../../package.js')).toThrow('escapes its UI source package')
+	expect(() => resolveHeadlessUiSource('@zoltar/ui-zoltar-domain/../../package.js')).toThrow('escapes its UI source package')
 })
 
 test('headless deployment carries its pinned artifact into actual execution', async () => {

@@ -11,7 +11,7 @@ import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contrac
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
-type UseZoltarMigration = typeof import('../../../features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
+type UseZoltarMigration = typeof import('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
 type UseZoltarMigrationState = ReturnType<UseZoltarMigration>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -81,7 +81,7 @@ describe('useZoltarMigration', () => {
 				kind: 'write-client',
 			})),
 		}))
-		mock.module('../../../protocol/zoltarForks.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar: mock(async () => {
 				throw new Error('migrateInternalRepInZoltar should not be called in this test')
 			}),
@@ -199,7 +199,7 @@ describe('useZoltarMigration', () => {
 			}
 		})
 
-		mock.module('../../../protocol/zoltarForks.js', () => ({
+		mock.module('@zoltar/ui-zoltar-domain/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
 			prepareRepForMigrationInZoltar: mock(async () => {
 				throw new Error('prepareRepForMigrationInZoltar should not be called in this test')

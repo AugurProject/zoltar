@@ -5,7 +5,7 @@ import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatter
 
 const STATOBLAST_SECURITY_MULTIPLIER_DECIMALS = 4
 
-export { getDefaultMarketFormState } from '@zoltar/ui-zoltar/features/questions/lib/questionForm.js'
+export { getDefaultMarketFormState } from '@zoltar/ui-zoltar-domain/features/questions/lib/questionForm.js'
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {

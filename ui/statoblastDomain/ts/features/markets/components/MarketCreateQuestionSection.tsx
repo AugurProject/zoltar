@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'preact'
-import { QuestionCreateSection } from '@zoltar/ui-zoltar/features/questions/components/QuestionCreateSection.js'
+import { QuestionCreateSection } from '@zoltar/ui-zoltar-domain/features/questions/components/QuestionCreateSection.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
 type QuestionCreateProps = ComponentProps<typeof QuestionCreateSection>

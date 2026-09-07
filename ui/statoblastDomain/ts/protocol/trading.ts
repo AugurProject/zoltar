@@ -3,8 +3,8 @@ import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar/protocol/helpers.js'
-import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar/protocol/core.js'
+import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-domain/protocol/helpers.js'
+import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-domain/protocol/core.js'
 import { readSecurityPoolUniverseId } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>

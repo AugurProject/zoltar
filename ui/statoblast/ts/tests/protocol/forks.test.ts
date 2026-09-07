@@ -2,11 +2,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { depositRepToVaultToSecurityPool } from '../../protocol/securityVault.js'
-import { finalizeSecurityPoolTruthAuction } from '../../protocol/truthAuctionActions.js'
-import { migrateSharesFromUniverse } from '../../protocol/trading.js'
-import { loadForkAuctionDetails } from '@zoltar/ui-zoltar/protocol/forks.js'
-import { getForkOutcomeKey } from '@zoltar/ui-zoltar/protocol/helpers.js'
+import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-domain/protocol/securityVault.js'
+import { finalizeSecurityPoolTruthAuction } from '@zoltar/ui-statoblast-domain/protocol/truthAuctionActions.js'
+import { migrateSharesFromUniverse } from '@zoltar/ui-statoblast-domain/protocol/trading.js'
+import { loadForkAuctionDetails } from '@zoltar/ui-zoltar-domain/protocol/forks.js'
+import { getForkOutcomeKey } from '@zoltar/ui-zoltar-domain/protocol/helpers.js'
 import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 

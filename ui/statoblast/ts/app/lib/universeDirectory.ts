@@ -1,4 +1,4 @@
-import type { SecurityPoolsView } from '../../features/types.js'
+import type { SecurityPoolsView } from '@zoltar/ui-statoblast-domain/features/types.js'
 
 export function shouldAutoLoadUniverseDirectory({
 	activeSecurityPoolsView,

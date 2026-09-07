@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getLiquidationNoticeState } from '../../../features/security-pools/lib/liquidationStatus.js'
+import { getLiquidationNoticeState } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/liquidationStatus.js'
 import { createOracleManagerDetails } from './workflow/builders.js'
 
 describe('liquidation notice state', () => {

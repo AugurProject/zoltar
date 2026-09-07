@@ -41,6 +41,9 @@ runs:
       run: |
         bun install --frozen-lockfile
         (cd ui/coreShared && bun install --frozen-lockfile)
+        (cd ui/zoltarDomain && bun install --frozen-lockfile)
+        (cd ui/statoblastDomain && bun install --frozen-lockfile)
+        (cd ui/tradingDomain && bun install --frozen-lockfile)
         (cd ui/zoltar && bun install --frozen-lockfile)
         (cd ui/statoblast && bun install --frozen-lockfile)
         (cd ui/trading && bun install --frozen-lockfile)

@@ -5,8 +5,9 @@
 		"paths": {
 			"@zoltar/shared/*": ["../../shared/js/*"],
 			"@zoltar/ui-core-shared/*": ["../coreShared/js/*"],
-			"@zoltar/ui-statoblast/*": ["../statoblast/js/*"],
-			"@zoltar/ui-zoltar/*": ["../zoltar/js/*"]
+			"@zoltar/ui-statoblast-domain/*": ["../statoblastDomain/js/*"],
+			"@zoltar/ui-trading-domain": ["../tradingDomain/js/index.d.ts"],
+			"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/js/*"]
 		},
 		"rootDir": "./ts",
 		"outDir": "./js"

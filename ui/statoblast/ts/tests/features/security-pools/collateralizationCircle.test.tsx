@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { CollateralizationCircle } from '../../../features/security-pools/components/CollateralizationCircle.js'
+import { CollateralizationCircle } from '@zoltar/ui-statoblast-domain/features/security-pools/components/CollateralizationCircle.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../../features/open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/oracleRequestEth.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {

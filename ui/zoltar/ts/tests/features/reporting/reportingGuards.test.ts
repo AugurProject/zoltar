@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../../../features/reporting/lib/reportingGuards.js'
+import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reportingGuards.js'
 
 describe('reporting guards', () => {
 	test('blocks report submission for disconnected, unselected, and invalid amount states', () => {

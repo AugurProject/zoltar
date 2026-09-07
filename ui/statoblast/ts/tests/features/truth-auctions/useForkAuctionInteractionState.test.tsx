@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
-import { useForkAuctionInteractionState } from '../../../features/truth-auctions/hooks/useForkAuctionInteractionState.js'
+import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 

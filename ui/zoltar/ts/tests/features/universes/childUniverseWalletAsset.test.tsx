@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/ethereum'
-import { ChildUniverseDetails } from '../../../features/universes/components/ChildUniverseDetails.js'
+import { ChildUniverseDetails } from '@zoltar/ui-zoltar-domain/features/universes/components/ChildUniverseDetails.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createTruthAuctionSettlementActionState, reduceTruthAuctionSettlementActionState } from '../../../features/truth-auctions/lib/truthAuctionSettlementActionState.js'
+import { createTruthAuctionSettlementActionState, reduceTruthAuctionSettlementActionState } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionSettlementActionState.js'
 
 describe('truth auction settlement action reducer', () => {
 	test('marks mixed claim and refund results after a combined settlement succeeds', () => {

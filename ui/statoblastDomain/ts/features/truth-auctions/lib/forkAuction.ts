@@ -1,8 +1,8 @@
 import type { ForkOutcomeKey, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getTimeRemaining as getSharedTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
-import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar/features/reporting/lib/reporting.js'
-import { deriveHasForkActivity } from '@zoltar/ui-zoltar/protocol/forkActivity.js'
+import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
+import { deriveHasForkActivity } from '@zoltar/ui-zoltar-domain/protocol/forkActivity.js'
 
 export { deriveHasForkActivity }
 
