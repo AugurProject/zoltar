@@ -7,7 +7,7 @@ import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, retryLifecycleObligation } from './obligations.ts'
 import { liveInventoryReadinessBlockers } from './live-readiness.ts'
-import { workflowNeedsContinuation } from './workflows.ts'
+import { workflowNeedsOperatorReconciliation } from './workflows.ts'
 import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 import { createRetirementController } from './retirement-controller.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
@@ -256,7 +256,7 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 }
 
 function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
-	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction')
+	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction' || workflowNeedsOperatorReconciliation(workflow))
 	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
 	const lifecyclePresenceAlert = state.lifecyclePresenceBlocker === undefined ? undefined : lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 	return {
@@ -753,8 +753,8 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				if (source === undefined || source.updatedAt !== updatedAt) {
 					throw new Error('The partial workflow changed; refresh and review it again')
 				}
-				if (!workflowNeedsContinuation(source)) {
-					throw new Error('Only a partial workflow awaiting continuation can be abandoned')
+				if (!workflowNeedsOperatorReconciliation(source)) {
+					throw new Error('Only a partial workflow or semantic failure requiring operator reconciliation can be abandoned')
 				}
 				if (options.state.obligations.some(obligation => obligation.workflowId === source.id)) {
 					throw new Error('Lifecycle workflows must use lifecycle obligation reconciliation')

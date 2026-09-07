@@ -453,7 +453,8 @@ export function assessRetirement(parameters: {
 	planning?: PlanningOptions | undefined
 	canonicalScanComplete: boolean
 }): RetirementAssessment {
-	const partialWorkflows = parameters.state.workflows.filter(workflow => !['abandoned', 'completed', 'failed'].includes(workflow.status)).length
+	const unresolvedWorkflows = parameters.state.workflows.filter(workflow => workflow.status !== 'abandoned' && workflow.status !== 'completed')
+	const partialWorkflows = unresolvedWorkflows.length
 	const actionableObligations = parameters.state.obligations.filter(obligation => !['abandoned', 'completed', 'deferred'].includes(obligation.status)).length
 	const fullLiquidityPlan = parameters.planning === undefined ? undefined : buildRetirementLiquidityRemovalPlan(parameters.snapshot, parameters.planning)
 	const claimPlan = retirementPlanFromEvaluations(fullLiquidityPlan === undefined ? parameters.evaluations : parameters.evaluations.filter(evaluation => evaluation.plan?.definitionId !== 'trading.liquidity.remove'), parameters.retirement.policies, parameters.snapshot)
@@ -464,6 +465,14 @@ export function assessRetirement(parameters: {
 	const approvals = knownApprovalCount(parameters.snapshot)
 	const shareClassification = classifyShares(parameters.snapshot)
 	const blockers: RetirementBlocker[] = [...parameters.retirement.blockers.filter(blocker => blocker.category === 'ambiguous-position' && blocker.id.startsWith('v3-workflow:')), ...shareClassification.blockers]
+	for (const workflow of unresolvedWorkflows.filter(candidate => candidate.classification === 'selectable' && candidate.status === 'failed')) {
+		const failure = workflow.steps.find(step => step.status === 'failed')
+		blockers.push({
+			category: failure?.failureKind === 'semantic-failure' ? 'operator-action' : 'transaction',
+			details: failure?.failureKind === 'semantic-failure' ? `${workflow.label} has an unresolved semantic postcondition failure and requires explicit operator reconciliation` : `${workflow.label} has an unresolved transaction failure and requires explicit operator reconciliation`,
+			id: workflow.id,
+		})
+	}
 	if (!parameters.canonicalScanComplete) blockers.push({ category: 'incomplete-discovery', details: 'The canonical lifecycle, carry-proof, or topology scan is incomplete', id: 'canonical-scan-incomplete' })
 	if (parameters.snapshot.warnings.length !== 0) blockers.push({ category: 'incomplete-discovery', details: parameters.snapshot.warnings.join('; '), id: 'canonical-scan-warnings' })
 	for (const obligation of parameters.state.obligations.filter(candidate => candidate.status === 'deferred')) {

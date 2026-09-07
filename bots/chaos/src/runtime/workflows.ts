@@ -65,6 +65,10 @@ export function workflowNeedsContinuation(workflow: DurableWorkflow) {
 	return (workflow.status === 'blocked' || workflow.status === 'waiting-continuation') && workflow.steps.some(step => step.status === 'confirmed') && workflow.steps.some(step => step.status !== 'confirmed')
 }
 
+export function workflowNeedsOperatorReconciliation(workflow: DurableWorkflow) {
+	return workflowNeedsContinuation(workflow) || (workflow.classification === 'selectable' && workflow.status === 'failed' && workflow.steps.some(step => step.status === 'failed' && step.failureKind === 'semantic-failure'))
+}
+
 function sameConfirmedStep(existing: DurableWorkflowStep, fresh: DurableWorkflowStep) {
 	return existing.to.toLowerCase() === fresh.to.toLowerCase() && existing.data.toLowerCase() === fresh.data.toLowerCase() && existing.value === fresh.value
 }
