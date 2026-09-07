@@ -42,7 +42,11 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 	assert(Array.isArray(candidate.pages) && candidate.pages.length > 0, 'docs manifest must declare pages')
 	const sectionIds = new Set<string>(candidate.sections.map(section => section.id))
 	assert.deepEqual(sectionIds, new Set<string>(['start-here', ...categoryDirectories]), 'docs manifest sections must be Start here, Explanations, and Reference')
-	assert.deepEqual(candidate.sections.map(section => section.id), ['start-here', 'explanation', 'reference'], 'docs manifest sections must follow the reading path')
+	assert.deepEqual(
+		candidate.sections.map(section => section.id),
+		['start-here', 'explanation', 'reference'],
+		'docs manifest sections must follow the reading path',
+	)
 	const paths = new Set<string>()
 	for (const page of candidate.pages) {
 		assert(page.path.endsWith('.html'), `docs manifest page ${page.path} must be an HTML route`)

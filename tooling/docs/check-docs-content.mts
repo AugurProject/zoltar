@@ -76,7 +76,6 @@ await assert.rejects(assertFormulaMetadataUnchanged(formulaMetadataFixture, '<p>
 
 const renderedMarkdownParagraphBodies = (text: string) => parsedHtmlParagraphBodies(Bun.markdown.html(text), 'script, style, template, noscript, pre, table, li')
 
-
 const normalizeDuplicateSyntax = (text: string) =>
 	normalizeWhitespace(text)
 		.toLowerCase()

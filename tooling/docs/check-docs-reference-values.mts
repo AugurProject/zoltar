@@ -124,19 +124,7 @@ function findNarrativeDocumentationAssertions(source: string, sourcePath: string
 function isStaticDocumentationExpression(expression: ts.Expression | undefined): boolean {
 	if (expression === undefined) return false
 	if (ts.isIdentifier(expression)) {
-		return new Set([
-			'html',
-			'invariantsHtml',
-			'liquidationHtml',
-			'openOracleIntegration',
-			'whitepaperStatoblast',
-			'operatorReference',
-			'contractInteractionReference',
-			'openOracleHtml',
-			'auctionDesignHtml',
-			'statoblastHtml',
-			'requestCostEquation',
-		]).has(expression.text) || /(?:Entry|Row)$/.test(expression.text)
+		return new Set(['html', 'invariantsHtml', 'liquidationHtml', 'openOracleIntegration', 'whitepaperStatoblast', 'operatorReference', 'contractInteractionReference', 'openOracleHtml', 'auctionDesignHtml', 'statoblastHtml', 'requestCostEquation']).has(expression.text) || /(?:Entry|Row)$/.test(expression.text)
 	}
 	return ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'blockWithId'
 }
@@ -368,7 +356,6 @@ function assertZoltarForkDepths(): void {
 	const migrationCredit = nonDivisibleThreshold - haircut
 	assert.equal(haircut, 1n, 'non-divisible fork threshold haircut must round down')
 	assert.equal(migrationCredit, 5n, 'non-divisible fork threshold remainder must round the 80% migration credit up')
-
 }
 
 function assertRecursiveForkGasStatusDocs(): void {
