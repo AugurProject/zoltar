@@ -27,6 +27,10 @@ DA:3,1
 DA:4,0
 LF:4
 LH:3
+FN:1,largeA
+FN:2,largeB
+FNDA:1,largeA
+FNDA:0,largeB
 FNF:2
 FNH:1
 end_of_record
@@ -34,6 +38,8 @@ SF:ui/zoltar/ts/small.ts
 DA:1,1
 LF:1
 LH:1
+FN:1,small
+FNDA:1,small
 FNF:1
 FNH:1
 end_of_record
@@ -53,6 +59,8 @@ DA:1,1
 DA:2,0
 LF:2
 LH:1
+FNF:0
+FNH:0
 end_of_record
 `)
 		const second = parseLcov(`SF:shared/ts/example.ts
@@ -60,6 +68,8 @@ DA:1,0
 DA:2,2
 LF:2
 LH:1
+FNF:0
+FNH:0
 end_of_record
 `)
 
@@ -70,6 +80,26 @@ end_of_record
 				[2, 2],
 			]),
 		)
+	})
+
+	test('rejects malformed, duplicate, unterminated, and internally inconsistent LCOV records', () => {
+		for (const lcov of [
+			'SF:shared/ts/a.ts\nDA:one,1\nLF:1\nLH:1\nend_of_record\n',
+			'SF:shared/ts/a.ts\nDA:1,1\nDA:1,0\nLF:1\nLH:1\nend_of_record\n',
+			'SF:shared/ts/a.ts\nDA:1,1\nLF:2\nLH:1\nend_of_record\n',
+			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\n',
+			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\nSF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n',
+			'LF:1\nSF:shared/ts/a.ts\nDA:1,1\nLH:1\nend_of_record\n',
+			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nBRF:1\nBRH:0\nend_of_record\n',
+		])
+			expect(() => parseLcov(lcov)).toThrow()
+		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNF:0\nFNH:0\nend_of_record\n')).toThrow('Duplicate LCOV FNF')
+		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n')).toThrow('missing FNF/FNH')
+		expect(() => parseLcov(`SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:${'9'.repeat(400)}\nFNH:0\nend_of_record\n`)).toThrow('Invalid LCOV FNF')
+		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nBRDA:1,0,missing,1\nBRF:1\nBRH:1\nend_of_record\n')).toThrow('BRDA branch')
+		expect(parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:1\nFNH:1\nend_of_record\n').get('shared/ts/a.ts')?.functions).toEqual({ covered: 1, total: 1 })
+		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFN:1,only\nFNDA:1,only\nFNF:2\nFNH:1\nend_of_record\n')).toThrow('FN/FNDA')
+		for (const lcov of ['FN:1,stray\nFNDA:1,stray\n', 'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nFN:1,stray\n', 'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nend_of_record\n']) expect(() => parseLcov(lcov)).toThrow('outside a record')
 	})
 
 	test('lists unloaded runtime source while excluding tests, generated files, and type-only modules', () => {
@@ -179,6 +209,18 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('Changed product TypeScript line coverage is unavailable')
+	})
+
+	test('rejects empty required Solidity evidence instead of treating it as complete coverage', () => {
+		const result = evaluateCoveragePolicy(
+			{
+				typescript: { surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] }, tooling: surface(100, 100) }, excludedFiles: [] },
+				solidity: { firstParty: { covered: 0, total: 0, percentage: 100 }, imported: { covered: 0, total: 0, percentage: 100 }, all: { covered: 0, total: 0, percentage: 100 }, uncoveredFirstPartyLines: [], uncoveredImportedLines: [] },
+				changedLines: metric(100),
+			},
+			policy,
+		)
+		expect(result.failures).toContain('First-party Solidity coverage contains no executable line evidence')
 	})
 
 	test('caps and time-bounds unloaded source exceptions', () => {
@@ -313,17 +355,23 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 			)
 			const records = parseLcov(`SF:ui/zoltar/ts/committed.ts
 DA:1,1
+LF:1
+LH:1
 FNF:0
 FNH:0
 end_of_record
 SF:shared/ts/staged.ts
 DA:1,1
+LF:1
+LH:1
 FNF:0
 FNH:0
 end_of_record
 SF:ui/zoltar/ts/existing.ts
 DA:1,1
 DA:2,1
+LF:2
+LH:2
 FNF:0
 FNH:0
 end_of_record
@@ -342,8 +390,8 @@ end_of_record
 	test('separates imported compatibility contracts from first-party Solidity', () => {
 		const report = summarizeSolidityCoverage(
 			{
-				totalLines: 0,
-				totalCoveredLines: 0,
+				totalLines: 3,
+				totalCoveredLines: 1,
 				files: {
 					'/repo/solidity/contracts/Protocol.sol': {
 						file: '/repo/solidity/contracts/Protocol.sol',
@@ -365,6 +413,7 @@ end_of_record
 		expect(report.firstParty).toEqual({ covered: 1, total: 2, percentage: 50 })
 		expect(report.imported).toEqual({ covered: 0, total: 1, percentage: 0 })
 		expect(report.uncoveredFirstPartyLines).toEqual(['solidity/contracts/Protocol.sol:2'])
+		expect(() => summarizeSolidityCoverage({ totalLines: 2, totalCoveredLines: 2, files: { '/repo/solidity/contracts/Protocol.sol': { file: '/repo/solidity/contracts/Protocol.sol', totalLines: 2, coveredLines: 2, lineHits: { '1': 1 } } } }, '/repo')).toThrow('do not match line hits')
 	})
 })
 

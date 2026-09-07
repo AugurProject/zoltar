@@ -239,7 +239,7 @@ async function availablePort() {
 
 async function connectToChromium(port: number) {
 	let tabs: unknown
-	for (let attempt = 0; attempt < 100; attempt += 1) {
+	for (let attempt = 0; attempt < 400; attempt += 1) {
 		try {
 			const response: unknown = await fetch(`http://127.0.0.1:${port.toString()}/json/list`).then(value => value.json())
 			if (Array.isArray(response) && response.length > 0) {
