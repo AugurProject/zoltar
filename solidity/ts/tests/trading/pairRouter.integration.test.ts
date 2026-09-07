@@ -573,7 +573,10 @@ describe('factory, pair, and router integration', () => {
 
 		const routerResidue = [7n, 11n, 13n] as const
 		for (const [outcome, amount] of routerResidue.entries()) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [routerV2, ids[outcome], amount] }))
+		const forcedEth = await deploy(mocks.TradingForceEth, [], 7n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingForceEth.abi, address: forcedEth, functionName: 'force', args: [routerV2] }))
 		expect(await shareBalances(routerV2)).toEqual(routerResidue)
+		expect(await client.getBalance({ address: routerV2 })).toBe(7n)
 
 		const exitAmount = rate
 		const [swapInput] = await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'quoteExactOutput', args: [true, exitAmount] })
@@ -613,6 +616,8 @@ describe('factory, pair, and router integration', () => {
 		for (const malformedTransfer of [
 			{ ids: [ids[1], ids[0], ids[2]], values: [redeemAmount, redeemAmount, redeemAmount] },
 			{ ids: [ids[0], ids[1]], values: [redeemAmount, redeemAmount] },
+			{ ids: [ids[0], ids[1], ids[1]], values: [redeemAmount, redeemAmount, redeemAmount] },
+			{ ids: [ids[0], ids[1], ids[2], ids[2]], values: [redeemAmount, redeemAmount, redeemAmount, redeemAmount] },
 			{ ids, values: [redeemAmount, redeemAmount, redeemAmount + 1n] },
 		] as const) {
 			await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, malformedTransfer.ids, malformedTransfer.values, requestData] })).rejects.toThrow()
@@ -648,5 +653,7 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'allowance', args: [account, routerV2] })).toBe(0n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'removeLiquidity', args: [directLiquidity, 1n, 1n, account, deadline] }))
 		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'allowance', args: [account, routerV2] })).toBe(0n)
+		await expect(client.writeContract({ abi: routerV2Artifact.abi, address: routerV2, functionName: 'removeLiquidityWithPermit', args: [pair, 1n, 1n, 1n, account, deadline, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] })).rejects.toThrow('Unrecognized pair')
+		expect(await client.getBalance({ address: routerV2 })).toBe(7n)
 	})
 })
