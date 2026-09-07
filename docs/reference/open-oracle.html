@@ -11,14 +11,14 @@
 		<main>
 			<header>
 				<h1>OpenOracle integration reference</h1>
-				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> is a source for REP/ETH price for Statoblast. Open oracle supplies a fresh REP/ETH price for solvency-sensitive operations. It does not decide market truth; local escalation games and Zoltar remain responsible for truth and branching.</p>
+				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> supplies a fresh REP/ETH price for Statoblast's solvency-sensitive operations. It does not decide market truth; local Escalation Games and Zoltar remain responsible for truth and branching.</p>
 			</header>
 			<section id="openoracle-role">
 				<h2>Why Statoblast uses OpenOracle</h2>
 
 				<p>Statoblast needs a REP/ETH price to enforce live backing and convert price-independent REP capacity ownership into ETH minting capacity. Price-gated operations include REP withdrawals, liquidations, and certain Escalation Game deposits. A stale or easily manipulated price could allow an unsafe withdrawal or make a healthy vault appear liquidatable. A price change updates aggregate ETH capacity arithmetically and never requires a vault scan.</p>
 
-				<p>Statoblast therefore uses <a href="https://docs.openoracle.org">OpenOracle</a> to obtain a fresh, economically contestable REP/ETH price. OpenOracle does not prove a price by consulting a trusted source. Instead, a reporter posts a WETH/REP position, and other participants can replace an inaccurate report through an, economically motivated correction trade.</p>
+				<p>Statoblast therefore uses <a href="https://docs.openoracle.org">OpenOracle</a> to obtain a fresh, economically contestable REP/ETH price. OpenOracle does not prove a price by consulting a trusted source. Instead, a reporter posts a WETH/REP position, and other participants can replace an inaccurate report through an economically motivated correction trade.</p>
 
 				<p>Statoblast configures WETH as <code>token1</code> and REP as <code>token2</code>. Keeping WETH on the exact side lets the coordinator size the report directly from ETH-denominated gas costs without first assuming a REP/ETH conversion price. When a report settles, the coordinator converts the settled token amounts into REP per ETH:</p>
 				<figure class="equation" id="eq-rep-eth-price">
@@ -67,7 +67,7 @@
 				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report. The coordinator's validity window then determines whether the child price can be used.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
 					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration Flow</span>The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. After settlement, an accepted report refreshes the cache before guarded execution; a rejected report leaves the cache unchanged and terminally fails the attached batch.</p>
+					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. After settlement, an accepted report refreshes the cache before guarded execution; a rejected report leaves the cache unchanged and terminally fails the attached batch.</p>
 				</figure>
 			</section>
 
