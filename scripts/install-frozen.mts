@@ -135,12 +135,19 @@ const unlinkLocalZoltarDependencies = () => {
 	}
 }
 
+const isEscapingLocalDependency = (dependencySource: string): boolean => {
+	if (!dependencySource.startsWith('file:')) return false
+	const sourcePath = path.resolve(installDirectory, dependencySource.slice('file:'.length))
+	const relativeSourcePath = path.relative(installDirectory, sourcePath)
+	return relativeSourcePath === '..' || relativeSourcePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativeSourcePath)
+}
+
 const runNonWindowsInstallWithoutLocalDependencies = () => {
 	const packageJson = readPackageJson()
 	let changed = false
 	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
 		for (const [dependencyName, dependencySource] of Object.entries(packageJson[dependencySection] ?? {})) {
-			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
+			if (!dependencyName.startsWith('@zoltar/') || !isEscapingLocalDependency(dependencySource)) continue
 			delete packageJson[dependencySection]?.[dependencyName]
 			changed = true
 		}

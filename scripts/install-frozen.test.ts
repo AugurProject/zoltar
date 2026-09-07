@@ -139,3 +139,24 @@ test('native local dependency workaround rejects a stale registry lock without m
 		await rm(temporaryRoot, { force: true, recursive: true })
 	}
 })
+
+test('native install retains transitive dependencies from safe local packages', async () => {
+	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-safe-local-'))
+	const sharedDirectory = path.join(installDirectory, 'shared')
+	try {
+		await mkdir(sharedDirectory)
+		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:shared' }))
+		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
+		expect(initialInstall.exitCode).toBe(0)
+		await rm(path.join(installDirectory, 'node_modules'), { force: true, recursive: true })
+
+		const result = runNativeInstall(installDirectory)
+
+		if (result.exitCode !== 0) throw new Error(`${result.stdout}\n${result.stderr}`)
+		expect(await readFile(path.join(installDirectory, 'node_modules', 'kleur', 'package.json'), 'utf8')).toContain('"version": "4.1.5"')
+		await expectNoInstallBackups(installDirectory)
+	} finally {
+		await rm(installDirectory, { force: true, recursive: true })
+	}
+})
