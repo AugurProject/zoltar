@@ -8,6 +8,7 @@ import { discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES
 import {
 	createTestFingerprints,
 	createTestTimingObservation,
+	haveExactManifestUnion,
 	createTestTimingReport,
 	filterTestTimingHistory,
 	getHistoricalTestWeights,
@@ -182,6 +183,11 @@ describe('canonical test discovery', () => {
 		const junit = '<testsuite><testcase name="compares 2 > 1" file="comparison.test.ts" time="0.25" /></testsuite>'
 		expect(() => validateJunitDocument(junit)).not.toThrow()
 		expect(parseJunitTestCaseSeconds(junit)).toEqual(new Map([['comparison.test.ts', 0.25]]))
+	})
+
+	test('exact timing manifests are independent of locale sort order', () => {
+		expect(haveExactManifestUnion(['loadingText.test.tsx', 'loadState.test.ts'], ['loadState.test.ts', 'loadingText.test.tsx'])).toBe(true)
+		expect(haveExactManifestUnion(['loadState.test.ts', 'loadState.test.ts'], ['loadState.test.ts', 'loadingText.test.tsx'])).toBe(false)
 	})
 
 	test('JUnit timing evidence rejects incomplete or partially malformed testcases', () => {

@@ -172,6 +172,12 @@ export function createTestTimingObservation(junitXml: string, elapsedSeconds: nu
 	}
 }
 
+export function haveExactManifestUnion(actualFiles: readonly string[], expectedFiles: readonly string[]) {
+	const actual = new Set(actualFiles)
+	const expected = new Set(expectedFiles)
+	return actual.size === actualFiles.length && expected.size === expectedFiles.length && actual.size === expected.size && [...actual].every(filePath => expected.has(filePath))
+}
+
 export function estimateObservationFileSeconds(observation: TestTimingObservation) {
 	const testCaseTotal = observation.testFiles.reduce((total, filePath) => total + (observation.testCaseSecondsByFile[filePath] ?? 0), 0)
 	const scale = testCaseTotal > observation.elapsedSeconds && testCaseTotal > 0 ? observation.elapsedSeconds / testCaseTotal : 1

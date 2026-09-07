@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { discoverTestFilesForDomain, isTestDomain } from './test-discovery.mts'
-import { createTestTimingReport, mergeTestTimingHistory, readTestTimingHistory, renderTestTimingMarkdown, TEST_TIMING_HISTORY_VERSION, type TestTimingObservation } from './test-timings.mts'
+import { createTestTimingReport, haveExactManifestUnion, mergeTestTimingHistory, readTestTimingHistory, renderTestTimingMarkdown, TEST_TIMING_HISTORY_VERSION, type TestTimingObservation } from './test-timings.mts'
 
 function isTestTimingObservation(value: unknown): value is TestTimingObservation {
 	const sha256 = /^[0-9a-f]{64}$/
@@ -70,7 +70,7 @@ for (const observation of observations) {
 	if (observation.fingerprintsByFile === undefined || JSON.stringify(Object.keys(observation.fingerprintsByFile).sort()) !== JSON.stringify([...executedFiles].sort())) throw new Error('Timing observation fingerprint manifest differs from executed files')
 }
 const expectedFiles = await discoverTestFilesForDomain(observationDomain)
-if (JSON.stringify([...selectedFiles].sort()) !== JSON.stringify(expectedFiles)) throw new Error('Timing observations are not an exact union of the expected domain manifest')
+if (!haveExactManifestUnion(selectedFiles, expectedFiles)) throw new Error('Timing observations are not an exact union of the expected domain manifest')
 const timingReport = createTestTimingReport(previousHistory, observations)
 const timingMarkdown = renderTestTimingMarkdown(timingReport)
 const history = mergeTestTimingHistory(previousHistory, observations, expectedFiles)
