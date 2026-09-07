@@ -19,21 +19,21 @@
 				<h2>Four separate components</h2>
 				<dl>
 					<dt>Zoltar</dt><dd>Registers global <a href="../reference/glossary.html#question">questions</a>, defines branching <a href="../reference/glossary.html#universe">universes</a>, manages universe-specific <a href="../reference/glossary.html#rep">REP</a>, and coordinates forks. It neither resolves market truth nor manages Statoblast settlement collateral.</dd>
-					<dt>Statoblast core</dt><dd>Deploys a <a href="../reference/glossary.html#security-pool">SecurityPool</a> for a question in a universe, holds ETH settlement collateral, mints and burns Yes, No, and Invalid shares, tracks vault REP and capacity, resolves ordinary disputes locally, and handles migration and collateral repair after a fork.</dd>
+					<dt>Statoblast core</dt><dd>Deploys a <a href="../reference/glossary.html#security-pool">SecurityPool</a> for a question in a universe, holds ETH <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, mints and burns Yes, No, and Invalid <a href="../reference/glossary.html#outcome-share">outcome shares</a>, tracks <a href="../reference/glossary.html#vault">vault</a> REP and <a href="../reference/glossary.html#capacity-ownership">capacity ownership</a>, resolves ordinary disputes locally, and handles migration and collateral repair after a fork.</dd>
 					<dt>Statoblast Trading</dt><dd>An optional, separate on-chain trading subsystem built around Statoblast shares. It does not create or resolve markets.</dd>
 					<dt>OpenOracle</dt><dd>Supplies fresh, economically contestable REP/ETH prices for solvency-sensitive operations. It does not decide prediction-market outcomes.</dd>
 				</dl>
 			</section>
 			<section id="lifecycle">
 				<h2>One market lifecycle</h2>
-				<p>Alice registers the Aurora question. A creator deploys its SecurityPool in a selected universe. Vault owners deposit REP to provide security capacity, and traders deposit ETH to mint complete sets. After the question ends, reporting begins.</p>
+				<p>Alice registers the Aurora question. A creator deploys its SecurityPool in a selected universe. Vault owners deposit REP to provide security capacity, and traders deposit ETH to mint <a href="../reference/glossary.html#complete-set">complete sets</a>. After the question ends, reporting begins.</p>
 				<figure class="diagram" aria-labelledby="aurora-lifecycle-caption">
 					<ol class="protocol-flow">
-						<li>Register question</li><li>Deploy SecurityPool</li><li>Deposit vault REP</li><li>Mint complete sets</li><li>Optionally trade</li><li>Question ends</li><li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li><li>Local resolution or Zoltar fork</li><li>Migrate into child pools</li><li>Repair missing collateral through a Truth Auction</li><li>Redeem</li>
+						<li>Register question</li><li>Deploy SecurityPool</li><li>Deposit vault REP</li><li>Mint complete sets</li><li>Optionally trade</li><li>Question ends</li><li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li><li>Local resolution or Zoltar fork</li><li>Migrate into child pools</li><li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li><li>Redeem</li>
 					</ol>
 					<figcaption id="aurora-lifecycle-caption"><span class="figure-label">Aurora market lifecycle.</span> The ordinary path resolves locally and skips branching, migration, and repair. The fork path creates branch-specific pools whose collateral depends on migration and auction demand.</figcaption>
 				</figure>
-				<p>In the ordinary path, one outcome has a strict local reporting lead and its shares redeem from the original pool. If two outcomes reach the non-decision threshold, or the pool's universe is forked elsewhere, the pool enters the fork path. Users choose child universes; ETH follows specific migration claims and is never copied. A child with insufficient collateral may try to raise the difference by selling child REP in a Truth Auction.</p>
+				<p>In the ordinary path, one outcome has a strict local reporting lead and its shares redeem from the original pool. If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, or the pool's universe is forked elsewhere, the pool enters the fork path. Users choose <a href="../reference/glossary.html#child-universe">child universes</a>; ETH follows specific migration claims and is never copied. A child with insufficient collateral may try to raise the difference by selling <a href="../reference/glossary.html#child-rep">child REP</a> in a Truth Auction.</p>
 			</section>
 			<section id="assets">
 				<h2>Assets and custody</h2>
