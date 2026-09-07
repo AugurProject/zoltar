@@ -2,7 +2,7 @@ import { getAddress, type Address, type Hash, type PublicClient } from '@zoltar/
 import { erc1155Abi, erc20Abi, wethAbi } from '../contracts/abi.ts'
 import { retirementErc20TransferAbi, retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
-import { buildRetirementLiquidityRemovalPlan } from '../operations/trading.ts'
+import { buildRetirementLiquidityRemovalPlan } from '../operations/retirement-liquidity.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan, PlanningOptions } from '../operations/types.ts'
 import { uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position, type RetirementBlocker, type RetirementResidual } from '../state/retirement.ts'
 import type { DurableState } from '../state/operator-state.ts'

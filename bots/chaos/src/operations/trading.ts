@@ -9,7 +9,7 @@ import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { canCreateCompleteSet, projectedEthToShares, sharesToProjectedEth } from './pool-economics.ts'
 
 const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapshot.wallet.shares.find(share => share.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && share.universeId === pool.universeId)
-const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
+export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
 const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 const BPS_DENOMINATOR = 10_000n
 const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
@@ -504,7 +504,7 @@ const TRADING_SLIPPAGE_BPS = 100n
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 const ORACLE_PRICE_VALIDITY_SECONDS = 300n
 
-function minimumAfterSlippage(value: bigint) {
+export function minimumAfterSlippage(value: bigint) {
 	if (value <= 0n) return 0n
 	const bounded = (value * (BPS_DENOMINATOR - TRADING_SLIPPAGE_BPS)) / BPS_DENOMINATOR
 	return bounded > 0n ? bounded : 1n
@@ -593,7 +593,7 @@ function removableLiquidity(pair: PairSnapshot) {
 	return liquidity
 }
 
-function removableLiquidityQuote(pair: PairSnapshot, liquidity: bigint) {
+export function removableLiquidityQuote(pair: PairSnapshot, liquidity: bigint) {
 	const totalSupply = amount(pair.totalSupply)
 	if (liquidity <= 0n || totalSupply <= 0n) return undefined
 	const yesOut = (amount(pair.effectiveYesReserve) * liquidity) / totalSupply
@@ -1385,7 +1385,7 @@ function lpApproval(snapshot: EcosystemSnapshot, pair: PairSnapshot, liquidity: 
 	]
 }
 
-function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string, allowAboveOperationalCap = false) {
+export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string, allowAboveOperationalCap = false) {
 	if ((!allowAboveOperationalCap && liquidity > 10n ** 15n) || amount(pair.walletLiquidity) < liquidity) return undefined
 	const inventory = snapshot.wallet.lpTokens.find(candidate => candidate.pair.toLowerCase() === pair.address.toLowerCase())
 	const quote = removableLiquidityQuote(pair, liquidity)
@@ -1418,18 +1418,6 @@ function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		snapshot,
 		steps,
 	})
-}
-
-export function buildRetirementLiquidityRemovalPlan(snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	const pair = [...snapshot.pairs].sort((left, right) => left.address.localeCompare(right.address)).find(candidate => amount(candidate.walletLiquidity) > 0n)
-	if (pair === undefined) return undefined
-	const pool = poolForPair(snapshot, pair)
-	const liquidity = amount(pair.walletLiquidity)
-	const quote = removableLiquidityQuote(pair, liquidity)
-	if (pool === undefined || quote === undefined) return undefined
-	const minimumYes = minimumAfterSlippage(quote.yesOut)
-	const minimumNo = minimumAfterSlippage(quote.noOut)
-	return buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter }, false, undefined, true)
 }
 
 function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {

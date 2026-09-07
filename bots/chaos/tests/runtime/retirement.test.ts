@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
-import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/trading.ts'
+import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/retirement-liquidity.ts'
 import {
 	applyRetirementAssessment,
 	assessRetirement,
@@ -190,6 +190,7 @@ describe('Drain & Retire planning', () => {
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: pair.walletLiquidity, pair: pair.address }]
 		const plan = buildRetirementLiquidityRemovalPlan(snapshot, { maximumBlockIntervalSeconds: 15, seed: 1, workflowValidForBlocks: 288 })
 		expect(plan?.metadata['liquidity']).toBe(pair.walletLiquidity)
+		expect(plan?.planningSeed).toBe(1)
 		expect(plan?.steps.map(step => step.id)).toEqual(['approve-lp', 'removeLiquidity'])
 	})
 
