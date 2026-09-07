@@ -85,12 +85,14 @@ const securityPoolForkSnapshotEvent = {
 } as const
 
 function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
+	const blockNumber = overrides.blockNumber ?? 1n
+	const transactionIndex = overrides.transactionIndex ?? 0
 	return {
 		chainId: 1n,
-		blockHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-		blockNumber: 1n,
-		transactionHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-		transactionIndex: 0,
+		blockHash: `0x${blockNumber.toString(16).padStart(64, '0')}`,
+		blockNumber,
+		transactionHash: `0x${(blockNumber * 1_000n + BigInt(transactionIndex) + 1n).toString(16).padStart(64, '0')}`,
+		transactionIndex,
 		logIndex: 0,
 		emitter: '0x1111111111111111111111111111111111111111',
 		eventName: 'PoolAccountingCheckpoint',
@@ -130,6 +132,32 @@ describe('event-only replay', () => {
 		const rolledBack = replayZoltarEvents([orphanedLog, canonicalLog], new Set<Hex>([orphanedLog.blockHash]))
 		if (rolledBack.pools.get(emitter)?.settlementCollateralAttoEth !== 1n) throw new Error('orphaned block was not removed')
 		if (getCanonicalEventIdentity(canonicalLog) !== getCanonicalEventIdentity({ ...canonicalLog })) throw new Error('canonical identity is not deterministic')
+	})
+
+	test('replay rejects conflicting identities, mixed chains, and competing block hashes deterministically', () => {
+		const canonical = createReplayLog()
+		const conflict = createReplayLog({ args: { ...canonical.args, settlementCollateralAttoEth: 9n } })
+		for (const input of [
+			[canonical, conflict],
+			[conflict, canonical],
+		])
+			expect(() => replayZoltarEvents(input)).toThrow('conflicting duplicate')
+		const typedConflict = createReplayLog({ args: { ...canonical.args, reason: '0n' } })
+		for (const input of [
+			[canonical, typedConflict],
+			[typedConflict, canonical],
+		])
+			expect(() => replayZoltarEvents(input)).toThrow('conflicting duplicate')
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ chainId: 2n, logIndex: 1 })])).toThrow('mixed-chain')
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ blockHash: `0x${'cc'.repeat(32)}`, logIndex: 1 })])).toThrow('competing block hashes')
+		const orphanedCompetitor = createReplayLog({ blockHash: `0x${'cc'.repeat(32)}`, logIndex: 1 })
+		expect(replayZoltarEvents([canonical, orphanedCompetitor], new Set([orphanedCompetitor.blockHash])).identities.size).toBe(1)
+		const mixedCaseOrphan = canonical.blockHash.toUpperCase().replace('0X', '0x') as Hex
+		expect(replayZoltarEvents([canonical], new Set([mixedCaseOrphan])).identities.size).toBe(0)
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ blockNumber: 2n, blockHash: canonical.blockHash, transactionHash: `0x${'ee'.repeat(32)}`, logIndex: 1 })])).toThrow('block hash appears at inconsistent positions')
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ transactionHash: canonical.transactionHash, transactionIndex: 1, logIndex: 1 })])).toThrow('transaction hash appears at inconsistent positions')
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ transactionHash: `0x${'ef'.repeat(32)}`, logIndex: 1 })])).toThrow('transaction position contains conflicting hashes')
+		expect(() => replayZoltarEvents([canonical, createReplayLog({ transactionHash: `0x${'fe'.repeat(32)}`, transactionIndex: 1 })])).toThrow('block log position contains conflicting transactions')
 	})
 
 	test('vault checkpoints preserve the fractional fee entitlement carried into later accrual', () => {
@@ -478,7 +506,18 @@ describe('event-only replay', () => {
 			}),
 		]
 
-		const anchoredLogs = logs.map((log, index) => (index === 0 ? log : { ...log, blockNumber: 2n }))
+		const secondBlockHash: Hex = `0x${'2'.padStart(64, '0')}`
+		const secondTransactionHash: Hex = `0x${'3'.padStart(64, '0')}`
+		const anchoredLogs = logs.map((log, index) =>
+			index === 0
+				? log
+				: {
+						...log,
+						blockHash: secondBlockHash,
+						blockNumber: 2n,
+						transactionHash: secondTransactionHash,
+					},
+		)
 		const replayed = replayZoltarEvents(anchoredLogs.toReversed())
 		if (replayed.questions.get(9n)?.endTime !== 20n) throw new Error('question lifecycle mismatch')
 		if (replayed.universeForks.get('0')?.questionId !== 9n) throw new Error('universe fork question mismatch')

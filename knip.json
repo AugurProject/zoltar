@@ -1,7 +1,7 @@
 {
 	"workspaces": {
 		".": {
-			"entry": ["docs/charts/chartRuntime.ts", "solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/fuzz/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts"],
+			"entry": ["docs/charts/chartRuntime.ts", "scripts/**/*.test.ts", "solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/fuzz/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts"],
 			"project": ["docs/charts/**/*.ts", "scripts/uniswap-deployment.mts", "solidity/ts/**/*.ts"],
 			"ignoreIssues": {
 				"solidity/ts/**/*.ts": ["unlisted"]
@@ -9,7 +9,7 @@
 			"ignore": ["docs/charts/virtualModules.d.ts"]
 		},
 		"ui/coreShared": {
-			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "build/browserSmoke.mts", "build/vendor.mts", "build/tests.mts"],
+			"entry": ["ts/tests/**/*.ts", "ts/tests/**/*.tsx", "build/**/*.test.ts", "build/browserSmoke.mts", "build/vendor.mts", "build/tests.mts"],
 			"project": ["ts/**/*.ts", "ts/**/*.tsx", "build/**/*.mts"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["./ts/*"]
@@ -49,5 +49,5 @@
 		}
 	},
 	"ignoreDependencies": ["better-typescript-lib", "@preact/signals", "tevm", "@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "funtypes", "solc-0-8-28"],
-	"ignoreUnresolved": ["./bun-test-setup-ui.ts", "../../scripts/sharedBrowserArtifacts.ts"]
+	"ignoreUnresolved": ["./bun-test-setup-ui.ts", "./bun-test-setup-solidity.ts", "../../scripts/sharedBrowserArtifacts.ts"]
 }

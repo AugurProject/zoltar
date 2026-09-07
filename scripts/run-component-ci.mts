@@ -6,7 +6,6 @@ const botAudit = ['bun', 'audit', '--ignore', 'GHSA-8xcm-r25x-g524', '--ignore',
 const augurScanAudit = ['bun', 'audit', '--ignore', 'GHSA-52f5-9888-hmc6', '--ignore', 'GHSA-ph9p-34f9-6g65'] as const
 
 const definitions: Readonly<Record<string, { readonly directory: string; readonly commands: readonly (readonly string[])[] }>> = {
-	trading: { directory: 'trading', commands: [['bun', 'run', 'ci']] },
 	'bot-shared': {
 		directory: 'bots/shared',
 		commands: [['bun', 'run', 'check'], botAudit],
@@ -17,6 +16,10 @@ const definitions: Readonly<Record<string, { readonly directory: string; readonl
 	},
 	liquidator: {
 		directory: 'bots/liquidator',
+		commands: [['bun', 'run', 'check'], botAudit],
+	},
+	chaos: {
+		directory: 'bots/chaos',
 		commands: [['bun', 'run', 'check'], botAudit],
 	},
 	'augur-scan': {
