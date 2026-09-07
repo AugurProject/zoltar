@@ -21,14 +21,7 @@ import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]
 type RiskEventPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string]
-type RiskLiquidationPosition = readonly [
-	blockNumber: string,
-	logIndex: number,
-	txHash: string,
-	blockHash: string,
-	entityType: string,
-	entityIdentity: string,
-]
+type RiskLiquidationPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string, entityType: string, entityIdentity: string]
 type RiskHistoryPositions = {
 	readonly state?: RiskStatePosition
 	readonly accounting?: RiskEventPosition
@@ -137,13 +130,8 @@ const parseRiskHistoryCursor = (value: string | null, chainId: number, identity:
 	}
 }
 
-const riskHistoryCursorFor = (
-	chainId: number,
-	identity: string,
-	asOf: Record<string, unknown>,
-	offset: number,
-	positions: RiskHistoryPositions,
-): string => encodeOpaqueCursor([1, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions] satisfies RiskHistoryCursor)
+const riskHistoryCursorFor = (chainId: number, identity: string, asOf: Record<string, unknown>, offset: number, positions: RiskHistoryPositions): string =>
+	encodeOpaqueCursor([1, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions] satisfies RiskHistoryCursor)
 
 export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const kind = parts[0]
