@@ -12,7 +12,7 @@
 			<header>
 				<h1>Statoblast And Zoltar Invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
-				<p>The catalog separates local contract guards from cross-contract properties and economic assumptions. It also records launch-critical properties that the current contracts do not preserve. A documented implementation choice is not automatically a safe invariant.</p>
+				<p>The catalog separates local contract guards, automated release-tooling guards, cross-contract properties, and economic assumptions. Each entry names the strongest enforcement and evidence currently present; a documented implementation choice is not automatically a safe invariant.</p>
 				<p>See the <a href="./security-model.html">Protocol Security Model</a> for assumptions A01–A28. Funded and underfunded clearing are explained in the <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a>; oracle notional and residual-loss analysis are explained in <a href="../explanation/open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a>.</p>
 				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="786" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span></div>
@@ -110,9 +110,9 @@
 								<td>State and monitor the assumption, and document both its failure mode and the guarantees deliberately excluded from the protocol model.</td>
 							</tr>
 							<tr>
-								<td><strong>Proposed guard</strong></td>
-								<td>The property closes a missing safety or verification boundary not currently represented as one assertion.</td>
-								<td>Add a contract check, model assertion, or invariant harness where practical.</td>
+								<td><strong>Automated tooling guard</strong></td>
+								<td>Release, deployment, or CI tooling rejects a mismatched artifact, address, or runtime-code identity before it is accepted.</td>
+								<td>Keep the check deterministic, run it in the documented release path, and test both matching and mismatched inputs.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -578,8 +578,8 @@
 						<summary><code>AUTH-07</code><span class="invariant-title">Published deployment verification</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For every published deployment address, the runtime-bytecode hash and constructor-installed dependencies must match the reviewed release manifest.</div>
-							<p class="invariant-example"><strong>Example:</strong> A manifest check fails when the published coordinator address contains code built with a different OpenOracle dependency.</p>
+							<div class="invariant-property">The release manifest must match the deterministic address calculation, and deployment tooling must reject installed planned contracts or bootstrap descendants whose runtime-code hash differs from the pinned release artifact.</div>
+							<p class="invariant-example"><strong>Example:</strong> Testnet deployment stops instead of treating a coordinator address as installed when its runtime bytecode differs from the expected hash.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -587,13 +587,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Automated tooling guard</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../reference/deployment-status.html">Deployment Status Oracle limits</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>,
-										<a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
+										<a href="../../tooling/contracts/deploy-testnet.mts">runtime-code verification in the deployment plan</a>, <a href="../../tooling/contracts/deployment-runtime-hashes.test.ts">runtime-hash regression tests</a>,
+										<a href="../../tooling/contracts/check-mainnet-deployment.mts">deterministic manifest freshness check</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>, and <a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
 									</dd>
 								</div>
 							</dl>
@@ -2378,7 +2378,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Once a resolution, migration, auction-completion, or withdrawal function's documented semantic preconditions hold, dust, unsolicited balances, empty collections, or earlier permissionless calls cannot permanently prevent some caller from completing it.</div>
 							<p class="invariant-example"><strong>Example:</strong> Forced ETH and an empty losing-bid list do not prevent a caller from finalizing an otherwise complete truth auction.</p>
-							<p>The stateful lifecycle audit covers empty games and collections, zero-demand auctions, unsolicited ETH, bounded partial fork continuation, repeated migrations and claims, delayed oracle operations, and recovery after failed callbacks. No remaining permanent blocker was identified in those cases.</p>
+							<p>The named <code>LIFE-02 fixed-point</code> stateful regressions combine empty zero-demand auctions, unsolicited ETH, repeated migration calls, shuffled partial migration, and bounded continuation progress, then require a reachable terminal child state with tracked accounting unchanged by the forced balance. The wider lifecycle audit also covers empty games and collections, repeated claims, delayed oracle operations, and recovery after failed callbacks. No permanent blocker was identified in those cases.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2391,7 +2391,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<code>FORK-04</code>, <code>BAL-02</code>, and <code>AUC-08</code>; <a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful lifecycle regressions</a>, <a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">forced-balance and zero-demand auction regressions</a>, and
+										<code>FORK-04</code>, <code>BAL-02</code>, and <code>AUC-08</code>; <a href="../../solidity/ts/tests/statoblastInvariant.test.ts">named <code>LIFE-02</code> fixed-point and stateful lifecycle regressions</a>, <a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">forced-balance and zero-demand auction regressions</a>, and
 										<a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">oracle recovery and empty-vault regressions</a>
 									</dd>
 								</div>
@@ -2607,7 +2607,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<code>ORA-08</code>, <a href="../../solidity/ts/tests/openOracleDispute.test.ts">same-block dispute and settlement ordering</a>, and
+										<code>ORA-08</code>, <a href="../../solidity/ts/tests/openOracleDispute.test.ts">same-block dispute and settlement ordering</a>, <a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">same-block staged execution and expiry ordering</a>, and
 										<a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">same-block migration, bidding, and finalization ordering</a>
 									</dd>
 								</div>
