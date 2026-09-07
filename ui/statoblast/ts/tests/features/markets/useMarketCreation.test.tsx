@@ -86,7 +86,7 @@ describe('useMarketCreation', () => {
 			})),
 		}))
 
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
 			hookState = useMarketCreation(
@@ -167,7 +167,7 @@ describe('useMarketCreation', () => {
 			})),
 		}))
 
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
 			hookState = useMarketCreation(
@@ -253,7 +253,7 @@ describe('useMarketCreation', () => {
 			getAccounts: async () => await activeAccounts.promise,
 		})
 
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness() {
 			hookState = useMarketCreation(
@@ -314,7 +314,7 @@ describe('useMarketCreation', () => {
 		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketAdmissionHarness() {
 			hookState = useMarketCreation(
@@ -352,7 +352,7 @@ describe('useMarketCreation', () => {
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
 			hookState = useMarketCreation(
@@ -402,7 +402,7 @@ describe('useMarketCreation', () => {
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
 			hookState = useMarketCreation({
@@ -446,7 +446,7 @@ describe('useMarketCreation', () => {
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ accountAddress }: { accountAddress: Address | undefined }) {
 			hookState = useMarketCreation({
@@ -516,7 +516,7 @@ describe('useMarketCreation', () => {
 			})),
 		}))
 
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		let observedFormTitles: string[] = []
 		const Harness = function MarketCreationHarness({ accountAddress, activeUniverseId }: { accountAddress: Address; activeUniverseId: bigint }) {
@@ -634,7 +634,7 @@ describe('useMarketCreation', () => {
 			})),
 		}))
 
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ activeUniverseId }: { activeUniverseId: bigint }) {
 			hookState = useMarketCreation(
@@ -715,7 +715,7 @@ describe('useMarketCreation', () => {
 		}))
 
 		window.sessionStorage.setItem(`zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`, '{invalid')
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ activeUniverseId = 7n }: { activeUniverseId?: bigint }) {
 			hookState = useMarketCreation({
@@ -793,7 +793,7 @@ describe('useMarketCreation', () => {
 		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
 			hookState = useMarketCreation(
@@ -835,7 +835,7 @@ describe('useMarketCreation', () => {
 		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
 			hookState = useMarketCreation(
@@ -885,7 +885,7 @@ describe('useMarketCreation', () => {
 		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
 			hookState = useMarketCreation(
@@ -960,7 +960,7 @@ describe('useMarketCreation', () => {
 		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
 		}))
-		const { useMarketCreation } = await import(`../../../features/markets/hooks/useMarketCreation.js?case=${crypto.randomUUID()}`)
+		const { useMarketCreation } = await import(`../../../../../statoblastDomain/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
 		const Harness = function MarketCreationHarness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
 			hookState = useMarketCreation(
