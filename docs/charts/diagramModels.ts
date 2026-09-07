@@ -330,28 +330,6 @@ export const diagramGraphSpecs = {
 			),
 		],
 	),
-	'fig-statoblast-pool-accounting': diagram(
-		{
-			ariaDescription: 'REP deposits mint proportional REP backing units, decayed settlement collateral increments the fee index, and vault capacity ownership claims fees from that index.',
-			ariaLabel: 'Pool accounting conversions',
-			height: 430,
-			width: 920,
-		},
-		[
-			section(
-				'rep-backing',
-				[node('rep', 'REP amount', 'blue'), node('units', 'REP backing units', 'green', ['proportional claim']), node('vault-rep', 'Vault REP backing', 'teal', ['live pool-held REP'])],
-				[edge('accounting-rep-units', 'rep', 'units', 'mint units'), edge('accounting-units-vault', 'units', 'vault-rep', 'inverse conversion')],
-				{ description: 'Backing units preserve each vault’s proportional REP claim', title: 'REP backing ledger' },
-			),
-			section(
-				'fee-accounting',
-				[node('collateral', 'Settlement collateral', 'blue'), node('fee-index', 'Fee index', 'gold', ['global accumulator']), node('vault-fees', 'Vault fees', 'green', ['capacity ownership'])],
-				[edge('accounting-collateral-index', 'collateral', 'fee-index', 'decay produces fees'), edge('accounting-index-fees', 'fee-index', 'vault-fees', 'checkpoint')],
-				{ description: 'Collateral decay accrues through a separate fee index', title: 'Fee ledger' },
-			),
-		],
-	),
 	'fig-statoblast-share-lifecycle': diagram(
 		{
 			ariaDescription: 'ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.',

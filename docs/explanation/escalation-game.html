@@ -112,7 +112,7 @@
 					<li><strong>Local non-decision.</strong> Two outcomes reach the non-decision threshold. Statoblast uses its fork path instead of choosing one locally.</li>
 				</ol>
 
-				<p>After the game ends, the payout uses <a href="#term-binding-capital">binding capital</a>, the <a href="#term-safety-boundary">safety boundary</a>, and the <a href="#term-reward-cap">reward-eligible cap</a>. A winning deposit returns its <a href="#term-principal">principal</a> and may receive a bonus. Any excess above the reward cap returns principal without a bonus. The game burns the winning-deposit <a href="#term-haircut">haircut</a>; forked payouts can also be scaled by the fork threshold.</p>
+				<p>After the game ends, the payout uses <a href="#term-binding-capital">binding capital</a>, the <a href="#term-safety-boundary">safety boundary</a>, and the <a href="#term-reward-cap">reward-eligible cap</a>. In ordinary local settlement, a winning deposit returns its <a href="#term-principal">principal</a> and may receive a bonus. Any excess above the reward cap returns principal without a bonus. The game burns the winning-deposit <a href="#term-haircut">haircut</a>; fork scaling can reduce the final transfer below principal.</p>
 
 				<div class="callout">
 					<p><strong>Exact example.</strong> Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>10 + 10 / 2 = 15 REP</code>. The reward pool is <code>10 × 3 / 5 = 6 REP</code>, and the haircut pool is <code>10 × 2 / 5 = 4 REP</code>. If the winning outcome has <code>15 REP</code> and a deposit contributes <code>5 REP</code> within the eligible range:</p>
@@ -137,7 +137,7 @@
 						<dt id="term-reward-cap">Reward-eligible cap</dt>
 						<dd>Binding capital plus half of binding capital. Only the portion of winning deposits up to this cap participates in the bonus calculation.</dd>
 						<dt id="term-principal">Principal</dt>
-						<dd>The REP originally deposited. A winning deposit returns its principal before any bonus is added.</dd>
+						<dd>The REP originally deposited and used as the base of the payout calculation. Ordinary local settlement returns this amount before any bonus; fork scaling can reduce the final transfer.</dd>
 						<dt id="term-haircut">Haircut</dt>
 						<dd>The REP amount calculated for burning from the reward-eligible portion of a winning deposit. It is separate from the payout amount.</dd>
 					</dl>
