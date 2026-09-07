@@ -166,6 +166,15 @@ describe('SecurityVaultSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('shows the selected child REP symbol on vault action controls', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ repTokenSymbol: 'REP4' }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByRole('button', { name: 'Deposit REP4' }).length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByRole('button', { name: 'Withdraw REP4' }).length).toBeGreaterThan(0)
+	})
+
 	test('renders the shared selected-vault metric summary', async () => {
 		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ repPerEthPrice: 3n * 10n ** 18n })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

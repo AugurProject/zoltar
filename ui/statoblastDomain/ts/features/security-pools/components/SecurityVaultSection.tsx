@@ -115,6 +115,8 @@ export function SecurityVaultSection({
 		? securityVaultDetails
 		: undefined
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwner, accountState.address)
+	const repTokenSymbol = currentSelectedVaultDetails?.repTokenSymbol ?? commonCopy.rep
+	const depositRepActionLabel = securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	const vaultTransactionContext = [
 		...(selectedMarketTitle === undefined ? [] : [{ label: commonCopy.question, value: selectedMarketTitle }]),
 		{ label: commonCopy.securityPoolAddress, value: <AddressValue address={currentSelectedVaultDetails?.securityPoolAddress ?? normalizedSecurityVaultForm.securityPoolAddress} /> },
@@ -179,7 +181,7 @@ export function SecurityVaultSection({
 	})()
 	const effectiveRepExitMode = redeemRepFromVaultEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultEnabled : queueWithdrawRepEnabled
-	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? securityPoolCopy.redeemRepFromVault : securityPoolCopy.withdrawRep
+	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol) : securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	const repExitAmountLabel = (() => {
 		if (effectiveRepExitMode === 'redeem') return securityPoolCopy.redeemableAttoRep
 		if (hasValidOraclePrice) return securityPoolCopy.withdrawableAttoRep
@@ -254,7 +256,6 @@ export function SecurityVaultSection({
 				</p>
 			)
 		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
-
 		return undefined
 	})()
 	const vaultLookupActionLabel = securityVaultError === undefined ? commonCopy.refresh : commonCopy.retry
@@ -306,14 +307,14 @@ export function SecurityVaultSection({
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
-			actionLabel: securityPoolCopy.depositRepToVault,
+			actionLabel: depositRepActionLabel,
 			description: securityPoolCopy.depositRepToVaultDescription,
 			key: 'deposit-rep',
 			...(depositRepToVaultEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepToVaultEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
 			...(visibleDepositLauncherBlocker === undefined || !depositRepToVaultEnabled ? {} : { blocker: visibleDepositLauncherBlocker }),
-			title: securityPoolCopy.depositRepToVault,
+			title: depositRepActionLabel,
 		},
 		{
 			actionLabel: repExitActionLabel,
@@ -359,7 +360,7 @@ export function SecurityVaultSection({
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
 			<ErrorNotice message={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError} />
-			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRepToVault}>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={depositRepActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -409,21 +410,21 @@ export function SecurityVaultSection({
 							</small>
 						</label>
 						<MetricGrid>
-							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={commonCopy.rep} />}</MetricField>
+							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
 						<TokenApprovalControl
-							actionLabel={securityPoolCopy.depositingRep}
+							actionLabel={depositRepActionLabel}
 							allowanceError={securityVaultRepApproval.error}
 							allowanceLoading={securityVaultRepApproval.loading}
 							approvedAmount={securityVaultRepApproval.value}
 							guardMessage={undefined}
 							onApprove={amount => onApproveRep(amount)}
 							pending={securityVaultActiveAction === 'approveRep'}
-							pendingLabel={commonCopy.approvingRep}
+							pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
 							requiredAmount={depositAmount}
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
-							tokenSymbol='REP'
+							tokenSymbol={repTokenSymbol}
 							tokenUnits={18}
 							disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 						/>
@@ -432,8 +433,8 @@ export function SecurityVaultSection({
 								{commonCopy.cancel}
 							</button>
 							<TransactionActionButton
-								idleLabel={securityPoolCopy.depositRepToVault}
-								pendingLabel={securityPoolCopy.depositRepToVaultPendingLabel}
+								idleLabel={depositRepActionLabel}
+								pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
 								onClick={onDepositRepToVault}
 								pending={securityVaultActiveAction === 'depositRepToVault'}
 								availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
@@ -442,7 +443,6 @@ export function SecurityVaultSection({
 					</>
 				)}
 			</OperationModal>
-
 			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title={repExitActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
@@ -574,7 +574,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.depositRepToVault} variant='embedded'>
+			<SectionBlock title={depositRepActionLabel} variant='embedded'>
 				<label className='field'>
 					<span>{securityPoolCopy.repBackingLabel}</span>
 					<div className='field-inline'>
@@ -606,24 +606,24 @@ export function SecurityVaultSection({
 					</small>
 				</label>
 				<TokenApprovalControl
-					actionLabel={securityPoolCopy.depositingRep}
+					actionLabel={depositRepActionLabel}
 					allowanceError={securityVaultRepApproval.error}
 					allowanceLoading={securityVaultRepApproval.loading}
 					approvedAmount={securityVaultRepApproval.value}
 					guardMessage={undefined}
 					onApprove={amount => onApproveRep(amount)}
 					pending={securityVaultActiveAction === 'approveRep'}
-					pendingLabel={commonCopy.approvingRep}
+					pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
 					requiredAmount={depositAmount}
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
-					tokenSymbol='REP'
+					tokenSymbol={repTokenSymbol}
 					tokenUnits={18}
 					disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={securityPoolCopy.depositRepToVault}
-						pendingLabel={securityPoolCopy.depositRepToVaultPendingLabel}
+						idleLabel={depositRepActionLabel}
+						pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
 						onClick={onDepositRepToVault}
 						pending={securityVaultActiveAction === 'depositRepToVault'}
 						availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}

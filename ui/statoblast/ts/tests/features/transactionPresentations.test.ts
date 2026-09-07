@@ -49,6 +49,13 @@ describe('transaction presentations', () => {
 		}
 	})
 
+	test('renders child REP symbols in vault transaction actions', () => {
+		const context = { repTokenSymbol: 'REP2' }
+		expect(createSecurityVaultTransactionIntent('depositRepToVault', context).submittedTitle).toBe('Deposit REP2')
+		expect(createSecurityVaultTransactionIntent('queueWithdrawRep', context).submittedTitle).toBe('Withdraw REP2')
+		expect(createSecurityVaultSuccessPresentation({ action: 'redeemRepFromVault', hash: '0x1234' }, context).title).toBe('Redeem REP2')
+	})
+
 	test('keeps vault identity in transaction intent rows', () => {
 		const intent = createSecurityVaultTransactionIntent('depositRepToVault', {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',

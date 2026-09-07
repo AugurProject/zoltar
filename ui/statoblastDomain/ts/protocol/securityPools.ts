@@ -6,6 +6,7 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_tokens_ShareToken_ShareToken,
+	ReputationToken_ReputationToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -22,17 +23,14 @@ import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-domain/protocol/zoltar.js'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
-
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
-
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
-
 export type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
@@ -798,6 +796,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress] }),
 	])
+	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [] })
 
 	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = vaultData
 	const vaultAttoRepBacking = getVaultRepBackingAttoRepFromRepBackingUnits({
@@ -819,6 +818,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		totalRepBackingUnits,
 		vaultAttoRepBacking,
 		repToken,
+		repTokenSymbol,
 		capacityOwnershipAttoRep,
 		securityPoolAddress,
 		totalCapacityOwnershipAttoRep,

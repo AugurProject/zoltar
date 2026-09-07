@@ -196,7 +196,6 @@ export type SecurityPoolCreationResult = {
 	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
 }
-
 export type SecurityVaultDetails = {
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
@@ -210,6 +209,7 @@ export type SecurityVaultDetails = {
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address
+	repTokenSymbol?: string
 	capacityOwnershipAttoRep: bigint
 	securityPoolAddress: Address
 	totalCapacityOwnershipAttoRep: bigint

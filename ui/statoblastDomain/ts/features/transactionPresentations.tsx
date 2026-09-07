@@ -60,6 +60,7 @@ export function createSecurityPoolCreationWarningPresentation(result: SecurityPo
 }
 
 type SecurityVaultTransactionContext = {
+	repTokenSymbol?: string | undefined
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
 	vaultAddress?: string | undefined
@@ -73,9 +74,10 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 	]
 }
 
-function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action']) {
-	if (actionName === 'depositRepToVault') return securityPoolCopy.depositRepToVault
-	if (actionName === 'queueWithdrawRep') return securityPoolCopy.withdrawRep
+function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
+	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
+	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
+	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
 	return humanizeTransactionAction(actionName)
 }
 
@@ -84,7 +86,7 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 		action: actionName,
 		rows: getSecurityVaultTransactionRows(context),
 		source: 'security-vault',
-		submittedTitle: getSecurityVaultActionTitle(actionName),
+		submittedTitle: getSecurityVaultActionTitle(actionName, context?.repTokenSymbol),
 		universeId: context?.universeId,
 	})
 }
@@ -98,7 +100,7 @@ export function createSecurityVaultSuccessPresentation(result: SecurityVaultActi
 		...(queuedOperationDetail === undefined ? {} : { detail: queuedOperationDetail }),
 		hash: result.hash,
 		rows: [...(getSecurityVaultTransactionRows(context) ?? []), ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
-		title: getSecurityVaultActionTitle(result.action),
+		title: getSecurityVaultActionTitle(result.action, context?.repTokenSymbol),
 		tone: 'success',
 		universeId: context?.universeId,
 	})

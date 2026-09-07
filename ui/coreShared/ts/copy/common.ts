@@ -114,6 +114,7 @@ export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) 
 export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
+export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
 export const approvalSatisfied = 'Approval Satisfied'
 export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve Max ${tokenLabel}`
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`

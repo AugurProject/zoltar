@@ -23,6 +23,8 @@ export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questio
 export const managePoolDescription = 'Review the selected pool’s current stage and use the available position, pricing, reporting, or settlement actions.'
 export const badDebt = 'Bad Debt'
 export const depositRepToVault = 'Deposit REP'
+export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Deposit ${tokenSymbol}`
+export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
 export const depositRepToVaultDescription = 'Increase this vault’s REP backing and collateralization.'
 export const loadingVault = 'Loading vault details…'
 export const maxLead = 'Max '
@@ -38,6 +40,7 @@ export const selectedVaultOwner = 'Vault owner address'
 export const missingVaultDetail = 'This vault does not exist.'
 export const missingVaultRepBalanceReason = 'No REP is available in the active universe. Obtain or migrate REP into this universe before creating a vault.'
 export const withdrawRep = 'Withdraw REP'
+export const formatWithdrawRep = (tokenSymbol: CopyTemplateValue) => `Withdraw ${tokenSymbol}`
 export const claimFees = 'Claim fees'
 export const claimFeesTitle = 'Claim Fees'
 export const claimFeesDescription = 'Transfer this vault’s accrued fees to its owner.'
@@ -194,6 +197,7 @@ export const immediateWithdrawalRejectedDetail = 'The oracle manager attempted t
 export const repWithdrawalQueued = 'REP Withdrawal Queued'
 export const repWithdrawalSubmitted = 'REP Withdrawal Submitted'
 export const redeemRepFromVault = 'Redeem REP'
+export const formatRedeemRepFromVault = (tokenSymbol: CopyTemplateValue) => `Redeem ${tokenSymbol}`
 export const redeemingRep = 'Redeeming REP…'
 export const redeemableAttoRep = 'Redeemable REP'
 export const repRedemptionDescription = 'Redeem the remaining REP backing from this ended pool after escalation deposits are settled.'

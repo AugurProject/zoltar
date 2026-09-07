@@ -90,6 +90,7 @@ type SecurityVaultActionSnapshot = {
 	effectiveSecurityPoolAddressInput: string | undefined
 	effectiveVaultSelectionKey: string
 	form: SecurityVaultFormState
+	repTokenSymbol?: string | undefined
 	universeId?: bigint | undefined
 }
 
@@ -195,6 +196,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		effectiveSecurityPoolAddressInput,
 		effectiveVaultSelectionKey,
 		form: { ...securityVaultForm.value },
+		repTokenSymbol: securityVaultDetails.value?.repTokenSymbol,
 		universeId: securityVaultDetails.value?.universeId,
 	})
 	const isVaultActionSnapshotCurrent = (snapshot: SecurityVaultActionSnapshot) => snapshot.effectiveVaultSelectionKey === lastEffectiveVaultSelectionKey.current
@@ -325,6 +327,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const actionSelectionKey = effectiveVaultSelectionKey
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
+			repTokenSymbol: snapshot.repTokenSymbol,
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
 			universeId: snapshot.universeId,
 			vaultAddress: getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress),
