@@ -44,7 +44,7 @@
 			</section>
 
 			<section id="overview">
-				<h2>Primary Interaction Flow</h2>
+				<h2>Primary interaction flow</h2>
 				<p>Arrows point from the contract initiating an interaction to the contract receiving it. The map repeats a contract when it participates in more than one phase, separating construction-time wiring, recurring runtime calls, and fork repair into three readable panels. Users and keepers enter through several of these contracts, but are omitted so the plot can focus on contract-to-contract boundaries.</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
 					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1142" data-plot-height="1814" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span></div>
@@ -53,7 +53,7 @@
 			</section>
 
 			<section id="edges">
-				<h2>What Each Arrow Means</h2>
+				<h2>What each arrow means</h2>
 				<div class="table-scroll" tabindex="0" role="region" aria-label="Contract interaction details">
 					<table>
 						<thead>
@@ -185,7 +185,7 @@
 			</section>
 
 			<section id="paths">
-				<h2>Four Useful Reading Paths</h2>
+				<h2>Four useful reading paths</h2>
 				<ol>
 					<li>
 						<strong>Deploy a market:</strong>
@@ -208,7 +208,7 @@
 			</section>
 
 			<section id="supporting-contracts">
-				<h2>Supporting Contracts Not Expanded in the Plot</h2>
+				<h2>Supporting contracts not expanded in the plot</h2>
 				<p>The diagram groups construction helpers and delegate modules behind the deployed component whose behavior they implement:</p>
 				<ul>
 					<li><code>ShareTokenFactory</code>, <code>EscalationGameFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, and <code>SecurityPoolDeployer</code> construct the displayed runtime contracts.</li>
@@ -222,7 +222,7 @@
 			</section>
 
 			<section id="sources">
-				<h2>Source Contracts</h2>
+				<h2>Source contracts</h2>
 				<ul>
 					<li>
 						<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.sol</code></a>

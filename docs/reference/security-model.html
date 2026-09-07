@@ -10,7 +10,7 @@
 	<body class="doc-openoracle security-model">
 		<main>
 			<header>
-				<h1>Statoblast Protocol Security Model</h1>
+				<h1>Statoblast protocol security model</h1>
 				<p class="security-model-lede">Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules onchain. Their economic safety and practical liveness still depend on the participant, market, asset, deployment, client, data, Ethereum, and cryptographic assumptions below.</p>
 				<p>An assumption is not a guarantee enforced by the contracts. Each entry says what must remain true, what can fail if it does not, and where the related mechanics are explained. The <a href="./invariants.html">Protocol Invariants</a> catalog lists contract-enforced properties and their implementation evidence.</p>
 				<nav class="assumption-nav" aria-label="Security assumption groups">
@@ -167,7 +167,7 @@
 					</li>
 					<li id="assumption-a10" value="10" data-assumption="A10">
 						<h3>Participants can access timely outcome evidence</h3>
-						<p>Users can obtain enough reliable real-world evidence before the relevant protocol deadline to judge which universe is truthfull.</p>
+						<p>Users can obtain enough reliable real-world evidence before the relevant protocol deadline to judge which universe is truthful.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Missing, delayed, or conflicting evidence can split honest capital or let a false local outcome become final.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#questions">question encoding</a>, <a href="../explanation/zoltar.html#encodings">invalid outcomes</a>, and <a href="../explanation/statoblast.html#forks-migration">child resolution</a>.</p>
 					</li>

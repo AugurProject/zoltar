@@ -10,7 +10,7 @@
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Truth Auctions</h1>
+				<h1>Truth auctions</h1>
 				<p>A child pool has 100 ETH of outstanding claims but receives only 70 ETH of settlement collateral through migration. Its Truth Auction tries to raise the missing 30 ETH by selling child REP.</p>
 				<ul><li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li><li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li><li><strong>No demand:</strong> no qualifying bid contributes ETH, so the child remains at 70 ETH.</li></ul>
 				<p><strong>The auction repairs collateral and never selects truth.</strong> It sells REP belonging to an already-defined child universe. The child resumes with only the ETH that migration and accepted bids actually provide.</p>
@@ -61,7 +61,7 @@
 				</ol>
 				<p>As soon as cumulative demand is enough to hit either cap at some price, that price becomes the clearing tick and all winning bids settle from it at one price. That is a valid uniform clearing even when the REP cap binds before the ETH repair target is fully met.</p>
 
-				<h3>Underfunded Clearing</h3>
+				<h3>Underfunded clearing</h3>
 				<p>When demand never reaches a full clearing price, the auction switches into the underfunded branch. Finalization computes <code>underfundedThreshold</code>, stores the lowest tick whose price reaches that qualification threshold as <code>clearingTick</code>. Only bids at or above the cap-implied qualification threshold are retained; lower ticks refund. Qualifying bidders collectively purchase <code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so the common effective price is their retained ETH divided by the REP cap. That effective price can be lower than the qualification threshold; the threshold is not an execution-price floor. If no ETH qualifies, every bid refunds.</p>
 				<p>Sold REP is allocated between them proportionally with integer floors: “them” means the pool-held and unresolved dispute-staked REP buckets. The dispute-staked bucket receives <code>⌊repPurchased * disputeStakedRepBefore / combinedRepBefore⌋</code>, and the pool-held bucket receives the complementary remainder. This bucket split happens before REP is allocated among qualifying bidders, and each bucket keeps separate backing and retention accounting.</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">

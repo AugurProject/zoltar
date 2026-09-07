@@ -10,7 +10,7 @@
 	<body class="doc-openoracle invariants-catalog">
 		<main>
 			<header>
-				<h1>Statoblast And Zoltar Invariants</h1>
+				<h1>Statoblast and Zoltar invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
 				<p>The catalog separates local contract guards, automated release-tooling guards, cross-contract properties, and economic assumptions. Each entry names the strongest enforcement and evidence currently present; a documented implementation choice is not automatically a safe invariant.</p>
 				<p>See the <a href="./security-model.html">Protocol Security Model</a> for assumptions A01–A28. Funded and underfunded clearing are explained in the <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a>; oracle notional and residual-loss analysis are explained in <a href="./open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a>.</p>
@@ -54,7 +54,7 @@
 			</section>
 
 			<section id="standing">
-				<h2>Classification and Scope</h2>
+				<h2>Classification and scope</h2>
 				<p>Each entry separates the kind of property from its current enforcement status. A status describes the strongest claim supported by the local implementation and tests; it is not a formal proof. Changes to any contract named in the evidence column must preserve the full statement, not only the check performed in one function.</p>
 				<div class="table-scroll" role="region" aria-label="Invariant property types" tabindex="0">
 					<table>
@@ -142,12 +142,12 @@
 			</section>
 
 			<section class="callout" id="zoltar-invariants">
-				<h2>Zoltar Invariants</h2>
+				<h2>Zoltar invariants</h2>
 				<p>These properties govern core universe creation, REP supply, universe forks, deterministic child identities, and branch-specific REP migration.</p>
 			</section>
 
 			<section id="universes">
-				<h2>Universes, REP Supply, and Migration</h2>
+				<h2>Universes, REP supply, and migration</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="uni-01">
 						<summary><code>UNI-01</code><span class="invariant-title">One fork per universe</span></summary>
@@ -383,7 +383,7 @@
 			</section>
 
 			<section id="questions">
-				<h2>Questions and Answer Classification</h2>
+				<h2>Questions and answer classification</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="qst-01">
 						<summary><code>QST-01</code><span class="invariant-title">Question registry and classifier coherence</span></summary>
@@ -417,12 +417,12 @@
 			</section>
 
 			<section class="callout" id="statoblast-invariants">
-				<h2>Augur Statoblast Invariants</h2>
+				<h2>Augur Statoblast invariants</h2>
 				<p>These properties govern Statoblast deployment, SecurityPool accounting, fork migration, escalation, oracle operations, truth auctions, and the cross-contract lifecycle built on Zoltar universes.</p>
 			</section>
 
 			<section id="authority">
-				<h2>Authority and Deployment Identity</h2>
+				<h2>Authority and deployment identity</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a23">A23 verified deployments</a> and <a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="auth-01">
@@ -628,7 +628,7 @@
 			</section>
 
 			<section id="pool-accounting">
-				<h2>Pool Assets, Shares, and Vaults</h2>
+				<h2>Pool assets, shares, and vaults</h2>
 				<p>The raw ETH balance needs an explicit surplus term. Without it, forced ETH is indistinguishable from collateral and can change an exchange rate or lifecycle precondition.</p>
 				<div class="equation" id="eq-pool-eth-conservation" role="region" aria-label="ETH conservation equation" tabindex="0">
 					<math display="block" aria-label="All values in attoETH: raw ETH balance equals settlement collateral plus unallocated accrued fees plus total claimable vault fees plus explicit surplus" data-source="rawEthBalanceAttoEth = settlementCollateralAttoEth + unallocatedAccruedFeesAttoEth + totalClaimableVaultFeesAttoEth + explicitSurplusAttoEth">
@@ -1113,7 +1113,7 @@
 			</section>
 
 			<section id="forks">
-				<h2>Forks and Child Isolation</h2>
+				<h2>Forks and child isolation</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="fork-01">
 						<summary><code>FORK-01</code><span class="invariant-title">Parent pool finality</span></summary>
@@ -1432,7 +1432,7 @@
 			</section>
 
 			<section id="escalation">
-				<h2>Escalation Games and Carried Claims</h2>
+				<h2>Escalation Games and carried claims</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="esc-01">
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
@@ -1786,7 +1786,7 @@
 			</section>
 
 			<section id="oracle">
-				<h2>REP/ETH Oracle Operations</h2>
+				<h2>REP/ETH oracle operations</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
 					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, capacity ownership changes, pool assets, or cumulative operations that use an accepted price.</p>
@@ -2339,7 +2339,7 @@
 			</section>
 
 			<section id="lifecycle">
-				<h2>Lifecycle, Liveness, Observability, and External Calls</h2>
+				<h2>Lifecycle, liveness, observability, and external calls</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="life-01">
