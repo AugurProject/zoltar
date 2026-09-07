@@ -149,7 +149,9 @@ export function LivePositionControls({
 					onClick={simulate}
 				/>
 			) : null}
-			{!(mode === 'exit' && !receiveBasedShareOperations && balances?.approved === false) && quote !== undefined ? <TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
+			{!(mode === 'exit' && !receiveBasedShareOperations && balances?.approved === false) && quote !== undefined ? (
+				<TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} />
+			) : null}
 			<p role='status' aria-live='polite'>
 				{stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))}
 			</p>
