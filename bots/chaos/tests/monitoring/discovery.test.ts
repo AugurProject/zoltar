@@ -103,6 +103,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	missingContract?: Address
 	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
 	delayUniswapPoolReads?: boolean
@@ -147,6 +148,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
+			if (parameters.address === graph.missingContract) return '0x'
+			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
 		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
@@ -1735,3 +1738,27 @@ describe('anchored ecosystem discovery', () => {
 		expect(() => assertCanonicalPairGraph({ ...pairIdentity, pairShareToken: address(99) })).toThrow('share-token edge')
 	})
 })
+
+test('reports missing configured contract code before calling protocol getters', async () => {
+	const fake = fakeClient(10n, hash(10), { missingContract: address(5) })
+	await expect(
+		discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			wallet: address(1),
+		}),
+	).rejects.toThrow('securityPoolForker')
+	expect(fake.contractReads).toHaveLength(0)
+})
+
+for (const [name, missingContract] of [
+	['tradingFactory', address(8)],
+	['tradingRouter', address(9)],
+] as const) {
+	test(`reports missing required ${name} before protocol getters`, async () => {
+		const fake = fakeClient(10n, hash(10), { missingContract })
+		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow(`No contract code on RPC chain 31337 at block 10: ${name} (${missingContract})`)
+		expect(fake.contractReads).toHaveLength(0)
+	})
+}

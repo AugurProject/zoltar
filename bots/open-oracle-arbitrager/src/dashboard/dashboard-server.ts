@@ -1,3 +1,4 @@
+import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
@@ -141,7 +142,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const directory = import.meta.dir
 	const projectDirectory = join(directory, '..', '..')
 	const documentationDirectory = join(projectDirectory, 'docs')
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
+	const browserEntrypoint = join(directory, 'dashboard.ts')
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
 	const dashboardPages = new Set(['overview', 'operations', 'games', 'markets', 'settings'])
 	const dashboardPage = async (pathname: string) => {
@@ -206,8 +207,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
-				const source = await browserSource.text()
-				return new Response(transpiler.transformSync(source), {
+				return new Response(await buildDashboardScript(browserEntrypoint), {
 					headers: securityHeaders('text/javascript; charset=utf-8'),
 				})
 			}

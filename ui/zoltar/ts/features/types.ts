@@ -47,6 +47,7 @@ export type DeploymentSectionProps = {
 }
 
 export type OverviewPanelsProps = {
+	settingsMenu?: ComponentChildren
 	applicationTitle: string
 	activeUniverseId: bigint
 	accountState: AccountState
