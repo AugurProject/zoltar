@@ -150,6 +150,22 @@ describe('ZoltarMigrationSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Prepare REP')
 	})
 
+	test('child REP preparation needs no approval transaction', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
+					zoltarUniverse: createUniverse({ reputationTokenKind: 'child', reputationTokenSymbol: 'REP4' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
+		expectTransactionButtonEnabled(document.body, 'Prepare REP')
+	})
+
 	test('enables split when the selected amount is already prepared and valid outcome universes are selected', async () => {
 		const renderedComponent = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup

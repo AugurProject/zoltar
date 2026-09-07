@@ -77,7 +77,8 @@ export function ForkZoltarSection({
 	const hasForked = rootUniverse?.hasForked === true
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= rootUniverse.forkThresholdAttoRep
 	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThresholdAttoRep, zoltarForkApproval.value)
-	const hasEnoughApproval = rootUniverse !== undefined && approvalRequirement.hasSufficientApproval
+	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
+	const hasEnoughApproval = rootUniverse !== undefined && (!requiresApproval || approvalRequirement.hasSufficientApproval)
 	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThresholdAttoRep / rootUniverse.forkBurnDivisor
 	const selectedQuestionId = zoltarForkQuestionId.trim()
@@ -152,7 +153,7 @@ export function ForkZoltarSection({
 			)}
 
 			<div className='form-grid'>
-				{hasForked ? undefined : (
+				{hasForked || !requiresApproval ? undefined : (
 					<TokenApprovalControl
 						actionLabel={zoltarCopy.forkingActionLabel}
 						allowanceError={zoltarForkApproval.error}
@@ -165,7 +166,7 @@ export function ForkZoltarSection({
 						pendingLabel={zoltarCopy.forkRepApprovalPending}
 						requiredAmount={rootUniverse?.forkThresholdAttoRep}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThresholdAttoRep.toString() ?? ''}`}
-						tokenSymbol='REP'
+						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
 						tokenUnits={18}
 					/>
 				)}

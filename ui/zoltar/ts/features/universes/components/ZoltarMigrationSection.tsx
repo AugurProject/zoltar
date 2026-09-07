@@ -106,7 +106,8 @@ export function ZoltarMigrationSection({
 	const hasEnoughRep = hasValidAmount && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= missingPreparationAmount
 	const hasPreparedBalance = hasValidAmount && zoltarMigrationPreparedRepBalanceAttoRep !== undefined && zoltarMigrationPreparedRepBalanceAttoRep >= migrationAmount
 	const approvalRequirement = deriveTokenApprovalRequirement(missingPreparationAmount, zoltarForkApproval.value)
-	const hasSufficientAllowance = approvalRequirement.hasSufficientApproval
+	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
+	const hasSufficientAllowance = !requiresApproval || approvalRequirement.hasSufficientApproval
 	const hasValidOutcomeIndexes = selectedOutcomeIndexes.length > 0
 	const needsAdditionalPreparation = missingPreparationAmount > 0n
 	const splitLimit = useMemo(
@@ -261,7 +262,7 @@ export function ZoltarMigrationSection({
 						/>
 					)}
 
-					<TokenApprovalControl
+					{requiresApproval ? <TokenApprovalControl
 						actionLabel={zoltarCopy.preparingCurrentAmountLabel}
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
@@ -273,16 +274,16 @@ export function ZoltarMigrationSection({
 						pendingLabel={commonCopy.approvingRep}
 						requiredAmount={missingPreparationAmount}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
-						tokenSymbol='REP'
+						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
 						tokenUnits={18}
-					/>
+					/> : undefined}
 
 					{heldChildUniverses.length === 0 ? undefined : (
 						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>
 							<DataGrid dense>
 								{heldChildUniverses.map(child => (
 									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${child.outcomeLabel} ${commonCopy.rep}`} />
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${child.outcomeLabel} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
 									</MetricField>
 								))}
 							</DataGrid>

@@ -20,7 +20,7 @@ export function ChildUniverseDetails({ accountAddress, child, isSupportedChain, 
 			{showOutcomeIndex ? <MetricField label={commonCopy.outcomeIndex}>{child.outcomeIndex.toString()}</MetricField> : undefined}
 			{child.exists ? (
 				<MetricField label={commonCopy.reputationToken}>
-					<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isSupportedChain} tokenLabel={`${child.outcomeLabel} ${commonCopy.rep}`} />
+					<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isSupportedChain} tokenLabel={`${child.outcomeLabel} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
 				</MetricField>
 			) : undefined}
 			{child.forkTime !== 0n ? (

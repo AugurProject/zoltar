@@ -33,8 +33,8 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 					<MetricField label={commonCopy.universe}>{formatUniverseLabel(zoltarUniverse.universeId)}</MetricField>
 					<MetricField label={commonCopy.status}>{zoltarUniverse.hasForked ? commonCopy.forked : marketCopy.unforked}</MetricField>
 					<MetricField label={marketCopy.parentUniverse}>{zoltarUniverse.universeId === 0n ? commonCopy.none : <UniverseLink universeId={zoltarUniverse.parentUniverseId} />}</MetricField>
-					<MetricField label={commonCopy.rep}>
-						<CurrencyValue value={zoltarUniverse.totalTheoreticalSupplyAttoRep} suffix={commonCopy.rep} />
+					<MetricField label={zoltarUniverse.reputationTokenName ?? commonCopy.rep}>
+						<CurrencyValue value={zoltarUniverse.totalTheoreticalSupplyAttoRep} suffix={zoltarUniverse.reputationTokenSymbol ?? commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 				{zoltarUniverse.forkQuestionDetails === undefined ? undefined : (
@@ -67,6 +67,7 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 									variant='record'
 								>
 									<DataGrid dense>
+										{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
 										<MetricField label={commonCopy.universe}>{formatUniverseLabel(childUniverse.universeId)}</MetricField>
 										<MetricField label={marketCopy.parentUniverse}>
 											<UniverseLink universeId={childUniverse.parentUniverseId} />

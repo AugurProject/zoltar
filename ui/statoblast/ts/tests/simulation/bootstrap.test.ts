@@ -93,12 +93,6 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 					repState.totalSupply += amount
 					break
 				}
-				case 'setMaxTheoreticalSupplyAttoRep': {
-					const nextTheoreticalSupply = args?.[0]
-					if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
-					repState.theoreticalSupply = nextTheoreticalSupply
-					break
-				}
 				default:
 					throw new Error(`Unexpected write function ${functionName}`)
 			}
@@ -593,7 +587,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		getBlock: async () => ({ timestamp: 1_000n }),
 		getBalance: async () => 0n,
 		getStorageAt: async () => toHex(0n, { size: 32 }),
-		setStorageAt: async () => undefined,
+		setStorageAt: async ({ address, value }: { address: Address; value: string }) => {
+			if (address.toLowerCase() === profile.genesisRepTokenAddress.toLowerCase()) repState.theoreticalSupply = BigInt(value)
+		},
 		getCode: async ({ address }: { address: Address }) => {
 			state.deploymentCodeRequests.push(address)
 			return deployedCodes.get(address) ?? '0x'
@@ -647,12 +643,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 						const normalizedRecipient = recipient.toLowerCase()
 						repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
 						repState.totalSupply += amount
-						return '0x01'
-					}
-					if (functionName === 'setMaxTheoreticalSupplyAttoRep') {
-						const nextTheoreticalSupply = args?.[0]
-						if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
-						repState.theoreticalSupply = nextTheoreticalSupply
 						return '0x01'
 					}
 					throw new Error(`Unexpected REP write function ${functionName}`)
@@ -751,6 +741,7 @@ describe('simulation bootstrap', () => {
 		const repState = createRepTokenMockState()
 		const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
 			storageWrites.push(payload)
+			if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
 		})
 		const memoryClient = {
 			setStorageAt,
@@ -774,7 +765,7 @@ describe('simulation bootstrap', () => {
 		expect(repState.totalSupply).toBe(11n)
 		expect(repState.theoreticalSupply).toBe(11n)
 		expect(repState.balances.get(MOCK_PRIMARY_ACCOUNT.toLowerCase())).toBe(11n)
-		expect(storageWrites).toHaveLength(0)
+		expect(storageWrites.filter(write => write.address === zoltarAddress)).toHaveLength(0)
 	})
 
 	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
@@ -785,6 +776,7 @@ describe('simulation bootstrap', () => {
 		const memoryClient = {
 			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
 				storageWrites.push(payload)
+				if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
 			},
 			getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
 			getBalance: async () => 0n,

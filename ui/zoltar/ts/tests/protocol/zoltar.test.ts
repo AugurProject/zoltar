@@ -120,6 +120,7 @@ describe('zoltar contract helpers', () => {
 		const client = createReadClient({
 			multicallResponses: [
 				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
+				['Augur Reputation 5', 'REP5', 5n],
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
 			readContractHandlers: {
@@ -143,6 +144,7 @@ describe('zoltar contract helpers', () => {
 		const client = createReadClient({
 			multicallResponses: [
 				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
+				['Augur Reputation 8', 'REP8', 8n],
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
 			readContractHandlers: {
@@ -166,7 +168,16 @@ describe('zoltar contract helpers', () => {
 		const childUniverseTuple3 = [7n, 8n, 9n, getAddress('0x0000000000000000000000000000000000000030'), 97n]
 		const childUniverseIds = [10n, 20n, 30n]
 		const client = createReadClient({
-			multicallResponses: [[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n], [QUESTION_TUPLE_BINARY, 1n], childUniverseIds, [childUniverseTuple1, childUniverseTuple2, childUniverseTuple3]],
+			multicallResponses: [
+				[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n],
+				['Augur Reputation 8', 'REP8', 8n],
+				[QUESTION_TUPLE_BINARY, 1n],
+				childUniverseIds,
+				[childUniverseTuple1, childUniverseTuple2, childUniverseTuple3],
+				['Augur Reputation 1', 'REP1', 1n],
+				['Augur Reputation 2', 'REP2', 2n],
+				['Augur Reputation 3', 'REP3', 3n],
+			],
 			readContractHandlers: {
 				getTotalTheoreticalSupplyAttoRep: async () => 999n,
 				getOutcomeLabels: async () => ['Yes', 'No'],

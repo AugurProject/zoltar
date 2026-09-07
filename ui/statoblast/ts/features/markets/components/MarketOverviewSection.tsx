@@ -52,10 +52,10 @@ export function MarketOverviewSection({ accountAddress, isOnActiveAppChain, load
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
-							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={commonCopy.reputationToken} />
+							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={rootUniverse.reputationTokenName ?? commonCopy.reputationToken} />
 						</MetricField>
 						<MetricField label={marketCopy.totalTheoreticalSupplyAttoRep}>
-							<CurrencyValue value={rootUniverse.totalTheoreticalSupplyAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={rootUniverse.totalTheoreticalSupplyAttoRep} suffix={rootUniverse.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
 					</DataGrid>
 					{hasForked ? (

@@ -30,6 +30,24 @@ type DeployedChildUniverseRecord = {
 type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
 type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
 
+async function loadReputationTokenMetadata(client: ReadClient, reputationToken: Address, isGenesis: boolean) {
+	const calls = [
+		{ abi: ReputationToken_ReputationToken.abi, functionName: 'name', address: reputationToken, args: [] },
+		{ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: reputationToken, args: [] },
+		...(isGenesis ? [] : [{ abi: ReputationToken_ReputationToken.abi, functionName: 'repNumber', address: reputationToken, args: [] }]),
+	] as const
+	const [name, symbol, repNumber] = await readRequiredMulticall(client, calls)
+	if (typeof name !== 'string' || typeof symbol !== 'string') throw new Error('Unexpected REP token metadata response')
+	if (isGenesis) return { reputationTokenKind: 'genesis' as const, reputationTokenName: name, reputationTokenSymbol: symbol }
+	if (typeof repNumber !== 'bigint') throw new Error('Unexpected child REP number response')
+	return {
+		reputationTokenKind: 'child' as const,
+		reputationTokenName: name,
+		reputationTokenNumber: repNumber,
+		reputationTokenSymbol: symbol,
+	}
+}
+
 function requireBigintArray(value: unknown, context: string): bigint[] {
 	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
 	return [...value]
@@ -209,6 +227,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		},
 	])
 	if (repToken === zeroAddress) return undefined
+	const reputationTokenMetadata = await loadReputationTokenMetadata(client, repToken, universeId === 0n)
 
 	const totalTheoreticalSupplyAttoRep = await client.readContract({
 		abi: ReputationToken_ReputationToken.abi,
@@ -326,6 +345,16 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 				}
 			})
 		}
+		childUniverses = await Promise.all(
+			childUniverses.map(async childUniverse =>
+				childUniverse.exists
+					? {
+							...childUniverse,
+							...(await loadReputationTokenMetadata(client, childUniverse.reputationToken, false)),
+						}
+					: childUniverse,
+			),
+		)
 	}
 
 	return {
@@ -338,6 +367,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		hasForked,
 		parentUniverseId,
 		reputationToken: repToken,
+		...reputationTokenMetadata,
 		totalTheoreticalSupplyAttoRep,
 		universeId,
 		zoltarAddress,

@@ -100,7 +100,7 @@ export type ZoltarChildUniverseSummary = {
 	parentUniverseId: bigint
 	reputationToken: Address
 	universeId: bigint
-}
+} & import('./reputation.js').ReputationTokenMetadata
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -115,7 +115,7 @@ export type ZoltarUniverseSummary = {
 	totalTheoreticalSupplyAttoRep: bigint
 	universeId: bigint
 	zoltarAddress?: Address
-}
+} & import('./reputation.js').ReputationTokenMetadata
 
 export type DeploymentStep = {
 	id: DeploymentStepId
