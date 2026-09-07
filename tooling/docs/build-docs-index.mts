@@ -38,15 +38,16 @@ function normalizedText(value: string | null | undefined): string {
 function assertManifest(value: unknown): asserts value is DocsManifest {
 	assert(typeof value === 'object' && value !== null, 'docs/manifest.json must contain an object')
 	const candidate = value as Partial<DocsManifest>
-	assert(Array.isArray(candidate.sections) && candidate.sections.length === 2, 'docs manifest must declare the two remaining Diátaxis sections')
+	assert(Array.isArray(candidate.sections) && candidate.sections.length === 3, 'docs manifest must declare the reading-path sections')
 	assert(Array.isArray(candidate.pages) && candidate.pages.length > 0, 'docs manifest must declare pages')
 	const sectionIds = new Set<string>(candidate.sections.map(section => section.id))
-	assert.deepEqual(sectionIds, new Set<string>(categoryDirectories), 'docs manifest sections must be reference and explanation')
+	assert.deepEqual(sectionIds, new Set<string>(['start-here', ...categoryDirectories]), 'docs manifest sections must be Start here, Explanations, and Reference')
+	assert.deepEqual(candidate.sections.map(section => section.id), ['start-here', 'explanation', 'reference'], 'docs manifest sections must follow the reading path')
 	const paths = new Set<string>()
 	for (const page of candidate.pages) {
 		assert(page.path.endsWith('.html'), `docs manifest page ${page.path} must be an HTML route`)
 		assert(sectionIds.has(page.section), `docs manifest page ${page.path} has unknown section ${page.section}`)
-		assert(page.path.startsWith(`${page.section}/`), `docs manifest page ${page.path} must live under its Diátaxis section`)
+		if (page.section !== 'start-here') assert(page.path.startsWith(`${page.section}/`), `docs manifest page ${page.path} must live under its Diátaxis section`)
 		assert(!paths.has(page.path), `docs manifest repeats ${page.path}`)
 		assert(normalizedText(page.title).length > 0, `docs manifest page ${page.path} needs a title`)
 		assert(normalizedText(page.summary).length > 0, `docs manifest page ${page.path} needs a summary`)
@@ -87,7 +88,7 @@ for (const link of Array.from(landingWindow.document.querySelectorAll('a[href]')
 landingWindow.close()
 
 const actualPagePaths = (await Promise.all(categoryDirectories.map(filesIn))).flat().toSorted()
-assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the two remaining Diátaxis directories')
+assert.deepEqual(actualPagePaths, manifest.pages.map(page => page.path).toSorted(), 'docs manifest pages must exactly match HTML pages in the explanation and reference directories')
 
 const searchIndex = []
 for (const page of manifest.pages) {

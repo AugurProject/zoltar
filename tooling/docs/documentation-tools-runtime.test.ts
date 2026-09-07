@@ -194,7 +194,7 @@ test('mobile widgets preserve the primary-only disclosure default', async () => 
 })
 
 test('OpenOracle controls separate coordinator policy from the report request and expose the fee bound', async () => {
-	const cleanup = await loadDocument('docs/explanation/open-oracle.html', 'http://localhost/docs/explanation/open-oracle.html')
+	const cleanup = await loadDocument('docs/reference/open-oracle.html', 'http://localhost/docs/reference/open-oracle.html')
 	try {
 		await runGeneratedRuntime('openOracleTools')
 		await runGeneratedRuntime('interactiveTools')
@@ -550,7 +550,6 @@ test('shared scenarios reject out-of-range timeline values before the browser cl
 
 for (const scenario of [
 	{ input: 'aliceEth', mount: 'fig-auction-clearing-ladder', name: 'auction', path: 'docs/explanation/truth-auctions.html', tool: 'simple-auction-example' },
-	{ input: 'parentSettlementCollateral', mount: 'plot-statoblast-whitepaper-19', name: 'collateral repair', path: 'docs/explanation/statoblast.html', tool: 'collateral-repair-example' },
 	{ input: 'nonDecisionThreshold', mount: 'fig-statoblast-escalation-cost-curve', name: 'escalation', path: 'docs/explanation/escalation-game.html', tool: 'escalation-game-example' },
 ] as const) {
 	test(`quantitative chart resize preserves last-valid ${scenario.name} state`, async () => {

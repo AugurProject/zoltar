@@ -747,7 +747,7 @@ async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourc
 }
 
 async function checkDynamicWethReportExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'initial-report-estimator-example')
+	const example = await loadInteractiveExample('docs/reference/open-oracle.html', 'initial-report-estimator-example')
 
 	try {
 		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
@@ -799,7 +799,7 @@ async function checkDynamicWethReportExample(): Promise<void> {
 }
 
 async function checkBinaryCensorshipExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/explanation/open-oracle.html', 'binary-censorship-example')
+	const example = await loadInteractiveExample('docs/reference/open-oracle.html', 'binary-censorship-example')
 
 	try {
 		assertEqual(example.output('executionErrorThreshold'), '12.22%', 'binary censorship default execution threshold')
@@ -880,7 +880,7 @@ checkDiagramControlStates()
 await checkInteractiveToolControls()
 checkExactRepCapEquality()
 
-const openOracleHtml = await readFile('docs/explanation/open-oracle.html', 'utf8')
+const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
@@ -908,7 +908,7 @@ assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling t
 
 const operatorReferenceText = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 assert.match(operatorReferenceText, /parent vault is checkpointed before its capacity ownership is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceText, /statoblast\.html#migration/i, 'operator reference should delegate migration derivations to the whitepaper')
+assert.match(operatorReferenceText, /statoblast\.html#forks-migration/i, 'operator reference should delegate migration derivations to the canonical explanation')
 assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
 assert.match(
 	operatorReferenceText,
@@ -946,7 +946,7 @@ assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'con
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
 const escalationHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
-assert.match(statoblastHtml, /<details class="interactive-example technical-details" id="collateral-repair-example">[\s\S]*data-plot-chart="plot-statoblast-whitepaper-19"/i, 'collateral repair controls and chart must share the interactive example container')
+assert.doesNotMatch(statoblastHtml, /id="collateral-repair-example"/i, 'the overview must delegate interactive auction mechanics to the focused Truth Auction page')
 assert.match(escalationHtml, /configured start bond|fixed-point attrition curve/i, 'escalation explanation should name the configured bond and canonical curve')
 assert.match(escalationHtml, /cumulative binding-capital threshold/i, 'escalation explanation should distinguish the cumulative threshold from the deposit minimum')
 assert.match(escalationHtml, /deadline moves only when the deposit raises the median outcome balance/i, 'escalation explanation should tie deadline changes to median balance increases')

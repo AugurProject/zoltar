@@ -11,13 +11,14 @@ const auctionDesign = normalizeHtmlSource(await readFile('docs/explanation/truth
 const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-game.html', 'utf8'))
 const invariantsHtml = normalizeHtmlSource(await readFile('docs/reference/invariants.html', 'utf8'))
 const liquidationHtml = normalizeHtmlSource(await readFile('docs/explanation/liquidations.html', 'utf8'))
-const openOracleIntegration = normalizeHtmlSource(await readFile('docs/explanation/open-oracle.html', 'utf8'))
+const openOracleIntegration = normalizeHtmlSource(await readFile('docs/reference/open-oracle.html', 'utf8'))
 const zoltarWhitepaper = normalizeHtmlSource(await readFile('docs/explanation/zoltar.html', 'utf8'))
 const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanation/statoblast.html', 'utf8'))
 const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
+const systemOverview = normalizeHtmlSource(await readFile('docs/explanation/system-overview.html', 'utf8'))
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 const securityModel = await readFile('docs/reference/security-model.html', 'utf8')
 const contractInteractionReference = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))
@@ -113,7 +114,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(securityPoolUtils, /function calculateMintingCapacityAttoEth\([\s\S]*Math\.mulDiv\(capacityOwnershipAttoRep, PRICE_PRECISION, repEthPrice\)[\s\S]*Math\.mulDiv\(capacityValueAttoEth, BPS_DENOMINATOR, securityMultiplierBps\)/)
 	const calculateCapacity = (capacityOwnershipAttoRep: bigint, repPerEth: bigint, securityMultiplierBps: bigint) => ((capacityOwnershipAttoRep * 10n ** 18n) / repPerEth / securityMultiplierBps) * 10_000n
 	assert.ok(calculateCapacity(100n * 10n ** 18n, 4n * 10n ** 18n, 20_000n) < calculateCapacity(100n * 10n ** 18n, 2n * 10n ** 18n, 20_000n), 'A higher REP-per-ETH quote must lower live ETH minting capacity')
-	assert.match(whitepaperStatoblast, /id="dynamic-capacity"/)
+	assert.match(whitepaperStatoblast, /id="fees-capacity-liquidations"/)
 	assert.match(securityPoolOperationsDelegate, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
 	assert.equal((11n * 10_000n) / 30_000n, 3n, 'capacity ownership must round a nonzero remainder downward')
 	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
@@ -296,7 +297,8 @@ function assertNonDecisionLifecycleDocs(): void {
 function assertAuditFindingRemediations(): void {
 	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
 	const normalizedAuctionDesign = auctionDesign.replaceAll(/\s+/g, ' ')
-	assert.match(normalizedStatoblast, /settlement-collateral migration weight[\s\S]*transferred capacity ownership determines the vault's live proportional open-interest allocation in the child/)
+	assert.match(normalizedStatoblast, /parent backing claim, capacity ownership, and proportional pool collateral are routed into one selected child pool/)
+	assert.match(normalizedStatoblast, /branch-specific ledger claims in multiple selected child pools[\s\S]*reproduces claims, not ETH/)
 	assert.doesNotMatch(normalizedStatoblast, /vault's migrated OI share is its pool-held vault REP backing share/)
 	assert.doesNotMatch(normalizedStatoblast, /Retention-rate updates also no-op when total coverage commitment is zero/, 'Statoblast whitepaper must not retain the obsolete total-coverage commitment zero-retention rule')
 	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*getCurrentMintingCapacityAttoEth\(\)/, 'SecurityPool retention updates must use live oracle-priced minting capacity')
@@ -385,7 +387,7 @@ function assertZoltarForkDepths(): void {
 	assert.equal(migrationCredit, 5n, 'non-divisible fork threshold remainder must round the 80% migration credit up')
 
 	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/<[^>]*>/g, '').replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of ['⌈4 × forkThresholdAttoRep / 5⌉', 'constructor rejects forkBurnDivisor &lt; 5', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
+	for (const documentedClaim of ['separate branch-specific ledgers', 'do not copy ETH', 'does not guarantee equal economic value', 'never selects or deletes a canonical child']) {
 		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
@@ -480,7 +482,7 @@ function assertLifecycleReferences(): void {
 	for (const systemState of ['Operational', 'PoolForked', 'ForkMigration', 'ForkTruthAuction']) {
 		assert.match(securityPoolInterface, new RegExp(`\\b${systemState}\\b`))
 	}
-	assert.match(startHere, /explanation\/escalation-game\.html/)
+	assert.match(systemOverview, /\.\/escalation-game\.html/)
 	const lifecycle = diagramGraphSpecs['fig-statoblast-fork-state-machine']
 	assert.ok(lifecycle, 'Statoblast lifecycle diagram model must exist')
 	const lifecycleSection = lifecycle.sections[0]
@@ -536,7 +538,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(invariantsHtml, /Child creation, share migration, vault migration/)
 	assert.doesNotMatch(invariantsHtml, /forkTime \+ 8 weeks/)
 	assert.doesNotMatch(auctionDesign, /8 weeks from the parent\s+universe fork time/)
-	assert.match(whitepaperStatoblast, /source remains locked as an entitlement/)
+	assert.match(whitepaperStatoblast, /source remains locked[\s\S]*ETH is not copied/)
 	assert.doesNotMatch(whitepaperStatoblast, /Parent burned/)
 	assert.match(contractInteractionReference, /single-target call may lazily create that child/)
 	assert.match(contractInteractionReference, /every target in a multi-target call already has a canonical child pool/)
