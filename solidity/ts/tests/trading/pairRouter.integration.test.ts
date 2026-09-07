@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { signTyped } from 'micro-eth-signer'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -9,6 +10,44 @@ type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const rate = 10n ** 18n
 const universe = 17n
 const question = 91n
+
+function splitSignature(signature: string) {
+	if (!isHex(signature) || signature.length !== 132) throw new Error('Expected a 65-byte signature')
+	return {
+		r: `0x${signature.slice(2, 66)}` as Hex,
+		s: `0x${signature.slice(66, 130)}` as Hex,
+		v: Number.parseInt(signature.slice(130, 132), 16),
+	}
+}
+
+const receiveRequestParameter = {
+	type: 'tuple',
+	components: [
+		{ name: 'version', type: 'uint8' },
+		{ name: 'operation', type: 'uint8' },
+		{ name: 'shareToken', type: 'address' },
+		{ name: 'securityPool', type: 'address' },
+		{ name: 'pair', type: 'address' },
+		{ name: 'universeId', type: 'uint248' },
+		{ name: 'questionId', type: 'uint256' },
+		{ name: 'invalidTokenId', type: 'uint256' },
+		{ name: 'yesTokenId', type: 'uint256' },
+		{ name: 'noTokenId', type: 'uint256' },
+		{ name: 'longOutcome', type: 'uint8' },
+		{ name: 'completeSetShares', type: 'uint256' },
+		{ name: 'maxLongSharesIn', type: 'uint256' },
+		{ name: 'minEthOut', type: 'uint256' },
+		{ name: 'payoutRecipient', type: 'address' },
+		{ name: 'refundRecipient', type: 'address' },
+		{ name: 'deadline', type: 'uint256' },
+	],
+} as const
+
+type ReceiveRequest = readonly [number, number, Address, Address, Address, bigint, bigint, bigint, bigint, bigint, number, bigint, bigint, bigint, Address, Address, bigint]
+
+function encodeReceiveRequest(request: ReceiveRequest) {
+	return encodeAbiParameters([receiveRequestParameter], [request])
+}
 
 describe('factory, pair, and router integration', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -414,48 +453,200 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: factoryV2Artifact.abi, address: factoryV2, functionName: 'predictPair', args: [pool] })).toBe(pairV2)
 		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'IMPLEMENTATION_VERSION' })).toBe(2n)
 		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'DOMAIN_SEPARATOR' })).not.toBe(`0x${'00'.repeat(32)}`)
-		await expect(client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'permit', args: [account, routerV2, 7n, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] })).rejects.toThrow('Permit expired')
+		await expect(client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'permit', args: [account, routerV2, 7n, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] })).rejects.toThrow('ERC2612 permit expired')
 
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 20_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pairV2, true] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'initialize', args: [10_000n * rate, 10_000n * rate, 1n, account] }))
 		const liquidity = await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'balanceOf', args: [account] })
 		await expect(client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 0n] })).rejects.toThrow('Deadline expired')
+		const permitDeadline = 10n ** 12n
+		const ethereum = getAnvilWindowEthereum()
+		const chainId = await client.getChainId()
+		const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as Address
+		const permitOwnerKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+		const wrongSignerKey = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412d99615a5f2f5f0'
+		const permitOwner = privateKeyToAccount(permitOwnerKey)
+		await ethereum.impersonateAccount(permitOwner.address)
+		await ethereum.setBalance(permitOwner.address, 10n ** 20n)
+		const permitOwnerClient = createWriteClient(ethereum, BigInt(permitOwner.address), 0)
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'transfer', args: [permitOwner.address, liquidity / 2n] }))
+		const signPermit = async ({ signedChainId = chainId, name = 'Zoltar Two-Way LP', nonce, owner = permitOwner.address, signerKey = permitOwnerKey, spender = routerV2, value }: { signedChainId?: number; name?: string; nonce?: bigint; owner?: Address; signerKey?: Hex; spender?: Address; value: bigint }) => {
+			const signedNonce = nonce ?? (await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'nonces', args: [permitOwner.address] }))
+			const signature = signTyped(
+				{
+					domain: { chainId: signedChainId, name, version: '1', verifyingContract: pairV2 },
+					primaryType: 'Permit',
+					types: {
+						EIP712Domain: [
+							{ name: 'name', type: 'string' },
+							{ name: 'version', type: 'string' },
+							{ name: 'chainId', type: 'uint256' },
+							{ name: 'verifyingContract', type: 'address' },
+						],
+						Permit: [
+							{ name: 'owner', type: 'address' },
+							{ name: 'spender', type: 'address' },
+							{ name: 'value', type: 'uint256' },
+							{ name: 'nonce', type: 'uint256' },
+							{ name: 'deadline', type: 'uint256' },
+						],
+					},
+					message: { owner, spender, value, nonce: signedNonce, deadline: permitDeadline },
+				},
+				signerKey,
+			)
+			return splitSignature(signature)
+		}
+
+		const permittedLiquidity = liquidity / 4n
+		const permit = await signPermit({ value: permittedLiquidity })
+		await writeContractAndWait(permitOwnerClient, () => permitOwnerClient.writeContract({ abi: routerV2Artifact.abi, address: routerV2, functionName: 'removeLiquidityWithPermit', args: [pairV2, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] }))
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'allowance', args: [permitOwner.address, routerV2] })).toBe(0n)
+		await expect(permitOwnerClient.writeContract({ abi: routerV2Artifact.abi, address: routerV2, functionName: 'removeLiquidityWithPermit', args: [pairV2, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] })).rejects.toThrow('LP permit or allowance')
+
+		const preSubmittedLiquidity = liquidity / 8n
+		const preSubmittedPermit = await signPermit({ value: preSubmittedLiquidity })
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'permit', args: [permitOwner.address, routerV2, preSubmittedLiquidity, permitDeadline, preSubmittedPermit.v, preSubmittedPermit.r, preSubmittedPermit.s] }))
+		await writeContractAndWait(permitOwnerClient, () =>
+			permitOwnerClient.writeContract({ abi: routerV2Artifact.abi, address: routerV2, functionName: 'removeLiquidityWithPermit', args: [pairV2, preSubmittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, preSubmittedPermit.v, preSubmittedPermit.r, preSubmittedPermit.s] }),
+		)
+
+		const wrongPermitCases = [
+			await signPermit({ value: 7n, spender: account }),
+			await signPermit({ value: 8n }),
+			await signPermit({ value: 7n, nonce: 99n }),
+			await signPermit({ value: 7n, signedChainId: chainId + 1 }),
+			await signPermit({ value: 7n, name: 'Wrong LP' }),
+			await signPermit({ value: 7n, owner: recipient }),
+			await signPermit({ value: 7n, signerKey: wrongSignerKey }),
+		]
+		for (const invalidPermit of wrongPermitCases) {
+			await expect(client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'permit', args: [permitOwner.address, routerV2, 7n, permitDeadline, invalidPermit.v, invalidPermit.r, invalidPermit.s] })).rejects.toThrow('ERC2612 invalid signer')
+		}
 
 		const redeemAmount = rate
-		const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as Address
 		const recipientEthBefore = await client.getBalance({ address: recipient })
-		const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n]
-		const requestData = encodeAbiParameters(
-			[
-				{
-					type: 'tuple',
-					components: [
-						{ name: 'version', type: 'uint8' },
-						{ name: 'operation', type: 'uint8' },
-						{ name: 'shareToken', type: 'address' },
-						{ name: 'securityPool', type: 'address' },
-						{ name: 'pair', type: 'address' },
-						{ name: 'universeId', type: 'uint248' },
-						{ name: 'questionId', type: 'uint256' },
-						{ name: 'invalidTokenId', type: 'uint256' },
-						{ name: 'yesTokenId', type: 'uint256' },
-						{ name: 'noTokenId', type: 'uint256' },
-						{ name: 'longOutcome', type: 'uint8' },
-						{ name: 'completeSetShares', type: 'uint256' },
-						{ name: 'maxLongSharesIn', type: 'uint256' },
-						{ name: 'minEthOut', type: 'uint256' },
-						{ name: 'payoutRecipient', type: 'address' },
-						{ name: 'refundRecipient', type: 'address' },
-						{ name: 'deadline', type: 'uint256' },
-					],
-				},
-			],
-			[[1, 1, token, pool, pairV2, universe, question, ids[0], ids[1], ids[2], 3, redeemAmount, 0n, 1n, recipient, account, 10n ** 12n]],
-		)
+		const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n] as const
+		const deadline = 10n ** 12n
+		const redeemRequest = ({
+			version = 1,
+			operation = 1,
+			shareToken = token,
+			securityPool = pool,
+			configuredPair = pairV2,
+			universeId = universe,
+			questionId = question,
+			invalidTokenId = ids[0],
+			yesTokenId = ids[1],
+			noTokenId = ids[2],
+			longOutcome = 3,
+			completeSetShares = redeemAmount,
+			maxLongSharesIn = 0n,
+			minEthOut = 1n,
+			payoutRecipient = recipient,
+			refundRecipient = account,
+			requestDeadline = deadline,
+		}: Partial<{
+			version: number
+			operation: number
+			shareToken: Address
+			securityPool: Address
+			configuredPair: Address
+			universeId: bigint
+			questionId: bigint
+			invalidTokenId: bigint
+			yesTokenId: bigint
+			noTokenId: bigint
+			longOutcome: number
+			completeSetShares: bigint
+			maxLongSharesIn: bigint
+			minEthOut: bigint
+			payoutRecipient: Address
+			refundRecipient: Address
+			requestDeadline: bigint
+		}> = {}) => encodeReceiveRequest([version, operation, shareToken, securityPool, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline])
+		const requestData = redeemRequest()
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, routerV2] })).toBe(false)
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], requestData] }))
 		expect((await client.getBalance({ address: recipient })) - recipientEthBefore).toBe(1n)
-		expect(await shareBalances(routerV2)).toEqual([0n, 0n, 0n])
+
+		const routerResidue = [7n, 11n, 13n] as const
+		for (const [outcome, amount] of routerResidue.entries()) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [routerV2, ids[outcome], amount] }))
+		expect(await shareBalances(routerV2)).toEqual(routerResidue)
+
+		const exitAmount = rate
+		const [swapInput] = await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'quoteExactOutput', args: [true, exitAmount] })
+		const maximumLongShares = exitAmount + swapInput + 17n
+		const yesBeforeExit = await tokenBalance(account, 1n)
+		const exitRecipientEthBefore = await client.getBalance({ address: recipient })
+		const exitData = encodeReceiveRequest([1, 0, token, pool, pairV2, universe, question, ids[0], ids[1], ids[2], 1, exitAmount, maximumLongShares, 1n, recipient, account, deadline])
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, [ids[0], ids[1]], [exitAmount, maximumLongShares], exitData] }))
+		expect(yesBeforeExit - (await tokenBalance(account, 1n))).toBe(exitAmount + swapInput)
+		expect((await client.getBalance({ address: recipient })) - exitRecipientEthBefore).toBe(1n)
+		expect(await shareBalances(routerV2)).toEqual(routerResidue)
+		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [routerV2, pairV2] })).toBe(false)
+
+		const malformedRequests = [
+			{ name: 'version', data: redeemRequest({ version: 2 }) },
+			{ name: 'operation', data: redeemRequest({ operation: 2 }) },
+			{ name: 'share token', data: redeemRequest({ shareToken: account }) },
+			{ name: 'security pool', data: redeemRequest({ securityPool: account }) },
+			{ name: 'pair', data: redeemRequest({ configuredPair: account }) },
+			{ name: 'universe', data: redeemRequest({ universeId: universe + 1n }) },
+			{ name: 'question', data: redeemRequest({ questionId: question + 1n }) },
+			{ name: 'INVALID ID', data: redeemRequest({ invalidTokenId: ids[0] + 3n }) },
+			{ name: 'YES ID', data: redeemRequest({ yesTokenId: ids[2] }) },
+			{ name: 'NO ID', data: redeemRequest({ noTokenId: ids[1] }) },
+			{ name: 'long outcome', data: redeemRequest({ longOutcome: 1 }) },
+			{ name: 'maximum input', data: redeemRequest({ maxLongSharesIn: 1n }) },
+			{ name: 'zero payout', data: redeemRequest({ payoutRecipient: `0x${'00'.repeat(20)}` }) },
+			{ name: 'router payout', data: redeemRequest({ payoutRecipient: routerV2 }) },
+			{ name: 'zero refund', data: redeemRequest({ refundRecipient: `0x${'00'.repeat(20)}` }) },
+			{ name: 'router refund', data: redeemRequest({ refundRecipient: routerV2 }) },
+			{ name: 'deadline', data: redeemRequest({ requestDeadline: 0n }) },
+			{ name: 'slippage', data: redeemRequest({ minEthOut: 2n }) },
+		] as const
+		for (const malformed of malformedRequests) {
+			await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], malformed.data] }), malformed.name).rejects.toThrow()
+		}
+		for (const malformedTransfer of [
+			{ ids: [ids[1], ids[0], ids[2]], values: [redeemAmount, redeemAmount, redeemAmount] },
+			{ ids: [ids[0], ids[1]], values: [redeemAmount, redeemAmount] },
+			{ ids, values: [redeemAmount, redeemAmount, redeemAmount + 1n] },
+		] as const) {
+			await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, malformedTransfer.ids, malformedTransfer.values, requestData] })).rejects.toThrow()
+		}
+		await expect(client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], '0x'] })).rejects.toThrow()
+		expect(await shareBalances(routerV2)).toEqual(routerResidue)
+
+		const safe = await deploy(mocks.TradingMockSafe)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [safe, true] }))
+		await expect(client.writeContract({ abi: mocks.TradingMockSafe.abi, address: safe, functionName: 'transferBatch', args: [token, account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], requestData] })).rejects.toThrow('Transfer must be owner initiated')
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSafe.abi, address: safe, functionName: 'createCompleteSet', args: [pool], value: 1n }))
+		const safeRedeemData = redeemRequest({ payoutRecipient: safe, refundRecipient: safe })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSafe.abi, address: safe, functionName: 'transferBatch', args: [token, safe, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], safeRedeemData] }))
+		expect(await client.getBalance({ address: safe })).toBe(1n)
+
+		const safeLiquidity = liquidity / 16n
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'transfer', args: [safe, safeLiquidity] }))
+		const safeApprove = encodeFunctionData({ abi: pairV2Artifact.abi, functionName: 'approve', args: [routerV2, safeLiquidity] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSafe.abi, address: safe, functionName: 'execute', args: [pairV2, safeApprove] }))
+		const safeRemoval = encodeFunctionData({ abi: routerV2Artifact.abi, functionName: 'removeLiquidityWithPermit', args: [pairV2, safeLiquidity, 1n, 1n, safe, deadline, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSafe.abi, address: safe, functionName: 'execute', args: [routerV2, safeRemoval] }))
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'balanceOf', args: [safe] })).toBe(0n)
+
+		const reentrantRecipient = await deploy(mocks.TradingReentrantRecipient)
+		const reentryPayload = encodeFunctionData({ abi: routerV2Artifact.abi, functionName: 'onERC1155BatchReceived', args: [reentrantRecipient, reentrantRecipient, [], [], '0x'] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingReentrantRecipient.abi, address: reentrantRecipient, functionName: 'configure', args: [routerV2, reentryPayload] }))
+		const reentrantRedeemData = redeemRequest({ payoutRecipient: reentrantRecipient })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], reentrantRedeemData] }))
+		expect(await client.readContract({ abi: mocks.TradingReentrantRecipient.abi, address: reentrantRecipient, functionName: 'reentryBlocked' })).toBe(true)
+		expect(await shareBalances(routerV2)).toEqual(routerResidue)
+
+		const directLiquidity = liquidity / 32n
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'allowance', args: [account, routerV2] })).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'removeLiquidity', args: [directLiquidity, 1n, 1n, account, deadline] }))
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: pairV2, functionName: 'allowance', args: [account, routerV2] })).toBe(0n)
 	})
 })
