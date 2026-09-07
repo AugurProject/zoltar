@@ -65,6 +65,7 @@ const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixture
 
 await assertNoNarrativeDocumentationSnapshots()
 assertEscalationContinuationReference()
+assertSystemDecisionForkTriggers()
 assertDisputeStakedReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
 assertNonDecisionLifecycleDocs()
@@ -147,6 +148,16 @@ function isNarrativeDocumentationIncludes(expression: ts.Expression | undefined,
 
 function assertEscalationContinuationReference(): void {
 	assert.match(html, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
+}
+
+function assertSystemDecisionForkTriggers(): void {
+	const decisionFlow = diagramGraphSpecs['fig-statoblast-system-decision-flow']
+	const forkSources = decisionFlow.sections
+		.flatMap(section => section.edges)
+		.filter(edge => edge.target === 'fork')
+		.map(edge => edge.source)
+		.sort()
+	assert.deepEqual(forkSources, ['decision', 'universe-fork'], 'Statoblast lifecycle diagram must show local non-decision and an independent universe fork entering migration')
 }
 
 function assertDisputeStakedReplayIdentityDocs(): void {

@@ -385,7 +385,7 @@ function assertNodeMatchesLegend(figureId: string, nodeId: string, legendLabel: 
 }
 assertNodeMatchesLegend('fig-zoltar-fork-branch-set', 'parent', 'Forking parent')
 assertNodeMatchesLegend('fig-zoltar-fork-branch-set', 'invalid', 'Invalid branch')
-for (const nodeId of ['outcome-1', 'outcome-2', 'outcome-n']) assertNodeMatchesLegend('fig-zoltar-fork-branch-set', nodeId, 'Valid outcome branches')
+for (const nodeId of ['yes', 'no']) assertNodeMatchesLegend('fig-zoltar-fork-branch-set', nodeId, 'Valid outcome branches')
 assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'flag', 'Namespace bit')
 assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'first', 'First payout')
 assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'second', 'Second payout')
