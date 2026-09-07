@@ -22,8 +22,8 @@ export const importBoundaryViolations = (sources: ReadonlyMap<string, string>): 
 	const violations: ImportBoundaryViolation[] = []
 	for (const [file, source] of sources) {
 		const owner = capability(file)
-		if ((file === 'src/api/router.ts' || file === 'src/api/serializers.ts') && /\bsql\s*(?:`|\.unsafe\s*\()/.test(source))
-			violations.push({ file, imported: 'SQL execution', reason: 'HTTP routing and response serialization must not execute database queries' })
+		if (owner === 'api' && /\bsql\s*(?:`|\.unsafe\s*\()/.test(source))
+			violations.push({ file, imported: 'SQL execution', reason: 'HTTP parsing, routing, and response serialization must not execute database queries' })
 		for (const imported of importsFrom(source)) {
 			if (file !== 'src/api.ts' && owner !== 'api' && owner !== 'repository' && /(?:^|\/)api\//.test(imported))
 				violations.push({ file, imported, reason: 'API capabilities must be consumed through src/api.ts' })
