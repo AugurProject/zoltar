@@ -131,7 +131,7 @@ describe('useSecurityPoolCreation', () => {
 			loadMarketDetails: mock(async () => createMarketDetails()),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -166,7 +166,7 @@ describe('useSecurityPoolCreation', () => {
 			loadMarketDetails: mock(async () => createMarketDetails({ exists: false, questionId: '0x00' })),
 		})
 		let state: UseSecurityPoolCreationState | undefined
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		const HarnessNotFound = createHarness(
 			useSecurityPoolCreation,
 			{
@@ -238,7 +238,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists: mock(async () => false),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -289,7 +289,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -338,7 +338,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -397,7 +397,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists: mock(async () => false),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -439,7 +439,7 @@ describe('useSecurityPoolCreation', () => {
 			}),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -505,7 +505,7 @@ describe('useSecurityPoolCreation', () => {
 			if (presentation.hash !== undefined) onTransactionHashes.push(presentation.hash)
 		}
 		let refreshCalls = 0
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -568,7 +568,7 @@ describe('useSecurityPoolCreation', () => {
 			}),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -633,7 +633,7 @@ describe('useSecurityPoolCreation', () => {
 			}),
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -696,7 +696,7 @@ describe('useSecurityPoolCreation', () => {
 			createSecurityPool,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -771,7 +771,7 @@ describe('useSecurityPoolCreation', () => {
 			createSecurityPool,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -850,7 +850,7 @@ describe('useSecurityPoolCreation', () => {
 			createSecurityPool,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -926,7 +926,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		const onTransactionRequested = mock(() => undefined)
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
@@ -1017,7 +1017,7 @@ describe('useSecurityPoolCreation', () => {
 			getAccounts: async () => await activeAccounts.promise,
 		})
 
-		const { useSecurityPoolCreation } = await import(`../../../features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
 		let state: UseSecurityPoolCreationState | undefined
 		const Harness = createHarness(
 			useSecurityPoolCreation,
