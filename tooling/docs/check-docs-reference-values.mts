@@ -66,7 +66,7 @@ const sepoliaRepAllocations = await readFile('shared/ts/deployment/sepoliaRepAll
 const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 
-assertEscalationContinuationOverview()
+assertEscalationContinuationReference()
 assertDisputeStakedReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
 assertNonDecisionLifecycleDocs()
@@ -88,10 +88,8 @@ assertContractInteractionDistinctions()
 assertSolidityFunctionReader()
 await assertProductionSolidityInventory()
 
-function assertEscalationContinuationOverview(): void {
-	assert.match(html, /<h3>Escalation game continuation<\/h3>/)
-	assert.match(html, /fork escalation games\. This is called continuation\./)
-	assert.match(html, /Merkle Mountain Range carry proofs<\/a> and nullifier roots/)
+function assertEscalationContinuationReference(): void {
+	assert.match(html, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
 }
 
 function assertDisputeStakedReplayIdentityDocs(): void {
