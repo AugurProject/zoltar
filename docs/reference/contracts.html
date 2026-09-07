@@ -59,11 +59,11 @@
 				</table>
 				<h2 id="zoltar">Zoltar</h2>
 				<p>Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. <a href="../../solidity/contracts/Zoltar.sol">Source</a></p>
-				<p>Read surface: Use <code>universes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
+				<p>Read surface: Use <code>universes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>childReputationTokenCount</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, <code>getMigrationRepBalanceAttoRep</code>, and <code>getBoundAuthorizationNonce</code> to reconstruct universe and migration state or prepare a recipient-bound authorization. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
 
 				<p>Security boundaries for these calls are <a href="./security-model.html#assumption-a15">A15 intended question selection</a> and <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
-				<!-- Validated read ABI fingerprint: 1916e3480c70c4ccd5962f4b8069988d7dc36f0ea89337ebe04b8bca089d1492 -->
-				<!-- Validated complete compiled ABI fingerprint: 023e5a38bcf613044e07d23e84095e1125be871017388a0c5a6cf7a41958b350 -->
+				<!-- Validated read ABI fingerprint: c908994972ca4e8bcf1a44c288dcc830dc9a8bbb1e0a6f85a55f051d96703887 -->
+				<!-- Validated complete compiled ABI fingerprint: 58a39fda8fd00d2448a493854e8dbfb9d7cd8f3178f80614b3d53f6057bb6950 -->
 				<table>
 					<thead>
 						<tr>
@@ -83,6 +83,20 @@
 							<td><code>UniverseForked</code></td>
 						</tr>
 						<tr>
+							<td><code>forkUniverseWithPermit(universeId, questionId, deadline, v, r, s)</code></td>
+							<td>Genesis REP holder supplying an ERC-2612 signature</td>
+							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the threshold; ordinary fork prerequisites still hold.</td>
+							<td>Attempts the exact fork-threshold permit and then performs the same fork as <code>forkUniverse</code>; an already mined permit remains usable when the exact allowance is present.</td>
+							<td><code>Approval</code>, then <code>UniverseForked</code> and token transfer events</td>
+						</tr>
+						<tr>
+							<td><code>forkUniverseWithAuthorization(owner, universeId, questionId, validAfter, validBefore, nonce, v, r, s)</code></td>
+							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
+							<td>The REP token supports ERC-3009; authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary fork prerequisites hold.</td>
+							<td>Receives exactly the fork threshold into Zoltar under an operation- and owner-bound nonce, burns it, and credits the named owner with migration REP.</td>
+							<td><code>AuthorizationUsed</code>, <code>UniverseForked</code>, and token transfer events</td>
+						</tr>
+						<tr>
 							<td><code>burnRep(universeId, amountAttoRep)</code></td>
 							<td>Any REP holder; the caller can burn only its own balance</td>
 							<td>Initialized universe; positive amount; sufficient caller REP and theoretical supply. Genesis REP requires allowance.</td>
@@ -90,11 +104,25 @@
 							<td><code>RepBurned</code> and the token burn or transfer event</td>
 						</tr>
 						<tr>
+							<td><code>burnRepWithPermit(universeId, amountAttoRep, deadline, v, r, s)</code></td>
+							<td>Genesis REP holder supplying an ERC-2612 signature</td>
+							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; ordinary burn prerequisites hold.</td>
+							<td>Attempts an exact-amount permit and burns the caller's REP without migration credit.</td>
+							<td><code>Approval</code>, <code>RepBurned</code>, and token transfer events</td>
+						</tr>
+						<tr>
+							<td><code>burnRepWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)</code></td>
+							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
+							<td>The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary burn prerequisites hold.</td>
+							<td>Receives and burns exactly the signed amount under an operation- and owner-bound nonce.</td>
+							<td><code>AuthorizationUsed</code>, <code>RepBurned</code>, and token transfer events</td>
+						</tr>
+						<tr>
 							<td><code>deployChild(universeId, outcomeIndex)</code></td>
 							<td>Anyone</td>
 							<td>Parent forked; outcome is well formed; child is not already deployed.</td>
 							<td>Deploys the deterministic child REP token and initializes the child universe.</td>
-							<td><code>DeployChild</code></td>
+							<td><code>TheoreticalSupplySet</code>, <code>ReputationTokenInitialized</code>, <code>DeployChild</code>, and <code>ChildReputationTokenInitialized</code></td>
 						</tr>
 						<tr>
 							<td><code>addRepToMigrationBalance(universeId, amountAttoRep)</code></td>
@@ -102,6 +130,20 @@
 							<td>Universe forked; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.</td>
 							<td>Burns or sinks additional parent REP and increases the caller's reusable migration balance.</td>
 							<td><code>MigrationRepAdded</code></td>
+						</tr>
+						<tr>
+							<td><code>addRepToMigrationBalanceWithPermit(universeId, amountAttoRep, deadline, v, r, s)</code></td>
+							<td>Genesis REP holder supplying an ERC-2612 signature</td>
+							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; the universe is forked.</td>
+							<td>Attempts an exact-amount permit, sinks the caller's parent REP, and adds the amount to its migration balance.</td>
+							<td><code>Approval</code>, <code>MigrationRepAdded</code>, and token transfer events</td>
+						</tr>
+						<tr>
+							<td><code>addRepToMigrationBalanceWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)</code></td>
+							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
+							<td>The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and the universe is forked.</td>
+							<td>Receives and sinks the signed amount under an operation- and owner-bound nonce, then credits the named owner's migration balance.</td>
+							<td><code>AuthorizationUsed</code>, <code>MigrationRepAdded</code>, and token transfer events</td>
 						</tr>
 						<tr>
 							<td><code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code></td>
@@ -113,11 +155,11 @@
 					</tbody>
 				</table>
 				<h2 id="reputationtoken">ReputationToken</h2>
-				<p>Implements universe-specific ERC-20 REP and enforces the supply ceiling maintained by Zoltar. <a href="../../solidity/contracts/ReputationToken.sol">Source</a></p>
-				<p>Read surface: Use <code>getTotalTheoreticalSupplyAttoRep</code>, <code>zoltar</code>, and the standard ERC-20 <code>name</code>, <code>symbol</code>, <code>decimals</code>, <code>totalSupply</code>, <code>balanceOf</code>, and <code>allowance</code> reads.</p>
+				<p>Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar. <a href="../../solidity/contracts/ReputationToken.sol">Source</a></p>
+				<p>Read surface: Use <code>getTotalTheoreticalSupplyAttoRep</code>, <code>zoltar</code>, <code>universeId</code>, <code>repNumber</code>, the standard ERC-20 <code>name</code>, <code>symbol</code>, <code>decimals</code>, <code>totalSupply</code>, <code>balanceOf</code>, and <code>allowance</code> reads, and authorization reads <code>nonces</code>, <code>DOMAIN_SEPARATOR</code>, and <code>authorizationState</code>.</p>
 
-				<!-- Validated read ABI fingerprint: 1385406a6e5989eb754a8adeb36f946309659127e088734528cdffa7f8bbe7c8 -->
-				<!-- Validated complete compiled ABI fingerprint: 14cee3c68c22f454d0d83f16aad27d40b686fa8abc7fb0220c03ba19ba609f64 -->
+				<!-- Validated read ABI fingerprint: 45de6b2cbe737531d3b96d234678d2005f7801f9df527506e9abcd47da18eaee -->
+				<!-- Validated complete compiled ABI fingerprint: 13ddc463c15993eab7862efc6371b2401eae8fb3edc9c947cb10d42eb26d6493 -->
 				<table>
 					<thead>
 						<tr>
@@ -130,11 +172,11 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>setMaxTheoreticalSupplyAttoRep(totalTheoreticalSupplyAttoRep)</code></td>
+							<td><code>initialize(universeId, totalTheoreticalSupplyAttoRep, repNumber)</code></td>
 							<td><code>Zoltar</code> only</td>
-							<td>Called by Zoltar as part of child-universe creation; theoretical supply does not exceed 11 million REP.</td>
-							<td>Sets the child token theoretical-supply ceiling used to bound subsequent migration mints.</td>
-							<td><code>TheoreticalSupplySet</code></td>
+							<td>Called once by Zoltar as part of child-universe creation; universe, REP number, and theoretical supply are nonzero; supply does not exceed 11 million REP.</td>
+							<td>Atomically assigns the child universe, global display sequence, name, symbol, and theoretical-supply ceiling used to bound migration mints.</td>
+							<td><code>TheoreticalSupplySet</code> and <code>ReputationTokenInitialized</code></td>
 						</tr>
 						<tr>
 							<td><code>mint(account, valueAttoRep)</code></td>
@@ -170,6 +212,34 @@
 							<td>Source and destination are nonzero; source has sufficient balance; caller has sufficient allowance, including when caller equals source.</td>
 							<td>Moves REP from <code>from</code>; a finite allowance decreases by <code>value</code>, while an infinite allowance remains unchanged. Neither allowance path emits <code>Approval</code>.</td>
 							<td><code>Transfer</code> only</td>
+						</tr>
+						<tr>
+							<td><code>permit(owner, spender, value, deadline, v, r, s)</code></td>
+							<td>Anyone presenting the owner's valid ERC-2612 signature</td>
+							<td>Deadline has not passed; signature matches the current chain, token domain, owner, spender, value, and nonce.</td>
+							<td>Sets the signed allowance and advances the owner's permit nonce.</td>
+							<td><code>Approval</code></td>
+						</tr>
+						<tr>
+							<td><code>transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s)</code></td>
+							<td>Anyone presenting the source's valid ERC-3009 signature</td>
+							<td>The strict validity window is open; the nonce is unused; signature fields and source balance are valid.</td>
+							<td>Consumes the authorization nonce and transfers the exact signed amount to the signed recipient.</td>
+							<td><code>AuthorizationUsed</code> and <code>Transfer</code></td>
+						</tr>
+						<tr>
+							<td><code>receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s)</code></td>
+							<td>The signed recipient presenting the source's valid ERC-3009 signature</td>
+							<td>Caller equals the signed recipient; the strict validity window is open; the nonce is unused; signature fields and source balance are valid.</td>
+							<td>Consumes the authorization nonce and transfers the exact signed amount to the caller-bound recipient.</td>
+							<td><code>AuthorizationUsed</code> and <code>Transfer</code></td>
+						</tr>
+						<tr>
+							<td><code>cancelAuthorization(authorizer, nonce, v, r, s)</code></td>
+							<td>Anyone presenting the authorizer's valid ERC-3009 cancellation signature</td>
+							<td>The nonce is unused and the cancellation signature matches the authorizer.</td>
+							<td>Marks the authorization nonce as consumed without transferring tokens.</td>
+							<td><code>AuthorizationCanceled</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -208,11 +278,11 @@
 				</table>
 				<h2 id="securitypool">SecurityPool</h2>
 				<p>Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation. <a href="../../solidity/contracts/statoblast/SecurityPool.sol">Source</a></p>
-				<p>Read surface: Immutable relationship and configuration getters are <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, and <code>statoblastSecurityMultiplierBps</code>; the current game is <code>escalationGame</code>. Accounting getters include <code>totalCapacityOwnershipAttoRep</code>, <code>settlementCollateralAttoEth</code>, <code>totalRepBackingUnits</code>, <code>shareTokenSupplyAttoShares</code>, <code>securityVaults</code>, <code>minimumSecurityBondDebtAttoEth</code>, <code>minimumVaultRepDepositAttoRep</code>, <code>totalBadDebtAttoEth</code>, and <code>vaultBadDebtAttoEth</code>. Aggregate and per-vault bad debt describe only the current collateral-claim generation; <code>getPoolAccountingSnapshot</code> exposes its <code>badDebtGeneration</code>. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. <code>lastDepositTargetHealthFactorBpsByVault</code> is deposit-instruction metadata, not a vault health measurement. Use <code>getVaultCapacityBackingFactorsBps</code> for current associated and pool-held REP-per-capacity ratios, <code>getCurrentMintingCapacityAttoEth</code> for price-converted aggregate capacity, and <code>getVaultOpenInterestAttoEth</code> for a vault’s live proportional obligation. Other derived and paged reads are <code>getVaultCount</code>, <code>getVaults</code>, <code>attoSharesToAttoEth</code>, <code>attoEthToAttoShares</code>, <code>attoRepToBackingUnits</code>, <code>backingUnitsToAttoRep</code>, <code>getTotalPoolHeldAttoRep</code>, <code>totalAccruedFeesAttoEth</code>, <code>getPoolAccountingSnapshot</code>, <code>getVaultFeeRemainder</code>, and <code>isEscalationResolved</code>. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from <code>securityVaults</code>, escalation stake, and bad debt. <code>isEscalationResolved()</code> is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-<code>None</code> outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. Lifecycle and fee getters are <code>totalClaimableVaultFeesAttoEth</code>, <code>lastUpdatedFeeAccumulator</code>, <code>feeIndex</code>, <code>currentRetentionRate</code>, <code>awaitingForkContinuation</code>, and <code>systemState</code>.</p>
+				<p>Read surface: Immutable relationship and configuration getters are <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>priceOracleManagerAndOperatorQueuer</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>eventEmitter</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, and <code>statoblastSecurityMultiplierBps</code>; the current game is <code>escalationGame</code>. Accounting getters include <code>totalCapacityOwnershipAttoRep</code>, <code>settlementCollateralAttoEth</code>, <code>totalRepBackingUnits</code>, <code>shareTokenSupplyAttoShares</code>, <code>securityVaults</code>, <code>minimumSecurityBondDebtAttoEth</code>, <code>minimumVaultRepDepositAttoRep</code>, <code>totalBadDebtAttoEth</code>, and <code>vaultBadDebtAttoEth</code>. Aggregate and per-vault bad debt describe only the current collateral-claim generation; <code>getPoolAccountingSnapshot</code> exposes its <code>badDebtGeneration</code>. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. <code>lastDepositTargetHealthFactorBpsByVault</code> is deposit-instruction metadata, not a vault health measurement. Use <code>getVaultCapacityBackingFactorsBps</code> for current associated and pool-held REP-per-capacity ratios, <code>getCurrentMintingCapacityAttoEth</code> for price-converted aggregate capacity, and <code>getVaultOpenInterestAttoEth</code> for a vault’s live proportional obligation. Other derived and paged reads are <code>getVaultCount</code>, <code>getVaults</code>, <code>attoSharesToAttoEth</code>, <code>attoEthToAttoShares</code>, <code>attoRepToBackingUnits</code>, <code>backingUnitsToAttoRep</code>, <code>getTotalPoolHeldAttoRep</code>, <code>totalAccruedFeesAttoEth</code>, <code>getPoolAccountingSnapshot</code>, <code>getVaultFeeRemainder</code>, and <code>isEscalationResolved</code>. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on OI, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from <code>securityVaults</code>, escalation stake, and bad debt. <code>isEscalationResolved()</code> is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-<code>None</code> outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. Lifecycle and fee getters are <code>totalClaimableVaultFeesAttoEth</code>, <code>lastUpdatedFeeAccumulator</code>, <code>feeIndex</code>, <code>currentRetentionRate</code>, <code>awaitingForkContinuation</code>, and <code>systemState</code>.</p>
 
 				<p>Price-sensitive withdrawal, dynamic-capacity, and liquidation calls depend on <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>. User-initiated pool calls additionally depend on <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
-				<!-- Validated read ABI fingerprint: 97ff6a11dad11d4bfb856f6671c54914ca66ccd8e4814489dfd9ea23e442d97a -->
-				<!-- Validated complete compiled ABI fingerprint: 40e6156bd7342b3cc82d9cadf42184ed910915f1a364ad920e83e4f7602f45e3 -->
+				<!-- Validated read ABI fingerprint: b7a6c1289cc9bc887647c35998a13f11a95f5458c4a5f6edf1e3ea2e4876f0c5 -->
+				<!-- Validated complete compiled ABI fingerprint: 9684ea3ba073675f3e7227919749e16f50710d1dfc17bd076add11966cd417b1 -->
 				<table>
 					<thead>
 						<tr>
