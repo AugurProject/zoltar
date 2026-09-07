@@ -56,11 +56,12 @@ function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundary
 	const aliasMatch = /^(@zoltar\/ui-[a-z-]+)(?:\/|$)/.exec(specifier)
 	if (aliasMatch !== null) {
 		const aliasName = aliasMatch[1]
-		const targetPackage = aliasName === undefined ? undefined : packageAliases[aliasName]
+		if (aliasName === undefined) return undefined
+		const targetPackage = packageAliases[aliasName]
 		if (targetPackage === undefined) return undefined
 		const allowedTargets = allowedCrossPackageImports[sourcePackage] ?? []
 		if (targetPackage === sourcePackage || !allowedTargets.includes(targetPackage)) return 'cross-package-import-boundary'
-		const publicExports = aliasName === undefined ? undefined : domainPublicExports.get(aliasName)
+		const publicExports = domainPublicExports.get(aliasName)
 		if (publicExports !== undefined) {
 			const subpath = specifier === aliasName ? '.' : `.${specifier.slice(aliasName.length)}`
 			if (!publicExports.has(subpath)) return 'cross-package-private-subpath'
