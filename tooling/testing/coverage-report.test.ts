@@ -14,6 +14,7 @@ import {
 	readTaskChangedLines,
 	readTrackedTypeScriptSources,
 	remapGeneratedTypeScriptLcovRecords,
+	renderLcovRecords,
 	renderMarkdown,
 	resolveCoverageBaseRef,
 	summarizeSolidityCoverage,
@@ -82,6 +83,73 @@ end_of_record
 				[2, 2],
 			]),
 		)
+	})
+
+	test('merges and renders exact function and branch hits across shards', () => {
+		const first = parseLcov(`SF:shared/ts/example.ts
+FN:1,first
+FN:2,second
+FNDA:1,first
+FNDA:0,second
+FNF:2
+FNH:1
+DA:1,2
+DA:2,0
+BRDA:1,0,0,1
+BRDA:2,0,0,-
+BRF:2
+BRH:1
+LF:2
+LH:1
+end_of_record
+`)
+		const second = parseLcov(`SF:shared/ts/example.ts
+FN:1,first
+FN:2,second
+FNDA:0,first
+FNDA:3,second
+FNF:2
+FNH:1
+DA:1,0
+DA:2,4
+BRDA:1,0,0,-
+BRDA:2,0,0,2
+BRF:2
+BRH:1
+LF:2
+LH:1
+end_of_record
+`)
+
+		const rendered = renderLcovRecords(mergeLcovRecords([first, second]))
+		const merged = parseLcov(rendered).get('shared/ts/example.ts')
+
+		expect(merged?.lineHits).toEqual(
+			new Map([
+				[1, 2],
+				[2, 4],
+			]),
+		)
+		expect(merged?.functions).toEqual({
+			covered: 2,
+			total: 2,
+			definitions: new Map([
+				['first', 1],
+				['second', 2],
+			]),
+			hits: new Map([
+				['first', 1],
+				['second', 3],
+			]),
+		})
+		expect(merged?.branches).toEqual({
+			covered: 2,
+			total: 2,
+			hits: new Map([
+				['1,0,0', 1],
+				['2,0,0', 2],
+			]),
+		})
 	})
 
 	test('remaps generated package coverage to its tracked TypeScript source', async () => {
