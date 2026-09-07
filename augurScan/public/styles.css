@@ -2817,6 +2817,8 @@ dialog::backdrop {
 
 @media (max-width: 900px) {
 	.site-header {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
 		height: auto;
 		min-height: 76px;
 		padding-block: 0.75rem;
@@ -2824,16 +2826,34 @@ dialog::backdrop {
 	}
 
 	.header-actions {
+		position: static;
 		min-width: 0;
-		flex-wrap: wrap;
-		justify-content: flex-end;
+		display: grid;
+		grid-template-columns: minmax(145px, 1fr) auto;
+		justify-content: stretch;
 		gap: 0.5rem;
 	}
 
 	.product-nav {
-		order: 3;
+		position: static;
+		grid-column: 1 / -1;
+		grid-row: 2;
 		width: 100%;
 		overflow-x: auto;
+	}
+
+	.global-network,
+	.connection {
+		position: static;
+	}
+
+	.connection {
+		max-width: none;
+		padding: 0.25rem 0.45rem;
+	}
+
+	.connection span:last-child {
+		max-width: 12rem;
 	}
 
 	.global-network select {
@@ -2861,11 +2881,14 @@ dialog::backdrop {
 	.operations-route-selector > span {
 		padding-left: 0;
 	}
+
+	main {
+		padding-top: 2rem;
+	}
 }
 
 @media (max-width: 600px) {
 	.site-header {
-		display: grid;
 		grid-template-columns: 1fr;
 		align-items: stretch;
 		padding-inline: 1rem;
@@ -2882,7 +2905,6 @@ dialog::backdrop {
 	}
 
 	.header-actions {
-		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 	}
 
@@ -2905,6 +2927,12 @@ dialog::backdrop {
 
 	.connection {
 		min-height: var(--control-height);
+	}
+
+	main a[href] {
+		min-height: var(--control-height);
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.feed-shell {
