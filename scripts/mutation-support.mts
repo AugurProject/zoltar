@@ -1,4 +1,4 @@
-import { validateJunitDocument } from './test-timings.mts'
+import { getXmlAttribute, scanXmlTags, validateJunitDocument } from './test-timings.mts'
 
 export type SourceMutation = {
 	filePath: string
@@ -18,9 +18,26 @@ export function applyExactMutation(source: string, mutation: Pick<SourceMutation
 export function classifyMutantResult(exitCode: number, junitXml: string, evidence?: { expectedTestNames: readonly string[]; mutatedModuleLoaded: boolean }) {
 	if (exitCode === 0) return 'survived' as const
 	validateJunitDocument(junitXml)
-	const testCases = [...junitXml.matchAll(/<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g)]
-	if (/<error\b/.test(junitXml) || /errors="[1-9][0-9]*"/.test(junitXml)) throw new Error('Mutation runner reported an infrastructure error')
-	if (testCases.length === 0 || !testCases.some(match => /<failure\b/.test(match[2] ?? ''))) throw new Error('Mutation runner exited unsuccessfully without a recorded test assertion failure')
+	const tags = scanXmlTags(junitXml)
+	let testcaseDepth = 0
+	let testcaseCount = 0
+	let assertionFailure = false
+	for (const tag of tags) {
+		if (/^<testcase\b/.test(tag)) {
+			testcaseCount += 1
+			if (!tag.endsWith('/>')) testcaseDepth += 1
+		} else if (/^<\/testcase\s*>$/.test(tag)) testcaseDepth -= 1
+		else if (testcaseDepth > 0 && /^<failure\b/.test(tag)) assertionFailure = true
+	}
+	let suiteReportedErrors = false
+	for (const tag of tags.filter(tag => /^<testsuites?\b/.test(tag))) {
+		const errorCount = getXmlAttribute(tag, 'errors')
+		if (errorCount === undefined) continue
+		if (!/^[0-9]+$/.test(errorCount)) throw new Error('Mutation runner reported a malformed suite error count')
+		if (BigInt(errorCount) > 0n) suiteReportedErrors = true
+	}
+	if (tags.some(tag => /^<error\b/.test(tag)) || suiteReportedErrors) throw new Error('Mutation runner reported an infrastructure error')
+	if (testcaseCount === 0 || !assertionFailure) throw new Error('Mutation runner exited unsuccessfully without a recorded test assertion failure')
 	if (evidence !== undefined) {
 		if (!evidence.mutatedModuleLoaded) throw new Error('Mutation runner has no evidence that the mutated module loaded')
 		const names = new Set(getMutationJunitTestNames(junitXml))
@@ -30,7 +47,10 @@ export function classifyMutantResult(exitCode: number, junitXml: string, evidenc
 }
 
 export function getMutationJunitTestNames(junitXml: string) {
-	return [...junitXml.matchAll(/<testcase\b([^>]*)>/g)].map(match => /\sname="([^"]+)"/.exec(match[1] ?? '')?.[1]).filter((name): name is string => name !== undefined)
+	return scanXmlTags(junitXml)
+		.filter(tag => /^<testcase\b/.test(tag))
+		.map(tag => getXmlAttribute(tag, 'name'))
+		.filter((name): name is string => name !== undefined)
 }
 
 export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [

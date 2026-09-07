@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { applyExactMutation, classifyMutantResult } from './mutation-support.mts'
+import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames } from './mutation-support.mts'
 
 describe('mutation smoke support', () => {
 	test('replaces exactly one intended source fragment', () => {
@@ -21,5 +21,16 @@ describe('mutation smoke support', () => {
 		expect(() => classifyMutantResult(1, '<testsuite><testcase name="expected"><error /></testcase></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: true })).toThrow('infrastructure')
 		expect(() => classifyMutantResult(1, '<testsuite><testcase><failure /></testcase></testsuite><testcase')).toThrow('Malformed JUnit')
 		expect(() => classifyMutantResult(1, '<testsuites><testsuite><testcase><failure /></testcase></testsuites></testsuite>')).toThrow('mismatched')
+	})
+
+	test('accepts greater-than characters in mutation testcase names', () => {
+		const junit = '<testsuite><testcase name="compares 2 > 1"><failure /></testcase></testsuite>'
+		expect(getMutationJunitTestNames(junit)).toEqual(['compares 2 > 1'])
+		expect(classifyMutantResult(1, junit, { expectedTestNames: ['compares 2 > 1'], mutatedModuleLoaded: true })).toBe('killed')
+	})
+
+	test('reads mutation error counts only from structured suite attributes', () => {
+		expect(classifyMutantResult(1, '<testsuite errors="0"><testcase><![CDATA[errors="1"]]><failure /></testcase><!-- errors="1" --></testsuite>')).toBe('killed')
+		expect(() => classifyMutantResult(1, "<testsuite errors='01'><testcase><failure /></testcase></testsuite>")).toThrow('infrastructure')
 	})
 })

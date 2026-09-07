@@ -77,18 +77,56 @@ function decodeXmlAttribute(value: string) {
 	return value.replaceAll('&quot;', '"').replaceAll('&apos;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')
 }
 
-function getXmlAttribute(tag: string, name: string) {
-	const match = new RegExp(`\\s${name}="([^"]*)"`).exec(tag)
-	return match?.[1] === undefined ? undefined : decodeXmlAttribute(match[1])
+export function getXmlAttribute(tag: string, name: string) {
+	const match = new RegExp(`\\s${name}=(["'])(.*?)\\1`).exec(tag)
+	return match?.[2] === undefined ? undefined : decodeXmlAttribute(match[2])
+}
+
+export function scanXmlTags(xml: string) {
+	const tags: string[] = []
+	for (let start = xml.indexOf('<'); start !== -1; start = xml.indexOf('<', start)) {
+		let specialEnd: string | undefined
+		if (xml.startsWith('<!--', start)) specialEnd = '-->'
+		else if (xml.startsWith('<![CDATA[', start)) specialEnd = ']]>'
+		else if (xml.startsWith('<?', start)) specialEnd = '?>'
+		if (specialEnd !== undefined) {
+			const end = xml.indexOf(specialEnd, start + 2)
+			if (end === -1) throw new Error('Malformed JUnit: incomplete element')
+			start = end + specialEnd.length
+			continue
+		}
+
+		let quote: '"' | "'" | undefined
+		let end = start + 1
+		for (; end < xml.length; end += 1) {
+			const character = xml[end]
+			if ((character === '"' || character === "'") && quote === undefined) quote = character
+			else if (character === quote) quote = undefined
+			else if (character === '>' && quote === undefined) break
+		}
+		if (end === xml.length) throw new Error('Malformed JUnit: incomplete element')
+		tags.push(xml.slice(start, end + 1))
+		start = end + 1
+	}
+	return tags
 }
 
 export function parseJunitTestCaseSeconds(junitXml: string, requireTimingAttributes = true) {
 	const secondsByFile = new Map<string, number>()
-	const testcaseStarts = [...junitXml.matchAll(/<testcase\b/g)].length
-	const testcases = [...junitXml.matchAll(/<testcase\b[^>]*(?:\/>|>[\s\S]*?<\/testcase>)/g)]
-	if (testcases.length !== testcaseStarts) throw new Error('Malformed JUnit: incomplete testcase element')
-	for (const match of testcases) {
-		const tag = match[0]
+	const testcaseTags: string[] = []
+	let openTestcases = 0
+	for (const tag of scanXmlTags(junitXml)) {
+		if (/^<\/testcase\s*>$/.test(tag)) {
+			if (openTestcases === 0) throw new Error('Malformed JUnit: incomplete testcase element')
+			openTestcases -= 1
+			continue
+		}
+		if (!/^<testcase\b/.test(tag)) continue
+		if (!tag.endsWith('/>')) openTestcases += 1
+		testcaseTags.push(tag)
+	}
+	if (openTestcases !== 0) throw new Error('Malformed JUnit: incomplete testcase element')
+	for (const tag of testcaseTags) {
 		const filePath = getXmlAttribute(tag, 'file')
 		const secondsText = getXmlAttribute(tag, 'time')
 		if (filePath === undefined || secondsText === undefined) {
@@ -108,11 +146,10 @@ export function validateJunitDocument(junitXml: string) {
 	if (!/^<testsuites?\b/.test(document) || !/<\/testsuites?>$/.test(document)) throw new Error('Malformed JUnit: missing complete suite root')
 	const stack: string[] = []
 	let rootCount = 0
-	const completeTag = /<\/?([A-Za-z][\w:.-]*)\b[^>]*\/?>/g
-	for (const match of document.matchAll(completeTag)) {
-		const tag = match[0]
-		const name = match[1]
-		if (name === undefined || tag.startsWith('<?') || tag.startsWith('<!')) continue
+	const tags = scanXmlTags(document)
+	for (const tag of tags) {
+		const name = /^<\/?([A-Za-z][\w:.-]*)\b/.exec(tag)?.[1]
+		if (name === undefined) continue
 		if (tag.startsWith('</')) {
 			if (stack.pop() !== name) throw new Error(`Malformed JUnit: mismatched closing ${name}`)
 		} else if (!tag.endsWith('/>')) {
@@ -121,7 +158,6 @@ export function validateJunitDocument(junitXml: string) {
 		}
 	}
 	if (stack.length !== 0 || rootCount !== 1) throw new Error('Malformed JUnit: expected exactly one complete root element')
-	if (/<\/?(?:testsuites?|testcase|failure|error)\b/.test(document.replaceAll(completeTag, ''))) throw new Error('Malformed JUnit: incomplete element')
 }
 
 export function createTestTimingObservation(junitXml: string, elapsedSeconds: number, testFiles: readonly string[]): TestTimingObservation {

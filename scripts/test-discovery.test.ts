@@ -178,6 +178,12 @@ describe('canonical test discovery', () => {
 		expect(Object.fromEntries(seconds)).toEqual({ 'fast&safe.test.ts': 0.5, 'slow.test.ts': 3.75 })
 	})
 
+	test('JUnit attributes may contain greater-than characters', () => {
+		const junit = '<testsuite><testcase name="compares 2 > 1" file="comparison.test.ts" time="0.25" /></testsuite>'
+		expect(() => validateJunitDocument(junit)).not.toThrow()
+		expect(parseJunitTestCaseSeconds(junit)).toEqual(new Map([['comparison.test.ts', 0.25]]))
+	})
+
 	test('JUnit timing evidence rejects incomplete or partially malformed testcases', () => {
 		expect(() => parseJunitTestCaseSeconds('<testcase file="a.test.ts" time="1"/><testcase file="a.test.ts">')).toThrow('incomplete')
 		expect(() => parseJunitTestCaseSeconds('<testcase file="a.test.ts" time="1"/><testcase file="b.test.ts" time="bad"/>')).toThrow('time')
