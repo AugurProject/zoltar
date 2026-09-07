@@ -35,10 +35,13 @@ export type LcovRecord = {
 	functions: {
 		covered: number
 		total: number
+		definitions?: Map<string, number>
+		hits?: Map<string, number>
 	}
 	branches?: {
 		covered: number
 		total: number
+		hits?: Map<string, number | undefined>
 	}
 }
 
@@ -134,7 +137,9 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 	let declaredCoveredFunctions = false
 	let recordTerminated = true
 	const branchIdentities = new Set<string>()
+	const branchHits = new Map<string, number | undefined>()
 	const functionDefinitions = new Set<string>()
+	const functionDefinitionLines = new Map<string, number>()
 	const functionHits = new Map<string, number>()
 	const parseNonNegativeInteger = (text: string, label: string) => {
 		if (!/^(?:0|[1-9][0-9]*)$/.test(text)) throw new Error(`Invalid LCOV ${label}: ${text}`)
@@ -159,8 +164,12 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 		records.set(currentFile, {
 			file: currentFile,
 			lineHits,
-			functions: { covered: functionCovered, total: functionTotal },
-			...(sawBranchData ? { branches: { covered: branchCovered, total: branchTotal } } : {}),
+			functions: {
+				covered: functionCovered,
+				total: functionTotal,
+				...(hasDetailedFunctionEvidence ? { definitions: new Map(functionDefinitionLines), hits: new Map(functionHits) } : {}),
+			},
+			...(sawBranchData ? { branches: { covered: branchCovered, total: branchTotal, hits: new Map(branchHits) } } : {}),
 		})
 		currentFile = undefined
 		lineHits = new Map()
@@ -176,7 +185,9 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 		declaredFunctions = false
 		declaredCoveredFunctions = false
 		branchIdentities.clear()
+		branchHits.clear()
 		functionDefinitions.clear()
+		functionDefinitionLines.clear()
 		functionHits.clear()
 	}
 
@@ -220,6 +231,7 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 			const name = line.slice(separator + 1)
 			if (functionLine === 0 || name === '' || functionDefinitions.has(name)) throw new Error(`Invalid or duplicate LCOV FN entry: ${line}`)
 			functionDefinitions.add(name)
+			functionDefinitionLines.set(name, functionLine)
 			continue
 		}
 		if (line.startsWith('FNDA:')) {
@@ -248,6 +260,7 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 			const identity = fields.slice(0, 3).join(',')
 			if (branchIdentities.has(identity)) throw new Error(`Duplicate LCOV BRDA entry: ${identity}`)
 			branchIdentities.add(identity)
+			branchHits.set(identity, taken === undefined || taken === '-' ? undefined : parseNonNegativeInteger(taken, 'BRDA taken'))
 			branchTotal += 1
 			if (taken !== undefined && taken !== '-' && parseNonNegativeInteger(taken, 'BRDA taken') > 0) branchCovered += 1
 			continue
@@ -279,24 +292,72 @@ export function mergeLcovRecords(collections: readonly Map<string, LcovRecord>[]
 				merged.set(file, {
 					...record,
 					lineHits: new Map(record.lineHits),
-					...(record.branches === undefined ? {} : { branches: { ...record.branches } }),
+					functions: {
+						...record.functions,
+						...(record.functions.definitions === undefined ? {} : { definitions: new Map(record.functions.definitions) }),
+						...(record.functions.hits === undefined ? {} : { hits: new Map(record.functions.hits) }),
+					},
+					...(record.branches === undefined ? {} : { branches: { ...record.branches, ...(record.branches.hits === undefined ? {} : { hits: new Map(record.branches.hits) }) } }),
 				})
 				continue
 			}
 			for (const [lineNumber, hitCount] of record.lineHits) {
 				existing.lineHits.set(lineNumber, (existing.lineHits.get(lineNumber) ?? 0) + hitCount)
 			}
-			existing.functions.total = Math.max(existing.functions.total, record.functions.total)
-			existing.functions.covered = Math.max(existing.functions.covered, record.functions.covered)
+			if (existing.functions.definitions !== undefined && existing.functions.hits !== undefined && record.functions.definitions !== undefined && record.functions.hits !== undefined) {
+				for (const [name, line] of record.functions.definitions) {
+					const existingLine = existing.functions.definitions.get(name)
+					if (existingLine !== undefined && existingLine !== line) throw new Error(`LCOV function ${name} has inconsistent definition lines in ${file}`)
+					existing.functions.definitions.set(name, line)
+				}
+				for (const [name, hits] of record.functions.hits) existing.functions.hits.set(name, (existing.functions.hits.get(name) ?? 0) + hits)
+				existing.functions.total = existing.functions.definitions.size
+				existing.functions.covered = [...existing.functions.hits.values()].filter(hits => hits > 0).length
+			} else {
+				existing.functions.total = Math.max(existing.functions.total, record.functions.total)
+				existing.functions.covered = Math.max(existing.functions.covered, record.functions.covered)
+				delete existing.functions.definitions
+				delete existing.functions.hits
+			}
 			if (record.branches !== undefined) {
-				existing.branches = {
-					total: Math.max(existing.branches?.total ?? 0, record.branches.total),
-					covered: Math.max(existing.branches?.covered ?? 0, record.branches.covered),
+				if (existing.branches === undefined) {
+					existing.branches = { ...record.branches, ...(record.branches.hits === undefined ? {} : { hits: new Map(record.branches.hits) }) }
+				} else if (existing.branches.hits !== undefined && record.branches.hits !== undefined) {
+					for (const [identity, hits] of record.branches.hits) {
+						const priorHits = existing.branches.hits.get(identity)
+						existing.branches.hits.set(identity, priorHits === undefined && hits === undefined ? undefined : (priorHits ?? 0) + (hits ?? 0))
+					}
+					existing.branches.total = existing.branches.hits.size
+					existing.branches.covered = [...existing.branches.hits.values()].filter(hits => hits !== undefined && hits > 0).length
+				} else {
+					existing.branches = {
+						total: Math.max(existing.branches?.total ?? 0, record.branches.total),
+						covered: Math.max(existing.branches?.covered ?? 0, record.branches.covered),
+					}
 				}
 			}
 		}
 	}
 	return merged
+}
+
+export function renderLcovRecords(records: Map<string, LcovRecord>) {
+	const output: string[] = []
+	for (const [file, record] of [...records].sort(([left], [right]) => left.localeCompare(right))) {
+		output.push(`SF:${file}`)
+		if (record.functions.definitions !== undefined && record.functions.hits !== undefined) {
+			for (const [name, line] of [...record.functions.definitions].sort(([leftName, leftLine], [rightName, rightLine]) => leftLine - rightLine || leftName.localeCompare(rightName))) output.push(`FN:${line.toString()},${name}`)
+			for (const [name, hits] of [...record.functions.hits].sort(([left], [right]) => left.localeCompare(right))) output.push(`FNDA:${hits.toString()},${name}`)
+		}
+		for (const [line, hits] of [...record.lineHits].sort(([left], [right]) => left - right)) output.push(`DA:${line.toString()},${hits.toString()}`)
+		output.push(`FNF:${record.functions.total.toString()}`, `FNH:${record.functions.covered.toString()}`)
+		if (record.branches?.hits !== undefined) {
+			for (const [identity, hits] of [...record.branches.hits].sort(([left], [right]) => left.localeCompare(right))) output.push(`BRDA:${identity},${hits?.toString() ?? '-'}`)
+			output.push(`BRF:${record.branches.total.toString()}`, `BRH:${record.branches.covered.toString()}`)
+		}
+		output.push(`LF:${record.lineHits.size.toString()}`, `LH:${[...record.lineHits.values()].filter(hits => hits > 0).length.toString()}`, 'end_of_record')
+	}
+	return `${output.join('\n')}\n`
 }
 
 type TypeScriptSourceMap = {
@@ -395,8 +456,8 @@ export async function remapGeneratedTypeScriptLcovRecords(records: Map<string, L
 		const mappedRecord: LcovRecord = {
 			file: sourceFile,
 			lineHits,
-			functions: { ...record.functions },
-			...(record.branches === undefined ? {} : { branches: { ...record.branches } }),
+			functions: { covered: record.functions.covered, total: record.functions.total },
+			...(record.branches === undefined ? {} : { branches: { covered: record.branches.covered, total: record.branches.total } }),
 		}
 		const existing = remapped.get(sourceFile)
 		if (existing === undefined) remapped.set(sourceFile, mappedRecord)
