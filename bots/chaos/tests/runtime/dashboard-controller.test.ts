@@ -16,7 +16,7 @@ import {
 } from '../../src/runtime/dashboard-controller.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { bindRuntimeStateToSigner, initialDurableState, initialRuntimeState, type RuntimeState } from '../../src/state/operator-state.ts'
-import { createDurableWorkflow, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 
 function settings() {
@@ -1063,6 +1063,39 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(state.workflows[0]?.status).toBe('abandoned')
 		expect(state.scheduler.status).toBe('paused')
 		expect(state.scheduler.nextRunAt).toBeDefined()
+	})
+
+	test('durably reconciles a selectable semantic failure before retirement can complete', async () => {
+		const current = settings()
+		const state = initialRuntimeState(true, undefined, current.network.chainId, initialDurableState(current.network.chainId, true))
+		const workflow = createDurableWorkflow({
+			classification: 'selectable',
+			createdAtBlock: '10',
+			definitionId: 'trading.test',
+			ecosystem: 'trading',
+			id: 'plan:semantic-failure',
+			label: 'Semantically uncertain trade',
+			metadata: {},
+			obligation: false,
+			planningSeed: 7,
+			postconditions: [],
+			priority: 'random',
+			risk: 'low',
+			steps: [{ data: '0x11', evidence: [{ kind: 'receipt-success' }], gasLimit: '100000', id: 'trade', label: 'Trade', preflightCalls: [], to: zeroAddress, walletAssetDebits: [] }],
+		})
+		markWorkflowFailed(workflow, 'trade', new Error('Receipt succeeded but the state proof disagreed'), 'semantic-failure')
+		state.workflows = [workflow]
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined },
+			saveState: async () => {},
+			state,
+		})
+		expect((await controller.getState()).currentWorkflow).toMatchObject({ id: workflow.id, status: 'failed' })
+		await controller.setWorkflow({ action: 'abandon', confirmation: 'ABANDON PARTIAL WORKFLOW', reason: 'Operator verified the final canonical state manually', updatedAt: workflow.updatedAt, workflowId: workflow.id })
+		expect(state.workflows[0]).toMatchObject({ status: 'abandoned' })
 	})
 
 	test('does not begin a resume when the pre-configuration safety checkpoint cannot persist', async () => {

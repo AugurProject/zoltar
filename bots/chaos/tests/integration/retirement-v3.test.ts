@@ -7,8 +7,10 @@ import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
-import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan, buildV3RetirementPlan, readV3Position } from '../../src/runtime/retirement.ts'
+import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan, buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum } from '../../src/runtime/retirement.ts'
 import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
+import { updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
 import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '../support/bot-shared.ts'
 
@@ -173,6 +175,67 @@ async function executePlan(client: ReturnType<typeof createWriteClient>, plan: R
 }
 
 describe('Drain & Retire on a local chain', () => {
+	test('recovers idempotently across pre-confirmation, post-confirmation, and burn-to-collect restarts', async () => {
+		const simulator = requiredNode().anvilWindowEthereum
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[4], 4)
+		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		const directory = await mkdtemp(join(tmpdir(), 'chaos-retirement-v3-restart-'))
+		const path = join(directory, 'state.json')
+		try {
+			const pending = { ...durablePosition(pool, owner.account.address, token0, token1, 'workflow:seed'), registeredBy: 'workflow' as const, status: 'pending-confirmation' as const }
+			const durable = initialDurableState(31_337, false, 'integration', owner.account.address)
+			durable.retirement.status = 'draining'
+			durable.retirement.positions = [pending]
+			await saveDurableState(path, durable)
+			let restored = await loadDurableState(path, 31_337)
+			const restoredPending = restored.retirement.positions[0]
+			if (restoredPending === undefined) throw new Error('Pending V3 position was not restored')
+			await expect(readV3Position(owner, restoredPending, await owner.getBlockNumber())).rejects.toThrow('missing its canonical creation transaction')
+
+			const creationTransactionHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
+			await owner.waitForTransactionReceipt({ hash: creationTransactionHash })
+			restoredPending.creationTransactionHash = creationTransactionHash
+			await saveDurableState(path, restored)
+			restored = await loadDurableState(path, 31_337)
+			const confirmed = restored.retirement.positions[0]
+			if (confirmed === undefined) throw new Error('Confirmed V3 position was not restored')
+			let observation = await readV3Position(owner, confirmed, await owner.getBlockNumber())
+			updateV3PositionStatus(observation, await owner.getBlockNumber())
+			expect(confirmed.status).toBe('active')
+			await saveDurableState(path, restored)
+
+			const initialPlan = buildV3RetirementPlan(snapshotFixture(), observation, 1)
+			const burn = initialPlan.steps[0]
+			if (burn === undefined || burn.id !== 'burn-full-v3-position') throw new Error('Expected V3 burn step')
+			await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: burn.data, to: burn.to }) })
+
+			restored = await loadDurableState(path, 31_337)
+			const afterBurn = restored.retirement.positions[0]
+			if (afterBurn === undefined) throw new Error('Burned V3 position was not restored')
+			observation = await readV3Position(owner, afterBurn, await owner.getBlockNumber())
+			expect(observation).toMatchObject({ liquidity: 0n, tokensOwed0: 73n, tokensOwed1: 144n })
+			const collectPlan = buildV3RetirementPlan(snapshotFixture(), observation, 2)
+			expect(collectPlan.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
+			await executePlan(owner, collectPlan)
+
+			restored = await loadDurableState(path, 31_337)
+			const afterCollectCrash = restored.retirement.positions[0]
+			if (afterCollectCrash === undefined) throw new Error('Collected V3 position was not restored')
+			const closed = await readV3Position(owner, afterCollectCrash, await owner.getBlockNumber())
+			expect(closed).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
+			updateV3PositionStatus(closed, await owner.getBlockNumber())
+			await saveDurableState(path, restored)
+			const terminal = await loadDurableState(path, 31_337)
+			expect(terminal.retirement.positions[0]?.status).toBe('closed')
+			expect(await readV3PositionsWithQuorum([async candidate => await readV3Position(owner, candidate, await owner.getBlockNumber())], 1, terminal.retirement.positions, await owner.getBlockNumber())).toEqual([])
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
 	test('burns and collects exact current liquidity while leaving another wallet position untouched', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[0], 0)

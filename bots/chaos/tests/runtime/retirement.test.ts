@@ -23,6 +23,8 @@ import { processRetirementCycle, recordV3ScanFailure, updateV3PositionStatus } f
 import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
+import { resetPristineStateForDeploymentProfile } from '../../src/runtime/deployment-profile.ts'
+import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 
 const now = '2026-09-07T00:00:00.000Z'
 
@@ -225,6 +227,25 @@ describe('Drain & Retire planning', () => {
 		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state, v3: [] })
 		expect(result.status).toBe('draining')
 		expect(result.proof.knownApprovals).toBe(1)
+	})
+
+	test('blocks completion and profile replacement for an unresolved semantic workflow failure', () => {
+		const snapshot = emptySnapshot()
+		const workflow = createDurableWorkflow(plan('trading.position.exit', 'semantic-failure'))
+		markWorkflowFailed(workflow, 'step', new Error('Canonical postcondition was not proven'), 'semantic-failure')
+		const durable = initialDurableState(31_337, true, 'profile:test', snapshot.wallet.address)
+		durable.workflows = [workflow]
+		const retirement = request(durable.retirement)
+		const assessment = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: durable, v3: [] })
+		expect(assessment).toMatchObject({
+			blockers: [{ category: 'operator-action', id: workflow.id }],
+			proof: { partialWorkflows: 1 },
+			status: 'blocked',
+		})
+		applyRetirementAssessment(retirement, assessment, hash(1), 1n, now)
+		expect(retirement.completionEvidence).toBeUndefined()
+		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337, durable)
+		expect(() => resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toThrow('drain it first')
 	})
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {
