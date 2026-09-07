@@ -23,6 +23,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			zoltar: addresses.zoltar,
 		},
 		30,
+		2,
 	)
 	const readClient = parameters.createReadClient()
 	const writeClient = parameters.createWriteClient(account)
@@ -30,6 +31,9 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	await deployTradingStep(writeClient, readClient, plan, plan.factory)
 	await reportBootstrapProgress(parameters.onProgress, 'Deploying Trading router', 0.98)
 	await deployTradingStep(writeClient, readClient, plan, plan.router)
+	if (plan.receiveRouter === undefined) throw new Error('Trading V2 deployment is missing its approval-free router')
+	await reportBootstrapProgress(parameters.onProgress, 'Deploying approval-free Trading router', 0.99)
+	await deployTradingStep(writeClient, readClient, plan, plan.receiveRouter)
 	await reportBootstrapProgress(parameters.onProgress, 'Trading simulation is ready', 0.995)
 	return true
 }

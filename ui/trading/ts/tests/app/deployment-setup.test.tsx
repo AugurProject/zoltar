@@ -18,6 +18,7 @@ const core = {
 	id: 'sepolia',
 	proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 	securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
+	zoltar: getAddress(`0x${'56'.repeat(20)}`),
 }
 
 function deploymentClient(rpcAvailable: () => boolean = () => true) {
@@ -94,7 +95,7 @@ describe('trading deployment setup', () => {
 
 	test('derives and verifies the canonical CREATE2 trading deployment without configuration', async () => {
 		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
-		const plan = getTradingDeploymentPlan(core, 30)
+		const plan = getTradingDeploymentPlan(core, 30, 2)
 		let contractReadCount = 0
 		let rpcChainId = '0xaa36a7'
 		const client = createPublicClient({
@@ -111,6 +112,7 @@ describe('trading deployment setup', () => {
 						contractReadCount += 1
 						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
 						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
+						if (contractReadCount === 3 || contractReadCount === 6) return encodeAbiParameters([{ type: 'uint256' }], [2n])
 						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
 					}
 					throw new Error(`Unexpected RPC method ${method}`)
@@ -160,7 +162,7 @@ describe('trading deployment setup', () => {
 	})
 
 	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
-		const plan = getTradingDeploymentPlan(core, 30)
+		const plan = getTradingDeploymentPlan(core, 30, 2)
 		const client = createPublicClient({
 			transport: custom(
 				{
@@ -189,7 +191,7 @@ describe('trading deployment setup', () => {
 	test('keeps advanced configuration closed for a hydrated normalized default RPC', async () => {
 		const canonicalRpcUrl = 'https://ethereum-sepolia-rpc.publicnode.com'
 		const canonicalCore = { ...core, defaultRpcUrl: canonicalRpcUrl }
-		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(canonicalCore, 30), `${canonicalRpcUrl}/`)
+		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(canonicalCore, 30, 2), `${canonicalRpcUrl}/`)
 		const services = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [canonicalCore] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={configuration} onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
@@ -448,7 +450,7 @@ describe('trading deployment setup', () => {
 
 	test('keeps the app route locked while a deployment transaction is pending', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
-		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')
+		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30, 2), 'https://rpc.example/')
 		let resolveConfiguration: ((configuration: typeof loadedConfiguration) => void) | undefined
 		const configurationPending = new Promise<typeof loadedConfiguration>(resolve => {
 			resolveConfiguration = resolve
@@ -517,7 +519,7 @@ describe('trading deployment setup', () => {
 
 	test('hydrates the deploy route from asynchronously resolved configuration', async () => {
 		window.history.replaceState(undefined, '', '/?feeBps=99#/deploy')
-		const plan = getTradingDeploymentPlan(core, 30)
+		const plan = getTradingDeploymentPlan(core, 30, 2)
 		const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
 		let contractReadCount = 0
 		const client = createPublicClient({

@@ -52,7 +52,7 @@ function requireFeeBps(feeBps: number) {
 	return feeBps
 }
 
-export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number, version: TradingDeploymentVersion = 2): TradingDeploymentPlan {
+export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number, version: TradingDeploymentVersion): TradingDeploymentPlan {
 	const checkedFeeBps = requireFeeBps(feeBps)
 	const selectedFactory = version === 2 ? factoryContractV2 : factoryContract
 	const selectedRouter = routerContract
@@ -105,6 +105,10 @@ async function validateTradingFactory(client: Pick<PublicClient, 'readContract'>
 	const [securityPoolFactory, feeBps] = await Promise.all([client.readContract({ abi: selectedFactory.abi, address: plan.factory.address, functionName: 'securityPoolFactory' }), client.readContract({ abi: selectedFactory.abi, address: plan.factory.address, functionName: 'feeBps' })])
 	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (feeBps !== BigInt(plan.feeBps)) throw new Error('Trading factory fee does not match the selected fee')
+	if (plan.version === 2) {
+		const version = await client.readContract({ abi: factoryContractV2.abi, address: plan.factory.address, functionName: 'IMPLEMENTATION_VERSION' })
+		if (version !== 2n) throw new Error('Trading factory implementation version is not V2')
+	}
 }
 
 async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
@@ -138,6 +142,22 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 		await validateReceiveRouter(client, plan)
 	}
 	return { factory: factoryDeployed, router: routerDeployed, receiveRouter: receiveRouterDeployed }
+}
+
+function hasInstalledTradingStep(status: Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>) {
+	return status.factory || status.router || status.receiveRouter === true
+}
+
+export async function resolveInstalledTradingDeployment(client: Pick<PublicClient, 'getCode' | 'readContract'>, core: CoreDeployment, feeBps: number, rpcUrl: string): Promise<DeploymentConfiguration> {
+	const versionTwoPlan = getTradingDeploymentPlan(core, feeBps, 2)
+	const versionTwoStatus = await loadTradingDeploymentStatus(client, versionTwoPlan)
+	if (versionTwoStatus.factory && versionTwoStatus.router && versionTwoStatus.receiveRouter) return deploymentConfigurationForPlan(versionTwoPlan, rpcUrl)
+	const legacyPlan = getTradingDeploymentPlan(core, feeBps, 1)
+	const legacyStatus = await loadTradingDeploymentStatus(client, legacyPlan)
+	if (legacyStatus.factory && legacyStatus.router) return deploymentConfigurationForPlan(legacyPlan, rpcUrl)
+	if (hasInstalledTradingStep(versionTwoStatus)) throw new Error('The V2 trading deployment is incomplete')
+	if (hasInstalledTradingStep(legacyStatus)) throw new Error('The V1 trading deployment is incomplete')
+	throw new Error('Trading contracts have not been deployed')
 }
 
 export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>) {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress, type Address, type Hash, type WalletClient } from '@zoltar/shared/ethereum'
-import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep } from '../../protocol/deployment.js'
+import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Address, type Hash, type WalletClient } from '@zoltar/shared/ethereum'
+import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deployTradingStep, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment } from '../../protocol/deployment.js'
+import { tradingContracts } from '../../generated/contractArtifact.js'
 
 function examplePlan() {
 	return getTradingDeploymentPlan(
@@ -11,10 +12,54 @@ function examplePlan() {
 			id: 'sepolia',
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
+			zoltar: getAddress(`0x${'56'.repeat(20)}`),
+			zoltar: getAddress(`0x${'56'.repeat(20)}`),
 		},
 		30,
 		1,
 	)
+}
+
+const factoryV1Abi = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory.abi
+const factoryV2Abi = tradingContracts['contracts/trading/TwoWayConstantProductFactoryV2.sol'].TwoWayConstantProductFactoryV2.abi
+const routerV1Abi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
+const routerV2Abi = tradingContracts['contracts/trading/TwoWayConstantProductRouterV2.sol'].TwoWayConstantProductRouterV2.abi
+
+function installedDeploymentClient(core: ReturnType<typeof examplePlan>['core'], installedVersions: readonly (1 | 2)[], options: Readonly<{ partialV2?: boolean; wrongFactoryLink?: boolean; wrongVersion?: boolean }> = {}) {
+	const plans = { 1: getTradingDeploymentPlan(core, 30, 1), 2: getTradingDeploymentPlan(core, 30, 2) }
+	const codeAddresses = new Set<string>()
+	for (const version of installedVersions) {
+		const plan = plans[version]
+		codeAddresses.add(plan.factory.address.toLowerCase())
+		if (version !== 2 || !options.partialV2) codeAddresses.add(plan.router.address.toLowerCase())
+		if (version === 2 && !options.partialV2 && plan.receiveRouter !== undefined) codeAddresses.add(plan.receiveRouter.address.toLowerCase())
+	}
+	return createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method === 'eth_getCode' && Array.isArray(params)) {
+					const address = params[0]
+					if (typeof address !== 'string') throw new Error('Missing code address')
+					if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+					if (address.toLowerCase() === core.securityPoolFactory.toLowerCase() || codeAddresses.has(address.toLowerCase())) return '0x01'
+					return '0x'
+				}
+				if (method === 'eth_call' && Array.isArray(params)) {
+					const transaction = params[0]
+					if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed deployment validation call')
+					const target = transaction.to.toLowerCase()
+					const version = target === plans[2].factory.address.toLowerCase() || target === plans[2].router.address.toLowerCase() || target === plans[2].receiveRouter?.address.toLowerCase() ? 2 : 1
+					const decoded = decodeFunctionData({ abi: version === 2 ? [...factoryV2Abi, ...routerV2Abi] : [...factoryV1Abi, ...routerV1Abi], data: transaction.data })
+					if (decoded.functionName === 'securityPoolFactory') return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+					if (decoded.functionName === 'feeBps') return encodeAbiParameters([{ type: 'uint256' }], [30n])
+					if (decoded.functionName === 'IMPLEMENTATION_VERSION') return encodeAbiParameters([{ type: 'uint256' }], [options.wrongVersion ? 1n : 2n])
+					if (decoded.functionName === 'factory') return encodeAbiParameters([{ type: 'address' }], [options.wrongFactoryLink ? plans[1].factory.address : plans[version].factory.address])
+					throw new Error(`Unexpected deployment validation call ${decoded.functionName}`)
+				}
+				throw new Error(`Unexpected RPC method ${method}`)
+			},
+		}),
+	})
 }
 
 describe('wallet trading deployment plan', () => {
@@ -27,8 +72,8 @@ describe('wallet trading deployment plan', () => {
 			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
 		}
-		const first = getTradingDeploymentPlan(core, 30)
-		const second = getTradingDeploymentPlan(core, 30)
+		const first = getTradingDeploymentPlan(core, 30, 2)
+		const second = getTradingDeploymentPlan(core, 30, 2)
 
 		expect(first.factory.address).toBe(second.factory.address)
 		expect(first.router.address).toBe(second.router.address)
@@ -45,13 +90,14 @@ describe('wallet trading deployment plan', () => {
 			id: 'mainnet',
 			proxyDeployer: getAddress(`0x${'56'.repeat(20)}`),
 			securityPoolFactory: getAddress(`0x${'78'.repeat(20)}`),
+			zoltar: getAddress(`0x${'9a'.repeat(20)}`),
 		}
-		expect(getTradingDeploymentPlan(core, 30).factory.address).not.toBe(getTradingDeploymentPlan(core, 25).factory.address)
+		expect(getTradingDeploymentPlan(core, 30, 2).factory.address).not.toBe(getTradingDeploymentPlan(core, 25, 2).factory.address)
 	})
 
-	test('keeps V1 and V2 venues independently predictable and defaults new deployments to V2', () => {
+	test('keeps explicitly selected V1 and V2 venues independently predictable', () => {
 		const legacyFixture = examplePlan()
-		const plan = getTradingDeploymentPlan(legacyFixture.core, legacyFixture.feeBps)
+		const plan = getTradingDeploymentPlan(legacyFixture.core, legacyFixture.feeBps, 2)
 		const legacy = getTradingDeploymentPlan(plan.core, plan.feeBps, 1)
 		expect(plan.version).toBe(2)
 		expect(legacy.version).toBe(1)
@@ -68,13 +114,31 @@ describe('wallet trading deployment plan', () => {
 				id: 'mainnet',
 				proxyDeployer: getAddress(`0x${'9a'.repeat(20)}`),
 				securityPoolFactory: getAddress(`0x${'bc'.repeat(20)}`),
+				zoltar: getAddress(`0x${'de'.repeat(20)}`),
 			},
 			30,
+			2,
 		)
 		expect(nextTradingDeploymentStep(plan, { factory: false, router: false })?.id).toBe('factory')
 		expect(nextTradingDeploymentStep(plan, { factory: true, router: false })?.id).toBe('router')
 		expect(nextTradingDeploymentStep(plan, { factory: true, router: true })?.id).toBe('receiveRouter')
 		expect(nextTradingDeploymentStep(plan, { factory: true, router: true, receiveRouter: true })).toBeUndefined()
+	})
+
+	test('selects only complete authoritative V2 deployments and falls back to complete V1', async () => {
+		const core = examplePlan().core
+		expect((await resolveInstalledTradingDeployment(installedDeploymentClient(core, [2]), core, 30, core.defaultRpcUrl)).version).toBe(2)
+		const legacy = await resolveInstalledTradingDeployment(installedDeploymentClient(core, [1]), core, 30, core.defaultRpcUrl)
+		expect(legacy.version).toBe(1)
+		expect(legacy.receiveRouter).toBeUndefined()
+		expect((await resolveInstalledTradingDeployment(installedDeploymentClient(core, [1, 2], { partialV2: true }), core, 30, core.defaultRpcUrl)).version).toBe(1)
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, [2], { partialV2: true }), core, 30, core.defaultRpcUrl)).rejects.toThrow('V2 trading deployment is incomplete')
+	})
+
+	test('rejects false V2 capability claims and wrong router factory links', async () => {
+		const core = examplePlan().core
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, [2], { wrongVersion: true }), core, 30, core.defaultRpcUrl)).rejects.toThrow('implementation version is not V2')
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, [2], { wrongFactoryLink: true }), core, 30, core.defaultRpcUrl)).rejects.toThrow('different factory')
 	})
 
 	test('rejects a network without the exact canonical proxy deployer runtime', async () => {

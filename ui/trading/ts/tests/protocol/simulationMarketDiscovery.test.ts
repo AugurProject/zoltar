@@ -34,6 +34,7 @@ describe('trading simulation market discovery', () => {
 				zoltar: addresses.zoltar,
 			},
 			30,
+			2,
 		)
 		const discovery = await discoverLiveUniverseMarketPage(backend.createReadClient(), deploymentConfigurationForPlan(plan, 'http://127.0.0.1/'), 0n)
 

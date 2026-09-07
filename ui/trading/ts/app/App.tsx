@@ -10,7 +10,7 @@ import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUni
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, type CoreDeployment } from '../protocol/deployment.js'
+import { resolveInstalledTradingDeployment, type CoreDeployment } from '../protocol/deployment.js'
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.js'
 import { shortAddress } from '../lib/format.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -57,13 +57,10 @@ export async function resolveCanonicalLiveDeployment(coreDeployments: readonly C
 	const activeChainId = getActiveNetworkProfile().chain.id
 	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
 	if (core === undefined) throw new Error('No canonical deployment is available for the active network')
-	const plan = getTradingDeploymentPlan(core, 30)
-	const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
-	const client = createPublicClient(configuration)
+	const bootstrapConfiguration: DeploymentConfiguration = { chainId: core.chainId, chainName: core.chainName, factory: core.securityPoolFactory, feeBps: 30, router: core.securityPoolFactory, rpcUrl: core.defaultRpcUrl, securityPoolFactory: core.securityPoolFactory, zoltar: core.zoltar }
+	const client = createPublicClient(bootstrapConfiguration)
 	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
-	const status = await withTimeout(loadTradingDeploymentStatus(client, plan), 15_000, 'Trading deployment verification timed out')
-	if (!status.factory || !status.router) throw new Error('Trading contracts have not been deployed')
-	return configuration
+	return await withTimeout(resolveInstalledTradingDeployment(client, core, 30, core.defaultRpcUrl), 15_000, 'Trading deployment verification timed out')
 }
 
 async function resolveLiveDeployment() {

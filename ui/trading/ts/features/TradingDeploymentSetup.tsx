@@ -225,7 +225,7 @@ export function TradingDeploymentSetup({
 		void (async () => {
 			try {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
-				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps)
+				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps, 2)
 				if (!active || revision !== inputRevision.current) return
 				setPlan(nextPlan)
 				const client = services.createPublicClient(input.rpcUrl)
