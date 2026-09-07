@@ -70,8 +70,8 @@ export const contractSafetyPolicy = {
 		{
 			sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 			contractName: 'EscalationGameFactory',
-			maximumBytes: 45_672,
-			reason: 'The factory embeds the reviewed atomic-authorization EscalationGame creation code; 3,480 bytes of EIP-3860 headroom remain.',
+			maximumBytes: 46_137,
+			reason: 'The factory embeds the reviewed, question-bound atomic-authorization EscalationGame creation code; 3,015 bytes of EIP-3860 headroom remain.',
 		},
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
