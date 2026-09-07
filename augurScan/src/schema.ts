@@ -73,7 +73,13 @@ const historicalIntegrityIndexes = new Set([
 ])
 const ownershipTables = new Set(['indexer_ownership'])
 const ownershipIndexes = new Set(['indexer_ownership_heartbeat'])
-const normalizeDefinition = (value: string): string => value.replaceAll('public.', '').replace(/\s+/g, ' ').trim().replace(/;$/, '')
+const normalizeDefinition = (value: string): string => {
+	const normalized = value.replaceAll('public.', '').replace(/\s+/g, ' ').trim().replace(/;$/, '')
+	// PostgreSQL 17 preserves one additional pair of parentheses around some
+	// CHECK expressions compared with the canonical schema source. The pair is
+	// formatting only, so normalize it before comparing otherwise exact layouts.
+	return normalized.replace(/^CHECK \(\((.*)\)\)$/, 'CHECK ($1)')
+}
 const sorted = (values: Iterable<string>): string[] => [...values].sort()
 
 const columnSignature = (table: string, column: string, type: string, notNull: boolean, identity: string, defaultExpression: string | undefined): string =>

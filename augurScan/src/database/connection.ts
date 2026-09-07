@@ -78,7 +78,7 @@ export class ScannerDatabaseConnection {
 				WHERE NOT EXISTS (
 					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND granted
-				) AND (${state} = 'standby' OR indexer_ownership.backend_pid IS NOT DISTINCT FROM ${backendPid ?? null})
+				)
 			`
 			return
 		}
