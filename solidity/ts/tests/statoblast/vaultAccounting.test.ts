@@ -1,6 +1,7 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
+import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { createCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 
 const depositRepToVaultEvent = {
@@ -201,6 +202,33 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(preferenceArgs.vault, client.account.address, 'preference event should identify the depositing vault')
 		strictEqualTypeSafe(preferenceArgs.depositTargetHealthFactorBps, 10_000n, 'preference event should record the positive deposit instruction')
 		strictEqualTypeSafe(preferenceArgs.capacityOwnershipAttoRep, vault.capacityOwnershipAttoRep, 'preference event should expose resulting vault capacity')
+	})
+
+	test('permit deposit continues with an already-submitted exact allowance', async () => {
+		const depositAmount = repDeposit / 10n
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: addressString(GENESIS_REPUTATION_TOKEN),
+				functionName: 'approve',
+				args: [securityPoolAddresses.securityPool, depositAmount],
+			}),
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi,
+				address: securityPoolAddresses.securityPool,
+				functionName: 'depositRepToVaultWithPermit',
+				args: [depositAmount, 10_000n, 0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`],
+			}),
+		)
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		assert.ok(vault.repBackingUnits > 0n, 'permit fallback deposit should credit the signer vault')
+		assert.strictEqual(
+			await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'allowance', args: [client.account.address, securityPoolAddresses.securityPool] }),
+			0n,
+			'exact fallback allowance should be fully consumed',
+		)
 	})
 
 	test('supports a backing-only REP top-up without changing capacity ownership', async () => {

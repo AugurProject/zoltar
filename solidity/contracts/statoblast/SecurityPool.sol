@@ -63,7 +63,7 @@ contract SecurityPool is SecurityPoolStorage {
 	address public immutable truthAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
-	SecurityPoolEventEmitter private immutable eventEmitter;
+	SecurityPoolEventEmitter public immutable eventEmitter;
 	address private immutable operationsDelegate;
 	// settlementCollateralAttoEth is protocol-accounted ETH backing complete sets;
 	// the raw balance can also contain fees or unsolicited surplus.
@@ -122,7 +122,6 @@ contract SecurityPool is SecurityPoolStorage {
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		repToken = _zoltar.getRepToken(_universeId);
-		IERC20(address(repToken)).safeApprove(address(_zoltar), type(uint256).max);
 		initialEscalationGameDepositAttoRep = SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(repToken.getTotalTheoreticalSupplyAttoRep());
 		minimumSecurityBondDebtAttoEth = securityPoolFactory.minimumSecurityBondDebtAttoEth();
 		zoltar = _zoltar;
@@ -175,6 +174,8 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
 		if (msg.sender != address(escalationGame)) revert();
+		if (address(repToken) == address(zoltar.genesisReputationToken()))
+			IERC20(address(repToken)).safeApprove(address(zoltar), amountAttoRep);
 		zoltar.burnRep(universeId, amountAttoRep);
 	}
 
@@ -429,24 +430,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
-		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
-		if (isEscalationResolved()) revert();
-		if (block.timestamp >= vaultAdmissionEndTime && !postEndVaultAdmissionAllowed) revert();
-		require(attoRepAmount > 0, 'Zero REP');
-		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
-		updateVaultFees(msg.sender);
-		uint256 repBackingUnits = attoRepToBackingUnits(attoRepAmount);
-		IERC20(address(repToken)).safeTransferFrom(msg.sender, address(this), attoRepAmount);
-		securityVaults[msg.sender].repBackingUnits += repBackingUnits;
-		totalRepBackingUnits += repBackingUnits;
-		_requireMinimumVaultRep(backingUnitsToAttoRep(securityVaults[msg.sender].repBackingUnits), false, 'Vault REP below minimum');
-		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, SecurityPoolUtils.BPS_DENOMINATOR, targetHealthFactorBps);
-		_setVaultCapacity(msg.sender, securityVaults[msg.sender].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep, targetHealthFactorBps);
-		updateRetentionRate();
-		_registerVault(msg.sender);
-		emit RepDepositedToVault(msg.sender, attoRepAmount, securityVaults[msg.sender].repBackingUnits, totalRepBackingUnits);
-		_emitVaultAccountingCheckpoint(msg.sender);
-		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, msg.sender);
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (attoRepAmount, targetHealthFactorBps)));
 	}
 
 	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
@@ -798,5 +782,14 @@ contract SecurityPool is SecurityPoolStorage {
 
 	receive() external payable {
 		require(msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
+	}
+
+	fallback() external {
+		bytes4 selector = msg.sig;
+		if (
+			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector &&
+			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector
+		) revert();
+		DelegateCallForwarder.invoke(operationsDelegate, msg.data);
 	}
 }
