@@ -7,6 +7,7 @@
 			"@zoltar/ui-core-shared/*": ["../coreShared/js/*"],
 			"@zoltar/ui-statoblast-domain/*": ["../statoblastDomain/js/*"],
 			"@zoltar/ui-trading-domain": ["../tradingDomain/js/index.d.ts"],
+			"@zoltar/ui-trading-domain/*": ["../tradingDomain/js/*"],
 			"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/js/*"]
 		},
 		"rootDir": "./ts",

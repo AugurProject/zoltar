@@ -1,7 +1,7 @@
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { capabilitiesForTradingVersion } from './capabilities.js'
+import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { deadlineAtBlock, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'

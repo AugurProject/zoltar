@@ -17,7 +17,7 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { capabilitiesForTradingVersion } from '../protocol/capabilities.js'
+import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 
 export { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from './live/routePresentation.js'
@@ -48,7 +48,7 @@ function questionOutcomeLabel(outcome: number) {
 	return `Unknown outcome ${outcome}`
 }
 
-function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'questionId'> }) {
+function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
 	return (
 		<>
@@ -63,6 +63,14 @@ function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' 
 				<dd>
 					<TradingAddressValue value={scope.shareToken} />
 				</dd>
+			</div>
+			<div>
+				<dt>Current universe ID</dt>
+				<dd>{market.universeId.toString()}</dd>
+			</div>
+			<div>
+				<dt>Market lineage origin universe ID</dt>
+				<dd>{market.originUniverseId?.toString() ?? 'Unavailable'}</dd>
 			</div>
 			<div>
 				<dt>Question ID</dt>

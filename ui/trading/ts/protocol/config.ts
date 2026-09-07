@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import type { TradingDeploymentVersion } from './capabilities.js'
+import type { TradingDeploymentVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 
 export type DeploymentConfiguration = Readonly<{
 	chainId: number

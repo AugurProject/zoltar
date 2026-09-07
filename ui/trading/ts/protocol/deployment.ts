@@ -2,7 +2,7 @@ import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, t
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
-import type { TradingDeploymentVersion } from './capabilities.js'
+import type { TradingDeploymentVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 
 export type CoreDeployment = Readonly<{
 	chainId: number

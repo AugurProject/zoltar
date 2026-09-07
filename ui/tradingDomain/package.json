@@ -22,6 +22,10 @@
 		".": {
 			"types": "./js/index.d.ts",
 			"default": "./js/index.js"
+		},
+		"./capabilities.js": {
+			"types": "./js/capabilities.d.ts",
+			"default": "./js/capabilities.js"
 		}
 	}
 }

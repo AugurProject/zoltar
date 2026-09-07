@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { capabilitiesForTradingVersion, requireTradingVersion } from '../../protocol/capabilities.js'
+import { capabilitiesForTradingVersion, requireTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 
 describe('trading deployment capabilities', () => {
 	test('treats omitted and V1 deployment metadata as legacy', () => {
