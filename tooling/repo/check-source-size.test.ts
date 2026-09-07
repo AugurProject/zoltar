@@ -19,3 +19,24 @@ test('guards allowlisted files against growth and requires stale entries to be r
 	expect(inspectSourceSizes(new Map([['shared/ts/legacy.ts', source(701)]]), allowances)).toEqual([{ file: 'shared/ts/legacy.ts', kind: 'allowance-exceeded', limit: 700, lines: 701 }])
 	expect(inspectSourceSizes(new Map([['shared/ts/legacy.ts', source(500)]]), allowances)).toEqual([{ file: 'shared/ts/legacy.ts', kind: 'stale-allowance', limit: 600, lines: 500 }])
 })
+
+test('requires valid production paths, ceilings, and nonblank reasons for allowances', () => {
+	const files = new Map([
+		['shared/ts/legacy.ts', source(650)],
+		['shared/ts/tests/helper.ts', source(650)],
+	])
+	const findings = inspectSourceSizes(
+		files,
+		new Map([
+			['shared/ts/legacy.ts', { maxLines: 600, reason: '   ' }],
+			['shared/ts/tests/helper.ts', { maxLines: 700, reason: 'Tests are not production modules.' }],
+		]),
+	)
+	expect(findings.map(finding => [finding.file, finding.kind])).toEqual([
+		['shared/ts/legacy.ts', 'invalid-allowance-limit'],
+		['shared/ts/legacy.ts', 'invalid-allowance-reason'],
+		['shared/ts/legacy.ts', 'oversized'],
+		['shared/ts/tests/helper.ts', 'invalid-allowance-path'],
+	])
+	expect(findings.every(finding => finding.detail === undefined || finding.detail.trim() !== '')).toBe(true)
+})
