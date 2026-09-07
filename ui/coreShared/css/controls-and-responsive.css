@@ -1582,6 +1582,16 @@
 }
 
 @media (max-width: 42rem) {
+	.overview-route-header .route-header-main {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.overview-route-header .route-header-badge {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-self: start;
+	}
+
 	.overview-route-header .environment-badge-row .badge {
 		padding-inline: 0.3rem;
 		letter-spacing: 0.02em;

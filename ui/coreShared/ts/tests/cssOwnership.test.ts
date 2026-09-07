@@ -72,6 +72,8 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	expect(base).toMatch(/\.app-settings-menu label > span \{[^}]*font-size: var\(--font-label\);/s)
 	expect(base).toMatch(/\.account-menu-network span \{[^}]*font-size: var\(--font-label\);/s)
 	expect(controls).toMatch(/\.metric-inline-status \{[^}]*font-size: var\(--font-label\);/s)
+	expect(controls).toMatch(/@media \(max-width: 42rem\) \{[^}]*\.overview-route-header \.route-header-main \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;/s)
+	expect(controls).toMatch(/\.overview-route-header \.route-header-badge \{[^}]*grid-column: 1 \/ -1;[^}]*grid-row: 2;[^}]*justify-self: start;/s)
 	expect(trading).toMatch(/\.field \{[^}]*0\.8125rem ui-monospace/s)
 	expect(trading).toMatch(/\.wallet-summary--loading \.wallet-summary__compact-loading \{[^}]*font-size: 0\.8125rem;/s)
 	expect(trading).toMatch(/\.wallet-summary__detail-balances small \{[^}]*font-size: 0\.8125rem;/s)
