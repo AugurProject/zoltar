@@ -157,7 +157,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Trading contracts')
 		expect(rendered.container.textContent).toContain('Next to deploy')
 		expect(rendered.container.textContent).toContain('Deploy Trading factory')
-		expect(rendered.container.textContent).toContain('0 / 2')
+		expect(rendered.container.textContent).toContain('0 / 3')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 	})
 
@@ -185,7 +185,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).not.toContain('Unable to inspect the selected deployment')
 		expect(rendered.container.textContent).toContain(plan.factory.address)
 		expect(rendered.container.textContent).toContain(plan.router.address)
-		expect(rendered.container.textContent).toContain('0 / 2')
+		expect(rendered.container.textContent).toContain('0 / 3')
 	})
 
 	test('keeps advanced configuration closed for a hydrated normalized default RPC', async () => {
@@ -378,7 +378,7 @@ describe('trading deployment setup', () => {
 		await enterNetworkSettings(rendered.container)
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
-		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .status')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
+		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .status')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking', 'Checking'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
@@ -520,6 +520,7 @@ describe('trading deployment setup', () => {
 	test('hydrates the deploy route from asynchronously resolved configuration', async () => {
 		window.history.replaceState(undefined, '', '/?feeBps=99#/deploy')
 		const plan = getTradingDeploymentPlan(core, 30, 2)
+		if (plan.receiveRouter === undefined) throw new Error('V2 deployment plan is missing its approval-free router')
 		const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
 		let contractReadCount = 0
 		const client = createPublicClient({
@@ -530,13 +531,15 @@ describe('trading deployment setup', () => {
 						const address = params[0]
 						if (typeof address !== 'string') throw new Error('Missing code address')
 						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
-						if ([core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
+						if ([core.securityPoolFactory, plan.factory.address, plan.router.address, plan.receiveRouter.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
 						return '0x'
 					}
 					if (method === 'eth_call') {
 						contractReadCount += 1
-						if (contractReadCount % 3 === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (contractReadCount % 3 === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						const readInInspection = ((contractReadCount - 1) % 6) + 1
+						if (readInInspection === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (readInInspection === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						if (readInInspection === 3 || readInInspection === 6) return encodeAbiParameters([{ type: 'uint256' }], [2n])
 						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
 					}
 					throw new Error(`Unexpected RPC method ${method}`)
@@ -563,7 +566,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).not.toContain('Immutable trading fee')
 		expect(rendered.container.textContent).not.toContain('Core network')
 		expect(rendered.container.textContent).not.toContain('Use default RPC')
-		expect(rendered.container.textContent).toContain('2 / 2')
+		expect(rendered.container.textContent).toContain('3 / 3')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 		expect(rendered.container.querySelector('nav')?.textContent).not.toContain('Deploy')
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deployment complete')).toBe(false)

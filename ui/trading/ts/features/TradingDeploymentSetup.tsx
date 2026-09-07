@@ -235,7 +235,7 @@ export function TradingDeploymentSetup({
 				const securityPoolFactoryCode = await client.getCode({ address: nextPlan.core.securityPoolFactory })
 				if (securityPoolFactoryCode === undefined || securityPoolFactoryCode === '0x') {
 					if (!active || revision !== inputRevision.current) return
-					setDeploymentStatus({ factory: false, router: false })
+					setDeploymentStatus({ factory: false, receiveRouter: false, router: false })
 					setInspectedRevision(revision)
 					setInspectionState('blocked')
 					return
