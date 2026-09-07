@@ -95,10 +95,11 @@ export async function runHeadlessTestnetDeployment(args: readonly string[], opti
 		await Bun.write(sourceEntrypoint, `import { main } from ${JSON.stringify(deploymentEntrypoint)}\nmain().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1 })\n`)
 		const output = await (options.buildEntrypoint ?? buildHeadlessEntrypoint)(sourceEntrypoint)
 		if (receivedSignal === undefined) {
-			const bundledEntrypoint = path.join(temporaryDirectory, 'deploy-testnet.js')
+			const bundledEntrypoint = path.join(temporaryDirectory, 'tooling', 'contracts', 'deploy-testnet.js')
+			await mkdir(path.dirname(bundledEntrypoint), { recursive: true })
 			await Bun.write(bundledEntrypoint, output)
-			const bundledArtifactsDirectory = path.join(temporaryDirectory, 'artifacts')
-			await mkdir(bundledArtifactsDirectory)
+			const bundledArtifactsDirectory = path.join(temporaryDirectory, 'scripts', 'artifacts')
+			await mkdir(bundledArtifactsDirectory, { recursive: true })
 			await copyFile(path.join(repositoryRoot, 'scripts', 'artifacts', 'uniswap-deployment.json'), path.join(bundledArtifactsDirectory, 'uniswap-deployment.json'))
 			if (receivedSignal === undefined) {
 				const command = [process.execPath, bundledEntrypoint, ...args]
