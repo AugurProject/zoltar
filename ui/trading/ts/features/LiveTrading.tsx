@@ -543,7 +543,6 @@ export function LiveTrading({
 								<LiveLiquidityControls
 									configuration={configuration}
 									market={selected}
-									balances={selectedBalances}
 									balanceState={selectedBalanceState}
 									balanceError={balanceError}
 									account={account}
@@ -551,9 +550,7 @@ export function LiveTrading({
 									externallyLocked={workflowLocked}
 									nowSeconds={nowSeconds}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
-									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
 									onKnownReceipt={refreshWalletSummaryAfterReceipt}
-									walletContextIsCurrent={walletContextIsCurrent}
 									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
 									createGuardedWalletWrite={createGuardedWalletWrite}
 									retryBalances={retryBalances}

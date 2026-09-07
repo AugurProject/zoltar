@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
-import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
@@ -136,13 +136,6 @@ describe('standalone trading UI model', () => {
 	test('keeps displayed conditional prices complementary after rounding', () => {
 		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
 		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
-	})
-
-	test('requires LP approval only after authoritative balances are ready', () => {
-		for (const state of ['disconnected', 'loading', 'error'] as const) expect(liquidityApprovalRequired(state, 'remove', 1n, 0n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
 	})
 
 	test('parses and formats chain quantities without numbers', () => {

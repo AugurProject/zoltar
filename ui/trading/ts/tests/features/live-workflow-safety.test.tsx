@@ -261,7 +261,7 @@ describe('live workflow safety boundary', () => {
 				})
 			},
 		}
-		const liquidityServices = { ...liveLiquidityServices, approveLpRouter: async () => transactionHash }
+		const liquidityServices = liveLiquidityServices
 		const settlementServices = { ...liveSettlementServices, approveRouter: controllerServices.approveRouter }
 		const LiveTrading = (props: Parameters<typeof ProductionLiveTrading>[0]) => <ProductionLiveTrading {...props} controllerServices={controllerServices} liquidityServices={liquidityServices} settlementServices={settlementServices} />
 		const workflowLocks: boolean[] = []

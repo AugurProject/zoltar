@@ -4,36 +4,26 @@ import { formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits,
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { approveLpRouter, marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiquidityOperation, type LiveBalances, type LiveMarket, type MarketLifecycle } from '../protocol/live.js'
+import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiquidityOperation, type LiveMarket, type MarketLifecycle } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as liquidityCopy from '../copy/liquidity.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState, QuoteContext, TransactionState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 type LiquidityQuote = Awaited<ReturnType<typeof simulateLiquidity>> & QuoteContext
 
 export type LiveLiquidityServices = Readonly<{
-	approveLpRouter: typeof approveLpRouter
 	publicErrorMessage: typeof publicErrorMessage
 	simulateLiquidity: typeof simulateLiquidity
 	submitFreshLiquidity: typeof submitFreshLiquidity
 }>
 
 export const liveLiquidityServices: LiveLiquidityServices = {
-	approveLpRouter,
 	publicErrorMessage,
 	simulateLiquidity,
 	submitFreshLiquidity,
-}
-
-export function liquidityApprovalRequired(balanceState: BalanceState, operation: LiquidityOperation, amount: bigint | undefined, allowance: bigint | undefined) {
-	void balanceState
-	void operation
-	void amount
-	void allowance
-	return false
 }
 
 export function liquidityOperationAvailable(operation: LiquidityOperation, market: MarketLifecycle, nowSeconds: bigint) {
@@ -43,7 +33,6 @@ export function liquidityOperationAvailable(operation: LiquidityOperation, marke
 export function LiveLiquidityControls({
 	configuration,
 	market,
-	balances,
 	balanceState,
 	balanceError,
 	account,
@@ -51,9 +40,7 @@ export function LiveLiquidityControls({
 	externallyLocked,
 	nowSeconds,
 	refresh,
-	refreshBalancesAfterApproval,
 	onKnownReceipt,
-	walletContextIsCurrent,
 	executeWithCurrentWalletContext,
 	createGuardedWalletWrite,
 	retryBalances,
@@ -62,7 +49,6 @@ export function LiveLiquidityControls({
 }: {
 	configuration: DeploymentConfiguration
 	market: LiveMarket
-	balances: LiveBalances | undefined
 	balanceState: BalanceState
 	balanceError: string | undefined
 	account: Address | undefined
@@ -70,9 +56,7 @@ export function LiveLiquidityControls({
 	externallyLocked: boolean
 	nowSeconds: bigint
 	refresh(): Promise<void>
-	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
 	onKnownReceipt(): void
-	walletContextIsCurrent(account: Address): boolean
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	retryBalances(): Promise<void>
@@ -101,7 +85,6 @@ export function LiveLiquidityControls({
 	}, [probability])
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
-	const needsLpApproval = liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
 	useEffect(() => {
 		if (receiptWarning !== undefined) return
@@ -155,81 +138,6 @@ export function LiveLiquidityControls({
 			if (!simulationRequests.isCurrent(request)) return
 			setState('error')
 			setError(services.publicErrorMessage(caught, 'Liquidity simulation failed'))
-		}
-	}
-
-	async function approveLp() {
-		if (walletClient === undefined || account === undefined || parsed === undefined) return
-		if (externallyLocked) return
-		if (!workflow.begin()) return
-		onWorkflowLockChange(true)
-		setState('preparing')
-		setError(undefined)
-		setReceiptWarning(undefined)
-		setTransactionHash(undefined)
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		try {
-			broadcastHash = await createGuardedWalletWrite(
-				account,
-				'Wallet network changed; switch back before approving',
-				'Wallet account changed; reconnect before approving',
-			)(async () => {
-				setState('approval')
-				return await services.approveLpRouter(walletClient, configuration, market, account, parsed)
-			})
-			setTransactionHash(broadcastHash)
-			setState('approval-pending')
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					onKnownReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					setTransactionHash(replacementHash)
-				},
-			})
-			if (receipt.status === 'reverted') {
-				if (!walletContextIsCurrent(account)) {
-					setState('error')
-					setError('Wallet context changed while the LP-token approval was pending. Approval transaction reverted.')
-					return
-				}
-				throw new Error('Approval transaction reverted')
-			}
-			setState('approval-confirmed')
-			if (!walletContextIsCurrent(account)) return
-			const refreshResult = await refreshBalancesAfterApproval('LP-token approval', market, account)
-			if (refreshResult !== 'ready') {
-				if (refreshResult === 'context-changed') setError('Wallet context changed while approved balances were refreshing. Reconnect to continue.')
-				return
-			}
-			setReceiptWarning(undefined)
-			setError(undefined)
-		} catch (caught) {
-			if (!walletContextIsCurrent(account)) {
-				if (broadcastHash !== undefined && !receiptKnown) {
-					keepLocked = true
-					setState('approval-pending')
-					setError(undefined)
-					setReceiptWarning(broadcastUncertainMessage('LP-token approval', broadcastHash))
-				} else {
-					setState('error')
-					setError('Wallet context changed while the LP-token approval was pending. Reconnect to continue.')
-				}
-				return
-			}
-			const failure = approvalFailureTransition('LP-token approval', broadcastHash, receiptKnown, caught, 'LP approval failed')
-			keepLocked = failure.keepLocked
-			setState(failure.state === 'pending' ? 'approval-pending' : failure.state)
-			setError(failure.message)
-			setReceiptWarning(failure.warning)
-		} finally {
-			workflow.finish()
-			if (!keepLocked) onWorkflowLockChange(false)
 		}
 	}
 
@@ -496,8 +404,7 @@ export function LiveLiquidityControls({
 			<p role='status' aria-live='polite'>
 				{stateLabel(state, workflowCopy.liquidityTransaction)}
 			</p>
-			{needsLpApproval ? <TransactionActionButton disabled={workflowLocked} idleLabel={workflowCopy.approveExactLp} pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'} pendingLabel={workflowCopy.approvingExactLp} onClick={approveLp} /> : null}
-			{!needsLpApproval && quote === undefined ? (
+			{quote === undefined ? (
 				<TransactionActionButton
 					disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || workflowLocked}
 					idleLabel={workflowCopy.simulateLiquidity}
@@ -506,7 +413,7 @@ export function LiveLiquidityControls({
 					onClick={simulateCurrent}
 				/>
 			) : null}
-			{!needsLpApproval && quote !== undefined ? (
+			{quote !== undefined ? (
 				<TransactionActionButton
 					disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)}
 					idleLabel={workflowCopy.submitLiquidity}
