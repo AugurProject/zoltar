@@ -1,4 +1,4 @@
-import { tryParseBigIntInput } from './integerInput.js'
+import { tryParseBigIntInput } from '../forms/integerInput.js'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'

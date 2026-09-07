@@ -1,5 +1,5 @@
 import type { Address, EIP1193Provider } from '@zoltar/shared/ethereum'
-import { tryParseAddressInput } from './lib/inputs.js'
+import { tryParseAddressInput } from '../forms/inputs.js'
 
 type EthereumEventHandler = (...args: unknown[]) => void
 

@@ -1,9 +1,9 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
-import { assertActiveWallet, type ActiveWalletContext } from './assertActiveWallet.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
+import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
-import { createActiveEnvironmentGuard } from './activeEnvironment.js'
+import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
 import { TRANSACTION_ACTION_LOCK_REASON } from './transactionTray.js'
 
 type RunWriteActionParameters = {

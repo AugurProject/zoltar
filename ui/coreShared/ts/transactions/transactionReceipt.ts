@@ -1,5 +1,5 @@
 import type { Hash, ReplacementReason, TransactionReceipt } from '@zoltar/shared/ethereum'
-import type { WriteClient } from './chainBackend.js'
+import type { WriteClient } from '../wallet/chainBackend.js'
 
 export type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {
 	onTransactionSubmitted?: ((hash: Hash) => void) | undefined

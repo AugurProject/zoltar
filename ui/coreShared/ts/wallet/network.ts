@@ -1,6 +1,6 @@
 import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/shared/ethereum'
-import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { parseChainId, sameChainId } from './chainId.js'
 
 const COMMON_CHAIN_NAMES = new Map<bigint, string>([

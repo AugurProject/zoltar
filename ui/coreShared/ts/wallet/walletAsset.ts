@@ -1,9 +1,9 @@
 import { bigintToSafeNumber, getAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
-import { getActiveBackend } from './activeEnvironment.js'
+import { getActiveBackend } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'
-import { hasErrorCode } from './errors.js'
-import { sameAddress } from './address.js'
+import { hasErrorCode } from '../lib/errors.js'
+import { sameAddress } from '../lib/address.js'
 import { sameChainId } from './chainId.js'
 
 export type WalletAssetWatchResult = { status: 'accepted' } | { status: 'declined' } | { status: 'dismissed' } | { status: 'failed' } | { status: 'stale' } | { status: 'unavailable' } | { status: 'unsupported' } | { status: 'wrong-network' }

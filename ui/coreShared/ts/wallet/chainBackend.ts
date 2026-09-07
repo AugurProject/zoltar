@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/shared/ethereum'
-import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from '../injectedEthereum.js'
-import { hasErrorCode, hasErrorMessage } from './errors.js'
+import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
+import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'

@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { createActiveEnvironmentGuard, getActiveBackend } from './activeEnvironment.js'
-import { sameAddress } from './address.js'
+import { createActiveEnvironmentGuard, getActiveBackend } from '../lib/activeEnvironment.js'
+import { sameAddress } from '../lib/address.js'
 import { sameChainId } from './chainId.js'
 
 export type ActiveWalletContext = {

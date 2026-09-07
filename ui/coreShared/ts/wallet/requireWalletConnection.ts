@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { getActiveBackend } from './activeEnvironment.js'
+import { getActiveBackend } from '../lib/activeEnvironment.js'
 
 /**
  * Guards a write action by checking that a wallet backend is present and

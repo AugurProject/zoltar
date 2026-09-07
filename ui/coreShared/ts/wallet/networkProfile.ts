@@ -1,6 +1,6 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { mainnet, type Chain } from '@zoltar/shared/ethereum'
-import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from './sepoliaDeploymentConfig.js'
+import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 import { sameChainId } from './chainId.js'
 
 export type NetworkProfile = {

@@ -1,6 +1,6 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isAddress, isHex, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { deriveTokenApprovalRequirement } from './tokenApproval.js'
+import { deriveTokenApprovalRequirement } from '../transactions/tokenApproval.js'
 import { parseBigIntInput, tryParseBigIntInput } from './integerInput.js'
 
 export function tryParseAddressInput(value: string): Address | undefined {

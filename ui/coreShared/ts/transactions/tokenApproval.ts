@@ -1,7 +1,7 @@
 import { maxUint256 } from '@zoltar/shared/ethereum'
-import { parseDecimalInput } from './decimal.js'
-import { sanitizeErrorDetail } from './errors.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from './formatters.js'
+import { parseDecimalInput } from '../forms/decimal.js'
+import { sanitizeErrorDetail } from '../lib/errors.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
 export const maxUint200 = 2n ** 200n - 1n
 export type TokenApprovalState = {
 	error: string | undefined

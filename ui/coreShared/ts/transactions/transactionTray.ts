@@ -1,7 +1,7 @@
 import type { Hash } from '@zoltar/shared/ethereum'
-import { getActiveBackend } from './activeEnvironment.js'
+import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
-import type { TransactionRequestPreview } from './chainBackend.js'
+import type { TransactionRequestPreview } from '../wallet/chainBackend.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
 
 export type TransactionTrayState = {
