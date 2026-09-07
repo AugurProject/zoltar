@@ -6,7 +6,7 @@
 			<header><p class="kicker">Reference</p><h1>Protocol glossary</h1><p>Canonical, plain-language definitions for terms used throughout the documentation.</p></header>
 			<dl>
 				<dt id="universe">Universe</dt><dd>A Zoltar ledger and identity for universe-specific REP and application state. Universe 0 is the initialized root; later universes are descendants created through forks.</dd>
-				<dt id="child-universe">Child universe</dt><dd>A deterministic descendant that represents one valid answer to its parent's fork question. A Statoblast binary market has Invalid, Yes, and No children; categorical and scalar questions can have different valid answer sets.</dd>
+				<dt id="child-universe">Child universe</dt><dd>A deterministic descendant that represents one valid answer to its parent's fork question. In the Aurora example, a Statoblast fork on its own binary market question creates Invalid, Yes, and No children. If an unrelated fork interrupts that market, its children instead follow the unrelated categorical or scalar fork question's valid answers.</dd>
 				<dt id="question">Question</dt><dd>A global Zoltar object that identifies a proposition, its end time, and its eligibility for a fork.</dd>
 				<dt id="outcome">Outcome</dt><dd>One possible answer to a question. Statoblast binary markets use Invalid, Yes, and No.</dd>
 				<dt id="invalid">Invalid</dt><dd>The legitimate third outcome for ambiguous, malformed, or otherwise unanswerable market wording.</dd>
