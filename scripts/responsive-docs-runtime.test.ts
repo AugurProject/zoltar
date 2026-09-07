@@ -10,7 +10,7 @@ function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', val
 }
 
 test('full-screen diagrams isolate background siblings without inerting their ancestor path', () => {
-	const environment = installDomEnvironment('http://localhost/docs/reference/deployment-status.html')
+	const environment = installDomEnvironment('http://localhost/docs/reference/contracts.html')
 	try {
 		document.body.innerHTML = '<header></header><main><section><p>Before</p><figure id="diagram"></figure><p>After</p></section></main><footer></footer>'
 		const diagram = document.getElementById('diagram')

@@ -20,6 +20,8 @@ The codebase is split into these main areas:
 
 Each interface package (`ui/zoltar`, `ui/statoblast`, `ui/trading`) keeps route-specific code under `ts/features`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. Imports point inward along `coreShared ← Zoltar ← Statoblast ← Trading`; shared packages never import an application that consumes them.
 
+Question and universe discovery is event-first. Categorical presentation metadata comes from `QuestionCreated`, and deployed child universes come from `DeployChild`; consumers verify replayed question identifiers with the deterministic ID function and child relationships with direct mappings. Scalar encoding and scalar display metadata remain onchain. Deployment readiness is checked offchain with `eth_getCode` and pinned runtime hashes rather than a deployment-status contract.
+
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 ## Prerequisites
@@ -162,6 +164,7 @@ variables.
 | --- | --- | --- |
 | `RPC_URL` / `--rpc-url` | Required | RPC endpoint for the target network |
 | `CHAIN_ID` / `--chain-id` | `11155111` | Expected decimal chain ID |
+| `DEPLOYMENT_PROFILE` / `--profile` | `minimal` | Use `with-quote-venues` to add local Uniswap V3/V4 quote contracts |
 | `MAX_FEE_PER_GAS_GWEI` / `--max-fee-per-gas-gwei` | `100` | Rejects higher RPC fee suggestions |
 | `MAX_TOTAL_COST_ETH` / `--max-total-cost-eth` | `20` | Caps the conservative preflight estimate and transaction budget |
 | `PRIVATE_KEY` / `--private-key` | Required | `0x`-prefixed 32-byte deployer key |
@@ -184,14 +187,14 @@ as `deployed` or `skip` and verifying the bootstrap support contracts.
 
 ### Deployed infrastructure
 
-Every deployment includes:
+The default `minimal` profile includes:
 
 - deterministic WETH and genesis REP
 - the canonical CREATE2 deployer and Permit2
-- a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2
-- a Uniswap V4 PoolManager and Quoter
 - the Zoltar and Augur Statoblast protocol factories and their bootstrap support
   contracts
+
+The `with-quote-venues` profile additionally deploys a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2 plus a Uniswap V4 PoolManager and Quoter. Permit2 is not optional because OpenOracle consumes it directly.
 
 The command does not create Uniswap pools or add liquidity. Protocol factories
 create market-specific security pools, share tokens, oracle coordinators,
@@ -211,8 +214,8 @@ This mode does not require a wallet extension or `anvil`. Instead, it boots a Te
 Simulation mode details:
 
 - The activation flag is `?simulate=1`
-- The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
-- Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
+- Development builds and QA production builds created with `UI_BUILD_ENABLE_SIMULATION=1` honor the flag.
+- Standard production builds omit the Tevm worker and compile simulation activation out, so `?simulate=1` cannot switch the application into a simulated backend.
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading`
 - The live simulation chain is ephemeral and exists only in the current brow
 

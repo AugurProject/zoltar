@@ -33,7 +33,6 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
 const FORKER_DEPOSIT_FRACTION = 20n
-const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
 
 function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
@@ -748,7 +747,7 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, [aliasedScalarOutcomeIndex]), /Malformed outcome index for the fork migration question/)
 	})
 
-	test('getDeployedChildUniverses pages deployed child universes', async () => {
+	test('DeployChild events reconstruct deployed child universes', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
@@ -770,54 +769,22 @@ describe('Contract Test Suite', () => {
 		const balance = await getMigrationRepBalanceAttoRep(client, genesisUniverse, client.account.address)
 		await splitMigrationRep(client, genesisUniverse, balance, [0, 1, 3])
 
-		const firstPage = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getDeployedChildUniverses',
-			address: getZoltarAddress(),
-			args: [genesisUniverse, 0n, 2n],
-		})
-		const secondPage = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getDeployedChildUniverses',
-			address: getZoltarAddress(),
-			args: [genesisUniverse, 2n, 2n],
-		})
-		const maxCountPage = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getDeployedChildUniverses',
-			address: getZoltarAddress(),
-			args: [genesisUniverse, 1n, MAX_UINT256],
-		})
-		const emptyPage = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getDeployedChildUniverses',
-			address: getZoltarAddress(),
-			args: [genesisUniverse, 4n, 2n],
-		})
-
-		assert.deepStrictEqual(firstPage[0], [0n, 1n], 'first page should include the first two child outcomes')
-		assert.deepStrictEqual(firstPage[1], [getChildUniverseId(genesisUniverse, 0), getChildUniverseId(genesisUniverse, 1)], 'first page child ids should match deployed children')
+		const deployedChildren: Array<{ childUniverseId: bigint; outcomeIndex: bigint }> = []
+		for (const log of await client.getLogs({ address: zoltar, fromBlock: 0n })) {
+			const decoded = decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: log.topics })
+			if (decoded.eventName === 'DeployChild' && decoded.args.universeId === genesisUniverse) deployedChildren.push({ childUniverseId: decoded.args.childUniverseId, outcomeIndex: decoded.args.outcomeIndex })
+		}
 		assert.deepStrictEqual(
-			firstPage[2].map((child: { parentUniverseId: bigint }) => child.parentUniverseId),
-			[genesisUniverse, genesisUniverse],
-			'first page child universes should point back to genesis',
+			deployedChildren.map(event => event.outcomeIndex),
+			[0n, 1n, 3n],
+			'child creation events should preserve deployment order',
 		)
-
-		assert.deepStrictEqual(secondPage[0], [3n], 'second page should include the remaining child outcome')
-		assert.deepStrictEqual(secondPage[1], [getChildUniverseId(genesisUniverse, 3)], 'second page child id should match the deployed child')
-		assert.strictEqual(secondPage[2][0]?.forkingOutcomeIndex, 3n, 'second page child universe should retain the outcome index')
-
-		assert.deepStrictEqual(maxCountPage[0], [1n, 3n], 'max-count paging should clamp to the remaining child outcomes')
-		assert.deepStrictEqual(maxCountPage[1], [getChildUniverseId(genesisUniverse, 1), getChildUniverseId(genesisUniverse, 3)], 'max-count paging should return matching child ids')
-		assert.deepStrictEqual(
-			maxCountPage[2].map((child: { parentUniverseId: bigint }) => child.parentUniverseId),
-			[genesisUniverse, genesisUniverse],
-			'max-count child universes should point back to genesis',
-		)
-
-		assert.deepStrictEqual(emptyPage[0], [], 'out of range paging should return no outcome indexes')
-		assert.deepStrictEqual(emptyPage[1], [], 'out of range paging should return no child universe ids')
-		assert.deepStrictEqual(emptyPage[2], [], 'out of range paging should return no child universes')
+		for (const event of deployedChildren) {
+			assert.strictEqual(event.childUniverseId, getChildUniverseId(genesisUniverse, event.outcomeIndex), 'event child ids should match deterministic derivation')
+			const child = await getUniverseData(client, event.childUniverseId)
+			assert.strictEqual(child.parentUniverseId, genesisUniverse, 'direct child lookup should point back to genesis')
+			assert.strictEqual(child.forkingOutcomeIndex, event.outcomeIndex, 'direct child lookup should retain its outcome')
+		}
 	})
 
 	test('all child universes from a single fork inherit the same theoretical supply regardless of deployment order', async () => {

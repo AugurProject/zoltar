@@ -109,7 +109,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const multiOutcomeQuestionId = getQuestionId(multiOutcomeQuestionData, multiOutcomes)
 
 		// Attempt to deploy security pool with non-binary question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, statoblastSecurityMultiplierBps), /Question must have two outcomes/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, statoblastSecurityMultiplierBps), /Question must have Yes and No outcomes/)
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -129,7 +129,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const scalarQuestionId = getQuestionId(scalarQuestionData, scalarOutcomes)
 
 		// Attempt to deploy security pool with scalar question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, statoblastSecurityMultiplierBps), /Question must have two outcomes/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, statoblastSecurityMultiplierBps), /Question must have Yes and No outcomes/)
 	})
 
 	test('cannot deploy security pool when either binary outcome label is not canonical', async () => {
@@ -137,12 +137,12 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			{
 				title: 'wrong first binary outcome',
 				outcomes: sortStringArrayByKeccak(['Apple', 'Banana']),
-				expected: /First outcome must be Yes/,
+				expected: /Question must have Yes and No outcomes/,
 			},
 			{
 				title: 'wrong second binary outcome',
 				outcomes: sortStringArrayByKeccak(['Yes', 'Apple']),
-				expected: /Second outcome must be No/,
+				expected: /Question must have Yes and No outcomes/,
 			},
 		]
 

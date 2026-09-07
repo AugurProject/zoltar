@@ -123,21 +123,6 @@ export const diagramGraphSpecs = {
 		},
 		contractPanelDefinitions.map(contractPanel),
 	),
-	'fig-deployment-mask': diagram(
-		{
-			ariaDescription: 'A row of deployment steps maps by index into bit positions in a uint256 mask. Each step sets its bit only when code exists at that configured address.',
-			ariaLabel: 'Deployment mask maps ordered deployment steps to bits',
-			height: 260,
-			width: 920,
-		},
-		[
-			section(
-				'deployment-mask',
-				[node('step-0', 'step 0', 'blue'), node('step-1', 'step 1', 'blue'), node('step-2', 'step 2', 'blue'), node('bit-0', 'bit 0', 'gold', ['code?']), node('bit-1', 'bit 1', 'gold', ['code?']), node('bit-2', 'bit 2', 'gold', ['code?']), node('mask', 'returned uint256', 'slate', ['matching bits set'], 210)],
-				[edge('deployment-step-0-bit-0', 'step-0', 'bit-0'), edge('deployment-step-1-bit-1', 'step-1', 'bit-1'), edge('deployment-step-2-bit-2', 'step-2', 'bit-2'), edge('deployment-bit-0-mask', 'bit-0', 'mask'), edge('deployment-bit-1-mask', 'bit-1', 'mask'), edge('deployment-bit-2-mask', 'bit-2', 'mask')],
-			),
-		],
-	),
 	'fig-invariant-layers': diagram(
 		{
 			ariaDescription: 'Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.',

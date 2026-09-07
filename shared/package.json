@@ -32,6 +32,10 @@
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"
 		},
+		"./questionId": {
+			"types": "./ts/questionId.ts",
+			"default": "./js/questionId.js"
+		},
 		"./sepoliaRepAllocations": {
 			"types": "./ts/sepoliaRepAllocations.ts",
 			"default": "./js/sepoliaRepAllocations.js"
@@ -56,6 +60,10 @@
 		"./truthAuctionTickMath": {
 			"types": "./ts/truthAuctionTickMath.ts",
 			"default": "./js/truthAuctionTickMath.js"
+		},
+		"./universeId": {
+			"types": "./ts/universeId.ts",
+			"default": "./js/universeId.js"
 		},
 		"./trading": {
 			"types": "./ts/trading/index.ts",

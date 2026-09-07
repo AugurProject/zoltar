@@ -43,12 +43,6 @@ type InfraContractAddressConfig = {
 	getZoltarQuestionDataAddress: () => Address
 }
 
-type DeploymentStatusOracleAddressConfig = {
-	deploymentStatusOracleBytecode: () => Hex
-	proxyDeployerAddress: Address
-	zeroSalt: Hex
-}
-
 type InfraContractAddresses = {
 	escalationGameClaimDelegate: Address
 	escalationGameFactory: Address
@@ -149,13 +143,5 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 
 	return {
 		getInfraContractAddresses,
-	}
-}
-
-export function createDeploymentStatusOracleAddressHelper(config: DeploymentStatusOracleAddressConfig) {
-	const getDeploymentStatusOracleAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
-
-	return {
-		getDeploymentStatusOracleAddress,
 	}
 }

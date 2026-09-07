@@ -16,15 +16,25 @@ contract ZoltarQuestionData {
 		int256 displayValueMax;
 		string answerUnit;
 	}
+	struct ProtocolQuestionData {
+		uint48 startTime;
+		uint48 endTime;
+		uint120 numTicks;
+		uint32 outcomeCount;
+		bool isBinary;
+	}
 
 	mapping(uint256 => uint256) public questionCreatedTimestamp;
-	mapping(uint256 => string[]) private outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
-	uint256[] private questionIds;
+	mapping(uint256 => ProtocolQuestionData) public protocolQuestions;
 
 	event QuestionCreated(uint256 indexed questionId, uint256 createdTimestamp, QuestionData questionData, string[] outcomeOptions);
 
 	function getQuestionId(QuestionData memory questionData, string[] calldata outcomeOptions) public pure returns (uint256) {
+		if (outcomeOptions.length != 0) {
+			return
+				uint256(keccak256(abi.encode(questionData.startTime, questionData.endTime, keccak256(abi.encode(questionData.title, questionData.description, outcomeOptions)))));
+		}
 		return uint256(keccak256(abi.encode(questionData, outcomeOptions)));
 	}
 
@@ -37,6 +47,10 @@ contract ZoltarQuestionData {
 			require(questionData.displayValueMax > questionData.displayValueMin, 'Scalar question display max must be greater than display min');
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
+			require(outcomeOptions.length <= type(uint32).max, 'Categorical question has too many outcomes');
+			require(questionData.numTicks == 0, 'Categorical question numTicks must be zero');
+			require(questionData.displayValueMin == 0 && questionData.displayValueMax == 0, 'Categorical question display range must be zero');
+			require(bytes(questionData.answerUnit).length == 0, 'Categorical question answer unit must be empty');
 			// Check that all strings are non-empty
 			uint256 previous = type(uint256).max;
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
@@ -45,31 +59,17 @@ contract ZoltarQuestionData {
 				require(iHash < previous, 'Outcome option hashes must be provided in descending sorted order');
 				previous = iHash;
 			}
-			outcomeLabels[questionId] = outcomeOptions;
 		}
-		questions[questionId] = questionData;
+		bool isBinary =
+			outcomeOptions.length == 2 &&
+				keccak256(bytes(outcomeOptions[0])) == keccak256(bytes('Yes')) &&
+				keccak256(bytes(outcomeOptions[1])) == keccak256(bytes('No'));
+		protocolQuestions[questionId] = ProtocolQuestionData(questionData.startTime, questionData.endTime, questionData.numTicks, uint32(outcomeOptions.length), isBinary);
+		if (outcomeOptions.length == 0) questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
-		questionIds.push(questionId);
 		emit QuestionCreated(questionId, questionCreatedTimestamp[questionId], questionData, outcomeOptions);
 
 		return questionId;
-	}
-
-	function getQuestionCount() external view returns (uint256) {
-		return questionIds.length;
-	}
-
-	function getQuestions(uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory returnQuestionIds) {
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, questionIds.length);
-		if (iterateUntil <= startIndex) return new uint256[](0);
-		returnQuestionIds = new uint256[](iterateUntil - startIndex);
-		for (uint256 i = startIndex; i < iterateUntil; i++) {
-			returnQuestionIds[i - startIndex] = questionIds[i];
-		}
-	}
-
-	function getQuestionEndDate(uint256 questionId) external view returns (uint256) {
-		return questions[questionId].endTime;
 	}
 
 	function splitUint256IntoTwoWithInvalid(uint256 value) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
@@ -81,28 +81,17 @@ contract ZoltarQuestionData {
 		secondPart = uint120(value & ((1 << 120) - 1));
 	}
 
+	function getQuestionEndDate(uint256 questionId) external view returns (uint256) {
+		return protocolQuestions[questionId].endTime;
+	}
+
 	function hasNonZeroScalarReservedBits(uint256 answer) public pure returns (bool) {
 		return answer & SCALAR_RESERVED_BITS_MASK != 0;
 	}
 
-	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeLabels[questionId].length);
-		if (iterateUntil <= startIndex) return new string[](0);
-		returnOutcomeLabels = new string[](iterateUntil - startIndex);
-		for (uint256 i = startIndex; i < iterateUntil; i++) {
-			returnOutcomeLabels[i - startIndex] = outcomeLabels[questionId][i];
-		}
-	}
-
-	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
-		if (startIndex >= total || count == 0) return startIndex;
-		uint256 availableCount = total - startIndex;
-		if (count >= availableCount) return total;
-		return startIndex + count;
-	}
-
 	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
-		if (outcomeLabels[questionId].length == 0) {
+		ProtocolQuestionData memory protocolQuestion = protocolQuestions[questionId];
+		if (protocolQuestion.outcomeCount == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return true;
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
@@ -112,10 +101,10 @@ contract ZoltarQuestionData {
 			}
 			// When invalid=false (high bit set), malformed iff sum != numTicks
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			return sum != questions[questionId].numTicks;
+			return sum != protocolQuestion.numTicks;
 		}
 		if (answer == 0) return false;
-		if (answer < outcomeLabels[questionId].length + 1) {
+		if (answer < uint256(protocolQuestion.outcomeCount) + 1) {
 			// categorical
 			return false;
 		}
@@ -123,7 +112,8 @@ contract ZoltarQuestionData {
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
-		if (outcomeLabels[questionId].length == 0) {
+		ProtocolQuestionData memory protocolQuestion = protocolQuestions[questionId];
+		if (protocolQuestion.outcomeCount == 0) {
 			// scalar
 			if (hasNonZeroScalarReservedBits(answer)) return 'Malformed';
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
@@ -132,14 +122,13 @@ contract ZoltarQuestionData {
 				return 'Malformed';
 			}
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			if (sum == questions[questionId].numTicks) {
+			if (sum == protocolQuestion.numTicks) {
 				return
 					ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}
-		} else if (answer == 0) return 'Invalid';
-		else if (answer < outcomeLabels[questionId].length + 1) {
-			// categorical
-			return outcomeLabels[questionId][answer - 1];
+		} else {
+			if (answer == 0) return 'Invalid';
+			if (answer < uint256(protocolQuestion.outcomeCount) + 1) return 'Categorical outcome';
 		}
 		return 'Malformed';
 	}

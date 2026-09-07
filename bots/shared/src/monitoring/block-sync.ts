@@ -1,6 +1,6 @@
-import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, logRangeLimitError, LogScanError, type LogRange } from '@zoltar/shared/logScan'
+import { createCanonicalLogLoader, fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, findContractDeploymentBlock, logRangeLimitError, LogScanError, requiredCanonicalBlockAnchor, type LogRange } from '@zoltar/shared/logScan'
 
-export { logRangeLimitError, LogScanError, type LogRange }
+export { createCanonicalLogLoader, findContractDeploymentBlock, logRangeLimitError, LogScanError, requiredCanonicalBlockAnchor, type LogRange }
 
 export const DEFAULT_LATEST_LOG_BLOCKS = 256n
 

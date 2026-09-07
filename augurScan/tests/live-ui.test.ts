@@ -1241,10 +1241,10 @@ test('describes verified, absent, and pending contract deployments', () => {
 })
 
 test('identifies contract creation from the known deployed contract', () => {
-	expect(decodedActionLabel('Call 0x60806040', null, 'Deployment Status Oracle', '0xabc', '0xAbC')).toBe('Deploy Deployment Status Oracle')
+	expect(decodedActionLabel('Call 0x60806040', null, 'Question Data', '0xabc', '0xAbC')).toBe('Deploy Question Data')
 	expect(decodedActionLabel('Call 0x60806040', null, 'WETH', '0xdef', '0xabc')).toBe('Deploy contract')
 	expect(decodedActionLabel('Call 0x60806040', null, null)).toBe('Deploy contract')
-	expect(decodedActionLabel('submitReport(bytes32)', '0x1234', 'Deployment Status Oracle')).toBe('submitReport(bytes32)')
+	expect(decodedActionLabel('submitReport(bytes32)', '0x1234', 'OpenOracle')).toBe('submitReport(bytes32)')
 })
 
 test('clears a log deep link from the current activity entry before route navigation', () => {

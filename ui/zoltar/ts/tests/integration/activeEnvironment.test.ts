@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
+import { loadDeploymentStatusSnapshot, loadErc20Balance } from '../../protocol/index.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
@@ -125,6 +125,18 @@ void describe('active environment', () => {
 	void test('intentionally allows simulation mode on production-style hostnames', () => {
 		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?simulate=1' })).toBe(true)
 		expect(shouldUseSimulationLocation({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
+	})
+
+	void test('ignores simulation query parameters when the build disables browser simulation', () => {
+		const key = '__ZOLTAR_ENABLE_BROWSER_SIMULATION__'
+		const previous = Object.getOwnPropertyDescriptor(globalThis, key)
+		Object.defineProperty(globalThis, key, { configurable: true, value: false })
+		try {
+			expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?simulate=1' })).toBe(false)
+		} finally {
+			if (previous === undefined) Reflect.deleteProperty(globalThis, key)
+			else Object.defineProperty(globalThis, key, previous)
+		}
 	})
 
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
@@ -519,7 +531,7 @@ void describe('simulation backend', () => {
 		})
 		const repBalanceAttoRep = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
 		const wethBalanceAttoEth = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
-		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
+		const deploymentSnapshot = await loadDeploymentStatusSnapshot(readClient)
 
 		expect(repCode).not.toBe('0x')
 		expect(wethCode).not.toBe('0x')

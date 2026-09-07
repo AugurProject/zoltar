@@ -1,11 +1,15 @@
-import { createWalletClient, custom, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { createWalletClient, custom, decodeEventLog, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import { ReputationToken_ReputationToken, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
+import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { fetchLogsWithAdaptiveRanges, findContractDeploymentBlock } from '@zoltar/shared/logScan'
+import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
+import { getQuestionId } from '@zoltar/shared/questionId'
+import { getChildUniverseId } from '@zoltar/shared/universeId'
 export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
@@ -24,6 +28,7 @@ const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof secu
 if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
 
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
+const MAXIMUM_SECURITY_POOL_DEPLOYMENTS = 10_000
 
 const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
@@ -250,12 +255,11 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	const shareToken = getAddress(shareTokenAddress)
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: tradingFactory.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
 	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } = poolSettings
-	const [question, questionOutcome, universeForkTime] = await Promise.all([
-		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
+	const [questionFields, questionOutcome, universeForkTime] = await Promise.all([
+		loadLiveQuestionFields(client, getAddress(questionData), questionId),
 		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
 		client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
 	])
-	const questionFields = liveQuestionFields(question)
 	const canonicalPair = pairAddress === zeroAddress ? undefined : getAddress(pairAddress)
 	let yesReserve = 0n
 	let noReserve = 0n
@@ -306,25 +310,40 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	}
 }
 
-export function liveQuestionFields(question: readonly [title: string, description: string, startTime: bigint, endTime: bigint, ...rest: readonly unknown[]]) {
-	return { title: question[0], description: question[1], endTime: question[3] }
+export async function loadLiveQuestionFields(client: PublicClient, questionData: Address, questionId: bigint) {
+	const logs = await loadCanonicalQuestionCreatedLogs(client, questionData)
+	for (const log of logs) {
+		try {
+			const decoded = decodeEventLog({ abi: questionDataAbi, data: log.data, topics: log.topics })
+			if (decoded.eventName !== 'QuestionCreated' || decoded.args.questionId !== questionId) continue
+			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+			const { title, description, endTime } = decoded.args.questionData
+			return { title, description, endTime }
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			continue
+		}
+	}
+	throw new Error(`Question ${questionId.toString()} creation event is unavailable`)
 }
 
 export type SecurityPoolDeploymentIndex<Deployment, Anchor> = {
 	key: string | undefined
 	deployments: Deployment[]
 	anchor: Anchor | undefined
+	startBlock: bigint | undefined
 	pending: Promise<void> | undefined
 }
 
 export function createSecurityPoolDeploymentIndex<Deployment, Anchor>(): SecurityPoolDeploymentIndex<Deployment, Anchor> {
-	return { key: undefined, deployments: [], anchor: undefined, pending: undefined }
+	return { key: undefined, deployments: [], anchor: undefined, startBlock: undefined, pending: undefined }
 }
 
 function clearSecurityPoolDeploymentIndex<Deployment, Anchor>(index: SecurityPoolDeploymentIndex<Deployment, Anchor>, key: string) {
 	index.key = key
 	index.deployments = []
 	index.anchor = undefined
+	index.startBlock = undefined
 }
 
 export async function refreshSecurityPoolDeploymentIndex<Deployment, Anchor>(
@@ -394,7 +413,10 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 	loadLatest: () => Promise<RegistryBlockAnchor>,
 	isAnchorCanonical: (anchor: RegistryBlockAnchor) => Promise<boolean>,
 	loadEvents: (fromBlock: bigint, toBlock: bigint) => Promise<readonly Deployment[]>,
+	maximumItems = MAXIMUM_SECURITY_POOL_DEPLOYMENTS,
+	loadStartBlock: (toBlock: bigint) => Promise<bigint | undefined> = async () => 0n,
 ) {
+	if (!Number.isSafeInteger(maximumItems) || maximumItems < 0) throw new Error('SecurityPool deployment limit must be a non-negative safe integer')
 	const previous = index.pending
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
@@ -408,12 +430,16 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 			currentAnchor = undefined
 		}
 		const anchor = await loadLatest()
-		const fromBlock = currentAnchor === undefined ? 0n : currentAnchor.blockNumber + 1n
-		let appended = fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock)) : []
+		let candidateStartBlock = index.startBlock
+		if (currentAnchor === undefined && candidateStartBlock === undefined) candidateStartBlock = await loadStartBlock(anchor.blockNumber)
+		const fromBlock = currentAnchor === undefined ? candidateStartBlock : currentAnchor.blockNumber + 1n
+		if (currentDeployments.length > maximumItems) throw new Error(`SecurityPool deployment history exceeds the configured ${maximumItems.toString()}-item limit`)
+		let appended = fromBlock !== undefined && fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock), maximumItems - currentDeployments.length) : []
 		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
 			clearSecurityPoolDeploymentIndex(index, key)
 			currentDeployments = []
-			appended = await fetchLogsWithAdaptiveRanges(0n, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock))
+			candidateStartBlock = await loadStartBlock(anchor.blockNumber)
+			appended = candidateStartBlock === undefined ? [] : await fetchLogsWithAdaptiveRanges(candidateStartBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock), maximumItems)
 		}
 		if (!(await isAnchorCanonical(anchor))) {
 			clearSecurityPoolDeploymentIndex(index, key)
@@ -423,6 +449,7 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 		index.key = key
 		index.deployments = nextDeployments
 		index.anchor = anchor
+		index.startBlock = candidateStartBlock
 		snapshot = nextDeployments.slice()
 	})()
 	index.pending = refresh
@@ -456,22 +483,43 @@ function securityPoolDeploymentFromEvent(log: Readonly<{ args?: unknown }>): Sec
 	}
 }
 
-async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
+export async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
+	const anchor = await latestBlockIdentity(client)
+	const childLogs = await loadCanonicalDeployChildLogs(client, configuration.zoltar, anchor.blockNumber)
+	const childrenByParent = new Map<bigint, bigint[]>()
+	for (const log of childLogs) {
+		const args = log.args
+		if (typeof args !== 'object' || args === null) throw new Error('DeployChild event is missing its arguments')
+		const universeId = Reflect.get(args, 'universeId')
+		const outcomeIndex = Reflect.get(args, 'outcomeIndex')
+		const childUniverseId = Reflect.get(args, 'childUniverseId')
+		if (typeof universeId !== 'bigint' || typeof outcomeIndex !== 'bigint' || typeof childUniverseId !== 'bigint') throw new Error('DeployChild event is incomplete')
+		if (getChildUniverseId(universeId, outcomeIndex) !== childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		const child = await client.readContract({
+			abi: zoltarAbi,
+			address: configuration.zoltar,
+			args: [childUniverseId],
+			functionName: 'universes',
+			...registrySnapshotBlockParameters(anchor, getActiveBackend().id === 'simulation'),
+		})
+		if (child.parentUniverseId !== universeId || child.forkingOutcomeIndex !== outcomeIndex) throw new Error(`Zoltar universe ${childUniverseId.toString()} does not match its DeployChild route`)
+		const children = childrenByParent.get(universeId) ?? []
+		children.push(childUniverseId)
+		childrenByParent.set(universeId, children)
+	}
+	if (!(await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })))) {
+		throw new Error('DeployChild events changed during universe discovery')
+	}
 	const universeIds = [0n]
 	const seen = new Set(['0'])
 	for (let universeIndex = 0; universeIndex < universeIds.length; universeIndex += 1) {
 		const universeId = universeIds[universeIndex]
 		if (universeId === undefined) throw new Error('Universe discovery lost its current entry')
-		for (let start = 0n; ; start += 100n) {
-			const [, childUniverseIds, children] = await client.readContract({ abi: zoltarAbi, address: configuration.zoltar, functionName: 'getDeployedChildUniverses', args: [universeId, start, 100n] })
-			if (childUniverseIds.length !== children.length) throw new Error('Zoltar returned mismatched child universe arrays')
-			for (const childUniverseId of childUniverseIds) {
-				const key = childUniverseId.toString()
-				if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once`)
-				seen.add(key)
-				universeIds.push(childUniverseId)
-			}
-			if (children.length < 100) break
+		for (const childUniverseId of childrenByParent.get(universeId) ?? []) {
+			const key = childUniverseId.toString()
+			if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once`)
+			seen.add(key)
+			universeIds.push(childUniverseId)
 		}
 	}
 	return universeIds
@@ -502,6 +550,8 @@ async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, confi
 					toBlock,
 				})
 			).map(securityPoolDeploymentFromEvent),
+		MAXIMUM_SECURITY_POOL_DEPLOYMENTS,
+		async toBlock => await findContractDeploymentBlock(client, configuration.securityPoolFactory, toBlock),
 	)
 }
 

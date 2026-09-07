@@ -20,7 +20,7 @@
 				<h2>Conceptual Model Before the Graph</h2>
 				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
 				<ul>
-					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and REP branches.</li>
+					<li><code>ZoltarQuestionData</code> stores protocol validation fields and scalar encoding data; categorical presentation metadata is reconstructed from <code>QuestionCreated</code> events. <code>Zoltar</code> manages universes, forks, and REP branches.</li>
 					<li>A security pool tracks market collateral, vault accounting, open interest, and lifecycle state.</li>
 					<li>The share token tracks outcome-share balances.</li>
 					<li>The price coordinator stages operations that require a fresh REP/ETH price.</li>
@@ -56,7 +56,7 @@
 								<td><code>SecurityPoolFactory</code></td>
 								<td><code>ZoltarQuestionData</code></td>
 								<td>Deployment</td>
-								<td>Confirms that the question exists and is the required Yes/No categorical shape before reserving the canonical pool identity.</td>
+								<td>Confirms that the question exists and carries the compact binary marker derived only from categorical labels exactly <code>Yes</code>, then <code>No</code>, before reserving the canonical pool identity. Presentation labels remain event data.</td>
 							</tr>
 							<tr data-edge-id="factory-universe-lookup" data-source="Pool Factory" data-receiver="Zoltar" data-phase="Deployment">
 								<td><code>SecurityPoolFactory</code></td>
@@ -206,6 +206,7 @@
 					</li>
 					<li><code>WETH9</code>, <code>Multicall3</code>, and the imported <code>OpenOracle</code> implementation are compatibility or external boundaries; only OpenOracle's protocol-facing relationship is shown.</li>
 				</ul>
+				<p>Deployment progress has no onchain registry contract. Deployment tools read code at each manifest address and compare it with the pinned runtime hash; wiring and release provenance remain separate checks described in <a href="../reference/operator-guardrails.html">operator guardrails</a>.</p>
 			</section>
 
 			<section id="sources">

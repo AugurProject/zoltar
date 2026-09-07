@@ -22,6 +22,7 @@ import {
 	parseChainId,
 	parseMaxFeePerGas,
 	parseMaxTotalCost,
+	parseDeploymentProfile,
 	parsePrivateKey,
 	parseRpcUrl,
 	preflightDeploymentPlan,
@@ -129,11 +130,18 @@ describe('testnet deployment inputs', () => {
 			}),
 		).toEqual({
 			chainId: 11_155_111,
+			deploymentProfile: 'minimal',
 			maxFeePerGas: 42_000_000_000n,
 			maxTotalCost: 7_500_000_000_000_000_000n,
 			privateKey,
 			rpcUrl: 'https://rpc.example.test/',
 		})
+	})
+
+	test('uses the minimal deployment profile by default and validates explicit profiles', () => {
+		expect(parseDeploymentProfile(undefined)).toBe('minimal')
+		expect(parseDeploymentProfile('with-quote-venues')).toBe('with-quote-venues')
+		expect(() => parseDeploymentProfile('full')).toThrow('DEPLOYMENT_PROFILE')
 	})
 
 	test('warns about command history when documenting the private key option', () => {
@@ -539,7 +547,7 @@ describe('testnet deployment plan', () => {
 
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
 		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
-		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
+		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap, 'with-quote-venues')
 		const addressSet = new Set(plan.map(step => step.address))
 		const infrastructure = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
 		const bootstrapDescendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
@@ -572,6 +580,11 @@ describe('testnet deployment plan', () => {
 			uniswap.addresses.uniswapV4QuoterAddress,
 		]
 		for (const address of requiredAddresses) expect(addressSet.has(address)).toBe(true)
+		const minimalIds = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap).map(step => step.id)
+		expect(minimalIds).toContain('permit2')
+		expect(minimalIds).toContain('openOracle')
+		expect(minimalIds).not.toContain('uniswapV3Factory')
+		expect(minimalIds).not.toContain('uniswapV4PoolManager')
 		expect(Object.keys(bootstrapDescendants)).toHaveLength(16)
 		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
@@ -586,7 +599,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(25)
+		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

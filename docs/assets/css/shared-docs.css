@@ -1988,6 +1988,16 @@ body.paper-statoblast pre {
 	max-width: 100%;
 	overflow-x: auto;
 }
+body.paper-zoltar pre.code-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.paper-zoltar pre.code-scroll:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
 body.paper-statoblast .equation math {
 	display: block;
 	width: max-content;
@@ -3647,7 +3657,6 @@ body.paper-zoltar .footer-note {
 
 	body.docs-shell-page .interactive-tool-presets button,
 	body.docs-shell-page .interactive-tool-actions button,
-	body.docs-shell-page .interactive-tool [data-deployment-mask-retry],
 	body.docs-shell-page .segmented-control button,
 	body.docs-shell-page .peak-choice-control button {
 		min-height: 2.65rem;
@@ -3670,15 +3679,13 @@ body.paper-zoltar .footer-note {
 		box-shadow: 0 0 0 0.15rem var(--accent-soft);
 	}
 
-	body.docs-shell-page :is(.interactive-tool-presets, .interactive-tool-actions, .segmented-control, .peak-choice-control) button:hover:not(:disabled),
-	body.docs-shell-page .interactive-tool [data-deployment-mask-retry]:hover:not(:disabled) {
+	body.docs-shell-page :is(.interactive-tool-presets, .interactive-tool-actions, .segmented-control, .peak-choice-control) button:hover:not(:disabled) {
 		border-color: var(--accent);
 		background: var(--accent-soft);
 		color: var(--ink);
 	}
 
-	body.docs-shell-page :is(.interactive-tool-presets, .interactive-tool-actions, .segmented-control, .peak-choice-control) button:disabled,
-	body.docs-shell-page .interactive-tool [data-deployment-mask-retry]:disabled {
+	body.docs-shell-page :is(.interactive-tool-presets, .interactive-tool-actions, .segmented-control, .peak-choice-control) button:disabled {
 		opacity: 0.48;
 		cursor: not-allowed;
 	}
@@ -4034,19 +4041,6 @@ body.paper-zoltar .footer-note {
 		color: var(--muted);
 		cursor: not-allowed;
 		opacity: 0.52;
-	}
-
-	body.docs-shell-page #deployment-mask-input {
-		box-sizing: border-box;
-		width: min(100%, 28rem);
-		min-height: 2.75rem;
-		padding: 0.62rem 0.75rem;
-		border: 1px solid var(--line);
-		border-radius: 0.55rem;
-		background: var(--paper);
-		color: var(--ink);
-		font: inherit;
-		font-variant-numeric: tabular-nums;
 	}
 
 	body.docs-shell-page .example-value {

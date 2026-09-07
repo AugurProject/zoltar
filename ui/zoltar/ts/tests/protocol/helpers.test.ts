@@ -86,7 +86,7 @@ describe('contracts helpers', () => {
 		const outcomes = ['Yes', 'No']
 		const idA = getQuestionId(questionData, outcomes)
 		const idB = getQuestionId(questionData, outcomes)
-		const idDifferent = getQuestionId({ ...questionData, answerUnit: 'USD' }, outcomes)
+		const idDifferent = getQuestionId({ ...questionData, title: 'Different question' }, outcomes)
 
 		expect(idA).toBe(idB)
 		expect(idDifferent).not.toBe(idA)

@@ -4,7 +4,7 @@ export * from './trading.js'
 export * from './truthAuctionActions.js'
 export * from './truthAuctions.js'
 
-export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './deployment.js'
+export { getDeploymentSteps, loadDeploymentStatusSnapshot, loadErc20Allowance, loadErc20Balance } from './deployment.js'
 export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar/protocol/zoltar.js'
 export { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool, withdrawForkedEscalationDeposits } from '@zoltar/ui-zoltar/protocol/reporting.js'
 export { readOptionalMulticall } from '@zoltar/ui-zoltar/protocol/core.js'

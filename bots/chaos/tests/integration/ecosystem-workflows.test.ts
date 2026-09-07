@@ -11,7 +11,7 @@ import { chaosChain, createChaosReadPool, performCanonicalScan } from '../../src
 import { executionProfileId } from '../../src/runtime/operator.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadRuntimeState } from '../../src/state/operator-state.ts'
-import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
+import { statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { CHAOS_TEST_FINALITY_BLOCKS, CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
 
 const SCAN_SEED = 42
@@ -217,13 +217,13 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 				expect(parseTransaction(rawTransaction).type).toBe('eip1559')
 			}
 
-			const [questionCount, wethAfter, pair, vault] = await Promise.all([
-				readClient.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: current.infra.zoltarQuestionData, functionName: 'getQuestionCount' }),
+			const [questionLogs, wethAfter, pair, vault] = await Promise.all([
+				readClient.getLogs({ address: current.infra.zoltarQuestionData, fromBlock: 0n }),
 				readClient.readContract({ abi: statoblast_WETH9_WETH9.abi, address: getAddress(WETH_ADDRESS), args: [context.account.address], functionName: 'balanceOf' }),
 				readClient.readContract({ abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi, address: current.tradingFactory, args: [current.pool], functionName: 'getPair' }),
 				readClient.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: current.pool, args: [context.account.address], functionName: 'securityVaults' }),
 			])
-			expect(questionCount).toBe(current.baselineQuestionCount + 1n)
+			expect(BigInt(questionLogs.length)).toBe(current.baselineQuestionCount + 1n)
 			expect(wethAfter).toBeGreaterThan(wethBefore)
 			expect(pair).not.toBe(zeroAddress)
 			expect(vault[0]).toBeGreaterThan(0n)

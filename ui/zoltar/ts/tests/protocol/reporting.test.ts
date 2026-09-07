@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, reportOutcomeInSecurityPool, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
-import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -15,6 +15,36 @@ const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e8')
 const missingForkContinuationGetterMessage = 'The contract function "forkContinuation" returned no data ("0x"). The contract does not have the function "forkContinuation".'
 const carryLeafAbi = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
+const questionComponents = [
+	{ name: 'title', type: 'string' },
+	{ name: 'description', type: 'string' },
+	{ name: 'startTime', type: 'uint48' },
+	{ name: 'endTime', type: 'uint48' },
+	{ name: 'numTicks', type: 'uint120' },
+	{ name: 'displayValueMin', type: 'int256' },
+	{ name: 'displayValueMax', type: 'int256' },
+	{ name: 'answerUnit', type: 'string' },
+] as const
+const reportingQuestion = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+const reportingQuestionLog = {
+	data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [10n, reportingQuestion, ['Yes', 'No']]),
+	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(1n, { size: 32 })],
+}
+const getReportingQuestionLogs = async () => [reportingQuestionLog]
+let reportingChainIdentity = 0n
+
+function reportingBlockHash(chainIdentity: bigint, blockNumber: bigint): Hex {
+	return `0x${((chainIdentity << 64n) + blockNumber).toString(16).padStart(64, '0')}`
+}
+
+function createReportingBlockLoader() {
+	reportingChainIdentity += 1n
+	const chainIdentity = reportingChainIdentity
+	return async (request?: { blockNumber?: bigint }) => {
+		const number = request?.blockNumber ?? 1n
+		return { hash: reportingBlockHash(chainIdentity, number), number, timestamp: 88n, transactions: [] }
+	}
+}
 
 function hashCarryLeafForTest(depositor: Address, outcome: bigint, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) {
 	return keccak256(encodeAbiParameters(carryLeafAbi, [depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
@@ -122,17 +152,16 @@ describe('reporting protocol client', () => {
 
 	test('loadReportingDetails keeps proof deposits visible after optional unresolved parent escalation-deposit accounting cleanup', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const poolHeldVaultRepBackingAttoRep = 70n
 		const escrowedRep = 30n
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -164,7 +193,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [true, escrowedRep, [false, true, false]]
 				if (request.functionName === 'backingUnitsToAttoRep') return poolHeldVaultRepBackingAttoRep
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
@@ -193,15 +221,14 @@ describe('reporting protocol client', () => {
 
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -232,7 +259,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
@@ -259,15 +285,14 @@ describe('reporting protocol client', () => {
 
 	test('loadReportingDetails keeps parent settlement locked when the unrelated external fork happened after escalation ended', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ee')
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -298,7 +323,6 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
@@ -319,21 +343,19 @@ describe('reporting protocol client', () => {
 	})
 
 	test('loadReportingDetails keeps pool-level finality and previews the live reduced bond when no game exists', async () => {
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'getForkThresholdAttoRep') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -349,21 +371,19 @@ describe('reporting protocol client', () => {
 	})
 
 	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		let forkContinuationRead = false
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') {
 					forkContinuationRead = true
 					throw new Error(missingForkContinuationGetterMessage)
@@ -379,20 +399,18 @@ describe('reporting protocol client', () => {
 	})
 
 	test('loadReportingDetails requires the forkContinuation getter for deployed escalation games', async () => {
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
@@ -402,21 +420,19 @@ describe('reporting protocol client', () => {
 	})
 
 	test('loadReportingDetails keeps a known child outcome locked until the pool becomes operational', async () => {
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: createReportingBlockLoader(),
+			getLogs: getReportingQuestionLogs,
 			getCode: async () => '0x' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n, zeroAddress]
-				if (functionName === 'questions') return [questionTuple, 10n]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]

@@ -41,7 +41,6 @@ const deploymentFile = (value: unknown, source: string): DeploymentFile => {
 }
 
 const deploymentKind: Readonly<Record<string, string>> = {
-	deploymentStatusOracle: 'deploymentStatusOracle',
 	escalationGameClaimDelegate: 'escalationGameClaimDelegate',
 	escalationGameProofVerifier: 'escalationProofVerifier',
 	escalationGameFactory: 'escalationGameFactory',

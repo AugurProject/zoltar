@@ -24,7 +24,7 @@ const FORK_THRESHOLD = 20n * 10n ** 18n
 const NON_DECISION_THRESHOLD = FORK_THRESHOLD / 2n
 const START_BOND = 1n * 10n ** 18n
 const MAX_UINT256 = 2n ** 256n - 1n
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 1n
 
 const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
 	{

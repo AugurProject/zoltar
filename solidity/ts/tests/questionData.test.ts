@@ -27,7 +27,6 @@ import {
 } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
 import type { ScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
 
-const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12
 const SCALAR_ENCODING_FUZZ_STATE_MASK = (1n << 128n) - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
@@ -161,25 +160,18 @@ describe('Question Data', () => {
 			address: questionDataAddress,
 			args: [questionId],
 		})
-		assert.strictEqual(data.title, testCategoricalQuestion.title, 'title mismatch')
-		assert.strictEqual(data.description, testCategoricalQuestion.description, 'description mismatch')
-		assert.strictEqual(data.startTime, testCategoricalQuestion.startTime, 'startTime mismatch')
-		assert.strictEqual(data.endTime, testCategoricalQuestion.endTime, 'endTime mismatch')
-		assert.strictEqual(data.numTicks, testCategoricalQuestion.numTicks, 'numTicks mismatch')
+		const protocolData = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'protocolQuestions',
+			address: questionDataAddress,
+			args: [questionId],
+		})
+		assert.strictEqual(data.title, '', 'categorical presentation metadata should not be retained in storage')
+		assert.deepStrictEqual([...protocolData], [testCategoricalQuestion.startTime, testCategoricalQuestion.endTime, 0n, 2n, true], 'compact protocol state should retain timing, outcome count, and the binary invariant')
 		assert.ok(areEqualArrays(fetchedOutcomeLabels, outcomeLabels), 'outcomeLabels mismatch')
-		assert.strictEqual(data.displayValueMin, testCategoricalQuestion.displayValueMin, 'displayValueMin mismatch')
-		assert.strictEqual(data.displayValueMax, testCategoricalQuestion.displayValueMax, 'displayValueMax mismatch')
-		assert.strictEqual(data.answerUnit, testCategoricalQuestion.answerUnit, 'answerUnit mismatch')
 		assert.strictEqual(createdLog.args.questionId, questionId, 'QuestionCreated should identify the question')
 		assert.strictEqual(createdLog.args.createdTimestamp, createdTimestamp, 'QuestionCreated should expose the stored creation timestamp')
-		assert.strictEqual(createdLog.args.questionData.title, data.title, 'QuestionCreated should expose the stored title')
-		assert.strictEqual(createdLog.args.questionData.description, data.description, 'QuestionCreated should expose the stored description')
-		assert.strictEqual(createdLog.args.questionData.startTime, data.startTime, 'QuestionCreated should expose the stored start time')
-		assert.strictEqual(createdLog.args.questionData.endTime, data.endTime, 'QuestionCreated should expose the stored end time')
-		assert.strictEqual(createdLog.args.questionData.numTicks, data.numTicks, 'QuestionCreated should expose the stored tick count')
-		assert.strictEqual(createdLog.args.questionData.displayValueMin, data.displayValueMin, 'QuestionCreated should expose the stored display minimum')
-		assert.strictEqual(createdLog.args.questionData.displayValueMax, data.displayValueMax, 'QuestionCreated should expose the stored display maximum')
-		assert.strictEqual(createdLog.args.questionData.answerUnit, data.answerUnit, 'QuestionCreated should expose the stored answer unit')
+		assert.deepStrictEqual(createdLog.args.questionData, testCategoricalQuestion, 'QuestionCreated should preserve categorical presentation metadata')
 		assert.deepStrictEqual(Array.from(createdLog.args.outcomeOptions), fetchedOutcomeLabels, 'QuestionCreated should expose the stored outcome labels')
 
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 0n)), 'invalid is valid')
@@ -188,8 +180,8 @@ describe('Question Data', () => {
 		assert.ok(await isMalformedAnswerOption(client, questionId, 3n), 'does not exist')
 
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Yes', 'Yes is valid')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, 2n), 'No', 'No is valid')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Categorical outcome', 'first categorical outcome is valid')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 2n), 'Categorical outcome', 'second categorical outcome is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed', 'does not exist')
 	})
 
@@ -588,70 +580,11 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(labels2, ['Yes', 'No'], 'binary outcome labels should match')
 	})
 
-	test('question pagination returns exact-length pages without zero padding', async () => {
-		const question = {
-			title: 'Paged Question',
-			description: '',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
-		const firstOutcomes = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
-		const secondOutcomes = ['Yes', 'No']
-		const secondQuestion = { ...question, title: 'Paged Question 2' }
-		await createQuestion(client, question, firstOutcomes)
-		await createQuestion(client, secondQuestion, secondOutcomes)
-		const firstQuestionId = getQuestionId(question, firstOutcomes)
-		const secondQuestionId = getQuestionId(secondQuestion, secondOutcomes)
-
-		const rawQuestionPage = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestions',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [1n, 5n],
-		})
-		const maxCountQuestionPage = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestions',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [0n, MAX_UINT256],
-		})
-
-		const rawOutcomePage = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [firstQuestionId, 1n, 5n],
-		})
-		const maxCountOutcomePage = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [firstQuestionId, 1n, MAX_UINT256],
-		})
-		const questionPage = rawQuestionPage.filter((questionId: bigint) => questionId !== 0n)
-		const outcomePage = rawOutcomePage.filter((label: string) => label !== '')
-
-		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
-		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
-		assert.deepStrictEqual(maxCountQuestionPage, [firstQuestionId, secondQuestionId], 'question paging should clamp max count to available ids')
-		assert.deepStrictEqual(maxCountOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should clamp max count to available labels')
-	})
-
-	test('question registry, stored data, and malformed classifiers stay coherent across appends', async () => {
+	test('QuestionCreated events preserve categorical discovery order and metadata', async () => {
 		const questionDataAddress = getInfraContractAddresses().zoltarQuestionData
-		const initialCount = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestionCount',
-			address: questionDataAddress,
-			args: [],
-		})
 		const baseQuestion = {
-			title: 'Question registry coherence 1',
-			description: 'persistent registry fixture',
+			title: 'Event-discovered question 1',
+			description: 'metadata lives in the creation event',
 			startTime: (await mockWindow.getTime()) + 100000n,
 			endTime: (await mockWindow.getTime()) + 200000n,
 			numTicks: 0n,
@@ -660,70 +593,44 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 		const categoricalOutcomes = ['Yes', 'No']
-		const secondQuestion = { ...baseQuestion, title: 'Question registry coherence 2' }
+		const secondQuestion = { ...baseQuestion, title: 'Event-discovered question 2' }
+		const firstQuestionId = getQuestionId(baseQuestion, categoricalOutcomes)
+		const secondQuestionId = getQuestionId(secondQuestion, categoricalOutcomes)
+
+		await createQuestion(client, baseQuestion, categoricalOutcomes)
+		await createQuestion(client, secondQuestion, categoricalOutcomes)
+		const createdEvents = (await client.getLogs({ address: questionDataAddress, fromBlock: 0n })).map(log => decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: log.topics })).filter(log => log.eventName === 'QuestionCreated')
+		assert.deepStrictEqual(
+			createdEvents.map(event => event.args.questionId),
+			[firstQuestionId, secondQuestionId],
+			'creation events should be a canonical ordered discovery source',
+		)
+		assert.deepStrictEqual(createdEvents[0]?.args.outcomeOptions, categoricalOutcomes, 'creation events should preserve categorical labels')
+		assert.strictEqual(createdEvents[0]?.args.questionData.title, baseQuestion.title, 'creation events should preserve presentation metadata')
+		assert.deepStrictEqual(await getOutcomeLabels(client, firstQuestionId), categoricalOutcomes, 'off-chain helpers should replay categorical labels from events')
+		await assert.rejects(createQuestion(client, baseQuestion, categoricalOutcomes), /Question already exists and cannot be created twice/)
+		const afterDuplicate = (await client.getLogs({ address: questionDataAddress, fromBlock: 0n })).map(log => decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: log.topics })).filter(log => log.eventName === 'QuestionCreated')
+		assert.strictEqual(afterDuplicate.length, 2, 'a rejected duplicate must not emit a discovery event')
+	})
+
+	test('scalar malformed classifiers and public answer names stay coherent', async () => {
 		const scalarQuestion = {
-			...baseQuestion,
-			title: 'Question registry coherence scalar',
+			title: 'Scalar classifier coherence',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
 			numTicks: 10n,
 			displayValueMin: -5n,
 			displayValueMax: 5n,
 			answerUnit: 'points',
 		}
-		const firstQuestionId = getQuestionId(baseQuestion, categoricalOutcomes)
-		const secondQuestionId = getQuestionId(secondQuestion, categoricalOutcomes)
 		const scalarQuestionId = getQuestionId(scalarQuestion, [])
-		const expectedQuestionIds = [firstQuestionId, secondQuestionId, scalarQuestionId]
-
-		await createQuestion(client, baseQuestion, categoricalOutcomes)
-		const firstStoredData = await getQuestionData(client, firstQuestionId)
-		const firstStoredOutcomes = await getOutcomeLabels(client, firstQuestionId)
-		await createQuestion(client, secondQuestion, categoricalOutcomes)
 		await createQuestion(client, scalarQuestion, [])
-
-		const finalCount = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestionCount',
-			address: questionDataAddress,
-			args: [],
-		})
-		const appendedQuestionIds = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestions',
-			address: questionDataAddress,
-			args: [initialCount, finalCount - initialCount],
-		})
-
-		assert.strictEqual(finalCount, initialCount + 3n, 'each successful create should append exactly one question id')
-		assert.deepStrictEqual(appendedQuestionIds, expectedQuestionIds, 'question ids should be unique and preserve creation order')
-		assert.strictEqual(new Set(appendedQuestionIds).size, appendedQuestionIds.length, 'the question registry must not contain duplicate ids')
-		assert.deepStrictEqual(await getQuestionData(client, firstQuestionId), firstStoredData, 'later appends must not mutate stored question data')
-		assert.deepStrictEqual(await getOutcomeLabels(client, firstQuestionId), firstStoredOutcomes, 'later appends must not mutate stored outcome labels')
-
-		await assert.rejects(createQuestion(client, baseQuestion, categoricalOutcomes), /Question already exists and cannot be created twice/)
-		assert.strictEqual(
-			await client.readContract({
-				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-				functionName: 'getQuestionCount',
-				address: questionDataAddress,
-				args: [],
-			}),
-			finalCount,
-			'a rejected duplicate must not change the registry count',
-		)
-
-		const classifierSamples = [
-			{ questionId: firstQuestionId, answers: [0n, 1n, 2n, 3n] },
-			{
-				questionId: scalarQuestionId,
-				answers: [combineUint256FromTwoWithInvalid(true, 0n, 0n), combineUint256FromTwoWithInvalid(false, 5n, 5n), combineUint256FromTwoWithInvalid(false, 11n, 0n), withScalarReservedBits(combineUint256FromTwoWithInvalid(false, 5n, 5n))],
-			},
-		]
-		for (const sample of classifierSamples) {
-			for (const answer of sample.answers) {
-				const malformed = await isMalformedAnswerOption(client, sample.questionId, answer)
-				const name = await getAnswerOptionName(client, sample.questionId, answer)
-				assert.strictEqual(name === 'Malformed', malformed, 'the malformed classifier and public answer name must agree')
-			}
+		const answers = [combineUint256FromTwoWithInvalid(true, 0n, 0n), combineUint256FromTwoWithInvalid(false, 5n, 5n), combineUint256FromTwoWithInvalid(false, 11n, 0n), withScalarReservedBits(combineUint256FromTwoWithInvalid(false, 5n, 5n))]
+		for (const answer of answers) {
+			const malformed = await isMalformedAnswerOption(client, scalarQuestionId, answer)
+			const name = await getAnswerOptionName(client, scalarQuestionId, answer)
+			assert.strictEqual(name === 'Malformed', malformed, 'the scalar malformed classifier and public answer name must agree')
 		}
 	})
 })

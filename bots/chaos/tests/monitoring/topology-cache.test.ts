@@ -78,6 +78,7 @@ function cache(questionCount = 2): CanonicalImmutableTopologyCache {
 		discoveryCursors: {
 			poolDeployments: { canonicalCount: '1', commitment: hash(61), nextIndex: '1', residentLimit: '100', retentionMode: 'resident' },
 			questions: { canonicalCount: questionCount.toString(), commitment: hash(62), nextIndex: questionCount.toString(), residentLimit: questionCount.toString(), retentionMode: 'resident' },
+			universeChildren: { canonicalCount: '2', commitment: hash(60), nextIndex: '2', residentLimit: '99', retentionMode: 'resident' },
 			vaultsByPool: { [pool.toLowerCase()]: { canonicalCount: '2', commitment: hash(63), nextIndex: '2', residentLimit: '100', retentionMode: 'resident' } },
 		},
 		pairsByPool: { [pool.toLowerCase()]: address(30) },

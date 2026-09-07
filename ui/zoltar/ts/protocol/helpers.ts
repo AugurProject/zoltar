@@ -1,4 +1,5 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getQuestionId } from '@zoltar/shared/questionId'
 import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type IntegerLike = bigint | number
@@ -124,31 +125,7 @@ export function requireSecurityVaultTupleArray(value: unknown, context: string):
 	throw new Error(`Unexpected ${context} response`)
 }
 
-export function getQuestionId(questionData: QuestionData, outcomeOptions: readonly string[]) {
-	return BigInt(
-		keccak256(
-			encodeAbiParameters(
-				[
-					{
-						type: 'tuple',
-						components: [
-							{ name: 'title', type: 'string' },
-							{ name: 'description', type: 'string' },
-							{ name: 'startTime', type: 'uint256' },
-							{ name: 'endTime', type: 'uint256' },
-							{ name: 'numTicks', type: 'uint120' },
-							{ name: 'displayValueMin', type: 'int256' },
-							{ name: 'displayValueMax', type: 'int256' },
-							{ name: 'answerUnit', type: 'string' },
-						],
-					},
-					{ type: 'string[]' },
-				],
-				[questionData, outcomeOptions],
-			),
-		),
-	)
-}
+export { getQuestionId }
 
 export function getQuestionIdHex(questionId: bigint) {
 	return `0x${questionId.toString(16)}`

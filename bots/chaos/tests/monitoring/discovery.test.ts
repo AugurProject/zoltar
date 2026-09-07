@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,6 +32,11 @@ import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUE
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
+let testChainIdentity = 0
+
+beforeEach(() => {
+	testChainIdentity += 1
+})
 
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { force: true, recursive: true })))
@@ -109,7 +114,8 @@ interface GraphOverrides {
 	forkerZoltar?: Address
 	historicalBlockErrors?: readonly string[]
 	historicalBlockHashes?: Readonly<Record<string, `0x${string}`>>
-	outcomeLabelPage?: (questionId: bigint, start: bigint, count: bigint) => readonly string[]
+	invalidDeterministicQuestionId?: boolean
+	invalidDeterministicChildId?: boolean
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
 	poolDeployments?: readonly {
 		parent: Address
@@ -121,6 +127,8 @@ interface GraphOverrides {
 		universeId: bigint
 	}[]
 	questionIds?: readonly bigint[]
+	maximumTopologyLogRange?: bigint
+	topologyEventBlockNumbers?: readonly bigint[]
 	routerFactory?: Address
 	tradingSecurityPoolFactory?: Address
 	uniswapFactory?: Address
@@ -130,17 +138,21 @@ interface GraphOverrides {
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
 	const pinnedReads: Array<bigint | undefined> = []
 	const contractReads: Array<{ args?: readonly unknown[]; functionName: string }> = []
+	const logReads: Array<{ event: string | undefined; fromBlock: bigint | undefined; toBlock: bigint | undefined }> = []
 	let requestedBlock: bigint | undefined
 	const implementation = {
 		async getBalance(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
 			return 10n
 		},
-		async getBlock(parameters: { blockNumber?: bigint }) {
-			requestedBlock = parameters.blockNumber
-			const number = parameters.blockNumber ?? anchorBlockNumber
+		async getBlock(parameters?: { blockNumber?: bigint }) {
+			requestedBlock = parameters?.blockNumber
+			const number = parameters?.blockNumber ?? anchorBlockNumber
 			if (graph.historicalBlockErrors?.includes(number.toString()) === true) throw new Error(`Historical block ${number.toString()} unavailable`)
-			return { baseFeePerGas: graph.baseFeePerGas === undefined ? 1n : graph.baseFeePerGas, hash: graph.historicalBlockHashes?.[number.toString()] ?? (number === anchorBlockNumber ? blockHash : hash(Number(number))), number, timestamp: 1_000n }
+			let canonicalHash = hash(Number(number))
+			if (number === 0n) canonicalHash = hash(10_000 + testChainIdentity)
+			else if (number === anchorBlockNumber) canonicalHash = blockHash
+			return { baseFeePerGas: graph.baseFeePerGas === undefined ? 1n : graph.baseFeePerGas, hash: graph.historicalBlockHashes?.[number.toString()] ?? canonicalHash, number, timestamp: 1_000n }
 		},
 		async getChainId() {
 			return 31337
@@ -148,6 +160,48 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
+		},
+		async getLogs(parameters: { event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }) {
+			logReads.push({ event: parameters.event?.name, fromBlock: parameters.fromBlock, toBlock: parameters.toBlock })
+			if (graph.maximumTopologyLogRange !== undefined && parameters.fromBlock !== undefined && parameters.toBlock !== undefined && parameters.toBlock - parameters.fromBlock + 1n > graph.maximumTopologyLogRange) throw new Error('block range is too large')
+			const inRequestedRange = (index: number) => {
+				const eventBlock = graph.topologyEventBlockNumbers?.[index] ?? 1n
+				return (parameters.fromBlock === undefined || eventBlock >= parameters.fromBlock) && (parameters.toBlock === undefined || eventBlock <= parameters.toBlock)
+			}
+			if (parameters.event?.name === 'DeployChild') {
+				return Object.entries(graph.childOutcomesByUniverse ?? {}).flatMap(([universeId, outcomes]) =>
+					outcomes.flatMap((outcomeIndex, index) =>
+						inRequestedRange(index)
+							? [
+									{
+										args: {
+											childUniverseId: BigInt(universeId) === 0n ? outcomeIndex : BigInt(universeId) * 100n + outcomeIndex,
+											outcomeIndex,
+											universeId: BigInt(universeId),
+										},
+									},
+								]
+							: [],
+					),
+				)
+			}
+			if (parameters.event?.name === 'QuestionCreated') {
+				return (graph.questionIds ?? []).flatMap((questionId, index) =>
+					inRequestedRange(index)
+						? [
+								{
+									args: {
+										createdTimestamp: 900n,
+										outcomeOptions: [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])],
+										questionData: { answerUnit: 'shares', description: 'Description', displayValueMax: 1n, displayValueMin: 0n, endTime: 2_000n, numTicks: 2n, startTime: 1_000n, title: `Question ${questionId.toString()}` },
+										questionId,
+									},
+								},
+							]
+						: [],
+				)
+			}
+			throw new Error(`Unexpected log read ${parameters.event?.name ?? 'without an event'}`)
 		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
 			pinnedReads.push(parameters.blockNumber)
@@ -161,6 +215,19 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			switch (parameters.functionName) {
 				case 'zoltar':
 					return graph.forkerZoltar ?? address(2)
+				case 'getQuestionId': {
+					const questionData = parameters.args?.[0]
+					if (typeof questionData !== 'object' || questionData === null || !('title' in questionData) || typeof questionData.title !== 'string') throw new Error('Malformed getQuestionId test input')
+					const suffix = questionData.title.match(/^Question (\d+)$/)?.[1]
+					if (suffix === undefined) throw new Error('Question test title does not encode its ID')
+					return BigInt(suffix) + (graph.invalidDeterministicQuestionId === true ? 1n : 0n)
+				}
+				case 'getChildUniverseId': {
+					const parentUniverseId = parameters.args?.[0]
+					const outcomeIndex = parameters.args?.[1]
+					if (typeof parentUniverseId !== 'bigint' || typeof outcomeIndex !== 'bigint') throw new Error('Child route test inputs are required')
+					return (parentUniverseId === 0n ? outcomeIndex : parentUniverseId * 100n + outcomeIndex) + (graph.invalidDeterministicChildId === true ? 1n : 0n)
+				}
 				case 'securityPoolFactory':
 					return graph.tradingSecurityPoolFactory ?? address(4)
 				case 'factory':
@@ -201,35 +268,6 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 5n
 				case 'getMigrationRepBalanceAttoRep':
 					return 0n
-				case 'getDeployedChildUniverses': {
-					const universeId = parameters.args?.[0]
-					const start = parameters.args?.[1]
-					const count = parameters.args?.[2]
-					if (typeof universeId !== 'bigint' || typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Child-universe page arguments required')
-					const outcomes = [...(graph.childOutcomesByUniverse?.[universeId.toString()] ?? [])].slice(Number(start), Number(start + count))
-					const childIds = outcomes.map(outcome => (universeId === 0n ? outcome : universeId * 100n + outcome))
-					return [outcomes, childIds, childIds.map(() => ({}))]
-				}
-				case 'getQuestionCount':
-					return BigInt(graph.questionIds?.length ?? 0)
-				case 'getQuestions': {
-					const start = parameters.args?.[0]
-					const count = parameters.args?.[1]
-					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Question page arguments required')
-					return [...(graph.questionIds ?? [])].slice(Number(start), Number(start + count))
-				}
-				case 'questions':
-					return ['Question', 'Description', 1_000n, 2_000n, 2n, 0n, 1n, 'shares']
-				case 'questionCreatedTimestamp':
-					return 900n
-				case 'getOutcomeLabels': {
-					const questionId = parameters.args?.[0]
-					const start = parameters.args?.[1]
-					const count = parameters.args?.[2]
-					if (typeof questionId !== 'bigint' || typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Outcome-label page arguments required')
-					if (graph.outcomeLabelPage !== undefined) return graph.outcomeLabelPage(questionId, start, count)
-					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
-				}
 				case 'securityPoolDeploymentCount':
 					return BigInt(graph.poolDeployments?.length ?? 0)
 				case 'securityPoolDeploymentsRange': {
@@ -257,7 +295,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			return value
 		},
 	})
-	return { client, contractReads, pinnedReads, requested: () => requestedBlock }
+	return { client, contractReads, logReads, pinnedReads, requested: () => requestedBlock }
 }
 
 interface RefundBackfillOverrides {
@@ -777,9 +815,9 @@ describe('anchored ecosystem discovery', () => {
 			wallet: address(1),
 		})
 		expect(snapshot.questions).toEqual([])
-		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1'])
-		expect(snapshot.warnings).toContain('Question discovery truncated while bounded catch-up authenticated 2 of 3 canonical entries')
-		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery truncated'))).toBeTrue()
+		expect(snapshot.universes).toEqual([])
+		expect(snapshot.warnings).toContain('Question discovery paused because at least 3 creation events exceed the configured 2-entry resident limit')
+		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery paused'))).toBeTrue()
 	})
 
 	test('bounds a wide universe fan-out to the resident envelope without building an unbounded queue', async () => {
@@ -792,9 +830,142 @@ describe('anchored ecosystem discovery', () => {
 			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
 			wallet: address(1),
 		})
-		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2'])
-		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery truncated at 3 retained universes'))).toBeTrue()
-		expect(fake.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses').map(read => read.args)).toEqual([[0n, 0n, 3n]])
+		expect(snapshot.universes).toEqual([])
+		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery paused'))).toBeTrue()
+	})
+
+	test('replays overflowed child discovery after the universe limit increases', async () => {
+		const graph = { childOutcomesByUniverse: { '0': [1n, 2n, 3n] } }
+		const first = fakeClient(10n, hash(10), graph)
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: first.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 2, maxVaultsPerPool: 3 },
+			recordTopologyCache: value => {
+				checkpoint = value
+			},
+			wallet: address(1),
+		})
+		if (checkpoint === undefined) throw new Error('Universe overflow checkpoint was not recorded')
+		const second = fakeClient(11n, hash(11), { ...graph, historicalBlockHashes: { '10': hash(10) } })
+		const recovered = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 11n,
+			client: second.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 4, maxVaultsPerPool: 3 },
+			topologyCache: checkpoint,
+			wallet: address(1),
+		})
+		expect(recovered.universes.map(universe => universe.id)).toEqual(['0', '1', '2', '3'])
+	})
+
+	test('bounds event replay across multiple ranges and persists overflow as a restart-safe execution stop', async () => {
+		const questionIds = [101n, 102n, 103n, 104n]
+		const first = fakeClient(20_001n, hash(20_001), { questionIds, topologyEventBlockNumbers: [1n, 10_001n, 20_001n, 20_001n] })
+		let checkpoint: CanonicalImmutableTopologyCache | undefined
+		const limits = { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 20_001n,
+			client: first.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits,
+			recordTopologyCache: value => {
+				checkpoint = value
+			},
+			wallet: address(1),
+		})
+		expect(snapshot.questions).toEqual([])
+		expect(checkpoint?.discoveryCursors.questions).toMatchObject({ canonicalCount: '4', nextIndex: '4', retentionMode: 'overflow' })
+		const questionReads = first.logReads.filter(read => read.event === 'QuestionCreated')
+		expect(questionReads.length).toBeGreaterThan(3)
+		for (const read of questionReads) {
+			if (read.fromBlock === undefined || read.toBlock === undefined) throw new Error('Question event replay was not block bounded')
+			expect(read.toBlock - read.fromBlock + 1n).toBeLessThanOrEqual(10_000n)
+		}
+		if (checkpoint === undefined) throw new Error('Overflow replay did not persist a topology checkpoint')
+		const restarted = fakeClient(20_002n, hash(20_002), { historicalBlockHashes: { '20001': hash(20_001) }, questionIds, topologyEventBlockNumbers: [1n, 10_001n, 20_001n, 20_001n] })
+		const restartedSnapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 20_002n,
+			client: restarted.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits,
+			topologyCache: checkpoint,
+			wallet: address(1),
+		})
+		expect(restartedSnapshot.questions).toEqual([])
+		expect(restarted.logReads.filter(read => read.event === 'QuestionCreated')).toEqual([])
+		const raised = fakeClient(20_003n, hash(20_003), { historicalBlockHashes: { '20001': hash(20_001) }, questionIds, topologyEventBlockNumbers: [1n, 10_001n, 20_001n, 20_001n] })
+		const recovered = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 20_003n,
+			client: raised.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { ...limits, maxQuestions: 4 },
+			topologyCache: checkpoint,
+			wallet: address(1),
+		})
+		expect(recovered.questions.map(question => question.id)).toEqual(['101', '102', '103', '104'])
+	})
+
+	test('stops question replay before later ranges when aggregate labels exceed the resident envelope', async () => {
+		const questionIds = [101n, 102n, 103n, 104n]
+		const labels = Array.from({ length: 4_096 }, (_, index) => `L${index.toString()}`)
+		const fake = fakeClient(30_001n, hash(30_001), {
+			outcomeLabelsByQuestion: Object.fromEntries(questionIds.map(questionId => [questionId.toString(), labels])),
+			questionIds,
+			topologyEventBlockNumbers: [1n, 10_001n, 20_001n, 30_001n],
+		})
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 30_001n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxOutcomeLabelsPerQuestion: 4_096, maxPools: 3, maxQuestions: 5, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+			wallet: address(1),
+		})
+		expect(snapshot.questions).toEqual([])
+		const questionReads = fake.logReads.filter(read => read.event === 'QuestionCreated')
+		expect(questionReads.some(read => read.fromBlock !== undefined && read.fromBlock >= 30_000n)).toBeFalse()
+	})
+
+	test('adapts topology replay to a provider block-range limit', async () => {
+		const fake = fakeClient(25n, hash(25), { maximumTopologyLogRange: 3n, questionIds: [101n], topologyEventBlockNumbers: [2n] })
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 25n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+			wallet: address(1),
+		})
+		expect(snapshot.questions.map(question => question.id)).toEqual(['101'])
+		expect(fake.logReads.some(read => read.fromBlock !== undefined && read.toBlock !== undefined && read.toBlock - read.fromBlock + 1n > 3n)).toBeTrue()
+		expect(fake.logReads.filter(read => read.event === 'QuestionCreated').some(read => read.fromBlock !== undefined && read.toBlock !== undefined && read.toBlock - read.fromBlock + 1n <= 3n)).toBeTrue()
+	})
+
+	test('rejects a question event whose ID does not match the deterministic contract result', async () => {
+		const fake = fakeClient(2n, hash(2), { invalidDeterministicQuestionId: true, questionIds: [101n] })
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 2n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('mismatched deterministic question ID')
+	})
+
+	test('rejects a child event whose ID does not match the deterministic contract result', async () => {
+		const fake = fakeClient(2n, hash(2), { childOutcomesByUniverse: { '0': [1n] }, invalidDeterministicChildId: true })
+		await expect(
+			discoverEcosystemSnapshot({
+				anchorBlockNumber: 2n,
+				client: fake.client,
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				limits: { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 },
+				wallet: address(1),
+			}),
+		).rejects.toThrow('mismatched deterministic child universe ID')
 	})
 
 	test('advances oversized counted-registry cursors across restarts while retaining no historical topology', async () => {
@@ -829,23 +1000,22 @@ describe('anchored ecosystem discovery', () => {
 				wallet: address(1),
 			})
 			if (checkpoint === undefined) throw new Error('Oversized discovery did not record its durable cursor')
-			const expectedCursor = Math.min((cycle + 1) * limits.maxQuestions, questionIds.length)
-			expect(checkpoint.discoveryCursors.questions).toMatchObject({ canonicalCount: questionIds.length.toString(), nextIndex: expectedCursor.toString(), retentionMode: 'overflow' })
-			expect(checkpoint.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: poolDeployments.length.toString(), nextIndex: expectedCursor.toString(), retentionMode: 'overflow' })
+			const expectedPoolCursor = Math.min((cycle + 1) * limits.maxQuestions, questionIds.length)
+			expect(checkpoint.discoveryCursors.questions).toMatchObject({ canonicalCount: '4', nextIndex: '4', retentionMode: 'overflow' })
+			expect(checkpoint.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: poolDeployments.length.toString(), nextIndex: expectedPoolCursor.toString(), retentionMode: 'overflow' })
 			expect(checkpoint.questions).toEqual([])
 			expect(checkpoint.poolDeployments).toEqual([])
 			expect(snapshot.questions).toEqual([])
 			expect(snapshot.pools).toEqual([])
-			expect(fake.contractReads.filter(read => read.functionName === 'getQuestions')).toHaveLength(1)
+			expect(fake.contractReads.filter(read => read.functionName === 'getQuestions')).toHaveLength(0)
 			expect(fake.contractReads.filter(read => read.functionName === 'securityPoolDeploymentsRange')).toHaveLength(1)
 			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(0)
 			expect(fake.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(0)
-			expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(0)
 			await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint, limits)
 			previousAnchor = anchor
 		}
 		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
-		expect(exact?.discoveryCursors.questions).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
+		expect(exact?.discoveryCursors.questions).toMatchObject({ canonicalCount: '4', nextIndex: '4', retentionMode: 'overflow' })
 		expect(exact?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.questions).toEqual([])
 		expect(exact?.poolDeployments).toEqual([])
@@ -894,6 +1064,7 @@ describe('anchored ecosystem discovery', () => {
 					discoveryCursors: {
 						poolDeployments: restored?.discoveryCursors.poolDeployments ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
 						questions: restored?.discoveryCursors.questions ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
+						universeChildren: restored?.discoveryCursors.universeChildren ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '2', retentionMode: 'resident' },
 						vaultsByPool: { [pool]: advanced.cursor },
 					},
 					pairsByPool: {},
@@ -940,7 +1111,7 @@ describe('anchored ecosystem discovery', () => {
 		).rejects.toThrow('no longer extends its authenticated cursor')
 	})
 
-	test('exhausts categorical outcome labels beyond the first 256-entry page', async () => {
+	test('loads large categorical outcome metadata from the creation event', async () => {
 		const labels = Array.from({ length: 512 }, (_, index) => `Outcome ${index.toString()}`)
 		const fake = fakeClient(10n, hash(1), {
 			outcomeLabelsByQuestion: { '101': labels },
@@ -953,16 +1124,11 @@ describe('anchored ecosystem discovery', () => {
 			wallet: address(1),
 		})
 		expect(snapshot.questions[0]?.outcomeLabels).toEqual(labels)
-		expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels').map(read => read.args)).toEqual([
-			[101n, 0n, 256n],
-			[101n, 256n, 256n],
-			[101n, 512n, 256n],
-		])
 	})
 
-	test('rejects a provider that returns a full outcome-label page forever', async () => {
+	test('rejects creation events beyond the configured outcome-label limit', async () => {
 		const fake = fakeClient(10n, hash(1), {
-			outcomeLabelPage: (_questionId, start, count) => Array.from({ length: Number(count) }, (_, index) => `Outcome ${(start + BigInt(index)).toString()}`),
+			outcomeLabelsByQuestion: { '101': Array.from({ length: 513 }, (_, index) => `Outcome ${index.toString()}`) },
 			questionIds: [101n],
 		})
 		await expect(
@@ -974,11 +1140,6 @@ describe('anchored ecosystem discovery', () => {
 				wallet: address(1),
 			}),
 		).rejects.toThrow('Question 101 exceeds the configured 512-label discovery limit')
-		expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels').map(read => read.args)).toEqual([
-			[101n, 0n, 256n],
-			[101n, 256n, 256n],
-			[101n, 512n, 1n],
-		])
 	})
 
 	test('rejects outcome labels that exceed the configured UTF-8 byte budget', async () => {
@@ -994,7 +1155,7 @@ describe('anchored ecosystem discovery', () => {
 				limits: { maxOutcomeLabelUtf8BytesPerQuestion: 1 },
 				wallet: address(1),
 			}),
-		).rejects.toThrow('Question 101 outcome labels exceed the configured 1-byte UTF-8 discovery limit')
+		).rejects.toThrow('Question 101 exceeds the configured outcome-label byte limit')
 	})
 
 	test('discovers and persists an escaped outcome label at the shared UTF-8 byte boundary', async () => {
@@ -1055,6 +1216,7 @@ describe('anchored ecosystem discovery', () => {
 			childOutcomesByUniverse: { '0': [1n, 2n, 3n, 4n] },
 			historicalBlockHashes: { '10': hash(10) },
 			questionIds: [101n, 102n, 103n, 104n],
+			topologyEventBlockNumbers: [1n, 1n, 1n, 11n],
 		})
 		let nextCheckpoint: CanonicalImmutableTopologyCache | undefined
 		let extendedChanged: boolean | undefined
@@ -1072,12 +1234,7 @@ describe('anchored ecosystem discovery', () => {
 		})
 		expect(snapshot.questions.map(question => question.id)).toEqual(['101', '102', '103', '104'])
 		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1', '2', '3', '4'])
-		expect(next.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(1)
-		expect(next.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(1)
-		expect(next.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(1)
-		expect(next.contractReads.filter(read => read.functionName === 'getQuestions').map(read => read.args)).toEqual([[3n, 1n]])
 		expect(next.contractReads.filter(read => read.functionName === 'forkBurnDivisor')).toHaveLength(1)
-		expect(next.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses' && read.args?.[0] === 0n).map(read => read.args)).toEqual([[0n, 3n, 7n]])
 		expect(nextCheckpoint?.anchor).toEqual({ blockHash: hash(11), blockNumber: '11' })
 		expect(extendedChanged).toBe(true)
 
@@ -1086,6 +1243,7 @@ describe('anchored ecosystem discovery', () => {
 			childOutcomesByUniverse: { '0': [1n, 2n, 3n, 4n] },
 			historicalBlockHashes: { '11': hash(11) },
 			questionIds: [101n, 102n, 103n, 104n],
+			topologyEventBlockNumbers: [1n, 1n, 1n, 11n],
 		})
 		let unchangedCheckpoint: CanonicalImmutableTopologyCache | undefined
 		let unchangedChanged: boolean | undefined
@@ -1122,8 +1280,7 @@ describe('anchored ecosystem discovery', () => {
 			topologyCache: checkpoint,
 			wallet: address(1),
 		})
-		expect(reorged.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(2)
-		expect(reorged.contractReads.filter(read => read.functionName === 'getQuestions').map(read => read.args)).toEqual([[0n, 2n]])
+		expect(reorged.contractReads.filter(read => ['questions', 'getQuestions'].includes(read.functionName))).toHaveLength(0)
 		expect(reorgChanged).toBe(true)
 	})
 
@@ -1133,6 +1290,7 @@ describe('anchored ecosystem discovery', () => {
 			discoveryCursors: {
 				poolDeployments: { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
 				questions: { canonicalCount: '1', commitment: hash(20), nextIndex: '1', residentLimit: '100', retentionMode: 'resident' },
+				universeChildren: { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '99', retentionMode: 'resident' },
 				vaultsByPool: {},
 			},
 			pairsByPool: {},
@@ -1160,7 +1318,7 @@ describe('anchored ecosystem discovery', () => {
 				wallet: address(1),
 			})
 			expect(changed).toBe(true)
-			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(1)
+			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(0)
 		}
 		const unavailable = fakeClient(11n, hash(11), { historicalBlockErrors: ['10'], questionIds: [101n] })
 		await expect(

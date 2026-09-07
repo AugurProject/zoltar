@@ -1,48 +1,6 @@
 {
-  "sourceHash": "848cda8a79eb23a67f89c0bc118dcc76ac92e3272ce78ce810d141c76343d74f",
+  "sourceHash": "4259f1b8e4b5dbb5db00823be9c22492bd9b05db132fb305d28da696f9ec6b0b",
   "contracts": {
-    "DeploymentStatusOracle": {
-      "source": "contracts/DeploymentStatusOracle.sol",
-      "abi": [
-        {
-          "inputs": [
-            {
-              "internalType": "address[]",
-              "name": "_deploymentAddresses",
-              "type": "address[]"
-            }
-          ],
-          "stateMutability": "nonpayable",
-          "type": "constructor"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": false,
-              "internalType": "address[]",
-              "name": "deploymentAddresses",
-              "type": "address[]"
-            }
-          ],
-          "name": "DeploymentAddressesSet",
-          "type": "event"
-        },
-        {
-          "inputs": [],
-          "name": "getDeploymentMask",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "deployedMask",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ]
-    },
     "ERC20": {
       "source": "contracts/ERC20.sol",
       "abi": [
@@ -1763,72 +1721,6 @@
               "internalType": "uint248",
               "name": "universeId",
               "type": "uint248"
-            },
-            {
-              "internalType": "uint256",
-              "name": "startIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "count",
-              "type": "uint256"
-            }
-          ],
-          "name": "getDeployedChildUniverses",
-          "outputs": [
-            {
-              "internalType": "uint256[]",
-              "name": "outcomeIndexes",
-              "type": "uint256[]"
-            },
-            {
-              "internalType": "uint248[]",
-              "name": "childUniverseIds",
-              "type": "uint248[]"
-            },
-            {
-              "components": [
-                {
-                  "internalType": "uint256",
-                  "name": "forkTime",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "forkQuestionId",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "forkingOutcomeIndex",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "contract ReputationToken",
-                  "name": "reputationToken",
-                  "type": "address"
-                },
-                {
-                  "internalType": "uint248",
-                  "name": "parentUniverseId",
-                  "type": "uint248"
-                }
-              ],
-              "internalType": "struct Zoltar.Universe[]",
-              "name": "childUniverses",
-              "type": "tuple[]"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint248",
-              "name": "universeId",
-              "type": "uint248"
             }
           ],
           "name": "getForkThresholdAttoRep",
@@ -2191,48 +2083,6 @@
               "internalType": "uint256",
               "name": "questionId",
               "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "startIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "numberOfEntries",
-              "type": "uint256"
-            }
-          ],
-          "name": "getOutcomeLabels",
-          "outputs": [
-            {
-              "internalType": "string[]",
-              "name": "returnOutcomeLabels",
-              "type": "string[]"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [],
-          "name": "getQuestionCount",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
-              "name": "questionId",
-              "type": "uint256"
             }
           ],
           "name": "getQuestionEndDate",
@@ -2316,30 +2166,6 @@
           "inputs": [
             {
               "internalType": "uint256",
-              "name": "startIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "numberOfEntries",
-              "type": "uint256"
-            }
-          ],
-          "name": "getQuestions",
-          "outputs": [
-            {
-              "internalType": "uint256[]",
-              "name": "returnQuestionIds",
-              "type": "uint256[]"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "uint256",
               "name": "answer",
               "type": "uint256"
             }
@@ -2373,6 +2199,45 @@
             {
               "internalType": "bool",
               "name": "",
+              "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "name": "protocolQuestions",
+          "outputs": [
+            {
+              "internalType": "uint48",
+              "name": "startTime",
+              "type": "uint48"
+            },
+            {
+              "internalType": "uint48",
+              "name": "endTime",
+              "type": "uint48"
+            },
+            {
+              "internalType": "uint120",
+              "name": "numTicks",
+              "type": "uint120"
+            },
+            {
+              "internalType": "uint32",
+              "name": "outcomeCount",
+              "type": "uint32"
+            },
+            {
+              "internalType": "bool",
+              "name": "isBinary",
               "type": "bool"
             }
           ],

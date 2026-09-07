@@ -23,8 +23,25 @@ const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTI
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
+		const productionEnvironment = { ...process.env }
+		delete productionEnvironment['UI_BUILD_ENABLE_SIMULATION']
+		for (const appId of UI_APP_IDS) {
+			const appPaths = appPathsById.get(appId)
+			if (appPaths === undefined) throw new Error(`No path information recorded for ${appId}.`)
+			const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
+				cwd: repositoryRootPath,
+				env: productionEnvironment,
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
+			if (result.exitCode !== 0) throw new Error(`standard production build failed for ${appId}\n${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`)
+			const appBundle = await fs.readFile(path.join(appPaths.appDistAssetsRoot, 'app.js'), 'utf8')
+			expect(appBundle).not.toContain('new URL("./tevmWorker.worker.js", import.meta.url)')
+			await expect(fs.access(path.join(appPaths.appDistAssetsRoot, 'tevmWorker.worker.js'))).rejects.toThrow()
+		}
 		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
 			cwd: repositoryRootPath,
+			env: { ...process.env, UI_BUILD_ENABLE_SIMULATION: '1' },
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})
@@ -176,6 +193,7 @@ for (const appId of UI_APP_IDS) {
 		const rootBuild = await fs.readFile(appBundlePath)
 		const result = Bun.spawnSync([process.execPath, appPaths.productionBuildScript, appId], {
 			cwd: appPaths.appRoot,
+			env: { ...process.env, UI_BUILD_ENABLE_SIMULATION: '1' },
 			stderr: 'pipe',
 			stdout: 'pipe',
 		})

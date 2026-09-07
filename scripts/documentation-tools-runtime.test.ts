@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
-const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', 'HTMLOutputElement', 'SVGSVGElement'] as const
+const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLOutputElement', 'SVGSVGElement'] as const
 
 const loadDocument = async (relativePath: string, url: string) => {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
@@ -24,7 +24,7 @@ const loadDocument = async (relativePath: string, url: string) => {
 
 const runGeneratedRuntime = async (name: string): Promise<void> => {
 	const source = await Bun.file(`docs/assets/js/${name}.js`).text()
-	await Function(`${source}\nreturn typeof deploymentMaskDecoderReady === 'undefined' ? undefined : deploymentMaskDecoderReady`)()
+	await Function(source)()
 }
 
 test('interactive tools load shared state and preserve preset and reset behavior', async () => {
@@ -366,85 +366,6 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 		expect(leafIndexError.hidden).toBeTrue()
 		expect(selection.value).toBe('Valid peak-local index')
 	} finally {
-		cleanup()
-	}
-})
-
-test('deployment bit controls clear the active preset and stale status', async () => {
-	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
-	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
-	Object.defineProperty(globalThis, 'fetch', {
-		configurable: true,
-		value: async (input: URL | RequestInfo) => {
-			const source = String(input)
-			const path = source.includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
-			return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
-		},
-	})
-	try {
-		await runGeneratedRuntime('deploymentMaskDecoder')
-		await runGeneratedRuntime('interactiveTools')
-		for (let attempt = 0; attempt < 20 && document.querySelector('[data-deployment-bit-toggle]') === null; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
-		const preset = Array.from(document.querySelectorAll<HTMLButtonElement>('#deployment-mask-decoder .interactive-tool-presets button')).find(button => button.textContent === 'First and third set')
-		const bit = document.querySelector<HTMLButtonElement>('[data-deployment-bit-toggle="0"]')
-		const status = document.querySelector<HTMLElement>('#deployment-mask-decoder .interactive-tool-status')
-		if (preset === undefined || bit === null || status === null) throw new Error('Deployment decoder controls are missing')
-		preset.click()
-		expect(preset.getAttribute('aria-pressed')).toBe('true')
-		bit.click()
-		expect(preset.getAttribute('aria-pressed')).toBe('false')
-		expect(status.textContent).toBe('')
-	} finally {
-		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
-		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
-		cleanup()
-	}
-})
-
-test('deployment decoder exposes retryable HTTP and malformed-manifest failures', async () => {
-	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
-	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
-	let mainnetResponse: 'http-error' | 'malformed' = 'http-error'
-	Object.defineProperty(globalThis, 'fetch', {
-		configurable: true,
-		value: async (input: URL | RequestInfo) => {
-			const source = String(input)
-			if (source.includes('sepolia')) return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
-			if (mainnetResponse === 'http-error') return new Response('Unavailable', { status: 500 })
-			return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
-		},
-	})
-	try {
-		await runGeneratedRuntime('deploymentMaskDecoder')
-		await runGeneratedRuntime('interactiveTools')
-		const mapping = document.querySelector<HTMLTableSectionElement>('#deployment-status-bit-mapping')
-		const sepoliaMapping = document.querySelector<HTMLTableSectionElement>('#sepolia-deployment-status-bit-mapping')
-		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
-		const retry = document.querySelector<HTMLButtonElement>('[data-deployment-mask-retry]')
-		const preset = document.querySelector<HTMLButtonElement>('#deployment-mask-decoder .interactive-tool-presets button')
-		if (mapping === null || sepoliaMapping === null || input === null || retry === null || preset === null) throw new Error('Deployment failure controls are missing')
-		for (let attempt = 0; attempt < 20 && retry.hidden; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
-		expect(mapping.textContent).toContain('Unable to load the deployment mapping.')
-		expect(sepoliaMapping.textContent).toContain('Unable to load the deployment mapping.')
-		expect(mapping.getAttribute('aria-busy')).toBe('false')
-		expect(sepoliaMapping.getAttribute('aria-busy')).toBe('false')
-		expect(input.disabled).toBeTrue()
-		expect(preset.disabled).toBeTrue()
-		expect(retry.hidden).toBeFalse()
-		expect(retry.disabled).toBeFalse()
-
-		mainnetResponse = 'malformed'
-		retry.click()
-		expect(mapping.getAttribute('aria-busy')).toBe('true')
-		for (let attempt = 0; attempt < 20 && mapping.getAttribute('aria-busy') !== 'false'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5))
-		expect(mapping.textContent).toContain('Unable to load the deployment mapping.')
-		expect(mapping.getAttribute('aria-busy')).toBe('false')
-		expect(input.disabled).toBeTrue()
-		expect(retry.hidden).toBeFalse()
-		expect(retry.disabled).toBeFalse()
-	} finally {
-		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
-		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
 		cleanup()
 	}
 })

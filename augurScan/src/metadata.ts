@@ -33,7 +33,6 @@ const catalogFile = (await Bun.file(path.resolve(import.meta.dir, '../config/abi
 const kindToContractName: Readonly<Record<string, string>> = {
 	ammFactory: 'TwoWayConstantProductFactory',
 	ammPair: 'TwoWayConstantProductPair',
-	deploymentStatusOracle: 'DeploymentStatusOracle',
 	escalationGame: 'EscalationGame',
 	escalationGameClaimDelegate: 'EscalationGameClaimDelegate',
 	escalationGameFactory: 'EscalationGameFactory',

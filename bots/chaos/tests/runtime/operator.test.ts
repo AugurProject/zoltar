@@ -58,6 +58,7 @@ function topologyCacheWithVaults(pool: Address, vaults: Address[]): CanonicalImm
 		discoveryCursors: {
 			poolDeployments: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
 			questions: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '100', retentionMode: 'resident' },
+			universeChildren: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '99', retentionMode: 'resident' },
 			vaultsByPool: { [pool.toLowerCase()]: { canonicalCount: vaults.length.toString(), commitment: zeroHash, nextIndex: vaults.length.toString(), residentLimit: '100', retentionMode: 'resident' } },
 		},
 		pairsByPool: {},

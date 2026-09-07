@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = '783f39dcbfecb00949b9b4bc562177457dc0c94edc0d96b4ee14390783925bfa'
+export const expectedProductionSoliditySourceFingerprint = '96e8b4c6d96f28b67487da4a5a416d2c9aa335043db9a24250d809b87a57b5a0'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -268,11 +268,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		name: 'InternalApproval',
 		parameters: 'address indexed owner,address indexed spender,address indexed token,uint256 amount',
 		sourcePath: 'solidity/contracts/statoblast/openOracle/OpenOracle.sol',
-	},
-	{
-		name: 'DeploymentAddressesSet',
-		parameters: 'address[] deploymentAddresses',
-		sourcePath: 'solidity/contracts/DeploymentStatusOracle.sol',
 	},
 ]
 
@@ -511,55 +506,36 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 
 export const contractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '580109cfcebb3ce505def01895f7b6567e75bbd8e8ccac857bdd00d54f15c37f',
+		compiledAbiFingerprint: 'bbbc7e6939b6c78f3c953c50abe823f69bcbf9baf73e13352d5552c1d8601c68',
 		name: 'ZoltarQuestionData',
-		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
-		readAbiFingerprint: '964d0ce318d2890011ff485c8d78e933cabc8d10e489a0c22f0e266fa2563ded',
+		purpose: 'Creates immutable scalar or categorical questions while keeping presentation metadata in creation events.',
+		readAbiFingerprint: '2c6a09bd4cbcf5b355242f2800244e4af258f5a9f20d72d3190d9fa565b5f2c5',
 		readSurface:
-			'Use `getQuestionId` before submission; `questionCreatedTimestamp` and `questions` for direct lookup; `getQuestionCount` and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
-		readDeclarations: [
-			{ name: 'getQuestionId' },
-			{ name: 'getQuestionCount' },
-			{ name: 'getQuestions' },
-			{ name: 'getQuestionEndDate' },
-			{ name: 'getOutcomeLabels' },
-			{ name: 'splitUint256IntoTwoWithInvalid' },
-			{ name: 'hasNonZeroScalarReservedBits' },
-			{ name: 'isMalformedAnswerOption' },
-			{ name: 'getAnswerOptionName' },
-		],
-		readStorageDeclarations: [{ name: 'questionCreatedTimestamp' }, { name: 'questions' }],
+			'`QuestionData` encodes `startTime` and `endTime` as `uint48` and `numTicks` as `uint120`; these widths determine the `getQuestionId` and `createQuestion` selectors. Use `getQuestionId` before creation; `QuestionCreated` logs for discovery and categorical presentation metadata; `questionCreatedTimestamp`, `protocolQuestions`, and `getQuestionEndDate` for protocol state; and `questions`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` for scalar metadata and validation.',
+		readDeclarations: [{ name: 'getQuestionId' }, { name: 'getQuestionEndDate' }, { name: 'splitUint256IntoTwoWithInvalid' }, { name: 'hasNonZeroScalarReservedBits' }, { name: 'isMalformedAnswerOption' }, { name: 'getAnswerOptionName' }],
+		readStorageDeclarations: [{ name: 'questionCreatedTimestamp' }, { name: 'questions' }, { name: 'protocolQuestions' }],
 		sourcePath: 'solidity/contracts/ZoltarQuestionData.sol',
 		interactions: [
 			{
 				call: '`createQuestion(questionData, outcomeOptions)`',
 				caller: 'Anyone',
-				effect: 'Stores the question at its deterministic content hash, records the creation timestamp, appends it to discovery order, and stores categorical labels when supplied.',
+				effect: 'Stores protocol timing and answer-space validation at a deterministic ID, records scalar metadata when applicable, and emits presentation metadata for off-chain discovery.',
 				declarations: [{ name: 'createQuestion' }],
-				preconditions: 'Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions require nonempty labels whose `keccak256(abi.encode(label))` values are strictly descending.',
+				preconditions:
+					'Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions require at most `uint32.max` nonempty labels whose `keccak256(abi.encode(label))` values are strictly descending; `numTicks`, both display bounds, and `answerUnit` must be zero or empty.',
 				signals: '`QuestionCreated`',
 			},
 		],
 	},
 	{
-		compiledAbiFingerprint: '023e5a38bcf613044e07d23e84095e1125be871017388a0c5a6cf7a41958b350',
+		compiledAbiFingerprint: '6ae911161cd2cf6b410f276da89e36408cda55a272d40053d02a3d2ce5961cb9',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: '1916e3480c70c4ccd5962f4b8069988d7dc36f0ea89337ebe04b8bca089d1492',
+		readAbiFingerprint: 'a5763ef6fa06c2232a054556fde84da5a4107994f44a8643920f3387bd3d29f3',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
+			'Use `DeployChild` logs for child discovery; `universes` and `getChildUniverseId` for deterministic direct lookup; `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, and `getMigrationRepBalanceAttoRep` to reconstruct universe state; and `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, and `genesisReputationToken` for immutable configuration. Construction requires `forkBurnDivisor >= 5`, capping the uncredited fork haircut at 20%, and accepts a deployed external genesis REP token with theoretical supply from one attoREP through 11 million REP.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
-		readDeclarations: [
-			{ name: 'getForkTime' },
-			{ name: 'forkQuestionMatches' },
-			{ name: 'getRepToken' },
-			{ name: 'getForkThresholdAttoRep' },
-			{ name: 'getNonDecisionThresholdAttoRep' },
-			{ name: 'getUniverseTheoreticalSupplyAttoRep' },
-			{ name: 'getChildUniverseId' },
-			{ name: 'getDeployedChildUniverses' },
-			{ name: 'getMigrationRepBalanceAttoRep' },
-		],
+		readDeclarations: [{ name: 'getForkTime' }, { name: 'forkQuestionMatches' }, { name: 'getRepToken' }, { name: 'getForkThresholdAttoRep' }, { name: 'getNonDecisionThresholdAttoRep' }, { name: 'getUniverseTheoreticalSupplyAttoRep' }, { name: 'getChildUniverseId' }, { name: 'getMigrationRepBalanceAttoRep' }],
 		readStorageDeclarations: [{ name: 'universes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [

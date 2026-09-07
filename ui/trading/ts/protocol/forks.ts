@@ -1,6 +1,11 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/scalarOutcome'
+import { getQuestionId } from '@zoltar/shared/questionId'
+import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
+import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
 import type { LiveMarket } from './live.js'
 
 const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -24,23 +29,7 @@ type ForkQuestionBase = Readonly<{
 
 export type ForkMigrationContext = (ForkQuestionBase & Readonly<{ kind: 'categorical' }>) | (ForkQuestionBase & ScalarQuestionDetails & Readonly<{ kind: 'scalar' }>)
 
-const FORK_PAGE_SIZE = 30n
-const UINT248_MASK = (1n << 248n) - 1n
-
-export function getChildUniverseId(parentUniverseId: bigint, outcomeIndex: bigint) {
-	if (parentUniverseId < 0n || parentUniverseId > UINT248_MASK) throw new Error('Parent universe ID is outside uint248')
-	if (outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork outcome is outside uint256')
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, outcomeIndex]))) & UINT248_MASK
-}
-
-async function loadOutcomeLabels(client: PublicClient, questionData: Address, questionId: bigint) {
-	const labels: string[] = []
-	for (let start = 0n; ; start += FORK_PAGE_SIZE) {
-		const page = await client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'getOutcomeLabels', args: [questionId, start, FORK_PAGE_SIZE] })
-		labels.push(...page)
-		if (BigInt(page.length) < FORK_PAGE_SIZE) return labels
-	}
-}
+export { getChildUniverseId }
 
 async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, outcomeIndex: bigint, label: string, knownUniverseId?: bigint): Promise<ForkTarget> {
 	const universeId = knownUniverseId ?? getChildUniverseId(market.universeId, outcomeIndex)
@@ -48,24 +37,35 @@ async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMa
 	return { outcomeIndex, universeId, label, canonicalPool: canonicalPool === zeroAddress ? undefined : getAddress(canonicalPool) }
 }
 
-async function loadScalarTargets(client: PublicClient, zoltar: Address, questionData: Address, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, questionId: bigint) {
-	const targets: ForkTarget[] = []
-	for (let start = 0n; ; start += FORK_PAGE_SIZE) {
-		const page = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'getDeployedChildUniverses', args: [market.universeId, start, FORK_PAGE_SIZE] })
-		const outcomeIndexes = page[0]
-		const childUniverseIds = page[1]
-		const labels = await Promise.all(outcomeIndexes.map(async outcomeIndex => await client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'getAnswerOptionName', args: [questionId, outcomeIndex] })))
-		const pageTargets = await Promise.all(
-			outcomeIndexes.map(async (outcomeIndex, index) => {
-				const universeId = childUniverseIds[index]
-				const label = labels[index]
-				if (universeId === undefined || label === undefined) throw new Error('Malformed deployed child universe page')
-				return await targetWithCanonicalPool(client, market, outcomeIndex, label, universeId)
-			}),
-		)
-		targets.push(...pageTargets)
-		if (BigInt(outcomeIndexes.length) < FORK_PAGE_SIZE) return targets
+async function loadScalarTargets(client: PublicClient, zoltar: Address, questionData: Address, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, questionId: bigint, anchor: Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>) {
+	const logs = await loadCanonicalDeployChildLogs(client, zoltar, anchor.blockNumber)
+	const children = logs.flatMap(log => {
+		try {
+			const decoded = decodeEventLog({ abi: zoltarForkAbi, data: log.data, topics: log.topics })
+			return decoded.eventName === 'DeployChild' && decoded.args.universeId === market.universeId ? [decoded.args] : []
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			return []
+		}
+	})
+	for (const child of children) {
+		if (getChildUniverseId(child.universeId, child.outcomeIndex) !== child.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		const universe = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'universes', args: [child.childUniverseId], blockHash: anchor.blockHash })
+		if (universe.parentUniverseId !== child.universeId || universe.forkingOutcomeIndex !== child.outcomeIndex) throw new Error('Deployed child universe does not match its DeployChild route')
 	}
+	const outcomeIndexes = children.map(child => child.outcomeIndex)
+	const childUniverseIds = children.map(child => child.childUniverseId)
+	const labels = await Promise.all(outcomeIndexes.map(async outcomeIndex => await client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'getAnswerOptionName', args: [questionId, outcomeIndex] })))
+	const targets = await Promise.all(
+		outcomeIndexes.map(async (outcomeIndex, index) => {
+			const universeId = childUniverseIds[index]
+			const label = labels[index]
+			if (universeId === undefined || label === undefined) throw new Error('Malformed deployed child universe event')
+			return await targetWithCanonicalPool(client, market, outcomeIndex, label, universeId)
+		}),
+	)
+	if (requiredCanonicalBlockAnchor(await client.getBlock({ blockNumber: anchor.blockNumber })).blockHash !== anchor.blockHash) throw new Error('DeployChild events changed during scalar fork discovery')
+	return targets
 }
 
 export function createScalarForkTarget(context: Extract<ForkMigrationContext, { kind: 'scalar' }>, outcomeIndex: bigint): ForkTarget {
@@ -86,15 +86,29 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 	const universe = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'universes', args: [market.universeId] })
 	const forkQuestionId = universe[1]
 	if (forkQuestionId === 0n) throw new Error('Forked universe has no fork question')
-	const [question, outcomeLabels] = await Promise.all([client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'questions', args: [forkQuestionId] }), loadOutcomeLabels(client, questionData, forkQuestionId)])
-	const [title, , , , numTicks, displayValueMin, displayValueMax, answerUnit] = question
+	const anchor = requiredCanonicalBlockAnchor(await client.getBlock())
+	const questionLogs = await loadCanonicalQuestionCreatedLogs(client, questionData, anchor.blockNumber)
+	const created = questionLogs.flatMap(log => {
+		try {
+			const decoded = decodeEventLog({ abi: forkQuestionAbi, data: log.data, topics: log.topics })
+			if (decoded.eventName !== 'QuestionCreated') return []
+			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+			return decoded.args.questionId === forkQuestionId ? [decoded.args] : []
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			return []
+		}
+	})[0]
+	if (created === undefined) throw new Error('Fork question creation event is unavailable')
+	const { title, numTicks, displayValueMin, displayValueMax, answerUnit } = created.questionData
+	const outcomeLabels = [...created.outcomeOptions]
 	if (outcomeLabels.length > 0) {
 		const entries = [{ outcomeIndex: 0n, label: 'Invalid' }, ...outcomeLabels.map((label, index) => ({ outcomeIndex: BigInt(index + 1), label }))]
 		const availableTargets = await Promise.all(entries.map(async entry => await targetWithCanonicalPool(client, market, entry.outcomeIndex, entry.label)))
 		return { kind: 'categorical', parentUniverseId: market.universeId, questionId: forkQuestionId, title, availableTargets }
 	}
 	if (numTicks === 0n) throw new Error('Fork question has neither categorical outcomes nor scalar ticks')
-	const availableTargets = await loadScalarTargets(client, zoltar, questionData, market, forkQuestionId)
+	const availableTargets = await loadScalarTargets(client, zoltar, questionData, market, forkQuestionId, { blockHash: anchor.blockHash as `0x${string}`, blockNumber: anchor.blockNumber })
 	return {
 		kind: 'scalar',
 		parentUniverseId: market.universeId,

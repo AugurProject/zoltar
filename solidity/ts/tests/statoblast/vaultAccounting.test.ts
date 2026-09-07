@@ -41,22 +41,13 @@ describe('Statoblast: vault accounting', () => {
 		TEST_ADDRESSES,
 		approveToken,
 		getERC20Balance,
-		ensureProxyDeployerDeployed,
-		setupTestAccounts,
 		addressString,
 		approveAndDepositRepToVault,
 		manipulatePriceOracle,
 		manipulatePriceOracleAndPerformOperation,
 		deployOriginSecurityPool,
-		ensureDeploymentStatusOracleDeployed,
-		getAnvilWindowEthereum,
-		setBaselineSnapshot,
-		initializeStatoblastBaseline,
-		getDeploymentStatusOracleAddress,
-		getDeploymentStepAddresses,
 		getInfraContractAddresses,
 		getSecurityPoolAddresses,
-		loadDeploymentStatusOracleMask,
 		createQuestion,
 		getQuestionId,
 		getLastPrice,
@@ -410,29 +401,6 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
 		strictEqualTypeSafe(settlementCollateralAttoEth, 0n, 'origin deployments should not have complete set collateral')
 		strictEqualTypeSafe(await getLastPrice(client, managerAddress), 0n, 'origin manager should start with a zero price')
-	})
-
-	test('deployment status oracle returns the deployment bitmask in one read', async () => {
-		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-		const deploymentMask = await loadDeploymentStatusOracleMask(client)
-
-		assert.notStrictEqual(await client.getCode({ address: deploymentStatusOracleAddress }), '0x', 'deployment status oracle should be deployed')
-		strictEqualTypeSafe(deploymentMask, (1n << BigInt(getDeploymentStepAddresses().length)) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
-	})
-
-	test('deployment status oracle reports missing contracts from a partial deployment', async () => {
-		const partialWindow = getAnvilWindowEthereum()
-		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
-		await partialWindow.resetToCleanState()
-		await setupTestAccounts(partialWindow)
-		await ensureProxyDeployerDeployed(partialClient)
-		await ensureDeploymentStatusOracleDeployed(partialClient)
-
-		const deploymentMask = await loadDeploymentStatusOracleMask(partialClient)
-
-		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be marked deployed before the rest of infra')
-		await initializeStatoblastBaseline()
-		await setBaselineSnapshot()
 	})
 
 	test('security pool exposes vault paging without duplicate entries', async () => {

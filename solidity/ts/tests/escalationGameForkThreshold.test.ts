@@ -30,7 +30,7 @@ import {
 import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 
 const DAY = 86400n
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 1n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

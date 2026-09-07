@@ -34,7 +34,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	uniswapV3SwapRouter: 4_250_000n,
 	uniswapV4PoolManager: 8_000_000n,
 	uniswapV4Quoter: 2_250_000n,
-	deploymentStatusOracle: 1_000_000n,
 	weth: 1_000_000n,
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
@@ -74,15 +73,15 @@ const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainne
 		priceCoordinatorCreationCodeFirstChunk: '0xb2d923d6091e5526573d9c740a0442c01fe608239077cc132d174e7a1e23ae78',
 		priceCoordinatorCreationCodeSecondChunk: '0x31600fba62534dc98d7af851bd88fe79105b904dba03585d9cacc9cae3bda8b4',
 		priceCoordinatorDeploymentWorker: '0xc7d9eff4511ad136ef6642e6de8dfdbc333478bdd1fe05c2e78004e7690d0500',
-		securityPoolDeployer: '0x218dcff3692388d470eb416a84d97f4c299119f08e9785d42ea45b08c3b934d1',
-		securityPoolDeploymentWorker: '0x5e8decc4b7c8c5f2b61666eb4f839a11eeeabb938715a497ad54bfd88d540e94',
+		securityPoolDeployer: '0x94bd933ce12dae632e5f36474b47474bbf2bffe9e16769e3eb7d79d7527f38b9',
+		securityPoolDeploymentWorker: '0x8f2477f9c1adb1c8ab7aa8e044d4cc5386171c0e078637debb6ad37b89b18e03',
 		securityPoolOperationsDelegate: '0x3989f9e935c45e1fef1ed08dd120cd5d3f4931043cb505a944396860475ef4c9',
 		securityPoolCreationCodeFirstChunk: '0x7f126afc4e9ce2dca6193708fe9e1c46e3fd7d0c86b2590716057886e05497ea',
 		securityPoolCreationCodeSecondChunk: '0x2287a5a7ac5ffe34d94b57a20de3168b31244f931cd587ae6ce456472262a4cd',
 		securityPoolEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
-		securityPoolForkerEscalationGameForkerDelegate: '0xe2ae211f053d60f5470053d25233316b5111d73f1eb15c8abed91e5e0cbfe5f9',
+		securityPoolForkerEscalationGameForkerDelegate: '0xbea51b8420be06bcb4957eef427c4ed359859b80d4b0462a06a60516abd8a879',
 		securityPoolForkerEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
-		securityPoolForkerVaultMigrationDelegate: '0xeb30183c6271a10148e3ee9a99cf1ca6b4c35d2e92951f68d9d4fef5315d5759',
+		securityPoolForkerVaultMigrationDelegate: '0x36c8cd5e2c5655273e9b267cd2d6ec1ba6d80170a9c9f81b26a3608806f68ffa',
 	},
 	mainnet: {
 		escalationGameCreationCodePartOne: '0xa5fd2dfefe573b8f87769bcfec9bcf54d2a2419e25d5d35b31c319f3a448dabf',
@@ -93,15 +92,15 @@ const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<'mainne
 		priceCoordinatorCreationCodeFirstChunk: '0xb2d923d6091e5526573d9c740a0442c01fe608239077cc132d174e7a1e23ae78',
 		priceCoordinatorCreationCodeSecondChunk: '0x31600fba62534dc98d7af851bd88fe79105b904dba03585d9cacc9cae3bda8b4',
 		priceCoordinatorDeploymentWorker: '0xd360771cdeb4b775d39d311964b5b1a5485f7c2c59394f874caa6135799ea4cd',
-		securityPoolDeployer: '0xe4359d5435cbcafc54243f36e5c208c2ae8f012ac4edf54aa4db49308d0db872',
-		securityPoolDeploymentWorker: '0xe4c9721abe03076a18508d6444a95e24f1c7ea0e9812cacd79262e1b7aa7d690',
+		securityPoolDeployer: '0x04dea62e617e233e9bbbf00dd35a1f04ea87989540ec598c767b9f1e1d79570b',
+		securityPoolDeploymentWorker: '0x4da7d12275e58266d56b7c2b43f28eae5e6c85221510ee46f0c0273074bc8dcf',
 		securityPoolOperationsDelegate: '0x3989f9e935c45e1fef1ed08dd120cd5d3f4931043cb505a944396860475ef4c9',
 		securityPoolCreationCodeFirstChunk: '0x7f126afc4e9ce2dca6193708fe9e1c46e3fd7d0c86b2590716057886e05497ea',
 		securityPoolCreationCodeSecondChunk: '0x2287a5a7ac5ffe34d94b57a20de3168b31244f931cd587ae6ce456472262a4cd',
 		securityPoolEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
-		securityPoolForkerEscalationGameForkerDelegate: '0xb4955f0d1dd0ef629a95dcf182896fab7c19af34a79113324d8f436eda9dcd5d',
+		securityPoolForkerEscalationGameForkerDelegate: '0x684a178821e472d98c0e80af27cf596bec575e01c442d1a6e9faf1a16a379fbe',
 		securityPoolForkerEventEmitter: '0x905e8b9dd5b90487854b7918acbeb703275515808fb36a59ec93c0af3dc61c3a',
-		securityPoolForkerVaultMigrationDelegate: '0xbfb44122108fc0a32903c25250e8430568a8b738003d66ba13dbc65ca1d8581b',
+		securityPoolForkerVaultMigrationDelegate: '0x44def790e9314462336392d7d5944c79c7e634131400d1afae3fa416d4441bcb',
 	},
 }
 
@@ -212,9 +211,18 @@ export function parseMaxTotalCost(value: string | undefined) {
 	return parsePositiveUnits(value, DEFAULT_MAX_TOTAL_COST_ETH, 18, 'MAX_TOTAL_COST_ETH')
 }
 
+export type DeploymentProfile = 'minimal' | 'with-quote-venues'
+
+export function parseDeploymentProfile(value: string | undefined): DeploymentProfile {
+	const profile = value ?? 'minimal'
+	if (profile !== 'minimal' && profile !== 'with-quote-venues') throw new Error('DEPLOYMENT_PROFILE must be "minimal" or "with-quote-venues"')
+	return profile
+}
+
 export function parseDeploymentCommandLine(argv = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env) {
 	return {
 		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
+		deploymentProfile: parseDeploymentProfile(commandLineValue('profile', 'DEPLOYMENT_PROFILE', argv) ?? environment['DEPLOYMENT_PROFILE']),
 		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-gwei', 'MAX_FEE_PER_GAS_GWEI', argv) ?? environment['MAX_FEE_PER_GAS_GWEI']),
 		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
 		privateKey: parsePrivateKey(option('private-key', [...argv]) ?? environment['PRIVATE_KEY']),
@@ -591,14 +599,15 @@ async function assertCanonicalCreate2DeployerCode(client: CodeReader) {
 	if (code.toLowerCase() !== ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical CREATE2 deployer ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 }
 
-export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment) {
+export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment, deploymentProfile: DeploymentProfile = 'minimal') {
 	const [create2DeployerStep, permit2Step, ...uniswapQuoteSteps] = uniswap.steps
 	if (create2DeployerStep === undefined || create2DeployerStep.id !== 'arachnidCreate2Deployer') throw new Error('Uniswap deployment plan must begin with the canonical CREATE2 deployer')
 	if (permit2Step === undefined || permit2Step.id !== 'permit2') throw new Error('Uniswap deployment plan must deploy Permit2 after the canonical CREATE2 deployer')
 	const [proxyDeployerStep, ...protocolSteps] = getDeploymentSteps(profile)
 	if (proxyDeployerStep === undefined || proxyDeployerStep.id !== 'proxyDeployer') throw new Error('Protocol deployment plan must begin with the canonical proxy deployer')
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
-	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, ...protocolStepsWithExternalDependencies].map(step => (!('verifyRuntimeCode' in step) || step.verifyRuntimeCode === undefined ? { ...step, expectedRuntimeCodeHash: getExpectedRuntimeCodeHash(step.id) } : step))
+	const optionalSteps = deploymentProfile === 'with-quote-venues' ? uniswapQuoteSteps : []
+	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...optionalSteps, ...protocolStepsWithExternalDependencies].map(step => (!('verifyRuntimeCode' in step) || step.verifyRuntimeCode === undefined ? { ...step, expectedRuntimeCodeHash: getExpectedRuntimeCodeHash(step.id) } : step))
 }
 
 export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>>) {
@@ -635,7 +644,7 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 	await appendFile(summaryPath, `## Testnet deployment\n\nChain ID: \`${chainId.toString()}\`  \nDeployer: \`${account}\`\n\n| Contract | Result | Address | Transaction |\n| --- | --- | --- | --- |\n${rows}\n`)
 }
 
-export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
+export async function deployTestnet(parameters: { chainId: number; deploymentProfile?: DeploymentProfile; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
 	assertStaticDeploymentArtifactRuntimeCodeHashes()
 	assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()
 	const chainId = parseChainId(parameters.chainId.toString())
@@ -665,7 +674,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
 		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
-	const plan = createCompleteDeploymentPlan(profile, uniswap)
+	const plan = createCompleteDeploymentPlan(profile, uniswap, parameters.deploymentProfile)
 	const knownInstalledAddresses = new Set<Address>()
 	if (canonicalCreate2Installed) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
@@ -716,6 +725,7 @@ Pass RPC and cost limits as uppercase assignments after --, for example:
   --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
+  --profile=minimal       Deploy protocol requirements only; use with-quote-venues for local V3/V4 quote infrastructure
   --max-fee-per-gas-gwei=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
@@ -734,6 +744,6 @@ export async function main() {
 		printHelp()
 		return
 	}
-	const { chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
-	await deployTestnet({ chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
+	const { chainId, deploymentProfile, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
+	await deployTestnet({ chainId, deploymentProfile, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
 }

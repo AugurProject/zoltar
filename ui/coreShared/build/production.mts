@@ -7,6 +7,7 @@ import { createTevmBufferImportPlugin } from './tevmBufferImport.mts'
 
 const appId = parseUiAppIdFromProcess('the production build')
 const paths = getUiAppPaths(appId)
+const enableBrowserSimulation = process.env['UI_BUILD_ENABLE_SIMULATION'] === '1'
 
 // Bun records source paths relative to the current working directory in bundle
 // comments and source maps. Normalize it so root and package scripts produce
@@ -56,6 +57,19 @@ function createBrowserVendorAliasPlugin() {
 	}
 }
 
+function createDisabledSimulationBackendPlugin(): Bun.BunPlugin {
+	return {
+		name: 'disabled-simulation-backend',
+		setup(build) {
+			build.onResolve({ filter: /simulation\/tevmBackend\.js$/ }, () => ({ namespace: 'disabled-simulation-backend', path: 'tevmBackend.ts' }))
+			build.onLoad({ filter: /.*/, namespace: 'disabled-simulation-backend' }, () => ({
+				contents: `export async function createSimulationBackend() { throw new Error('Browser simulation is not included in this production build') }`,
+				loader: 'ts',
+			}))
+		},
+	}
+}
+
 async function copyStaticAsset(sourcePath: string, destinationPath: string) {
 	await fs.mkdir(path.dirname(destinationPath), { recursive: true })
 	const sourceFile = Bun.file(sourcePath)
@@ -90,7 +104,8 @@ async function buildProductionApp(paths: UiAppPaths) {
 			chunk: 'chunks/[name]-[hash].js',
 		},
 		outdir: paths.appDistAssetsRoot,
-		plugins: [createBrowserVendorAliasPlugin()],
+		plugins: [createBrowserVendorAliasPlugin(), ...(enableBrowserSimulation ? [] : [createDisabledSimulationBackendPlugin()])],
+		define: { __ZOLTAR_ENABLE_BROWSER_SIMULATION__: enableBrowserSimulation ? 'true' : 'false' },
 		target: 'browser',
 		sourcemap: 'linked',
 	})
@@ -116,7 +131,7 @@ export async function buildProductionBundle() {
 
 	await Promise.all([
 		buildProductionApp(paths),
-		buildProductionWorker(paths),
+		...(enableBrowserSimulation ? [buildProductionWorker(paths)] : []),
 		writeProductionIndexHtml(paths),
 		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'index.css'), path.join(paths.appDistRoot, 'css', 'index.css')),
 		copyStaticAsset(path.join(paths.coreSharedCssRoot, 'tokens.css'), path.join(paths.appDistRoot, 'css', 'tokens.css')),

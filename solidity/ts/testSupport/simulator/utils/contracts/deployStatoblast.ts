@@ -1,6 +1,6 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/shared/ethereum'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
-import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
+import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
@@ -8,7 +8,6 @@ import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
 import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_Multicall3_Multicall3,
@@ -54,15 +53,7 @@ const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${sta
 const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
 
 export function getDeploymentStepAddresses() {
-	return getDeploymentStatusOracleSteps().map(step => step.address)
-}
-
-function getDeploymentStatusOracleByteCode() {
-	return encodeDeployData({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStepAddresses()],
-	})
+	return getInfrastructureSteps().map(step => step.address)
 }
 
 function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
@@ -220,12 +211,6 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	zeroSalt: ZERO_SALT,
 })
 
-export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
-	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
-	zeroSalt: ZERO_SALT,
-})
-
 export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: (securityPool, repToken, proofVerifier) =>
 		encodeDeployData({
@@ -307,25 +292,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 		}),
 })
 
-export async function loadDeploymentStatusOracleMask(client: Pick<WriteClient, 'readContract'>): Promise<bigint> {
-	return BigInt(
-		await client.readContract({
-			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-			functionName: 'getDeploymentMask',
-			address: getDeploymentStatusOracleAddress(),
-			args: [],
-		}),
-	)
-}
-
-export async function ensureDeploymentStatusOracleDeployed(client: WriteClient): Promise<void> {
-	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-	if (await contractExists(client, deploymentStatusOracleAddress)) return
-	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: getDeploymentStatusOracleByteCode() })
-	await client.waitForTransactionReceipt({ hash })
-}
-
-function getDeploymentStatusOracleSteps() {
+function getInfrastructureSteps() {
 	const infraContracts = getInfraContractAddresses()
 	return [
 		{ id: 'proxyDeployer', address: addressString(PROXY_DEPLOYER_ADDRESS) },
@@ -346,32 +313,24 @@ function getDeploymentStatusOracleSteps() {
 	] as const
 }
 
-type DeploymentStatusOracleStepId = ReturnType<typeof getDeploymentStatusOracleSteps>[number]['id']
-
-function isDeploymentStatusOracleStepDeployed(deploymentMask: bigint, stepId: DeploymentStatusOracleStepId) {
-	const bitIndex = getDeploymentStatusOracleSteps().findIndex(step => step.id === stepId)
-	if (bitIndex === -1) throw new Error(`Unknown deployment status oracle step: ${stepId}`)
-	return (deploymentMask & (1n << BigInt(bitIndex))) !== 0n
-}
-
 async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
-	const deploymentMask = await loadDeploymentStatusOracleMask(client)
+	const deployed = new Map(await Promise.all(getInfrastructureSteps().map(async step => [step.id, await contractExists(client, step.address)] as const)))
 	return {
-		multicall3: isDeploymentStatusOracleStepDeployed(deploymentMask, 'multicall3'),
-		securityPoolUtils: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolUtils'),
-		securityPoolOperationsDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolOperationsDelegate'),
-		openOracle: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOracle'),
-		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
-		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
-		priceOracleManagerAndOperatorQueuerFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
-		securityPoolForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForker'),
-		escalationGameClaimDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameClaimDelegate'),
-		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
-		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
-		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
-		scalarOutcomes: isDeploymentStatusOracleStepDeployed(deploymentMask, 'scalarOutcomes'),
-		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
-		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
+		multicall3: deployed.get('multicall3') ?? false,
+		securityPoolUtils: deployed.get('securityPoolUtils') ?? false,
+		securityPoolOperationsDelegate: deployed.get('securityPoolOperationsDelegate') ?? false,
+		openOracle: deployed.get('openOracle') ?? false,
+		zoltar: deployed.get('zoltar') ?? false,
+		shareTokenFactory: deployed.get('shareTokenFactory') ?? false,
+		priceOracleManagerAndOperatorQueuerFactory: deployed.get('priceOracleManagerAndOperatorQueuerFactory') ?? false,
+		securityPoolForker: deployed.get('securityPoolForker') ?? false,
+		escalationGameClaimDelegate: deployed.get('escalationGameClaimDelegate') ?? false,
+		escalationGameFactory: deployed.get('escalationGameFactory') ?? false,
+		escalationGameProofVerifier: deployed.get('escalationGameFactory') ?? false,
+		zoltarQuestionData: deployed.get('zoltarQuestionData') ?? false,
+		scalarOutcomes: deployed.get('scalarOutcomes') ?? false,
+		uniformPriceDualCapBatchAuctionFactory: deployed.get('uniformPriceDualCapBatchAuctionFactory') ?? false,
+		securityPoolFactory: deployed.get('securityPoolFactory') ?? false,
 	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
@@ -383,7 +342,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		if (receipt.status === 'reverted') throw new Error(`infra deploy reverted while creating ${label}: ${hash}`)
 	}
 
-	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
@@ -425,7 +383,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)
 	}
-	if (!(await contractExists(client, getDeploymentStatusOracleAddress()))) throw new Error('deploymentStatusOracle does not exist even though we deployed it')
 }
 
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) => {

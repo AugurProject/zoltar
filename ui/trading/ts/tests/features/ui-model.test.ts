@@ -8,7 +8,6 @@ import {
 	collateMarketDiscoveryResults,
 	createSecurityPoolDeploymentIndex,
 	liveBalancesForMarket,
-	liveQuestionFields,
 	marketAcceptsNewRisk,
 	marketDiscoveryPage,
 	marketDiscoveryRanges,
@@ -100,11 +99,6 @@ describe('standalone trading UI model', () => {
 		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` }
 		expect(registrySnapshotBlockParameters(anchor, true)).toEqual({})
 		expect(registrySnapshotBlockParameters(anchor, false)).toEqual({ blockHash: anchor.blockHash })
-	})
-
-	test('reads question metadata from the ABI tuple preserved by the worker boundary', () => {
-		const question = ['Will this resolve?', 'Seeded market', 10n, 20n] as const
-		expect(liveQuestionFields(question)).toEqual({ description: 'Seeded market', endTime: 20n, title: 'Will this resolve?' })
 	})
 
 	test('keeps provider identifiers out of public error copy', () => {
@@ -321,6 +315,184 @@ describe('standalone trading UI model', () => {
 			{ fromBlock: 10_000n, toBlock: 19_999n },
 			{ fromBlock: 20_000n, toBlock: 20_000n },
 		])
+	})
+
+	test('starts initial and reorg event scans at the resolved factory deployment block', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const firstAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 1_000_000n }
+		const secondAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 1_000_001n }
+		let latest = firstAnchor
+		let firstCanonical = true
+		let deploymentStart = 900_000n
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const starts: bigint[] = []
+		const loadStartBlock = async (toBlock: bigint) => {
+			starts.push(toBlock)
+			return deploymentStart
+		}
+		const loadEvents = async (fromBlock: bigint, toBlock: bigint) => {
+			ranges.push({ fromBlock, toBlock })
+			return []
+		}
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async anchor => anchor.blockHash !== firstAnchor.blockHash || firstCanonical,
+			loadEvents,
+			10,
+			loadStartBlock,
+		)
+		expect(ranges[0]?.fromBlock).toBe(900_000n)
+		latest = secondAnchor
+		firstCanonical = false
+		deploymentStart = 899_000n
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async anchor => anchor.blockHash === secondAnchor.blockHash,
+			loadEvents,
+			10,
+			loadStartBlock,
+		)
+		expect(ranges.some(range => range.fromBlock === 899_000n)).toBeTrue()
+		expect(ranges.every(range => range.fromBlock >= 899_000n)).toBeTrue()
+		expect(starts).toEqual([1_000_000n, 1_000_001n])
+	})
+
+	test('recomputes the factory deployment block after a failed initial scan', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 1_000n }
+		let deploymentStart = 900n
+		let fail = true
+		const starts: bigint[] = []
+		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
+		const loadStartBlock = async () => {
+			starts.push(deploymentStart)
+			return deploymentStart
+		}
+		const loadEvents = async (fromBlock: bigint, toBlock: bigint) => {
+			ranges.push({ fromBlock, toBlock })
+			if (fail) throw new Error('temporary log failure')
+			return [fromBlock.toString()]
+		}
+
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadEvents,
+				10,
+				loadStartBlock,
+			),
+		).rejects.toThrow('temporary log failure')
+		expect(index.startBlock).toBeUndefined()
+		deploymentStart = 899n
+		fail = false
+		expect(
+			await refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadEvents,
+				10,
+				loadStartBlock,
+			),
+		).toEqual(['899'])
+		expect(starts).toEqual([900n, 899n])
+		expect(ranges.at(-1)?.fromBlock).toBe(899n)
+	})
+
+	test('fails closed without retaining an oversized initial event history and recovers after the limit increases', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
+		const loadEvents = async () => ['first', 'second']
+
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadEvents,
+				1,
+			),
+		).rejects.toThrow('exceeds the configured 1-item limit')
+		expect(index.deployments).toEqual([])
+		expect(index.anchor).toBeUndefined()
+		expect(
+			await refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadEvents,
+				2,
+			),
+		).toEqual(['first', 'second'])
+	})
+
+	test('preserves the prior event index when an append exceeds the resident limit', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
+		const loadEvents = async (fromBlock: bigint) => (fromBlock === 0n ? ['retained'] : ['overflow-a', 'overflow-b'])
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async () => true,
+			loadEvents,
+			2,
+		)
+		latest = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 1n }
+
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadEvents,
+				2,
+			),
+		).rejects.toThrow('exceeds the configured 1-item limit')
+		expect(index.deployments).toEqual(['retained'])
+		expect(index.anchor?.blockNumber).toBe(0n)
+	})
+
+	test('leaves no orphan event state when a canonical rebuild exceeds the resident limit', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		const orphan = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
+		const replacement = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 1n }
+		let latest = orphan
+		let orphanCanonical = true
+		await refreshSecurityPoolDeploymentEventIndex(
+			index,
+			'chain:factory:universe-7',
+			async () => latest,
+			async () => orphanCanonical,
+			async () => ['orphan'],
+			2,
+		)
+		latest = replacement
+		orphanCanonical = false
+
+		await expect(
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async anchor => anchor.blockHash === replacement.blockHash,
+				async () => ['canonical-a', 'canonical-b'],
+				1,
+			),
+		).rejects.toThrow('exceeds the configured 1-item limit')
+		expect(index.deployments).toEqual([])
+		expect(index.anchor).toBeUndefined()
 	})
 
 	test('does not retain orphan deployment events when the discovery anchor is replaced', async () => {

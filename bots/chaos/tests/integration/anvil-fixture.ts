@@ -8,7 +8,7 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresse
 import { createQuestion, getQuestionId } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.ts'
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
-import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
+import { ReputationToken_ReputationToken, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 
 export const CHAOS_TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
 export const CHAOS_TEST_FINALITY_BLOCKS = 2n
@@ -282,11 +282,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 			'Trading router',
 		)
 
-		const baselineQuestionCount = await deployer.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			address: infra.zoltarQuestionData,
-			functionName: 'getQuestionCount',
-		})
+		const baselineQuestionCount = BigInt((await deployer.getLogs({ address: infra.zoltarQuestionData, fromBlock: 0n })).length)
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,

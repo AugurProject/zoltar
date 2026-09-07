@@ -6,7 +6,7 @@ import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from 
 import { OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 1n
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {

@@ -131,7 +131,7 @@
 				</div>
 				<p>Deterministic child ids make each branch reproducible from parent universe and outcome index alone. Child universes are deployed lazily when a forked branch is actually needed.</p>
 				<div class="callout"><strong>Concrete balance example.</strong> Alice converts 100 parent-universe REP into a migration balance and mints 100 REP in the Yes child and 100 REP in the No child. This reproduces the parent REP claim across explicitly selected branches.</div>
-				<pre><code>Genesis
+				<pre class="code-scroll" tabindex="0" aria-label="Example child-universe tree"><code>Genesis
 ├── Yes: Alice holds 100 Yes-REP
 │   ├── Option A: Alice may later mint 100 Yes/A-REP
 │   └── Option B: Alice may later mint 100 Yes/B-REP
@@ -270,13 +270,13 @@
 					<h2>6. Questions and Outcome Encoding</h2>
 					<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
 				</div>
-				<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a> stores title, description, start and end time, scalar metadata such as <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code>.</p>
+				<p><a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a> is the question-creation input and event payload. Every question keeps its start time, end time, tick count, outcome count, and exact binary marker in the compact <code>protocolQuestions</code> mapping. The full <code>questions</code> record is stored only for scalar questions, whose answer validation and display names require those fields. Categorical title, description, and labels remain in the immutable <code>QuestionCreated</code> event rather than duplicate contract storage.</p>
 
 				<p>Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options. For scalar questions, there are no categorical labels to include, so the id is determined from the scalar question fields alone.</p>
 				<p>Every call to <code>createQuestion</code> also requires <code>endTime &gt;= startTime</code>. The contract rejects any question whose end time is earlier than its start time before it reaches scalar or categorical validation.</p>
 
 				<h3>Categorical Questions</h3>
-				<p>Categorical questions store sorted outcome labels. The implementation requires labels to be non-empty and strictly ordered by hash: each label's <code>keccak256(abi.encode(label))</code> value must be lower than the previous label's hash, so callers provide labels in descending hash order. The contract stores the labels in <code>outcomeLabels[questionId]</code>. Any number of categorical outcomes can exist at the Zoltar level as long as those conditions hold.</p>
+				<p>Categorical questions emit their sorted outcome labels in <code>QuestionCreated</code>. Their scalar-only fields must be zero or empty, the outcome count must fit <code>uint32</code>, and every label must be non-empty and strictly ordered by hash: each label's <code>keccak256(abi.encode(label))</code> value must be lower than the previous label's hash, so callers provide labels in descending hash order. UIs and indexers discover questions by replaying these events and reject identifiers that do not match the deterministic question ID function. The compact <code>protocolQuestions</code> mapping remains the onchain source for answer-space validation. Only the labels exactly <code>Yes</code>, then <code>No</code>, set the binary marker required by Statoblast pool creation.</p>
 
 				<h3>Scalar Questions</h3>
 				<p>Scalar questions store no categorical labels. Instead, <code>numTicks</code>, <code>displayValueMin</code>, <code>displayValueMax</code>, and <code>answerUnit</code> define the answer space. At creation time, scalar questions must satisfy <code>numTicks &gt; 0</code> and <code>displayValueMax &gt; displayValueMin</code>.</p>

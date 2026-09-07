@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
 
-export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
+export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 4
 export const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
@@ -76,6 +76,7 @@ export interface CountedRegistryCursor {
 export interface ImmutableTopologyDiscoveryCursors {
 	poolDeployments: CountedRegistryCursor
 	questions: CountedRegistryCursor
+	universeChildren: CountedRegistryCursor
 	vaultsByPool: Record<string, CountedRegistryCursor>
 }
 
@@ -112,6 +113,7 @@ export function emptyImmutableTopologyData(): ImmutableTopologyData {
 		discoveryCursors: {
 			poolDeployments: emptyCountedRegistryCursor(),
 			questions: emptyCountedRegistryCursor(),
+			universeChildren: emptyCountedRegistryCursor(),
 			vaultsByPool: {},
 		},
 		pairsByPool: {},
@@ -127,6 +129,7 @@ export function cloneImmutableTopologyData(cache: ImmutableTopologyData): Immuta
 		discoveryCursors: {
 			poolDeployments: { ...cache.discoveryCursors.poolDeployments },
 			questions: { ...cache.discoveryCursors.questions },
+			universeChildren: { ...cache.discoveryCursors.universeChildren },
 			vaultsByPool: Object.fromEntries(Object.entries(cache.discoveryCursors.vaultsByPool).map(([pool, cursor]) => [pool, { ...cursor }])),
 		},
 		pairsByPool: { ...cache.pairsByPool },
@@ -145,7 +148,7 @@ type CollectionCommitment = {
 	recordCount: string
 }
 
-type ManifestDiscoveryCursors = Pick<ImmutableTopologyDiscoveryCursors, 'poolDeployments' | 'questions'>
+type ManifestDiscoveryCursors = Pick<ImmutableTopologyDiscoveryCursors, 'poolDeployments' | 'questions' | 'universeChildren'>
 
 type TopologyManifestPayload = {
 	anchor: CanonicalImmutableTopologyCache['anchor']
@@ -227,7 +230,7 @@ function parseCountedRegistryCursor(value: unknown, label: string): CountedRegis
 
 function parseDiscoveryCursors(value: unknown, label: string): ImmutableTopologyDiscoveryCursors {
 	const cursors = requiredRecord(value, label)
-	assertExactKeys(cursors, ['poolDeployments', 'questions', 'vaultsByPool'], label)
+	assertExactKeys(cursors, ['poolDeployments', 'questions', 'universeChildren', 'vaultsByPool'], label)
 	const rawVaults = requiredRecord(cursors['vaultsByPool'], `${label}.vaultsByPool`)
 	const vaultsByPool: Record<string, CountedRegistryCursor> = {}
 	for (const rawPool of Object.keys(rawVaults).sort((left, right) => left.localeCompare(right))) {
@@ -238,16 +241,18 @@ function parseDiscoveryCursors(value: unknown, label: string): ImmutableTopology
 	return {
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
+		universeChildren: parseCountedRegistryCursor(cursors['universeChildren'], `${label}.universeChildren`),
 		vaultsByPool,
 	}
 }
 
 function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestDiscoveryCursors {
 	const cursors = requiredRecord(value, label)
-	assertExactKeys(cursors, ['poolDeployments', 'questions'], label)
+	assertExactKeys(cursors, ['poolDeployments', 'questions', 'universeChildren'], label)
 	return {
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
+		universeChildren: parseCountedRegistryCursor(cursors['universeChildren'], `${label}.universeChildren`),
 	}
 }
 
@@ -415,12 +420,16 @@ function assertTopologyResidentBounds(cache: CanonicalImmutableTopologyCache, li
 			if (vaults.length > limits.maxVaultsPerPool) throw configuredResidentLimitError('Immutable topology cache exceeds the configured per-pool vault resident limit')
 		}
 	}
-	const { poolDeployments, questions, vaultsByPool } = cache.discoveryCursors
+	const { poolDeployments, questions, universeChildren, vaultsByPool } = cache.discoveryCursors
 	if (poolDeployments.retentionMode === 'resident' ? BigInt(cache.poolDeployments.length) !== BigInt(poolDeployments.nextIndex) : cache.poolDeployments.length !== 0) {
 		throw new Error('Immutable topology pool cursor does not match its resident records')
 	}
 	if (questions.retentionMode === 'resident' ? BigInt(cache.questions.length) !== BigInt(questions.nextIndex) : cache.questions.length !== 0) {
 		throw new Error('Immutable topology question cursor does not match its resident records')
+	}
+	const childCount = Object.values(cache.universeChildren).reduce((total, children) => total + children.childUniverseIds.length, 0)
+	if (universeChildren.retentionMode === 'resident' ? BigInt(childCount) !== BigInt(universeChildren.nextIndex) : Object.keys(cache.universeChildren).length !== 0) {
+		throw new Error('Immutable topology universe-child cursor does not match its resident records')
 	}
 	for (const [pool, cursor] of Object.entries(vaultsByPool)) {
 		const resident = cache.vaultsByPool[pool] ?? []
@@ -1028,6 +1037,7 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 				discoveryCursors: {
 					poolDeployments: { ...cache.discoveryCursors.poolDeployments },
 					questions: { ...cache.discoveryCursors.questions },
+					universeChildren: { ...cache.discoveryCursors.universeChildren },
 				},
 				identity: parsedIdentity,
 			}),

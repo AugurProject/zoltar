@@ -2,12 +2,22 @@ import { expect, test } from 'bun:test'
 import { createPublicClient, custom, mainnet } from '@zoltar/bot-shared/ethereum'
 import { parseSettings } from '#config/settings'
 import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
-import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, loadUniverses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
 import { getAddress } from '../helpers/ethereum.ts'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
+
+test('rejects a child event with a mismatched deterministic universe ID', async () => {
+	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
+	const client = {
+		getBlock: async (request?: { blockNumber?: bigint }) => ({ hash: `0x${'77'.repeat(32)}`, number: request?.blockNumber ?? 2n, timestamp: 1n, transactions: [] }),
+		getCode: async () => '0x01',
+		getLogs: async () => [{ args: { childUniverseId: 99n, outcomeIndex: 1n, universeId: 0n } }],
+	} as unknown as Parameters<typeof loadUniverses>[0]
+	await expect(loadUniverses(client, settings, 2n)).rejects.toThrow('mismatched deterministic child universe ID')
+})
 
 test('binds the complete pool scan to one canonical block', async () => {
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -28,9 +38,11 @@ test('binds the complete pool scan to one canonical block', async () => {
 		chain: mainnet,
 		transport: custom({
 			request: parameters => {
+				if (parameters.method === 'eth_getCode') return Promise.resolve('0x01')
 				if (parameters.method === 'eth_getBlockByNumber') {
 					if (!Array.isArray(parameters.params)) throw new Error('Block request parameters are missing')
 					const blockTag = parameters.params[0]
+					if (blockTag === '0x0') return Promise.resolve({ hash: `0x${'01'.repeat(32)}`, number: '0x0', parentHash: `0x${'00'.repeat(32)}`, timestamp: '0x0', transactions: [] })
 					if (blockTag === '0x1') return Promise.resolve({ hash: previousBlockHash, number: '0x1', parentHash: `0x${'00'.repeat(32)}`, timestamp: '0x1', transactions: [] })
 					if (blockTag === 'latest' || blockTag === '0x2') return Promise.resolve({ hash: blockTag === '0x2' && reorgSnapshot ? reorgedBlockHash : blockHash, number: '0x2', parentHash: previousBlockHash, timestamp: '0x2', transactions: [] })
 					throw new Error(`Unexpected block tag: ${String(blockTag)}`)
@@ -44,6 +56,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 			if (property === 'getLogs') {
 				return (parameters: { args?: { securityPool?: string }; event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }) => {
 					logReads.push(parameters)
+					if (parameters.event?.name === 'DeployChild') return Promise.resolve([])
 					if (parameters.event?.name === 'DeploySecurityPool') {
 						if (parameters.args?.securityPool === undefined) return Promise.resolve([])
 						return Promise.resolve([
@@ -84,7 +97,6 @@ test('binds the complete pool scan to one canonical block', async () => {
 					if (parameters.functionName === 'universes') {
 						return Promise.resolve({ forkQuestionId: 0n, forkTime: 0n, forkingOutcomeIndex: 0n, parentUniverseId: 0n, reputationToken: repToken })
 					}
-					if (parameters.functionName === 'getDeployedChildUniverses') return Promise.resolve([[], [], []])
 					if (parameters.functionName === 'getVaultCount') return Promise.resolve(1n)
 					if (parameters.functionName === 'currentRetentionRate') return Promise.resolve(1n)
 					if (parameters.functionName === 'totalRepBackingUnits') return Promise.resolve(1n)

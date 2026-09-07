@@ -206,6 +206,10 @@ export async function loadTopologyCacheForScan(parameters: { identity: Immutable
 	}
 }
 
+export function topologyCheckpointRequiresSave(previous: CanonicalImmutableTopologyCache | undefined, next: CanonicalImmutableTopologyCache, topologyChanged: boolean) {
+	return topologyChanged || previous === undefined || previous.anchor.blockNumber !== next.anchor.blockNumber || previous.anchor.blockHash.toLowerCase() !== next.anchor.blockHash.toLowerCase()
+}
+
 export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
 	const connectivity = requiredConnectivity(settings)
 	const indexed = index === undefined ? {} : protocolIndexDiscoveryInputs(index)
@@ -595,7 +599,9 @@ export async function performCanonicalScan(
 		statePath: settings.runtime.stateFile,
 	})
 	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, compatibleIndex, cachedTopology)
-	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
+	if (topologyCheckpointRequiresSave(cachedTopology, discovery.topologyCache, discovery.topologyChanged)) {
+		await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
+	}
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
 	const [updatedCandidate, carryUpdated] = discoveryComplete ? await drainConcurrent([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]

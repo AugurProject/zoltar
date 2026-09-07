@@ -176,6 +176,19 @@ export const zoltarAbi = [
 	{
 		anonymous: false,
 		inputs: [
+			{ indexed: false, name: 'deployer', type: 'address' },
+			{ indexed: true, name: 'universeId', type: 'uint248' },
+			{ indexed: true, name: 'outcomeIndex', type: 'uint256' },
+			{ indexed: true, name: 'childUniverseId', type: 'uint248' },
+			{ indexed: false, name: 'childReputationToken', type: 'address' },
+			{ indexed: false, name: 'childUniverseTheoreticalSupplyAttoRep', type: 'uint256' },
+		],
+		name: 'DeployChild',
+		type: 'event',
+	},
+	{
+		anonymous: false,
+		inputs: [
 			{ indexed: true, name: 'migrator', type: 'address' },
 			{ indexed: false, name: 'recipient', type: 'address' },
 			{ indexed: true, name: 'universeId', type: 'uint248' },
@@ -209,21 +222,6 @@ export const zoltarAbi = [
 		],
 		name: 'getMigrationRepBalanceAttoRep',
 		outputs: [{ name: 'migrationRepBalanceAttoRep', type: 'uint256' }],
-		stateMutability: 'view',
-		type: 'function',
-	},
-	{
-		inputs: [
-			{ name: 'universeId', type: 'uint248' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		name: 'getDeployedChildUniverses',
-		outputs: [
-			{ name: 'outcomeIndexes', type: 'uint256[]' },
-			{ name: 'childUniverseIds', type: 'uint248[]' },
-			{ components: universeComponents, name: 'childUniverses', type: 'tuple[]' },
-		],
 		stateMutability: 'view',
 		type: 'function',
 	},
@@ -281,28 +279,25 @@ export const zoltarAbi = [
 ] as const
 
 export const questionDataAbi = [
-	{ inputs: [], name: 'getQuestionCount', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
+		anonymous: false,
 		inputs: [
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'numberOfEntries', type: 'uint256' },
+			{ indexed: true, name: 'questionId', type: 'uint256' },
+			{ indexed: false, name: 'createdTimestamp', type: 'uint256' },
+			{ components: questionComponents, indexed: false, name: 'questionData', type: 'tuple' },
+			{ indexed: false, name: 'outcomeOptions', type: 'string[]' },
 		],
-		name: 'getQuestions',
-		outputs: [{ name: 'returnQuestionIds', type: 'uint256[]' }],
-		stateMutability: 'view',
-		type: 'function',
+		name: 'QuestionCreated',
+		type: 'event',
 	},
-	{ inputs: [{ name: '', type: 'uint256' }], name: 'questions', outputs: questionComponents, stateMutability: 'view', type: 'function' },
-	{ inputs: [{ name: '', type: 'uint256' }], name: 'questionCreatedTimestamp', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
-			{ name: 'questionId', type: 'uint256' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'numberOfEntries', type: 'uint256' },
+			{ components: questionComponents, name: 'questionData', type: 'tuple' },
+			{ name: 'outcomeOptions', type: 'string[]' },
 		],
-		name: 'getOutcomeLabels',
-		outputs: [{ name: 'returnOutcomeLabels', type: 'string[]' }],
-		stateMutability: 'view',
+		name: 'getQuestionId',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'pure',
 		type: 'function',
 	},
 	{

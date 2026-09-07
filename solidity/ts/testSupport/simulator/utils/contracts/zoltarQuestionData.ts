@@ -1,8 +1,13 @@
-import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployStatoblast'
-import { CONTRACT_PAGE_SIZE } from './pagination'
+
+const ignorableLogDecodeErrorNames = new Set(['AbiEventSignatureNotFoundError', 'DecodeLogDataMismatch', 'DecodeLogTopicsMismatch'])
+
+function isIgnorableLogDecodeError(error: unknown) {
+	return error instanceof Error && ignorableLogDecodeErrorNames.has(error.name)
+}
 
 type QuestionData = {
 	title: string
@@ -16,21 +21,17 @@ type QuestionData = {
 }
 
 export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
-	let currentIndex = 0n
-	const pages: string[] = []
-	do {
-		const returnedLabels = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
-		})
-		const newLabels = returnedLabels.filter((label: string) => label !== '')
-		pages.push(...newLabels)
-		if (BigInt(returnedLabels.length) !== CONTRACT_PAGE_SIZE || BigInt(newLabels.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	} while (true)
-	return pages
+	const logs = await client.getLogs({ address: getInfraContractAddresses().zoltarQuestionData, fromBlock: 0n })
+	for (const log of logs) {
+		try {
+			const decoded = decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: log.topics })
+			if (decoded.eventName === 'QuestionCreated' && decoded.args.questionId === questionId) return [...decoded.args.outcomeOptions]
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			continue
+		}
+	}
+	return []
 }
 
 export const getQuestionData = async (client: ReadClient, questionId: bigint) => {
@@ -44,6 +45,10 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 }
 
 export const getQuestionId = (questionData: QuestionData, outcomeOptions: readonly string[]): bigint => {
+	if (outcomeOptions.length > 0) {
+		const metadataDigest = keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'string' }, { type: 'string[]' }], [questionData.title, questionData.description, outcomeOptions]))
+		return BigInt(keccak256(encodeAbiParameters([{ type: 'uint48' }, { type: 'uint48' }, { type: 'bytes32' }], [questionData.startTime, questionData.endTime, metadataDigest])))
+	}
 	const encodedData = encodeAbiParameters(
 		[
 			{

@@ -32,11 +32,11 @@
 					</nav>
 				</header>
 				<h2 id="zoltarquestiondata">ZoltarQuestionData</h2>
-				<p>Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata. <a href="../../solidity/contracts/ZoltarQuestionData.sol">Source</a></p>
-				<p>Read surface: Use <code>getQuestionId</code> before submission; <code>questionCreatedTimestamp</code> and <code>questions</code> for direct lookup; <code>getQuestionCount</code> and <code>getQuestions</code> for indexed or paged discovery; and <code>getQuestionEndDate</code>, <code>getOutcomeLabels</code>, <code>splitUint256IntoTwoWithInvalid</code>, <code>hasNonZeroScalarReservedBits</code>, <code>isMalformedAnswerOption</code>, and <code>getAnswerOptionName</code> when validating or displaying answers. In the <code>QuestionData</code> tuple, <code>startTime</code> and <code>endTime</code> are <code>uint48</code>, while <code>numTicks</code> is <code>uint120</code>; clients must use these exact widths because they determine the <code>getQuestionId</code> and <code>createQuestion</code> selectors.</p>
+				<p>Creates immutable scalar or categorical questions while keeping presentation metadata in creation events. <a href="../../solidity/contracts/ZoltarQuestionData.sol">Source</a></p>
+				<p>Read surface: <code>QuestionData</code> encodes <code>startTime</code> and <code>endTime</code> as <code>uint48</code> and <code>numTicks</code> as <code>uint120</code>; these widths determine the <code>getQuestionId</code> and <code>createQuestion</code> selectors. Use <code>getQuestionId</code> before creation; <code>QuestionCreated</code> logs for discovery and categorical presentation metadata; <code>questionCreatedTimestamp</code>, <code>protocolQuestions</code>, and <code>getQuestionEndDate</code> for protocol state; and <code>questions</code>, <code>splitUint256IntoTwoWithInvalid</code>, <code>hasNonZeroScalarReservedBits</code>, <code>isMalformedAnswerOption</code>, and <code>getAnswerOptionName</code> for scalar metadata and validation.</p>
 
-				<!-- Validated read ABI fingerprint: 964d0ce318d2890011ff485c8d78e933cabc8d10e489a0c22f0e266fa2563ded -->
-				<!-- Validated complete compiled ABI fingerprint: 580109cfcebb3ce505def01895f7b6567e75bbd8e8ccac857bdd00d54f15c37f -->
+				<!-- Validated read ABI fingerprint: 2c6a09bd4cbcf5b355242f2800244e4af258f5a9f20d72d3190d9fa565b5f2c5 -->
+				<!-- Validated complete compiled ABI fingerprint: bbbc7e6939b6c78f3c953c50abe823f69bcbf9baf73e13352d5552c1d8601c68 -->
 				<table>
 					<thead>
 						<tr>
@@ -51,19 +51,19 @@
 						<tr>
 							<td><code>createQuestion(questionData, outcomeOptions)</code></td>
 							<td>Anyone</td>
-							<td>Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions require nonempty labels whose <code>keccak256(abi.encode(label))</code> values are strictly descending.</td>
-							<td>Stores the question at its deterministic content hash, records the creation timestamp, appends it to discovery order, and stores categorical labels when supplied.</td>
+							<td>Question ID not already created; end time is on or after start time. Scalar questions use no labels, require display maximum greater than minimum, and positive ticks. Categorical questions require at most <code>uint32.max</code> nonempty labels whose <code>keccak256(abi.encode(label))</code> values are strictly descending; <code>numTicks</code>, both display bounds, and <code>answerUnit</code> must be zero or empty.</td>
+							<td>Stores protocol timing and answer-space validation at a deterministic ID, records scalar metadata when applicable, and emits presentation metadata for off-chain discovery.</td>
 							<td><code>QuestionCreated</code></td>
 						</tr>
 					</tbody>
 				</table>
 				<h2 id="zoltar">Zoltar</h2>
 				<p>Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. <a href="../../solidity/contracts/Zoltar.sol">Source</a></p>
-				<p>Read surface: Use <code>universes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe and migration state. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
+				<p>Read surface: Use <code>DeployChild</code> logs for child discovery; <code>universes</code> and <code>getChildUniverseId</code> for deterministic direct lookup; <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe state; and <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, and <code>genesisReputationToken</code> for immutable configuration. Construction requires <code>forkBurnDivisor &gt;= 5</code>, capping the uncredited fork haircut at 20%, and accepts a deployed external genesis REP token with theoretical supply from one attoREP through 11 million REP.</p>
 
 				<p>Security boundaries for these calls are <a href="./security-model.html#assumption-a15">A15 intended question selection</a> and <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
-				<!-- Validated read ABI fingerprint: 1916e3480c70c4ccd5962f4b8069988d7dc36f0ea89337ebe04b8bca089d1492 -->
-				<!-- Validated complete compiled ABI fingerprint: 023e5a38bcf613044e07d23e84095e1125be871017388a0c5a6cf7a41958b350 -->
+				<!-- Validated read ABI fingerprint: a5763ef6fa06c2232a054556fde84da5a4107994f44a8643920f3387bd3d29f3 -->
+				<!-- Validated complete compiled ABI fingerprint: 6ae911161cd2cf6b410f276da89e36408cda55a272d40053d02a3d2ce5961cb9 -->
 				<table>
 					<thead>
 						<tr>

@@ -21,11 +21,6 @@
 			"address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12"
 		},
 		{
-			"id": "deploymentStatusOracle",
-			"label": "Deployment Status Oracle",
-			"address": "0x099e6Cc924BFd3096cFCc241fB70eed3b9B826BA"
-		},
-		{
 			"id": "weth",
 			"label": "Wrapped Ether",
 			"address": "0x65156FD21726b8efcB627fa38c506E3f3542F601"
@@ -48,12 +43,12 @@
 		{
 			"id": "zoltarQuestionData",
 			"label": "ZoltarQuestionData",
-			"address": "0x98927dA4cD6C97d95c8CC97E77948389a84559fC"
+			"address": "0x2645A9c9408eA1b3314cd24D02E6611ee2c3Fd18"
 		},
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0x132bE08534a074242Be03FD46558f97AC8891048"
+			"address": "0x266b981B3582Bb4ad867DfC3D9CE61b87307f766"
 		},
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
@@ -78,7 +73,7 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x3d4D0c4cACbbae0E3d4B885ce21360158Fa501C9"
+			"address": "0x3eDb00BbeE20B2707F66B06F4F5555d6658C1f8E"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
@@ -88,7 +83,7 @@
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x49eCFF1B7d870d64A773204c5512eDBf7449F82e"
+			"address": "0x43f5E8C45C4a00330a9Bbe8bAD8F6Aea9c391B62"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -103,14 +98,14 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x4354a8c67e79Bf6892399191E1429b1ed8E62254"
+			"address": "0x2e0868715C6fcB728058d8cE22f78cE8B4CC8ad3"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x49eCFF1B7d870d64A773204c5512eDBf7449F82e"
+			"address": "0x43f5E8C45C4a00330a9Bbe8bAD8F6Aea9c391B62"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -125,7 +120,7 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x4354a8c67e79Bf6892399191E1429b1ed8E62254"
+			"address": "0x2e0868715C6fcB728058d8cE22f78cE8B4CC8ad3"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",

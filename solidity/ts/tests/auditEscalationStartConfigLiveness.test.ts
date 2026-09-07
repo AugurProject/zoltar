@@ -6,7 +6,7 @@ import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 1n
 
 describe('Audit regression: escalation start configuration liveness', () => {
 	const fixture = useStatoblastVaultAccountingFixture()

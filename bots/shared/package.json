@@ -21,7 +21,9 @@
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
-		"./monitoring/resilience": "./src/monitoring/resilience.ts"
+		"./monitoring/resilience": "./src/monitoring/resilience.ts",
+		"./protocol/question-id": "./src/protocol/question-id.ts",
+		"./protocol/universe-id": "./src/protocol/universe-id.ts"
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run test && bun run format:check",

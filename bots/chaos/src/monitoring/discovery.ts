@@ -21,6 +21,7 @@ import {
 	zoltarAbi,
 } from '../contracts/abi.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
+import { logRangeLimitError } from '@zoltar/bot-shared/monitoring/block-sync'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type {
@@ -66,13 +67,46 @@ const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT 
 export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
-const OUTCOME_LABEL_PAGE_SIZE = 256n
 // Zoltar persists and emits every non-empty label in one createQuestion
 // transaction. These ceilings are far above a practical transaction-sized
 // domain, but still make a hostile endpoint's pagination and memory finite.
 const DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION = 4_096
 const DEFAULT_MAXIMUM_OUTCOME_LABEL_UTF8_BYTES_PER_QUESTION = IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES
-const utf8Encoder = new TextEncoder()
+const MAXIMUM_TOPOLOGY_LOG_RANGE = 10_000n
+
+async function loadBoundedEventHistory<T>(parameters: { acceptPage?: (page: readonly T[]) => boolean; fetchRange: (fromBlock: bigint, toBlock: bigint) => Promise<readonly T[]>; fromBlock: bigint; maximumLogs: number; toBlock: bigint }) {
+	const logs: T[] = []
+	if (parameters.fromBlock > parameters.toBlock) return { logs, minimumCount: logs.length, overflow: false }
+	for (let fromBlock = parameters.fromBlock; fromBlock <= parameters.toBlock; ) {
+		let toBlock = fromBlock + MAXIMUM_TOPOLOGY_LOG_RANGE - 1n
+		if (toBlock > parameters.toBlock) toBlock = parameters.toBlock
+		while (true) {
+			let page: readonly T[]
+			try {
+				page = await parameters.fetchRange(fromBlock, toBlock)
+			} catch (error) {
+				if (fromBlock < toBlock && logRangeLimitError(error)) {
+					toBlock = fromBlock + (toBlock - fromBlock) / 2n
+					continue
+				}
+				throw error
+			}
+			const remaining = parameters.maximumLogs - logs.length
+			if (page.length <= remaining) {
+				if (parameters.acceptPage?.(page) === false) return { logs, minimumCount: logs.length + 1, overflow: true }
+				logs.push(...page)
+				fromBlock = toBlock + 1n
+				break
+			}
+			if (fromBlock < toBlock) {
+				toBlock = fromBlock + (toBlock - fromBlock) / 2n
+				continue
+			}
+			return { logs, minimumCount: logs.length + remaining + 1, overflow: true }
+		}
+	}
+	return { logs, minimumCount: logs.length, overflow: false }
+}
 
 export function forkMigrationWindowIsOpen(systemState: bigint, forkActivationTime: bigint, timestamp: bigint) {
 	return systemState === 1n && forkActivationTime > 0n && timestamp <= forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
@@ -160,29 +194,6 @@ function limitsWithDefaults(configured?: Partial<DiscoveryLimits>): DiscoveryLim
 		maxStagedOperationsPerPool: configured?.maxStagedOperationsPerPool ?? DEFAULT_LIMITS.maxStagedOperationsPerPool,
 		maxUniverses: configured?.maxUniverses ?? DEFAULT_LIMITS.maxUniverses,
 		maxVaultsPerPool: configured?.maxVaultsPerPool ?? DEFAULT_LIMITS.maxVaultsPerPool,
-	}
-}
-
-async function discoverOutcomeLabels(client: ChaosReadClient, questionData: Address, questionId: bigint, blockNumber: bigint, limits: DiscoveryLimits) {
-	const outcomeLabels: string[] = []
-	let utf8Bytes = 0
-	for (;;) {
-		const remaining = limits.maxOutcomeLabelsPerQuestion - outcomeLabels.length
-		const requested = remaining === 0 ? 1n : BigInt(Math.min(remaining, Number(OUTCOME_LABEL_PAGE_SIZE)))
-		const page = await client.readContract({ abi: questionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
-		if (BigInt(page.length) > requested) throw new Error(`Question ${questionId.toString()} outcome-label page exceeded its requested size`)
-		if (remaining === 0) {
-			if (page.length === 0) return outcomeLabels
-			throw new Error(`Question ${questionId.toString()} exceeds the configured ${limits.maxOutcomeLabelsPerQuestion.toString()}-label discovery limit`)
-		}
-		for (const label of page) {
-			utf8Bytes += utf8Encoder.encode(label).byteLength
-			if (utf8Bytes > limits.maxOutcomeLabelUtf8BytesPerQuestion) {
-				throw new Error(`Question ${questionId.toString()} outcome labels exceed the configured ${limits.maxOutcomeLabelUtf8BytesPerQuestion.toString()}-byte UTF-8 discovery limit`)
-			}
-		}
-		outcomeLabels.push(...page)
-		if (BigInt(page.length) < requested) return outcomeLabels
 	}
 }
 
@@ -698,8 +709,54 @@ export async function discoverDirectEscalationDepositQuotes(
 	return quotes
 }
 
-async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
+async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber: bigint, scanFromBlock: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments, wallet } = context
+	const childCursor = topology.discoveryCursors.universeChildren
+	let replayFromBlock = scanFromBlock
+	if (childCursor.retentionMode === 'overflow') {
+		if (BigInt(Math.max(0, limits.maxUniverses - 1)) <= BigInt(childCursor.residentLimit)) {
+			warnings.push(`Universe discovery remains unavailable because child deployment events exceed the configured ${limits.maxUniverses.toString()}-universe resident limit`)
+			return []
+		}
+		topology.universeChildren = {}
+		topology.discoveryCursors.universeChildren = emptyCountedRegistryCursor()
+		mutation.changed = true
+		replayFromBlock = 0n
+	}
+	const cachedChildCount = Object.values(topology.universeChildren).reduce((total, children) => total + children.childUniverseIds.length, 0)
+	const childHistory = await loadBoundedEventHistory({
+		fetchRange: async (fromBlock, toBlock) => await client.getLogs({ address: deployments.zoltar, event: zoltarAbi[0], fromBlock, toBlock }),
+		fromBlock: replayFromBlock,
+		maximumLogs: Math.max(0, limits.maxUniverses - 1 - cachedChildCount),
+		toBlock: blockNumber,
+	})
+	if (childHistory.overflow) {
+		const observedCount = cachedChildCount + childHistory.minimumCount
+		topology.universeChildren = {}
+		topology.discoveryCursors.universeChildren = {
+			...emptyCountedRegistryCursor(),
+			canonicalCount: observedCount.toString(),
+			nextIndex: observedCount.toString(),
+			residentLimit: Math.max(0, limits.maxUniverses - 1).toString(),
+			retentionMode: 'overflow',
+		}
+		mutation.changed = true
+		warnings.push(`Universe discovery paused because at least ${observedCount.toString()} child deployment events exceed the configured ${limits.maxUniverses.toString()}-universe resident limit`)
+		return []
+	}
+	const childLogs = childHistory.logs
+	await mapWithConcurrency(childLogs, DISCOVERY_RPC_CONCURRENCY, async log => {
+		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
+		const expectedChildId = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [log.args.universeId, log.args.outcomeIndex], blockNumber, functionName: 'getChildUniverseId' })
+		if (expectedChildId !== log.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+	})
+	const childrenByParent = new Map<bigint, Array<{ childUniverseId: bigint; outcomeIndex: bigint }>>()
+	for (const log of childLogs) {
+		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
+		const children = childrenByParent.get(log.args.universeId) ?? []
+		children.push({ childUniverseId: log.args.childUniverseId, outcomeIndex: log.args.outcomeIndex })
+		childrenByParent.set(log.args.universeId, children)
+	}
 	const queue = [0n]
 	const queuedIds = new Set<string>(['0'])
 	const seen = new Set<string>()
@@ -736,6 +793,12 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
+		if (universeId !== 0n) {
+			const route = Object.entries(topology.universeChildren)
+				.flatMap(([parentId, children]) => children.childUniverseIds.map((childId, index) => ({ childId, outcomeIndex: children.outcomeIndexes[index], parentId })))
+				.find(candidate => candidate.childId === universeId.toString())
+			if (route !== undefined && (route.parentId !== parentUniverseId.toString() || route.outcomeIndex !== forkingOutcomeIndex.toString())) throw new Error(`Universe ${universeId.toString()} does not match its DeployChild route`)
+		}
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
 		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupplyAttoRep' })
 		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
@@ -752,28 +815,15 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 			retainedUniverseIds.add(childId.toString())
 		}
 		if (!truncated) {
-			for (let start = BigInt(outcomes.length); ; ) {
-				const remainingSlots = limits.maxUniverses - retainedUniverseIds.size
-				const requestedPageSize = BigInt(Math.max(1, Math.min(limits.maxUniverses, remainingSlots + 1)))
-				const [pageOutcomes, pageChildIds, pageChildren] = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId, start, requestedPageSize], blockNumber, functionName: 'getDeployedChildUniverses' })
-				if (pageOutcomes.length !== pageChildIds.length || pageOutcomes.length !== pageChildren.length) throw new Error(`Universe ${universeId.toString()} returned mismatched child arrays`)
-				if (BigInt(pageOutcomes.length) > requestedPageSize) throw new Error(`Universe ${universeId.toString()} exceeded the requested child page size`)
-				const accepted = Math.min(pageOutcomes.length, remainingSlots)
-				for (let index = 0; index < accepted; index += 1) {
-					const outcome = pageOutcomes[index]
-					const childId = pageChildIds[index]
-					if (outcome === undefined || childId === undefined) throw new Error(`Universe ${universeId.toString()} omitted a retained child route`)
-					outcomes.push(outcome)
-					childIds.push(childId)
-					retainedUniverseIds.add(childId.toString())
-				}
-				if (accepted > 0) mutation.changed = true
-				if (accepted < pageOutcomes.length) {
+			for (const child of childrenByParent.get(universeId) ?? []) {
+				if (retainedUniverseIds.size >= limits.maxUniverses) {
 					truncated = true
 					break
 				}
-				if (BigInt(pageOutcomes.length) < requestedPageSize) break
-				start += BigInt(pageOutcomes.length)
+				outcomes.push(child.outcomeIndex)
+				childIds.push(child.childUniverseId)
+				retainedUniverseIds.add(child.childUniverseId.toString())
+				mutation.changed = true
 			}
 		}
 		if (new Set(outcomes.map(outcome => outcome.toString())).size !== outcomes.length || new Set(childIds.map(childId => childId.toString())).size !== childIds.length) {
@@ -809,99 +859,121 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		}
 		universes.push(snapshot)
 	}
+	const childIds = Object.values(topology.universeChildren).flatMap(children => children.childUniverseIds)
+	topology.discoveryCursors.universeChildren = {
+		...emptyCountedRegistryCursor(),
+		canonicalCount: childIds.length.toString(),
+		commitment: updateRegistryCommitment(emptyCountedRegistryCursor().commitment, 0n, childIds),
+		nextIndex: childIds.length.toString(),
+		residentLimit: Math.max(0, limits.maxUniverses - 1).toString(),
+	}
 	if (truncated) warnings.push(`Universe discovery truncated at ${universes.length.toString()} retained universes because the configured resident limit is ${limits.maxUniverses.toString()}`)
 	return universes
 }
 
-async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
+async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, scanFromBlock: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments } = context
-	const count = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
-	let cursor = topology.discoveryCursors.questions
-	assertRegistryCountNotRegressed(cursor, count, 'Question registry')
-	let retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxQuestions) ? 'resident' : 'overflow'
-	if (cursor.retentionMode === 'overflow' && retentionMode === 'resident' && BigInt(cursor.residentLimit) >= BigInt(limits.maxQuestions)) retentionMode = 'overflow'
-	if (cursor.retentionMode === 'overflow' && retentionMode === 'resident') {
-		cursor = emptyCountedRegistryCursor()
+	const baseCursor = emptyCountedRegistryCursor()
+	let replayFromBlock = scanFromBlock
+	if (topology.discoveryCursors.questions.retentionMode === 'overflow') {
+		if (BigInt(limits.maxQuestions) <= BigInt(topology.discoveryCursors.questions.residentLimit)) {
+			warnings.push(`Question discovery remains unavailable because creation events exceed the configured ${limits.maxQuestions.toString()}-entry resident limit`)
+			return []
+		}
 		topology.questions = []
+		topology.discoveryCursors.questions = emptyCountedRegistryCursor()
 		mutation.changed = true
+		replayFromBlock = 0n
 	}
-	if (retentionMode === 'overflow' && topology.questions.length > 0) {
-		topology.questions = []
-		mutation.changed = true
-	}
-	const canonicalCursor = cursorWithCanonicalCount(cursor, count, limits.maxQuestions, retentionMode)
-	if (!sameRegistryCursor(cursor, canonicalCursor)) mutation.changed = true
-	cursor = canonicalCursor
-	if (cursor.retentionMode === 'resident' && BigInt(topology.questions.length) !== BigInt(cursor.nextIndex)) throw new Error('Question registry cursor does not match its retained canonical prefix')
-	const collected = await collectCountedPages({
-		count,
-		label: 'Question discovery',
-		maximumItems: limits.maxQuestions,
-		pageSize: limits.maxQuestions,
-		readPage: async (start, pageCount) => await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
-		start: BigInt(cursor.nextIndex),
+	let residentBytes = topology.questions.reduce((total, question) => total + Buffer.byteLength(JSON.stringify(question), 'utf8'), 0)
+	let residentItems = topology.questions.reduce((total, question) => total + 1 + question.outcomeLabels.length, 0)
+	const history = await loadBoundedEventHistory({
+		fetchRange: async (fromBlock, toBlock) => await client.getLogs({ address: deployments.questionData, event: questionDataAbi[0], fromBlock, toBlock }),
+		acceptPage: page => {
+			for (const log of page) {
+				if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
+				const { outcomeOptions, questionData } = log.args
+				if (outcomeOptions.length > limits.maxOutcomeLabelsPerQuestion) throw new Error(`Question ${log.args.questionId.toString()} exceeds the configured ${limits.maxOutcomeLabelsPerQuestion.toString()}-label discovery limit`)
+				const labelBytes = outcomeOptions.reduce((total, label) => total + Buffer.byteLength(label, 'utf8'), 0)
+				if (labelBytes > limits.maxOutcomeLabelUtf8BytesPerQuestion) throw new Error(`Question ${log.args.questionId.toString()} exceeds the configured outcome-label byte limit`)
+				const serializedLabelBytes = outcomeOptions.reduce((total, label) => total + Buffer.byteLength(JSON.stringify(label), 'utf8'), 0)
+				residentItems += 1 + outcomeOptions.length
+				residentBytes +=
+					512 + serializedLabelBytes + Buffer.byteLength(JSON.stringify(questionData.title), 'utf8') + Buffer.byteLength(JSON.stringify(questionData.description), 'utf8') + Buffer.byteLength(JSON.stringify(questionData.answerUnit), 'utf8')
+				if (residentItems > DISCOVERY_AGGREGATE_ITEM_LIMIT || residentBytes > DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES) return false
+			}
+			return true
+		},
+		fromBlock: replayFromBlock,
+		maximumLogs: Math.max(0, limits.maxQuestions - topology.questions.length),
+		toBlock: blockNumber,
 	})
-	if (collected.values.length > 0) {
-		cursor = {
-			...cursor,
-			commitment: updateRegistryCommitment(
-				cursor.commitment,
-				BigInt(cursor.nextIndex),
-				collected.values.map(questionId => questionId.toString()),
-			),
-			nextIndex: collected.nextStart.toString(),
+	const logs = history.logs
+	if (history.overflow) {
+		const ids = [
+			...topology.questions.map(question => question.id),
+			...logs.map(log => {
+				if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
+				return log.args.questionId.toString()
+			}),
+		]
+		const count = BigInt(topology.questions.length + history.minimumCount)
+		const nextCursor = {
+			...baseCursor,
+			canonicalCount: count.toString(),
+			commitment: updateRegistryCommitment(baseCursor.commitment, 0n, ids),
+			nextIndex: count.toString(),
+			residentLimit: limits.maxQuestions.toString(),
+			retentionMode: 'overflow' as const,
 		}
-		mutation.changed = true
+		if (topology.questions.length > 0 || !sameRegistryCursor(topology.discoveryCursors.questions, nextCursor)) mutation.changed = true
+		topology.questions = []
+		topology.discoveryCursors.questions = nextCursor
+		warnings.push(`Question discovery paused because at least ${count.toString()} creation events exceed the configured ${limits.maxQuestions.toString()}-entry resident limit`)
+		return []
 	}
-	if (cursor.retentionMode === 'resident' && collected.values.length > 0) {
-		let residentBytes = topology.questions.reduce((total, question) => total + Buffer.byteLength(JSON.stringify(question), 'utf8'), 0)
-		let residentItems = topology.questions.reduce((total, question) => total + 1 + question.outcomeLabels.length, 0)
-		let overflowed = false
-		const discovered = await mapWithConcurrency(collected.values, DISCOVERY_RPC_CONCURRENCY, async questionId => {
-			if (overflowed) return undefined
-			const [question, createdAt, labels] = await drainConcurrent([
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
-				discoverOutcomeLabels(client, deployments.questionData, questionId, blockNumber, limits),
-			])
-			const [, , startTime, endTime, numTicks] = question
+	await mapWithConcurrency(logs, DISCOVERY_RPC_CONCURRENCY, async log => {
+		if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
+		const expectedQuestionId = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [log.args.questionData, log.args.outcomeOptions], blockNumber, functionName: 'getQuestionId' })
+		if (expectedQuestionId !== log.args.questionId) throw new Error(`QuestionCreated event ${log.args.questionId.toString()} has a mismatched deterministic question ID`)
+	})
+	const questions = [
+		...topology.questions,
+		...logs.map(log => {
+			if (log.args === undefined) throw new Error('QuestionCreated event is missing its arguments')
+			const { createdTimestamp, outcomeOptions, questionData, questionId } = log.args
+			if (outcomeOptions.length > limits.maxOutcomeLabelsPerQuestion) throw new Error(`Question ${questionId.toString()} exceeds the configured ${limits.maxOutcomeLabelsPerQuestion.toString()}-label discovery limit`)
+			const labelBytes = outcomeOptions.reduce((total, label) => total + Buffer.byteLength(label, 'utf8'), 0)
+			if (labelBytes > limits.maxOutcomeLabelUtf8BytesPerQuestion) throw new Error(`Question ${questionId.toString()} exceeds the configured outcome-label byte limit`)
+			const { startTime, endTime, numTicks } = questionData
 			let kind: QuestionSnapshot['kind'] = 'categorical'
-			if (labels.length === 0) kind = 'scalar'
-			else if (labels.length === 2 && labels[0] === 'Yes' && labels[1] === 'No') kind = 'binary'
-			const snapshot: QuestionSnapshot = {
-				createdAt: createdAt.toString(),
-				endTime: endTime.toString(),
-				id: questionId.toString(),
-				kind,
-				numTicks: numTicks.toString(),
-				outcomeLabels: [...labels],
-				startTime: startTime.toString(),
-			}
-			const snapshotBytes = Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
-			residentBytes += snapshotBytes
-			residentItems += 1 + snapshot.outcomeLabels.length
-			if (snapshotBytes > IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES || residentBytes > DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES || residentItems > DISCOVERY_AGGREGATE_ITEM_LIMIT) {
-				overflowed = true
-				return undefined
-			}
+			if (outcomeOptions.length === 0) kind = 'scalar'
+			else if (outcomeOptions.length === 2 && outcomeOptions[0] === 'Yes' && outcomeOptions[1] === 'No') kind = 'binary'
+			const snapshot: QuestionSnapshot = { createdAt: createdTimestamp.toString(), endTime: endTime.toString(), id: questionId.toString(), kind, numTicks: numTicks.toString(), outcomeLabels: [...outcomeOptions], startTime: startTime.toString() }
 			return snapshot
-		})
-		if (overflowed) {
-			topology.questions = []
-			cursor = { ...cursor, retentionMode: 'overflow' }
-		} else {
-			for (const question of discovered) {
-				if (question === undefined) throw new Error('Question discovery omitted a retained result without exceeding its resident envelope')
-				topology.questions.push({ ...question, outcomeLabels: [...question.outcomeLabels] })
-			}
-		}
+		}),
+	]
+	const count = BigInt(questions.length)
+	if (residentBytes > DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES || residentItems > DISCOVERY_AGGREGATE_ITEM_LIMIT || questions.some(question => Buffer.byteLength(JSON.stringify(question), 'utf8') > IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES)) {
+		topology.questions = []
+		topology.discoveryCursors.questions = { ...baseCursor, canonicalCount: count.toString(), residentLimit: limits.maxQuestions.toString(), retentionMode: 'overflow' }
+		mutation.changed = true
+		warnings.push('Question discovery exceeded the configured immutable-topology memory envelope')
+		return []
 	}
-	topology.discoveryCursors.questions = cursor
-	if (cursor.retentionMode === 'overflow' || !collected.complete) warnings.push(registryCatchUpWarning('Question', cursor))
-	if (cursor.retentionMode === 'overflow') return []
-	if (!collected.complete || BigInt(topology.questions.length) !== count) throw new Error('Resident question registry did not reach its canonical count within the configured envelope')
-	if (new Set(topology.questions.map(question => question.id)).size !== topology.questions.length) throw new Error('Question registry contains duplicate immutable question IDs')
-	return topology.questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
+	const ids = questions.map(question => question.id)
+	const nextCursor = {
+		...baseCursor,
+		canonicalCount: count.toString(),
+		commitment: updateRegistryCommitment(baseCursor.commitment, 0n, ids),
+		nextIndex: count.toString(),
+		residentLimit: limits.maxQuestions.toString(),
+	}
+	if (new Set(ids).size !== questions.length) throw new Error('Question creation events contain duplicate immutable question IDs')
+	if (JSON.stringify(topology.questions) !== JSON.stringify(questions) || !sameRegistryCursor(topology.discoveryCursors.questions, nextCursor)) mutation.changed = true
+	topology.questions = questions
+	topology.discoveryCursors.questions = nextCursor
+	return questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
 }
 
 async function discoverVault(client: ChaosReadClient, pool: Address, escalationGame: Address, vault: Address, blockNumber: bigint): Promise<VaultSnapshot> {
@@ -1788,13 +1860,14 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const resolvedTopology = await immutableTopologyForAnchor(context, { hash: block.hash, number: blockNumber })
 	const topology = resolvedTopology.topology
 	const topologyMutation = { changed: resolvedTopology.reset }
+	const scanFromBlock = resolvedTopology.reset || context.topologyCache === undefined ? 0n : BigInt(context.topologyCache.anchor.blockNumber) + 1n
 	const tradingDeployment = await authenticateConfiguredGraph(context, blockNumber)
 	const warnings: string[] = []
 	const [chainId, ethBalanceAttoEth, universes, questions, openOracleEthCredit] = await drainConcurrent([
 		context.client.getChainId(),
 		context.client.getBalance({ address: context.wallet, blockNumber }),
-		discoverUniverses(context, blockNumber, limits, topology, topologyMutation, warnings),
-		discoverQuestions(context, blockNumber, limits, topology, topologyMutation, warnings),
+		discoverUniverses(context, blockNumber, scanFromBlock, limits, topology, topologyMutation, warnings),
+		discoverQuestions(context, blockNumber, scanFromBlock, limits, topology, topologyMutation, warnings),
 		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)

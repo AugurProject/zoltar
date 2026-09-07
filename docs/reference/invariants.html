@@ -391,14 +391,11 @@
 				<h2>Questions and Answer Classification</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="qst-01">
-						<summary><code>QST-01</code><span class="invariant-title">Question registry and classifier coherence</span></summary>
+						<summary><code>QST-01</code><span class="invariant-title">Question creation and classifier coherence</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Every successful question creation appends its deterministic ID exactly once and leaves prior question data and labels immutable. For every stored question and answer, the malformed classifier is true exactly when the public answer name is
-								<code>Malformed</code>.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> Appending a scalar question after two categorical questions preserves the first two records and their order; a scalar answer with reserved bits is both classified and named malformed.</p>
+							<div class="invariant-property">Every successful creation records its deterministic ID and compact protocol state once and emits exactly one <code>QuestionCreated</code> event containing the creation input. A duplicate reverts without changing state or emitting another event. Categorical presentation metadata exists only in that event; scalar metadata remains in <code>questions</code>. For every scalar answer, the malformed classifier is true exactly when the public answer name is <code>Malformed</code>.</div>
+							<p class="invariant-example"><strong>Example:</strong> Replaying two successful categorical creation events preserves their order and labels; retrying the first input emits nothing. A scalar answer with reserved bits is both classified and named malformed.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -411,8 +408,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code>, <code>getQuestions</code>, and answer classification</a>,
-										<a href="../../solidity/ts/tests/questionData.test.ts">registry and classifier invariant test</a>
+										<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code>, <code>protocolQuestions</code>, <code>QuestionCreated</code>, and answer classification</a>,
+										<a href="../../solidity/ts/tests/questionData.test.ts">creation-event and classifier invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -597,7 +594,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../reference/deployment-status.html">Deployment Status Oracle limits</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>,
+										<a href="../mainnet-deployment-addresses.json">Mainnet manifest</a>,
 										<a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
 									</dd>
 								</div>

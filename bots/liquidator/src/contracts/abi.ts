@@ -125,24 +125,22 @@ const universeComponents = [
 
 export const zoltarAbi = [
 	{
+		anonymous: false,
+		inputs: [
+			{ indexed: false, name: 'deployer', type: 'address' },
+			{ indexed: true, name: 'universeId', type: 'uint248' },
+			{ indexed: true, name: 'outcomeIndex', type: 'uint256' },
+			{ indexed: true, name: 'childUniverseId', type: 'uint248' },
+			{ indexed: false, name: 'childReputationToken', type: 'address' },
+			{ indexed: false, name: 'childUniverseTheoreticalSupplyAttoRep', type: 'uint256' },
+		],
+		name: 'DeployChild',
+		type: 'event',
+	},
+	{
 		inputs: [{ name: 'universeId', type: 'uint248' }],
 		name: 'universes',
 		outputs: universeComponents,
-		stateMutability: 'view',
-		type: 'function',
-	},
-	{
-		inputs: [
-			{ name: 'universeId', type: 'uint248' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		name: 'getDeployedChildUniverses',
-		outputs: [
-			{ name: 'outcomeIndexes', type: 'uint256[]' },
-			{ name: 'childUniverseIds', type: 'uint248[]' },
-			{ components: universeComponents, name: 'childUniverses', type: 'tuple[]' },
-		],
 		stateMutability: 'view',
 		type: 'function',
 	},

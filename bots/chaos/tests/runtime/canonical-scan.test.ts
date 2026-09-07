@@ -17,13 +17,14 @@ import {
 	planningOptions,
 	sharedCanonicalBlockNumber,
 	snapshotWithProtocolIndex,
+	topologyCheckpointRequiresSave,
 	unavailableOperationCatalog,
 	walletInventory,
 } from '../../src/runtime/canonical-scan.ts'
 import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../../src/operations/types.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { hash, snapshotFixture } from '../operations/fixture.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
 
@@ -117,6 +118,12 @@ function snapshot(): EcosystemSnapshot {
 }
 
 describe('canonical scan policy', () => {
+	test('persists an authenticated quiet scan frontier even when topology records do not change', () => {
+		const previous: CanonicalImmutableTopologyCache = { ...emptyImmutableTopologyData(), anchor: { blockHash: hash(10), blockNumber: '10' }, schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION }
+		const advanced = { ...previous, anchor: { blockHash: hash(20), blockNumber: '20' } }
+		expect(topologyCheckpointRequiresSave(previous, advanced, false)).toBeTrue()
+		expect(topologyCheckpointRequiresSave(advanced, advanced, false)).toBeFalse()
+	})
 	test('discards a valid disk or hot cache after discovery limits decrease while preserving corruption failures', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-canonical-topology-'))
 		try {
@@ -137,6 +144,7 @@ describe('canonical scan policy', () => {
 				discoveryCursors: {
 					poolDeployments: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '2', retentionMode: 'resident' },
 					questions: { canonicalCount: '2', commitment: zeroHash, nextIndex: '2', residentLimit: '2', retentionMode: 'resident' },
+					universeChildren: { canonicalCount: '0', commitment: zeroHash, nextIndex: '0', residentLimit: '1', retentionMode: 'resident' },
 					vaultsByPool: {},
 				},
 				pairsByPool: {},

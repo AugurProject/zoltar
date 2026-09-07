@@ -1,11 +1,13 @@
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { decodeEventLog, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { createCanonicalLogLoader, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
+import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 
-const CONTRACT_PAGE_SIZE = 30n
 const ANSWER_OPTION_ABI = [
 	{
 		inputs: [
@@ -19,16 +21,23 @@ const ANSWER_OPTION_ABI = [
 	},
 ] as const
 
-type DeployedChildUniverseRecord = {
-	forkQuestionId: bigint
-	forkTime: bigint
-	forkingOutcomeIndex: bigint
-	parentUniverseId: bigint
-	reputationToken: Address
-}
+const MAXIMUM_EVENT_LOG_RANGE = 10_000n
+const questionCreatedEvent = ZoltarQuestionData_ZoltarQuestionData.abi.find((entry): entry is Extract<(typeof ZoltarQuestionData_ZoltarQuestionData.abi)[number], { type: 'event'; name: 'QuestionCreated' }> => entry.type === 'event' && entry.name === 'QuestionCreated')
+if (questionCreatedEvent === undefined) throw new Error('QuestionCreated event missing from ABI')
+const deployChildEvent = Zoltar_Zoltar.abi.find((entry): entry is Extract<(typeof Zoltar_Zoltar.abi)[number], { type: 'event'; name: 'DeployChild' }> => entry.type === 'event' && entry.name === 'DeployChild')
+if (deployChildEvent === undefined) throw new Error('DeployChild event missing from ABI')
 
-type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
-type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
+const canonicalEventLoader = <Event extends typeof questionCreatedEvent | typeof deployChildEvent>(event: Event) =>
+	createCanonicalLogLoader({
+		fetchRange: async (client: ReadClient, address: Address, range) => await client.getLogs({ address, event, fromBlock: range.fromBlock, toBlock: range.toBlock }),
+		loadBlockAnchor: async (client: ReadClient, blockNumber?: bigint) => requiredCanonicalBlockAnchor(await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })),
+		loadCacheIdentity: async (client: ReadClient) => (await client.getBlock({ blockNumber: 0n })).hash,
+		loadStartBlock: async (client: ReadClient, address: Address, toBlock?: bigint) => await findContractDeploymentBlock(client, address, toBlock),
+		maximumItems: 10_000,
+		maximumRange: MAXIMUM_EVENT_LOG_RANGE,
+	})
+const loadCanonicalQuestionCreatedLogs = canonicalEventLoader(questionCreatedEvent)
+const loadCanonicalDeployChildLogs = canonicalEventLoader(deployChildEvent)
 
 function requireBigintArray(value: unknown, context: string): bigint[] {
 	if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint')) throw new Error(`Unexpected ${context} response`)
@@ -41,121 +50,61 @@ function getDeploymentStepAddress(id: 'zoltar' | 'zoltarQuestionData') {
 	return step.address
 }
 
-async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
-	let currentIndex = 0n
-	const outcomeLabels: string[] = []
-
-	while (true) {
-		const page = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getDeploymentStepAddress('zoltarQuestionData'),
-			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
-		})
-		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
-		outcomeLabels.push(...page)
-		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	}
-
-	return outcomeLabels
-}
-
-async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
-	const questionCount = await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestionCount',
-		address: getDeploymentStepAddress('zoltarQuestionData'),
-		args: [],
+async function loadQuestionEvents(client: ReadClient) {
+	const logs = await loadCanonicalQuestionCreatedLogs(client, getDeploymentStepAddress('zoltarQuestionData'))
+	return logs.flatMap(log => {
+		try {
+			const decoded = decodeEventLog({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, data: log.data, topics: log.topics })
+			if (decoded.eventName !== 'QuestionCreated') return []
+			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+			return [decoded.args]
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			return []
+		}
 	})
-
-	let currentIndex = 0n
-	const questionIds: bigint[] = []
-	while (currentIndex < questionCount) {
-		const page = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestions',
-			address: getDeploymentStepAddress('zoltarQuestionData'),
-			args: [currentIndex, CONTRACT_PAGE_SIZE],
-		})
-		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
-		if (!page.every((questionId): questionId is bigint => typeof questionId === 'bigint')) throw new Error('Unexpected question id page response')
-		questionIds.push(...page)
-		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	}
-
-	return questionIds
 }
 
-async function loadQuestionIdsPage(client: ReadClient, startIndex: bigint, count: bigint) {
-	if (count === 0n) return []
-	const page = await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestions',
-		address: getDeploymentStepAddress('zoltarQuestionData'),
-		args: [startIndex, count],
-	})
-	if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
-	if (!page.every((questionId): questionId is bigint => typeof questionId === 'bigint')) throw new Error('Unexpected question id page response')
-	return page
-}
-
-export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
-	const [question, createdAt] = await readRequiredMulticall(client, [
-		{
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'questions',
-			address: getDeploymentStepAddress('zoltarQuestionData'),
-			args: [questionId],
-		},
-		{
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'questionCreatedTimestamp',
-			address: getDeploymentStepAddress('zoltarQuestionData'),
-			args: [questionId],
-		},
-	])
-	const questionData: QuestionTuple = question
-	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = questionData
-
-	const exists = createdAt > 0n || title !== '' || description !== '' || startTime !== 0n || endTime !== 0n || numTicks !== 0n
-	const outcomeLabels = exists ? await loadOutcomeLabels(client, questionId) : []
+function marketDetailsFromQuestionEvent(created: Awaited<ReturnType<typeof loadQuestionEvents>>[number]): MarketDetails {
+	const { title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit } = created.questionData
+	const outcomeLabels = [...created.outcomeOptions]
 
 	return {
 		answerUnit,
-		createdAt,
+		createdAt: created.createdTimestamp,
 		description,
 		displayValueMax,
 		displayValueMin,
 		endTime,
-		exists,
+		exists: true,
 		marketType: getMarketType({ title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }, outcomeLabels),
 		outcomeLabels,
 		numTicks,
-		questionId: getQuestionIdHex(questionId),
+		questionId: getQuestionIdHex(created.questionId),
 		startTime,
 		title,
 	}
 }
 
+export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
+	const created = (await loadQuestionEvents(client)).find(event => event.questionId === questionId)
+	if (created === undefined) return { answerUnit: '', createdAt: 0n, description: '', displayValueMax: 0n, displayValueMin: 0n, endTime: 0n, exists: false, marketType: 'binary', outcomeLabels: [], numTicks: 0n, questionId: getQuestionIdHex(questionId), startTime: 0n, title: '' }
+	return marketDetailsFromQuestionEvent(created)
+}
+
 export async function loadAllZoltarQuestions(client: ReadClient): Promise<MarketDetails[]> {
-	const questionIds = await loadQuestionIds(client)
-	return await Promise.all(questionIds.map(async questionId => await loadMarketDetails(client, questionId)))
+	const events = await loadQuestionEvents(client)
+	return events.map(marketDetailsFromQuestionEvent)
 }
 
 export async function loadZoltarQuestionCount(client: ReadClient) {
-	return await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestionCount',
-		address: getDeploymentStepAddress('zoltarQuestionData'),
-		args: [],
-	})
+	return BigInt((await loadQuestionEvents(client)).length)
 }
 
 export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: number, pageSize: number): Promise<MarketDetailsPage> {
 	const startIndex = getProtocolPageOffset(pageIndex, pageSize)
-	const questionCount = await loadZoltarQuestionCount(client)
+	const questionEvents = await loadQuestionEvents(client)
+	const questionCount = BigInt(questionEvents.length)
 	if (startIndex >= questionCount) {
 		return {
 			pageIndex,
@@ -165,12 +114,11 @@ export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: numb
 		}
 	}
 	const count = questionCount - startIndex < BigInt(pageSize) ? questionCount - startIndex : BigInt(pageSize)
-	const questionIds = await loadQuestionIdsPage(client, startIndex, count)
 	return {
 		pageIndex,
 		pageSize,
 		questionCount,
-		questions: await Promise.all(questionIds.map(async questionId => await loadMarketDetails(client, questionId))),
+		questions: questionEvents.slice(Number(startIndex), Number(startIndex + count)).map(marketDetailsFromQuestionEvent),
 	}
 }
 
@@ -226,56 +174,61 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
 		if (marketDetails.marketType === 'scalar') {
-			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
-			let currentIndex = 0n
-			while (true) {
-				const pageResponse = await client.readContract({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'getDeployedChildUniverses',
-					address: getDeploymentStepAddress('zoltar'),
-					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
-				})
-				if (!Array.isArray(pageResponse) || pageResponse.length !== 3) throw new Error('Unexpected deployed child universe page response')
-				const [outcomeIndexesRaw, childUniverseIdsRaw, childUniverseTuplesRaw] = pageResponse
-				const page: DeployedChildUniversesPage = [requireBigintArray(outcomeIndexesRaw, 'deployed child universe outcome indexes'), requireBigintArray(childUniverseIdsRaw, 'deployed child universe ids'), requireDeployedChildUniverseTupleArray(childUniverseTuplesRaw, 'deployed child universe page')]
-				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
-				let outcomeLabels: string[] = []
-				if (outcomeIndexes.length > 0) {
-					const rawOutcomeLabels = await readRequiredMulticall(
-						client,
-						outcomeIndexes.map(outcomeIndex => ({
-							abi: ANSWER_OPTION_ABI,
-							functionName: 'getAnswerOptionName',
-							address: getDeploymentStepAddress('zoltarQuestionData'),
-							args: [forkQuestionId, outcomeIndex],
-						})),
-					)
-					if (!isStringArray(rawOutcomeLabels)) throw new Error('Unexpected child universe outcome labels response')
-					outcomeLabels = rawOutcomeLabels.map(outcomeLabel => String(outcomeLabel))
+			const logs = await loadCanonicalDeployChildLogs(client, zoltarAddress)
+			const deployed = logs.flatMap(log => {
+				try {
+					const decoded = decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: log.topics })
+					return decoded.eventName === 'DeployChild' && decoded.args.universeId === universeId ? [decoded.args] : []
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return []
 				}
-				const pageChildren = outcomeIndexes.map((outcomeIndex, index) => {
-					const childUniverse = childUniverseTuples[index]
-					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
-					const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
-					const outcomeLabel = outcomeLabels[index]
-					if (outcomeLabel === undefined) throw new Error('Unexpected outcome label response')
-					const childUniverseId = childUniverseIds[index]
-					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
-					return {
-						exists: childReputationToken !== zeroAddress,
-						forkTime: childForkTime,
-						outcomeIndex,
-						outcomeLabel,
-						parentUniverseId: childParentUniverseId,
-						reputationToken: childReputationToken,
-						universeId: childUniverseId,
-					}
-				})
-				deployedChildUniverses.push(...pageChildren)
-				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
-				currentIndex += CONTRACT_PAGE_SIZE
+			})
+			for (const child of deployed) {
+				if (getChildUniverseId(child.universeId, child.outcomeIndex) !== child.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
 			}
-			childUniverses = deployedChildUniverses
+			const outcomeIndexes = deployed.map(event => event.outcomeIndex)
+			const childUniverseIds = deployed.map(event => event.childUniverseId)
+			const childUniverseTuples = requireUniverseTupleArray(
+				await readRequiredMulticall(
+					client,
+					childUniverseIds.map(childUniverseId => ({ abi: Zoltar_Zoltar.abi, functionName: 'universes', address: zoltarAddress, args: [childUniverseId] })),
+				),
+				'deployed child universe tuples',
+			)
+			let outcomeLabels: string[] = []
+			if (outcomeIndexes.length > 0) {
+				const rawOutcomeLabels = await readRequiredMulticall(
+					client,
+					outcomeIndexes.map(outcomeIndex => ({
+						abi: ANSWER_OPTION_ABI,
+						functionName: 'getAnswerOptionName',
+						address: getDeploymentStepAddress('zoltarQuestionData'),
+						args: [forkQuestionId, outcomeIndex],
+					})),
+				)
+				if (!isStringArray(rawOutcomeLabels)) throw new Error('Unexpected child universe outcome labels response')
+				outcomeLabels = rawOutcomeLabels.map(outcomeLabel => String(outcomeLabel))
+			}
+			childUniverses = outcomeIndexes.map((outcomeIndex, index) => {
+				const childUniverse = childUniverseTuples[index]
+				if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
+				const [childForkTime, , childOutcomeIndex, childReputationToken, childParentUniverseId] = childUniverse
+				const outcomeLabel = outcomeLabels[index]
+				if (outcomeLabel === undefined) throw new Error('Unexpected outcome label response')
+				const childUniverseId = childUniverseIds[index]
+				if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
+				if (childParentUniverseId !== universeId || childOutcomeIndex !== outcomeIndex) throw new Error('Deployed child universe tuple does not match its event route')
+				return {
+					exists: childReputationToken !== zeroAddress,
+					forkTime: childForkTime,
+					outcomeIndex,
+					outcomeLabel,
+					parentUniverseId: childParentUniverseId,
+					reputationToken: childReputationToken,
+					universeId: childUniverseId,
+				}
+			})
 		} else {
 			const childOutcomeEntries = [
 				{ outcomeIndex: 0n, outcomeLabel: 'Invalid' },
@@ -314,9 +267,12 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 				if (childUniverseId === undefined) throw new Error('Unexpected child universe id response')
 				const childUniverseData = childUniverseTuples[index]
 				if (childUniverseData === undefined) throw new Error('Unexpected child universe response')
-				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
+				const [childForkTime, childForkQuestionId, childOutcomeIndex, childReputationToken, childParentUniverseId] = childUniverseData
+				const exists = childReputationToken !== zeroAddress
+				if (exists && (childParentUniverseId !== universeId || childOutcomeIndex !== outcomeIndex)) throw new Error('Child universe tuple does not match its deterministic route')
+				if (!exists && (childForkTime !== 0n || childForkQuestionId !== 0n || childOutcomeIndex !== 0n || childParentUniverseId !== 0n)) throw new Error('Undeployed child universe returned a nonzero tuple')
 				return {
-					exists: childReputationToken !== zeroAddress,
+					exists,
 					forkTime: childForkTime,
 					outcomeIndex,
 					outcomeLabel,

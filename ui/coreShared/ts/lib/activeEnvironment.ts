@@ -4,8 +4,9 @@ import { getErrorMessage } from './errors.js'
 import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
-import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { getRegisteredSimulationScenarios, type SimulationScenario } from '../simulation/scenarios.js'
+
+type CreateSimulationBackend = typeof import('../simulation/tevmBackend.js')['createSimulationBackend']
 
 type LocationLike = {
 	hash?: string
@@ -24,15 +25,20 @@ export const SIMULATION_QUERY_PARAM = 'simulate'
 export const SIMULATION_QUERY_VALUE = '1'
 const NETWORK_QUERY_PARAM = 'network'
 
+declare const __ZOLTAR_ENABLE_BROWSER_SIMULATION__: boolean | undefined
+
+export function isBrowserSimulationEnabled() {
+	return typeof __ZOLTAR_ENABLE_BROWSER_SIMULATION__ === 'undefined' || __ZOLTAR_ENABLE_BROWSER_SIMULATION__
+}
+
 type InitializeActiveEnvironmentDependencies = {
 	appId?: 'zoltar' | 'statoblast' | 'trading'
 	createInjectedBackend?: typeof createInjectedBackend
-	createSimulationBackend?: typeof createSimulationBackend
+	createSimulationBackend?: CreateSimulationBackend
 }
 
 const defaultInitializeActiveEnvironmentDependencies = {
 	createInjectedBackend,
-	createSimulationBackend,
 }
 
 function readLocationParams(location: LocationLike) {
@@ -49,10 +55,8 @@ function readLocationParams(location: LocationLike) {
 }
 
 export function shouldUseSimulationLocation(location: LocationLike) {
+	if (!isBrowserSimulationEnabled()) return false
 	const params = readLocationParams(location)
-	// Simulation mode is intentionally available as a public URL opt-in on any hostname,
-	// including production deployments. It boots a browser-local chain instead of
-	// granting privileged access to production state.
 	return params.get(SIMULATION_QUERY_PARAM) === SIMULATION_QUERY_VALUE
 }
 
@@ -123,7 +127,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
 		}
 	}
-	const createSimulationBackendImpl = dependencies.createSimulationBackend ?? createSimulationBackend
+	const createSimulationBackendImpl = dependencies.createSimulationBackend ?? (await import('../simulation/tevmBackend.js')).createSimulationBackend
 	const simulationAppId = dependencies.appId ?? 'zoltar'
 	const simulationBackend =
 		savedStateId !== undefined && savedState !== undefined

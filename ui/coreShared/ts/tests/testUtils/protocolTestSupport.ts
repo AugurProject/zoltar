@@ -32,10 +32,33 @@ export function createMulticallStub(handler: MockLoaderMulticallHandler): MockLo
 	return async request => (await handler(request as MockLoaderMulticallRequest)) as never
 }
 
-export function createMockLoaderClient({ getBlock, getLogs = async () => [], multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; getLogs?: () => Promise<readonly unknown[]>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
+let mockLoaderChainIdentity = 0n
+
+function mockLoaderBlockHash(chainIdentity: bigint, blockNumber: bigint): Hash {
+	return `0x${((chainIdentity << 64n) + blockNumber).toString(16).padStart(64, '0')}`
+}
+
+export function createMockLoaderClient({
+	getBlock,
+	getLogs = async () => [],
+	multicall,
+	readContract,
+}: {
+	getBlock: (request?: { blockNumber?: bigint }) => Promise<{ hash?: Hash; number?: bigint; timestamp: bigint }>
+	getLogs?: () => Promise<readonly unknown[]>
+	multicall: MockLoaderMulticallHandler
+	readContract: MockReadContractHandler
+}): MockLoaderClient {
+	mockLoaderChainIdentity += 1n
+	const chainIdentity = mockLoaderChainIdentity
 	return {
-		getBlock,
+		getBlock: async request => {
+			const block = await getBlock(request)
+			const number = block.number ?? request?.blockNumber ?? 1n
+			return { ...block, hash: block.hash ?? mockLoaderBlockHash(chainIdentity, number), number, transactions: [] }
+		},
 		getBlockNumber: async () => 0n,
+		getCode: async () => '0x01',
 		getLogs,
 		multicall: createMulticallStub(multicall),
 		readContract: createReadContractStub(readContract),

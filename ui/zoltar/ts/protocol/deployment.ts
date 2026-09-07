@@ -1,8 +1,7 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
+import { ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
@@ -19,18 +18,16 @@ const TRUSTED_SIMULATION_CODE_PRESENCE: true = true
 export const CANONICAL_DEPLOYER_RAW_GAS_PRICE = 100_000_000_000n
 export const CANONICAL_DEPLOYER_RAW_TRANSACTION_COST = 10_000_000_000_000_000n
 export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0xffc50c2e60f6b94512c41eb736669e9ce8ec546340cb85b3959c00c0efbde9e3',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
 	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
-	zoltar: '0xab10fc74b97acd4e7a97007283f9f341ddfa81cf894fdfe5c9caf0bb939946b2',
-	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
+	zoltar: '0x8534c96e99139aa63004392cd42124fc71ba5ac2f08f63490ef800d5f711ad49',
+	zoltarQuestionData: '0xa6357cd97ad976b51d12f71be663c9c30a8774a4879ce4b7470c855cf7b3df32',
 }
 
 export const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
-	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
 	multicall3: `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`,
 	scalarOutcomes: `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}`,
 	weth: `0x${statoblast_WETH9_WETH9.evm.deployedBytecode.object}`,
@@ -54,12 +51,11 @@ export function assertStaticDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
-	zoltar: '0xd88ac0e34684f9156068590e63fe1a0da390eb63b4261e456e7e0843cc2090f0',
-	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
+	zoltar: '0xffdef904f8f6fac5b014ea519589f2c044f78dd4c248d2c07d280ce54f8e5b3b',
+	zoltarQuestionData: '0xa6357cd97ad976b51d12f71be663c9c30a8774a4879ce4b7470c855cf7b3df32',
 }
 const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
 	{
@@ -245,51 +241,12 @@ function markDeploymentTransactionPrepared(
 	})
 }
 
-export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
-	const addresses = getZoltarContractAddresses(profile)
-	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.scalarOutcomes, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
-}
-
-function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
-	return encodeDeployData({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getZoltarDeploymentStatusOracleStepAddresses(profile)],
-	})
-}
-
-export function buildDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	let maskIndex = 0n
-	const deploymentStatuses = steps.map(step => {
-		if (step.id === 'deploymentStatusOracle')
-			return {
-				...step,
-				deployed: deploymentStatusOracleDeployed,
-			}
-
-		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
-		maskIndex += 1n
-		return {
-			...step,
-			deployed,
-		}
-	})
+export function buildDeploymentStatusSnapshot(steps: readonly DeploymentStep[], deployedSteps: readonly boolean[]): DeploymentStatusSnapshot {
+	const deploymentStatuses = steps.map((step, index) => ({ ...step, deployed: deployedSteps[index] ?? false }))
 	return {
 		applicationDeploymentComplete: deploymentStatuses.every(step => step.deployed),
 		deploymentStatuses,
 	}
-}
-
-function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	return buildDeploymentStatusSnapshot(getDeploymentSteps(), deployedMask, deploymentStatusOracleDeployed)
-}
-
-function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()) {
-	return createDeploymentStatusOracleAddressHelper({
-		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
-		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-		zeroSalt: ZERO_SALT,
-	}).getDeploymentStatusOracleAddress()
 }
 
 export async function deployViaProxy(client: WriteClient, bytecode: Hex) {
@@ -366,21 +323,6 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 	return resolvedDeployHash
 }
 
-export async function loadDeploymentStatusOracleMaskAtAddress(client: Pick<ReadClient, 'readContract'>, address: Address): Promise<bigint> {
-	return BigInt(
-		await client.readContract({
-			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-			functionName: 'getDeploymentMask',
-			address,
-			args: [],
-		}),
-	)
-}
-
-async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
-	return await loadDeploymentStatusOracleMaskAtAddress(client, getDeploymentStatusOracleAddress())
-}
-
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: RpcStateRetryWait): DeploymentStep[] {
 	const addresses = getZoltarContractAddresses(profile)
 	const testTokenSteps =
@@ -413,13 +355,6 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 				const hash = await ensureProxyDeployerDeployed(client, wait)
 				return hash ?? ZERO_HASH
 			},
-		},
-		{
-			id: 'deploymentStatusOracle',
-			label: 'Deployment Status Oracle',
-			address: getDeploymentStatusOracleAddress(profile),
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
 		},
 		...testTokenSteps,
 		{
@@ -482,39 +417,11 @@ export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'addr
 	return true
 }
 
-export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
+export async function loadDeploymentStatusSnapshot(client: Pick<ReadClient, 'getCode'>): Promise<DeploymentStatusSnapshot> {
 	const profile = getRuntimeNetworkProfile()
-	if (profile.id === 'simulation') {
-		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-		const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
-		if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
-			const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-			return getDeploymentStatusSnapshot(proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false)
-		}
-		return getDeploymentStatusSnapshot(await loadDeploymentStatusOracleMask(client), true)
-	}
-
 	const steps = getDeploymentSteps(profile)
-	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
-	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
-	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
-	if (!assertDeploymentStepRuntimeCode(oracleStep, deploymentStatusOracleCode)) {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
-	}
-
-	const deployedMask = await loadDeploymentStatusOracleMask(client)
-	const snapshot = getDeploymentStatusSnapshot(deployedMask, true)
-	await Promise.all(
-		snapshot.deploymentStatuses.map(async step => {
-			if (!step.deployed) return
-			assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))
-		}),
-	)
-	return snapshot
+	const deployedSteps = await Promise.all(steps.map(async step => assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))))
+	return buildDeploymentStatusSnapshot(steps, deployedSteps)
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address): Promise<bigint> {

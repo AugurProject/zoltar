@@ -24,7 +24,7 @@ function createStep(id: DeploymentStatus['id'], label: string, deployed: boolean
 }
 
 function createProps(): DeploymentRouteContentProps {
-	const deploymentStatuses: DeploymentStatus[] = [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('deploymentStatusOracle', 'Deployment Status Oracle', true, ['proxyDeployer']), createStep('multicall3', 'Multicall3', true, ['proxyDeployer']), createStep('scalarOutcomes', 'Scalar Outcomes', false)]
+	const deploymentStatuses: DeploymentStatus[] = [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'ScalarOutcomes', true, ['proxyDeployer']), createStep('multicall3', 'Multicall3', true, ['proxyDeployer']), createStep('scalarOutcomes', 'Scalar Outcomes', false)]
 
 	return {
 		accountAddress: zeroAddress,
@@ -88,8 +88,8 @@ describe('DeploymentRouteContent', () => {
 			h(DeploymentRouteContent, {
 				...createProps(),
 				accountAddress: undefined,
-				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])],
-				deploymentSections: [{ title: 'Zoltar', steps: [createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])] }],
+				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'Scalar Outcomes', false, ['scalarOutcomes'])],
+				deploymentSections: [{ title: 'Zoltar', steps: [createStep('scalarOutcomes', 'Scalar Outcomes', false, ['scalarOutcomes'])] }],
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup

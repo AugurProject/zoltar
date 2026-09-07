@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Hex } from '../src/ethereum.ts'
+import { encodeAbiParameters, getAddress, type Hex, keccak256 } from '../src/ethereum.ts'
 import { projectionsFrom, semanticEventNames } from '../src/projections.ts'
 import type { StoredLog } from '../src/types.ts'
 
@@ -7,6 +7,27 @@ const hash = `0x${'12'.repeat(32)}` as Hex
 const pool = getAddress('0x1111111111111111111111111111111111111111')
 const vault = getAddress('0x2222222222222222222222222222222222222222')
 const atomic = (value: bigint): string => value.toString()
+const questionData = {
+	title: 'Will it rain?',
+	description: 'Observed at the airport',
+	startTime: 1100n,
+	endTime: 2100n,
+	numTicks: 0n,
+	displayValueMin: 0n,
+	displayValueMax: 0n,
+	answerUnit: '',
+}
+const questionOutcomes = ['Yes', 'No'] as const
+const questionMetadataDigest = keccak256(
+	encodeAbiParameters([{ type: 'string' }, { type: 'string' }, { type: 'string[]' }], [questionData.title, questionData.description, questionOutcomes]),
+)
+const questionId = BigInt(
+	keccak256(
+		encodeAbiParameters([{ type: 'uint48' }, { type: 'uint48' }, { type: 'bytes32' }], [questionData.startTime, questionData.endTime, questionMetadataDigest]),
+	),
+)
+const childUniverseId = (parent: bigint, outcome: bigint) =>
+	BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parent, outcome]))) & ((1n << 248n) - 1n)
 
 const log = (name: string, argumentsValue: Record<string, unknown>, address = pool, contractKind?: string): StoredLog => ({
 	transactionHash: hash,
@@ -34,26 +55,30 @@ describe('state projections', () => {
 	test('captures immutable question metadata', () => {
 		const [projection] = projectionsFrom(
 			log('QuestionCreated', {
-				questionId: '42',
+				questionId: questionId.toString(),
 				createdTimestamp: '1000',
-				questionData: {
-					title: 'Will it rain?',
-					description: 'Observed at the airport',
-					startTime: '1100',
-					endTime: '2100',
-					numTicks: '0',
-					displayValueMin: '0',
-					displayValueMax: '0',
-					answerUnit: '',
-				},
-				outcomeOptions: ['Yes', 'No'],
+				questionData: Object.fromEntries(Object.entries(questionData).map(([key, value]) => [key, typeof value === 'bigint' ? value.toString() : value])),
+				outcomeOptions: questionOutcomes,
 			}),
 		)
 		expect(projection?.type).toBe('question')
 		if (projection?.type !== 'question') throw new Error('question projection missing')
-		expect(projection.questionId).toBe('42')
+		expect(projection.questionId).toBe(questionId.toString())
 		expect(projection.outcomeOptions).toEqual(['Yes', 'No'])
 		expect(projection.endTime.toISOString()).toBe('1970-01-01T00:35:00.000Z')
+	})
+
+	test('rejects question metadata whose event ID is not deterministic', () => {
+		expect(() =>
+			projectionsFrom(
+				log('QuestionCreated', {
+					questionId: '42',
+					createdTimestamp: '1000',
+					questionData: Object.fromEntries(Object.entries(questionData).map(([key, value]) => [key, typeof value === 'bigint' ? value.toString() : value])),
+					outcomeOptions: questionOutcomes,
+				}),
+			),
+		).toThrow('mismatched deterministic question ID')
 	})
 
 	test('captures complete pool and vault accounting snapshots', () => {
@@ -117,19 +142,34 @@ describe('state projections', () => {
 	})
 
 	test('records universe lineage and changing theoretical supply', () => {
+		const derivedChildUniverseId = childUniverseId(0n, 2n)
 		const [child] = projectionsFrom(
 			log('DeployChild', {
 				universeId: '0',
 				outcomeIndex: '2',
-				childUniverseId: '9001',
+				childUniverseId: derivedChildUniverseId.toString(),
 				childReputationToken: vault,
 				childUniverseTheoreticalSupplyAttoRep: atomic(7_000_000_000_000_000_000_000_000n),
 			}),
 		)
-		expect(child).toMatchObject({ type: 'universe', universeId: '9001', parentUniverseId: '0', forkingOutcomeIndex: '2' })
+		expect(child).toMatchObject({ type: 'universe', universeId: derivedChildUniverseId.toString(), parentUniverseId: '0', forkingOutcomeIndex: '2' })
 
 		const [burn] = projectionsFrom(log('RepBurned', { universeId: '9001', universeTheoreticalSupplyAttoRep: atomic(6999n) }))
 		expect(burn).toMatchObject({ type: 'universe', eventName: 'RepBurned', theoreticalSupplyAttoRep: atomic(6999n) })
+	})
+
+	test('rejects a child event whose universe ID is not deterministic', () => {
+		expect(() =>
+			projectionsFrom(
+				log('DeployChild', {
+					universeId: '0',
+					outcomeIndex: '2',
+					childUniverseId: '9001',
+					childReputationToken: vault,
+					childUniverseTheoreticalSupplyAttoRep: atomic(1n),
+				}),
+			),
+		).toThrow('mismatched deterministic child universe ID')
 	})
 
 	test('normalizes every share supply event to the same logical field', () => {
@@ -262,25 +302,16 @@ describe('state projections', () => {
 		expect(
 			projectionsFrom(
 				log('QuestionCreated', {
-					questionId: '42',
+					questionId: questionId.toString(),
 					createdTimestamp: '1000',
-					questionData: {
-						title: 'Will it rain?',
-						description: 'Observed at the airport',
-						startTime: '1100',
-						endTime: '2100',
-						numTicks: '0',
-						displayValueMin: '0',
-						displayValueMax: '0',
-						answerUnit: '',
-					},
-					outcomeOptions: ['Yes', 'No'],
+					questionData: Object.fromEntries(Object.entries(questionData).map(([key, value]) => [key, typeof value === 'bigint' ? value.toString() : value])),
+					outcomeOptions: questionOutcomes,
 				}),
 			).at(-1),
 		).toMatchObject({
 			domain: 'system',
 			entityType: 'question',
-			entityIdentity: '42',
+			entityIdentity: questionId.toString(),
 		})
 		expect(
 			projectionsFrom(log('PairCreated', { pair: vault, securityPool: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1),

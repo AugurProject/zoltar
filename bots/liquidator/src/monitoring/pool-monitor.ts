@@ -1,5 +1,6 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
+import { createCanonicalLogLoader, fetchLogsWithAdaptiveRanges, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/bot-shared/monitoring/block-sync'
+import { getChildUniverseId } from '@zoltar/bot-shared/protocol/universe-id'
 import type { OperatorSettings } from '#config/settings'
 import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
@@ -13,6 +14,14 @@ type ReadClient = PublicClient<Transport, Chain>
 const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 const MAXIMUM_VAULT_CHANGE_LOG_RANGE = 10_000n
+const loadCanonicalChildLogs = createCanonicalLogLoader({
+	fetchRange: async (client: ReadClient, address: Address, range) => await client.getLogs({ address, event: zoltarAbi[0], fromBlock: range.fromBlock, toBlock: range.toBlock }),
+	loadBlockAnchor: async (client: ReadClient, blockNumber?: bigint) => requiredCanonicalBlockAnchor(await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })),
+	loadCacheIdentity: async (client: ReadClient) => (await client.getBlock({ blockNumber: 0n })).hash,
+	loadStartBlock: async (client: ReadClient, address: Address, toBlock?: bigint) => await findContractDeploymentBlock(client, address, toBlock),
+	maximumItems: 10_000,
+	maximumRange: MAXIMUM_DEPLOYMENT_LOG_RANGE,
+})
 
 type PoolDeployment = {
 	settlementCollateralAttoEth: bigint
@@ -64,7 +73,16 @@ function emptyVault(address: Address): VaultPosition {
 	}
 }
 
-async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
+export async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
+	const childLogs = await loadCanonicalChildLogs(client, settings.deployment.zoltar, blockNumber)
+	const childrenByParent = new Map<bigint, Array<{ childUniverseId: bigint; outcomeIndex: bigint }>>()
+	for (const log of childLogs) {
+		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
+		if (getChildUniverseId(log.args.universeId, log.args.outcomeIndex) !== log.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		const children = childrenByParent.get(log.args.universeId) ?? []
+		children.push({ childUniverseId: log.args.childUniverseId, outcomeIndex: log.args.outcomeIndex })
+		childrenByParent.set(log.args.universeId, children)
+	}
 	const root = await client.readContract({
 		abi: zoltarAbi,
 		address: settings.deployment.zoltar,
@@ -87,35 +105,21 @@ async function loadUniverses(client: ReadClient, settings: OperatorSettings, blo
 	for (let universeIndex = 0; universeIndex < universes.length; universeIndex += 1) {
 		const universe = universes[universeIndex]
 		if (universe === undefined) throw new Error('Universe traversal lost its current entry')
-		for (let start = 0n; ; start += 100n) {
-			const [outcomeIndexes, childUniverseIds, children] = await client.readContract({
-				abi: zoltarAbi,
-				address: settings.deployment.zoltar,
-				args: [universe.id, start, 100n],
-				blockNumber,
-				functionName: 'getDeployedChildUniverses',
+		for (const { childUniverseId: childId, outcomeIndex } of childrenByParent.get(universe.id) ?? []) {
+			const child = await client.readContract({ abi: zoltarAbi, address: settings.deployment.zoltar, args: [childId], blockNumber, functionName: 'universes' })
+			if (child.parentUniverseId !== universe.id || child.forkingOutcomeIndex !== outcomeIndex) throw new Error(`Zoltar universe ${childId.toString()} does not match its DeployChild route`)
+			const key = childId.toString()
+			if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once in the universe tree`)
+			seen.add(key)
+			universes.push({
+				approved: settings.approvedUniverses.includes(childId),
+				forkQuestionId: child.forkQuestionId,
+				forkTime: child.forkTime,
+				id: childId,
+				outcomeIndex,
+				parentId: universe.id,
+				repToken: getAddress(child.reputationToken),
 			})
-			if (outcomeIndexes.length !== childUniverseIds.length || childUniverseIds.length !== children.length) {
-				throw new Error(`Zoltar returned mismatched children for universe ${universe.id.toString()}`)
-			}
-			for (const [index, childId] of childUniverseIds.entries()) {
-				const child = children[index]
-				const outcomeIndex = outcomeIndexes[index]
-				if (child === undefined || outcomeIndex === undefined) throw new Error('Zoltar returned an incomplete child universe')
-				const key = childId.toString()
-				if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once in the universe tree`)
-				seen.add(key)
-				universes.push({
-					approved: settings.approvedUniverses.includes(childId),
-					forkQuestionId: child.forkQuestionId,
-					forkTime: child.forkTime,
-					id: childId,
-					outcomeIndex,
-					parentId: universe.id,
-					repToken: getAddress(child.reputationToken),
-				})
-			}
-			if (children.length < 100) break
 		}
 	}
 	return universes

@@ -93,7 +93,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -121,7 +120,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -149,7 +147,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -182,7 +179,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -218,7 +214,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -250,7 +245,6 @@ describe('forks protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getOwnForkMigrationStatus') return [true, 30n, 12n, 9n, 18n]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},

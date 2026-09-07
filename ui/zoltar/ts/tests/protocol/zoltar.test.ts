@@ -1,175 +1,213 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
-import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../protocol/zoltar.js'
+import { encodeAbiParameters, getAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { getDeploymentSteps } from '../../protocol/deployment.js'
+import { getQuestionId } from '../../protocol/helpers.js'
+import { loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../protocol/zoltar.js'
 
-const QUESTION_TUPLE_BINARY = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 100n, '']
-const QUESTION_TUPLE_SCALAR = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units']
-const EMPTY_QUESTION = ['', '', 0n, 0n, 0n, 0n, 0n, '']
 const REP_TOKEN = getAddress('0x00000000000000000000000000000000000000f1')
+const QUESTION_DATA_ADDRESS = getDeploymentSteps().find(step => step.id === 'zoltarQuestionData')?.address
+if (QUESTION_DATA_ADDRESS === undefined) throw new Error('Question data deployment step is missing')
+
+const questionComponents = [
+	{ name: 'title', type: 'string' },
+	{ name: 'description', type: 'string' },
+	{ name: 'startTime', type: 'uint48' },
+	{ name: 'endTime', type: 'uint48' },
+	{ name: 'numTicks', type: 'uint120' },
+	{ name: 'displayValueMin', type: 'int256' },
+	{ name: 'displayValueMax', type: 'int256' },
+	{ name: 'answerUnit', type: 'string' },
+] as const
 
 type MockReadClient = Parameters<typeof loadMarketDetails>[0]
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
+type MockLog = Readonly<{ address: Address; data: Hex; topics: readonly Hex[] }>
 
-function createReadClient({ multicallResponses, readContractHandlers }: { multicallResponses: unknown[]; readContractHandlers: Record<string, (request: MockReadContractRequest) => Promise<unknown>> }): MockReadClient {
-	let callIndex = 0
+function questionObject(question: readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]) {
+	return { title: question[0], description: question[1], startTime: question[2], endTime: question[3], numTicks: question[4], displayValueMin: question[5], displayValueMax: question[6], answerUnit: question[7] }
+}
 
+function questionCreatedLog(question: readonly [string, string, bigint, bigint, bigint, bigint, bigint, string], outcomeOptions: readonly string[], questionId = getQuestionId(questionObject(question), outcomeOptions)): MockLog {
 	return {
+		address: QUESTION_DATA_ADDRESS,
+		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [1n, question, outcomeOptions]),
+		topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(questionId, { size: 32 })],
+	}
+}
+
+function deployChildLog(universeId: bigint, outcomeIndex: bigint, childUniverseId: bigint): MockLog {
+	return {
+		address: getDeploymentSteps().find(step => step.id === 'zoltar')?.address ?? QUESTION_DATA_ADDRESS,
+		data: encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [getAddress('0x0000000000000000000000000000000000000001'), getAddress('0x0000000000000000000000000000000000000002'), 1n]),
+		topics: [keccak256('DeployChild(address,uint248,uint256,uint248,address,uint256)'), toHex(universeId, { size: 32 }), toHex(outcomeIndex, { size: 32 }), toHex(childUniverseId, { size: 32 })],
+	}
+}
+
+let nextTestChainIdentity = 0n
+
+function createReadClient({
+	chainIdentity,
+	deploymentBlock = 0n,
+	head = 1n,
+	logs = [],
+	multicallResponses,
+	onLogRange,
+	readContractHandlers,
+}: {
+	chainIdentity?: bigint
+	deploymentBlock?: bigint
+	head?: bigint
+	logs?: readonly MockLog[]
+	multicallResponses: unknown[]
+	onLogRange?: (fromBlock: bigint, toBlock: bigint) => void
+	readContractHandlers: Record<string, (request: MockReadContractRequest) => Promise<unknown>>
+}): MockReadClient {
+	nextTestChainIdentity += 1n
+	const identity = chainIdentity ?? nextTestChainIdentity
+	let callIndex = 0
+	return {
+		getBlock: async request => {
+			const number = request?.blockNumber ?? head
+			return { hash: toHex((identity << 64n) + number, { size: 32 }), number, timestamp: 1n, transactions: [] }
+		},
+		getCode: async request => (request.blockNumber === undefined || request.blockNumber >= deploymentBlock ? '0x01' : '0x'),
+		getLogs: async request => {
+			if (request.fromBlock !== undefined && request.toBlock !== undefined) onLogRange?.(request.fromBlock, request.toBlock)
+			const eventName = typeof request.event === 'object' && request.event !== null ? Reflect.get(request.event, 'name') : undefined
+			let eventTopic: Hex | undefined
+			if (eventName === 'QuestionCreated') eventTopic = keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])')
+			else if (eventName === 'DeployChild') eventTopic = keccak256('DeployChild(address,uint248,uint256,uint248,address,uint256)')
+			return logs.filter(log => (request.address === undefined || log.address === request.address) && (eventTopic === undefined || log.topics[0] === eventTopic))
+		},
 		multicall: async () => {
 			const response = multicallResponses[callIndex]
 			if (response === undefined) throw new Error('No queued multicall response')
 			callIndex += 1
 			return response
 		},
-		readContract: async (request: Parameters<MockReadClient['readContract']>[0]) => {
+		readContract: async request => {
 			if (typeof request.functionName !== 'string') throw new Error('Expected function name')
 			const handler = readContractHandlers[request.functionName]
 			if (handler === undefined) throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			return await handler(request)
 		},
-	} as unknown as MockReadClient
+	} as MockReadClient
 }
 
 describe('zoltar contract helpers', () => {
-	test('loadMarketDetails marks missing question data as non-existent without loading labels', async () => {
-		const readContractCalls: string[] = []
-		const client = createReadClient({
-			multicallResponses: [[EMPTY_QUESTION, 0n]],
-			readContractHandlers: {
-				getOutcomeLabels: async () => {
-					readContractCalls.push('getOutcomeLabels')
-					return ['Yes']
-				},
-			},
-		})
-
+	test('loadMarketDetails marks a question without a creation event as non-existent', async () => {
+		const client = createReadClient({ multicallResponses: [], readContractHandlers: {} })
 		const market = await loadMarketDetails(client, 123n)
-
 		expect(market.exists).toBe(false)
 		expect(market.outcomeLabels).toEqual([])
-		expect(readContractCalls).toEqual([])
-		expect(market.marketType).toBe('categorical')
+		expect(market.marketType).toBe('binary')
 		expect(market.questionId).toBe('0x7b')
 	})
 
-	test('loadMarketDetails loads binary outcome labels for an existing question', async () => {
-		const outcomeLabels = ['Yes', 'No']
-		const readContractCalls: string[] = []
-		const client = createReadClient({
-			multicallResponses: [[QUESTION_TUPLE_BINARY, 1n]],
-			readContractHandlers: {
-				getOutcomeLabels: async () => {
-					readContractCalls.push('getOutcomeLabels')
-					return outcomeLabels
-				},
-			},
-		})
-
-		const market = await loadMarketDetails(client, 456n)
-
+	test('loadMarketDetails reconstructs binary presentation metadata from QuestionCreated', async () => {
+		const question = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 0n, ''] as const
+		const questionId = getQuestionId(questionObject(question), ['Yes', 'No'])
+		const client = createReadClient({ logs: [questionCreatedLog(question, ['Yes', 'No'])], multicallResponses: [], readContractHandlers: {} })
+		const market = await loadMarketDetails(client, questionId)
 		expect(market.exists).toBe(true)
 		expect(market.marketType).toBe('binary')
-		expect(market.outcomeLabels).toEqual(outcomeLabels)
-		expect(readContractCalls).toEqual(['getOutcomeLabels'])
+		expect(market.outcomeLabels).toEqual(['Yes', 'No'])
+		expect(market.title).toBe('Binary question')
 	})
 
-	test('loadZoltarQuestionPage loads only the requested page of questions', async () => {
-		const client = createReadClient({
-			multicallResponses: [
-				[QUESTION_TUPLE_BINARY, 1n],
-				[QUESTION_TUPLE_SCALAR, 1n],
-			],
-			readContractHandlers: {
-				getQuestionCount: async () => 5n,
-				getQuestions: async () => [101n, 102n],
-				getOutcomeLabels: async () => ['Yes', 'No'],
-			},
-		})
+	test('rejects a QuestionCreated event with a mismatched deterministic ID', async () => {
+		const question = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 0n, ''] as const
+		const client = createReadClient({ logs: [questionCreatedLog(question, ['Yes', 'No'], 456n)], multicallResponses: [], readContractHandlers: {} })
+		await expect(loadZoltarQuestionCount(client)).rejects.toThrow('mismatched deterministic question ID')
+	})
 
+	test('loadZoltarQuestionPage slices the ordered creation-event stream', async () => {
+		const tuples = Array.from({ length: 5 }, (_, index) => [`Question ${index}`, '', 1n, 2n, 0n, 0n, 0n, ''] as const)
+		const logs = tuples.map(question => questionCreatedLog(question, ['Yes', 'No']))
+		const client = createReadClient({ logs, multicallResponses: [], readContractHandlers: {} })
 		const page = await loadZoltarQuestionPage(client, 1, 2)
-
 		expect(page.questionCount).toBe(5n)
 		expect(page.pageIndex).toBe(1)
 		expect(page.pageSize).toBe(2)
-		expect(page.questions.map(question => question.questionId)).toEqual(['0x65', '0x66'])
+		expect(page.questions.map(question => question.questionId)).toEqual(tuples.slice(2, 4).map(question => toHex(getQuestionId(questionObject(question), ['Yes', 'No']))))
 	})
 
-	test('loadZoltarQuestionPage preserves exact offsets above the safe multiplication range', async () => {
-		const pageIndex = Number.MAX_SAFE_INTEGER
-		const pageSize = 3
-		const expectedStartIndex = BigInt(pageIndex) * BigInt(pageSize)
-		const questionPageCalls: unknown[][] = []
-		const client = createReadClient({
-			multicallResponses: [],
-			readContractHandlers: {
-				getQuestionCount: async () => expectedStartIndex + 1n,
-				getQuestions: async request => {
-					questionPageCalls.push(Array.isArray(request.args) ? [...request.args] : [])
-					return []
-				},
-			},
-		})
+	test('loadZoltarQuestionPage returns an empty page for an event offset beyond the stream', async () => {
+		const client = createReadClient({ logs: [questionCreatedLog(['Question', '', 1n, 2n, 0n, 0n, 0n, ''], ['Yes', 'No'])], multicallResponses: [], readContractHandlers: {} })
+		const page = await loadZoltarQuestionPage(client, Number.MAX_SAFE_INTEGER, 3)
+		expect(page.questions).toEqual([])
+		expect(page.questionCount).toBe(1n)
+	})
 
-		await loadZoltarQuestionPage(client, pageIndex, pageSize)
+	test('question discovery uses bounded ranges and reuses its canonical event cache', async () => {
+		const ranges: Array<readonly [bigint, bigint]> = []
+		const client = createReadClient({ deploymentBlock: 19_000n, head: 20_000n, multicallResponses: [], onLogRange: (fromBlock, toBlock) => ranges.push([fromBlock, toBlock]), readContractHandlers: {} })
+		expect(await loadZoltarQuestionCount(client)).toBe(0n)
+		expect(ranges).toEqual([[19_000n, 20_000n]])
+		await loadZoltarQuestionPage(client, 0, 10)
+		expect(ranges).toHaveLength(1)
+	})
 
-		expect(questionPageCalls).toEqual([[expectedStartIndex, 1n]])
+	test('question discovery fails closed when the event history exceeds its resident limit', async () => {
+		const question = ['Question', '', 1n, 2n, 0n, 0n, 0n, ''] as const
+		const logs = Array.from({ length: 10_001 }, (_, index) => questionCreatedLog([`${question[0]} ${index.toString()}`, ...question.slice(1)] as typeof question, ['Yes', 'No']))
+		const client = createReadClient({ logs, multicallResponses: [], readContractHandlers: {} })
+		await expect(loadZoltarQuestionPage(client, 0, 10)).rejects.toThrow('exceeds the configured 10000-item limit')
 	})
 
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {
 		const client = createReadClient({
-			multicallResponses: [
-				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
-				[QUESTION_TUPLE_BINARY, 0n],
-			],
-			readContractHandlers: {
-				getTotalTheoreticalSupplyAttoRep: async () => 111n,
-				getOutcomeLabels: async () => ['Yes', 'No'],
-			},
+			multicallResponses: [[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n]],
+			readContractHandlers: { getTotalTheoreticalSupplyAttoRep: async () => 111n },
 		})
-
 		const summary = await loadZoltarUniverseSummary(client, 5n)
-
-		expect(summary).toBeDefined()
 		expect(summary?.hasForked).toBe(false)
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(111n)
 		expect(summary?.forkBurnDivisor).toBe(5n)
-		expect(summary?.zoltarAddress).toBeDefined()
 	})
 
-	test('loadZoltarUniverseSummary handles forked scalar details and an empty child-universe page', async () => {
+	test('loadZoltarUniverseSummary handles scalar forks with no deployed child events', async () => {
+		const scalarQuestion = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units'] as const
+		const scalarQuestionId = getQuestionId(questionObject(scalarQuestion), [])
 		const client = createReadClient({
-			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
-				[QUESTION_TUPLE_SCALAR, 1n],
-			],
-			readContractHandlers: {
-				getTotalTheoreticalSupplyAttoRep: async () => 222n,
-				getOutcomeLabels: async () => [],
-				getDeployedChildUniverses: async () => [[], [], []],
-			},
+			logs: [questionCreatedLog(scalarQuestion, [])],
+			multicallResponses: [[REP_TOKEN, [0n, scalarQuestionId, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n], []],
+			readContractHandlers: { getTotalTheoreticalSupplyAttoRep: async () => 222n },
 		})
-
 		const summary = await loadZoltarUniverseSummary(client, 8n)
-
-		expect(summary).toBeDefined()
 		expect(summary?.forkQuestionDetails?.marketType).toBe('scalar')
 		expect(summary?.hasForked).toBe(true)
 		expect(summary?.childUniverses).toEqual([])
 	})
 
-	test('loadZoltarUniverseSummary builds categorical child universes from fork question outcome ids', async () => {
-		const childUniverseTuple1 = [1n, 2n, 3n, getAddress('0x0000000000000000000000000000000000000010'), 99n]
-		const childUniverseTuple2 = [4n, 5n, 6n, getAddress('0x0000000000000000000000000000000000000020'), 98n]
-		const childUniverseTuple3 = [7n, 8n, 9n, getAddress('0x0000000000000000000000000000000000000030'), 97n]
-		const childUniverseIds = [10n, 20n, 30n]
+	test('rejects a scalar child event with a mismatched deterministic universe ID', async () => {
+		const scalarQuestion = ['Scalar question', 'desc', 1n, 2n, 100n, -10n, 10n, 'units'] as const
+		const scalarQuestionId = getQuestionId(questionObject(scalarQuestion), [])
 		const client = createReadClient({
-			multicallResponses: [[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n], [QUESTION_TUPLE_BINARY, 1n], childUniverseIds, [childUniverseTuple1, childUniverseTuple2, childUniverseTuple3]],
+			logs: [questionCreatedLog(scalarQuestion, []), deployChildLog(8n, 1n, 99n)],
+			multicallResponses: [[REP_TOKEN, [0n, scalarQuestionId, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n]],
+			readContractHandlers: { getTotalTheoreticalSupplyAttoRep: async () => 222n },
+		})
+		await expect(loadZoltarUniverseSummary(client, 8n)).rejects.toThrow('mismatched deterministic child universe ID')
+	})
+
+	test('loadZoltarUniverseSummary derives categorical child universes directly', async () => {
+		const binaryQuestion = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 0n, ''] as const
+		const binaryQuestionId = getQuestionId(questionObject(binaryQuestion), ['Yes', 'No'])
+		const childUniverseTuples = [
+			[1n, 2n, 0n, getAddress('0x0000000000000000000000000000000000000010'), 8n],
+			[4n, 5n, 1n, getAddress('0x0000000000000000000000000000000000000020'), 8n],
+			[7n, 8n, 2n, getAddress('0x0000000000000000000000000000000000000030'), 8n],
+		]
+		const client = createReadClient({
+			logs: [questionCreatedLog(binaryQuestion, ['Yes', 'No'])],
+			multicallResponses: [[REP_TOKEN, [0n, binaryQuestionId, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n], [10n, 20n, 30n], childUniverseTuples],
 			readContractHandlers: {
 				getTotalTheoreticalSupplyAttoRep: async () => 999n,
-				getOutcomeLabels: async () => ['Yes', 'No'],
 				getChildUniverseId: async () => {
 					throw new Error('getChildUniverseId should be resolved via multicall in this test')
 				},
@@ -178,14 +216,32 @@ describe('zoltar contract helpers', () => {
 				},
 			},
 		})
-
 		const summary = await loadZoltarUniverseSummary(client, 8n)
-
-		expect(summary).toBeDefined()
 		expect(summary?.childUniverses.map(universe => universe.outcomeIndex)).toEqual([0n, 1n, 2n])
 		expect(summary?.childUniverses.map(universe => universe.exists)).toEqual([true, true, true])
-		expect(summary?.childUniverses.map(universe => universe.parentUniverseId)).toEqual([99n, 98n, 97n])
+		expect(summary?.childUniverses.map(universe => universe.parentUniverseId)).toEqual([8n, 8n, 8n])
 		expect(summary?.forkQuestionDetails?.marketType).toBe('binary')
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(999n)
+	})
+
+	test('keeps undeployed categorical children as explicit zero-tuple entries', async () => {
+		const binaryQuestion = ['Binary question', 'desc', 1n, 2n, 0n, 0n, 0n, ''] as const
+		const binaryQuestionId = getQuestionId(questionObject(binaryQuestion), ['Yes', 'No'])
+		const client = createReadClient({
+			logs: [questionCreatedLog(binaryQuestion, ['Yes', 'No'])],
+			multicallResponses: [
+				[REP_TOKEN, [0n, binaryQuestionId, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n],
+				[10n, 20n, 30n],
+				[
+					[1n, 2n, 0n, getAddress('0x0000000000000000000000000000000000000010'), 8n],
+					[0n, 0n, 0n, zeroAddress, 0n],
+					[0n, 0n, 0n, zeroAddress, 0n],
+				],
+			],
+			readContractHandlers: { getTotalTheoreticalSupplyAttoRep: async () => 999n },
+		})
+		const summary = await loadZoltarUniverseSummary(client, 8n)
+		expect(summary?.childUniverses.map(universe => universe.exists)).toEqual([true, false, false])
+		expect(summary?.childUniverses.slice(1).every(universe => universe.parentUniverseId === 0n && universe.reputationToken === zeroAddress)).toBeTrue()
 	})
 })

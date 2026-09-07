@@ -70,7 +70,7 @@ describe('securityPools protocol client', () => {
 		const deploySecurityPoolEvent = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find(entry => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from generated ABI')
 		const client = createMockLoaderClient({
-			getBlock: async () => ({ hash: headHash, number: 20_000n, timestamp: 0n }),
+			getBlock: async request => (request?.blockNumber === 0n ? { hash: `0x${'01'.repeat(32)}` as const, number: 0n, timestamp: 0n } : { hash: headHash, number: 20_000n, timestamp: 0n }),
 			getLogs: async (request?: object) => {
 				const fromBlock = request === undefined ? undefined : Reflect.get(request, 'fromBlock')
 				const toBlock = request === undefined ? undefined : Reflect.get(request, 'toBlock')
@@ -100,7 +100,8 @@ describe('securityPools protocol client', () => {
 		const replacementHash = `0x${'22'.repeat(32)}` as const
 		let blockReads = 0
 		const client = createMockLoaderClient({
-			getBlock: async () => {
+			getBlock: async request => {
+				if (request?.blockNumber === 0n) return { hash: `0x${'01'.repeat(32)}` as const, number: 0n, timestamp: 0n }
 				blockReads += 1
 				return { hash: blockReads === 1 ? originalHash : replacementHash, number: 100n, timestamp: 0n }
 			},
@@ -139,7 +140,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
@@ -148,7 +148,6 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 7n * 10n ** 18n, 30n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n, escalationGameAddress]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
@@ -172,7 +171,6 @@ describe('securityPools protocol client', () => {
 					]
 				}
 				if (request.functionName === 'getVaultCount') return 0n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -192,7 +190,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage rejects malformed fork data instead of casting tuple reads', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async request => {
@@ -200,7 +197,6 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
@@ -223,7 +219,6 @@ describe('securityPools protocol client', () => {
 					]
 				}
 				if (request.functionName === 'getVaultCount') return 0n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -233,7 +228,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage does not infer parent fork activity from other pools on the same page', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const client = createMockLoaderClient({
@@ -247,7 +241,6 @@ describe('securityPools protocol client', () => {
 					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n, zeroAddress]
 					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n, zeroAddress]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
@@ -283,7 +276,6 @@ describe('securityPools protocol client', () => {
 					]
 				}
 				if (request.functionName === 'getVaultCount') return 0n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -298,7 +290,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadAllSecurityPools infers parent fork activity when a loaded child points to it', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e1')
 		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000e2')
 		const client = createMockLoaderClient({
@@ -312,7 +303,6 @@ describe('securityPools protocol client', () => {
 					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n, zeroAddress]
 					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n, zeroAddress]
 				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
@@ -348,7 +338,6 @@ describe('securityPools protocol client', () => {
 					]
 				}
 				if (request.functionName === 'getVaultCount') return 0n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -363,7 +352,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadAllSecurityPools batches vault summary tuple reads through multicall', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')] as const
 		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
 		const loadedVaultAddresses: Address[] = []
@@ -378,7 +366,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'vaultBadDebtAttoEth') {
 					return contracts.map(contract => {
@@ -429,7 +416,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return request.args?.[0] === previewVaultAddresses[0] ? 5n : 0n
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -447,7 +433,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
 		let getVaultsCallCount = 0
@@ -461,7 +446,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
@@ -496,7 +480,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -516,7 +499,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage scans past exited known vaults to fill actionable previews', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
 		const currentVaultAddress = knownVaultAddresses[3]
 		if (currentVaultAddress === undefined) throw new Error('Expected a current vault address')
@@ -530,7 +512,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					return contracts.map(contract => {
@@ -572,7 +553,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -588,7 +568,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
 			getAddress(
 				`0x${BigInt(index + 1)
@@ -606,7 +585,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') return contracts.map(() => [0n, 0n, 0n, 0n, 0n])
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
@@ -638,7 +616,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -656,7 +633,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage keeps the connected account after later positions fill the preview cap', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const knownVaultAddresses = [
 			getAddress('0x00000000000000000000000000000000000000c1'),
 			getAddress('0x00000000000000000000000000000000000000c2'),
@@ -681,7 +657,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth' || functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
 					return contracts.map(contract => {
@@ -719,7 +694,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -734,7 +708,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadSecurityPoolPage marks empty browse-page vault sets as already loaded', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
 		const client = createMockLoaderClient({
@@ -746,7 +719,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'securityVaults') {
@@ -780,7 +752,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 100n
 				if (request.functionName === 'totalRepBackingUnits') return 10n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -798,7 +769,6 @@ describe('securityPools protocol client', () => {
 
 	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {
 		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const getVaultCalls: Address[] = []
 		const vaultSummaryCalls: Address[] = []
 		const client = createMockLoaderClient({
@@ -810,7 +780,6 @@ describe('securityPools protocol client', () => {
 				if (functionName === 'settlementCollateralAttoEth') {
 					return [0n, 10n, 10n ** 18n, 10n * 10n ** 18n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, createPoolAccountingSnapshot(0n, 9n, 3n), 0n, zeroAddress]
 				}
-				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'backingUnitsToAttoRep') return [5n]
 				if (functionName === 'getVaultOpenInterestAttoEth') return contracts.map(() => 0n)
 				if (functionName === 'vaultBadDebtAttoEth') return contracts.map(() => 0n)
@@ -871,7 +840,6 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalPoolHeldAttoRep') return 5n
 				if (request.functionName === 'totalRepBackingUnits') return 1n
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})

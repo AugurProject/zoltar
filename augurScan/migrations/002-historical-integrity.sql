@@ -293,7 +293,6 @@ SELECT log.chain_id, log.block_hash, log.tx_hash, log.log_index, log.block_numbe
         WHEN log.event_name = 'VaultDepositTargetHealthFactorRecorded' THEN 'vault'
         WHEN log.event_name IN ('TheoreticalSupplySet', 'Mint', 'Burn') THEN 'reputation-token'
         WHEN log.event_name IN ('AuthorizationUpdated', 'TransferSingle', 'TransferBatch') THEN 'share-token'
-        WHEN log.event_name = 'DeploymentAddressesSet' THEN 'deployment'
         ELSE 'price-coordinator'
     END,
     lower(CASE
@@ -311,7 +310,7 @@ SELECT log.chain_id, log.block_hash, log.tx_hash, log.log_index, log.block_numbe
     log.emitter_address, log.event_name, log.canonical
 FROM public.logs log
 WHERE log.event_name IN (
-        'QuestionCreated', 'DeploymentAddressesSet', 'TheoreticalSupplySet', 'Mint', 'Burn',
+        'QuestionCreated', 'TheoreticalSupplySet', 'Mint', 'Burn',
         'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'InternalApproval',
         'DeploySecurityPool', 'SecurityPoolRegistered', 'PairCreated', 'UniverseInitialized', 'Transfer', 'Approval',
         'EscalationMigrationEntitlementInitialized', 'EscalationMigrationEntitlementMaterialized',

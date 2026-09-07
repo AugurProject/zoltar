@@ -121,11 +121,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		// Validate that the question exists
 		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 
-		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
-		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
-		require(outcomes.length == 2, 'Question must have two outcomes');
-		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'First outcome must be Yes');
-		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be No');
+		// The compact marker preserves Statoblast's exact Yes/No invariant without
+		// retaining every presentation label in contract storage.
+		(, , , , bool isBinary) = questionData.protocolQuestions(questionId);
+		require(isBinary, 'Question must have Yes and No outcomes');
 		require(zoltar.getForkTime(universeId) == 0, 'Universe already forked');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);

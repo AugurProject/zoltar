@@ -21,7 +21,6 @@ import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
@@ -273,15 +272,6 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 		)
 
-	const deployDeploymentStatusOracle = async (deploymentAddresses: readonly Address[]) =>
-		await deployContract(
-			encodeDeployData({
-				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-				bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-				args: [deploymentAddresses],
-			}),
-		)
-
 	const deployEscalationGameFactorySecurityPool = async (reputationTokenAddress: Address) =>
 		await deployContract(
 			encodeDeployData({
@@ -469,9 +459,9 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 		)
 		const deploymentData = encodeDeployData({
-			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-			bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-			args: [[client.account.address]],
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [client.account.address],
 		})
 		const serializedTransaction = await rawAccount.signTransaction({
 			chainId: 1,
@@ -492,32 +482,14 @@ describe('Solidity bytecode coverage helpers', () => {
 
 		if (isCoverageEnabled()) {
 			await flushSolidityBytecodeCoverageForTest()
-			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
-			assert.ok((deploymentStatusCoverage.lineHits['14'] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
+			const deploymentCoverage = await readCoverageFileSummary('/solidity/contracts/ReputationToken.sol')
+			assert.ok((deploymentCoverage.lineHits['20'] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
 		}
 	})
 
-	test('traces deployment status, ERC20 metadata, and safe ERC20 success paths through transactions', async () => {
+	test('traces ERC20 metadata and safe ERC20 success paths through transactions', async () => {
 		const helperAddress = await deployCoverageHelper()
 		const reputationTokenAddress = await deployReputationToken()
-		const deploymentStatusOracleAddress = await deployDeploymentStatusOracle([client.account.address, reputationTokenAddress])
-
-		await transact(
-			deploymentStatusOracleAddress,
-			encodeFunctionData({
-				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-				functionName: 'getDeploymentMask',
-			}),
-		)
-		assert.strictEqual(
-			await client.readContract({
-				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-				address: deploymentStatusOracleAddress,
-				functionName: 'getDeploymentMask',
-			}),
-			2n,
-			'only the deployed contract address should be set in the mask',
-		)
 
 		await transact(
 			reputationTokenAddress,
@@ -681,23 +653,6 @@ describe('Solidity bytecode coverage helpers', () => {
 				}),
 			),
 			/Mint exceeds theoretical supply/i,
-		)
-	})
-
-	test('deployment status rejects more than 256 tracked deployment steps', async () => {
-		const helperAddress = await deployCoverageHelper()
-		const tooManyDeploymentAddresses = Array.from({ length: 257 }, () => client.account.address)
-
-		await assert.rejects(
-			transact(
-				helperAddress,
-				encodeFunctionData({
-					abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
-					functionName: 'deployDeploymentStatusOracle',
-					args: [tooManyDeploymentAddresses],
-				}),
-			),
-			/DeploymentStatusOracle supports at most 256 deployment steps/,
 		)
 	})
 
