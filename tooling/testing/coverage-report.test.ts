@@ -121,6 +121,9 @@ end_of_record
 
 	test('classifies application, shared, and executable tooling surfaces', () => {
 		expect(classifyTypeScriptSource('ui/zoltar/ts/app.ts', 'export const app = true')).toBe('ui')
+		expect(classifyTypeScriptSource('ui/zoltarDomain/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
+		expect(classifyTypeScriptSource('ui/statoblastDomain/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
+		expect(classifyTypeScriptSource('ui/tradingDomain/ts/capabilities.ts', 'export const capabilities = true')).toBe('ui')
 		expect(classifyTypeScriptSource('shared/ts/model.ts', 'export const model = true')).toBe('shared')
 		expect(classifyTypeScriptSource('scripts/task.mts', 'console.log("run")')).toBe('tooling')
 		expect(classifyTypeScriptSource('solidity/ts/client.ts', 'export const client = true')).toBe('tooling')

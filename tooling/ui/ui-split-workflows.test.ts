@@ -21,6 +21,7 @@ const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', '
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
+const domainPackagePaths = ['ui/zoltarDomain/package.json', 'ui/statoblastDomain/package.json', 'ui/tradingDomain/package.json'] as const
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
@@ -162,6 +163,26 @@ describe('split UI workflow paths', () => {
 		expect(packageJson.scripts?.['coverage:typescript']).toContain('bun ./tooling/ui/vendor.mts trading')
 		expect(tradingPackageJson.scripts?.['test']).toStartWith('bun run generate')
 		expect(tradingPackageJson.scripts?.['watch']).toStartWith('bun run generate')
+	})
+
+	test('domain public exports attribute Bun tests to TypeScript sources', async () => {
+		for (const packagePath of domainPackagePaths) {
+			const packageDirectory = join(repositoryRoot, packagePath, '..')
+			const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
+			const exports = requireRecord(requireRecord(manifest, packagePath)['exports'], `${packagePath} exports`)
+			for (const [exportName, exportValue] of Object.entries(exports)) {
+				const conditions = requireRecord(exportValue, `${packagePath} export ${exportName}`)
+				expect(Object.keys(conditions).indexOf('bun')).toBeLessThan(Object.keys(conditions).indexOf('default'))
+				const bunTarget = conditions['bun']
+				const defaultTarget = conditions['default']
+				expect(typeof bunTarget).toBe('string')
+				expect(typeof defaultTarget).toBe('string')
+				if (typeof bunTarget !== 'string' || typeof defaultTarget !== 'string') continue
+				expect(bunTarget).toStartWith('./ts/')
+				expect(defaultTarget).toStartWith('./js/')
+				await access(join(packageDirectory, bunTarget))
+			}
+		}
 	})
 
 	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {
