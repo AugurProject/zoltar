@@ -1,10 +1,17 @@
 import * as process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { projectById, repositoryTaskProjects } from '../repo/projects.ts'
 
 export const APPLICATION_TYPESCRIPT_HEAP_MB = 6144
 const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
-const UI_TYPESCRIPT_PROJECTS = ['ui/coreShared/tsconfig.json', 'ui/zoltarDomain/tsconfig.json', 'ui/statoblastDomain/tsconfig.json', 'ui/tradingDomain/tsconfig.json', 'ui/zoltar/tsconfig.json', 'ui/statoblast/tsconfig.json', 'ui/trading/tsconfig.json'] as const
+const UI_TYPESCRIPT_PROJECTS = repositoryTaskProjects.typecheck
+	.filter(projectId => projectId.startsWith('ui-'))
+	.map(projectId => {
+		const project = projectById(projectId)
+		if (project === undefined) throw new Error(`Unknown UI TypeScript project ${projectId}`)
+		return `${project.path}/tsconfig.json`
+	})
 
 type NodeOptionToken = {
 	readonly isValid: boolean
@@ -102,7 +109,7 @@ export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessE
 	return childEnvironment
 }
 
-export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath: (typeof UI_TYPESCRIPT_PROJECTS)[number] = UI_TYPESCRIPT_PROJECTS[0]) => [
+export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath = UI_TYPESCRIPT_PROJECTS[0] ?? 'ui/coreShared/tsconfig.json') => [
 	nodeExecutablePath,
 	getApplicationTypeScriptHeapOption(existingNodeOptions),
 	typescriptCliPath,

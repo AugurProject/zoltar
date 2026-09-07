@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
+import { createProjectTaskPlan } from '../repo/run-project-tasks.mts'
 import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
 
 type PackageJson = {
@@ -16,20 +17,8 @@ describe('UI build dependency direction', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildAppsScript = scripts['ui:build:apps']
 		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
-		const coreSharedIndex = buildAppsScript.indexOf('coreShared')
-		const zoltarDomainIndex = buildAppsScript.indexOf('zoltarDomain')
-		const statoblastDomainIndex = buildAppsScript.indexOf('statoblastDomain')
-		const tradingDomainIndex = buildAppsScript.indexOf('tradingDomain')
-		const zoltarIndex = buildAppsScript.indexOf('zoltar && bun run build')
-		const statoblastIndex = buildAppsScript.indexOf('statoblast && bun run build')
-		expect(coreSharedIndex).toBeGreaterThanOrEqual(0)
-		expect(zoltarDomainIndex).toBeGreaterThan(coreSharedIndex)
-		expect(statoblastDomainIndex).toBeGreaterThan(zoltarDomainIndex)
-		expect(tradingDomainIndex).toBeGreaterThan(statoblastDomainIndex)
-		expect(zoltarIndex).toBeGreaterThan(tradingDomainIndex)
-		expect(statoblastIndex).toBeGreaterThan(tradingDomainIndex)
-		const tradingIndex = buildAppsScript.indexOf('trading && bun run build')
-		expect(tradingIndex).toBeGreaterThan(tradingDomainIndex)
+		expect(buildAppsScript).toBe('bun run projects:build')
+		expect(createProjectTaskPlan('build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 
 	test('app serve/watch scripts build the full DAG before starting', () => {
@@ -58,19 +47,16 @@ describe('UI build dependency direction', () => {
 
 	test('setup scripts emit the complete UI DAG before compiling tests', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		for (const name of ['setup', 'ui:setup']) {
-			const script = scripts[name]
-			if (script === undefined) throw new Error(`${name} script is missing`)
-			const appsIndex = script.indexOf('bun run ui:build:apps')
-			const testsIndex = script.indexOf('bun run ui:build:tests')
-			const tradingUiInstallIndex = script.indexOf('install-frozen.mts ui/trading')
-			expect(script).not.toContain('install-frozen.mts trading')
-			expect(tradingUiInstallIndex).toBeGreaterThan(0)
-			expect(appsIndex).toBeGreaterThan(0)
-			expect(appsIndex).toBeGreaterThan(tradingUiInstallIndex)
-			expect(testsIndex).toBeGreaterThan(appsIndex)
-			expect(script).not.toContain('cd ui/coreShared && bun x tsc')
-		}
+		const setup = scripts['setup']
+		if (setup === undefined) throw new Error('setup script is missing')
+		const projectsIndex = setup.indexOf('bun run projects:setup')
+		const appsIndex = setup.indexOf('bun run ui:build:apps')
+		const testsIndex = setup.indexOf('bun run ui:build:tests')
+		expect(createProjectTaskPlan('setup').map(entry => entry.projectId)).toContain('ui-trading')
+		expect(projectsIndex).toBeGreaterThan(0)
+		expect(appsIndex).toBeGreaterThan(projectsIndex)
+		expect(testsIndex).toBeGreaterThan(appsIndex)
+		expect(scripts['ui:setup']).toBe('bun run setup')
 	})
 
 	test('applications depend on domain packages and no application depends on another application', () => {
