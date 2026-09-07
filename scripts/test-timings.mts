@@ -19,6 +19,15 @@ export type TestTimingObservation = {
 	fingerprintsByFile?: Record<string, string>
 	testCaseSecondsByFile: Record<string, number>
 	testFiles: string[]
+	domain?: string
+	shardIndex?: number
+	shardCount?: number
+	executedTestFiles?: string[]
+	selectedManifestHash?: string
+	executedManifestHash?: string
+	exitStatus?: number
+	completionStatus?: 'complete' | 'incomplete'
+	contextFingerprint?: string
 }
 
 export type TestTimingRegression = {
@@ -73,19 +82,46 @@ function getXmlAttribute(tag: string, name: string) {
 	return match?.[1] === undefined ? undefined : decodeXmlAttribute(match[1])
 }
 
-export function parseJunitTestCaseSeconds(junitXml: string) {
+export function parseJunitTestCaseSeconds(junitXml: string, requireTimingAttributes = true) {
 	const secondsByFile = new Map<string, number>()
-	for (const match of junitXml.matchAll(/<testcase\b[^>]*>/g)) {
+	const testcaseStarts = [...junitXml.matchAll(/<testcase\b/g)].length
+	const testcases = [...junitXml.matchAll(/<testcase\b[^>]*(?:\/>|>[\s\S]*?<\/testcase>)/g)]
+	if (testcases.length !== testcaseStarts) throw new Error('Malformed JUnit: incomplete testcase element')
+	for (const match of testcases) {
 		const tag = match[0]
 		const filePath = getXmlAttribute(tag, 'file')
 		const secondsText = getXmlAttribute(tag, 'time')
-		if (filePath === undefined || secondsText === undefined) continue
+		if (filePath === undefined || secondsText === undefined) {
+			if (requireTimingAttributes) throw new Error('Malformed JUnit: every testcase requires file and time attributes')
+			continue
+		}
 		const seconds = Number(secondsText)
-		if (!Number.isFinite(seconds) || seconds < 0) continue
+		if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Malformed JUnit testcase time: ${secondsText}`)
 		const normalizedPath = normalizeTestPath(filePath)
 		secondsByFile.set(normalizedPath, (secondsByFile.get(normalizedPath) ?? 0) + seconds)
 	}
 	return secondsByFile
+}
+
+export function validateJunitDocument(junitXml: string) {
+	const document = junitXml.trim().replace(/^<\?xml\b[^>]*>\s*/, '')
+	if (!/^<testsuites?\b/.test(document) || !/<\/testsuites?>$/.test(document)) throw new Error('Malformed JUnit: missing complete suite root')
+	const stack: string[] = []
+	let rootCount = 0
+	const completeTag = /<\/?([A-Za-z][\w:.-]*)\b[^>]*\/?>/g
+	for (const match of document.matchAll(completeTag)) {
+		const tag = match[0]
+		const name = match[1]
+		if (name === undefined || tag.startsWith('<?') || tag.startsWith('<!')) continue
+		if (tag.startsWith('</')) {
+			if (stack.pop() !== name) throw new Error(`Malformed JUnit: mismatched closing ${name}`)
+		} else if (!tag.endsWith('/>')) {
+			if (stack.length === 0) rootCount += 1
+			stack.push(name)
+		}
+	}
+	if (stack.length !== 0 || rootCount !== 1) throw new Error('Malformed JUnit: expected exactly one complete root element')
+	if (/<\/?(?:testsuites?|testcase|failure|error)\b/.test(document.replaceAll(completeTag, ''))) throw new Error('Malformed JUnit: incomplete element')
 }
 
 export function createTestTimingObservation(junitXml: string, elapsedSeconds: number, testFiles: readonly string[]): TestTimingObservation {
@@ -244,14 +280,21 @@ export function renderTestTimingMarkdown(report: TestTimingReport) {
 }
 
 export async function writeTestTimingObservation(outputPath: string, junitPath: string, elapsedSeconds: number, testFiles: readonly string[], contextPaths: readonly string[] = []) {
-	let junitXml = ''
-	try {
-		junitXml = await fs.readFile(junitPath, 'utf8')
-	} catch (error) {
-		if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
-	}
+	const junitXml = await fs.readFile(junitPath, 'utf8')
+	validateJunitDocument(junitXml)
 	const observation = createTestTimingObservation(junitXml, elapsedSeconds, testFiles)
+	const executedTestFiles = [...parseJunitTestCaseSeconds(junitXml).keys()].sort((left, right) => left.localeCompare(right))
+	if (executedTestFiles.length === 0 || JSON.stringify(executedTestFiles) !== JSON.stringify(observation.testFiles)) throw new Error('JUnit execution manifest does not exactly match the selected shard manifest')
 	observation.fingerprintsByFile = await createTestFingerprints(observation.testFiles, contextPaths)
+	const manifestHash = new Bun.CryptoHasher('sha256').update(observation.testFiles.join('\n')).digest('hex')
+	const contextHasher = new Bun.CryptoHasher('sha256')
+	contextHasher.update(`${process.platform}:${process.arch}:${Bun.version}`)
+	for (const contextPath of [...contextPaths].sort()) {
+		contextHasher.update(normalizeTestPath(contextPath))
+		contextHasher.update(await fs.readFile(contextPath))
+	}
+	const contextFingerprint = contextHasher.digest('hex')
+	Object.assign(observation, { completionStatus: 'complete', contextFingerprint, executedManifestHash: manifestHash, executedTestFiles, exitStatus: 0, selectedManifestHash: manifestHash })
 	await fs.mkdir(path.dirname(outputPath), { recursive: true })
 	await fs.writeFile(outputPath, `${JSON.stringify(observation, undefined, 2)}\n`)
 }

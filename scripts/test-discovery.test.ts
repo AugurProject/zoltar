@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS } from './run-balanced-test-shard.mts'
+import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
-import { discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
+import { discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
 	createTestFingerprints,
 	createTestTimingObservation,
@@ -14,6 +14,7 @@ import {
 	MAXIMUM_TIMING_SAMPLES,
 	mergeTestTimingHistory,
 	parseJunitTestCaseSeconds,
+	validateJunitDocument,
 	readTestTimingHistory,
 	renderTestTimingMarkdown,
 	TEST_TIMING_HISTORY_VERSION,
@@ -23,6 +24,21 @@ import {
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 describe('canonical test discovery', () => {
+	test('the aggregate test entrypoint owns every local package suite and browser smoke', async () => {
+		const packageManifest: unknown = JSON.parse(await readFile('package.json', 'utf8'))
+		if (!isRecord(packageManifest) || !isRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
+		const command = packageManifest['scripts']['test:all']
+		expect(typeof command).toBe('string')
+		if (typeof command !== 'string') return
+		for (const packageDirectory of ['bots/chaos', 'bots/liquidator', 'bots/open-oracle-arbitrager', 'bots/shared']) {
+			expect(command).toContain(`bun ./scripts/run-package-script.mts ${packageDirectory} test`)
+		}
+		expect(command).not.toContain('run-package-script.mts ui/trading')
+		expect(command).not.toContain('run-package-script.mts solidity')
+		expect(command).toContain('bun ./scripts/run-package-script.mts augurScan test:unit')
+		expect(command).toContain('bun run test:browser:smoke')
+	})
+
 	test('local and CI discovery include source, shared, and fuzz tests exactly once', async () => {
 		const canonicalFiles = await discoverTestFiles()
 		const weightedFiles = await getWeightedTestFiles()
@@ -119,6 +135,40 @@ describe('canonical test discovery', () => {
 		expect(isExplicitTestPath('not-a-repository-path')).toBe(false)
 	})
 
+	test('Bun option values are never mistaken for explicit test paths', () => {
+		for (const option of ['--test-name-pattern', '--preload', '--reporter', '--coverage-reporter', '--coverage-dir', '--max-concurrency', '--retry', '--seed', '--timeout', '--shard']) {
+			expect(hasExplicitTestPath([option, '.'])).toBe(false)
+			expect(hasExplicitTestPath([`${option}=.`])).toBe(false)
+		}
+		expect(hasExplicitTestPath(['--concurrent', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--parallel', '2', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--bail', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--bail', '2', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--path-ignore-patterns', 'ui'])).toBe(false)
+		expect(hasExplicitTestPath(['-t', 'scripts'])).toBe(false)
+		expect(hasExplicitTestPath(['--grep', 'scripts'])).toBe(false)
+		expect(hasExplicitTestPath(['--timings', 'package.json'])).toBe(false)
+		expect(hasExplicitTestPath(['--parallel', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--parallel=2', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--changed', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['--changed=main'])).toBe(false)
+		expect(hasExplicitTestPath(['--timeout', '300000', 'scripts/test-discovery.test.ts'])).toBe(true)
+	})
+
+	test('balanced shards reject arguments that can alter their manifest evidence', () => {
+		for (const args of [
+			['--shard=1/2', '--reporter=junit'],
+			['--shard', '1/2', '--test-name-pattern', 'only one'],
+			['--shard=1/2', '--reporter-outfile=elsewhere.xml'],
+			['--shard=1/2', '--changed=main'],
+			['--shard=1/2', '--path-ignore-patterns=ui'],
+			['--shard=1/2', '--grep=focused'],
+			['--shard=1/2', 'scripts/test-discovery.test.ts'],
+		]) {
+			expect(() => parseShardOption(args)).toThrow('manifest')
+		}
+	})
+
 	test('JUnit timings are grouped by source file regardless of attribute order', () => {
 		const seconds = parseJunitTestCaseSeconds(`
 			<testcase time="2.5" file="./slow.test.ts" name="first" />
@@ -126,6 +176,20 @@ describe('canonical test discovery', () => {
 			<testcase file="fast&amp;safe.test.ts" time="0.5" />
 		`)
 		expect(Object.fromEntries(seconds)).toEqual({ 'fast&safe.test.ts': 0.5, 'slow.test.ts': 3.75 })
+	})
+
+	test('JUnit timing evidence rejects incomplete or partially malformed testcases', () => {
+		expect(() => parseJunitTestCaseSeconds('<testcase file="a.test.ts" time="1"/><testcase file="a.test.ts">')).toThrow('incomplete')
+		expect(() => parseJunitTestCaseSeconds('<testcase file="a.test.ts" time="1"/><testcase file="b.test.ts" time="bad"/>')).toThrow('time')
+	})
+
+	test('JUnit timing evidence requires a complete, correctly nested suite document', () => {
+		expect(() => validateJunitDocument('<testsuite><testcase file="a.test.ts" time="1"/></testsuite>')).not.toThrow()
+		expect(() => validateJunitDocument('<testsuite><testcase file="a.test.ts" time="1"/>')).toThrow('suite root')
+		expect(() => validateJunitDocument('<testsuites><testsuite></testsuites></testsuite>')).toThrow('mismatched')
+		expect(() => validateJunitDocument('<testsuite></testsuite> trailing')).toThrow('suite root')
+		expect(() => validateJunitDocument('<testsuite></testsuite><testsuite></testsuite>')).toThrow('exactly one')
+		expect(() => validateJunitDocument('<testsuite></testsuite><testsuites></testsuites>')).toThrow('exactly one')
 	})
 
 	test('observed wall time includes unreported per-file overhead', () => {
