@@ -28,8 +28,7 @@
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared"
+		"@zoltar/bot-shared": "file:../shared"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

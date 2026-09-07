@@ -101,7 +101,8 @@
 		},
 		"augurScan": {
 			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
-			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"]
+			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
+			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"]
 		},
 		"bots/shared": {
 			"entry": ["tests/**/*.ts"],
@@ -109,9 +110,7 @@
 		},
 		"bots/chaos": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"],
-			"ignoreBinaries": ["solcjs"],
-			"ignoreDependencies": ["solc"]
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"]
 		},
 		"bots/liquidator": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
@@ -119,7 +118,8 @@
 		},
 		"bots/open-oracle-arbitrager": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!", "docs/chart-runtime.ts!", "src/config/execution-manifest.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"]
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"],
+			"ignoreDependencies": ["prettier-plugin-solidity"]
 		}
 	},
 	"ignoreDependencies": ["better-typescript-lib"]

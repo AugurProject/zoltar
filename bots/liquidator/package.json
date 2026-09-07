@@ -25,8 +25,7 @@
 		"ui:fixture": "bun ./scripts/serve-dashboard-fixture.mts"
 	},
 	"dependencies": {
-		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared"
+		"@zoltar/bot-shared": "file:../shared"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

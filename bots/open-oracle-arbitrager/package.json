@@ -32,10 +32,8 @@
 		"manifest": "bun ./src/config/execution-manifest.ts"
 	},
 	"dependencies": {
-		"@noble/hashes": "2.2.0",
 		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared",
-		"micro-eth-signer": "0.18.1"
+		"@zoltar/shared": "file:../../shared"
 	},
 	"overrides": {
 		"tmp": "0.2.7"
@@ -44,6 +42,7 @@
 		"@biomejs/biome": "2.3.11",
 		"bun-types": "1.4.2",
 		"happy-dom": "20.10.6",
+		"micro-eth-signer": "0.18.1",
 		"prettier": "3.8.4",
 		"prettier-plugin-solidity": "2.3.1",
 		"solc": "0.8.35",
