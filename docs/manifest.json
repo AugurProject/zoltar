@@ -1,17 +1,46 @@
 {
 	"sections": [
 		{
-			"id": "reference",
-			"title": "Reference",
-			"description": "Look up authoritative contracts, events, invariants, and formats."
+			"id": "start-here",
+			"title": "Start here",
+			"description": "Build a practical mental model before reading detailed mechanisms."
 		},
 		{
 			"id": "explanation",
-			"title": "Explanation",
+			"title": "Explanations",
 			"description": "Understand why the protocol is designed and behaves as it does."
+		},
+		{
+			"id": "reference",
+			"title": "Reference",
+			"description": "Look up authoritative contracts, events, invariants, and formats."
 		}
 	],
 	"pages": [
+		{
+			"path": "explanation/system-overview.html",
+			"title": "System overview",
+			"summary": "A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle.",
+			"section": "start-here",
+			"topic": "Introduction",
+			"keywords": ["overview", "lifecycle", "Aurora", "components"]
+		},
+		{
+			"path": "explanation/contract-architecture.html",
+			"title": "Contract architecture",
+			"summary": "How the product layers and deployed contracts call, deploy, and move assets.",
+			"section": "start-here",
+			"topic": "Architecture",
+			"keywords": ["contracts", "architecture", "calls", "assets"]
+		},
+		{
+			"path": "reference/glossary.html",
+			"title": "Glossary",
+			"summary": "Canonical definitions for protocol assets, states, and mechanisms.",
+			"section": "start-here",
+			"topic": "Introduction",
+			"keywords": ["glossary", "terms", "REP", "universe"]
+		},
 		{
 			"path": "reference/contracts.html",
 			"title": "Contract interactions",
@@ -77,12 +106,12 @@
 			"keywords": ["Zoltar", "universes", "questions", "REP"]
 		},
 		{
-			"path": "explanation/contract-architecture.html",
-			"title": "Contract architecture",
-			"summary": "How deployed contracts call, deploy, and move assets between one another.",
+			"path": "explanation/trading.html",
+			"title": "How Statoblast Trading works",
+			"summary": "Complete sets, directional liquidity, conditional prices, and market isolation.",
 			"section": "explanation",
-			"topic": "Architecture",
-			"keywords": ["contracts", "architecture", "calls", "assets"]
+			"topic": "Trading",
+			"keywords": ["Trading", "AMM", "liquidity", "prices"]
 		},
 		{
 			"path": "explanation/escalation-game.html",
@@ -123,6 +152,14 @@
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
+		},
+		{
+			"path": "reference/open-oracle.html",
+			"title": "OpenOracle integration reference",
+			"summary": "Funding, sizing, callbacks, queues, recovery, parameters, and interactive estimators.",
+			"section": "reference",
+			"topic": "Oracle",
+			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
 		}
 	]
 }
