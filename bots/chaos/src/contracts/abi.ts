@@ -349,8 +349,6 @@ const poolAccountingComponents = [
 const liquidationSnapshotComponents = [
 	{ name: 'targetBackingUnits', type: 'uint256' },
 	{ name: 'targetCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'totalPoolHeldAttoRep', type: 'uint256' },
-	{ name: 'totalRepBackingUnits', type: 'uint256' },
 ] as const
 
 const liquidationRequestComponents = [
@@ -567,10 +565,6 @@ const stagedOperationComponents = [
 	{ name: 'validForSeconds', type: 'uint256' },
 	{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
 	{ name: 'snapshotTargetCapacityOwnershipAttoRep', type: 'uint256' },
-	{ name: 'snapshotTargetOpenInterestAttoEth', type: 'uint256' },
-	{ name: 'snapshotTargetDisputeStakedAttoRep', type: 'uint256' },
-	{ name: 'snapshotTotalPoolHeldAttoRep', type: 'uint256' },
-	{ name: 'snapshotTotalRepBackingUnits', type: 'uint256' },
 	{ name: 'liquidationApprovalId', type: 'bytes32' },
 	{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256' },
 ] as const

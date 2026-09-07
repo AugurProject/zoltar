@@ -338,11 +338,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		)
 	{}
 
-	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external pure {}
-
-	function lastDepositTargetHealthFactorBpsByVault(address) external pure returns (uint256) {
-		return 0;
-	}
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256) external pure {}
 }
 
 contract SecurityPoolForkerAlternatingChildGameMock {
@@ -468,12 +464,8 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		return 0;
 	}
 
-	function configureVault(address, uint256, uint256, uint256, uint256, uint256, uint256) external {
+	function configureVault(address, uint256, uint256, uint256, uint256, uint256) external {
 		if (operationalMode) useSecondOperationalEscalationGame = true;
-	}
-
-	function lastDepositTargetHealthFactorBpsByVault(address) external pure returns (uint256) {
-		return 0;
 	}
 
 	function totalRepBackingUnits() external pure returns (uint256) {

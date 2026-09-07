@@ -40,11 +40,8 @@ library SecurityPoolUtils {
 		migratedBadDebtAttoEth = parent.vaultBadDebtAttoEth(vault);
 		resultingParentTotalBadDebtAttoEth = parent.totalBadDebtAttoEth() - migratedBadDebtAttoEth;
 		resultingChildTotalBadDebtAttoEth = child.totalBadDebtAttoEth() + migratedBadDebtAttoEth;
-		uint256 lastDepositTargetHealthFactorBps = parent.lastDepositTargetHealthFactorBpsByVault(vault);
-		if (lastDepositTargetHealthFactorBps == 0)
-			lastDepositTargetHealthFactorBps = child.lastDepositTargetHealthFactorBpsByVault(vault);
-		child.configureVault(vault, childRepBackingUnits, childCapacityOwnershipAttoRep, childFeeIndex, lastDepositTargetHealthFactorBps, child.vaultBadDebtAttoEth(vault) + migratedBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
-		parent.configureVault(vault, 0, 0, parentFeeIndex, 0, 0, resultingParentTotalBadDebtAttoEth);
+		child.configureVault(vault, childRepBackingUnits, childCapacityOwnershipAttoRep, childFeeIndex, child.vaultBadDebtAttoEth(vault) + migratedBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
+		parent.configureVault(vault, 0, 0, parentFeeIndex, 0, resultingParentTotalBadDebtAttoEth);
 		emit VaultBadDebtMigrated(parent, child, vault, migratedBadDebtAttoEth, resultingParentTotalBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
 	}
 
@@ -56,12 +53,11 @@ library SecurityPoolUtils {
 			,
 			uint256 currentFeeIndex
 		) = securityPool.securityVaults(vault);
-		uint256 lastDepositTargetHealthFactorBps = securityPool.lastDepositTargetHealthFactorBpsByVault(vault);
 		uint256 currentBadDebtToAssignAttoEth =
 			auctionBadDebtGeneration == securityPool.getPoolAccountingSnapshot().badDebtGeneration
 				? badDebtToAssignAttoEth
 				: 0;
-		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, lastDepositTargetHealthFactorBps, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
+		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
 		securityPool.assignFinalizedAuctionFees(vault, newCapacityOwnershipAttoRep, auctionFeeIndexAtFinalization);
 		return securityPool.totalRepBackingUnits();
 	}

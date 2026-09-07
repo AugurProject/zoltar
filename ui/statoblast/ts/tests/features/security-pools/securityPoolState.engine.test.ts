@@ -50,6 +50,7 @@ describe('security pool state engine', () => {
 				'submitBid',
 				'finalizeTruthAuction',
 				'refundLosingBids',
+				'withdrawAuctionRefund',
 				'claimAuctionProceeds',
 				'settleForkedEscalation',
 			]),

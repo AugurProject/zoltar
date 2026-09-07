@@ -70,6 +70,20 @@ export async function settleTruthAuctionBids(client: WriteClient, securityPoolAd
 			})),
 	)
 }
+export async function withdrawTruthAuctionRefund(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address) {
+	return await executeForkAuctionAction(
+		client,
+		'withdrawAuctionRefund',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
+				address: truthAuctionAddress,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'withdrawPendingEthRefund',
+			})),
+	)
+}
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
