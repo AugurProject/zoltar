@@ -2169,6 +2169,7 @@ describe('network indexer lifecycle', () => {
 			release: async () => {},
 		}
 		spyOn(database, 'tryAcquireIndexerLock').mockResolvedValue(lease)
+		spyOn(database, 'recordIndexerOwnership').mockResolvedValue()
 		spyOn(database, 'checkpoint').mockResolvedValue(undefined)
 		spyOn(database, 'networkStartBlock').mockResolvedValue(10n)
 		spyOn(database, 'storedBlockTip').mockResolvedValue(undefined)
@@ -3528,7 +3529,7 @@ describe('network indexer lifecycle', () => {
 			expect(ownershipEvents).toEqual([
 				{ type: 'acquired', backendPid: 42, recoveredAfterFailures: 0, acquiredAfterStandby: false },
 				{ type: 'failure', stage: 'release', consecutiveFailures: 1, retryDelayMs: 10, backendPid: 42 },
-				{ type: 'released', backendPid: 42 },
+				{ type: 'release-failed', backendPid: 42 },
 			])
 			expect(logged).toHaveBeenCalledWith(
 				'[mainnet] indexer ownership failed; stage: release; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: Error; code ERR_POSTGRES_CONNECTION_CLOSED',

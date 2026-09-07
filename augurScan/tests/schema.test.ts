@@ -25,7 +25,8 @@ test('accepts the PostgreSQL release used to generate the schema fingerprint acr
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
 	expect(schemaInitializationAction(CURRENT_SCHEMA_VERSION, ['augurscan_schema', 'networks'])).toBe('current')
-	expect(schemaInitializationAction('1', ['augurscan_schema', 'networks'])).toBe('migrate')
+	expect(schemaInitializationAction('2', ['augurscan_schema', 'networks'])).toBe('migrate-from-2')
+	expect(schemaInitializationAction('1', ['augurscan_schema', 'networks'])).toBe('migrate-from-1')
 })
 
 test('rejects legacy, unknown, and incomplete database schemas', () => {
@@ -44,7 +45,11 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	const schema = await Bun.file(new URL('../schema.sql', import.meta.url)).text()
 	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION}`)
 	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
-	const previous = expectedSchemaLayout(schema, '1')
+	const previous = expectedSchemaLayout(schema, '2')
+	const initial = expectedSchemaLayout(schema, '1')
+	expect(current.relations).toContain('table:indexer_ownership')
+	expect(current.indexes.some((signature) => signature.startsWith('indexer_ownership_heartbeat|'))).toBe(true)
+	expect(previous.relations).not.toContain('table:indexer_ownership')
 	expect(current.relations).toContain('table:chain_reorganizations')
 	expect(current.relations).toContain('table:address_balance_observations')
 	expect(current.relations).toContain('table:entity_state_observations')
@@ -71,18 +76,18 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	expect(
 		current.constraints.find((signature) => signature.startsWith('history_invalidation_occurrences.history_invalidation_occurrences_kind_check|')),
 	).toContain("'token-metadata'")
-	expect(previous.relations).not.toContain('table:chain_reorganizations')
-	expect(previous.relations).not.toContain('table:address_balance_observations')
-	expect(previous.relations).not.toContain('table:entity_state_observations')
-	expect(previous.relations).not.toContain('table:token_metadata_observations')
-	expect(previous.relations).not.toContain('table:history_invalidation_causes')
-	expect(previous.relations).not.toContain('sequence:chain_reorganizations_id_seq')
-	expect(previous.constraints.some((signature) => signature.startsWith('chain_reorganizations.'))).toBe(false)
-	expect(previous.indexes.some((signature) => signature.startsWith('chain_reorganizations_history|'))).toBe(false)
-	expect(previous.columns.some((signature) => signature.startsWith('networks.applied_abi_source_hash|'))).toBe(false)
-	expect(previous.columns.some((signature) => signature.startsWith('networks.applied_application_source_hash|'))).toBe(false)
-	expect(previous.columns.some((signature) => signature.startsWith('networks.applied_projection_source_hash|'))).toBe(false)
-	expect(previous.columns.some((signature) => signature.startsWith('entity_state_snapshots.indexer_run_id|'))).toBe(false)
+	expect(initial.relations).not.toContain('table:chain_reorganizations')
+	expect(initial.relations).not.toContain('table:address_balance_observations')
+	expect(initial.relations).not.toContain('table:entity_state_observations')
+	expect(initial.relations).not.toContain('table:token_metadata_observations')
+	expect(initial.relations).not.toContain('table:history_invalidation_causes')
+	expect(initial.relations).not.toContain('sequence:chain_reorganizations_id_seq')
+	expect(initial.constraints.some((signature) => signature.startsWith('chain_reorganizations.'))).toBe(false)
+	expect(initial.indexes.some((signature) => signature.startsWith('chain_reorganizations_history|'))).toBe(false)
+	expect(initial.columns.some((signature) => signature.startsWith('networks.applied_abi_source_hash|'))).toBe(false)
+	expect(initial.columns.some((signature) => signature.startsWith('networks.applied_application_source_hash|'))).toBe(false)
+	expect(initial.columns.some((signature) => signature.startsWith('networks.applied_projection_source_hash|'))).toBe(false)
+	expect(initial.columns.some((signature) => signature.startsWith('entity_state_snapshots.indexer_run_id|'))).toBe(false)
 	expect(schemaLayoutsMatch(current, current)).toBe(true)
 	expect(schemaLayoutsMatch(current, { ...current, columns: current.columns.slice(1) })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, constraints: [...current.constraints, 'unknown.constraint|CHECK (false)'].sort() })).toBe(false)
@@ -143,6 +148,13 @@ test('keeps the supported migration additive and backfills retained evidence', a
 	expect(migration).toContain("WHERE entity_type = 'fork' AND source_event <> 'Migrate'")
 	expect(migration).not.toMatch(/DROP\s+(?:TABLE|SCHEMA)/i)
 	expect(migration).not.toMatch(/TRUNCATE/i)
+})
+
+test('adds durable indexer ownership through an additive migration', async () => {
+	const migration = await Bun.file(new URL('../migrations/003-indexer-ownership.sql', import.meta.url)).text()
+	expect(migration).toContain('CREATE TABLE public.indexer_ownership')
+	expect(migration).toContain("'release-failed'::text")
+	expect(migration).toContain('REFERENCES public.indexer_runs(id)')
 })
 
 test('uses one explicit transaction boundary for successful schema initialization', async () => {

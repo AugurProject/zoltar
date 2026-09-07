@@ -198,6 +198,18 @@ export class DatabaseConsistencyError extends Error {
 	}
 }
 
+export class IndexerLeaseReleaseError extends Error {
+	override name = 'IndexerLeaseReleaseError'
+
+	constructor(
+		message: string,
+		readonly sessionTerminated: boolean,
+		cause: unknown,
+	) {
+		super(message, { cause })
+	}
+}
+
 export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyError): string | undefined => {
 	const diagnostic = error.diagnostic
 	if (diagnostic?.code === 'lease-backend-moved') {
@@ -580,12 +592,18 @@ export const releaseReservedConnection = async (connection: Pick<ReservedSQL, 'r
 	await connection.release()
 }
 
+export const destroyReservedConnection = async (connection: Pick<ReservedSQL, 'close'>): Promise<void> => {
+	await connection.close({ timeout: 0 })
+}
+
 export type IndexerLease = {
 	readonly backendPid: number
 	readonly connection: ReservedSQL
 	readonly assertHeld: (sql?: SQL) => Promise<void>
 	readonly release: () => Promise<void>
 }
+
+export type PersistedIndexerOwnershipState = 'owned' | 'standby' | 'released' | 'release-failed' | 'unknown'
 
 const pendingLeaseOperations = new WeakMap<object, Promise<void>>()
 
@@ -660,6 +678,23 @@ export class ScannerDatabase {
 			if (Number(versions[0]?.['version'] ?? 0) >= 170_000) await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
 			return await operation(transaction)
 		})
+	}
+
+	async recordIndexerOwnership(
+		chainId: number,
+		networkId: string,
+		state: PersistedIndexerOwnershipState,
+		backendPid: number | undefined,
+		ownerRunId: string | undefined,
+		sql: SQL = this.sql,
+	): Promise<void> {
+		await sql`
+			INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
+			VALUES (${chainId}, ${networkId}, ${state}, ${backendPid ?? null}, ${ownerRunId ?? null}, now(), now())
+			ON CONFLICT (chain_id) DO UPDATE SET network_id = EXCLUDED.network_id, state = EXCLUDED.state,
+				backend_pid = EXCLUDED.backend_pid, owner_run_id = EXCLUDED.owner_run_id,
+				heartbeat_at = EXCLUDED.heartbeat_at, updated_at = now()
+		`
 	}
 
 	async latestEventId(): Promise<number> {
@@ -746,11 +781,16 @@ export class ScannerDatabase {
 
 	async tryAcquireIndexerLock(chainId: number): Promise<IndexerLease | undefined> {
 		const connection = await this.sql.reserve()
-		let connectionReleased = false
+		let connectionDisposed = false
 		const releaseConnection = async (): Promise<void> => {
-			if (connectionReleased) return
-			connectionReleased = true
+			if (connectionDisposed) return
+			connectionDisposed = true
 			await releaseReservedConnection(connection)
+		}
+		const destroyConnection = async (): Promise<void> => {
+			if (connectionDisposed) return
+			connectionDisposed = true
+			await destroyReservedConnection(connection)
 		}
 		try {
 			const rows = await connection`SELECT pg_try_advisory_lock(92138472, ${chainId}) AS locked, pg_backend_pid() AS backend_pid`
@@ -792,8 +832,17 @@ export class ScannerDatabase {
 									END AS unlocked
 							`
 							assertIndexerLeaseReleaseObservation(backendPid, Number(releaseRows[0]?.['backend_pid']), releaseRows[0]?.['unlocked'] === true)
-						} finally {
 							await releaseConnection()
+						} catch (error) {
+							try {
+								await destroyConnection()
+							} catch (cleanupError) {
+								throw new IndexerLeaseReleaseError('Indexer lease unlock failed and its PostgreSQL session could not be terminated', false, [
+									error,
+									cleanupError,
+								])
+							}
+							throw new IndexerLeaseReleaseError('Indexer lease unlock failed; its PostgreSQL session was terminated', true, error)
 						}
 					})
 					return releasePromise

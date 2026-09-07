@@ -2354,7 +2354,12 @@ postgresTest(
 				await collisionLease.connection`SELECT pg_advisory_unlock(92138472, ${chainId})`
 				await expect(collisionLease.assertHeld()).rejects.toThrow('Indexer lease is no longer held')
 				await collisionLease.connection`SELECT pg_advisory_unlock((92138472::bigint << 32) | ${chainId}::bigint)`
+				const failedReleaseBackendPid = collisionLease.backendPid
 				await expect(collisionLease.release()).rejects.toThrow('Indexer lease unlock failed')
+				const replacementLease = await database.tryAcquireIndexerLock(chainId)
+				if (replacementLease === undefined) throw new Error('replacement indexer did not acquire its lock after failed unlock cleanup')
+				expect(replacementLease.backendPid).not.toBe(failedReleaseBackendPid)
+				await replacementLease.release()
 			} finally {
 				await contender.close()
 			}

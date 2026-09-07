@@ -732,7 +732,24 @@ class NetworkIndexer {
 		console.info(`[${this.#network.id}] RPC providers: ${this.#providers.map(({ endpoint }) => endpoint).join(', ')}`)
 		await runIndexerOwnershipLifecycle({
 			networkId: this.#network.id,
-			onEvent: (event) => recordOwnershipEvent(this.#network.id, event),
+			onEvent: async (event) => {
+				recordOwnershipEvent(this.#network.id, event)
+				await this.#database.recordIndexerOwnership(
+					this.#network.chainId,
+					this.#network.id,
+					event.type === 'acquired'
+						? 'owned'
+						: event.type === 'standby'
+							? 'standby'
+							: event.type === 'released'
+								? 'released'
+								: event.type === 'release-failed'
+									? 'release-failed'
+									: 'unknown',
+					'backendPid' in event ? event.backendPid : undefined,
+					this.#provenance?.indexerRunId,
+				)
+			},
 			acquire: () => this.#database.tryAcquireIndexerLock(this.#network.chainId),
 			seed: (lease) => this.#seed(lease),
 			runOwned: async (lease) => {
@@ -1110,6 +1127,14 @@ class NetworkIndexer {
 
 	async #poll(): Promise<boolean> {
 		await this.#assertLease()
+		await this.#database.recordIndexerOwnership(
+			this.#network.chainId,
+			this.#network.id,
+			'owned',
+			this.#requireLease().backendPid,
+			this.#provenance?.indexerRunId,
+			this.#requireLease().connection,
+		)
 		await this.#reconcileReorg()
 		const observedHead = await this.#client.getBlockNumber()
 		if (!this.#stateBoundaryDiscovered && observedHead >= this.#network.startBlock) await this.#discoverStateStartBlock(observedHead)

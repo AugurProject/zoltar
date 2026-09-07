@@ -1,4 +1,11 @@
-import { type AddressActivity, DatabaseConsistencyError, databaseConsistencyDiagnosticMessage, type IndexerLease, type StoredTransaction } from './database.ts'
+import {
+	type AddressActivity,
+	DatabaseConsistencyError,
+	databaseConsistencyDiagnosticMessage,
+	type IndexerLease,
+	IndexerLeaseReleaseError,
+	type StoredTransaction,
+} from './database.ts'
 import { errorChainIncludes } from './error-chain.ts'
 import {
 	type Address,
@@ -865,7 +872,7 @@ export const runOwnedNetworkLifecycle = async ({ reconcile, poll, runWithProvide
 
 type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'> & { readonly backendPid?: number }
 
-type OwnershipStage = 'acquire' | 'verify' | 'seed' | 'owned-run' | 'record-failure' | 'release'
+type OwnershipStage = 'acquire' | 'verify' | 'seed' | 'record-ownership' | 'owned-run' | 'record-failure' | 'release'
 
 export type IndexerOwnershipEvent =
 	| {
@@ -877,6 +884,7 @@ export type IndexerOwnershipEvent =
 	  }
 	| { readonly type: 'acquired'; readonly backendPid?: number; readonly recoveredAfterFailures: number; readonly acquiredAfterStandby: boolean }
 	| { readonly type: 'released'; readonly backendPid?: number }
+	| { readonly type: 'release-failed'; readonly backendPid?: number }
 	| { readonly type: 'standby' }
 
 export type IndexerOwnershipStatus = {
@@ -925,12 +933,18 @@ export const nextIndexerOwnershipStatus = (
 			consecutiveFailures: 0,
 		}
 	}
-	return {
-		...previous,
-		active: false,
-		backendPid: undefined,
-		consecutiveFailures: event.type === 'standby' ? 0 : previous.consecutiveFailures,
-	}
+	return event.type === 'release-failed'
+		? {
+				...previous,
+				active: false,
+				...(event.backendPid === undefined ? {} : { backendPid: event.backendPid }),
+			}
+		: {
+				...previous,
+				active: false,
+				backendPid: undefined,
+				consecutiveFailures: event.type === 'standby' ? 0 : previous.consecutiveFailures,
+			}
 }
 
 export const recordOwnershipEvent = (networkId: string, event: IndexerOwnershipEvent): void => {
@@ -974,7 +988,7 @@ type OwnershipLifecycle<TLease extends LeaseControl> = {
 	readonly standby: () => void
 	readonly intervalMs: number
 	readonly now?: () => number
-	readonly onEvent?: (event: IndexerOwnershipEvent) => void
+	readonly onEvent?: (event: IndexerOwnershipEvent) => unknown
 	readonly random?: () => number
 	readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>
 	readonly signal: AbortSignal
@@ -1010,7 +1024,8 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				wasStandby = true
 				if (!standbyReported) {
 					standby()
-					onEvent({ type: 'standby' })
+					stage = 'record-ownership'
+					await onEvent({ type: 'standby' })
 					standbyReported = true
 				}
 			} else {
@@ -1023,7 +1038,8 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				if (signal.aborted) continue
 				const recoveredAfterFailures = consecutiveFailures
 				const acquiredAfterStandby = wasStandby
-				onEvent({
+				stage = 'record-ownership'
+				await onEvent({
 					type: 'acquired',
 					...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }),
 					recoveredAfterFailures,
@@ -1049,7 +1065,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				consecutiveFailures = 0
 			consecutiveFailures++
 			retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
-			onEvent({
+			await onEvent({
 				type: 'failure',
 				stage: failureStage,
 				consecutiveFailures,
@@ -1064,13 +1080,16 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				// A database outage can prevent status recording too; retry ownership regardless.
 			}
 		} finally {
+			let released = lease === undefined
 			try {
 				await lease?.release()
+				released = true
 			} catch (error) {
+				if (error instanceof IndexerLeaseReleaseError && error.sessionTerminated) released = true
 				if (retryDelay === undefined) {
 					consecutiveFailures++
 					retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
-					onEvent({
+					await onEvent({
 						type: 'failure',
 						stage: 'release',
 						consecutiveFailures,
@@ -1079,9 +1098,10 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 					})
 				}
 				console.error(ownershipFailureLogMessage(networkId, 'release', error, consecutiveFailures, retryDelay, lease?.backendPid))
-				// PostgreSQL already releases advisory locks when their session is lost.
+				if (lease !== undefined && !released)
+					await onEvent({ type: 'release-failed', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 			}
-			if (lease !== undefined) onEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
+			if (lease !== undefined && released) await onEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 		}
 		if (!signal.aborted) await wait(retryDelay ?? intervalMs, signal)
 	}

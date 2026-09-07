@@ -172,6 +172,22 @@ test('bounds stream admission and releases capacity when a reader disconnects', 
 	await bus.close()
 })
 
+test('evicts a client that remains backpressured and releases its admission slot', async () => {
+	let now = 1_000
+	const bus = new LiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1, 50, () => now)
+	const stalled = streamFrom(bus, 0)
+	await Promise.resolve()
+	bus.heartbeat()
+	expect(bus.stream(0)).toBeUndefined()
+
+	now += 51
+	await bus.poll()
+	const replacement = streamFrom(bus, 0)
+	await replacement.cancel()
+	await stalled.cancel()
+	await bus.close()
+})
+
 test('coalesces cursor initialization for concurrent new streams', async () => {
 	let latestQueries = 0
 	let resolveLatest: ((cursor: number) => void) | undefined

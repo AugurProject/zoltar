@@ -11,6 +11,7 @@ import {
 	requestAccessGuard,
 	staticAssetResponse,
 } from './http.ts'
+import { readIndexerHealth } from './indexer-health.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
@@ -18,13 +19,13 @@ import { initializeProcessContext, recordProcessStop } from './process-bootstrap
 
 installConsoleTimestamps()
 
-const { database, indexerRunId } = await initializeProcessContext(false)
+const { database, indexerRunId, networks } = await initializeProcessContext(false)
 const API_DATABASE_CONNECTIONS = 10
 const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)
 const liveDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2, 1)
 
-const bus = new LiveBus(liveDatabase)
+const bus = new LiveBus(liveDatabase, undefined, runtimeConfig.liveBackpressureTimeoutMs)
 let prunePromise: Promise<void> | undefined
 const pruneLiveEvents = (): Promise<void> => {
 	prunePromise ??= database
@@ -149,29 +150,19 @@ const server = Bun.serve({
 			return respond(
 				await healthCheck(async () => {
 					try {
-						const { rows, issues } = await healthDatabase.read(async (sql) => {
-							const rows =
-								await sql`SELECT chain_id, id, phase, last_poll_at, last_success_at, consecutive_failures, next_retry_at, last_error FROM networks ORDER BY chain_id`
-							return { rows, issues: await healthDatabase.auditIntegrity(sql) }
-						}, 3_000)
-						const staleBefore = Date.now() - freshnessThresholdMs
-						const stale = rows.filter(
-							(row: Record<string, unknown>) => row['last_success_at'] === null || new Date(String(row['last_success_at'])).getTime() < staleBefore,
+						const snapshot = await healthDatabase.read(
+							async (sql) => await readIndexerHealth(sql, (transaction) => healthDatabase.auditIntegrity(transaction), freshnessThresholdMs),
+							3_000,
 						)
-						const healthy = issues.length === 0 && stale.length === 0
-						return Response.json(
-							{
-								status: healthy ? 'healthy' : 'degraded',
-								networks: rows,
-								ownership: [],
-								staleChainIds: stale.map((row: Record<string, unknown>) => Number(row['chain_id'])),
-								integrityIssues: issues,
-							},
-							{ status: healthy ? 200 : 503 },
-						)
+						return Response.json(snapshot, { status: snapshot.status === 'healthy' ? 200 : 503 })
 					} catch (error) {
 						console.error(`augurScan indexer health check failed (${error instanceof Error ? error.name : typeof error})`)
-						return indexerHealthUnavailableResponse([])
+						return indexerHealthUnavailableResponse(
+							networks.map((network) => ({
+								networkId: network.id,
+								state: 'unknown',
+							})),
+						)
 					}
 				}),
 			)

@@ -9,12 +9,14 @@ type Client = {
 	readonly controller: ReadableStreamDefaultController<Uint8Array>
 	readonly release: () => void
 	cursor: number
+	backpressuredAt?: number
 }
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const EVENT_POLL_INTERVAL_MS = 1_000
 const MAX_CURSOR_COHORTS_PER_POLL = 4
 const DEFAULT_MAX_LIVE_CLIENTS = 256
+const DEFAULT_BACKPRESSURE_TIMEOUT_MS = 60_000
 
 export class LiveBus {
 	readonly #clients = new Set<Client>()
@@ -23,15 +25,26 @@ export class LiveBus {
 	readonly #pollTimer: ReturnType<typeof setInterval>
 	readonly #heartbeatTimer: ReturnType<typeof setInterval>
 	readonly #maxClients: number
+	readonly #backpressureTimeoutMs: number
+	readonly #now: () => number
 	#pollPromise: Promise<void> | undefined
 	#latestCursorPromise: Promise<number> | undefined
 	#admittedClients = 0
 	#closed = false
 	#cohortOffset = 0
 
-	constructor(store: LiveEventStore, maxClients = DEFAULT_MAX_LIVE_CLIENTS) {
+	constructor(
+		store: LiveEventStore,
+		maxClients = DEFAULT_MAX_LIVE_CLIENTS,
+		backpressureTimeoutMs = DEFAULT_BACKPRESSURE_TIMEOUT_MS,
+		now: () => number = Date.now,
+	) {
+		if (!Number.isSafeInteger(backpressureTimeoutMs) || backpressureTimeoutMs <= 0)
+			throw new Error('Live stream backpressure timeout must be a positive safe integer')
 		this.#store = store
 		this.#maxClients = maxClients
+		this.#backpressureTimeoutMs = backpressureTimeoutMs
+		this.#now = now
 		this.#pollTimer = setInterval(() => void this.poll(), EVENT_POLL_INTERVAL_MS)
 		this.#heartbeatTimer = setInterval(() => this.heartbeat(), HEARTBEAT_INTERVAL_MS)
 	}
@@ -85,6 +98,7 @@ export class LiveBus {
 		if (this.#closed || this.#clients.size === 0) return
 		const run = (async () => {
 			try {
+				this.#evictStaleClients()
 				const readyClients = [...this.#clients].filter((client) => client.controller.desiredSize === null || client.controller.desiredSize > 0)
 				if (readyClients.length === 0) return
 				const cohorts = new Map<number, Client[]>()
@@ -117,6 +131,7 @@ export class LiveBus {
 	}
 
 	#enqueueEvents(client: Client, events: readonly LiveEvent[]): void {
+		client.backpressuredAt = undefined
 		for (const event of events) {
 			if (event.id <= client.cursor && event.event !== 'reset') continue
 			if (client.controller.desiredSize !== null && client.controller.desiredSize <= 0) break
@@ -132,13 +147,35 @@ export class LiveBus {
 	}
 
 	heartbeat(): void {
+		this.#evictStaleClients()
 		this.#enqueue(this.#encoder.encode(': heartbeat\n\n'))
+	}
+
+	#evictStaleClients(): void {
+		const now = this.#now()
+		for (const client of this.#clients) {
+			if (client.controller.desiredSize === null || client.controller.desiredSize > 0) {
+				client.backpressuredAt = undefined
+				continue
+			}
+			client.backpressuredAt ??= now
+			if (now - client.backpressuredAt <= this.#backpressureTimeoutMs) continue
+			try {
+				client.controller.close()
+			} catch (error) {
+				if (!(error instanceof TypeError)) throw error
+			}
+			client.release()
+		}
 	}
 
 	#enqueue(payload: Uint8Array): void {
 		for (const client of this.#clients) {
 			try {
-				if (client.controller.desiredSize === null || client.controller.desiredSize > 0) client.controller.enqueue(payload)
+				if (client.controller.desiredSize === null || client.controller.desiredSize > 0) {
+					client.controller.enqueue(payload)
+					client.backpressuredAt = undefined
+				}
 			} catch (error) {
 				if (error instanceof TypeError) client.release()
 				else throw error

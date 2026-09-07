@@ -10,8 +10,38 @@ import {
 	requestAccessGuard,
 	staticAssetResponse,
 } from '../src/http.ts'
+import { reconcileIndexerOwnership } from '../src/indexer-health.ts'
 
 describe('HTTP response policy', () => {
+	test('reconciles durable ownership heartbeats with actual PostgreSQL advisory locks', () => {
+		const networks = [
+			{ chain_id: '1', id: 'mainnet' },
+			{ chain_id: '2', id: 'sepolia' },
+			{ chain_id: '3', id: 'released' },
+			{ chain_id: '4', id: 'failed-release' },
+			{ chain_id: '5', id: 'unrecorded-lock' },
+		]
+		const ownership = [
+			{ chain_id: '1', state: 'owned', backend_pid: 41, owner_run_id: '9', heartbeat_at: '2026-08-13T10:00:00.000Z' },
+			{ chain_id: '2', state: 'owned', backend_pid: 42, owner_run_id: '9', heartbeat_at: '2026-08-13T09:00:00.000Z' },
+			{ chain_id: '3', state: 'released', backend_pid: null, owner_run_id: '9', heartbeat_at: '2026-08-13T10:00:00.000Z' },
+			{ chain_id: '4', state: 'release-failed', backend_pid: 44, owner_run_id: '9', heartbeat_at: '2026-08-13T10:00:00.000Z' },
+		]
+		const locks = [
+			{ chain_id: '1', backend_pid: 41 },
+			{ chain_id: '2', backend_pid: 42 },
+			{ chain_id: '5', backend_pid: 45 },
+		]
+		const result = reconcileIndexerOwnership(networks, ownership, locks, Date.parse('2026-08-13T09:59:00.000Z'))
+		expect(result.map(({ networkId, state }) => [networkId, state])).toEqual([
+			['mainnet', 'owned'],
+			['sepolia', 'stale-owner'],
+			['released', 'standby'],
+			['failed-release', 'release-failed'],
+			['unrecorded-lock', 'unknown'],
+		])
+	})
+
 	test('revalidates stable asset names after a deployment', () => {
 		const response = staticAssetResponse('app', { 'x-content-type-options': 'nosniff' }, 'text/html; charset=utf-8')
 		expect(response.headers.get('cache-control')).toBe('no-cache')
