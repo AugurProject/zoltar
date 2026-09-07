@@ -67,8 +67,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_286,
-			'The reviewed runtime includes the two narrowly scoped atomic REP authorization deposit entrypoints and permits no further growth.',
+			24_304,
+			'The reviewed runtime includes exact selector routing for the two atomic REP authorization deposit entrypoints so internal delegate mutations stay unreachable, and permits no further growth.',
 		),
 		runtimeBudget(
 			{
@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_119,
-			'The factory embeds the reviewed, question-bound atomic-authorization EscalationGame creation code and permits no further growth.',
+			46_137,
+			'The factory embeds the reviewed, question-bound EscalationGame with exact authorization-selector routing and permits no further growth.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
