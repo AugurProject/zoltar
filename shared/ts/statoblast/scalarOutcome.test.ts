@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from './scalarOutcome'
-import { combineScalarParityOutcomeIndex, getScalarParityQuestion, SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES } from './testing/scalarOutcomeParityFixtures'
+import { combineScalarParityOutcomeIndex, getScalarParityQuestion, SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES } from '../testing/scalarOutcomeParityFixtures'
 
 describe('shared scalar outcome codec', () => {
 	for (const fixture of SCALAR_PARITY_LABEL_FIXTURES) {

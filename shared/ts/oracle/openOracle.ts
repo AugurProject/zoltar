@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, bytesToHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from './ethereum.js'
+import { bigintToSafeNumber, bytesToHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from '../evm/ethereum.js'
 
 export const OPEN_ORACLE_FLAG_TIME_TYPE = 1n << 0n
 export const OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1n << 1n

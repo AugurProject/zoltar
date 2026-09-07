@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createZoltarAddressHelpers } from './deploymentAddresses.js'
-import { encodeDeployData, getCreate2Address, toHex, type Address, type Hex } from './ethereum.js'
+import { encodeDeployData, getCreate2Address, toHex, type Address, type Hex } from '../evm/ethereum.js'
 
 const PROXY_DEPLOYER_ADDRESS = '0x7a0d94f55792c434d74a40883c6ed8545e406d12' satisfies Address
 const ZERO_SALT = toHex(0, { size: 32 })

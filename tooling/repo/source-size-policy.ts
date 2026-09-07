@@ -51,7 +51,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/liquidator/src/state/operator-state.ts', 731],
 		['bots/liquidator/src/execution/liquidation-executor.ts', 614],
 	]),
-	...allowances('Runtime-neutral EVM code is scheduled for domain extraction.', [['shared/ts/ethereum.ts', 2742]]),
+	...allowances('Runtime-neutral EVM compatibility code still needs responsibility extraction.', [['shared/ts/evm/ethereum.ts', 2742]]),
 	...allowances('Existing UI workflow debt is owned by the functional or visual lanes.', [
 		['ui/statoblastDomain/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx', 987],
 		['ui/statoblastDomain/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 980],

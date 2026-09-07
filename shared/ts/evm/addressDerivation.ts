@@ -1,5 +1,5 @@
 import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from './ethereum.js'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from './oracleInitialReport.js'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../oracle/oracleInitialReport.js'
 
 type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address

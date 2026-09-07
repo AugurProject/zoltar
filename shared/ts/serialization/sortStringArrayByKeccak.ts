@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256 } from './ethereum.js'
+import { encodeAbiParameters, keccak256 } from '../evm/ethereum.js'
 
 function getStringHash(value: string) {
 	return keccak256(encodeAbiParameters([{ type: 'string' }], [value]))

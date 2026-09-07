@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, parseUnits } from './ethereum.js'
+import { getAddress, parseUnits } from '../evm/ethereum.js'
 import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from './sepoliaRepAllocations.js'
 
 describe('Sepolia REP allocations', () => {

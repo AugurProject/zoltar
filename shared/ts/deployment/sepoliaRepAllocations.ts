@@ -1,4 +1,4 @@
-import { getAddress, parseUnits, type Address } from './ethereum.js'
+import { getAddress, parseUnits, type Address } from '../evm/ethereum.js'
 
 export type SepoliaRepAllocation = {
 	readonly address: Address

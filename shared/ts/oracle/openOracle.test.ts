@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, hexToBytes, type Address, type Hex } from './ethereum.js'
+import { getAddress, hexToBytes, type Address, type Hex } from '../evm/ethereum.js'
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage } from './openOracle.js'
 
 function encodePackedUint(value: bigint, width: number) {

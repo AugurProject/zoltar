@@ -1,4 +1,4 @@
-import { getCreate2Address, getCreateAddress, type Address, type Hex } from './ethereum.js'
+import { getCreate2Address, getCreateAddress, type Address, type Hex } from '../evm/ethereum.js'
 
 type LibraryReplacement = {
 	address: Address
