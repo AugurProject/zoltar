@@ -1,27 +1,38 @@
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { projectDependencyClosure, projects } from '../repo/projects.ts'
 
 export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
 export type UiPackageId = 'coreShared' | 'zoltarDomain' | 'statoblastDomain' | 'tradingDomain' | UiAppId
 
-const UI_PACKAGE_DIRECTORY_BY_ID: Readonly<Record<UiPackageId, string>> = {
-	coreShared: 'coreShared',
-	statoblast: 'statoblast',
-	statoblastDomain: 'statoblastDomain',
-	trading: 'trading',
-	tradingDomain: 'tradingDomain',
-	zoltar: 'zoltar',
-	zoltarDomain: 'zoltarDomain',
+const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
+	coreShared: 'ui-core',
+	statoblast: 'ui-statoblast',
+	statoblastDomain: 'ui-statoblast-domain',
+	trading: 'ui-trading',
+	tradingDomain: 'ui-trading-domain',
+	zoltar: 'ui-zoltar',
+	zoltarDomain: 'ui-zoltar-domain',
+}
+
+const UI_PACKAGE_ID_BY_PROJECT_ID = new Map(Object.entries(UI_PROJECT_ID_BY_PACKAGE_ID).map(([packageId, projectId]) => [projectId, packageId as UiPackageId]))
+
+function getUiProject(packageId: UiPackageId) {
+	const projectId = UI_PROJECT_ID_BY_PACKAGE_ID[packageId]
+	const project = projects.find(candidate => candidate.id === projectId)
+	if (project === undefined) throw new Error(`UI package ${packageId} is missing canonical project ${projectId}`)
+	return project
 }
 
 export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] {
-	if (appId === 'trading') return ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'trading']
-	return appId === 'statoblast' ? ['coreShared', 'zoltarDomain', 'statoblastDomain', 'statoblast'] : ['coreShared', 'zoltarDomain', 'zoltar']
+	return projectDependencyClosure([UI_PROJECT_ID_BY_PACKAGE_ID[appId]])
+		.map(project => UI_PACKAGE_ID_BY_PROJECT_ID.get(project.id))
+		.filter((packageId): packageId is UiPackageId => packageId !== undefined)
 }
 
-export const getUiPackageRoot = (uiRoot: string, packageId: UiPackageId) => path.join(uiRoot, UI_PACKAGE_DIRECTORY_BY_ID[packageId])
+export const getUiPackageRoot = (uiRoot: string, packageId: UiPackageId) => path.resolve(uiRoot, '..', getUiProject(packageId).path)
 
 export function isUiAppId(candidate: string): candidate is UiAppId {
 	return (UI_APP_IDS as readonly string[]).includes(candidate)

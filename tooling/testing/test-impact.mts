@@ -110,7 +110,7 @@ function directTestCommand(filePath: string) {
 function specializedTestCommand(filePath: string, options: SpecializedTestOptions) {
 	const directCommand = directTestCommand(filePath)
 	if (directCommand === undefined) return undefined
-	const prerequisites = 'bun run ensure-contract-artifacts && bun run check:shared-dependencies'
+	const prerequisites = 'bun run ensure-contract-artifacts'
 	const flags = [`--timeout ${options.timeout.toString()}`, ...(options.testNamePattern === undefined ? [] : [`--test-name-pattern ${options.testNamePattern}`])].join(' ')
 	const commandWithoutTimeout = directCommand.replace(/ --timeout \d+/, '')
 	const commandWithOptions = commandWithoutTimeout.replace(/ ([^ ]+)$/, ` ${flags} $1`)

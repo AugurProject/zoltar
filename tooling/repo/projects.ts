@@ -82,7 +82,7 @@ export const projects: readonly Project[] = [
 			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
 			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**']),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
-			knip: rootTask(['bun', 'x', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
+			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
 		},
 		generatedDirectories: [],

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import { createProjectTaskPlan } from '../repo/run-project-tasks.mts'
 import { projectsInTaskGroup } from '../repo/projects.ts'
+import { getAppBuildCommands } from './apps.mts'
 import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
 
 type PackageJson = {
@@ -23,12 +24,25 @@ describe('UI build dependency direction', () => {
 		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 
-	test('app serve/watch scripts build the full DAG before starting', () => {
+	test('targeted application preparation compiles each dependency once and builds only requested workers', () => {
+		const commands = getAppBuildCommands(['zoltar', 'statoblast', 'trading'])
+		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarDomain', 'zoltar', 'statoblastDomain', 'statoblast', 'tradingDomain', 'trading'].map(packageId => `ui/${packageId}/tsconfig.json`))
+		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
+			['./tooling/ui/vendor.mts', 'zoltar'],
+			['./tooling/ui/vendor.mts', 'statoblast'],
+			['./tooling/ui/vendor.mts', 'trading'],
+		])
+		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual(['zoltar', 'statoblast', 'trading'])
+		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(1)
+	})
+
+	test('app serve/watch scripts prepare only the selected application before starting', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		for (const name of ['app:serve:zoltar', 'app:serve:statoblast', 'app:serve:trading', 'app:watch:zoltar', 'app:watch:statoblast', 'app:watch:trading']) {
-			const script = scripts[name]
-			if (script === undefined) throw new Error(`${name} script is missing`)
-			expect(script.startsWith('bun run app:build')).toBe(true)
+		for (const app of ['zoltar', 'statoblast', 'trading'] as const) {
+			for (const mode of ['serve', 'watch']) expect(scripts[`app:${mode}:${app}`]).toStartWith(`bun ./tooling/ui/apps.mts ${app} && `)
+			const commands = getAppBuildCommands([app])
+			expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(getUiAppDependencyOrder(app).map(packageId => `ui/${packageId}/tsconfig.json`))
+			expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true)).toEqual([['./tooling/ui/workers.mts', app, '--artifacts-current']])
 		}
 		const appBuild = scripts['app:build']
 		if (appBuild === undefined) throw new Error('app:build script is missing')

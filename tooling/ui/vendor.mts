@@ -35,22 +35,22 @@ function getVendorOutputPath() {
 	return path.join(getUiAppPaths(parseUiAppIdFromProcess('vendor build')).appRoot, 'vendor')
 }
 
-type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
+type Dependency = { packageName: string; mainEntrypointFile: string }
 const dependencyPaths: Dependency[] = [
-	{ packageName: 'preact', subfolderToVendor: 'dist', mainEntrypointFile: 'preact.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/jsx-runtime', subfolderToVendor: 'dist', mainEntrypointFile: 'jsxRuntime.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/hooks', subfolderToVendor: 'dist', mainEntrypointFile: 'hooks.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/compat', subfolderToVendor: 'dist', mainEntrypointFile: 'compat.module.js', alternateEntrypoints: {} },
-	{ packageName: '@preact/signals', subfolderToVendor: 'dist', mainEntrypointFile: 'signals.module.js', alternateEntrypoints: {} },
-	{ packageName: '@preact/signals-core', subfolderToVendor: 'dist', mainEntrypointFile: 'signals-core.module.js', alternateEntrypoints: {} },
-	{ packageName: 'abitype', subfolderToVendor: 'dist/esm', mainEntrypointFile: 'exports/index.js', alternateEntrypoints: {} },
-	{ packageName: '@noble/hashes', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: { webcrypto: 'webcrypto.js', sha3: 'sha3.js', utils: 'utils.js', _assert: 'utils.js', sha256: 'sha2.js', sha512: 'sha2.js', pbkdf2: 'pbkdf2.js', hmac: 'hmac.js', ripemd160: 'legacy.js' } },
-	{ packageName: '@noble/curves', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', p256: 'nist.js', p384: 'nist.js', p521: 'nist.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'utils.js', utils: 'utils.js' } },
-	{ packageName: '@scure/base', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js', alternateEntrypoints: {} },
-	{ packageName: 'micro-eth-signer', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'micro-packed', subfolderToVendor: '', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
+	{ packageName: 'preact', mainEntrypointFile: 'preact.module.js' },
+	{ packageName: 'preact/jsx-runtime', mainEntrypointFile: 'jsxRuntime.module.js' },
+	{ packageName: 'preact/hooks', mainEntrypointFile: 'hooks.module.js' },
+	{ packageName: 'preact/compat', mainEntrypointFile: 'compat.module.js' },
+	{ packageName: '@preact/signals', mainEntrypointFile: 'signals.module.js' },
+	{ packageName: '@preact/signals-core', mainEntrypointFile: 'signals-core.module.js' },
+	{ packageName: 'abitype', mainEntrypointFile: 'exports/index.js' },
+	{ packageName: '@noble/hashes', mainEntrypointFile: 'index.js' },
+	{ packageName: '@noble/curves', mainEntrypointFile: 'index.js' },
+	{ packageName: '@scure/base', mainEntrypointFile: 'index.js' },
+	{ packageName: 'isows', mainEntrypointFile: 'native.js' },
+	{ packageName: 'micro-eth-signer', mainEntrypointFile: 'index.js' },
+	{ packageName: 'micro-packed', mainEntrypointFile: 'index.js' },
+	{ packageName: 'ox', mainEntrypointFile: 'index.js' },
 ]
 
 async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
@@ -65,14 +65,14 @@ async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
 		if (fileType === 'directory') return true
 		return false
 	}
-	for (const { packageName, packageToVendor, mainEntrypointFile } of dependencyPaths) {
+	for (const { packageName, mainEntrypointFile } of dependencyPaths) {
 		const resolvedEntrypointPath = resolveBundlerSpecifierPath(packageName)
 		let sourceDirectoryPath = path.dirname(resolvedEntrypointPath)
 		const mainEntrypointSegments = mainEntrypointFile.split('/').length
 		for (let segmentIndex = 1; segmentIndex < mainEntrypointSegments; segmentIndex++) {
 			sourceDirectoryPath = path.dirname(sourceDirectoryPath)
 		}
-		const destinationDirectoryPath = path.join(vendorOutputPath, packageToVendor || packageName)
+		const destinationDirectoryPath = path.join(vendorOutputPath, packageName)
 		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate, rewriteSourceMapSourcePath.bind(undefined, packageName))
 	}
 }

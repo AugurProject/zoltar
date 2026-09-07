@@ -272,10 +272,10 @@ contract Zoltar {
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
-		splitRepInternal(universeId, amountAttoRep, msg.sender, outcomeIndexes);
+		splitRepInternal(universeId, amountAttoRep, outcomeIndexes);
 	}
 
-	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, address recipient, uint256[] memory outcomeIndexes) private {
+	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
 		// Fork migration intentionally duplicates the holder's migration balance across the
 		// selected child universes. For example, splitting 1 parent-universe REP into the
@@ -291,8 +291,8 @@ contract Zoltar {
 			migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] +=
 				amountAttoRep;
 			require(migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] <= migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, 'Cannot migrate more than internal balance: requested child REP exceeds sender migration REP');
-			universes[childUniverseId].reputationToken.mint(recipient, amountAttoRep);
-			emit MigrationRepSplit(msg.sender, recipient, universeId, outcomeIndex, childUniverseId, amountAttoRep, migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]);
+			universes[childUniverseId].reputationToken.mint(msg.sender, amountAttoRep);
+			emit MigrationRepSplit(msg.sender, msg.sender, universeId, outcomeIndex, childUniverseId, amountAttoRep, migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]);
 		}
 	}
 
