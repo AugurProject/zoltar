@@ -256,7 +256,7 @@ export const projects: readonly Project[] = [
 		id: 'chaos',
 		path: 'bots/chaos',
 		type: 'bot',
-		dependencies: ['bot-shared', 'contracts'],
+		dependencies: ['shared', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
@@ -291,7 +291,7 @@ export const projects: readonly Project[] = [
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['bot-shared', 'contracts'],
+		dependencies: ['shared', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
