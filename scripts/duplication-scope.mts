@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
 
-const excludedSegments = new Set(['node_modules', 'vendor', 'vendored', 'generated', 'artifacts', 'dist', 'js', 'coverage', '.git'])
+const excludedSegments = new Set(['node_modules', 'vendor', 'vendored', 'generated', 'artifacts', 'dist', 'js', '.git'])
 
 export function isDuplicationSource(path: string) {
-	return /\.(?:[cm]?ts|tsx)$/.test(path) && !/\.generated\.[cm]?tsx?$/.test(path) && !/(?:^|\/)(?:contractArtifact|abis)\.ts$/.test(path) && !path.split('/').some(segment => excludedSegments.has(segment))
+	return !/^(?:(?:solidity|augurScan|bots\/[^/]+)\/)?coverage\//.test(path) && /\.(?:[cm]?ts|tsx)$/.test(path) && !/\.generated\.[cm]?tsx?$/.test(path) && !/(?:^|\/)(?:contractArtifact|abis)\.ts$/.test(path) && !path.split('/').some(segment => excludedSegments.has(segment))
 }
 
 export function isDuplicationTest(path: string) {

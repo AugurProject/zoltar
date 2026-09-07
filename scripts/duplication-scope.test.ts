@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { duplicationSourcePaths, isDuplicationSource, isDuplicationTest } from './duplication-scope.mts'
 
-test('includes maintained build tooling and its tests', () => {
-	for (const path of ['ui/coreShared/build/apps.mts', 'ui/coreShared/build/productionBuild.test.ts', 'ui/trading/build/core-deployments.mts']) {
+test('includes maintained build and coverage tooling and its tests', () => {
+	for (const path of ['ui/coreShared/build/apps.mts', 'ui/coreShared/build/productionBuild.test.ts', 'ui/trading/build/core-deployments.mts', 'solidity/ts/coverage/reporter.ts']) {
 		expect(isDuplicationSource(path)).toBe(true)
 	}
 })
@@ -25,6 +25,8 @@ test('excludes dependencies, generated artifacts, vendored files and compiled ou
 		'shared/js/index.js',
 		'solidity/artifacts/index.ts',
 		'coverage/report.ts',
+		'solidity/coverage/report.ts',
+		'bots/chaos/coverage/report.ts',
 		'.git/example.ts',
 		'ui/coreShared/build/apps.js',
 	]) {
