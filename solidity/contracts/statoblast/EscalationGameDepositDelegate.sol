@@ -32,6 +32,7 @@ interface IEscalationGameDepositContext {
 
 interface IEscalationGameSecurityPoolContext {
 	function escalationGame() external view returns (address);
+	function questionId() external view returns (uint256);
 	function securityPoolForker() external view returns (address);
 	function systemState() external view returns (SystemState);
 	function universeId() external view returns (uint248);
@@ -77,7 +78,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
-		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), outcome, maximumDepositAttoRep, depositedAttoRep));
+		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
 		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
 		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
