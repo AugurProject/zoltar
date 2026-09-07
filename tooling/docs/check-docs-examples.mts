@@ -13,9 +13,9 @@ import {
 	calculateForkThresholdSeries,
 	calculateResolutionModel,
 	ESCALATION_TIME_LENGTH_SECONDS,
-} from '../docs/charts/chartModels'
-import { getWinningEscalationDepositClaimAmount } from '../shared/ts/escalationMath'
-import { centeredDiagramScrollLeft, updateDiagramControl } from '../docs/charts/diagramControl'
+} from '../../docs/charts/chartModels'
+import { getWinningEscalationDepositClaimAmount } from '../../shared/ts/escalationMath'
+import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 type InteractiveExampleHarness = {

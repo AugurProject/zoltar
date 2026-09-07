@@ -4,16 +4,16 @@ import path from 'node:path'
 import { Window } from 'happy-dom'
 import ts from 'typescript'
 
-import { quantitativeChartMetadata } from '../docs/charts/chartMetadata'
-import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
-import { hasDiagramOverflow, resolveChartEnvelopeWidth } from '../docs/charts/diagramControl'
-import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from '../docs/charts/diagramGeometry'
-import { createDiagramLayouts } from '../docs/charts/diagramLayout'
-import { diagramGraphSpecs } from '../docs/charts/diagramModels'
-import type { DiagramGraphSpec, DiagramLayoutNode, DiagramLayoutPanel, DiagramLayoutSpec, DiagramNodeKind } from '../docs/charts/diagramTypes'
+import { quantitativeChartMetadata } from '../../docs/charts/chartMetadata'
+import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../../docs/charts/chartModels'
+import { hasDiagramOverflow, resolveChartEnvelopeWidth } from '../../docs/charts/diagramControl'
+import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from '../../docs/charts/diagramGeometry'
+import { createDiagramLayouts } from '../../docs/charts/diagramLayout'
+import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
+import type { DiagramGraphSpec, DiagramLayoutNode, DiagramLayoutPanel, DiagramLayoutSpec, DiagramNodeKind } from '../../docs/charts/diagramTypes'
 import { buildDocumentationChartBundle } from './documentationChartBuild.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '..')
+const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const diagramControlPath = path.join(repositoryRoot, 'docs/charts/diagramControl.ts')

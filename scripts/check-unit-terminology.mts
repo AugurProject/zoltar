@@ -55,7 +55,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/constant-product-markets.ts', /\bethReceived\b/],
 	['ui/zoltarDomain/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
 	['ui/statoblastDomain/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
-	['scripts/check-docs-reference-values.mts', /poolHeldVaultRepBackingValueAttoRep/],
+	['tooling/docs/check-docs-reference-values.mts', /poolHeldVaultRepBackingValueAttoRep/],
 ])
 
 function findUnsuffixedAtomicEthBigintIdentifier(source: string) {

@@ -1,9 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { diagramGraphSpecs } from '../docs/charts/diagramModels'
-import type { DiagramGraphNode } from '../docs/charts/diagramTypes'
-import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
+import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
+import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
+import { getMainnetProtocolConfig } from '../../shared/ts/protocolConfig'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
@@ -21,7 +21,7 @@ const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 const securityModel = await readFile('docs/reference/security-model.html', 'utf8')
 const contractInteractionReference = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))
-const contractReferenceGenerator = `${await readFile('scripts/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('scripts/contract-reference-metadata.mts', 'utf8')}`
+const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}`
 const deploymentStatus = normalizeHtmlSource(await readFile('docs/reference/deployment-status.html', 'utf8'))
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblast/EscalationGameClaimDelegate.sol', 'utf8')

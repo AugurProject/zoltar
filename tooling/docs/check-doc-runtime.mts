@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import { findStaleDocumentationRuntime } from './documentationRuntimeBuild.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '..')
+const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const sourceRoot = path.join(repositoryRoot, 'docs/runtime')
 const outputRoot = path.join(repositoryRoot, 'docs/assets/js')
 const stale = await findStaleDocumentationRuntime(sourceRoot, outputRoot)

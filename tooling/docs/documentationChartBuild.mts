@@ -1,10 +1,10 @@
 import path from 'node:path'
 
-import { quantitativeChartMetadata } from '../docs/charts/chartMetadata'
-import { createDiagramLayouts } from '../docs/charts/diagramLayout'
-import type { ChartMetadata, DiagramLayoutSpec } from '../docs/charts/diagramTypes'
+import { quantitativeChartMetadata } from '../../docs/charts/chartMetadata'
+import { createDiagramLayouts } from '../../docs/charts/diagramLayout'
+import type { ChartMetadata, DiagramLayoutSpec } from '../../docs/charts/diagramTypes'
 
-const repositoryRoot = path.resolve(import.meta.dir, '..')
+const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const virtualLayoutsModule = 'virtual:diagram-layouts'
 

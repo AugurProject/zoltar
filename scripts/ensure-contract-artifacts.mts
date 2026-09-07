@@ -25,7 +25,7 @@ const freshnessInputs = [
 	path.join(solidityRoot, 'tsconfig-compile.json'),
 	path.join(solidityRoot, 'ts', 'abi', 'abis.ts'),
 	path.join(solidityRoot, 'ts', 'compile.ts'),
-	path.join(repositoryRoot, 'ui', 'coreShared', 'build', 'projectArtifacts.mts'),
+	path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts'),
 ]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
