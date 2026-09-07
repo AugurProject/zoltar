@@ -108,8 +108,10 @@
 			"project": ["src/**/*.ts!", "tests/**/*.ts"]
 		},
 		"bots/chaos": {
-			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"]
+			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!"],
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"],
+			"ignoreBinaries": ["solcjs"],
+			"ignoreDependencies": ["solc"]
 		},
 		"bots/liquidator": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
