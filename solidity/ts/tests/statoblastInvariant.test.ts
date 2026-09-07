@@ -977,7 +977,7 @@ describe('Statoblast invariant harness', () => {
 	test.each([
 		{ path: 'external', seed: 0xe71e2a1n },
 		{ path: 'own', seed: 0x0a11f04bn },
-	] as const)('stateful $path-fork lifecycle fuzzing reaches a consistent reactivated child', async ({ path, seed }) => {
+	] as const)('LIFE-02 fixed-point: stateful $path-fork progress survives forced balances, empty auctions, and repeated calls', async ({ path, seed }) => {
 		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const capacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep)
@@ -997,11 +997,18 @@ describe('Statoblast invariant harness', () => {
 		}
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'forking should freeze the parent pool')
 		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
+		const yesAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
+		const forcedChildSurplus = 17n
+		await mockWindow.setBalance(yesAddresses.securityPool, (await getETHBalance(client, yesAddresses.securityPool)) + forcedChildSurplus)
 
 		const migrationActions = shuffle(['invalid-shares', 'yes-shares', 'no-shares', 'rep', 'vault'] as const, seed)
 		for (const action of migrationActions) {
 			if (action === 'rep') {
 				await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
+				const childRepBalanceAfterProgress = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesAddresses.securityPool)
+				await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
+				strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesAddresses.securityPool), childRepBalanceAfterProgress, 'repeating completed REP migration must not recreate progress')
 			} else if (action === 'vault') {
 				await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
 			} else {
@@ -1012,21 +1019,15 @@ describe('Statoblast invariant harness', () => {
 			}
 		}
 
-		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const yesAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.ForkMigration, 'migrated child should remain isolated until the repair phase')
 		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
 		await startTruthAuction(client, yesAddresses.securityPool)
 
 		if ((await getSystemState(client, yesAddresses.securityPool)) === SystemState.ForkTruthAuction) {
-			const attoEthRaiseCap = await getEthRaiseCapAttoEth(client, yesAddresses.truthAuction)
-			if (attoEthRaiseCap > 0n) {
-				const parentForkData = await getSecurityPoolForkerForkData(client, context.securityPool)
-				const repAtFork = path === 'own' ? (await getOwnForkRepBuckets(client, context.securityPool)).vaultRepAtForkAttoRep : parentForkData.auctionableAttoRepAtFork
-				await participateAuction(createClient(3), yesAddresses.truthAuction, repAtFork / 4n, attoEthRaiseCap)
-			}
+			strictEqualTypeSafe(await getEthRaisedAttoEth(client, yesAddresses.truthAuction), 0n, 'the empty auction collection should start with no bids')
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalizeTruthAuction(client, yesAddresses.securityPool)
+			strictEqualTypeSafe(await getEthRaisedAttoEth(client, yesAddresses.truthAuction), 0n, 'zero-demand finalization must not invent auction proceeds')
 		}
 
 		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.Operational, 'settled child should reactivate after randomized migration ordering')
@@ -1049,6 +1050,8 @@ describe('Statoblast invariant harness', () => {
 			await assert.rejects(createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n))
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool), supplyBeforeReactivatedMint, 'resolved own-fork child should reactivate without reopening complete-set minting')
 		}
+		const accountedChildEth = (await getSettlementCollateralAttoEth(client, yesAddresses.securityPool)) + (await getTotalAccruedFees(client, yesAddresses.securityPool))
+		strictEqualTypeSafe((await getETHBalance(client, yesAddresses.securityPool)) - accountedChildEth, forcedChildSurplus, 'the complete fixed point should preserve unsolicited ETH outside tracked collateral and fees')
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'reactivating a child must not reopen the parent')
 	})
 
