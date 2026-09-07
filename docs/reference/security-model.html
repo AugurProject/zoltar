@@ -67,7 +67,7 @@
 						<h3>Required actions remain worth their operating costs</h3>
 						<p>For each time-sensitive action, transaction fees, opportunity cost, coordination cost, and capital lockup remain small enough relative to the value protected or earned.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An action can be technically executable but economically abandoned before its deadline.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction gas bounds</a>, <a href="./open-oracle.html#parameters">oracle gas parameters</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">escalation deployment costs</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">Truth Auction lifecycle</a>, <a href="./open-oracle.html#parameters">oracle gas parameters</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game lifecycle</a>.</p>
 					</li>
 					<li id="assumption-a03" value="3" data-assumption="A03">
 						<h3>Each economic role has enough independent participants</h3>
@@ -163,13 +163,13 @@
 							<p class="equation-note">When several branches remain plausibly truthful, document the value split instead of assuming one winner.</p>
 						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Coordination on a false branch, or durable fragmentation across branches, defeats the value-concentration security argument.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">Zoltar security</a> and <a href="../explanation/statoblast.html#forks-migration">child outcome resolution</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">branch non-guarantees</a> and <a href="../explanation/statoblast.html#forks-migration">pool fork migration</a>.</p>
 					</li>
 					<li id="assumption-a10" value="10" data-assumption="A10">
 						<h3>Participants can access timely outcome evidence</h3>
 						<p>Users can obtain enough reliable real-world evidence before the relevant protocol deadline to judge which universe is truthful.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Missing, delayed, or conflicting evidence can split honest capital or let a false local outcome become final.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#questions">question encoding</a>, <a href="../explanation/zoltar.html#encodings">invalid outcomes</a>, and <a href="../explanation/statoblast.html#forks-migration">child resolution</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#questions">question encoding</a>, <a href="../explanation/zoltar.html#encodings">invalid outcomes</a>, and <a href="../explanation/statoblast.html#local-resolution">local resolution</a>.</p>
 					</li>
 					<li id="assumption-a11" value="11" data-assumption="A11">
 						<h3>Migration is operationally practical</h3>
@@ -211,7 +211,7 @@
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
 						<p class="assumption-links">
 							Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a
-							>, <a href="../explanation/zoltar.html#questions">question identity</a>, and <a href="../explanation/statoblast.html#fees-capacity-liquidations">pool selection</a>.
+							> and <a href="../explanation/zoltar.html#questions">question identity</a>.
 						</p>
 					</li>
 				</ol>
@@ -298,7 +298,7 @@
 						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
 						<p>Ethereum continues to provide correct EVM execution and atomic rollback, sufficient canonical finality, usable timestamp and <code>block.basefee</code> semantics, and block gas limits and gas schedules under which every mandatory immutable transition remains executable.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Deep reorganizations, invalid state execution, adversarial time behavior, or gas repricing can reverse accepted state or strand required transitions.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts.html">reorg handling</a>, <a href="./invariants.html#lifecycle">atomicity and deadlines</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">bytecode and gas bounds</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts.html">contract interactions</a>, <a href="./invariants.html#lifecycle">atomicity and deadlines</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game lifecycle</a>.</p>
 					</li>
 					<li id="assumption-a27" value="27" data-assumption="A27">
 						<h3>Ethereum cryptographic primitives remain secure</h3>
