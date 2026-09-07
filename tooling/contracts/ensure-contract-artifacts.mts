@@ -4,10 +4,10 @@ import * as url from 'node:url'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
-import { sharedBrowserArtifactRelativePaths } from '../tooling/ui/sharedBrowserArtifacts.ts'
+import { sharedBrowserArtifactRelativePaths } from '../ui/sharedBrowserArtifacts.ts'
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRoot = path.join(scriptDirectory, '..')
+const repositoryRoot = path.join(scriptDirectory, '..', '..')
 
 const solidityRoot = path.join(repositoryRoot, 'solidity')
 const contractsRoot = path.join(solidityRoot, 'contracts')

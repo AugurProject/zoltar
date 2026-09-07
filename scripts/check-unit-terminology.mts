@@ -5,7 +5,7 @@ if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repos
 
 const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
-const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'scripts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
+const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'tooling/contracts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
 const legacyTerminology =
 	/pool[ -]?ownership|poolOwnership|unpaidEthFees|feesOwedToVaults|completeSetCollateral|cashToShares|sharesToCash|nanoEth|nanoETH|pool-level REP|selectedVaultAddress|ChildPoolRepSwept|poolRepAtForkAttoRep|poolRepAmountAttoRep|resultingChildPoolRepBalanceAttoRep|\bwei\b|seiz(?:e|ed|ing)[^\n]{0,24}REP/i

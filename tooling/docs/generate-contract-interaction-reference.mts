@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { keccak256 } from '../../shared/ts/ethereum'
 import { renderReferencePage } from './docs-html-page.mts'
-import { ensureContractArtifactsAreCurrent } from '../../scripts/ensure-contract-artifacts.mts'
+import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
 import {
 	assemblyDelegateCalls,
 	type AssemblyDelegateCall,

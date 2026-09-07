@@ -170,9 +170,9 @@ describe('split UI workflow paths', () => {
 		}
 		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
 		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
-		expect(deployWorkflow).toContain('bun ./scripts/ensure-contract-artifacts.mts --headless')
-		expect(deployWorkflow).toContain('bun ./scripts/run-deploy-testnet.mts --help')
-		expect(deployWorkflow).not.toContain('bun ./scripts/deploy-testnet.mts --help')
+		expect(deployWorkflow).toContain('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless')
+		expect(deployWorkflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
+		expect(deployWorkflow).not.toContain('bun ./tooling/contracts/deploy-testnet.mts --help')
 	})
 
 	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {

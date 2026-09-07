@@ -33,6 +33,6 @@ describe('deployment manifest freshness', () => {
 	})
 
 	test('rejects a stale manifest instead of only warning', () => {
-		expect(() => assertDeploymentManifestCurrent('sepolia', 'tracked manifest\n', 'current manifest\n')).toThrow('Sepolia deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new values.')
+		expect(() => assertDeploymentManifestCurrent('sepolia', 'tracked manifest\n', 'current manifest\n')).toThrow('Sepolia deployment manifest is stale. Run bun ./tooling/contracts/check-mainnet-deployment.mts --write after confirming the new values.')
 	})
 })

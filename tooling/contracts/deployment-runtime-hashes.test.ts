@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { hexToBytes, type Hex } from '@zoltar/shared/ethereum'
-import { getDeploymentSteps } from '@zoltar/ui-statoblast-domain/protocol/deployment.ts'
-import { MAINNET_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
-import { createAnvilNodeForConnectionMode, type AnvilNode } from '../solidity/ts/testSupport/simulator/anvilNode.ts'
+import { getDeploymentSteps } from '../../ui/statoblastDomain/ts/protocol/deployment.ts'
+import { MAINNET_NETWORK_PROFILE } from '../../ui/coreShared/ts/lib/networkProfile.ts'
+import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { assertBootstrapDescendantCode, createPreparedDeploymentClient, deployTestnet, runDeploymentPlan } from './deploy-testnet.mts'
 
 const ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex

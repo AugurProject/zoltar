@@ -2,7 +2,7 @@
 	"workspaces": {
 		".": {
 			"entry": ["docs/charts/chartRuntime.ts", "solidity/ts/compile.ts", "solidity/ts/gas-costs.ts", "solidity/ts/tests/**/*.ts", "solidity/ts/fuzz/**/*.ts", "solidity/ts/types/bun-test.d.ts", "solidity/ts/types/index.d.ts"],
-			"project": ["docs/charts/**/*.ts", "scripts/uniswap-deployment.mts", "tooling/**/*.ts", "tooling/**/*.mts", "solidity/ts/**/*.ts"],
+			"project": ["docs/charts/**/*.ts", "tooling/**/*.ts", "tooling/**/*.mts", "solidity/ts/**/*.ts"],
 			"ignoreIssues": {
 				"solidity/ts/**/*.ts": ["unlisted"]
 			},

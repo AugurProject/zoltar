@@ -10,7 +10,7 @@ type SourceRange = {
 }
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(scriptDirectory, '..')
+const projectRoot = path.join(scriptDirectory, '..', '..')
 const contractsRoot = path.join(projectRoot, 'solidity', 'contracts')
 const excludedProjectPaths = new Set(['solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/WETH9.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'])
 
@@ -245,7 +245,7 @@ export async function writeSolidityFiles(files: string[]): Promise<string[]> {
 
 async function main(): Promise<void> {
 	const mode = process.argv[2]
-	if (mode !== '--check' && mode !== '--write') throw new Error('Usage: bun scripts/format-solidity-one-line.mts --check|--write')
+	if (mode !== '--check' && mode !== '--write') throw new Error('Usage: bun tooling/contracts/format-solidity-one-line.mts --check|--write')
 	const files = await collectSolidityFiles(contractsRoot)
 	const changedFiles = mode === '--write' ? await writeSolidityFiles(files) : await checkSolidityFiles(files)
 	if (mode === '--write') {

@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as url from 'node:url'
 
-const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
-const deploymentEntrypoint = path.join(repositoryRoot, 'scripts', 'deploy-testnet.mts')
+const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
+const deploymentEntrypoint = path.join(repositoryRoot, 'tooling', 'contracts', 'deploy-testnet.mts')
 const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 const uiSourceRoots: Readonly<Record<string, string>> = {
 	'@zoltar/ui-core-shared': path.join(repositoryRoot, 'ui', 'coreShared', 'ts'),

@@ -34,8 +34,8 @@ type DeploymentManifest = {
 }
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(directoryOfThisFile, '..')
-const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar', 'js', 'protocol', 'deployment.js')] as const
+const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
+const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar-domain', 'js', 'protocol', 'deployment.js')] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
 
@@ -263,7 +263,7 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 export function assertDeploymentManifestCurrent(manifestId: ManifestId, expected: string, computed: string): void {
 	if (expected === computed) return
 	const displayName = manifestId === 'mainnet' ? 'Mainnet' : 'Sepolia'
-	throw new Error(`${displayName} deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new values.`)
+	throw new Error(`${displayName} deployment manifest is stale. Run bun ./tooling/contracts/check-mainnet-deployment.mts --write after confirming the new values.`)
 }
 
 export async function assertDeploymentManifestsCurrent(): Promise<void> {

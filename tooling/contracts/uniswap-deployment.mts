@@ -1,11 +1,11 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from '@zoltar/ui-zoltar-domain/protocol/core.ts'
+import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from '../../ui/zoltarDomain/ts/protocol/core.ts'
 import type { TransactionReceipt } from '@zoltar/shared/ethereum'
-import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '@zoltar/ui-zoltar-domain/protocol/deployment.ts'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.ts'
-import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
+import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
+import type { WriteClient } from '../../ui/coreShared/ts/lib/chainBackend.ts'
 
-const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('./artifacts/uniswap-deployment.json', import.meta.url)
+const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)
 const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '4f3d8c4839675fd70102172a2c82eecee6e60d076f7709af264d733631c6efe6'
 
 export const ARACHNID_CREATE2_DEPLOYER_ADDRESS = getAddress('0x4e59b44847b379578588920ca78fbf26c0b4956c')

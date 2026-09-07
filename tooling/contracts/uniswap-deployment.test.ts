@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
-import { SEPOLIA_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
+import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/lib/networkProfile.ts'
+import type { WriteClient } from '../../ui/coreShared/ts/lib/chainBackend.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight } from './uniswap-deployment.mts'
 
 const WETH = getAddress('0x65156FD21726b8efcB627fa38c506E3f3542F601')
@@ -38,12 +38,12 @@ describe('Uniswap testnet deployment', () => {
 		expect(retryDelays).toEqual([250])
 	})
 	test('accepts the pinned deployment artifact with Windows line endings', async () => {
-		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
+		const artifact = await Bun.file(new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)).text()
 		expect(() => assertUniswapDeploymentArtifact(artifact.replaceAll('\n', '\r\n'))).not.toThrow()
 	})
 
 	test('rejects a changed deployment artifact before constructing a plan', async () => {
-		const artifact = await Bun.file(new URL('./artifacts/uniswap-deployment.json', import.meta.url)).text()
+		const artifact = await Bun.file(new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)).text()
 		const changedArtifact = artifact.replace('"uniswapV3Factory": "0x60', '"uniswapV3Factory": "0x61')
 		expect(changedArtifact).not.toBe(artifact)
 		expect(() => assertUniswapDeploymentArtifact(changedArtifact)).toThrow('Uniswap deployment artifact is stale or changed')

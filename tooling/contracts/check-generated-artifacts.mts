@@ -5,7 +5,7 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const defaultRepositoryRoot = path.join(scriptDirectory, '..')
+const defaultRepositoryRoot = path.join(scriptDirectory, '..', '..')
 
 type GitResult = {
 	status: number | null

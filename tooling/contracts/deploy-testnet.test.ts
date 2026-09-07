@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.ts'
-import { SEPOLIA_NETWORK_PROFILE } from '../ui/coreShared/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../ui/coreShared/ts/lib/chainBackend.ts'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/ui-zoltar-domain/protocol/deployment.ts'
+import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
+import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/lib/networkProfile.ts'
+import type { WriteClient } from '../../ui/coreShared/ts/lib/chainBackend.ts'
+import { PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
 import {
 	assertBootstrapDescendantCode,
 	assertConfirmedProxyCode,
@@ -157,18 +157,18 @@ describe('testnet deployment inputs', () => {
 		const workflow = await Bun.file(new URL('../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).not.toContain('cd ui/')
 		expect(workflow).not.toContain('ui:build:apps')
-		expect(workflow).toContain('bun ./scripts/run-deploy-testnet.mts --help')
+		expect(workflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
 	})
 
 	test('refreshes contract artifacts before loading the deployment script', async () => {
 		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
-		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun ./scripts/ensure-contract-artifacts.mts --headless &&')
+		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless &&')
 		expect(packageJson.scripts?.['deploy:testnet']).not.toContain('refresh:shared-dependencies')
 	})
 
 	test('runs deployment through the headless source bundler', async () => {
 		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
-		expect(packageJson.scripts?.['deploy:testnet']).toEndWith('bun ./scripts/run-deploy-testnet.mts')
+		expect(packageJson.scripts?.['deploy:testnet']).toEndWith('bun ./tooling/contracts/run-deploy-testnet.mts')
 		const implementation = await Bun.file(new URL('./deploy-testnet.mts', import.meta.url)).text()
 		expect(implementation).not.toStartWith('#!')
 		expect(implementation).not.toContain('import.meta.main')
