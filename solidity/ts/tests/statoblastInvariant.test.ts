@@ -73,7 +73,7 @@ import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/uti
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaisedAttoEth, getTotalRepPurchasedAttoRep, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -1271,6 +1271,24 @@ describe('Statoblast invariant harness', () => {
 				await assertTruthAuctionAccounting('after claim-first losing refund')
 			}
 
+			const pendingRefundAttoEth = await losingBidder.readContract({
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				address: yesSecurityPool.truthAuction,
+				functionName: 'pendingEthRefundsAttoEth',
+				args: [losingBidder.account.address],
+			})
+			strictEqualTypeSafe(pendingRefundAttoEth, losingEth, 'losing claim should credit the original ETH bid exactly once')
+			await writeContractAndWait(
+				losingBidder,
+				async () =>
+					await losingBidder.writeContract({
+						abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+						address: yesSecurityPool.truthAuction,
+						functionName: 'withdrawPendingEthRefund',
+						args: [],
+					}),
+			)
+
 			const losingBidderBalance = await getETHBalance(client, losingBidder.account.address)
 			const winningVault = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
 			const winningRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, winningVault.repBackingUnits)
@@ -1611,6 +1629,26 @@ describe('Statoblast invariant harness', () => {
 
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+		await writeContractAndWait(
+			underfundedBidder,
+			async () =>
+				await underfundedBidder.writeContract({
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					address: refundAuctionAddress,
+					functionName: 'withdrawPendingEthRefund',
+					args: [],
+				}),
+		)
+		await writeContractAndWait(
+			lowPriceBidder,
+			async () =>
+				await lowPriceBidder.writeContract({
+					abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					address: refundAuctionAddress,
+					functionName: 'withdrawPendingEthRefund',
+					args: [],
+				}),
+		)
 		strictEqualTypeSafe(auctionBalanceBeforeWithdrawals - (await getETHBalance(client, refundAuctionAddress)), refundOnlyBid + winningResult.totalRefundAttoEth, 'refund and partial-fill withdrawals should reconcile to the remaining auction ETH balance decrease')
 		await assert.rejects(withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }]), /already been claimed/i)
 	})

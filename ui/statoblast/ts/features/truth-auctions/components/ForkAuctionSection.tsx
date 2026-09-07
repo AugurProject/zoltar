@@ -4,10 +4,15 @@ import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { ImportedForkSettlementSection } from '@zoltar/ui-zoltar/features/reporting/components/ImportedForkSettlementSection.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
@@ -91,6 +96,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		onMigrateUnresolvedEscalation,
 		onMigrateVault,
 		onRefundLosingBids,
+		onWithdrawAuctionRefund,
 		onLoadReporting,
 		onReportingFormChange,
 		onStartTruthAuction,
@@ -148,6 +154,10 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
+	const [pendingEthRefundAttoEth, setPendingEthRefundAttoEth] = useState<bigint | undefined>(undefined)
+	const [loadingPendingEthRefund, setLoadingPendingEthRefund] = useState(false)
+	const [pendingEthRefundError, setPendingEthRefundError] = useState<string | undefined>(undefined)
+	const [pendingEthRefundRetryNonce, setPendingEthRefundRetryNonce] = useState(0)
 	const {
 		loadingSelectedAuctionChildPoolRecovery,
 		loadingSelectedOutcomeMigrationSeedStatus,
@@ -197,6 +207,40 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const auctionTruthAuctionStatus = selectedAuctionContext?.truthAuction
 	const auctionHasStartedAtValue = selectedAuctionContext?.truthAuctionStartedAt ?? selectedAuctionChildPool?.truthAuctionStartedAt ?? 0n
 	const hasSelectedAuctionChildPool = selectedAuctionChildPool !== undefined
+	useEffect(() => {
+		let canceled = false
+		if (accountState.address === undefined || auctionTruthAuctionAddress === undefined || auctionTruthAuctionAddress === zeroAddress) {
+			setPendingEthRefundAttoEth(undefined)
+			setLoadingPendingEthRefund(false)
+			setPendingEthRefundError(undefined)
+			return
+		}
+		setPendingEthRefundAttoEth(undefined)
+		setLoadingPendingEthRefund(true)
+		setPendingEthRefundError(undefined)
+		const client = truthAuctionReadClient ?? createConnectedReadClient()
+		void client
+			.readContract({
+				address: auctionTruthAuctionAddress,
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'pendingEthRefundsAttoEth',
+				args: [accountState.address],
+			})
+			.then(value => {
+				if (canceled) return
+				if (typeof value !== 'bigint') throw new Error('Pending refund response was not a bigint')
+				setPendingEthRefundAttoEth(value)
+			})
+			.catch(() => {
+				if (!canceled) setPendingEthRefundError(forkAuctionCopy.pendingRefundUnavailable)
+			})
+			.finally(() => {
+				if (!canceled) setLoadingPendingEthRefund(false)
+			})
+		return () => {
+			canceled = true
+		}
+	}, [accountState.address, auctionTruthAuctionAddress, forkAuctionResult?.hash, pendingEthRefundRetryNonce, selectedPoolRefreshNonce, truthAuctionReadClient])
 	const selectedAuctionContextError = selectedAuctionError
 	const optimisticTruthAuctionStartedAt =
 		forkAuctionResult?.action === 'startTruthAuction' && auctionSecurityPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, auctionSecurityPoolAddress) ? (effectiveCurrentTimestamp ?? forkAuctionDetails?.migrationEndsAt ?? selectedAuctionContext?.currentTime ?? 1n) : undefined
@@ -705,6 +749,11 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
 	})()
 	const truthAuctionStateBadgeElement = <Badge tone={truthAuctionStateBadge.tone}>{truthAuctionStateBadge.label}</Badge>
+	const pendingRefundDisplay = (() => {
+		if (loadingPendingEthRefund) return <LoadingText>{forkAuctionCopy.loadingPendingRefund}</LoadingText>
+		if (pendingEthRefundAttoEth === undefined) return commonCopy.metricUnavailablePlaceholder
+		return <CurrencyValue value={pendingEthRefundAttoEth} suffix={commonCopy.eth} />
+	})()
 	const auctionStatusMetrics: DisplayMetric[] = [
 		{ label: forkAuctionCopy.truthAuctionAddress, value: renderAddress(auctionTruthAuctionAddress) },
 		{ label: forkAuctionCopy.started, value: startedDisplay },
@@ -713,6 +762,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.clearingPrice, value: clearingPriceDisplay },
 		{ label: AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedCapacityOwnershipAttoRep} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 		{ label: forkAuctionCopy.minBidSizeAttoEth, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.maxAttoRepBeingSold, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxAttoRepBeingSold} suffix={commonCopy.rep} /> },
 	]
@@ -721,6 +771,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		{ label: forkAuctionCopy.settlementAvailable, value: settlementAvailableDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 	]
 	const auctionOutcomeSelector = (
 		<div className='form-grid fork-workflow-outcome-selector'>
@@ -747,6 +798,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				ethRaisedProgress={ethRaisedProgress}
 				maxAttoRepBeingSold={truthAuctionStatus.maxAttoRepBeingSold}
 				minBidSizeAttoEth={truthAuctionStatus.minBidSizeAttoEth}
+				pendingRefundDisplay={pendingRefundDisplay}
 				repSoldProgress={repSoldProgress}
 				startedDisplay={startedDisplay}
 				winningThresholdPriceDisplay={winningThresholdPrice === undefined ? undefined : renderTruthAuctionPriceValue(winningThresholdPrice)}
@@ -840,9 +892,47 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		pending: isSettleSelectedBidsInProgress,
 		tone: 'primary',
 	})
+	const pendingRefundWithdrawalAvailability = (() => {
+		if (loadingPendingEthRefund) return forkAuctionCopy.loadingPendingRefund
+		if (pendingEthRefundError !== undefined) return pendingEthRefundError
+		if (pendingEthRefundAttoEth === undefined || pendingEthRefundAttoEth === 0n) return forkAuctionCopy.noPendingRefund
+		return undefined
+	})()
+	const withdrawRefundAction =
+		onWithdrawAuctionRefund === undefined
+			? undefined
+			: renderStageActionButton({
+					action: 'withdrawAuctionRefund',
+					availability: createActionAvailability(pendingRefundWithdrawalAvailability),
+					forceEnabled: hasSelectedAuctionChildPool,
+					idleLabel: forkAuctionCopy.withdrawRefund,
+					onClick: () => onWithdrawAuctionRefund(auctionSecurityPoolAddress, selectedAuctionUniverseId),
+					pendingLabel: forkAuctionCopy.withdrawingRefundTruncated,
+				})
+	const withdrawRefundSection =
+		withdrawRefundAction === undefined ? undefined : (
+			<SectionBlock title={forkAuctionCopy.refundWithdrawal} variant='embedded'>
+				<p className='detail'>
+					<strong>{forkAuctionCopy.pendingRefund}: </strong>
+					{pendingRefundDisplay}
+				</p>
+				<ErrorNotice message={pendingEthRefundError} />
+				{pendingEthRefundError === undefined ? undefined : (
+					<div className='actions'>
+						<button className='secondary' disabled={loadingPendingEthRefund} onClick={() => setPendingEthRefundRetryNonce(currentNonce => currentNonce + 1)} type='button'>
+							{forkAuctionCopy.retryPendingRefund}
+						</button>
+					</div>
+				)}
+				<div className='actions'>{withdrawRefundAction}</div>
+			</SectionBlock>
+		)
 	const truthAuctionSettlementSection =
 		!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined ? undefined : (
-			<ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={settlementActionDescription} selectionSummary={settlementSelectionSummary} showRefundOnlyNotice={showRefundOnlySettlementCapacityOwnershipNotice} title={settlementActionLabel} />
+			<Fragment>
+				<ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={settlementActionDescription} selectionSummary={settlementSelectionSummary} showRefundOnlyNotice={showRefundOnlySettlementCapacityOwnershipNotice} title={settlementActionLabel} />
+				{withdrawRefundSection}
+			</Fragment>
 		)
 	const importedForkSettlementSection = (() => {
 		if (!hasImportedForkSettlementDeposits) return undefined

@@ -8,7 +8,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
-import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -20,7 +20,6 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPool_SecurityPool,
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
@@ -323,29 +322,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 		)
 		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
-	})
-
-	test('rejects an escalation baseline that could exceed the exact supply-based minimum', async () => {
-		const infra = getInfraContractAddresses()
-		const deploymentData = encodeDeployData({
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			bytecode: applyLibraries(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [
-				infra.securityPoolForker,
-				infra.zoltarQuestionData,
-				infra.escalationGameFactory,
-				infra.openOracle,
-				infra.zoltar,
-				infra.shareTokenFactory,
-				infra.uniformPriceDualCapBatchAuctionFactory,
-				infra.priceOracleManagerAndOperatorQueuerFactory,
-				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep + 1n,
-				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
-				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
-				infra.securityPoolOperationsDelegate,
-			],
-		})
-		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial deposit must be 1 REP/)
 	})
 
 	test.each([

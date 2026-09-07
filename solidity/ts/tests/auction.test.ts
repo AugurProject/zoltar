@@ -228,6 +228,25 @@ describe('Auction', () => {
 		approximatelyEqual(await getETHBalance(client, auctionAddress), 0n, tolerance, 'contract not empty')
 	}
 
+	async function getPendingEthRefund(client: WriteClient, auctionAddress: Address, bidder: Address): Promise<bigint> {
+		return await client.readContract({
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			address: auctionAddress,
+			functionName: 'pendingEthRefundsAttoEth',
+			args: [bidder],
+		})
+	}
+
+	async function withdrawPendingEthRefund(refundClient: WriteClient, auctionAddress: Address): Promise<void> {
+		if ((await getPendingEthRefund(refundClient, auctionAddress, refundClient.account.address)) === 0n) return
+		const hash = await refundClient.writeContract({
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			address: auctionAddress,
+			functionName: 'withdrawPendingEthRefund',
+		})
+		await refundClient.waitForTransactionReceipt({ hash })
+	}
+
 	async function setupStandardAuction(client: WriteClient, auctionAddress: Address, attoEthRaiseCap: bigint = DEFAULT_ETH_RAISE_CAP, maxAttoRepBeingSold: bigint = DEFAULT_MAX_REP): Promise<void> {
 		await startAuction(client, auctionAddress, attoEthRaiseCap * ATTOETH_PER_ETH, maxAttoRepBeingSold * ATTOETH_PER_ETH)
 	}
@@ -240,6 +259,7 @@ describe('Auction', () => {
 		let totalFilledAttoRep = 0n
 		let totalRefundAttoEth = 0n
 
+		const pendingRefundBefore = await getPendingEthRefund(auctionCreator, auctionAddress, userId)
 		for (const bid of bids) {
 			const amounts = await simulateWithdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
 
@@ -269,6 +289,12 @@ describe('Auction', () => {
 				totalFilledAttoRep += amounts.totalFilledAttoRep
 			}
 			await withdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
+		}
+		const pendingRefundAfter = await getPendingEthRefund(auctionCreator, auctionAddress, userId)
+		approximatelyEqual(pendingRefundAfter - pendingRefundBefore, totalRefundAttoEth, tolerance, 'settlement must credit the complete refund before withdrawal')
+		if (pendingRefundAfter > 0n) {
+			await withdrawPendingEthRefund(createWriteClient(mockWindow, BigInt(userId), 0), auctionAddress)
+			strictEqualTypeSafe(await getPendingEthRefund(auctionCreator, auctionAddress, userId), 0n, 'pull payment must clear the bidder refund credit')
 		}
 		return { totalFilledAttoRep, totalRefundAttoEth }
 	}
@@ -939,7 +965,8 @@ describe('Auction', () => {
 
 			const refundIndices = lowTicks.map(t => ({ tick: t, bidIndex: 0n }))
 			await refundLosingBids(alice, auctionAddress, refundIndices)
-
+			strictEqualTypeSafe(await getPendingEthRefund(client, auctionAddress, alice.account.address), 3n * lowBid, 'Alice refund credit')
+			await withdrawPendingEthRefund(alice, auctionAddress)
 			const aliceBalanceAfter = await getETHBalance(client, alice.account.address)
 			strictEqualTypeSafe(aliceBalanceAfter - aliceBalanceBefore, 3n * lowBid, 'Alice total refund')
 
@@ -1045,6 +1072,8 @@ describe('Auction', () => {
 			strictEqualTypeSafe(refundPreview.totalFilledAttoRep, 0n, 'below-reserve bids should allocate no REP')
 			strictEqualTypeSafe(refundPreview.totalRefundAttoEth, bidAmount, 'below-reserve bids should refund all ETH')
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: LOWEST_POSITIVE_PRICE_TICK, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingEthRefund(client, auctionAddress, alice.account.address), bidAmount, 'below-reserve refund must be credited')
+			await withdrawPendingEthRefund(alice, auctionAddress)
 			const aliceBalanceAfterWithdraw = await getETHBalance(client, alice.account.address)
 			strictEqualTypeSafe(aliceBalanceAfterWithdraw - aliceBalanceBeforeWithdraw, 0n, 'withdrawing should restore the below-reserve bidder balance')
 			await assertContractEmpty(client, auctionAddress)
@@ -1133,6 +1162,8 @@ describe('Auction', () => {
 			strictEqualTypeSafe(bobResult.totalFilledAttoRep, 0n, 'the lower below-reserve bid should receive no REP')
 			strictEqualTypeSafe(bobResult.totalRefundAttoEth, bobEth, 'the lower below-reserve bid should be refunded in full')
 			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: excludedTick, bidIndex: 0n }])
+			await withdrawPendingEthRefund(alice, auctionAddress)
+			await withdrawPendingEthRefund(bob, auctionAddress)
 
 			await assertContractEmpty(client, auctionAddress)
 		})
@@ -1583,9 +1614,13 @@ describe('Auction', () => {
 			await finalizeAndVerify(client, auctionAddress)
 
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
-			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), secondLosingBid, 'only the later losing bid should remain in the auction')
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), firstLosingBid + secondLosingBid + (winningBid - attoEthRaiseCap), 'active and credited refund liabilities should remain in the auction')
+			await withdrawPendingEthRefund(firstBidder, auctionAddress)
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), secondLosingBid + (winningBid - attoEthRaiseCap), 'later losing and partial-fill liabilities should remain after the first credit is withdrawn')
 			await withdrawBids(client, auctionAddress, secondBidder.account.address, [{ tick: losingTick, bidIndex: 1n }])
-			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), 0n, 'the later losing bid should be fully refunded')
+			await withdrawPendingEthRefund(secondBidder, auctionAddress)
+			await withdrawPendingEthRefund(client, auctionAddress)
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), 0n, 'the later losing bid credit should be fully withdrawn')
 		})
 
 		test('refund-prefix positions remain correct across repeated tick deletion and recreation', async () => {
@@ -1894,7 +1929,7 @@ describe('Auction', () => {
 				strictEqualTypeSafe(actualClearing.hitCap, modeledClearing.hitCap, `${label}: clearing cap result should match the model`)
 				strictEqualTypeSafe(actualClearing.foundTick, modeledClearing.foundTick, `${label}: clearing tick should match the model`)
 				strictEqualTypeSafe(actualClearing.accumulatedBidAttoEth, modeledClearing.accumulatedBidAttoEth, `${label}: clearing ETH should match the model`)
-				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + modeledBids.filter(bid => !bid.claimed).reduce((sum, bid) => sum + bid.amount, 0n), `${label}: auction ETH should equal active bid liabilities plus forced surplus`)
+				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + modeledBids.reduce((sum, bid) => sum + (bid.claimed ? bid.amount : bid.amount), 0n), `${label}: auction ETH should equal active bids plus unwithdrawn refund credits and forced surplus`)
 			}
 
 			await addModeledBid(bidderA, lowTick, 2n * ATTOETH_PER_ETH)
@@ -1927,19 +1962,21 @@ describe('Auction', () => {
 				strictEqualTypeSafe(bid.amount - settlement.totalRefundAttoEth + settlement.totalRefundAttoEth, bid.amount, 'each bid should partition into used ETH and refund')
 			}
 			const aggregateRefundLiability = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalRefundAttoEth, 0n)
+			const preExistingRefundLiability = (await getPendingEthRefund(client, auctionAddress, bidderA.account.address)) + (await getPendingEthRefund(client, auctionAddress, bidderB.account.address)) + (await getPendingEthRefund(client, auctionAddress, bidderC.account.address))
 			const aggregateUsedEth = simulatedSettlements.reduce((sum, entry) => sum + entry.bid.amount - entry.settlement.totalRefundAttoEth, 0n)
 			const aggregateFilledRep = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalFilledAttoRep, 0n)
 			strictEqualTypeSafe(aggregateUsedEth, await getEthRaisedAttoEth(client, auctionAddress), 'aggregate bid ETH used should equal finalized ETH raised')
 			strictEqualTypeSafe(aggregateFilledRep, await getTotalRepPurchasedAttoRep(client, auctionAddress), 'aggregate filled REP should equal finalized REP purchased')
-			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + aggregateRefundLiability, 'post-finalization ETH should equal unsettled refunds plus forced surplus')
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + preExistingRefundLiability + aggregateRefundLiability, 'post-finalization ETH should equal credited and unsettled refunds plus forced surplus')
 
-			let remainingRefundLiability = aggregateRefundLiability
-			for (const { bid, settlement } of simulatedSettlements.toReversed()) {
+			for (const { bid } of simulatedSettlements.toReversed()) {
 				await withdrawBids(client, auctionAddress, bid.bidder.account.address, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
 				bid.claimed = true
-				remainingRefundLiability -= settlement.totalRefundAttoEth
-				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + remainingRefundLiability, 'each withdrawal should reduce the auction balance by exactly its refund liability')
+				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + preExistingRefundLiability + aggregateRefundLiability, 'settlement should move ETH from bid liability to refund credit without an external call')
 			}
+			await withdrawPendingEthRefund(bidderA, auctionAddress)
+			await withdrawPendingEthRefund(bidderB, auctionAddress)
+			await withdrawPendingEthRefund(bidderC, auctionAddress)
 			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus, 'all bid liabilities should clear without consuming forced surplus')
 		})
 	})
@@ -1975,6 +2012,7 @@ describe('Auction', () => {
 			approximatelyEqual(amounts.totalRefundAttoEth, afterFinalizeAuctionEth, 1000n, 'simulated refund should match remaining contract balance')
 
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
+			await withdrawPendingEthRefund(client, auctionAddress)
 			await assertContractEmpty(client, auctionAddress)
 		})
 
@@ -2104,8 +2142,11 @@ describe('Auction', () => {
 			if (c.expectRefundToSucceed) {
 				const pre = await getETHBalance(client, refundClient.account.address)
 				await refundLosingBids(refundClient, auctionAddress, [{ tick: refundTick, bidIndex: 0n }])
+				const expectedRefund = c.refundBidder === 'alice' ? c.aliceAmount : c.bobAmount
+				strictEqualTypeSafe(await getPendingEthRefund(client, auctionAddress, refundClient.account.address), expectedRefund, 'refund must be credited before withdrawal')
+				await withdrawPendingEthRefund(refundClient, auctionAddress)
 				const post = await getETHBalance(client, refundClient.account.address)
-				approximatelyEqual(post - pre, c.refundBidder === 'alice' ? c.aliceAmount : c.bobAmount, DEFAULT_TOLERANCE, 'refund amount')
+				approximatelyEqual(post - pre, expectedRefund, DEFAULT_TOLERANCE, 'refund amount')
 			} else {
 				await assert.rejects(async () => await refundLosingBids(refundClient, auctionAddress, [{ tick: refundTick, bidIndex: 0n }]), /Binding or winning bid cannot be refunded before finalization/)
 			}
@@ -2199,7 +2240,7 @@ describe('Auction', () => {
 			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction has already been finalized/)
 		})
 
-		test('rejecting ETH bidders defer refunds without rolling back settlement while owner rejection still rolls back finalization', async () => {
+		test('settlement credits rejecting bidders without calling them while owner rejection still rolls back finalization', async () => {
 			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const rejectingReceiver = await deployRejectingEthReceiver()
 			await deployUniformPriceDualCapBatchAuction(client, rejectingReceiver)
@@ -2261,7 +2302,7 @@ describe('Auction', () => {
 				'rejected finalized refund should remain withdrawable from auction escrow',
 			)
 			assert.strictEqual(await getETHBalance(client, rejectingOwnerAuction), auctionBalanceBeforeDeferredWithdrawal, 'deferred finalized refund must remain held by the auction')
-			await assert.rejects(executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] })), /Auction failed to withdraw deferred ETH refund/)
+			await assert.rejects(executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] })), /Auction failed to withdraw credited ETH refund/)
 			await client.writeContract({
 				abi: rejectingEthReceiverArtifact.abi,
 				address: rejectingReceiver,
@@ -2395,7 +2436,43 @@ describe('Auction', () => {
 			)
 		})
 
-		test('separate rejected refunds accumulate until the bidder pulls the complete balance', async () => {
+		test('one multi-bid refund call emits one aggregate credit event', async () => {
+			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const refundReceiver = await deployRejectingEthReceiver()
+			const winningBid = 3n * ATTOETH_PER_ETH
+			const firstLosingBid = ATTOETH_PER_ETH
+			const secondLosingBid = 2n * ATTOETH_PER_ETH
+			const firstLosingTick = -10_000n
+			const secondLosingTick = -11_000n
+
+			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, 0n, winningBid)
+			await executeThroughReceiver(refundReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [firstLosingTick] }), firstLosingBid)
+			await executeThroughReceiver(refundReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [secondLosingTick] }), secondLosingBid)
+
+			const refundHash = await executeThroughReceiver(
+				refundReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [
+						[
+							{ tick: firstLosingTick, bidIndex: 0n },
+							{ tick: secondLosingTick, bidIndex: 0n },
+						],
+					],
+				}),
+			)
+			const refundEvents = (await decodeAuctionEvents(refundHash)).filter(log => log.eventName === 'EthRefundCredited')
+			assert.strictEqual(refundEvents.length, 1, 'one settlement call should emit one aggregate refund-credit event')
+			const refundEvent = ensureDefined(refundEvents[0], 'missing aggregate refund-credit event')
+			if (refundEvent.eventName !== 'EthRefundCredited') throw new Error('unexpected aggregate refund-credit event')
+			assert.strictEqual(refundEvent.args.amountAttoEth, firstLosingBid + secondLosingBid, 'the credit event should aggregate every refund processed by the call')
+			assert.strictEqual(refundEvent.args.pendingAmountAttoEth, firstLosingBid + secondLosingBid, 'the aggregate event should report the resulting bidder liability')
+		})
+
+		test('separate refund credits accumulate until the bidder pulls the complete balance', async () => {
 			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const rejectingReceiver = await deployRejectingEthReceiver()
 			const winningBid = 3n * ATTOETH_PER_ETH
@@ -2429,8 +2506,8 @@ describe('Auction', () => {
 				}),
 			)
 
-			const secondDeferredEvent = (await decodeAuctionEvents(secondRefundHash)).find(log => log.eventName === 'EthRefundDeferred')
-			if (secondDeferredEvent?.eventName !== 'EthRefundDeferred') throw new Error('missing second deferred-refund event')
+			const secondDeferredEvent = (await decodeAuctionEvents(secondRefundHash)).find(log => log.eventName === 'EthRefundCredited')
+			if (secondDeferredEvent?.eventName !== 'EthRefundCredited') throw new Error('missing second refund-credit event')
 			assert.strictEqual(secondDeferredEvent.args.amountAttoEth, secondLosingBid, 'the second event should report only the newly deferred refund')
 			assert.strictEqual(secondDeferredEvent.args.pendingAmountAttoEth, totalDeferredRefund, 'the second event should report the complete cumulative refund liability')
 			assert.strictEqual(
@@ -2441,7 +2518,7 @@ describe('Auction', () => {
 					args: [rejectingReceiver],
 				}),
 				totalDeferredRefund,
-				'separate rejected pushes must add to the existing bidder liability',
+				'separate credits must add to the existing bidder liability',
 			)
 
 			await client.writeContract({
@@ -2465,7 +2542,7 @@ describe('Auction', () => {
 			)
 		})
 
-		test('deferred-refund events remain reducer-safe when a pull callback defers another bid', async () => {
+		test('refund-credit events remain reducer-safe when a pull callback settles another bid', async () => {
 			const auctionAbi = statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const reentrantReceiver = await deployRejectingEthReceiver()
 			const winningBid = 2n * ATTOETH_PER_ETH
@@ -2496,7 +2573,7 @@ describe('Auction', () => {
 					args: [reentrantReceiver],
 				}),
 				firstLosingBid,
-				'the first rejected push should establish the replay starting balance',
+				'the first credit should establish the replay starting balance',
 			)
 
 			await client.writeContract({
@@ -2520,8 +2597,8 @@ describe('Auction', () => {
 					assert.strictEqual(log.args.amountAttoEth, reconstructedPendingRefund, 'a withdrawal event must clear the complete prior liability')
 					reconstructedPendingRefund = 0n
 				}
-				if (log.eventName === 'EthRefundDeferred') {
-					assert.strictEqual(log.args.pendingAmountAttoEth, reconstructedPendingRefund + log.args.amountAttoEth, 'a deferred-refund event must add its delta to the prior liability')
+				if (log.eventName === 'EthRefundCredited') {
+					assert.strictEqual(log.args.pendingAmountAttoEth, reconstructedPendingRefund + log.args.amountAttoEth, 'a refund-credit event must add its delta to the prior liability')
 					reconstructedPendingRefund = log.args.pendingAmountAttoEth
 				}
 			}
@@ -2532,8 +2609,8 @@ describe('Auction', () => {
 				functionName: 'pendingEthRefundsAttoEth',
 				args: [reentrantReceiver],
 			})
-			assert.strictEqual(onchainPendingRefund, secondLosingBid, 'the reentrant rejected push should remain withdrawable')
-			assert.strictEqual(reconstructedPendingRefund, onchainPendingRefund, 'ordered auction events must reconstruct the final deferred-refund liability')
+			assert.strictEqual(onchainPendingRefund, secondLosingBid, 'the reentrant refund credit should remain withdrawable')
+			assert.strictEqual(reconstructedPendingRefund, onchainPendingRefund, 'ordered auction events must reconstruct the final refund-credit liability')
 		})
 	})
 
@@ -2689,6 +2766,7 @@ describe('Auction', () => {
 				for (const bid of fairPayoutBids) {
 					await withdrawBids(client, auctionAddress, client.account.address, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
 				}
+				await withdrawPendingEthRefund(client, auctionAddress)
 			}
 
 			await assertContractEmpty(client, auctionAddress)
@@ -2739,6 +2817,8 @@ describe('Auction', () => {
 			// 3) Owner withdraws for alice (losing) -> full ETH refund
 			const aliceBalanceBefore = await getETHBalance(client, alice.account.address)
 			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingEthRefund(client, auctionAddress, alice.account.address), losingEth, 'owner settlement should credit Alice')
+			await withdrawPendingEthRefund(alice, auctionAddress)
 			const aliceBalanceAfter = await getETHBalance(client, alice.account.address)
 			strictEqualTypeSafe(aliceBalanceAfter - aliceBalanceBefore, losingEth, 'Alice should get full ETH refund')
 
@@ -2777,6 +2857,7 @@ describe('Auction', () => {
 			assert.strictEqual(amounts.totalFilledAttoRep, expectedRepPurchased, 'lowest positive-price bidder should receive no REP below reserve')
 			assert.strictEqual(amounts.totalRefundAttoEth, bidAmount, 'lowest positive-price bidder should receive a full refund below reserve')
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: lowPositiveTick, bidIndex: 0n }])
+			await withdrawPendingEthRefund(client, auctionAddress)
 			await assertContractEmpty(client, auctionAddress)
 		})
 	})

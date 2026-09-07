@@ -66,7 +66,7 @@ const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,addres
 const childRepSplitTopic = keccak256(toHex('ChildRepSplit(address,uint256,uint256,uint256)'))
 const reportSubmittedTopic = keccak256(toHex('ReportSubmitted(uint256,bytes)'))
 const reportSettledTopic = keccak256(toHex('ReportSettled(uint256)'))
-const ethRefundDeferredTopic = keccak256(toHex('EthRefundDeferred(address,uint256,uint256)'))
+const ethRefundDeferredTopic = keccak256(toHex('EthRefundCredited(address,uint256,uint256)'))
 const pendingEthRefundWithdrawnTopic = keccak256(toHex('PendingEthRefundWithdrawn(address,uint256)'))
 
 function indexedAddress(value: Address) {

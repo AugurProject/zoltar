@@ -131,6 +131,24 @@ describe('Statoblast: truth auction', () => {
 		questionId = fixture.questionId
 	})
 
+	const getPendingAuctionRefund = async (truthAuction: Address, bidder: Address) =>
+		await client.readContract({
+			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			address: truthAuction,
+			functionName: 'pendingEthRefundsAttoEth',
+			args: [bidder],
+		})
+
+	const withdrawPendingAuctionRefund = async (bidderClient: StatoblastTruthAuctionFixture['client'], truthAuction: Address) => {
+		await writeContractAndWait(bidderClient, () =>
+			bidderClient.writeContract({
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				address: truthAuction,
+				functionName: 'withdrawPendingEthRefund',
+			}),
+		)
+	}
+
 	const directAnvilRequest = async (method: string, params: readonly unknown[]) => {
 		return await mockWindow.requestRaw({ method, params })
 	}
@@ -766,6 +784,8 @@ describe('Statoblast: truth auction', () => {
 
 			const bidderBalanceBeforeRefund = await getETHBalance(client, losingBidder.account.address)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingBid, 'the non-qualifying bidder must receive a withdrawal credit')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - bidderBalanceBeforeRefund, losingBid, 'the non-qualifying bidder must recover all bid ETH after the deadline')
 		})
 
@@ -1691,6 +1711,8 @@ describe('Statoblast: truth auction', () => {
 			const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'finalized losing bidder refund credit')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 
 			const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
@@ -1703,7 +1725,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'refund-only finalized claim should not create a new vault')
 		})
 
-		test('auction participants receive settled vault REP or direct ETH refunds and can redeem purchased REP', async () => {
+		test('auction participants receive settled vault REP or credited ETH refunds and can redeem purchased REP', async () => {
 			const { yesSecurityPool, expectedEthToBuy, losingBidder, losingEth, losingTick, winningBidder, winningTick } = await setupTruthAuctionWithMixedBids(false)
 			const childRepToken = getRepTokenAddress(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
 			const childEthBeforeFinalize = await getETHBalance(client, yesSecurityPool.securityPool)
@@ -1725,6 +1747,8 @@ describe('Statoblast: truth auction', () => {
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'losing auction participant refund credit')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 
 			const winningVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
@@ -1766,6 +1790,8 @@ describe('Statoblast: truth auction', () => {
 			const winningBEthBeforeClaim = await getETHBalance(client, winningBidderB.account.address)
 			const losingEthBeforeClaim = await getETHBalance(client, losingBidder.account.address)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'multiple-participant losing-bid refund credit')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderA.account.address, [{ tick: winningTickA, bidIndex: 0n }])
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidderB.account.address, [{ tick: winningTickB, bidIndex: winningBidIndexB }])
 
@@ -1860,6 +1886,8 @@ describe('Statoblast: truth auction', () => {
 			const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'zero-REP finalized refund credit')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 
 			const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
 			const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
@@ -1957,7 +1985,7 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getTotalRepBackingUnits(client, yesSecurityPool.securityPool), auctionCap * PRICE_PRECISION, 'a rejected late deposit must not dilute the auction winner')
 		})
 
-		test('permissionless winner settlement assigns capacity once when an ETH refund is deferred', async () => {
+		test('permissionless winner settlement assigns capacity once when an ETH refund is credited', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -2091,7 +2119,7 @@ describe('Statoblast: truth auction', () => {
 			})
 			const winnerEthBeforePull = await getETHBalance(client, rejectingWinner)
 			await executeThroughReceiver(rejectingWinner, yesSecurityPool.truthAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] }))
-			strictEqualTypeSafe((await getETHBalance(client, rejectingWinner)) - winnerEthBeforePull, pendingRefund, 'the winner should receive the complete deferred refund after accepting ETH')
+			strictEqualTypeSafe((await getETHBalance(client, rejectingWinner)) - winnerEthBeforePull, pendingRefund, 'the winner should receive the complete credited refund after accepting ETH')
 			strictEqualTypeSafe(
 				await client.readContract({
 					abi: auctionAbi,
@@ -2112,6 +2140,8 @@ describe('Statoblast: truth auction', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'setup should leave the child pool in an active truth auction')
 			await settleAuctionBids(thirdParty, yesSecurityPool.securityPool, losingBidder.account.address, [], [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'pre-finalization settlement should credit the bidder')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 
 			const thirdPartyBalanceAfterSettlement = await getETHBalance(client, thirdParty.account.address)
 			const losingBidderBalanceAfterSettlement = await getETHBalance(client, losingBidder.account.address)
@@ -2143,6 +2173,8 @@ describe('Statoblast: truth auction', () => {
 			const expectedWinningRep = (winningAttoEth * PRICE_PRECISION) / tickToPrice(winningTick)
 
 			await settleAuctionBids(client, yesSecurityPool.securityPool, mixedBidder.account.address, [{ tick: winningTick, bidIndex: 0n }], [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, mixedBidder.account.address), losingEth, 'mixed settlement should credit the losing bid refund')
+			await withdrawPendingAuctionRefund(mixedBidder, yesSecurityPool.truthAuction)
 
 			const mixedBidderBalanceAfterSettlement = await getETHBalance(client, mixedBidder.account.address)
 			const mixedVaultAfterSettlement = await getSecurityVault(client, yesSecurityPool.securityPool, mixedBidder.account.address)
@@ -2175,6 +2207,8 @@ describe('Statoblast: truth auction', () => {
 			const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
 
 			await claimAuctionProceeds(thirdParty, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'permissionless settlement should credit only the bidder')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 
 			const thirdPartyBalanceAfterClaim = await getETHBalance(client, thirdParty.account.address)
 			const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
@@ -2352,6 +2386,8 @@ describe('Statoblast: truth auction', () => {
 			const { yesSecurityPool, losingBidder, losingEth, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
 			const losingBidderBalanceBeforeSettlement = await getETHBalance(client, losingBidder.account.address)
 			const settlementHash = await settleAuctionBids(client, yesSecurityPool.securityPool, losingBidder.account.address, [], [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getPendingAuctionRefund(yesSecurityPool.truthAuction, losingBidder.account.address), losingEth, 'refund-only batch settlement should credit the bidder')
+			await withdrawPendingAuctionRefund(losingBidder, yesSecurityPool.truthAuction)
 			const receipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 			const settlementLogs = receipt.logs
 				.map(log => {
@@ -2495,11 +2531,6 @@ describe('Statoblast: truth auction', () => {
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			strictEqualTypeSafe(participantVault.feeIndex, migratedVaultBeforeClaim.feeIndex, 'newly auction-funded vaults should inherit the current child-pool fee index')
-			strictEqualTypeSafe(
-				await client.readContract({ address: yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [auctionParticipant.account.address] }),
-				0n,
-				'auction claims into a new vault should not fabricate a deposit preference',
-			)
 			const [associatedRepPerCapacityBps, poolHeldRepPerCapacityBps] = await client.readContract({
 				address: yesSecurityPool.securityPool,
 				abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -2655,15 +2686,6 @@ describe('Statoblast: truth auction', () => {
 					args: [vault],
 				})
 			const auctionedBadDebtAttoEth = 2n
-			const retainedDepositPreferenceBps = 12_345n
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					address: poolAddress,
-					abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
-					functionName: 'setLastDepositTargetHealthFactorBps',
-					args: [positiveRepVault, retainedDepositPreferenceBps],
-				}),
-			)
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					address: poolAddress,
@@ -2690,16 +2712,6 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(zeroRepForward[1], 0n, 'capacity ownership')
 			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create backingUnits at the configured rate')
 			strictEqualTypeSafe(positiveRepForward[1], 3n, 'capacity ownership')
-			strictEqualTypeSafe(
-				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [positiveRepVault] }),
-				retainedDepositPreferenceBps,
-				'auction credit into an existing vault should preserve its last deposit preference',
-			)
-			strictEqualTypeSafe(
-				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [zeroRepVault] }),
-				0n,
-				'auction credit into a new vault should not fabricate a deposit preference',
-			)
 			strictEqualTypeSafe(await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [zeroRepVault] }), 1n, 'a debt-only auction position should still assign its bad-debt slice')
 			strictEqualTypeSafe(
 				await client.readContract({ address: poolAddress, abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi, functionName: 'vaultBadDebtAttoEth', args: [positiveRepVault] }),

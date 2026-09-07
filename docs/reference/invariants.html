@@ -838,7 +838,7 @@
 								<code>totalClaimableVaultFeesAttoEth</code> equals summed unpaid vault fees. In <code>Operational</code>, fee-eligible capacity ownership equals summed live vault capacity ownership plus sold truth-auction ownership awaiting claim. Uncheckpointed capacity ownership covers fee-eligible ownership not yet reconciled to the current global index, including an unclaimed auction allocation after the index advances. During <code>ForkMigration</code>, configured migrated capacity ownerships remain pending outside those pool aggregates. A <code>PoolForked</code>
 								parent retains its fork-time total and fee-eligible snapshots as individual vaults migrate. After a positive-purchase truth-auction activation, total capacity ownership equals fee-eligible capacity ownership, including the outstanding unclaimed auction allocation in both aggregates. If the auction purchases zero REP, the unmigrated remainder remains explicit unassigned capacity but stays outside fee eligibility. At finalization and after every claim, every capacity unit counted by the child belongs either to a real vault or to that nonwithdrawable unassigned position. The
 								<a href="../explanation/truth-auctions.html#clearing">auction settlement specification</a>
-								defines that zero-purchase allocation rule.
+								defines that zero-purchase allocation rule. Per-vault remainder carries make ordinary fee claims independent of checkpoint frequency and claim order. At a terminal fork, after all capacity behind the final index has been checkpointed, the only unreconciled whole-attoETH reserve is cumulative division residue: it is less than one attoETH per independently rounded fee-entitlement ledger or global fee-index denominator epoch. Here <code>N</code> counts each vault entitlement ledger, any separately checkpointed unassigned auction entitlement, and each denominator epoch whose global remainder is cleared when fee-eligible capacity changes; repeated checkpoints within the same ledger and epoch carry their remainder and do not increase <code>N</code>. The total is therefore strictly less than <code>N</code> attoETH. Because the configurable vault floor and auction settlement can create no protocol-wide small bound on <code>N</code>, the terminal recovery path is retained and releases that reserve only after <code>uncheckpointedFeeEligibleCapacityOwnershipAttoRep</code> reaches zero.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Migrating one of two vaults that each own 3 REP of capacity leaves the parent's frozen 6 REP total unchanged and records 3 REP as unassigned in the child. With purchased REP, finalization adds those 3 REP of sold ownership to fee eligibility immediately, and later claims only transfer the position to bidder vaults. With zero purchased REP, the same 3 REP remains system-owned and ineligible.</p>
 							<dl class="invariant-metadata">
@@ -2085,8 +2085,8 @@
 						<summary><code>AUC-03</code><span class="invariant-title">Single-use bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Each bid is settled or refunded at most once; claimed state is set before an external ETH refund. The best-effort push is gas-bounded, and any rejected, reverted, or gas-exhausted positive refund is moved to bidder-specific pull escrow without reverting the bid's REP or capacity ownership settlement.</div>
-							<p class="invariant-example"><strong>Example:</strong> A bidder whose refund callback reenters, rejects ETH, or consumes its complete callback budget cannot withdraw the same bid a second time or starve the remaining settlement because the bid is already marked claimed and the push is gas-bounded; deferred ETH remains available through <code>withdrawPendingEthRefund</code>.</p>
+							<div class="invariant-property">Each bid is settled at most once; claimed state is set before refundable ETH is credited to bidder-specific pull escrow. Settlement never calls recipient code. <code>withdrawPendingEthRefund</code> clears the caller's credit before its only external call, and a rejected transfer reverts the clear.</div>
+							<p class="invariant-example"><strong>Example:</strong> A reverting bidder cannot block settlement or withdraw another bidder's credit. Its own failed pull preserves the complete balance for a later authorized retry.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2292,7 +2292,7 @@
 								>. Historical insertion and refund-prefix obligations are owned by <a href="#auc-10"><code>AUC-10</code></a
 								>.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Before finalization, an independent descending-tick scan returns the same clearing result as the contract. After a winner claims, its bid is marked claimed and its refund liability leaves, while the final clearing page and result remain unchanged.</p>
+							<p class="invariant-example"><strong>Example:</strong> Before finalization, an independent descending-tick scan returns the same clearing result as the contract. After a winner settles, its bid is marked claimed and any refund moves to pull credit, while the final clearing page and result remain unchanged.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2317,10 +2317,10 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Before finalization, auction ETH equals active unrefunded bids plus aggregate <code>pendingEthRefundsAttoEth</code> and explicit surplus. After finalization, the remaining balance equals refunds still attached to unclaimed bids plus deferred <code>pendingEthRefundsAttoEth</code> and explicit surplus. Per-bid settlement partitions and aggregate REP allocation are owned by <a href="#auc-05"><code>AUC-05</code></a
+								Before finalization, auction ETH equals active unrefunded bids plus aggregate <code>pendingEthRefundsAttoEth</code> and explicit surplus. After finalization, the remaining balance equals refunds still attached to unclaimed bids plus credited <code>pendingEthRefundsAttoEth</code> and explicit surplus. Settling a refund moves value between those two liabilities without transferring ETH; only an authorized pull reduces the balance. Per-bid settlement partitions and aggregate REP allocation are owned by <a href="#auc-05"><code>AUC-05</code></a
 								>.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If a rejected pre-finalization push removes a 2 ETH losing bid from active clearing, raw ETH still equals the remaining active bids plus the 2 ETH deferred refund. After finalization, the same deferred bucket composes with unclaimed-bid refunds and any forced surplus.</p>
+							<p class="invariant-example"><strong>Example:</strong> Settling a 2 ETH losing bid removes it from active clearing and adds a 2 ETH bidder credit, leaving raw auction ETH unchanged until that bidder pulls it.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2333,8 +2333,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and deferred refunds</a>,
-										<a href="../../solidity/ts/tests/auction.test.ts">seeded and deferred-refund ETH-liability tests</a>
+										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and credited refunds</a>,
+										<a href="../../solidity/ts/tests/auction.test.ts">seeded and pull-refund ETH-liability tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -2549,7 +2549,7 @@
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd>Pool redemption, auction refund and deferred-credit, and oracle refund paths</dd>
+									<dd>Pool redemption, auction refund-credit, and oracle refund paths</dd>
 								</div>
 								<div>
 									<dt>Related external liveness boundary</dt>
