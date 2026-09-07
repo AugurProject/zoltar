@@ -187,12 +187,12 @@ describe('split UI workflow paths', () => {
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
 		const setupAction = await readFile(setupActionPath, 'utf8')
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
-			expect(setupAction).toContain(`(cd ui/${appId} && bun install --frozen-lockfile)`)
+			expect(setupAction).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
 		}
 		expect(setupAction).toContain("hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock')")
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
-		expect(dockerfile).toContain('ARG BUN_VERSION=1.3.14')
+		expect(dockerfile).toContain('ARG BUN_VERSION=1.4.2')
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}
