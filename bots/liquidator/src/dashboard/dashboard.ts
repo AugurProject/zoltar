@@ -228,23 +228,28 @@ function compactDuration(seconds: number) {
 }
 
 function renderBlockStatus(snapshot = currentSnapshot) {
+	const headerBlockStatus = element('header-block-status', HTMLParagraphElement)
 	if (snapshot?.lastScannedBlock === undefined) {
 		blockStatus.textContent = 'Block — · waiting for first observation'
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const timestamp = snapshot.lastScannedTimestamp
 	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
 		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const timestampMilliseconds = Number(timestamp) * 1_000
 	if (!Number.isSafeInteger(timestampMilliseconds)) {
 		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
 	const age = compactDuration(differenceSeconds)
 	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
+	headerBlockStatus.textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -1040,7 +1045,7 @@ function render(snapshot: Snapshot) {
 }
 
 function snapshotAttentionCount(snapshot: Snapshot) {
-	return (configurationConnected && currentConfiguration?.networkConfigured !== true ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+	return (configurationConnected && currentConfiguration?.networkConfigured !== true ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1) + (snapshot.operatorCapable === false ? 1 : 0)
 }
 
 function renderAttention(snapshot: Snapshot) {
@@ -1048,12 +1053,13 @@ function renderAttention(snapshot: Snapshot) {
 	const attentionCount = snapshotAttentionCount(snapshot)
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
+	if (attentionCount === 0) attentionBadge.removeAttribute('href')
 	let attentionTarget = '/overview'
 	if (networkSetupRequired) attentionTarget = '/settings#network-connectivity'
 	else if (snapshot.pendingTransactions.length > 0 || snapshot.pendingStagedOperations.length > 0) attentionTarget = '/operations#recovery'
 	else if (snapshot.error !== undefined) attentionTarget = '/overview#global-error'
 	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
-	attentionBadge.href = attentionTarget
+	if (attentionCount > 0) attentionBadge.href = attentionTarget
 }
 
 function setFormValue(name: string, value: string | number | boolean) {

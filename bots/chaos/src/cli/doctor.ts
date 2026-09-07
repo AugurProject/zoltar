@@ -230,7 +230,6 @@ async function defaultProbe(settings: OperatorSettings, wallet: `0x${string}`): 
 	const pool = createChaosReadPool(settings)
 	const anchor = await canonicalAnchor(settings, pool)
 	if (settings.runtime.protocolStartBlock > anchor.blockNumber) throw new Error(`Configured protocol start block ${settings.runtime.protocolStartBlock.toString()} is ahead of canonical block ${anchor.blockNumber.toString()}`)
-	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, undefined, undefined)
 	const deploymentRoots: DeploymentRoot[] = [
 		{ address: settings.deployment.openOracle, name: 'openOracle' },
 		{ address: settings.deployment.questionData, name: 'questionData' },
@@ -299,6 +298,7 @@ async function defaultProbe(settings: OperatorSettings, wallet: `0x${string}`): 
 		initialBlocksAfterRecheck,
 		recheckedBlocks,
 	)
+	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, undefined, undefined)
 	const readerResults = probedReaders.map(reader => reader.result)
 	return {
 		anchor: { blockHash: anchor.blockHash, blockNumber: anchor.blockNumber },

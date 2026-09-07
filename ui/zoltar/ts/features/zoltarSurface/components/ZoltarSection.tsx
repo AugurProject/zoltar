@@ -99,7 +99,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 										disabled={hasForked}
 										onClick={() => {
 											onZoltarForkQuestionIdChange(question.questionId)
-											onActiveViewChange('fork')
+											onActiveViewChange('universes')
 										}}
 									>
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
@@ -166,6 +166,7 @@ export function ZoltarSection({
 	onResetQuestion,
 	onZoltarForkQuestionIdChange,
 	onZoltarMigrationFormChange,
+	zoltarChildUniverseError,
 	zoltarChildUniversePendingOutcomeIndex,
 	zoltarForkActiveAction,
 	zoltarForkApproval,
@@ -207,7 +208,7 @@ export function ZoltarSection({
 					questionForm={questionForm}
 					questionResult={questionResult}
 					onCreateQuestion={onCreateQuestion}
-					onOpenForkTab={() => onActiveViewChange('fork')}
+					onOpenForkTab={() => onActiveViewChange('universes')}
 					onQuestionFormChange={onQuestionFormChange}
 					onResetQuestion={onResetQuestion}
 					onUseQuestionForFork={onZoltarForkQuestionIdChange}
@@ -233,10 +234,68 @@ export function ZoltarSection({
 	if (activeView === 'questions' || zoltarUniverseState === 'missing') return questionsView
 
 	if (activeView === 'universes') {
+		let universeActionContent
+		if (zoltarUniverse?.hasForked === true) {
+			universeActionContent = (
+				<SectionBlock title={zoltarCopy.migrateRep} variant='plain'>
+					<ZoltarMigrationSection
+						accountAddress={accountState.address}
+						isOnActiveAppChain={isOnActiveAppChain}
+						loadingZoltarForkAccess={loadingZoltarForkAccess}
+						loadingZoltarUniverse={loadingZoltarUniverse}
+						onApproveZoltarForkRep={amount => onApproveZoltarForkRep(amount)}
+						onMigrateInternalRep={onMigrateInternalRep}
+						onPrepareRepForMigration={onPrepareRepForMigration}
+						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
+						zoltarForkActiveAction={zoltarForkActiveAction}
+						zoltarForkApproval={zoltarForkApproval}
+						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
+						zoltarMigrationChildRepBalancesAttoRep={zoltarMigrationChildRepBalancesAttoRep}
+						zoltarMigrationError={zoltarMigrationError}
+						zoltarMigrationForm={zoltarMigrationForm}
+						zoltarMigrationPending={zoltarMigrationPending}
+						zoltarMigrationPreparedRepBalanceAttoRep={zoltarMigrationPreparedRepBalanceAttoRep}
+						zoltarUniverse={zoltarUniverse}
+						zoltarUniverseState={zoltarUniverseState}
+					/>
+				</SectionBlock>
+			)
+		} else if (zoltarUniverse !== undefined) {
+			universeActionContent = (
+				<SectionBlock title={zoltarCopy.forkZoltar} variant='plain'>
+					<ForkZoltarSection
+						accountAddress={accountState.address}
+						hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
+						isOnActiveAppChain={isOnActiveAppChain}
+						loadingZoltarForkAccess={loadingZoltarForkAccess}
+						loadingZoltarQuestion={loadingZoltarQuestion}
+						loadingZoltarQuestions={loadingZoltarQuestions}
+						onApproveZoltarForkRep={amount => onApproveZoltarForkRep(amount)}
+						onForkZoltar={onForkZoltar}
+						onRetryZoltarQuestion={zoltarForkQuestionId.trim() === '' ? undefined : () => void onLoadZoltarQuestion(zoltarForkQuestionId.trim())}
+						onZoltarForkQuestionIdChange={onZoltarForkQuestionIdChange}
+						zoltarForkActiveAction={zoltarForkActiveAction}
+						zoltarForkApproval={zoltarForkApproval}
+						zoltarForkError={zoltarForkError}
+						zoltarForkPending={zoltarForkPending}
+						zoltarForkQuestionId={zoltarForkQuestionId}
+						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
+						zoltarQuestionLookupError={zoltarQuestionLookupError}
+						zoltarQuestionLookupId={zoltarQuestionLookupId}
+						zoltarQuestions={zoltarQuestions}
+						zoltarUniverse={zoltarUniverse}
+						zoltarUniverseState={zoltarUniverseState}
+					/>
+				</SectionBlock>
+			)
+		}
 		return (
 			<>
 				<RouteHeader title={commonCopy.universe} />
-				<UniverseDirectorySection activeUniverseId={activeUniverseId} zoltarUniverse={zoltarUniverse} />
+				<UniverseDirectorySection activeUniverseId={activeUniverseId} accountAddress={accountState.address} isOnActiveAppChain={isOnActiveAppChain} onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex} pendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex} zoltarUniverse={zoltarUniverse} />
+				<ErrorNotice message={zoltarChildUniverseError} />
+				{universeActionContent}
 			</>
 		)
 	}

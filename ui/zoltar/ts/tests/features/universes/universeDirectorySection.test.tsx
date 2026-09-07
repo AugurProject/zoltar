@@ -45,14 +45,13 @@ describe('UniverseDirectorySection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows selection actions only for deployed non-active child universes', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { activeUniverseId: 1n, zoltarUniverse: createUniverse() }))
+	test('links deployed universe IDs and offers deployment for missing children', async () => {
+		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { activeUniverseId: 1n, accountAddress: zeroAddress, isOnActiveAppChain: true, onDeployChildUniverse: () => undefined, pendingOutcomeIndex: undefined, zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectLinks = documentQueries.getAllByRole('link', { name: 'Select' })
-		expect(selectLinks).toHaveLength(1)
-		expect(selectLinks[0]?.textContent).toBe('Select')
-		expect(selectLinks[0]?.className).toContain('button-link')
+		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
+		expect(documentQueries.getAllByRole('link').some(link => link.textContent?.includes('Universe'))).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 	})
 })

@@ -1,7 +1,6 @@
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/ethereum'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
-import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Status } from '../components/Status.js'
 import { TradingAddressValue } from '../components/TradingAddress.js'
@@ -100,7 +99,6 @@ export function TradingDeploymentSetup({
 	onWorkflowLockChange = () => undefined,
 	onWalletStateChange,
 	services = defaultServices,
-	settingsHost,
 	walletControlRequestNonce,
 }: {
 	currentConfiguration?: DeploymentConfiguration
@@ -108,7 +106,6 @@ export function TradingDeploymentSetup({
 	onWorkflowLockChange?(locked: boolean): void
 	onWalletStateChange?(state: DeploymentWalletState): void
 	services?: TradingDeploymentSetupServices
-	settingsHost?: HTMLElement
 	walletControlRequestNonce?: number
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
@@ -433,8 +430,8 @@ export function TradingDeploymentSetup({
 		}
 	}
 	const settingsPanel = (
-		<details class='deployment-settings' open={rpcOverride || undefined}>
-			<summary>Settings</summary>
+		<section class='deployment-settings' aria-labelledby='deployment-connection-title'>
+			<h2 id='deployment-connection-title'>{appCopy.deploymentConnection}</h2>
 			<div class='deployment-settings__panel'>
 				<label class='field'>
 					<span>Network</span>
@@ -461,8 +458,8 @@ export function TradingDeploymentSetup({
 					<span>RPC URL</span>
 					<input
 						type='url'
-						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
 						disabled={busy}
+						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
 						placeholder={selectedCore?.defaultRpcUrl ?? 'https://…'}
 						spellcheck={false}
 						onInput={event => {
@@ -473,15 +470,14 @@ export function TradingDeploymentSetup({
 					/>
 				</label>
 			</div>
-		</details>
+		</section>
 	)
 
 	return (
 		<main class='route' id='main-content'>
-			{settingsHost === undefined ? null : createPortal(settingsPanel, settingsHost)}
 			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} actions={standaloneWalletButton} />
 			<section class='section deployment-setup'>
-				{settingsHost === undefined ? settingsPanel : null}
+				{settingsPanel}
 				{registryError === undefined ? null : (
 					<p class='error' role='alert'>
 						{registryError}

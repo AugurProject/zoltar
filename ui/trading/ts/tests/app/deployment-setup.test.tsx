@@ -186,7 +186,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('0 / 2')
 	})
 
-	test('keeps advanced configuration closed for a hydrated normalized default RPC', async () => {
+	test('shows deployment connection fields without a second settings disclosure', async () => {
 		const canonicalRpcUrl = 'https://ethereum-sepolia-rpc.publicnode.com'
 		const canonicalCore = { ...core, defaultRpcUrl: canonicalRpcUrl }
 		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(canonicalCore, 30), `${canonicalRpcUrl}/`)
@@ -194,7 +194,8 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={configuration} onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Deploy Trading factory')
-		expect(rendered.container.querySelector<HTMLDetailsElement>('.deployment-settings')?.open).toBe(false)
+		expect(rendered.container.querySelector('.deployment-settings')?.tagName).toBe('SECTION')
+		expect(rendered.container.querySelector('.deployment-settings summary')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('Use default RPC')
 	})
 
@@ -274,8 +275,8 @@ describe('trading deployment setup', () => {
 		expect(navigationLabels[0]).toBe('Deploy')
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Deploy')
 		expect(document.title).toBe('Deploy · Statoblast trading')
-		expect(rendered.container.querySelector('.site-header .deployment-settings')).not.toBeNull()
-		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
+		expect(rendered.container.querySelector('.site-header .deployment-settings')).toBeNull()
+		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).not.toBeNull()
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.site-header .wallet-button')
 		if (walletButton === null) throw new Error('Persistent wallet button is unavailable')
 		expect(walletButton.disabled).toBe(true)
@@ -283,9 +284,7 @@ describe('trading deployment setup', () => {
 		expect(connectCount).toBe(0)
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
 		const headerWallet = rendered.container.querySelector('.site-header .wallet-button')
-		const headerSettings = rendered.container.querySelector('.site-header .deployment-settings-host')
-		if (headerWallet === null || headerSettings === null) throw new Error('Deployment header controls are unavailable')
-		expect(headerWallet.compareDocumentPosition(headerSettings) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		if (headerWallet === null) throw new Error('Deployment header wallet control is unavailable')
 	})
 
 	test('announces registry loading and clears its error while retrying', async () => {

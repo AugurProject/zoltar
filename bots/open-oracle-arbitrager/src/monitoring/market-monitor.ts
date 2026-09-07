@@ -205,6 +205,8 @@ export async function loadTokenMarkets(
 	},
 ) {
 	const snapshots: TokenMarketSnapshot[] = []
+	const factoryCode = await client.getCode({ address: parameters.factory })
+	if (factoryCode === undefined || factoryCode === '0x') throw new Error(`Configured Uniswap V3 factory ${parameters.factory} has no contract code on chain ${parameters.chainId.toString()}; verify the selected network, RPC sync, and factory address`)
 	for (const token of parameters.tokens) {
 		try {
 			const metadata = await tokenMetadata(client, token)

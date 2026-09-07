@@ -972,7 +972,9 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderBlockStatus(snapshot = latestSnapshot) {
-	setText('block-value', snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+	const value = snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`
+	setText('block-value', value)
+	setText('header-block-status', value)
 }
 
 function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
@@ -1034,7 +1036,8 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
 	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
 	attentionBadge.className = `badge attention-badge${attentionCount === 0 ? ' badge-ok' : ' badge-warning'}`
-	attentionBadge.href = networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : snapshot.lastError === undefined ? '/overview' : '/overview#notice'
+	if (attentionCount === 0) attentionBadge.removeAttribute('href')
+	else attentionBadge.href = networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice'
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())

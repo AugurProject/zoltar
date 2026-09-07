@@ -832,10 +832,8 @@
 
 .question-preview-meta-item-primary-id .identifier-value.copyable {
 	display: block;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	word-break: normal;
+	white-space: normal;
+	word-break: break-all;
 }
 
 .question-draft-preview {

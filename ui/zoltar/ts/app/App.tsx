@@ -39,7 +39,8 @@ export function App() {
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
 	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
-	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
+	const resolvedZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
+	const activeZoltarView = resolvedZoltarView === 'fork' || resolvedZoltarView === 'migrate' ? 'universes' : resolvedZoltarView
 	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
 	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
@@ -171,6 +172,9 @@ export function App() {
 		route: activeRoute,
 	})
 	useEffect(() => {
+		if (resolvedZoltarView === 'fork' || resolvedZoltarView === 'migrate') replaceZoltarView('universes')
+	}, [replaceZoltarView, resolvedZoltarView])
+	useEffect(() => {
 		if (activeRoute !== 'zoltar' || !showZoltarUniverseWarning || !activeViewRequiresUniverse) return
 		replaceZoltarView('questions')
 	}, [activeRoute, activeViewRequiresUniverse, replaceZoltarView, showZoltarUniverseWarning])
@@ -253,8 +257,6 @@ export function App() {
 				options={[
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
-					...(showZoltarUniverseWarning ? [] : [{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' as const }]),
-					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')), label: marketCopy.repMigration, value: 'migrate' as const },
 					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' as const },
 				]}
 			/>

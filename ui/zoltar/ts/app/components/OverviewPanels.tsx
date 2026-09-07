@@ -141,24 +141,7 @@ export function OverviewPanels({
 			</details>
 		)
 	})()
-	const headerDescription = (() => {
-		const forkDescription = (() => {
-			if (!universeHasForked) return undefined
-			if (universeForkTime === undefined) return appCopy.universeForkedDetail
-			return (
-				<>
-					{appCopy.zoltarForkedOn} <TimestampValue timestamp={universeForkTime} />.
-				</>
-			)
-		})()
-		if (environmentDescription === undefined) return forkDescription
-		if (forkDescription === undefined) return environmentDescription
-		return (
-			<>
-				{environmentDescription} {forkDescription}
-			</>
-		)
-	})()
+	const headerDescription = environmentDescription
 	return (
 		<section className='overview-shell'>
 			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
@@ -168,7 +151,6 @@ export function OverviewPanels({
 						<span className='environment-badge-row'>
 							{activeNetworkBadge}
 							{environmentBadge}
-							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
 					}
 					description={headerDescription}
@@ -176,8 +158,16 @@ export function OverviewPanels({
 				/>
 				{universeHasForked ? (
 					<WarningSurface role='alert' surface='flat'>
-						<strong>{appCopy.universeForkedWarningTitle}</strong>
-						<p>{appCopy.universeForkedWarningDetail}</p>
+						<p>
+							{appCopy.universeForkNoticeLead}
+							{universeForkTime === undefined ? undefined : (
+								<>
+									{' '}
+									{appCopy.forkedOnConnector} <TimestampValue timestamp={universeForkTime} />
+								</>
+							)}
+							. {appCopy.migrateRepToContinueUsingAugur}
+						</p>
 					</WarningSurface>
 				) : undefined}
 				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>

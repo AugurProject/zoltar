@@ -4,7 +4,7 @@ import * as commonCopy from '../copy/common.js'
 const DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 
 function normalizeDecimalInput(value: string) {
-	const trimmed = value.trim()
+	const trimmed = value.replaceAll(/\s/g, '')
 	if (trimmed === '') return trimmed
 	if (trimmed === '.' || trimmed === '-.') return trimmed
 	return (() => {
@@ -22,7 +22,7 @@ function hasValidDecimalPrecision(value: string, units: number) {
 }
 
 export function tryParseDecimalInput(value: string, units: number = 18) {
-	const trimmed = value.trim()
+	const trimmed = value.replaceAll(/\s/g, '')
 	if (trimmed === '') return undefined
 	const normalized = normalizeDecimalInput(trimmed)
 	if (!DECIMAL_INPUT_PATTERN.test(normalized)) return undefined

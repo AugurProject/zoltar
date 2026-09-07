@@ -2,7 +2,7 @@ const WHOLE_NUMBER_PATTERN = /^-?\d+$/
 const HEX_BIGINT_PATTERN = /^0x[0-9a-fA-F]+$/
 
 export function tryParseBigIntInput(value: string) {
-	const trimmed = value.trim()
+	const trimmed = value.replaceAll(/\s/g, '')
 	if (trimmed === '' || (!WHOLE_NUMBER_PATTERN.test(trimmed) && !HEX_BIGINT_PATTERN.test(trimmed))) return undefined
 	return BigInt(trimmed)
 }

@@ -110,7 +110,6 @@ export function App({
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
-	const [deploymentSettingsHost, setDeploymentSettingsHost] = useState<HTMLElement>()
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
 	const routeRef = useRef(route)
@@ -141,7 +140,7 @@ export function App({
 		setLiveDeploymentStatus('verified')
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
-	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
+	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus !== 'verified')
 	const displayedRoute = deploymentSetupActive ? 'deploy' : route
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
@@ -219,23 +218,13 @@ export function App({
 				onComplete={completeWalletDeployment}
 				onWorkflowLockChange={updateWorkflowLock}
 				onWalletStateChange={updateDeploymentWalletState}
-				{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
 				walletControlRequestNonce={deploymentWalletRequestNonce}
 				{...(liveConfiguration === undefined ? {} : { currentConfiguration: liveConfiguration })}
 				{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 			/>
 		)
 	else if (liveDeploymentStatus === 'unavailable')
-		content = (
-			<TradingDeploymentSetup
-				onComplete={completeWalletDeployment}
-				onWorkflowLockChange={updateWorkflowLock}
-				onWalletStateChange={updateDeploymentWalletState}
-				{...(deploymentSettingsHost === undefined ? {} : { settingsHost: deploymentSettingsHost })}
-				walletControlRequestNonce={deploymentWalletRequestNonce}
-				{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
-			/>
-		)
+		content = <TradingDeploymentSetup onComplete={completeWalletDeployment} onWorkflowLockChange={updateWorkflowLock} onWalletStateChange={updateDeploymentWalletState} walletControlRequestNonce={deploymentWalletRequestNonce} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
 	else
 		content = (
 			<LiveTrading
@@ -265,7 +254,7 @@ export function App({
 						{simulationBanner}
 						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
 							<a class='brand' href={getTradingRouteHref('#/markets')} aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-								<span class='brand__mark'>{appCopy.brandMark}</span>
+								<img class='brand__mark' src='./favicon.svg' alt='' />
 								<span>
 									<strong>{appCopy.appName}</strong>
 								</span>
@@ -310,7 +299,6 @@ export function App({
 										{deploymentWalletLabel(deploymentWalletState)}
 									</button>
 								) : null}
-								{deploymentSetupActive ? <div class='deployment-settings-host' ref={element => setDeploymentSettingsHost(element ?? undefined)} /> : null}
 								{liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
 									<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
 										{walletSummary.account === undefined ? appCopy.connectWallet : shortAddress(walletSummary.account)}

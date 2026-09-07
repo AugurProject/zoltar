@@ -218,15 +218,9 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent).toContain('Child-Universe REP Received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
-		const balanceChanges = within(document.body).getByText('Balance Changes').closest('details')
-		if (balanceChanges === null) throw new Error('Expected balance changes disclosure')
-		expect(balanceChanges.textContent).toContain('Custody REP After Split (Unchanged)')
-		expect(balanceChanges.closest('.actions')).toBeNull()
-		const migrationActions = balanceChanges.nextElementSibling
-		if (!(migrationActions instanceof HTMLElement)) throw new Error('Expected migration action row after balance changes')
-		expect(migrationActions.classList.contains('actions')).toBe(true)
-		expect(within(migrationActions).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
-		expect(within(migrationActions).getByRole('button', { name: 'Split REP' })).not.toBeNull()
+		expect(document.body.textContent).not.toContain('Balance Changes')
+		expect(within(document.body).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Split REP' })).not.toBeNull()
 	})
 
 	test('shows wallet import access only for deployed child tokens the account holds', async () => {

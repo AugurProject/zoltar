@@ -21,6 +21,26 @@
 	min-width: 0;
 }
 
+.attention-badge:not([href]) {
+	cursor: default;
+	text-decoration: none;
+}
+
+@media (min-width: 90rem) {
+	.operator-safety > .badge {
+		min-width: 7.5rem;
+		justify-content: center;
+	}
+}
+
+.header-block-status {
+	min-height: 1.2em;
+	margin: 0.2rem 0 0;
+	color: var(--operator-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 0.78rem;
+}
+
 .section-nav {
 	display: flex;
 	gap: 0.5rem;
