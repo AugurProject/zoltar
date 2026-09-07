@@ -6,12 +6,14 @@ import {
 	buildTypeScriptCoverage,
 	calculateChangedLineCoverage,
 	classifyTypeScriptSource,
+	decodeSourceMapOriginalLines,
 	evaluateCoveragePolicy,
 	mergeLcovRecords,
 	parseChangedLines,
 	parseLcov,
 	readTaskChangedLines,
 	readTrackedTypeScriptSources,
+	remapGeneratedTypeScriptLcovRecords,
 	renderMarkdown,
 	resolveCoverageBaseRef,
 	summarizeSolidityCoverage,
@@ -80,6 +82,53 @@ end_of_record
 				[2, 2],
 			]),
 		)
+	})
+
+	test('remaps generated package coverage to its tracked TypeScript source', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'coverage-source-map-'))
+		try {
+			await mkdir(join(repositoryRoot, 'shared/js'), { recursive: true })
+			await writeFile(join(repositoryRoot, 'shared/js/domain.js.map'), `${JSON.stringify({ version: 3, sources: ['../ts/domain.ts'], mappings: ';AAAA;AACA;AACA' })}\n`)
+			const generatedRecords = parseLcov(`SF:shared/js/domain.js
+DA:2,3
+DA:3,0
+DA:4,1
+LF:3
+LH:2
+FN:2,first
+FN:3,second
+FNDA:1,first
+FNDA:0,second
+FNF:2
+FNH:1
+end_of_record
+`)
+
+			const remapped = await remapGeneratedTypeScriptLcovRecords(generatedRecords, repositoryRoot)
+
+			expect(remapped.get('shared/ts/domain.ts')).toEqual({
+				file: 'shared/ts/domain.ts',
+				lineHits: new Map([
+					[1, 3],
+					[2, 0],
+					[3, 1],
+				]),
+				functions: { covered: 1, total: 2 },
+			})
+		} finally {
+			await rm(repositoryRoot, { recursive: true, force: true })
+		}
+	})
+
+	test('decodes source-map line deltas and rejects malformed VLQ data', () => {
+		expect(decodeSourceMapOriginalLines(';AAAA;AACA')).toEqual(
+			new Map([
+				[2, new Set([1])],
+				[3, new Set([2])],
+			]),
+		)
+		expect(() => decodeSourceMapOriginalLines('!')).toThrow('Invalid source-map VLQ character')
+		expect(() => decodeSourceMapOriginalLines('g')).toThrow('Unterminated source-map VLQ segment')
 	})
 
 	test('rejects malformed, duplicate, unterminated, and internally inconsistent LCOV records', () => {
