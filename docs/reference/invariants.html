@@ -2229,7 +2229,7 @@
 						<summary><code>AUC-09</code><span class="invariant-title">Bounded bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">After the auction deadline, value-free finalization succeeds using migration-routed collateral plus retained auction ETH. Qualifying bids settle for REP, non-qualifying bids refund, and nonzero finalizer ETH reverts.</div>
+							<div class="invariant-property">At and after the auction deadline, value-free finalization succeeds using migration-routed collateral plus retained auction ETH. Qualifying bids settle for REP, non-qualifying bids refund, and nonzero finalizer ETH reverts.</div>
 							<p class="invariant-example"><strong>Example:</strong> For a 10 ETH target with 6 ETH migrated and 3 ETH retained from bids, the child activates with 9 ETH of accounted collateral and every bid can then settle.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2378,6 +2378,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Once a resolution, migration, auction-completion, or withdrawal function's documented semantic preconditions hold, dust, unsolicited balances, empty collections, or earlier permissionless calls cannot permanently prevent some caller from completing it.</div>
 							<p class="invariant-example"><strong>Example:</strong> Forced ETH and an empty losing-bid list do not prevent a caller from finalizing an otherwise complete truth auction.</p>
+							<p>The stateful lifecycle audit covers empty games and collections, zero-demand auctions, unsolicited ETH, bounded partial fork continuation, repeated migrations and claims, delayed oracle operations, and recovery after failed callbacks. No remaining permanent blocker was identified in those cases.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2385,13 +2386,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<code>FORK-04</code>, <code>BAL-02</code>, and
-										<code>AUC-08</code>
+										<code>FORK-04</code>, <code>BAL-02</code>, and <code>AUC-08</code>; <a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful lifecycle regressions</a>, <a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">forced-balance and zero-demand auction regressions</a>, and
+										<a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">oracle recovery and empty-vault regressions</a>
 									</dd>
 								</div>
 							</dl>
@@ -2423,8 +2424,8 @@
 						<summary><code>LIFE-04</code><span class="invariant-title">Deadline equality rules</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Every deadline assigns equality to one documented side of the boundary: migration remains open at equality; auction bidding and public pool finalization are both closed at equality, and finalization opens immediately afterward; oracle disputes are closed and settlement is open at equality; staged operations expire only after equality; and an escalation result is final only after its end timestamp.</div>
-							<p class="invariant-example"><strong>Example:</strong> Exactly at an auction deadline, both a bid and public pool finalization revert; one second later, finalization succeeds.</p>
+							<div class="invariant-property">Every deadline assigns equality to one documented side of the boundary. A universe fork is allowed at question-end equality, while initial reporting opens one second later. Pool migration remains open at equality and auction start opens afterward. Auction bidding closes and finalization opens at equality. OpenOracle disputes close and settlement opens at equality. Cached oracle prices become stale at equality. Staged operations remain executable through equality and expire afterward. An escalation result becomes final only after its end timestamp. ERC-2612 permits include equality, while ERC-3009 authorizations use a strict validity window.</div>
+							<p class="invariant-example"><strong>Example:</strong> Exactly at an auction deadline, a bid reverts and public pool finalization succeeds; transaction ordering cannot reopen bidding.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2432,11 +2433,14 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Contract guards and boundary tests</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd>Boundary tests across fork migration, auctions, escalation, and OpenOracle</dd>
+									<dd>
+										<a href="../../solidity/ts/tests/zoltar.test.ts">question-end fork boundary</a>, <a href="../../solidity/ts/tests/statoblast/vaultAccounting.test.ts">initial-reporting boundary</a>, <a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">migration and auction boundaries</a>, <a href="../../solidity/ts/tests/escalationGame.test.ts">escalation finality boundary</a>, <a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">cached-price and staged-operation boundaries</a>, and
+										<a href="../../solidity/ts/tests/openOracleDispute.test.ts">OpenOracle dispute and settlement boundary</a>
+									</dd>
 								</div>
 							</dl>
 						</div>
@@ -2598,11 +2602,14 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Contract guards and same-block tests</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd><code>ORA-08</code> and same-block auction ordering analysis</dd>
+									<dd>
+										<code>ORA-08</code>, <a href="../../solidity/ts/tests/openOracleDispute.test.ts">same-block dispute and settlement ordering</a>, and
+										<a href="../../solidity/ts/tests/statoblast/truthAuction.test.ts">same-block migration, bidding, and finalization ordering</a>
+									</dd>
 								</div>
 							</dl>
 						</div>
