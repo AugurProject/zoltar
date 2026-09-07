@@ -34,7 +34,7 @@ test('core contract artifact preparation does not require Trading UI output', ()
 
 test('ensure-contract-artifacts reserves root-only shared refreshes for headless preparation', async () => {
 	const source = await readFile(new URL('./ensure-contract-artifacts.mts', import.meta.url), 'utf8')
-	expect(source).toContain("runBunScript(['./scripts/ensure-shared-package-fresh.mts', '--refresh']")
+	expect(source).toContain("runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh']")
 	expect(source).toContain("runBunScript(['run', 'refresh:shared-dependencies']")
 	expect(source).toContain("mode === '--headless'")
 	expect(source).toContain('prepareHeadlessContractArtifacts()')

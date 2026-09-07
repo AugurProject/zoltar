@@ -4,7 +4,7 @@ const sourceFilesResult = Bun.spawnSync(['git', 'ls-files', '--cached', '--other
 if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repository files for unit terminology validation')
 
 const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'
-const terminologyCheckPath = 'scripts/check-unit-terminology.mts'
+const terminologyCheckPath = 'tooling/repo/check-unit-terminology.mts'
 const serializedAtomicStringAllowlist = new Set(['bots/liquidator/scripts/serve-dashboard-fixture.mts', 'bots/liquidator/tests/config/settings.test.ts', 'docs/mainnet-deployment-addresses.json', 'docs/sepolia-deployment-addresses.json', 'tooling/contracts/check-mainnet-deployment.mts', 'solidity/ts/types/index.d.ts'])
 const textFilePattern = /\.(?:css|html|json|md|mts|sol|ts|tsx)$/
 const legacyTerminology =

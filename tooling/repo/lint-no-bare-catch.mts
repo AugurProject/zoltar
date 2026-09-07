@@ -11,7 +11,7 @@ type CatchFinding = {
 }
 
 const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(repositoryRoot, '..')
+const projectRoot = path.join(repositoryRoot, '..', '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
 const ignoredPathPrefixes = [
 	'.git',

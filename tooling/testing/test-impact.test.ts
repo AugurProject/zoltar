@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ChangedFileEntry } from '../../scripts/changed-files.mts'
+import type { ChangedFileEntry } from '../repo/changed-files.mts'
 import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getTestImpactRecommendations } from './test-impact.mts'
 
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)

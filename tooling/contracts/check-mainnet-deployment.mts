@@ -65,7 +65,7 @@ async function buildDeploymentRuntimeDependencies() {
 	await runRepositoryCommand(['run', 'ensure-shared-build'], 'Shared TypeScript prerequisite build')
 	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/coreShared/tsconfig.json'], 'coreShared TypeScript prerequisite build')
 	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/zoltar/tsconfig.json'], 'Zoltar TypeScript prerequisite build')
-	await runRepositoryCommand(['./scripts/install-frozen.mts', 'ui/statoblast'], 'Statoblast frozen dependency refresh')
+	await runRepositoryCommand(['./tooling/repo/install-frozen.mts', 'ui/statoblast'], 'Statoblast frozen dependency refresh')
 }
 
 export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () => Promise<boolean> = async () => (await Promise.all(deploymentRuntimeOutputPaths.map(pathExists))).every(Boolean), buildRuntimeDependencies: () => Promise<void> = buildDeploymentRuntimeDependencies) {

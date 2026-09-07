@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { validateConnectivitySettings } from '../bots/shared/src/monitoring/connectivity.ts'
+import { validateConnectivitySettings } from '../../bots/shared/src/monitoring/connectivity.ts'
 
-const testnetworkRoot = join(import.meta.dir, '..', 'testnetwork')
+const testnetworkRoot = join(import.meta.dir, '..', '..', 'testnetwork')
 const composeFile = join(testnetworkRoot, 'compose.yaml')
 const dockerfile = join(testnetworkRoot, 'Dockerfile')
 const windowsLauncher = join(testnetworkRoot, 'start.bat')
-const liquidatorComposeFile = join(import.meta.dir, '..', 'bots', 'liquidator', 'compose.yaml')
-const arbitragerComposeFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')
-const arbitragerExampleFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'config', 'operator.example.json')
+const liquidatorComposeFile = join(import.meta.dir, '..', '..', 'bots', 'liquidator', 'compose.yaml')
+const arbitragerComposeFile = join(import.meta.dir, '..', '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')
+const arbitragerExampleFile = join(import.meta.dir, '..', '..', 'bots', 'open-oracle-arbitrager', 'config', 'operator.example.json')
 
 const batchCommands = (source: string) =>
 	source

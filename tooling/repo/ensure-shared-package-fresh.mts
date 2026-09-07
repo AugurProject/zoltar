@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..')
+const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 const sharedPackagePath = path.join(repositoryRootPath, 'shared')
 const installedSharedPackagePath = path.join(process.cwd(), 'node_modules', '@zoltar', 'shared')
 const installedSharedNodeModulesPath = path.join(installedSharedPackagePath, 'node_modules')

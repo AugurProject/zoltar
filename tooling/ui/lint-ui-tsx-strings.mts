@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
-import { getChangedFiles } from '../../scripts/changed-files.mts'
+import { getChangedFiles } from '../repo/changed-files.mts'
 
 const UI_TSX_ROOTS = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'zoltar', 'statoblast', 'trading'].map(packageId => path.join('ui', packageId, 'ts'))
 const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltarDomain|statoblastDomain|tradingDomain|zoltar|statoblast|trading)\/ts\/.+\.tsx$/

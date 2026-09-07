@@ -10,7 +10,7 @@ type DirectViemImportFinding = {
 	column: number
 }
 
-const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..')
+const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
 const ignoredPathPrefixes = [
 	'.git',

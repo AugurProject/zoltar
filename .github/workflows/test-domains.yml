@@ -31,7 +31,7 @@ jobs:
       - name: TypeScript checks and production UI build
         run: |
           bun run ui:build:apps
-          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/install-frozen.mts ui/statoblast
           bun run ci:preflight:current
       - uses: actions/upload-artifact@v4
         with:
@@ -68,13 +68,13 @@ jobs:
           path: ui
       - name: Refresh split UI package installs
         run: |
-          bun ./scripts/install-frozen.mts ui/coreShared
-          bun ./scripts/install-frozen.mts ui/zoltarDomain
-          bun ./scripts/install-frozen.mts ui/statoblastDomain
-          bun ./scripts/install-frozen.mts ui/tradingDomain
-          bun ./scripts/install-frozen.mts ui/zoltar
-          bun ./scripts/install-frozen.mts ui/statoblast
-          bun ./scripts/install-frozen.mts ui/trading
+          bun ./tooling/repo/install-frozen.mts ui/coreShared
+          bun ./tooling/repo/install-frozen.mts ui/zoltarDomain
+          bun ./tooling/repo/install-frozen.mts ui/statoblastDomain
+          bun ./tooling/repo/install-frozen.mts ui/tradingDomain
+          bun ./tooling/repo/install-frozen.mts ui/zoltar
+          bun ./tooling/repo/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/install-frozen.mts ui/trading
       - uses: actions/cache/restore@v5
         with:
           path: .ci/test-timings-application.json

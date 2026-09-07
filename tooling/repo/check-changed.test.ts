@@ -14,8 +14,8 @@ test('check-changed keeps Biome-supported source files while filtering prose and
 		'ui/zoltar/ts/app/App.tsx',
 		'ui/trading/ts/app/App.tsx',
 		'ui/trading/css/app.css',
-		'scripts/check-changed.mts',
+		'tooling/repo/check-changed.mts',
 	])
 
-	expect(biomeChangedFiles).toEqual(['docs/explanation/fees.html', 'ui/zoltar/ts/app/App.tsx', 'ui/trading/ts/app/App.tsx', 'ui/trading/css/app.css', 'scripts/check-changed.mts'])
+	expect(biomeChangedFiles).toEqual(['docs/explanation/fees.html', 'ui/zoltar/ts/app/App.tsx', 'ui/trading/ts/app/App.tsx', 'ui/trading/css/app.css', 'tooling/repo/check-changed.mts'])
 })

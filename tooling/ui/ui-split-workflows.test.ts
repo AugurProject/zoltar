@@ -78,7 +78,7 @@ describe('split UI workflow paths', () => {
 			.split('\n')
 			.map(command => command.trim())
 			.filter(Boolean)
-		expect(new Set(installCommands)).toEqual(new Set(uiPackageIds.map(packageId => `bun ./scripts/install-frozen.mts ui/${packageId}`)))
+		expect(new Set(installCommands)).toEqual(new Set(uiPackageIds.map(packageId => `bun ./tooling/repo/install-frozen.mts ui/${packageId}`)))
 	})
 
 	test('CI isolates the production browser workflow', async () => {
@@ -125,7 +125,7 @@ describe('split UI workflow paths', () => {
 		expect(ciJobs).not.toHaveProperty('test-timings')
 		const domainSteps = Object.values(workflowJobs(testDomainsWorkflow)).flatMap(workflowSteps)
 		const domainCommands = domainSteps.flatMap(step => (typeof step['run'] === 'string' ? [step['run']] : []))
-		expect(domainCommands.some(command => command.includes('bun run ui:build:apps\nbun ./scripts/install-frozen.mts ui/statoblast\nbun run ci:preflight:current'))).toBe(true)
+		expect(domainCommands.some(command => command.includes('bun run ui:build:apps\nbun ./tooling/repo/install-frozen.mts ui/statoblast\nbun run ci:preflight:current'))).toBe(true)
 		expect(domainCommands).not.toContain('bun run tsc')
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=application'))).toBe(true)
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=solidity'))).toBe(true)
@@ -178,7 +178,7 @@ describe('split UI workflow paths', () => {
 	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
 		const ciWorkflow = await readFile(activeCiWorkflowPath, 'utf8')
 		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
-		const refreshIndex = ciWorkflow.indexOf('bun ./scripts/install-frozen.mts ui/statoblast', buildIndex)
+		const refreshIndex = ciWorkflow.indexOf('bun ./tooling/repo/install-frozen.mts ui/statoblast', buildIndex)
 		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current', buildIndex)
 		expect(buildIndex).toBeGreaterThan(0)
 		expect(refreshIndex).toBeGreaterThan(buildIndex)
@@ -197,7 +197,7 @@ describe('split UI workflow paths', () => {
 		for (const appId of uiPackageIds) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}
-		for (const appId of uiPackageIds) expect(dockerfile).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
+		for (const appId of uiPackageIds) expect(dockerfile).toContain(`bun ./tooling/repo/install-frozen.mts ui/${appId}`)
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
@@ -218,7 +218,7 @@ describe('split UI workflow paths', () => {
 		expect(botInstallStep).toBeGreaterThan(0)
 		expect(setupAction.slice(botInstallStep)).toContain("if: github.job == 'knip'")
 		for (const packageId of ['shared', 'chaos', 'open-oracle-arbitrager', 'liquidator']) {
-			const installIndex = setupAction.indexOf(`bun ./scripts/install-frozen.mts bots/${packageId}`, botInstallStep)
+			const installIndex = setupAction.indexOf(`bun ./tooling/repo/install-frozen.mts bots/${packageId}`, botInstallStep)
 			expect(installIndex).toBeGreaterThan(0)
 		}
 	})

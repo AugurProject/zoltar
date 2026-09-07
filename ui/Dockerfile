@@ -49,7 +49,7 @@ COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
-RUN bun ./scripts/install-frozen.mts ui/coreShared
+RUN bun ./tooling/repo/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
 # Build reusable domain packages before any dependency-leaf application.
@@ -57,24 +57,24 @@ COPY ./ui/zoltarDomain/package.json /source/ui/zoltarDomain/package.json
 COPY ./ui/zoltarDomain/bun.lock /source/ui/zoltarDomain/bun.lock
 COPY ./ui/zoltarDomain/tsconfig.json /source/ui/zoltarDomain/tsconfig.json
 COPY ./ui/zoltarDomain/ts/ /source/ui/zoltarDomain/ts/
-RUN bun ./scripts/install-frozen.mts ui/zoltarDomain && cd /source/ui/zoltarDomain && bun run build
+RUN bun ./tooling/repo/install-frozen.mts ui/zoltarDomain && cd /source/ui/zoltarDomain && bun run build
 COPY ./ui/statoblastDomain/package.json /source/ui/statoblastDomain/package.json
 COPY ./ui/statoblastDomain/bun.lock /source/ui/statoblastDomain/bun.lock
 COPY ./ui/statoblastDomain/tsconfig.json /source/ui/statoblastDomain/tsconfig.json
 COPY ./ui/statoblastDomain/ts/ /source/ui/statoblastDomain/ts/
-RUN bun ./scripts/install-frozen.mts ui/statoblastDomain && cd /source/ui/statoblastDomain && bun run build
+RUN bun ./tooling/repo/install-frozen.mts ui/statoblastDomain && cd /source/ui/statoblastDomain && bun run build
 COPY ./ui/tradingDomain/package.json /source/ui/tradingDomain/package.json
 COPY ./ui/tradingDomain/bun.lock /source/ui/tradingDomain/bun.lock
 COPY ./ui/tradingDomain/tsconfig.json /source/ui/tradingDomain/tsconfig.json
 COPY ./ui/tradingDomain/ts/ /source/ui/tradingDomain/ts/
-RUN bun ./scripts/install-frozen.mts ui/tradingDomain && cd /source/ui/tradingDomain && bun run build
+RUN bun ./tooling/repo/install-frozen.mts ui/tradingDomain && cd /source/ui/tradingDomain && bun run build
 
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
 COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
 COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/zoltar
+RUN bun ./tooling/repo/install-frozen.mts ui/zoltar
 RUN bun ./tooling/ui/vendor.mts zoltar
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
@@ -101,7 +101,7 @@ FROM common-builder AS statoblast-builder
 
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/statoblast
+RUN bun ./tooling/repo/install-frozen.mts ui/statoblast
 RUN bun ./tooling/ui/vendor.mts statoblast
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
@@ -127,7 +127,7 @@ FROM common-builder AS trading-builder
 
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/trading
+RUN bun ./tooling/repo/install-frozen.mts ui/trading
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg

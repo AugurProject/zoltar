@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { getChangedFileEntries, type ChangedFileEntry } from '../../scripts/changed-files.mts'
+import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { isTestSourceFile } from './test-discovery.mts'

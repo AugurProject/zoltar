@@ -147,7 +147,7 @@ function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: str
 
 async function main() {
 	const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-	const repositoryRoot = path.join(scriptDirectory, '..')
+	const repositoryRoot = path.join(scriptDirectory, '..', '..')
 	const agentDirectory = path.join(repositoryRoot, '.codex', 'agents')
 	const agentFileNames = (await readdir(agentDirectory)).filter(fileName => fileName.endsWith('.toml')).sort()
 	const agentSources = await Promise.all(

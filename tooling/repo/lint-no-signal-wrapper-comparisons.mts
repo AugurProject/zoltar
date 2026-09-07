@@ -10,7 +10,7 @@ type SignalComparisonFinding = {
 }
 
 const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(repositoryRoot, '..')
+const projectRoot = path.join(repositoryRoot, '..', '..')
 const formatDiagnosticsHost: ts.FormatDiagnosticsHost = {
 	getCanonicalFileName: fileName => fileName,
 	getCurrentDirectory: () => projectRoot,

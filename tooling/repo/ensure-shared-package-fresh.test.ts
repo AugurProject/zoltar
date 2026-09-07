@@ -6,7 +6,7 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..')
+const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 const sharedPackagePath = path.join(repositoryRootPath, 'shared')
 const sharedRefreshScriptPath = path.join(scriptDirectoryPath, 'ensure-shared-package-fresh.mts')
 

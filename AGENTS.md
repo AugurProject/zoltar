@@ -38,7 +38,7 @@ Use the whole task change set when choosing validation and preparing review:
 - unstaged changes
 - task-related untracked files
 
-`scripts/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
+`tooling/repo/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
 
 ## Validation
 

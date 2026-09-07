@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getChangedFileEntries, getChangedFiles } from './changed-files.mts'
-import { getTestImpactRecommendations } from './test-impact.mts'
+import { getTestImpactRecommendations } from '../testing/test-impact.mts'
 
 test('changed-files combines committed, staged, unstaged, and untracked paths', () => {
 	const changedFiles = getChangedFiles(args => {

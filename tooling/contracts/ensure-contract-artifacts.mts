@@ -149,7 +149,7 @@ async function runSharedBuild(): Promise<void> {
 }
 
 async function refreshRootSharedDependency(): Promise<void> {
-	await runBunScript(['./scripts/ensure-shared-package-fresh.mts', '--refresh'], `root @zoltar/shared dependency refresh`)
+	await runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh'], `root @zoltar/shared dependency refresh`)
 }
 
 async function refreshAllSharedDependencies(): Promise<void> {
