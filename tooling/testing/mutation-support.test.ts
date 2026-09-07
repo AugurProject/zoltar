@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, MUTATION_SMOKE_CASES } from './mutation-support.mts'
+import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, getMutationTestPath, MUTATION_SMOKE_CASES, pinMutationTestToTypeScript, type SourceMutation } from './mutation-support.mts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
 
@@ -17,17 +17,30 @@ describe('mutation smoke support', () => {
 
 	test('keeps every mutation source and focused test path current', async () => {
 		for (const mutation of MUTATION_SMOKE_CASES) {
-			const testPath = mutation.testCommand.find(argument => argument.endsWith('.test.ts'))
-			expect(testPath).toBeDefined()
-			if (testPath === undefined) throw new Error(`Mutation ${mutation.name} must name its focused test`)
+			const testPath = getMutationTestPath(mutation)
 			await Promise.all([access(join(repositoryRoot, mutation.filePath)), access(join(repositoryRoot, testPath))])
 			const source = await readFile(join(repositoryRoot, mutation.filePath), 'utf8')
+			const testSource = await readFile(join(repositoryRoot, testPath), 'utf8')
 			expect(applyExactMutation(source, mutation)).not.toBe(source)
+			expect(pinMutationTestToTypeScript(testSource, mutation)).not.toBe(testSource)
 		}
+	})
+
+	test('pins mutation tests to TypeScript when built JavaScript could also resolve', () => {
+		const mutation: SourceMutation = {
+			filePath: 'shared/ts/domain/value.ts',
+			from: 'original',
+			name: 'resolution fixture',
+			testCommand: ['bun', 'test', 'shared/ts/domain/value.test.ts'],
+			to: 'mutated',
+		}
+		expect(pinMutationTestToTypeScript("import { value } from './value.js'", mutation)).toBe("import { value } from './value.ts'")
+		expect(pinMutationTestToTypeScript("import { value } from './value'", mutation)).toBe("import { value } from './value.ts'")
 	})
 
 	test('counts only assertion failures as killed mutants', () => {
 		expect(classifyMutantResult(0, '<testsuite><testcase /></testsuite>')).toBe('survived')
+		expect(() => classifyMutantResult(0, '<testsuite><testcase name="expected" /></testsuite>', { expectedTestNames: ['expected'], mutatedModuleLoaded: false })).toThrow('mutated module')
 		expect(classifyMutantResult(1, '<testsuite><testcase><failure /></testcase></testsuite>')).toBe('killed')
 		expect(() => classifyMutantResult(1, '<testsuite><testcase /></testsuite>')).toThrow('without a recorded test assertion failure')
 		expect(() => classifyMutantResult(1, '')).toThrow('Malformed JUnit')

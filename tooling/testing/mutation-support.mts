@@ -1,3 +1,4 @@
+import { posix } from 'node:path'
 import { getXmlAttribute, scanXmlTags, validateJunitDocument } from './test-timings.mts'
 
 export type SourceMutation = {
@@ -15,9 +16,38 @@ export function applyExactMutation(source: string, mutation: Pick<SourceMutation
 	return `${source.slice(0, firstIndex)}${mutation.to}${source.slice(firstIndex + mutation.from.length)}`
 }
 
+export function getMutationTestPath(mutation: SourceMutation) {
+	const testPaths = mutation.testCommand.filter(argument => argument.endsWith('.test.ts'))
+	if (testPaths.length !== 1) throw new Error(`Mutation ${mutation.name} must name exactly one focused TypeScript test`)
+	const testPath = testPaths[0]
+	if (testPath === undefined) throw new Error(`Mutation ${mutation.name} has no focused TypeScript test`)
+	return testPath
+}
+
+export function pinMutationTestToTypeScript(testSource: string, mutation: SourceMutation) {
+	if (!mutation.filePath.endsWith('.ts')) throw new Error(`Mutation ${mutation.name} must target TypeScript source`)
+	const testPath = getMutationTestPath(mutation)
+	const relativeSourcePath = posix.relative(posix.dirname(testPath), mutation.filePath)
+	const typeScriptSpecifier = relativeSourcePath.startsWith('.') ? relativeSourcePath : `./${relativeSourcePath}`
+	const javaScriptSpecifier = typeScriptSpecifier.replace(/\.ts$/u, '.js')
+	const extensionlessSpecifier = typeScriptSpecifier.replace(/\.ts$/u, '')
+	for (const quote of ["'", '"']) {
+		for (const candidate of [javaScriptSpecifier, extensionlessSpecifier]) {
+			const quotedCandidate = `${quote}${candidate}${quote}`
+			if (testSource.includes(quotedCandidate)) return applyExactMutation(testSource, { from: quotedCandidate, name: `${mutation.name} test import`, to: `${quote}${typeScriptSpecifier}${quote}` })
+		}
+	}
+	throw new Error(`Mutation ${mutation.name} test does not import its TypeScript source`)
+}
+
 export function classifyMutantResult(exitCode: number, junitXml: string, evidence?: { expectedTestNames: readonly string[]; mutatedModuleLoaded: boolean }) {
-	if (exitCode === 0) return 'survived' as const
 	validateJunitDocument(junitXml)
+	if (evidence !== undefined) {
+		if (!evidence.mutatedModuleLoaded) throw new Error('Mutation runner has no evidence that the mutated module loaded')
+		const names = new Set(getMutationJunitTestNames(junitXml))
+		if (!evidence.expectedTestNames.every(name => names.has(name))) throw new Error('Mutation runner did not execute the expected test identities')
+	}
+	if (exitCode === 0) return 'survived' as const
 	const tags = scanXmlTags(junitXml)
 	let testcaseDepth = 0
 	let testcaseCount = 0
@@ -38,11 +68,6 @@ export function classifyMutantResult(exitCode: number, junitXml: string, evidenc
 	}
 	if (tags.some(tag => /^<error\b/.test(tag)) || suiteReportedErrors) throw new Error('Mutation runner reported an infrastructure error')
 	if (testcaseCount === 0 || !assertionFailure) throw new Error('Mutation runner exited unsuccessfully without a recorded test assertion failure')
-	if (evidence !== undefined) {
-		if (!evidence.mutatedModuleLoaded) throw new Error('Mutation runner has no evidence that the mutated module loaded')
-		const names = new Set(getMutationJunitTestNames(junitXml))
-		if (!evidence.expectedTestNames.every(name => names.has(name))) throw new Error('Mutation runner did not execute the expected test identities')
-	}
 	return 'killed' as const
 }
 

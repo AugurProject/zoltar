@@ -1,4 +1,4 @@
-import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, MUTATION_SMOKE_CASES } from './mutation-support.mts'
+import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, getMutationTestPath, MUTATION_SMOKE_CASES, pinMutationTestToTypeScript } from './mutation-support.mts'
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +15,9 @@ for (const mutation of MUTATION_SMOKE_CASES) {
 	let result: ReturnType<typeof classifyMutantResult>
 	try {
 		await cp('shared/ts', join(mutationDirectory, 'shared/ts'), { recursive: true })
+		const copiedTestPath = join(mutationDirectory, getMutationTestPath(mutation))
+		const copiedTestSource = await readFile(copiedTestPath, 'utf8')
+		await writeFile(copiedTestPath, pinMutationTestToTypeScript(copiedTestSource, mutation))
 		const command = mutation.testCommand.map(argument => (argument.startsWith('shared/ts/') ? join(mutationDirectory, argument) : argument))
 		const controlJunitPath = join(mutationDirectory, 'control.xml')
 		const control = await runTest(command, controlJunitPath)
