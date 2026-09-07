@@ -460,8 +460,8 @@ function assertCoordinatorSettlementEconomics(): void {
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {
-	assert.equal(createHash('sha256').update(openOracleSource).digest('hex'), 'dd48faa19839d443ffb272458051a14507cccc89faa5cec54786902cbd348b37', 'Vendored OpenOracle source changed; compare it with the pinned SlimStorage revision and update the source fingerprint')
-	for (const pinnedRevision of ['a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
+	assert.equal(createHash('sha256').update(openOracleSource).digest('hex'), '7afa3edc2c0fb21ea560e67ad5220e461e9b5d3ef9dd68d18081ffef2d157728', 'Vendored OpenOracle source changed; compare it with the pinned openPunt revision and update the source fingerprint')
+	for (const pinnedRevision of ['4e5cffb7203ccc5d47ab986d74c04796a8f51302', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
 		assert.ok(openOracleProvenance.includes(pinnedRevision), `OpenOracle provenance must retain ${pinnedRevision}`)
 	}
 	assert.match(liquidationHtml, /id="punitive-liquidation"/)

@@ -43,6 +43,20 @@
 				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. It is reusable only while it remains inside <code>PRICE_VALID_FOR_SECONDS</code>, currently five minutes. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
 			</section>
 
+			<section id="optional-upstream-capabilities">
+				<h2>Optional upstream capabilities</h2>
+
+				<p>The vendored <code>openPunt</code> revision adds three independent report flags. They extend what a report can record or permit; they do not change reports that omit them. Zoltar's coordinator still submits flags <code>6</code> for block-number clocks and <code>7</code> for timestamp clocks, while the chaos bot's direct reports use <code>7</code>. None of those configurations enables a new flag, so existing report economics and settlement behavior remain unchanged.</p>
+
+				<ul>
+					<li><strong>Store settlement eligibility.</strong> OpenOracle records the current settlement-eligibility clock value when a report is created and refreshes it after each dispute. A lightweight application can read that deadline without storing the complete report preimage. The application must still identify whether the report uses timestamps or block numbers.</li>
+					<li><strong>Flexible escalation.</strong> A disputer may choose any token-one amount from the ordinary required escalation amount through the configured halt. This exposes larger, fully funded correction positions and can move a game to its halt sooner. The report's halt and all dispute validation still apply.</li>
+					<li><strong>Fees only at the halt.</strong> Reporter and protocol fees are zero before the prior position has reached the escalation halt and apply once the prior position is at that halt. A configuration can therefore make early corrections cheaper while retaining a recurring cost for continued disagreement at the halt.</li>
+				</ul>
+
+				<p>These flags change operational data and correction incentives, not the meaning or external correctness of a settled price. An integration that enables them must include their effects when sizing positions, monitoring deadlines, and evaluating the participation assumptions in the <a href="../reference/security-model.html#assumptions-oracle">security model</a>. The exact vendored source and build profile are recorded in <a href="../../solidity/contracts/statoblast/openOracle/UPSTREAM.md">the OpenOracle provenance record</a>.</p>
+			</section>
+
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
 

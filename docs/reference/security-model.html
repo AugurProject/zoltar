@@ -214,7 +214,7 @@
 
 			<section class="assumption-group" id="assumptions-oracle">
 				<h2>Oracle correction, inclusion, and operational data</h2>
-				<p class="assumption-group-intro">These assumptions cover truthful REP/ETH price discovery, deadline access, capital, independent correction, and the offchain information required to act.</p>
+				<p class="assumption-group-intro">These assumptions cover truthful REP/ETH price discovery, deadline access, capital, independent correction, and the offchain information required to act. OpenOracle's optional flexible-escalation and halt-only-fee flags can change a corrector's required capital and net incentive, so a deployment that enables them must evaluate the same assumptions against its configured flag set.</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a16" value="16" data-assumption="A16">
 						<h3>Deadline transactions can obtain Ethereum inclusion</h3>
