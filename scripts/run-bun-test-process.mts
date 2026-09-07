@@ -45,7 +45,7 @@ export async function runBunTestProcess({ cmd, cwd = process.cwd(), env = proces
 		return await child.exited
 	}
 
-	// Bun 1.3.14 isolate workers can abort on Linux when inherited stdout or stderr
+	// Bun isolate workers can abort on Linux when inherited stdout or stderr
 	// is a pipe. Give the child regular files and forward their contents instead.
 	const outputDirectory = mkdtempSync(join(tmpdir(), 'zoltar-bun-test-stdio-'))
 	let stdoutFd: number | undefined
