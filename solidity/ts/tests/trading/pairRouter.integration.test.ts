@@ -64,6 +64,7 @@ describe('factory, pair, and router integration', () => {
 	let pair: Address
 	let mocks: TradingContracts['contracts/trading/test/TradingProtocolMocks.sol']
 	let factoryArtifact: TradingContracts['contracts/trading/TwoWayConstantProductFactory.sol']['TwoWayConstantProductFactory']
+	let factoryV2Artifact: TradingContracts['contracts/trading/TwoWayConstantProductFactoryV2.sol']['TwoWayConstantProductFactoryV2']
 	let pairArtifact: TradingContracts['contracts/trading/TwoWayConstantProductPair.sol']['TwoWayConstantProductPair']
 	let routerArtifact: TradingContracts['contracts/trading/TwoWayConstantProductRouter.sol']['TwoWayConstantProductRouter']
 
@@ -98,6 +99,7 @@ describe('factory, pair, and router integration', () => {
 		const contracts = await compileArtifactsForTests()
 		mocks = contracts['contracts/trading/test/TradingProtocolMocks.sol']
 		factoryArtifact = contracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
+		factoryV2Artifact = contracts['contracts/trading/TwoWayConstantProductFactoryV2.sol'].TwoWayConstantProductFactoryV2
 		pairArtifact = contracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 		routerArtifact = contracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const ethereum = getAnvilWindowEthereum()
@@ -283,26 +285,36 @@ describe('factory, pair, and router integration', () => {
 		expect(simulation.result.conditionalYesBpsBefore).toBe((noBalance * 10_000n) / (yesBalance + noBalance))
 	})
 
-	test('preserves reserve, product, INVALID, and router-residue invariants across a stateful swap sequence', async () => {
-		await initialize(50_000n, 5_000n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
-		for (let index = 0n; index < 16n; index++) {
-			const yesForNo = index % 2n === 0n
-			const inputId = (universe << 8n) | (yesForNo ? 1n : 2n)
-			const amount = (index + 1n) * rate
-			const donation = index % 5n === 0n ? 1n : 0n
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, inputId, amount + donation] }))
-			if (donation > 0n) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, pair, inputId, donation, '0x'] }))
-			const before = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getEffectiveReserves' })
-			await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [yesForNo, amount, 1n, account] }))
-			const after = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
-			expect(after[0] * after[1]).toBeGreaterThanOrEqual(before[0] * before[1])
-			expect(await tokenBalance(pair, 1n)).toBe(after[0])
-			expect(await tokenBalance(pair, 2n)).toBe(after[1])
-			expect(await tokenBalance(pair, 0n)).toBe(0n)
-			expect(await tokenBalance(router, 0n)).toBe(0n)
-			expect(await tokenBalance(router, 1n)).toBe(0n)
-			expect(await tokenBalance(router, 2n)).toBe(0n)
+	test('preserves reserve, product, INVALID, and router-residue invariants across V1 and V2 stateful swap sequences', async () => {
+		const venues: Array<{ label: string; venuePair: Address; venueRouter: Address }> = [{ label: 'V1', venuePair: pair, venueRouter: router }]
+		const v2Factory = await deploy(factoryV2Artifact, [coreFactory, 30n])
+		const v2Router = await deploy(routerArtifact, [v2Factory])
+		await writeContractAndWait(client, () => client.writeContract({ abi: factoryV2Artifact.abi, address: v2Factory, functionName: 'createPair', args: [pool] }))
+		const v2Pair = await client.readContract({ abi: factoryV2Artifact.abi, address: v2Factory, functionName: 'getPair', args: [pool] })
+		venues.push({ label: 'V2', venuePair: v2Pair, venueRouter: v2Router })
+
+		for (const venue of venues) {
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [venue.venueRouter, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: venue.venueRouter, functionName: 'initializeWithEth', args: [venue.venuePair, 5_000n, 1n, account, 10n ** 12n], value: 50_000n }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [venue.venuePair, true] }))
+			for (let index = 0n; index < 16n; index++) {
+				const yesForNo = index % 2n === 0n
+				const inputId = (universe << 8n) | (yesForNo ? 1n : 2n)
+				const amount = (index + 1n) * rate
+				const donation = index % 5n === 0n ? 1n : 0n
+				await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, inputId, amount + donation] }))
+				if (donation > 0n) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeTransferFrom', args: [account, venue.venuePair, inputId, donation, '0x'] }))
+				const before = await client.readContract({ abi: pairArtifact.abi, address: venue.venuePair, functionName: 'getEffectiveReserves' })
+				await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: venue.venuePair, functionName: 'swapExactInput', args: [yesForNo, amount, 1n, account] }))
+				const after = await client.readContract({ abi: pairArtifact.abi, address: venue.venuePair, functionName: 'getReserves' })
+				expect(after[0] * after[1], venue.label).toBeGreaterThanOrEqual(before[0] * before[1])
+				expect(await tokenBalance(venue.venuePair, 1n), venue.label).toBe(after[0])
+				expect(await tokenBalance(venue.venuePair, 2n), venue.label).toBe(after[1])
+				expect(await tokenBalance(venue.venuePair, 0n), venue.label).toBe(0n)
+				expect(await tokenBalance(venue.venueRouter, 0n), venue.label).toBe(0n)
+				expect(await tokenBalance(venue.venueRouter, 1n), venue.label).toBe(0n)
+				expect(await tokenBalance(venue.venueRouter, 2n), venue.label).toBe(0n)
+			}
 		}
 	})
 
