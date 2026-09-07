@@ -46,7 +46,7 @@
 			<section id="optional-upstream-capabilities">
 				<h2>Optional upstream capabilities</h2>
 
-				<p>The vendored <code>openPunt</code> revision adds three independent report flags. They extend what a report can record or permit; they do not change reports that omit them. Zoltar's coordinator still submits flags <code>6</code> for block-number clocks and <code>7</code> for timestamp clocks, while the chaos bot's direct reports use <code>7</code>. None of those configurations enables a new flag, so existing report economics and settlement behavior remain unchanged.</p>
+				<p>The vendored <code>openPunt</code> revision adds three independent report flags. They extend what a report can record or permit; they do not change reports that omit them. Statoblast's per-pool coordinator still submits flags <code>6</code> for block-number clocks and <code>7</code> for timestamp clocks, while the chaos bot's direct reports use <code>7</code>. None of those configurations enables a new flag, so existing report economics and settlement behavior remain unchanged.</p>
 
 				<ul>
 					<li><strong>Store settlement eligibility.</strong> OpenOracle records the current settlement-eligibility clock value when a report is created and refreshes it after each dispute. A lightweight application can read that deadline without storing the complete report preimage. The application must still identify whether the report uses timestamps or block numbers.</li>

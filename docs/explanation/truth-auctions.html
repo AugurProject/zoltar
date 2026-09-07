@@ -52,13 +52,11 @@
 				<h2>Implementation details: clearing</h2>
 				<p>The clearing process walks demand from the highest price downward. A bid above the clearing tick wins in full, a bid below it loses in full, and bids at the clearing tick share the last fill. In the uniform-clearing branch that last fill is First in First Out within the tick, so earlier same-tick bids are consumed before later ones.</p>
 
-				<p>Higher ticks represent higher bid prices and therefore receive priority during auction clearing. The clearing algorithm matches bids starting from the highest tick and works downward until all available REP has been allocated.</p>
-
-				<p>The auction has two caps</p>
-				<ol>
-					<li>ETH raise cap. The auction only wants to raise ETH required to make open interest holders whole</li>
-					<li>REP selling Cap. The auction can at most sell all the rep it has</li>
-				</ol>
+				<p>Two constraints limit how much the auction can clear:</p>
+				<ul>
+					<li><strong>ETH raise cap.</strong> The auction raises no more ETH than the amount required to make open-interest holders whole.</li>
+					<li><strong>REP sale cap.</strong> The auction sells no more REP than it holds.</li>
+				</ul>
 				<p>As soon as cumulative demand is enough to hit either cap at some price, that price becomes the clearing tick and all winning bids settle from it at one price. That is a valid uniform clearing even when the REP cap binds before the ETH repair target is fully met.</p>
 
 				<h3>Underfunded clearing</h3>

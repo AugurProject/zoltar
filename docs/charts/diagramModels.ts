@@ -390,7 +390,7 @@ export const diagramGraphSpecs = {
 	),
 	'fig-statoblast-system-decision-flow': diagram(
 		{
-			ariaDescription: 'Question, pool, escalation, fork, child migration, auction repair, fixed-outcome settlement, and unresolved recursive continuation flow.',
+			ariaDescription: 'Question, pool, escalation, local settlement, and fork migration flow. A local non-decision or an independent fork of the pool universe can enter child migration, auction repair, fixed-outcome settlement, or unresolved recursive continuation.',
 			ariaLabel: 'Whole-system decision flow',
 			height: 620,
 			width: 940,
@@ -406,6 +406,7 @@ export const diagramGraphSpecs = {
 				'system-decision-outcomes',
 				[
 					node('decision', 'Decision point', 'gold', ['local winner or non-decision']),
+					node('universe-fork', 'Universe fork elsewhere', 'red', ['interrupts this pool']),
 					node('local', 'Local settlement', 'green', ['redeem winning shares']),
 					node('fork', 'Fork + migration', 'gold', ['child pools per outcome']),
 					node('auction', 'Truth auction', 'gold', ['if collateral is short']),
@@ -415,28 +416,29 @@ export const diagramGraphSpecs = {
 				[
 					edge('system-decision-local', 'decision', 'local', 'local winner'),
 					edge('system-decision-fork', 'decision', 'fork', 'non-decision'),
+					edge('system-universe-fork', 'universe-fork', 'fork', 'interrupt pool'),
 					edge('system-fork-auction', 'fork', 'auction', 'backing short'),
 					edge('system-fork-child', 'fork', 'child', 'backing sufficient'),
 					edge('system-auction-child', 'auction', 'child', 'repair settles'),
 					edge('system-child-local', 'child', 'local', 'fixed outcome'),
 					edge('system-child-recursive', 'child', 'recursive', 'unresolved'),
 				],
-				{ description: 'A local winner settles immediately; a non-decision continues through child repair and may recurse', direction: 'DOWN', title: '2. Settle or continue' },
+				{ description: 'A local winner settles immediately; local non-decision or an independent universe fork continues through child repair and may recurse', direction: 'DOWN', title: '2. Settle or continue' },
 			),
 		],
 	),
 	'fig-zoltar-fork-branch-set': diagram(
 		{
-			ariaDescription: 'A fork creates the full valid branch set for Invalid and every valid outcome; the contract does not privilege a branch.',
-			ariaLabel: 'A parent universe forks into children for Invalid and each valid outcome',
+			ariaDescription: 'For the Aurora binary example, a fork creates Invalid, Yes, and No child universes; the contract does not privilege a branch.',
+			ariaLabel: 'The Aurora parent universe forks into Invalid, Yes, and No child universes',
 			height: 390,
 			width: 920,
 		},
 		[
 			section(
 				'fork-branches',
-				[node('parent', 'Parent universe', 'gold', ['fork on disputed question']), node('invalid', 'Invalid', 'teal'), node('outcome-1', 'Outcome 1', 'blue'), node('outcome-2', 'Outcome 2', 'blue'), node('outcome-n', 'Outcome N', 'blue')],
-				[edge('branch-parent-invalid', 'parent', 'invalid', 'deterministic child id'), edge('branch-parent-one', 'parent', 'outcome-1'), edge('branch-parent-two', 'parent', 'outcome-2'), edge('branch-parent-n', 'parent', 'outcome-n')],
+				[node('parent', 'Parent universe', 'gold', ['Aurora fork question']), node('invalid', 'Invalid', 'teal'), node('yes', 'Yes', 'blue'), node('no', 'No', 'blue')],
+				[edge('branch-parent-invalid', 'parent', 'invalid', 'deterministic child id'), edge('branch-parent-yes', 'parent', 'yes'), edge('branch-parent-no', 'parent', 'no')],
 				{ direction: 'DOWN' },
 			),
 		],

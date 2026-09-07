@@ -166,7 +166,7 @@ async function generateReferenceContent(): Promise<string> {
 		const securityBoundaryHeading = contractReference.securityBoundaryHeading === undefined ? '' : `<h3 id="${headingId(contractReference.securityBoundaryHeading)}">${escapeHtml(contractReference.securityBoundaryHeading)}</h3>`
 		const securityBoundary = contractReference.securityBoundary === undefined ? '' : `<p>${renderRichText(contractReference.securityBoundary)}</p>`
 		return `<h2 id="${headingId(contractReference.name)}">${escapeHtml(contractReference.name)}</h2>
-	<p>${renderRichText(contractReference.purpose)} <a href="${escapeHtml(sourceLink)}">Source</a></p>
+	<p>${renderRichText(contractReference.purpose)} <a href="${escapeHtml(sourceLink)}">${escapeHtml(contractReference.name)} source contract</a></p>
 	<p>Read surface: ${renderRichText(contractReference.readSurface)}</p>
 	${securityBoundaryHeading}
 	${securityBoundary}

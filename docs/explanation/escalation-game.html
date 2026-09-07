@@ -145,9 +145,9 @@
 
 				<h3>Escalation game continuation</h3>
 
-				<p>In AugurV2, when a fork happens, it cancels all currently running escalation games, and the players are refunded. This opens an attack vector for the oracle, discussed more in <a href="https://github.com/AugurProject/oracle-research/blob/main/Zoltar%20Forks%20Should%20Not%20Cancel%20Escalation%20Games.md">Zoltar Forks Should Not Cancel Escalation Games</a>. The fix to the issue is to fork escalation games. This is called continuation.</p>
-
 				<p>Escalation game continuation uses <a href="../reference/merkle-mountain-range.html">Merkle Mountain Range carry proofs</a> and nullifier roots to migrate user game deposits, without requiring expensive data copying efforts onchain.</p>
+
+				<aside class="callout"><h3>Design rationale</h3><p>Augur V2 cancelled active dispute games when a fork began and refunded their participants. Zoltar instead continues active games across the fork so cancellation cannot erase their economic commitments. See the research note <a href="https://github.com/AugurProject/oracle-research/blob/main/Zoltar%20Forks%20Should%20Not%20Cancel%20Escalation%20Games.md">Zoltar forks should not cancel escalation games</a> for the historical motivation.</p></aside>
 			</section>
 		</main>
 
