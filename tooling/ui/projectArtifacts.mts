@@ -15,7 +15,11 @@ const TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'trading',
 
 type CompiledContract = {
 	readonly abi?: unknown
-	readonly evm?: unknown
+	readonly evm?: {
+		readonly bytecode?: {
+			readonly object?: unknown
+		}
+	}
 }
 
 type CompiledContractsJson = {
@@ -36,6 +40,13 @@ export type ProjectArtifactPaths = {
 
 export function isCoreProjectContractPath(contractPath: string) {
 	return !contractPath.startsWith('contracts/trading/')
+}
+
+function tradingRuntimeArtifact(contract: CompiledContract) {
+	return {
+		abi: contract.abi,
+		evm: { bytecode: { object: contract.evm?.bytecode?.object } },
+	}
 }
 
 const defaultProjectArtifactPaths: ProjectArtifactPaths = {
@@ -72,7 +83,22 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 	await fs.writeFile(artifactPaths.contractArtifactOutputPath, `${contracts.join('\n\n')}\n`)
 
 	if (options.includeTrading !== true) return
-	const tradingContracts = Object.fromEntries(Object.entries(compiledArtifacts.contracts).filter(([filename]) => filename.startsWith('contracts/trading/')))
+	const tradingContracts = Object.fromEntries(
+		Object.entries(compiledArtifacts.contracts)
+			.filter(([filename]) => filename.startsWith('contracts/trading/'))
+			.map(([filename, contractsByName]) => {
+				if (contractsByName === undefined) throw new Error(`missing compiled contract file for ${filename}`)
+				return [
+					filename,
+					Object.fromEntries(
+						Object.entries(contractsByName).map(([contractName, contract]) => {
+							if (contract === undefined) throw new Error(`missing compiled contract ${contractName} in ${filename}`)
+							return [contractName, tradingRuntimeArtifact(contract)]
+						}),
+					),
+				]
+			}),
+	)
 	await fs.mkdir(path.dirname(artifactPaths.tradingContractArtifactOutputPath), { recursive: true })
 	await fs.writeFile(artifactPaths.tradingContractArtifactOutputPath, `// Generated from solidity/artifacts/Contracts.json by tooling/ui/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
 }

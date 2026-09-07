@@ -478,7 +478,21 @@ test('project artifact generation writes Trading output only when explicitly req
 		fs.mkdirSync(path.dirname(artifactPaths.abiSourcePath), { recursive: true })
 		fs.mkdirSync(path.dirname(artifactPaths.contractArtifactsJsonPath), { recursive: true })
 		fs.writeFileSync(artifactPaths.abiSourcePath, 'export const abis = {}\n')
-		fs.writeFileSync(artifactPaths.contractArtifactsJsonPath, JSON.stringify({ contracts: { 'contracts/Zoltar.sol': { Zoltar: { abi: [] } }, 'contracts/trading/Router.sol': { Router: { abi: [] } } } }))
+		fs.writeFileSync(
+			artifactPaths.contractArtifactsJsonPath,
+			JSON.stringify({
+				contracts: {
+					'contracts/Zoltar.sol': { Zoltar: { abi: [] } },
+					'contracts/trading/Router.sol': {
+						Router: {
+							abi: [],
+							evm: { bytecode: { object: '6000' }, deployedBytecode: { object: '6001' } },
+							storageLayout: { storage: ['not needed at runtime'] },
+						},
+					},
+				},
+			}),
+		)
 
 		await copyProjectArtifacts({}, artifactPaths)
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).toContain('Zoltar_Zoltar')
@@ -486,7 +500,11 @@ test('project artifact generation writes Trading output only when explicitly req
 		expect(fs.existsSync(artifactPaths.tradingContractArtifactOutputPath)).toBe(false)
 
 		await copyProjectArtifacts({ includeTrading: true }, artifactPaths)
-		expect(fs.readFileSync(artifactPaths.tradingContractArtifactOutputPath, 'utf8')).toContain('contracts/trading/Router.sol')
+		const tradingOutput = fs.readFileSync(artifactPaths.tradingContractArtifactOutputPath, 'utf8')
+		expect(tradingOutput).toContain('contracts/trading/Router.sol')
+		expect(tradingOutput).toContain('6000')
+		expect(tradingOutput).not.toContain('6001')
+		expect(tradingOutput).not.toContain('storageLayout')
 	} finally {
 		fs.rmSync(temporaryRoot, { force: true, recursive: true })
 	}
