@@ -92,70 +92,21 @@ contract Zoltar {
 		_forkUniverse(universeId, questionId, false);
 	}
 
-	function forkUniverseWithPermit(
-		uint248 universeId,
-		uint256 questionId,
-		uint256 deadline,
-		uint8 v,
-		bytes32 r,
-		bytes32 s
-	) external {
+	function forkUniverseWithPermit(uint248 universeId, uint256 questionId, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
 		uint256 amountAttoRep = getForkThresholdAttoRep(universeId);
 		try
-			IERC20PermitAuthorization(address(reputationToken)).permit(
-				msg.sender,
-				address(this),
-				amountAttoRep,
-				deadline,
-				v,
-				r,
-				s
-			)
+			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
 		{} catch {
-			require(
-				address(reputationToken) != address(genesisReputationToken) ||
-					IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep,
-				'Fork permit and allowance insufficient'
-			);
+			require(address(reputationToken) != address(genesisReputationToken) || IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Fork permit and allowance insufficient');
 		}
 		_forkUniverse(universeId, questionId, false);
 	}
 
-	function forkUniverseWithAuthorization(
-		uint248 universeId,
-		uint256 questionId,
-		uint256 validAfter,
-		uint256 validBefore,
-		bytes32 nonce,
-		uint8 v,
-		bytes32 r,
-		bytes32 s
-	) external {
+	function forkUniverseWithAuthorization(uint248 universeId, uint256 questionId, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
 		uint256 amountAttoRep = getForkThresholdAttoRep(universeId);
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(
-			msg.sender,
-			address(this),
-			amountAttoRep,
-			validAfter,
-			validBefore,
-			_boundAuthorizationNonce(
-				nonce,
-				keccak256(
-					abi.encode(
-						this.forkUniverseWithAuthorization.selector,
-						universeId,
-						questionId,
-						amountAttoRep
-					)
-				),
-				msg.sender
-			),
-			v,
-			r,
-			s
-		);
+		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(msg.sender, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, keccak256(abi.encode(this.forkUniverseWithAuthorization.selector, universeId, questionId, amountAttoRep)), msg.sender), v, r, s);
 		_forkUniverse(universeId, questionId, true);
 	}
 
@@ -268,67 +219,19 @@ contract Zoltar {
 		_addRepToMigrationBalance(universeId, amountAttoRep, false);
 	}
 
-	function addRepToMigrationBalanceWithPermit(
-		uint248 universeId,
-		uint256 amountAttoRep,
-		uint256 deadline,
-		uint8 v,
-		bytes32 r,
-		bytes32 s
-	) external {
+	function addRepToMigrationBalanceWithPermit(uint248 universeId, uint256 amountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
 		try
-			IERC20PermitAuthorization(address(reputationToken)).permit(
-				msg.sender,
-				address(this),
-				amountAttoRep,
-				deadline,
-				v,
-				r,
-				s
-			)
+			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
 		{} catch {
-			require(
-				address(reputationToken) != address(genesisReputationToken) ||
-					IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep,
-				'Migration permit and allowance insufficient'
-			);
+			require(address(reputationToken) != address(genesisReputationToken) || IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Migration permit and allowance insufficient');
 		}
 		_addRepToMigrationBalance(universeId, amountAttoRep, false);
 	}
 
-	function addRepToMigrationBalanceWithAuthorization(
-		uint248 universeId,
-		uint256 amountAttoRep,
-		uint256 validAfter,
-		uint256 validBefore,
-		bytes32 nonce,
-		uint8 v,
-		bytes32 r,
-		bytes32 s
-	) external {
+	function addRepToMigrationBalanceWithAuthorization(uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(
-			msg.sender,
-			address(this),
-			amountAttoRep,
-			validAfter,
-			validBefore,
-			_boundAuthorizationNonce(
-				nonce,
-				keccak256(
-					abi.encode(
-						this.addRepToMigrationBalanceWithAuthorization.selector,
-						universeId,
-						amountAttoRep
-					)
-				),
-				msg.sender
-			),
-			v,
-			r,
-			s
-		);
+		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(msg.sender, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, keccak256(abi.encode(this.addRepToMigrationBalanceWithAuthorization.selector, universeId, amountAttoRep)), msg.sender), v, r, s);
 		_addRepToMigrationBalance(universeId, amountAttoRep, true);
 	}
 
@@ -370,19 +273,11 @@ contract Zoltar {
 		return migrationRepBalances[migrator][universeId].migrationRepBalanceAttoRep;
 	}
 
-	function getBoundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount)
-		external
-		pure
-		returns (bytes32)
-	{
+	function getBoundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount) external pure returns (bytes32) {
 		return _boundAuthorizationNonce(nonce, operationHash, creditedAccount);
 	}
 
-	function _boundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount)
-		private
-		pure
-		returns (bytes32)
-	{
+	function _boundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount) private pure returns (bytes32) {
 		return keccak256(abi.encode(nonce, operationHash, creditedAccount));
 	}
 }

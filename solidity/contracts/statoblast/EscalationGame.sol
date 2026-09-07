@@ -84,7 +84,9 @@ contract EscalationGame is EscalationGameSettlement {
 			// authorization deposit calls have seven or eight, and unknown selectors
 			// are rejected by whichever delegate receives them.
 			let delegate := claimDelegateAddress
-			if gt(calldatasize(), 100) { delegate := depositDelegateAddress }
+			if gt(calldatasize(), 100) {
+				delegate := depositDelegateAddress
+			}
 			calldatacopy(0, 0, calldatasize())
 			if iszero(delegatecall(gas(), delegate, 0, calldatasize(), 0, 0)) {
 				returndatacopy(0, 0, returndatasize())

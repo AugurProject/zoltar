@@ -78,8 +78,9 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		address token = ISecurityPoolRepDepositContext(address(this)).repToken();
-		try IERC20PermitAuthorization(token).permit(msg.sender, address(this), attoRepAmount, deadline, v, r, s) {}
-		catch {
+		try
+			IERC20PermitAuthorization(token).permit(msg.sender, address(this), attoRepAmount, deadline, v, r, s)
+		{} catch {
 			require(IERC20(token).allowance(msg.sender, address(this)) >= attoRepAmount, 'Vault permit and allowance insufficient');
 		}
 		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
@@ -94,9 +95,15 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, bool transferRep) private {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
-		if (systemState != SystemState.Operational || IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0) revert();
+		if (
+			systemState != SystemState.Operational ||
+			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
+		) revert();
 		if (pool.isEscalationResolved()) revert();
-		if (block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) && !postEndVaultAdmissionAllowed) revert();
+		if (
+			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
+			!postEndVaultAdmissionAllowed
+		) revert();
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		pool.updateVaultFees(vault);
