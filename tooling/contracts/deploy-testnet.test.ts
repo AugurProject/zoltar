@@ -143,7 +143,7 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('uses the same canonicalized chain input for workflow concurrency and deployment', async () => {
-		const workflow = await Bun.file(new URL('../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
+		const workflow = await Bun.file(new URL('../../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).toContain('group: testnet-contract-deployment-${{ inputs.chain_id }}')
 		expect(workflow).toContain('CHAIN_ID: ${{ inputs.chain_id }}')
 		expect(workflow).toContain('MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}')
@@ -154,20 +154,20 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('keeps the deployment workflow independent from UI installs and builds', async () => {
-		const workflow = await Bun.file(new URL('../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
+		const workflow = await Bun.file(new URL('../../.github/workflows/deploy-testnet.yml', import.meta.url)).text()
 		expect(workflow).not.toContain('cd ui/')
 		expect(workflow).not.toContain('ui:build:apps')
 		expect(workflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
 	})
 
 	test('refreshes contract artifacts before loading the deployment script', async () => {
-		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
+		const packageJson = await Bun.file(new URL('../../package.json', import.meta.url)).json()
 		expect(packageJson.scripts?.['deploy:testnet']).toStartWith('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless &&')
 		expect(packageJson.scripts?.['deploy:testnet']).not.toContain('refresh:shared-dependencies')
 	})
 
 	test('runs deployment through the headless source bundler', async () => {
-		const packageJson = await Bun.file(new URL('../package.json', import.meta.url)).json()
+		const packageJson = await Bun.file(new URL('../../package.json', import.meta.url)).json()
 		expect(packageJson.scripts?.['deploy:testnet']).toEndWith('bun ./tooling/contracts/run-deploy-testnet.mts')
 		const implementation = await Bun.file(new URL('./deploy-testnet.mts', import.meta.url)).text()
 		expect(implementation).not.toStartWith('#!')
