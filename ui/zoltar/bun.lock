@@ -17,7 +17,7 @@
       },
       "devDependencies": {
         "better-typescript-lib": "2.11.0",
-        "bun-types": "1.3.11",
+        "bun-types": "1.4.2",
         "typescript": "5.8.2",
       },
     },
@@ -402,7 +402,7 @@
 
     "@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
 
-    "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.3.11", "typescript": "5.8.2" } }],
+    "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
     "abitype": ["abitype@1.3.0", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["typescript", "zod"] }, "sha512-fk6Te+bojIFrMvMZrnOO+SxCB+RUksTGOzq/60ZRvs1L+BVzvi2bqt9L3W/17ZLdZsyM1FuYf65P5nlmoiH1Bg=="],
 
@@ -444,7 +444,7 @@
 
     "buffer-from": ["buffer-from@1.1.2", "", {}, "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="],
 
-    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+    "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "call-bind": ["call-bind@1.0.9", "", { "dependencies": { "call-bind-apply-helpers": "^1.0.2", "es-define-property": "^1.0.1", "get-intrinsic": "^1.3.0", "set-function-length": "^1.2.2" } }, "sha512-a/hy+pNsFUTR+Iz8TCJvXudKVLAnz/DyeSUo10I5yvFDQJBFU2s9uqQpoSrJlroHUKoKqzg+epxyP9lqFdzfBQ=="],
 

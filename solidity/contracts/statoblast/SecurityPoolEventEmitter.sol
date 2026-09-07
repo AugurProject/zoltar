@@ -1,63 +1,28 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { AccountingReason, ISecurityPool, PoolAccountingSnapshot } from './interfaces/ISecurityPool.sol';
+import { AccountingReason, ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
+import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 
 /// @notice Delegate-called event encoder that keeps verbose checkpoint schemas out of SecurityPool runtime code.
-contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
-	// SecurityPool accounting occupies slots 1-14, its SecurityVault mapping is slot 16,
-	// and its per-vault fee remainder mapping is slot 17.
-	// This delegate is intentionally storage-layout coupled; storage-layout tests protect these anchors.
-	uint256 private constant SECURITY_VAULTS_SLOT = 16;
-	uint256 private constant VAULT_FEE_REMAINDERS_SLOT = 17;
+contract SecurityPoolEventEmitter is SecurityPoolStorage {
 	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalCapacityOwnershipAttoRep, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
 	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleCapacityOwnershipAttoRep);
 
 	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
-		PoolAccountingSnapshot memory snapshot;
-		assembly ('memory-safe') {
-			snapshot := mload(0x40)
-			mstore(0x40, add(snapshot, 0x160))
-			mstore(snapshot, sload(2))
-			mstore(add(snapshot, 0x20), sload(1))
-			mstore(add(snapshot, 0x40), sload(12))
-			mstore(add(snapshot, 0x60), sload(6))
-			mstore(add(snapshot, 0x80), sload(11))
-			mstore(add(snapshot, 0xa0), sload(8))
-			mstore(add(snapshot, 0xc0), sload(9))
-			mstore(add(snapshot, 0xe0), sload(10))
-			mstore(add(snapshot, 0x100), sload(13))
-			mstore(add(snapshot, 0x120), sload(7))
-			mstore(add(snapshot, 0x140), sload(14))
-		}
-		emit PoolAccountingCheckpoint(reason, vault, snapshot.settlementCollateralAttoEth, snapshot.totalCapacityOwnershipAttoRep, snapshot.feeEligibleCapacityOwnershipAttoRep, snapshot.totalClaimableVaultFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, snapshot.feeIndex, snapshot.feeIndexRemainder, snapshot.totalFeesOwedRemainder, snapshot.uncheckpointedFeeEligibleCapacityOwnershipAttoRep, snapshot.lastUpdatedFeeAccumulator, snapshot.currentRetentionRate);
+		emit PoolAccountingCheckpoint(reason, vault, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth, feeIndex, feeIndexRemainder, totalFeesOwedRemainder, uncheckpointedFeeEligibleCapacityOwnershipAttoRep, lastUpdatedFeeAccumulator, currentRetentionRate);
 	}
 
 	function emitVaultAccountingCheckpoint(address vault) external payable {
-		bytes32 vaultSlot = keccak256(abi.encode(vault, SECURITY_VAULTS_SLOT));
-		uint256 repBackingUnits;
-		uint256 capacityOwnershipAttoRep;
-		uint256 claimableFeesAttoEth;
-		uint256 vaultFeeIndex;
-		uint256 vaultFeeRemainder;
-		uint256 resultingTotalRepBackingUnits;
-		uint256 resultingFeeEligibleCapacityOwnershipAttoRep;
-		bytes32 vaultFeeRemainderSlot = keccak256(abi.encode(vault, VAULT_FEE_REMAINDERS_SLOT));
-		assembly {
-			repBackingUnits := sload(vaultSlot)
-			capacityOwnershipAttoRep := sload(add(vaultSlot, 1))
-			claimableFeesAttoEth := sload(add(vaultSlot, 2))
-			vaultFeeIndex := sload(add(vaultSlot, 3))
-			vaultFeeRemainder := sload(vaultFeeRemainderSlot)
-			resultingTotalRepBackingUnits := sload(3)
-			resultingFeeEligibleCapacityOwnershipAttoRep := sload(12)
-		}
-		emit VaultAccountingCheckpoint(vault, repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, vaultFeeIndex, vaultFeeRemainder, resultingTotalRepBackingUnits, resultingFeeEligibleCapacityOwnershipAttoRep);
+		emit VaultAccountingCheckpoint(vault, securityVaults[vault].repBackingUnits, securityVaults[vault].capacityOwnershipAttoRep, securityVaults[vault].claimableFeesAttoEth, securityVaults[vault].feeIndex, vaultFeeRemainders[vault], totalRepBackingUnits, feeEligibleCapacityOwnershipAttoRep);
 	}
+}
 
+/// @notice Delegate-called fork event encoder sharing the forker's typed storage base.
+contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
 	function emitForkSnapshotEvents(ISecurityPool parent, address migrationProxy, address sourceGame, uint256 totalPoolHeldRepAtForkAttoRep, uint256 disputeStakedRepAtForkAttoRep, uint256 resultingLockedAttoRep) external payable {
 		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
 		if (data.unresolvedEscalationAtFork) {

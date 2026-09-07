@@ -21,6 +21,19 @@
 	min-width: 0;
 }
 
+.attention-badge:not([href]) {
+	cursor: default;
+	text-decoration: none;
+}
+
+.header-block-status {
+	min-height: 1.2em;
+	margin: 0.2rem 0 0;
+	color: var(--operator-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 0.78rem;
+}
+
 .section-nav {
 	display: flex;
 	gap: 0.5rem;
@@ -30,8 +43,10 @@
 }
 
 .section-nav a {
+	display: inline-flex;
+	align-items: center;
 	flex: 0 0 auto;
-	min-height: 2.25rem;
+	min-height: 2.75rem;
 	padding: 0.45rem 0.75rem;
 	border: 1px solid var(--operator-border);
 	border-radius: 99rem;
@@ -274,5 +289,198 @@
 	.operator-shell,
 	.section-nav {
 		scroll-behavior: auto !important;
+	}
+}
+
+/* Shared operator primitives, loaded after application-specific layouts. */
+:root {
+	--operator-background: #080b10;
+	--operator-surface: #10151d;
+	--operator-surface-raised: #151c26;
+	--operator-border: #273141;
+	--operator-text: #f0f3f7;
+	--operator-muted: #94a0b2;
+	--operator-accent: #77e0ad;
+	--operator-warning: #f0c36b;
+	--operator-error: #ff8b8b;
+	--bg: var(--operator-background);
+	--surface: var(--operator-surface);
+	--surface-raised: var(--operator-surface-raised);
+	--line: var(--operator-border);
+	--border: var(--operator-border);
+	--text: var(--operator-text);
+	--muted: var(--operator-muted);
+	--accent: var(--operator-accent);
+	--warning: var(--operator-warning);
+	--error: var(--operator-error);
+	--danger: var(--operator-error);
+}
+
+body {
+	background: radial-gradient(circle at 15% -10%, rgb(61 111 97 / 18%), transparent 28rem), var(--operator-background);
+}
+
+.operator-shell {
+	padding: 1rem clamp(1rem, 3vw, 3rem) 0;
+}
+
+.operator-primary {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.75rem;
+}
+
+.operator-primary > .operator-safety {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr)) 6rem 6rem;
+	grid-template-areas: "mode network run capability attention refresh pause";
+	gap: 0.5rem;
+	width: 100%;
+	align-items: stretch;
+}
+
+.operator-primary > .operator-safety > .badge,
+.operator-primary > .operator-safety > button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	min-height: 3rem;
+	margin: 0;
+	padding: 0.4rem 0.55rem;
+	font-size: 0.78rem;
+	line-height: 1.25;
+	border-radius: 0.5rem;
+	text-align: center;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.operator-primary > .operator-safety > .badge[hidden] {
+	display: none;
+}
+
+.operator-safety > .action-status {
+	grid-column: 1 / -1;
+}
+
+.attention-badge[data-tone="ok"] {
+	color: var(--operator-accent);
+}
+.attention-badge[data-tone="warning"] {
+	color: var(--operator-warning);
+}
+
+main .panel {
+	border: 1px solid var(--operator-border);
+	border-radius: 0.65rem;
+	background: var(--operator-surface);
+	padding: 1.25rem;
+}
+
+.operator-metrics {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1px;
+	padding: 1px;
+	border: 0;
+	border-radius: 0.65rem;
+	overflow: hidden;
+	background: var(--operator-border);
+}
+
+.operator-metrics > .metric {
+	min-width: 0;
+	margin: 0;
+	padding: 1.25rem;
+	border: 0;
+	border-radius: 0;
+	background: var(--operator-surface);
+}
+
+.operator-metrics dt,
+.operator-metrics .metric-label {
+	color: var(--operator-muted);
+	font-size: 0.8rem;
+}
+
+.operator-metrics dd,
+.operator-metrics strong {
+	margin: 0.35rem 0 0;
+	font:
+		600 1.35rem / 1.35 ui-monospace,
+		monospace;
+	overflow-wrap: anywhere;
+}
+
+.operator-metrics .metric-detail {
+	font: inherit;
+	color: var(--operator-muted);
+}
+
+@media (max-width: 42rem) {
+	.operator-primary > .operator-safety {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.operator-primary > .operator-safety > .badge,
+	.operator-primary > .operator-safety > button {
+		min-height: 3.25rem;
+	}
+	.operator-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.operator-primary > .operator-safety > #mode-badge {
+	grid-area: mode;
+}
+.operator-primary > .operator-safety > #network-badge,
+.operator-primary > .operator-safety > #header-network-badge {
+	grid-area: network;
+}
+.operator-primary > .operator-safety > #run-status-badge,
+.operator-primary > .operator-safety > #retry-status-badge,
+.operator-primary > .operator-safety > #signer-badge {
+	grid-area: run;
+}
+.operator-primary > .operator-safety > #capability-badge {
+	grid-area: capability;
+}
+.operator-primary > .operator-safety > #attention-badge,
+.operator-primary > .operator-safety > #recovery-badge {
+	grid-area: attention;
+}
+.operator-primary > .operator-safety > #refresh-button {
+	grid-area: refresh;
+}
+.operator-primary > .operator-safety > #pause-button {
+	grid-area: pause;
+}
+.operator-primary > .operator-safety[data-retry-active] > #run-status-badge {
+	display: none;
+}
+.operator-primary > .operator-safety:has(#signer-badge) {
+	grid-template-columns: repeat(4, minmax(0, 1fr)) 6rem 6rem;
+	grid-template-areas: "mode network run attention refresh pause";
+}
+.operator-metrics > .metric:last-child:nth-child(3n + 1) {
+	grid-column: span 3;
+}
+.operator-metrics > .metric:last-child:nth-child(3n + 2) {
+	grid-column: span 2;
+}
+@media (max-width: 42rem) {
+	.operator-primary > .operator-safety {
+		grid-template-areas: "mode network run" "capability attention refresh" "pause pause pause";
+	}
+	.operator-primary > .operator-safety:has(#signer-badge) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-areas: "mode network run" "attention refresh pause";
+	}
+	.operator-metrics > .metric:last-child:nth-child(n) {
+		grid-column: auto;
+	}
+	.operator-metrics > .metric:last-child:nth-child(2n + 1) {
+		grid-column: span 2;
 	}
 }

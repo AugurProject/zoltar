@@ -297,6 +297,43 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(targetAfter[2], targetBefore[2], 'failed receiver rounding must not create bad debt')
 	})
 
+	test.each([
+		{ name: 'target on a partial request', requestedDebtAttoEth: 20n, targetBadDebtAttoEth: 10n, receiverBadDebtAttoEth: 0n, expectedReason: 'Target bad debt' },
+		{ name: 'target on a maximum request', requestedDebtAttoEth: 50n, targetBadDebtAttoEth: 10n, receiverBadDebtAttoEth: 0n, expectedReason: 'Target bad debt' },
+		{ name: 'receiver on a partial request', requestedDebtAttoEth: 20n, targetBadDebtAttoEth: 0n, receiverBadDebtAttoEth: 10n, expectedReason: 'Receiver bad debt' },
+		{ name: 'receiver on a maximum request', requestedDebtAttoEth: 50n, targetBadDebtAttoEth: 0n, receiverBadDebtAttoEth: 10n, expectedReason: 'Receiver bad debt' },
+	])('rejects a current-generation bad-debt-bearing $name before moving gross capacity', async ({ requestedDebtAttoEth, targetBadDebtAttoEth, receiverBadDebtAttoEth, expectedReason }) => {
+		const targetVault = addressString(TEST_ADDRESSES[0])
+		const receiverVault = addressString(TEST_ADDRESSES[1])
+		const linkedHarnessBytecode = test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.evm.bytecode.object.replace(/__\$[0-9a-f]{34}\$__/g, securityPoolUtilsAddress.slice(2))
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: `0x${linkedHarnessBytecode}` }) })
+		if (deploymentReceipt.contractAddress === undefined || deploymentReceipt.contractAddress === null) throw new Error('Bad debt liquidation harness deployment address missing')
+		const harnessAddress = deploymentReceipt.contractAddress
+		await client.waitForTransactionReceipt({
+			hash: await client.writeContract({
+				abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
+				address: harnessAddress,
+				functionName: 'configureBadDebtParticipants',
+				args: [targetVault, receiverVault, targetBadDebtAttoEth, receiverBadDebtAttoEth],
+			}),
+		})
+
+		const request = { receiverVault, targetVault, requestedDebtAttoEth, snapshotTargetBackingUnits: 10n, snapshotTargetCapacityOwnershipAttoRep: 50n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
+		await expect(client.writeContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'performBundledLiquidation', args: [request] })).rejects.toThrow(expectedReason)
+
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'advanceBadDebtGeneration' }) })
+		strictEqualTypeSafe((await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [targetVault] }))[2], 0n, 'generation advancement should retire target bad debt')
+		strictEqualTypeSafe((await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [receiverVault] }))[2], 0n, 'generation advancement should retire receiver bad debt')
+		const targetBeforeRecovery = await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [targetVault] })
+		const receiverBeforeRecovery = await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [receiverVault] })
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'performBundledLiquidation', args: [request] }) })
+		const targetAfterRecovery = await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [targetVault] })
+		const receiverAfterRecovery = await client.readContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'vaultState', args: [receiverVault] })
+		strictEqualTypeSafe(targetAfterRecovery[0] + receiverAfterRecovery[0], targetBeforeRecovery[0] + receiverBeforeRecovery[0], 'post-generation liquidation must conserve participant REP backing units')
+		strictEqualTypeSafe(targetAfterRecovery[1] + receiverAfterRecovery[1], targetBeforeRecovery[1] + receiverBeforeRecovery[1], 'post-generation liquidation must conserve participant capacity ownership')
+		strictEqualTypeSafe(receiverAfterRecovery[2], 0n, 'post-generation liquidation must not recreate retired bad debt on the receiver')
+	})
+
 	test('liquidation execution rechecks price distance against live open interest', async () => {
 		const targetVault = addressString(TEST_ADDRESSES[0])
 		const receiverVault = addressString(TEST_ADDRESSES[1])

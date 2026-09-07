@@ -29,6 +29,7 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'submitBid',
 	'finalizeTruthAuction',
 	'refundLosingBids',
+	'withdrawAuctionRefund',
 	'claimAuctionProceeds',
 	'settleForkedEscalation',
 ]
@@ -50,6 +51,7 @@ export const FORK_ACTIONS: ActionList = [
 	'submitBid',
 	'finalizeTruthAuction',
 	'refundLosingBids',
+	'withdrawAuctionRefund',
 	'claimAuctionProceeds',
 	'settleForkedEscalation',
 ]
@@ -76,8 +78,8 @@ export const ENABLED_ACTIONS_BY_FORK_STAGE: Record<SecurityPoolForkStage, Action
 	disabled: [],
 	initiate: ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'],
 	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'claimParentEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
-	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'],
-	settlement: ['claimAuctionProceeds', 'settleForkedEscalation'],
+	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids', 'withdrawAuctionRefund'],
+	settlement: ['claimAuctionProceeds', 'withdrawAuctionRefund', 'settleForkedEscalation'],
 }
 
 export const UNIVERSE_FORKED_ENABLE: ActionList = ['migrateShares']

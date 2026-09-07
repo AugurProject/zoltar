@@ -234,7 +234,7 @@ describe('canonical scan policy', () => {
 		expect(complete.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
 		expect(canonicalLifecyclePresence(complete, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
 
-		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without an authenticated EthRefundDeferred episode')
+		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without an authenticated EthRefundCredited episode')
 		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 7n.toString() } } })).toThrow('does not match its authenticated event episode')
 
 		const withdrawn = snapshot()

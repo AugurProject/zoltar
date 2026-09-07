@@ -5,6 +5,9 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
+import { IShareToken } from './interfaces/IShareToken.sol';
 
 contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
@@ -33,7 +36,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			nextCapacityOwnershipAttoRep;
 		securityVaults[vault].capacityOwnershipAttoRep = nextCapacityOwnershipAttoRep;
 		if (depositTargetHealthFactorBps != 0) {
-			lastDepositTargetHealthFactorBpsByVault[vault] = depositTargetHealthFactorBps;
 			emit VaultDepositTargetHealthFactorRecorded(vault, depositTargetHealthFactorBps, nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
 		}
 	}
@@ -48,9 +50,46 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		emit AwaitingForkContinuationSet(false);
 	}
 
+	function redeemShares(IShareToken shareToken, ISecurityPoolForker forker, uint248 universeId, address redeemer) external returns (uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) {
+		BinaryOutcomes.BinaryOutcome outcome = forker.getQuestionOutcome(ISecurityPool(payable(address(this))));
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
+		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
+		(winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, redeemer);
+		settlementCollateralRedeemedAttoEth =
+			shareTokenSupplyAttoShares == 0
+				? 0
+				: (winningSharesBurnedAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
+		shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares;
+		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
+		if (shareTokenSupplyAttoShares == 0) {
+			totalBadDebtAttoEth = 0;
+			unchecked {
+				badDebtGeneration++;
+			}
+		}
+	}
+
+	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares) external returns (uint256 settlementCollateralRedeemedAttoEth) {
+		settlementCollateralRedeemedAttoEth =
+			amountAttoShares == 0 || shareTokenSupplyAttoShares == 0
+				? 0
+				: (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
+		shareToken.burnCompleteSets(universeId, redeemer, amountAttoShares);
+		shareTokenSupplyAttoShares -= amountAttoShares;
+		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
+		if (shareTokenSupplyAttoShares == 0) {
+			totalBadDebtAttoEth = 0;
+			unchecked {
+				badDebtGeneration++;
+			}
+		}
+	}
+
 	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 capacityOwnershipToMoveAttoRep, uint256 badDebtAttoEth) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(request.receiverVault != request.targetVault, 'Receiver bad');
+		require(_getVaultBadDebtAttoEth(request.targetVault) == 0, 'Target bad debt');
+		require(_getVaultBadDebtAttoEth(request.receiverVault) == 0, 'Receiver bad debt');
 		require(securityVaults[request.targetVault].repBackingUnits == request.snapshotTargetBackingUnits, 'Target backingUnits changed');
 		require(securityVaults[request.targetVault].capacityOwnershipAttoRep == request.snapshotTargetCapacityOwnershipAttoRep, 'Target commitment changed');
 		uint256 targetVaultRepBackingAttoRep = pool.backingUnitsToAttoRep(request.snapshotTargetBackingUnits);

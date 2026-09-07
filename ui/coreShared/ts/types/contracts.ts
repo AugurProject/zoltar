@@ -41,6 +41,7 @@ export type ForkAuctionAction =
 	| 'startTruthAuction'
 	| 'submitBid'
 	| 'refundLosingBids'
+	| 'withdrawAuctionRefund'
 	| 'finalizeTruthAuction'
 	| 'claimAuctionProceeds'
 	| 'settleForkedEscalation'
@@ -317,6 +318,7 @@ export type ListedSecurityPool = {
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
+		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
 		totalFeesOwedRemainder: bigint

@@ -279,6 +279,7 @@ export type EscalationHaircutReplay = {
 }
 
 export type ReplayState = {
+	chainId?: bigint
 	identities: Set<string>
 	questions: Map<bigint, QuestionReplay>
 	universes: Map<string, UniverseReplay>
@@ -382,6 +383,58 @@ export function createReplayState(): ReplayState {
 		coordinatorOperations: new Map(),
 		coordinators: new Map(),
 	}
+}
+
+const HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/
+
+function canonicalizeReplayValue(value: unknown): unknown {
+	if (typeof value === 'string') {
+		if (/^0x[0-9a-fA-F]{40}$/.test(value)) return getAddress(value)
+		if (HASH_PATTERN.test(value)) return value.toLowerCase()
+		return value
+	}
+	if (Array.isArray(value)) return value.map(canonicalizeReplayValue)
+	if (typeof value === 'object' && value !== null)
+		return Object.fromEntries(
+			Object.entries(value)
+				.sort(([left], [right]) => left.localeCompare(right))
+				.map(([key, entry]) => [key, canonicalizeReplayValue(entry)]),
+		)
+	return value
+}
+
+function canonicalizeReplayLog(log: ReplayLog): ReplayLog {
+	if (log.chainId <= 0n) throw new Error('event chainId must be positive')
+	if (!HASH_PATTERN.test(log.blockHash)) throw new Error('event blockHash must be a 32-byte hash')
+	if (!HASH_PATTERN.test(log.transactionHash)) throw new Error('event transactionHash must be a 32-byte hash')
+	if (log.blockNumber < 0n || !Number.isSafeInteger(log.transactionIndex) || log.transactionIndex < 0 || !Number.isSafeInteger(log.logIndex) || log.logIndex < 0) throw new Error('event position must contain non-negative indexes')
+	if (log.eventName.trim() === '') throw new Error('eventName must not be empty')
+	return {
+		...log,
+		blockHash: log.blockHash.toLowerCase() as Hex,
+		transactionHash: log.transactionHash.toLowerCase() as Hex,
+		emitter: getAddress(log.emitter),
+		args: canonicalizeReplayValue(log.args) as Readonly<Record<string, unknown>>,
+	}
+}
+
+function canonicalPayloadValue(value: unknown): string {
+	if (typeof value === 'bigint') return `["bigint",${JSON.stringify(value.toString())}]`
+	if (typeof value === 'string') return `["string",${JSON.stringify(value)}]`
+	if (typeof value === 'number') return `["number",${JSON.stringify(value)}]`
+	if (typeof value === 'boolean') return `["boolean",${JSON.stringify(value)}]`
+	if (value === null) return '["null"]'
+	if (Array.isArray(value)) return `[${value.map(canonicalPayloadValue).join(',')}]`
+	if (typeof value === 'object')
+		return `{${Object.entries(value)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalPayloadValue(entry)}`)
+			.join(',')}}`
+	throw new Error(`Unsupported replay payload value: ${typeof value}`)
+}
+
+function canonicalPayload(log: ReplayLog) {
+	return canonicalPayloadValue(canonicalizeReplayValue(log))
 }
 
 export function getCanonicalEventIdentity(log: Pick<ReplayLog, 'chainId' | 'blockHash' | 'transactionHash' | 'logIndex'>) {
@@ -1473,13 +1526,46 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 
 export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHashes: ReadonlySet<Hex> = new Set(), knownPoolFactories?: ReadonlySet<Address>) {
 	const state = createReplayState()
-	const orderedLogs = logs
-		.filter(log => !orphanedBlockHashes.has(log.blockHash))
-		.toSorted((left, right) => {
-			if (left.blockNumber !== right.blockNumber) return left.blockNumber < right.blockNumber ? -1 : 1
-			if (left.transactionIndex !== right.transactionIndex) return left.transactionIndex - right.transactionIndex
-			return left.logIndex - right.logIndex
-		})
+	const canonicalOrphans = new Set([...orphanedBlockHashes].map(hash => hash.toLowerCase()))
+	const canonicalLogs = logs.map(canonicalizeReplayLog).filter(log => !canonicalOrphans.has(log.blockHash))
+	const chainIds = new Set(canonicalLogs.map(log => log.chainId))
+	if (chainIds.size > 1) throw new Error('mixed-chain event replay is not supported')
+	state.chainId = canonicalLogs[0]?.chainId
+	const blockHashes = new Map<string, Hex>()
+	const blockPositions = new Map<Hex, string>()
+	const transactionPositions = new Map<Hex, string>()
+	const transactionHashesByPosition = new Map<string, Hex>()
+	const transactionHashesByLogPosition = new Map<string, Hex>()
+	const uniqueLogs = new Map<string, ReplayLog>()
+	for (const log of canonicalLogs) {
+		const blockKey = `${log.chainId.toString()}:${log.blockNumber.toString()}`
+		const knownBlockHash = blockHashes.get(blockKey)
+		if (knownBlockHash !== undefined && knownBlockHash !== log.blockHash) throw new Error(`competing block hashes for ${blockKey}`)
+		blockHashes.set(blockKey, log.blockHash)
+		const knownBlockPosition = blockPositions.get(log.blockHash)
+		if (knownBlockPosition !== undefined && knownBlockPosition !== blockKey) throw new Error(`block hash appears at inconsistent positions: ${log.blockHash}`)
+		blockPositions.set(log.blockHash, blockKey)
+		const transactionPosition = `${blockKey}:${log.blockHash}:${log.transactionIndex.toString()}`
+		const knownTransactionPosition = transactionPositions.get(log.transactionHash)
+		if (knownTransactionPosition !== undefined && knownTransactionPosition !== transactionPosition) throw new Error(`transaction hash appears at inconsistent positions: ${log.transactionHash}`)
+		transactionPositions.set(log.transactionHash, transactionPosition)
+		const knownTransactionHash = transactionHashesByPosition.get(transactionPosition)
+		if (knownTransactionHash !== undefined && knownTransactionHash !== log.transactionHash) throw new Error(`transaction position contains conflicting hashes: ${transactionPosition}`)
+		transactionHashesByPosition.set(transactionPosition, log.transactionHash)
+		const logPosition = `${blockKey}:${log.blockHash}:${log.logIndex.toString()}`
+		const transactionAtLogPosition = transactionHashesByLogPosition.get(logPosition)
+		if (transactionAtLogPosition !== undefined && transactionAtLogPosition !== log.transactionHash) throw new Error(`block log position contains conflicting transactions: ${logPosition}`)
+		transactionHashesByLogPosition.set(logPosition, log.transactionHash)
+		const identity = getCanonicalEventIdentity(log)
+		const previous = uniqueLogs.get(identity)
+		if (previous !== undefined && canonicalPayload(previous) !== canonicalPayload(log)) throw new Error(`conflicting duplicate event identity: ${identity}`)
+		if (previous === undefined) uniqueLogs.set(identity, log)
+	}
+	const orderedLogs = [...uniqueLogs.values()].toSorted((left, right) => {
+		if (left.blockNumber !== right.blockNumber) return left.blockNumber < right.blockNumber ? -1 : 1
+		if (left.transactionIndex !== right.transactionIndex) return left.transactionIndex - right.transactionIndex
+		return left.logIndex - right.logIndex
+	})
 	const recognizedRepTokens = new Set<Address>()
 	for (const log of orderedLogs) {
 		if (log.eventName === 'UniverseInitialized') recognizedRepTokens.add(requireAddress(log.args, 'reputationToken'))
@@ -1510,7 +1596,6 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 	}
 	for (const log of orderedLogs) {
 		const identity = getCanonicalEventIdentity(log)
-		if (state.identities.has(identity)) continue
 		state.identities.add(identity)
 		reduceZoltarLog(state, log, recognizedRepTokens, poolRelationships)
 	}

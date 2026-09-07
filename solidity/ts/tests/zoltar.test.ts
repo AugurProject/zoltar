@@ -8,7 +8,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulat
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeDeployData, hexToBytes } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, hexToBytes, keccak256 } from '@zoltar/shared/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -33,7 +33,9 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
 const FORKER_DEPOSIT_FRACTION = 20n
+const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 1n
 
 function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
 	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
@@ -81,6 +83,24 @@ describe('Contract Test Suite', () => {
 	test('exposes configured fork economics', async () => {
 		assert.strictEqual(await getZoltarForkBurnDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor, 'fork burn divisor mismatch')
 		assert.strictEqual(await getZoltarForkThresholdDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 'fork threshold divisor mismatch')
+	})
+
+	test('rounds every nonzero universe supply up to a positive fork threshold without overflow', async () => {
+		const universeSupplySlot = formatStorageSlot(BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))))
+		const divisor = DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const boundarySupplies = [0n, 1n, divisor - 1n, divisor, divisor + 1n, MAX_UINT256 - (MAX_UINT256 % divisor)]
+		let state = 0x5eedn
+		const generatedSupplies = Array.from({ length: 32 }, () => {
+			state = (state * 6364136223846793005n + 1442695040888963407n) & MAX_UINT256
+			return state
+		})
+		for (const supply of [...boundarySupplies, ...generatedSupplies]) {
+			await mockWindow.addStateOverrides({
+				[getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: supply } },
+			})
+			const expected = supply === 0n ? 0n : supply / divisor + (supply % divisor === 0n ? 0n : 1n)
+			assert.strictEqual(await getZoltarForkThreshold(client, genesisUniverse), expected, `ceiling threshold mismatch for supply ${supply.toString()}`)
+		}
 	})
 
 	test('fork initiation charges the configured admission haircut', async () => {
@@ -508,10 +528,10 @@ describe('Contract Test Suite', () => {
 			[0n, 1n, 3n],
 			[3n, 1n, 0n],
 		]
-		const snapshot = await mockWindow.anvilSnapshot()
 		const results: Array<{ childBalances: bigint[]; remainingMigrationBalance: bigint }> = []
 
 		for (const outcomeIndexes of outcomeOrderings) {
+			const snapshot = await mockWindow.anvilSnapshot()
 			await splitMigrationRep(client, genesisUniverse, migrationBalance, outcomeIndexes)
 			const childBalances = await Promise.all(
 				outcomeIndexes.map(async outcomeIndex => {

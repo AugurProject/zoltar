@@ -52,7 +52,12 @@ describe('chaos dashboard server', () => {
 			expect(response.headers.get('content-security-policy')).toContain("default-src 'self'")
 			expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
 			expect(response.headers.get('permissions-policy')).toContain('camera=()')
-			expect(await response.text()).toContain(`<body data-page="${route}">`)
+			const html = await response.text()
+			expect(html).toContain(`<body data-page="${route}">`)
+			const header = html.split('</header>')[0]
+			expect(header).toContain('id="header-block-status" class="header-block-status"')
+			expect(header).toContain('id="last-block"')
+			expect(header).toContain('id="last-scan"')
 		}
 
 		const overview = await (await dashboardFetch(server.url)).text()

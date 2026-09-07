@@ -214,3 +214,7 @@ describe('dashboard exact ETH formatting', () => {
 		expect(chartTimeTickIndexes([100, 100], false, 1_000, 120)).toEqual([0])
 	})
 })
+
+test('hides JSON parser internals when the state response is unreadable', () => {
+	expect(statePollingFailureMessage(new SyntaxError('Unexpected token U in JSON'))).toBe('The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.')
+})

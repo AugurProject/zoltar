@@ -814,8 +814,6 @@ describe('Statoblast: fork migration', () => {
 			)
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const targetDepositPreferenceBeforeLiquidation = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] })
-			const receiverDepositPreferenceBeforeLiquidation = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [liquidatorClient.account.address] })
 			const targetClaimBeforeLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimBeforeLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
 
@@ -838,16 +836,6 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(originalVault.repBackingUnits + liquidatorVault.repBackingUnits, targetVaultBeforeLiquidation.repBackingUnits + liquidatorVaultBeforeLiquidation.repBackingUnits, 'liquidation should conserve target and receiver backing units')
 			strictEqualTypeSafe(originalClaim + liquidatorClaim, targetClaimBeforeLiquidation + liquidatorClaimBeforeLiquidation, 'liquidation should conserve target and receiver REP claims')
 			assert.ok(liquidatorVault.claimableFeesAttoEth >= liquidatorVaultBeforeLiquidation.claimableFeesAttoEth, 'the receiver should retain fees accrued from its own pre-liquidation ownership')
-			strictEqualTypeSafe(
-				await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				targetDepositPreferenceBeforeLiquidation,
-				'liquidation should not rewrite the target vault deposit preference',
-			)
-			strictEqualTypeSafe(
-				await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [liquidatorClient.account.address] }),
-				receiverDepositPreferenceBeforeLiquidation,
-				'liquidation should not rewrite the receiver vault deposit preference',
-			)
 		})
 
 		test('receiver existing debt permits accepting a liquidation slice below the debt floor', async () => {
@@ -1116,7 +1104,6 @@ describe('Statoblast: fork migration', () => {
 			const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const parentBackingAttoRep = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [parentVaultBeforeMigration.repBackingUnits] })
 			const parentBackingFactorsBps = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', args: [client.account.address] })
-			const parentDepositPreferenceBps = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] })
 
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -1131,11 +1118,6 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(childVault.feeIndex, await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'feeIndex' }), 'the migrated capacity should start from the child fee index')
 			strictEqualTypeSafe(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [childVault.repBackingUnits] }), parentBackingAttoRep, 'migration should preserve pool-held REP backing')
 			assert.deepStrictEqual(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', args: [client.account.address] }), parentBackingFactorsBps, 'migration should preserve derived REP-per-capacity ratios')
-			strictEqualTypeSafe(
-				await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				parentDepositPreferenceBps,
-				'migration may preserve the latest deposit preference only as metadata',
-			)
 			strictEqualTypeSafe(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', args: [client.account.address] }), 0n, 'parent vault bad debt should be consumed by migration')
 
 			const childVaultBeforeRepeat = await getSecurityVault(client, yesPool.securityPool, client.account.address)
@@ -1150,11 +1132,6 @@ describe('Statoblast: fork migration', () => {
 				'repeating migration to the same child should preserve derived backing factors',
 			)
 			strictEqualTypeSafe(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalBadDebtAttoEth' }), childTotalBadDebtBeforeRepeat, 'repeating migration to the same child should preserve aggregate bad debt')
-			strictEqualTypeSafe(
-				await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				parentDepositPreferenceBps,
-				'repeating migration to the same child should preserve the latest deposit preference metadata',
-			)
 		})
 
 		test('liquidation rejects attempts to use the target vault as the receiver', async () => {
@@ -1980,12 +1957,16 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(ensureDefined(secondHolderChildShares[1], 'second holder yes child winning shares missing'), 0n, 'second holder should not have migrated winning shares into the child')
 
 			const firstHolderBalanceBeforeRedemption = await getETHBalance(client, firstHolder.account.address)
+			const childFeesBeforeRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await redeemShares(firstHolder, yesSecurityPool.securityPool)
 			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
+			const childFeesAfterRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
+			const redemptionFeeDelta = childFeesAfterRedemption - childFeesBeforeRedemption
 
-			const expectedFirstHolderPayout = (childCollateralBeforeRedemption * firstHolderWinningShares) / (firstHolderWinningShares + secondWinningShares)
+			const collateralAfterCurrentFees = childCollateralBeforeRedemption - redemptionFeeDelta
+			const expectedFirstHolderPayout = (collateralAfterCurrentFees * firstHolderWinningShares) / (firstHolderWinningShares + secondWinningShares)
 			strictEqualTypeSafe(firstHolderPayout, expectedFirstHolderPayout, 'the early migrant should receive only its fork-time share of child collateral')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralBeforeRedemption - expectedFirstHolderPayout, 'late winning claims should retain their collateral reserve')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralAfterCurrentFees - expectedFirstHolderPayout, 'late winning claims should retain their collateral reserve after current fees')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), secondWinningShares, 'redemption should consume economic claims instead of replacing them with materialized supply')
 
 			await migrateShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
@@ -2724,14 +2705,17 @@ describe('Statoblast: fork migration', () => {
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
 			const collateralBeforeRedemption = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			const feesBeforeRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			const supplyBeforeRedemption = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
 			assert.ok(supplyBeforeRedemption > economicSupplyBeforeMint, 'new complete sets should add economic claims even when migrated outcome supplies are uneven')
-			const expectedRedemption = (collateralBeforeRedemption * migratedBalancedSupply) / supplyBeforeRedemption
 			const balanceBeforeRedemption = await getETHBalance(client, client.account.address)
 			await redeemCompleteSet(client, yesSecurityPool.securityPool, migratedBalancedSupply)
+			const redemptionFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - feesBeforeRedemption
+			const collateralAfterCurrentFees = collateralBeforeRedemption - redemptionFeeDelta
+			const expectedRedemption = (collateralAfterCurrentFees * migratedBalancedSupply) / supplyBeforeRedemption
 			strictEqualTypeSafe((await getETHBalance(client, client.account.address)) - balanceBeforeRedemption, expectedRedemption, 'balanced holder should redeem proportionally against all economic claims')
 
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeRedemption - expectedRedemption, 'redemption should debit only the proportional collateral payout')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralAfterCurrentFees - expectedRedemption, 'redemption should debit current fees and only the proportional collateral payout')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), supplyBeforeRedemption - migratedBalancedSupply, 'redemption should reduce the economic claim denominator by the burned complete sets')
 			const balancesAfterRedemption = await balanceOfShares(client, yesSecurityPool.shareToken, yesUniverse, client.account.address)
 			strictEqualTypeSafe(balancesAfterRedemption[0], 0n, 'redemption should burn the holder invalid balance')
@@ -2767,13 +2751,15 @@ describe('Statoblast: fork migration', () => {
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const collateralBeforeMint = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			const feesBeforeMint = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
+			const mintFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - feesBeforeMint
 			const mintedOutcomeSupplies = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
 			const mintedCompleteSets = ensureDefined(mintedOutcomeSupplies[0], 'new invalid child shares missing')
 			assert.ok(mintedCompleteSets > 0n, 'fork-time economic claims should define a nonzero child exchange rate')
 			assert.deepStrictEqual(mintedOutcomeSupplies, [mintedCompleteSets, mintedCompleteSets, mintedCompleteSets], 'post-fork complete-set minting should materialize balanced new claims')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), forkTimeShareSupply + mintedCompleteSets, 'new complete sets should add to the reserved economic claim supply')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeMint + 1n * 10n ** 18n, 'successful minting should add its collateral without exposing the preexisting reserve')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeMint - mintFeeDelta + 1n * 10n ** 18n, 'successful minting should charge current fees and add its collateral without exposing the preexisting reserve')
 		})
 
 		test('child pool with migrated shares but no collateral activates after settlement while still rejecting complete-set minting', async () => {

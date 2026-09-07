@@ -123,9 +123,36 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 	let branchTotal = 0
 	let branchCovered = 0
 	let sawBranchData = false
+	let declaredLines: number | undefined
+	let declaredCoveredLines: number | undefined
+	let declaredBranches: number | undefined
+	let declaredCoveredBranches: number | undefined
+	let declaredFunctions = false
+	let declaredCoveredFunctions = false
+	let recordTerminated = true
+	const branchIdentities = new Set<string>()
+	const functionDefinitions = new Set<string>()
+	const functionHits = new Map<string, number>()
+	const parseNonNegativeInteger = (text: string, label: string) => {
+		if (!/^(?:0|[1-9][0-9]*)$/.test(text)) throw new Error(`Invalid LCOV ${label}: ${text}`)
+		const value = Number(text)
+		if (!Number.isSafeInteger(value)) throw new Error(`Invalid LCOV ${label}: ${text}`)
+		return value
+	}
 
 	const finishRecord = () => {
 		if (currentFile === undefined) return
+		if (!recordTerminated) throw new Error(`Unterminated LCOV record: ${currentFile}`)
+		if (records.has(currentFile)) throw new Error(`Duplicate LCOV SF record: ${currentFile}`)
+		if (declaredLines === undefined || declaredCoveredLines === undefined) throw new Error(`LCOV record is missing LF/LH totals: ${currentFile}`)
+		if (!declaredFunctions || !declaredCoveredFunctions) throw new Error(`LCOV record is missing FNF/FNH totals: ${currentFile}`)
+		const hasDetailedFunctionEvidence = functionDefinitions.size > 0 || functionHits.size > 0
+		if (hasDetailedFunctionEvidence && (functionDefinitions.size !== functionTotal || functionHits.size !== functionTotal || [...functionHits.keys()].some(name => !functionDefinitions.has(name)))) throw new Error(`LCOV FNF total does not match FN/FNDA entries: ${currentFile}`)
+		if (hasDetailedFunctionEvidence && [...functionHits.values()].filter(hits => hits > 0).length !== functionCovered) throw new Error(`LCOV FNH total does not match FNDA entries: ${currentFile}`)
+		const coveredLines = [...lineHits.values()].filter(hits => hits > 0).length
+		if (declaredLines !== lineHits.size || declaredCoveredLines !== coveredLines) throw new Error(`LCOV LF/LH totals do not match DA entries: ${currentFile}`)
+		if (functionCovered > functionTotal) throw new Error(`LCOV FNH exceeds FNF: ${currentFile}`)
+		if ((sawBranchData || declaredBranches !== undefined || declaredCoveredBranches !== undefined) && (declaredBranches !== branchTotal || declaredCoveredBranches !== branchCovered)) throw new Error(`LCOV BRF/BRH totals do not match BRDA entries: ${currentFile}`)
 		records.set(currentFile, {
 			file: currentFile,
 			lineHits,
@@ -139,39 +166,104 @@ export function parseLcov(contents: string, repositoryRoot = process.cwd()) {
 		branchTotal = 0
 		branchCovered = 0
 		sawBranchData = false
+		declaredLines = undefined
+		declaredCoveredLines = undefined
+		declaredBranches = undefined
+		declaredCoveredBranches = undefined
+		declaredFunctions = false
+		declaredCoveredFunctions = false
+		branchIdentities.clear()
+		functionDefinitions.clear()
+		functionHits.clear()
 	}
 
 	for (const line of contents.split(/\r?\n/)) {
 		if (line.startsWith('SF:')) {
-			finishRecord()
+			if (currentFile !== undefined) finishRecord()
 			currentFile = normalizePath(line.slice(3), repositoryRoot)
+			if (currentFile === '') throw new Error('LCOV SF path must not be empty')
+			recordTerminated = false
 			continue
 		}
+		if (/^(?:LF|LH|FN|FNDA|FNF|FNH|BRDA|BRF|BRH):/.test(line) && currentFile === undefined) throw new Error(`LCOV record field appears outside a record: ${line}`)
 		if (line.startsWith('DA:')) {
+			if (currentFile === undefined) throw new Error('LCOV DA entry appears outside a record')
 			const [lineNumberValue, hitCountValue] = line.slice(3).split(',', 2)
-			const lineNumber = Number.parseInt(lineNumberValue ?? '', 10)
-			const hitCount = Number.parseInt(hitCountValue ?? '', 10)
-			if (!Number.isNaN(lineNumber) && !Number.isNaN(hitCount)) lineHits.set(lineNumber, hitCount)
+			const lineNumber = parseNonNegativeInteger(lineNumberValue ?? '', 'DA line')
+			const hitCount = parseNonNegativeInteger(hitCountValue ?? '', 'DA hits')
+			if (lineNumber === 0) throw new Error('LCOV DA line numbers must be positive')
+			if (lineHits.has(lineNumber)) throw new Error(`Duplicate LCOV DA entry: ${lineNumber.toString()}`)
+			lineHits.set(lineNumber, hitCount)
 			continue
+		}
+		if (line.startsWith('LF:')) {
+			if (declaredLines !== undefined) throw new Error('Duplicate LCOV LF declaration')
+			declaredLines = parseNonNegativeInteger(line.slice(3), 'LF')
+		}
+		if (line.startsWith('LH:')) {
+			if (declaredCoveredLines !== undefined) throw new Error('Duplicate LCOV LH declaration')
+			declaredCoveredLines = parseNonNegativeInteger(line.slice(3), 'LH')
 		}
 		if (line.startsWith('FNF:')) {
-			functionTotal = Number.parseInt(line.slice(4), 10)
+			if (declaredFunctions) throw new Error('Duplicate LCOV FNF declaration')
+			declaredFunctions = true
+			functionTotal = parseNonNegativeInteger(line.slice(4), 'FNF')
+			continue
+		}
+		if (line.startsWith('FN:')) {
+			const separator = line.indexOf(',', 3)
+			if (separator === -1) throw new Error(`Invalid LCOV FN entry: ${line}`)
+			const functionLine = parseNonNegativeInteger(line.slice(3, separator), 'FN line')
+			const name = line.slice(separator + 1)
+			if (functionLine === 0 || name === '' || functionDefinitions.has(name)) throw new Error(`Invalid or duplicate LCOV FN entry: ${line}`)
+			functionDefinitions.add(name)
+			continue
+		}
+		if (line.startsWith('FNDA:')) {
+			const separator = line.indexOf(',', 5)
+			if (separator === -1) throw new Error(`Invalid LCOV FNDA entry: ${line}`)
+			const hits = parseNonNegativeInteger(line.slice(5, separator), 'FNDA hits')
+			const name = line.slice(separator + 1)
+			if (name === '' || functionHits.has(name)) throw new Error(`Invalid or duplicate LCOV FNDA entry: ${line}`)
+			functionHits.set(name, hits)
 			continue
 		}
 		if (line.startsWith('FNH:')) {
-			functionCovered = Number.parseInt(line.slice(4), 10)
+			if (declaredCoveredFunctions) throw new Error('Duplicate LCOV FNH declaration')
+			declaredCoveredFunctions = true
+			functionCovered = parseNonNegativeInteger(line.slice(4), 'FNH')
 			continue
 		}
 		if (line.startsWith('BRDA:')) {
 			sawBranchData = true
+			const fields = line.slice(5).split(',')
+			if (fields.length !== 4) throw new Error(`Invalid LCOV BRDA entry: ${line}`)
+			const [lineText, blockText, branchText, taken] = fields
+			if (parseNonNegativeInteger(lineText ?? '', 'BRDA line') === 0) throw new Error('LCOV BRDA line numbers must be positive')
+			parseNonNegativeInteger(blockText ?? '', 'BRDA block')
+			parseNonNegativeInteger(branchText ?? '', 'BRDA branch')
+			const identity = fields.slice(0, 3).join(',')
+			if (branchIdentities.has(identity)) throw new Error(`Duplicate LCOV BRDA entry: ${identity}`)
+			branchIdentities.add(identity)
 			branchTotal += 1
-			const taken = line.slice(5).split(',')[3]
-			if (taken !== undefined && taken !== '-' && Number.parseInt(taken, 10) > 0) branchCovered += 1
+			if (taken !== undefined && taken !== '-' && parseNonNegativeInteger(taken, 'BRDA taken') > 0) branchCovered += 1
 			continue
 		}
-		if (line === 'end_of_record') finishRecord()
+		if (line.startsWith('BRF:')) {
+			if (declaredBranches !== undefined) throw new Error('Duplicate LCOV BRF declaration')
+			declaredBranches = parseNonNegativeInteger(line.slice(4), 'BRF')
+		}
+		if (line.startsWith('BRH:')) {
+			if (declaredCoveredBranches !== undefined) throw new Error('Duplicate LCOV BRH declaration')
+			declaredCoveredBranches = parseNonNegativeInteger(line.slice(4), 'BRH')
+		}
+		if (line === 'end_of_record') {
+			if (currentFile === undefined) throw new Error('LCOV end_of_record appears outside a record')
+			recordTerminated = true
+			finishRecord()
+		}
 	}
-	finishRecord()
+	if (currentFile !== undefined) finishRecord()
 	return records
 }
 
@@ -373,9 +465,18 @@ export function summarizeSolidityCoverage(summary: SolidityCoverageInput, reposi
 	const uncoveredFirstPartyLines: string[] = []
 	const uncoveredImportedLines: string[] = []
 
+	let declaredTotal = 0
+	let declaredCovered = 0
 	for (const fileSummary of Object.values(summary.files)) {
 		const file = normalizePath(fileSummary.file, repositoryRoot)
 		const imported = isImportedSolidityContract(file)
+		const entries = Object.entries(fileSummary.lineHits)
+		if (!Number.isSafeInteger(fileSummary.totalLines) || !Number.isSafeInteger(fileSummary.coveredLines) || fileSummary.totalLines < 0 || fileSummary.coveredLines < 0 || fileSummary.coveredLines > fileSummary.totalLines) throw new Error(`Invalid Solidity coverage totals: ${file}`)
+		if (entries.some(([line, hits]) => !/^[1-9][0-9]*$/.test(line) || !Number.isSafeInteger(hits) || hits < 0)) throw new Error(`Invalid Solidity line evidence: ${file}`)
+		const coveredEntries = entries.filter(([, hits]) => hits > 0).length
+		if (fileSummary.totalLines !== entries.length || fileSummary.coveredLines !== coveredEntries) throw new Error(`Solidity coverage totals do not match line hits: ${file}`)
+		declaredTotal += fileSummary.totalLines
+		declaredCovered += fileSummary.coveredLines
 		for (const [line, hitCount] of Object.entries(fileSummary.lineHits)) {
 			if (imported) {
 				importedTotal += 1
@@ -388,6 +489,7 @@ export function summarizeSolidityCoverage(summary: SolidityCoverageInput, reposi
 			}
 		}
 	}
+	if (summary.totalLines !== declaredTotal || summary.totalCoveredLines !== declaredCovered) throw new Error('Global Solidity coverage totals do not match file evidence')
 	uncoveredFirstPartyLines.sort((left, right) => left.localeCompare(right))
 	uncoveredImportedLines.sort((left, right) => left.localeCompare(right))
 	return {
@@ -423,6 +525,7 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 	if (report.solidity !== undefined && belowMinimum(report.solidity.firstParty, policy.solidity.minimumFirstPartyLines)) {
 		failures.push(`First-party Solidity line coverage ${formatExact(report.solidity.firstParty)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(3)}%`)
 	}
+	if (report.solidity !== undefined && report.solidity.firstParty.total === 0) failures.push('First-party Solidity coverage contains no executable line evidence')
 	if (report.changedLines === undefined || !('percentage' in report.changedLines)) {
 		failures.push('Changed product TypeScript line coverage is unavailable')
 	} else if (belowMinimum(report.changedLines, policy.changedLines.minimum)) {

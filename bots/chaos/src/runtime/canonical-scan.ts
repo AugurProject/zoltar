@@ -333,7 +333,7 @@ function authenticatedRefundGenerationAtCompleteIndex(auction: EcosystemSnapshot
 		return undefined
 	}
 	if (indexed === undefined) {
-		throw new Error(`Auction ${auction.address} has positive pending ETH refund storage without an authenticated EthRefundDeferred episode; protocolStartBlock may be after the episode start or the indexed history is incomplete`)
+		throw new Error(`Auction ${auction.address} has positive pending ETH refund storage without an authenticated EthRefundCredited episode; protocolStartBlock may be after the episode start or the indexed history is incomplete`)
 	}
 	if (BigInt(indexed.pendingAttoEth) !== pendingAttoEth) throw new Error(`Auction ${auction.address} pending ETH refund storage does not match its authenticated event episode`)
 	return indexed.generation

@@ -6,6 +6,7 @@ import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReporting
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { getQuestionId } from '../../protocol/helpers.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -26,9 +27,10 @@ const questionComponents = [
 	{ name: 'answerUnit', type: 'string' },
 ] as const
 const reportingQuestion = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+const reportingQuestionId = getQuestionId({ answerUnit: '', description: 'Description', displayValueMax: 100n, displayValueMin: 0n, endTime: 2n, numTicks: 2n, startTime: 1n, title: 'Question' }, ['Yes', 'No'])
 const reportingQuestionLog = {
 	data: encodeAbiParameters([{ type: 'uint256' }, { type: 'tuple', components: questionComponents }, { type: 'string[]' }], [10n, reportingQuestion, ['Yes', 'No']]),
-	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(1n, { size: 32 })],
+	topics: [keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])'), toHex(reportingQuestionId, { size: 32 })],
 }
 const getReportingQuestionLogs = async () => [reportingQuestionLog]
 let reportingChainIdentity = 0n
@@ -161,7 +163,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -228,7 +230,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -292,7 +294,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 99n, 3n, 120n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
@@ -350,7 +352,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 1n, zeroAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
@@ -379,7 +381,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
@@ -406,7 +408,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
@@ -427,7 +429,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n, zeroAddress]
+				if (functionName === 'questionId') return [reportingQuestionId, zeroAddress, 20n, 3n, zoltarAddress, 5n, 2n, 1n, zeroAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {

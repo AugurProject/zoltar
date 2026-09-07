@@ -365,7 +365,7 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected-bid settlement preview.')).not.toBeNull()
-		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned capacity ownership, while refund rows return locked ETH\./)).not.toBeNull()
+		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned capacity ownership, while refund rows credit locked ETH for withdrawal\./)).not.toBeNull()
 		expect(documentQueries.getByText('Estimated Auctioned capacity ownership')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 1.50 REP')).not.toBeNull()
 		expect(documentQueries.getByText('≈ 3.00 REP')).not.toBeNull()

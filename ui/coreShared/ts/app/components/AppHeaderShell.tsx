@@ -11,6 +11,7 @@ type AppHeaderShellProps = {
 	header?: ComponentChildren
 	renderHeader?: (simulationBanner: ComponentChildren, settingsMenu: ComponentChildren) => ComponentChildren
 	overview?: ComponentChildren
+	renderOverview?: (settingsMenu: ComponentChildren) => ComponentChildren
 	simulationController: SimulationController | undefined
 	subNavigation?: ComponentChildren
 	tabNavigation?: {
@@ -24,7 +25,7 @@ type AppHeaderShellProps = {
 	settingsContent?: ComponentChildren
 }
 
-export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
+export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, renderOverview, simulationController, subNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
 	const focusAppContent = () => {
 		const appContent = document.getElementById(mainElementId)
 		if (!(appContent instanceof HTMLElement)) return
@@ -36,8 +37,8 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 	const settingsMenu = <AppSettingsMenu onEnvironmentChanged={onEnvironmentChanged} settingsContent={settingsContent} />
 	const shellHeader = header ?? (
 		<div className='top-shell'>
-			<div className='top-shell-settings-row'>{settingsMenu}</div>
-			<div className='top-shell-content'>{overview}</div>
+			{renderOverview === undefined ? <div className='top-shell-settings-row'>{settingsMenu}</div> : undefined}
+			<div className='top-shell-content'>{renderOverview === undefined ? overview : renderOverview(settingsMenu)}</div>
 			<div className='app-nav-stack'>
 				{tabNavigation === undefined ? undefined : <TabNavigation {...tabNavigation} />}
 				{subNavigation}

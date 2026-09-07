@@ -143,7 +143,6 @@ const getSecurityPoolFactoryByteCode = ({
 				shareTokenFactory,
 				uniformPriceDualCapBatchAuctionFactory,
 				priceOracleManagerAndOperatorQueuerFactory,
-				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep,
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 				securityPoolOperationsDelegate,
@@ -275,7 +274,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			return encodeDeployData({
 				abi: statoblast_SecurityPool_SecurityPool.abi,
 				bytecode: applyLibraries(statoblast_SecurityPool_SecurityPool.evm.bytecode.object),
-				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, truthAuction],
+				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>

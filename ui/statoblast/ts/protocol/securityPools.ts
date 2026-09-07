@@ -389,6 +389,7 @@ async function loadSecurityPoolDetails(
 			poolAccountingSnapshot,
 			universeForkTime,
 			escalationGameAddress,
+			feeEndTimestamp,
 		],
 		marketDetails,
 		vaultSummaries,
@@ -478,6 +479,12 @@ async function loadSecurityPoolDetails(
 				address: securityPoolAddress,
 				args: [],
 			},
+			{
+				abi: statoblast_SecurityPool_SecurityPool.abi,
+				functionName: 'getFeeEpochEndTime',
+				address: securityPoolAddress,
+				args: [],
+			},
 		]),
 		loadMarketDetails(client, questionId),
 		shouldLoadVaults
@@ -503,6 +510,7 @@ async function loadSecurityPoolDetails(
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		feeAccrualState: {
+			feeEndTimestamp,
 			feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
 			lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 			totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,

@@ -6,17 +6,20 @@ import { getZoltarScenarioDescription, getZoltarScenarioLabel, isZoltarScenario,
 
 void describe('zoltar simulation scenarios', () => {
 	void test('recognizes zoltar scenarios', () => {
+		expect(isZoltarScenario('two-questions')).toBe(true)
 		expect(isZoltarScenario('forked-categorical')).toBe(true)
 		expect(isZoltarScenario('baseline')).toBe(false)
 	})
 
 	void test('returns labels and descriptions for zoltar scenarios', () => {
+		expect(getZoltarScenarioLabel('two-questions')).toBe('Two questions')
 		expect(getZoltarScenarioLabel('forked-categorical')).toBe('Forked categorical')
 		expect(getZoltarScenarioDescription('forked-categorical')).toContain('five-way categorical fork')
 	})
 
 	void test('registers scenarios into the shared registry', () => {
 		registerZoltarSimulationScenarios()
+		expect(getRegisteredSimulationScenarios()).toContain('two-questions')
 		expect(getRegisteredSimulationScenarios()).toContain('forked-categorical')
 		expect(getSimulationScenarioLabel('forked-categorical')).toBe('Forked categorical')
 		expect(getSimulationScenarioDescription('forked-categorical')).toContain('two child universes are deployed')

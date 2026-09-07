@@ -7,8 +7,7 @@ const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.ym
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
 const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
-const stagedCoverageWorkflowPath = join(repositoryRoot, 'workflow', 'coverage.yml')
-const coverageWorkflowPath = (await Bun.file(stagedCoverageWorkflowPath).exists()) ? stagedCoverageWorkflowPath : activeCoverageWorkflowPath
+const coverageWorkflowPath = activeCoverageWorkflowPath
 const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-domains.yml')
 const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
@@ -39,8 +38,14 @@ const workflowSteps = (job: unknown) => {
 	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
 }
 describe('split UI workflow paths', () => {
+	test('CI validates test ownership before scope-dependent jobs', async () => {
+		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const changesSteps = workflowSteps(jobs['changes'])
+		expect(changesSteps.some(step => step['run'] === 'bun run test:preflight')).toBe(true)
+	})
 	test('CI validation cannot be diverted to a staged workflow copy', async () => {
 		await expect(access(stagedCiWorkflowPath)).rejects.toThrow()
+		expect(coverageWorkflowPath).toBe(activeCoverageWorkflowPath)
 	})
 
 	test('split CI remains callable by the version release workflow', async () => {
@@ -75,6 +80,12 @@ describe('split UI workflow paths', () => {
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
+		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciJobs = workflowJobs(ciWorkflow)
+		const requiredBrowserJob = requireRecord(ciJobs['browser-smoke'], 'required browser smoke job')
+		expect(requiredBrowserJob['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(workflowSteps(requiredBrowserJob).some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
+		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
 	})
 
 	test('manual coverage publishes and retains the canonical policy report', async () => {
@@ -176,12 +187,12 @@ describe('split UI workflow paths', () => {
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
 		const setupAction = await readFile(setupActionPath, 'utf8')
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
-			expect(setupAction).toContain(`(cd ui/${appId} && bun install --frozen-lockfile)`)
+			expect(setupAction).toContain(`bun ./scripts/install-frozen.mts ui/${appId}`)
 		}
 		expect(setupAction).toContain("hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock')")
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
-		expect(dockerfile).toContain('ARG BUN_VERSION=1.3.14')
+		expect(dockerfile).toContain('ARG BUN_VERSION=1.4.2')
 		for (const appId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
 			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
 		}
@@ -205,7 +216,7 @@ describe('split UI workflow paths', () => {
 		const botInstallStep = setupAction.indexOf('name: Install bot workspace dependencies for dead code analysis')
 		expect(botInstallStep).toBeGreaterThan(0)
 		expect(setupAction.slice(botInstallStep)).toContain("if: github.job == 'knip'")
-		for (const packageId of ['shared', 'open-oracle-arbitrager', 'liquidator']) {
+		for (const packageId of ['shared', 'open-oracle-arbitrager', 'liquidator', 'chaos']) {
 			const installIndex = setupAction.indexOf(`bun ./scripts/install-frozen.mts bots/${packageId}`, botInstallStep)
 			expect(installIndex).toBeGreaterThan(0)
 		}

@@ -8,7 +8,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
-import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -20,7 +20,6 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPool_SecurityPool,
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
@@ -325,27 +324,36 @@ describe('Escalation Game Fork Threshold Test', () => {
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 
-	test('rejects an escalation baseline that could exceed the exact supply-based minimum', async () => {
-		const infra = getInfraContractAddresses()
-		const deploymentData = encodeDeployData({
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			bytecode: applyLibraries(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [
-				infra.securityPoolForker,
-				infra.zoltarQuestionData,
-				infra.escalationGameFactory,
-				infra.openOracle,
-				infra.zoltar,
-				infra.shareTokenFactory,
-				infra.uniformPriceDualCapBatchAuctionFactory,
-				infra.priceOracleManagerAndOperatorQueuerFactory,
-				DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep + 1n,
-				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
-				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
-				infra.securityPoolOperationsDelegate,
-			],
-		})
-		await assert.rejects(client.sendTransaction({ data: deploymentData }), /Initial deposit must be 1 REP/)
+	test('derives newly deployed genesis pool parameters from live supply after multiple burns', async () => {
+		const initialSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		let expectedLiveSupply = initialSupply
+		for (const burnAmount of [initialSupply / 20n, initialSupply / 25n]) {
+			await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'burnRep', args: [genesisUniverse, burnAmount] }))
+			expectedLiveSupply -= burnAmount
+			assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] }), expectedLiveSupply, 'each burn must reduce the authoritative live universe supply exactly once')
+		}
+		const liveSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
+		assert.strictEqual(liveSupply, expectedLiveSupply, 'the deployed pool must observe the complete burn sequence')
+		const nextQuestionData = {
+			title: 'Pool after multiple genesis REP burns',
+			description: '',
+			startTime: 0n,
+			endTime: questionEndDate + DAY,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const nextOutcomes = ['Yes', 'No']
+		const nextQuestionId = getQuestionId(nextQuestionData, nextOutcomes)
+		await createQuestion(client, nextQuestionData, nextOutcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, nextQuestionId, statoblastSecurityMultiplierBps)
+		const nextPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, nextQuestionId, statoblastSecurityMultiplierBps).securityPool
+		const expectedInitialDeposit = liveSupply / 10_000_000n < 10n ** 18n ? 10n ** 18n : liveSupply / 10_000_000n
+
+		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool, functionName: 'initialEscalationGameDepositAttoRep' }), expectedInitialDeposit, 'initial escalation deposit should use live Zoltar supply')
+		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool, functionName: 'minimumVaultRepDepositAttoRep' }), liveSupply / 100_000n, 'minimum vault deposit should use live Zoltar supply')
 	})
 
 	test.each([

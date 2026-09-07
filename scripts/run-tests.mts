@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os'
 import { cleanupFoundryAnvilState } from './cleanup-foundry-anvil-state.mts'
 import { runBunTestProcess } from './run-bun-test-process.mts'
-import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, toBunTestPath } from './test-discovery.mts'
+import { discoverTestFiles, getDefaultTestParallelism, hasExplicitTestPath, toBunTestPath } from './test-discovery.mts'
 
 const defaultParallelism = getDefaultTestParallelism(availableParallelism())
 const cleanupStaleAnvilState = async (phase: 'before' | 'after') => {
@@ -20,7 +20,7 @@ const normalizeOptionValueArgs = (args: string[]) => {
 		const arg = args[index]
 		if (arg === undefined) continue
 		const nextArg = args[index + 1]
-		if ((arg === '--parallel' || arg === '--timeout') && nextArg !== undefined && !nextArg.startsWith('--')) {
+		if (((arg === '--parallel' && /^\d+$/.test(nextArg ?? '')) || arg === '--timeout') && nextArg !== undefined && !nextArg.startsWith('--')) {
 			normalizedArgs.push(`${arg}=${nextArg}`)
 			index += 1
 			continue
@@ -37,30 +37,35 @@ if (!hasArg('--parallel')) args.push(`--parallel=${defaultParallelism}`)
 if (!hasArg('--timeout')) args.push('--timeout', '300000')
 
 args.push(...passthroughArgs)
-const hasExplicitTestPath = passthroughArgs.some(argument => isExplicitTestPath(argument))
-if (!hasExplicitTestPath) args.push(...(await discoverTestFiles()).map(toBunTestPath))
+if (!hasExplicitTestPath(passthroughArgs)) args.push(...(await discoverTestFiles()).map(toBunTestPath))
 
 await cleanupStaleAnvilState('before')
 
-if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
-	// Build shared production assets before parallel tests so productionBuild.test.ts
-	// does not clear and regenerate ui/<app>/vendor while sharedAssets.test.ts traverses it.
-	const productionBuild = Bun.spawn({
-		cmd: [process.execPath, 'run', 'ui:build:prod'],
-		stderr: 'inherit',
-		stdin: 'inherit',
-		stdout: 'inherit',
-	})
-	const productionBuildExitCode = await productionBuild.exited
-	if (productionBuildExitCode !== 0) {
-		await cleanupStaleAnvilState('after')
-		process.exit(productionBuildExitCode)
+let exitCode = 1
+try {
+	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
+		// Build shared production assets before parallel tests so productionBuild.test.ts
+		// does not clear and regenerate ui/<app>/vendor while sharedAssets.test.ts traverses it.
+		const productionBuild = Bun.spawn({
+			cmd: [process.execPath, 'run', 'ui:build:prod'],
+			stderr: 'inherit',
+			stdin: 'inherit',
+			stdout: 'inherit',
+		})
+		exitCode = await productionBuild.exited
+		if (exitCode !== 0) process.exitCode = exitCode
+		else
+			exitCode = await runBunTestProcess({
+				cmd: [process.execPath, ...args],
+				env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
+			})
+	} else {
+		exitCode = await runBunTestProcess({
+			cmd: [process.execPath, ...args],
+			env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
+		})
 	}
+	process.exitCode = exitCode
+} finally {
+	await cleanupStaleAnvilState('after')
 }
-
-const exitCode = await runBunTestProcess({
-	cmd: [process.execPath, ...args],
-	env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
-})
-await cleanupStaleAnvilState('after')
-process.exit(exitCode)

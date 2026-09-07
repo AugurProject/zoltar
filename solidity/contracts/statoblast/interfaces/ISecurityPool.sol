@@ -52,8 +52,6 @@ struct PoolAccountingSnapshot {
 struct LiquidationSnapshot {
 	uint256 targetBackingUnits;
 	uint256 targetCapacityOwnershipAttoRep;
-	uint256 totalPoolHeldAttoRep;
-	uint256 totalRepBackingUnits;
 }
 
 struct LiquidationRequest {
@@ -128,8 +126,6 @@ interface ISecurityPool {
 	function statoblastSecurityMultiplierBps() external view returns (uint256);
 	function minimumSecurityBondDebtAttoEth() external view returns (uint256);
 	function minimumVaultRepDepositAttoRep() external view returns (uint256);
-	/// @notice Latest target supplied with a positive REP deposit; metadata only, not aggregate vault health.
-	function lastDepositTargetHealthFactorBpsByVault(address vault) external view returns (uint256);
 	function totalClaimableVaultFeesAttoEth() external view returns (uint256);
 	function totalAccruedFeesAttoEth() external view returns (uint256);
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
@@ -176,6 +172,7 @@ interface ISecurityPool {
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external;
 
+	function getFeeEpochEndTime() external view returns (uint256);
 	function updateSettlementCollateral() external;
 	function updateRetentionRate() external;
 	function updateVaultFees(address vault) external;
@@ -196,8 +193,8 @@ interface ISecurityPool {
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function assignFinalizedAuctionFees(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization) external;
 	function setTotalRepBackingUnits(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);

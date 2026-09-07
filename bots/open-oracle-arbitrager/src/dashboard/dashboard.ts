@@ -1,3 +1,4 @@
+import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
 import {
@@ -972,7 +973,9 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderBlockStatus(snapshot = latestSnapshot) {
-	setText('block-value', snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
+	const value = snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`
+	setText('block-value', value)
+	setText('header-block-status', value)
 }
 
 function renderTransactions(transactions: readonly PublicTransactionActivity[]) {
@@ -1030,11 +1033,10 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
 	const uncertainTransactionCount = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
 	const networkSetupCount = snapshot.networkConfigured ? 0 : 1
-	const attentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
+	const detailedAttentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
+	const attentionCount = Math.max(snapshot.operatorCapable ? 0 : 1, detailedAttentionCount)
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
-	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
-	attentionBadge.className = `badge attention-badge${attentionCount === 0 ? ' badge-ok' : ' badge-warning'}`
-	attentionBadge.href = networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : snapshot.lastError === undefined ? '/overview' : '/overview#notice'
+	setAttentionBadge(attentionBadge, attentionCount, networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice')
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
@@ -1080,6 +1082,13 @@ function render(snapshot: PublicOperatorSnapshot) {
 	if (snapshot.execute) {
 		noticeTitle = 'Execution mode is locally armed'
 		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, state, and delivery guard passes.'
+		noticeTone = 'warning'
+	}
+	if (!snapshot.operatorCapable) {
+		noticeTitle = 'Operator not ready'
+		noticeCopy = 'Check the latest poll and execution settings before starting new work.'
+		if (snapshot.lastPollAt === undefined) noticeCopy = 'Waiting for the first successful poll. Check RPC connectivity in Settings if polling does not complete.'
+		else if (snapshot.execute && snapshot.wallet === undefined) noticeCopy = 'Configure a local signer in Settings before starting execution.'
 		noticeTone = 'warning'
 	}
 	if (snapshot.paused) {
@@ -1166,6 +1175,9 @@ const refresh = singleFlight(async () => {
 		delete modeBadge.dataset['mode']
 		modeBadge.textContent = 'Mode unavailable'
 		modeBadge.className = 'badge badge-danger'
+		const capabilityBadge = element('capability-badge')
+		capabilityBadge.textContent = 'Capability unavailable'
+		capabilityBadge.className = 'badge badge-warning'
 		const runStatusBadge = element('run-status-badge')
 		runStatusBadge.dataset['status'] = 'disconnected'
 		runStatusBadge.textContent = 'Disconnected'
@@ -1173,15 +1185,14 @@ const refresh = singleFlight(async () => {
 		const attentionBadge = element<HTMLAnchorElement>('attention-badge')
 		const retainedAttentionCount = latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length + (latestSnapshot.networkConfigured ? 0 : 1)
 		const attentionCount = retainedAttentionCount + 1
-		attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
-		attentionBadge.className = 'badge attention-badge badge-danger'
-		attentionBadge.href = '/overview#notice'
+		setAttentionBadge(attentionBadge, attentionCount, '/overview#notice')
 		const headerNetworkBadge = element('header-network-badge')
 		if (latestSnapshot?.networkConfigured === true) headerNetworkBadge.textContent = `${latestSnapshot.network} · ${latestSnapshot.expectedChainId.toString()} · last known`
 		else if (latestSnapshot !== undefined) headerNetworkBadge.textContent = 'Network setup · last known'
 		else headerNetworkBadge.textContent = 'Network unavailable'
 		headerNetworkBadge.className = 'badge badge-warning'
 		setText('status-value', statusLabels.status)
+		element('launch-notice').hidden = true
 		setText('notice-title', 'Dashboard disconnected')
 		setText('notice-copy', statePollingFailureMessage(error))
 		element('notice').dataset['tone'] = 'danger'

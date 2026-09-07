@@ -97,7 +97,7 @@ const REPORT_DISPUTED = eventTopic('ReportDisputed(uint256,bytes)')
 const REPORT_SETTLED = eventTopic('ReportSettled(uint256)')
 const BID_SUBMITTED = eventTopic('BidSubmitted(address,int256,uint256,uint256,uint256)')
 const BID_SETTLED = eventTopic('BidSettled(address,int256,uint256,uint256,uint256,uint256,uint256,uint8)')
-const ETH_REFUND_DEFERRED = eventTopic('EthRefundDeferred(address,uint256,uint256)')
+const ETH_REFUND_CREDITED = eventTopic('EthRefundCredited(address,uint256,uint256)')
 const PENDING_ETH_REFUND_WITHDRAWN = eventTopic('PendingEthRefundWithdrawn(address,uint256)')
 const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)')
 const DEPOSIT_ON_OUTCOME = eventTopic('DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)')
@@ -584,25 +584,25 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 			const key = log.address.toLowerCase()
 			if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
 			const topic0 = log.topics[0]
-			if (topic0 === ETH_REFUND_DEFERRED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
+			if (topic0 === ETH_REFUND_CREDITED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
 				if (log.topics.length !== 2) throw new Error('Auction refund event has an invalid indexed-field count')
 				const bidder = strictTopicAddress(log.topics[1], 'Auction refund bidder')
 				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
 				const data = hexToBytes(log.data)
-				if (topic0 === ETH_REFUND_DEFERRED) {
-					if (data.length !== 64) throw new Error('EthRefundDeferred has an invalid data length')
+				if (topic0 === ETH_REFUND_CREDITED) {
+					if (data.length !== 64) throw new Error('EthRefundCredited has an invalid data length')
 					const amountAttoEth = readUnsigned(data, 0, 32)
 					const pendingAttoEth = readUnsigned(data, 32, 32)
-					if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundDeferred has a zero refund amount')
+					if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundCredited has a zero refund amount')
 					const existing = auctionRefunds[key]
 					if (existing === undefined) {
 						if (pendingAttoEth !== amountAttoEth) {
-							throw new Error(`EthRefundDeferred for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
+							throw new Error(`EthRefundCredited for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
 						}
 						auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
 					} else {
 						const expectedPendingAttoEth = BigInt(existing.pendingAttoEth) + amountAttoEth
-						if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundDeferred continuity failed for auction ${log.address}`)
+						if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundCredited continuity failed for auction ${log.address}`)
 						auctionRefunds[key] = { ...existing, pendingAttoEth: pendingAttoEth.toString() }
 					}
 				} else {

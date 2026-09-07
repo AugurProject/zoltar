@@ -36,7 +36,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			reportBond,
 			'the canonical pool must apply the supply-based escalation bond floor',
 		)
-		assert.ok(reportBond > DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDepositAttoRep, 'the supply-based floor must exceed the configured one-REP fallback in this fixture')
+		assert.ok(reportBond > 10n ** 18n, 'the supply-based floor must exceed the one-REP minimum in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
@@ -74,7 +74,9 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the liveness PoC must isolate a 40 REP tracked-supply boundary',
 		)
 		assert.strictEqual(await readNonDecisionThreshold(), reportBond, 'the live non-decision threshold must equal the 1 REP start bond')
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n), /Escalation threshold too low/)
+		// A newly deployed pool must use the same reduced live supply for its bond,
+		// so the tracked threshold remains safely above that pool's start bond.
+		await deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n)
 
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)

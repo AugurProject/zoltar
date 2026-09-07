@@ -1,3 +1,4 @@
+import { normalizeNumericInput } from './numericInput.js'
 import { parseDecimalInput, tryParseDecimalInput } from './decimal.js'
 
 export function parseRepAmountInput(value: string, label: string) {
@@ -47,7 +48,7 @@ export function tryParseTruthAuctionAmountInput(value: string) {
 }
 
 export function tryParseTimestampInput(value: string) {
-	const trimmed = value.trim()
+	const trimmed = normalizeNumericInput(value)
 	if (/^-?\d+$/.test(trimmed)) return BigInt(trimmed)
 	const timestampMs = new Date(value).getTime()
 	if (Number.isNaN(timestampMs)) return undefined

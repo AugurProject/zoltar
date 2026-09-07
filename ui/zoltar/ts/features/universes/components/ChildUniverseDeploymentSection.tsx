@@ -18,7 +18,7 @@ type ChildUniverseDeploymentSectionProps = {
 	pendingOutcomeIndex: bigint | undefined
 }
 
-function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists?: boolean | undefined; hasForked: boolean; isOnActiveAppChain: boolean }) {
+export function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists?: boolean | undefined; hasForked: boolean; isOnActiveAppChain: boolean }) {
 	if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
 	if (!isOnActiveAppChain) return getWrongNetworkReason()
 	if (!hasForked) return marketCopy.childUniversesNotForkedReason

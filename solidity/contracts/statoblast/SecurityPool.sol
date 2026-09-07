@@ -113,7 +113,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, uint256, address _truthAuction) {
+	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, address _truthAuction) {
 		universeId = _universeId;
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
@@ -123,7 +123,8 @@ contract SecurityPool is SecurityPoolStorage {
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		repToken = _zoltar.getRepToken(_universeId);
 		IERC20(address(repToken)).safeApprove(address(_zoltar), type(uint256).max);
-		initialEscalationGameDepositAttoRep = SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(repToken.getTotalTheoreticalSupplyAttoRep());
+		uint256 universeTheoreticalSupplyAttoRep = _zoltar.getUniverseTheoreticalSupplyAttoRep(_universeId);
+		initialEscalationGameDepositAttoRep = SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(universeTheoreticalSupplyAttoRep);
 		minimumSecurityBondDebtAttoEth = securityPoolFactory.minimumSecurityBondDebtAttoEth();
 		zoltar = _zoltar;
 		parent = _parent;
@@ -144,7 +145,7 @@ contract SecurityPool is SecurityPoolStorage {
 				zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		}
 		shareToken = _shareToken;
-		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(repToken.getTotalTheoreticalSupplyAttoRep(), securityPoolFactory.minimumVaultRepDepositAttoRep());
+		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(universeTheoreticalSupplyAttoRep, securityPoolFactory.minimumVaultRepDepositAttoRep());
 	}
 
 	function getVaultCount() external view returns (uint256) {
@@ -181,6 +182,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _settlementCollateralAttoEth) external {
 		require(msg.sender == address(securityPoolFactory), 'Only factory');
 		lastUpdatedFeeAccumulator = block.timestamp;
+		feeEpochEndTime = questionData.getQuestionEndDate(questionId);
 		currentRetentionRate = _currentRetentionRate;
 		settlementCollateralAttoEth = _settlementCollateralAttoEth;
 		uint256 initialOraclePrice =
@@ -190,16 +192,15 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function updateSettlementCollateral() public {
-		uint256 forkTime = zoltar.getForkTime(universeId);
-		uint256 endTime = questionData.getQuestionEndDate(questionId);
-		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
+		uint256 feeEndDate = getFeeEpochEndTime();
+		feeEpochEndTime = feeEndDate;
 		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 		if (feeEligibleCapacityOwnershipAttoRep == 0) {
 			_clearFeeIndexRemainder();
-			lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
+			lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
 			_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
 			return;
 		}
@@ -211,9 +212,23 @@ contract SecurityPool is SecurityPoolStorage {
 		if (feeIndexDelta > 0) uncheckpointedFeeEligibleCapacityOwnershipAttoRep = feeEligibleCapacityOwnershipAttoRep;
 		unallocatedAccruedFeesAttoEth += creditedFeesAttoEth;
 		settlementCollateralAttoEth -= creditedFeesAttoEth;
-		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
-
+		lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
 		_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
+	}
+
+	function getFeeEpochEndTime() public view returns (uint256) {
+		uint256 forkTime = zoltar.getForkTime(universeId);
+		if (feeEpochEndTime != type(uint256).max) {
+			if (forkTime != 0 && address(parent) == address(0x0)) return forkTime;
+			return feeEpochEndTime;
+		}
+		uint256 endTime = feeEpochEndTime;
+		if (address(escalationGame) != address(0x0)) {
+			uint256 escalationEndTime = escalationGame.getEscalationGameEndDate();
+			if (escalationEndTime != type(uint256).max && block.timestamp > escalationEndTime && isEscalationResolved())
+				endTime = escalationEndTime;
+		}
+		return forkTime != 0 && forkTime < endTime ? forkTime : endTime;
 	}
 
 	function updateRetentionRate() public {
@@ -468,8 +483,8 @@ contract SecurityPool is SecurityPoolStorage {
 		onlyValidOracle
 		returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth)
 	{
-		// Pool execution uses the live backing rate so the queue-time pool totals in
-		// request.snapshot remain reconstruction evidence rather than execution inputs.
+		// Pool execution uses the live backing rate; historical pool totals are emitted
+		// by the coordinator at queue time and are not persisted as execution inputs.
 		if (isEscalationResolved()) revert();
 		updateVaultFees(request.targetVault);
 		updateVaultFees(request.receiverVault);
@@ -504,12 +519,8 @@ contract SecurityPool is SecurityPoolStorage {
 		// Complete-set exits use the current collateral-per-share rate after fee
 		// accrual, preserving the exchange rate for remaining complete sets.
 		updateSettlementCollateral();
-		// Burns a complete set and releases its attoETH settlement collateral.
-		uint256 settlementCollateralRedeemedAttoEth = attoSharesToAttoEth(amountAttoShares);
-		shareToken.burnCompleteSets(universeId, msg.sender, amountAttoShares);
-		shareTokenSupplyAttoShares -= amountAttoShares;
-		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
-		_resetBadDebtGenerationIfClaimsExhausted();
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
+		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
 		updateRetentionRate();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
@@ -518,31 +529,12 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this))));
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		updateSettlementCollateral();
-		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
-		(uint256 winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, msg.sender);
-		uint256 settlementCollateralRedeemedAttoEth =
-			shareTokenSupplyAttoShares == 0
-				? 0
-				: (winningSharesBurnedAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
-		shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares;
-		settlementCollateralAttoEth -= settlementCollateralRedeemedAttoEth;
-		_resetBadDebtGenerationIfClaimsExhausted();
+		bytes memory result = DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemShares, (shareToken, ISecurityPoolForker(securityPoolForker), universeId, msg.sender)));
+		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		_sendEth(payable(msg.sender), settlementCollateralRedeemedAttoEth);
-	}
-
-	function _resetBadDebtGenerationIfClaimsExhausted() private {
-		if (shareTokenSupplyAttoShares == 0) {
-			totalBadDebtAttoEth = 0;
-			// Exhausting uint256 generations would require more collateral cycles than blocks can exist.
-			unchecked {
-				badDebtGeneration++;
-			}
-		}
 	}
 
 	function redeemRepFromVault(address vault) external {
@@ -698,15 +690,15 @@ contract SecurityPool is SecurityPoolStorage {
 		emit SystemStateSet(systemState);
 	}
 
-	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
 	}
 
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
 	}
 
-	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
+	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
 		require(vault != address(0x0), 'Zero vault');
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (
@@ -717,7 +709,6 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 		securityVaults[vault].capacityOwnershipAttoRep = capacityOwnershipAttoRep;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
-		lastDepositTargetHealthFactorBpsByVault[vault] = lastDepositTargetHealthFactorBps;
 		_setVaultBadDebtAttoEth(vault, newVaultBadDebtAttoEth);
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		_registerVault(vault);
@@ -741,6 +732,10 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function _releaseUnassignableFeeReserveIfComplete() private returns (bool released) {
+		// Each independently rounded vault or unassigned-auction entitlement ledger, and each global
+		// fee-index denominator epoch whose remainder is cleared, can leave less than one attoETH of
+		// aggregate division residue. Their count has no safe protocol-wide bound, so release the
+		// terminal reserve only after every capacity unit behind the final fee index is reconciled.
 		if (
 			uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0 ||
 			systemState != SystemState.PoolForked ||
@@ -775,6 +770,8 @@ contract SecurityPool is SecurityPoolStorage {
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.setValidatedSettlementCollateral, (newSettlementCollateralAttoEth)));
 		lastUpdatedFeeAccumulator = block.timestamp;
+		feeEpochEndTime =
+			hasInheritedForkOutcome && address(escalationGame) == address(0x0) ? block.timestamp : type(uint256).max;
 		_clearFeeIndexRemainder();
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));
 	}

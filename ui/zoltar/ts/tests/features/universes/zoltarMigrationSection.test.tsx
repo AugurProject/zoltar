@@ -98,6 +98,32 @@ describe('ZoltarMigrationSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('Max includes prepared REP and explains the total without requiring it from the wallet again', async () => {
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarForkRepBalanceAttoRep: 2_550_000n * ATTO_REP,
+					zoltarMigrationPreparedRepBalanceAttoRep: 360_000n * ATTO_REP,
+					onZoltarMigrationFormChange: update => updates.push(update),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const amountField = rendered.container.querySelector('#zoltar-migration-amount')?.parentElement
+		if (amountField === undefined || amountField === null) throw new Error('Migration amount field is missing')
+		within(amountField).getByRole('button', { name: 'Max' }).click()
+		expect(updates).toEqual([{ amount: '2910000' }])
+		expect(rendered.container.textContent).toContain('Max includes wallet REP and REP already prepared for migration.')
+		const prepare = within(rendered.container).getByRole('button', { name: 'Prepare REP' })
+		const reasonId = prepare.getAttribute('aria-describedby')
+		if (reasonId === null) throw new Error('Prepare REP needs an associated reason')
+		const reason = document.getElementById(reasonId)
+		expect(reason?.classList.contains('visually-hidden')).toBe(false)
+		expect(reason?.textContent?.length).toBeGreaterThan(0)
+	})
+
 	test('disables prepare and split until forking and amount prerequisites are satisfied', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -218,15 +244,9 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent).toContain('Child-Universe REP Received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
-		const balanceChanges = within(document.body).getByText('Balance Changes').closest('details')
-		if (balanceChanges === null) throw new Error('Expected balance changes disclosure')
-		expect(balanceChanges.textContent).toContain('Custody REP After Split (Unchanged)')
-		expect(balanceChanges.closest('.actions')).toBeNull()
-		const migrationActions = balanceChanges.nextElementSibling
-		if (!(migrationActions instanceof HTMLElement)) throw new Error('Expected migration action row after balance changes')
-		expect(migrationActions.classList.contains('actions')).toBe(true)
-		expect(within(migrationActions).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
-		expect(within(migrationActions).getByRole('button', { name: 'Split REP' })).not.toBeNull()
+		expect(document.body.textContent).not.toContain('Balance Changes')
+		expect(within(document.body).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Split REP' })).not.toBeNull()
 	})
 
 	test('shows wallet import access only for deployed child tokens the account holds', async () => {

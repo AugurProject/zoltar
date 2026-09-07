@@ -120,7 +120,7 @@
 					<tbody>
 						<tr>
 							<td>Origin pool shape</td>
-							<td>Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: <code>Yes</code>, then <code>No</code>. Statoblast adds <code>Invalid</code> as the third trading and resolution outcome. At construction, the effective escalation deposit is exactly <code>max(1 REP, theoretical REP supply / 10,000,000)</code>; a new origin's non-decision threshold must exceed that effective value. A zero configured vault REP floor selects the default <code>theoretical supply / 100,000</code>; a nonzero constructor value is the exact override. The independently configured security-bond debt floor defaults to 1 ETH.</td>
+							<td>Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: <code>Yes</code>, then <code>No</code>. Statoblast adds <code>Invalid</code> as the third trading and resolution outcome. At construction, the effective escalation deposit is exactly <code>max(1 REP, live universe theoretical REP supply / 10,000,000)</code>; a new origin's non-decision threshold must exceed that effective value. A zero configured vault REP floor selects the default <code>live universe theoretical supply / 100,000</code>; a nonzero constructor value is the exact override. The independently configured security-bond debt floor defaults to 1 ETH.</td>
 							<td><a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">SecurityPoolFactory.sol</a>, <a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">ShareToken.sol</a>, <a href="../../solidity/contracts/statoblast/BinaryOutcomes.sol">BinaryOutcomes.sol</a></td>
 						</tr>
 						<tr>
@@ -149,7 +149,7 @@
 						</tr>
 						<tr>
 							<td>Fee accrual clamp</td>
-							<td>Fee accrual is clamped to the question end time while the universe is unforked; after a universe fork, the accumulator is clamped to the fork time.</td>
+							<td>While the initial pool's universe remains unforked, its provisional fee cutoff is the question end time. A universe fork replaces that cutoff with the fork timestamp, whether the fork is before or after the question end. A child with a fixed outcome and no continuation game stops accruing fees at finalization. Other children open a new epoch at finalization, ending at local escalation-game resolution or a subsequent universe fork.</td>
 							<td><a href="../../solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 						</tr>
 						<tr>
@@ -686,10 +686,10 @@
 						</tr>
 						<tr>
 							<td>
-								<a href="../../solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter.sol</code></a>
+								<a href="../../solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter</code> and <code>SecurityPoolForkEventEmitter</code></a>
 							</td>
-							<td><code>emitPoolAccountingCheckpoint</code>, <code>emitVaultAccountingCheckpoint</code>, and <code>emitForkSnapshotEvents</code> are externally callable and <code>payable</code>, but direct calls execute against the helper's own storage and emit from the helper address. Payability permits delegatecalls from value-bearing protocol flows; callers must not send ETH directly because it is not protocol collateral and the helper has no recovery surface.</td>
-							<td>Pools and the forker use constructor- or factory-installed modules through <code>delegatecall</code>, so logs are emitted from the recognized pool or forker address. Indexers must reject matching signatures from the helper or any unrecognized emitter. External-universe fork initiation requires declared-share-token authorization; own-game initiation does not. Child linking preserves the source factory and forker and rejects undeployed or previously trusted auctions. Configured-factory registration remains the canonicality boundary. Storage-layout tests protect the delegate's fixed slots.</td>
+							<td><code>SecurityPoolEventEmitter</code> inherits the pool's typed <code>SecurityPoolStorage</code> base and exposes <code>emitPoolAccountingCheckpoint</code> and <code>emitVaultAccountingCheckpoint</code>. <code>SecurityPoolForkEventEmitter</code> inherits the forker's typed <code>SecurityPoolForkerStorage</code> base and exposes <code>emitForkSnapshotEvents</code>. The entrypoints are externally callable and <code>payable</code>, but direct calls execute against the helper's own storage and emit from the helper address. Payability permits delegatecalls from value-bearing protocol flows; callers must not send ETH directly because it is not protocol collateral and the helpers have no recovery surface.</td>
+							<td>Pools delegate accounting checkpoints to their pool-layout emitter, while the forker delegates fork snapshots to its forker-layout emitter, so logs are emitted from the recognized pool or forker address. Indexers must reject matching signatures from either helper or any unrecognized emitter. External-universe fork initiation requires declared-share-token authorization; own-game initiation does not. Child linking preserves the source factory and forker and rejects undeployed or previously trusted auctions. Configured-factory registration remains the canonicality boundary. Storage-layout tests protect both typed delegate layouts.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameProofVerifier</code>, <code>MerkleMountainRange</code>, and <code>SecurityPoolUtils</code></td>
