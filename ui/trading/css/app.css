@@ -186,6 +186,11 @@ nav {
 	padding-bottom: 0.6rem;
 }
 nav a {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 44px;
+	min-height: 44px;
 	padding: 0.55rem 0.8rem;
 	border-radius: 4px;
 	color: var(--muted);
