@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
 import type { AnvilNode } from './anvilNode'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode } from './anvilNode'
+import { AnvilSnapshotUnavailableError } from './AnvilWindowEthereum'
 import { ensureDefined } from './utils/testUtils'
 const isSolidityBytecodeCoverageEnabled = (): boolean => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
 
@@ -32,8 +33,7 @@ export const useIsolatedAnvilNode = () => {
 		try {
 			await currentEthereum.anvilRevert(currentSnapshotId)
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error)
-			if (!errorMessage.includes('Resource not found')) throw error
+			if (!(error instanceof AnvilSnapshotUnavailableError)) throw error
 			await currentEthereum.resetToCleanState()
 		}
 		await currentEthereum.setNextBlockBaseFeePerGasToZero()

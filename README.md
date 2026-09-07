@@ -252,10 +252,16 @@ Compile the Solidity contracts:
 bun run compile-contracts
 ```
 
-Run the full test suite:
+Run the root test suite:
 
 ```bash
 bun run test
+```
+
+Run every local package suite and the required browser smoke tier (after the complete fresh-checkout setup above):
+
+```bash
+bun run test:all
 ```
 
 Run the launch-focused fork, auction, and exit invariant gate:
@@ -327,10 +333,10 @@ bun run anvil -- --host 127.0.0.1 --port 8545 --chain-id 1 --block-base-fee-per-
 Then run `gas-costs` against it from another terminal:
 
 ```bash
-ANVIL_RPC=http://127.0.0.1:8545 bun run gas-costs
+GAS_COST_ANVIL_RPC=http://127.0.0.1:8545 bun run gas-costs
 ```
 
-Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the command runs from a container that reaches the host through Docker routing.
+Use `GAS_COST_ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the command runs from a container that reaches the host through Docker routing.
 
 ## Notes
 
