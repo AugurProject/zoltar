@@ -1,5 +1,11 @@
 # Security model
 
+## Signature and callback authorization
+
+V2 LP permits use the standard ERC-2612 nonce, deadline, chain-bound EIP-712 domain, owner, spender, and exact value. The local signature primitives are derived from OpenZeppelin Contracts 5.2.0; provenance and local adaptations are recorded beside `contracts/vendor/authorization/AuthorizationSignatures.sol`. A signature is authorization, not transaction privacy: integrations should use short deadlines and exact amounts. A Safe that does not produce an ECDSA permit uses the ordinary allowance fallback.
+
+Receive-based ERC-1155 operations do not use an off-chain signature. The ShareToken call must be submitted by the owner, while the versioned payload binds all contract identities, operation inputs, recipients, slippage, and deadline. Copying an observed payload cannot redirect assets and cannot separately consume an allowance because the router requires `operator == from`.
+
 The pair rejects foreign ShareTokens, INVALID, and noncanonical universe IDs in both single and batch callbacks. A reentrancy lock covers all reserve and LP mutations. Recipient callbacks can execute arbitrary code, so final reserves are read from authoritative balances after transfers. Recorded-balance deficits revert; valid donations synchronize upward.
 
 The router recognizes pairs only through its immutable factory, opens callback state only around one expected pool/share token, and restores starting share balances. Its ETH receiver opens only around redemption from that pool. This prevents unsolicited callbacks and mixing forced ETH with exit proceeds.

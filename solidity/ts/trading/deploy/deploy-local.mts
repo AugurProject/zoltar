@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../types/contractArtifact'
+import { trading_TwoWayConstantProductFactoryV2_TwoWayConstantProductFactoryV2, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter, trading_TwoWayConstantProductRouterV2_TwoWayConstantProductRouterV2 } from '../../types/contractArtifact'
 import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
 import { parseRpcResponse } from './rpc'
 
@@ -53,23 +53,27 @@ const feeBps = BigInt(process.env.TRADING_FEE_BPS ?? '30')
 if (feeBps < 0n || feeBps >= 10_000n) throw new Error('TRADING_FEE_BPS must be between 0 and 9999')
 const manifestFeeBps = Number.parseInt(feeBps.toString(), 10)
 const artifactDocument: unknown = JSON.parse(await fs.readFile(path.join(projectRoot, 'artifacts/Contracts.json'), 'utf8'))
-const factoryContract = trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory
+const factoryContract = trading_TwoWayConstantProductFactoryV2_TwoWayConstantProductFactoryV2
 const routerContract = trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter
+const receiveRouterContract = trading_TwoWayConstantProductRouterV2_TwoWayConstantProductRouterV2
 const factoryArtifact = { abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` as const }
 const routerArtifact = { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` as const }
+const receiveRouterArtifact = { abi: receiveRouterContract.abi, bytecode: `0x${receiveRouterContract.evm.bytecode.object}` as const }
 const factoryDeployment = await deploy(deployer, encodeDeployData({ abi: factoryArtifact.abi, bytecode: factoryArtifact.bytecode, args: [securityPoolFactory, feeBps] }))
 const routerDeployment = await deploy(deployer, encodeDeployData({ abi: routerArtifact.abi, bytecode: routerArtifact.bytecode, args: [factoryDeployment.address] }))
+const receiveRouterDeployment = await deploy(deployer, encodeDeployData({ abi: receiveRouterArtifact.abi, bytecode: receiveRouterArtifact.bytecode, args: [factoryDeployment.address] }))
 const compilerProfiles = isRecord(artifactDocument) ? artifactDocument.compilerProfiles : undefined
 const manifest = {
 	network: { chainId: manifestChainId, chainIdHex, rpcUrl },
 	core: { securityPoolFactory, sourceManifest: path.resolve(coreManifestPath) },
-	trading: { factory: factoryDeployment.address, router: routerDeployment.address, feeBps: manifestFeeBps },
+	trading: { version: 2, factory: factoryDeployment.address, router: routerDeployment.address, receiveRouter: receiveRouterDeployment.address, feeBps: manifestFeeBps },
 	transactions: {
 		factory: { hash: factoryDeployment.transactionHash, blockNumber: factoryDeployment.blockNumber },
 		router: { hash: routerDeployment.transactionHash, blockNumber: routerDeployment.blockNumber },
+		receiveRouter: { hash: receiveRouterDeployment.transactionHash, blockNumber: receiveRouterDeployment.blockNumber },
 	},
 	compilerProfiles,
-	bytecodeHashes: { factory: keccak256(factoryArtifact.bytecode), router: keccak256(routerArtifact.bytecode) },
+	bytecodeHashes: { factory: keccak256(factoryArtifact.bytecode), router: keccak256(routerArtifact.bytecode), receiveRouter: keccak256(receiveRouterArtifact.bytecode) },
 	deployer,
 	deployedAt: new Date().toISOString(),
 }
