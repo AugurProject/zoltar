@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
+import { getAppBuildCommands } from './apps.mts'
 import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
 
 type PackageJson = {
@@ -12,42 +13,40 @@ function readRootPackageJson(): PackageJson {
 }
 
 describe('UI build dependency direction', () => {
-	test('ui:build:apps compiles coreShared before the dependent apps', () => {
-		const scripts = readRootPackageJson().scripts ?? {}
-		const buildAppsScript = scripts['ui:build:apps']
-		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
-		const coreSharedIndex = buildAppsScript.indexOf('coreShared')
-		const zoltarIndex = buildAppsScript.indexOf('zoltar && bun run build')
-		const statoblastIndex = buildAppsScript.indexOf('statoblast && bun run build')
-		expect(coreSharedIndex).toBeGreaterThanOrEqual(0)
-		expect(zoltarIndex).toBeGreaterThan(coreSharedIndex)
-		expect(statoblastIndex).toBeGreaterThan(zoltarIndex)
-		const tradingIndex = buildAppsScript.indexOf('trading && bun run build')
-		expect(tradingIndex).toBeGreaterThan(statoblastIndex)
+	test('full builds compile each dependency once and build every application worker', () => {
+		const commands = getAppBuildCommands(['zoltar', 'statoblast', 'trading'])
+		expect(commands.filter(command => command[0] === 'x')).toEqual(['coreShared', 'zoltar', 'statoblast', 'trading'].map(app => ['x', 'tsc', '--project', `ui/${app}/tsconfig.json`]))
+		expect(commands.filter(command => command[0]?.endsWith('/workers.mts')).map(command => command[1])).toEqual(['zoltar', 'statoblast', 'trading'])
+		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(1)
 	})
 
-	test('app serve/watch scripts build the full DAG before starting', () => {
+	test('app serve/watch builds only the selected application and its TypeScript dependencies', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		for (const name of ['app:serve:zoltar', 'app:serve:statoblast', 'app:serve:trading', 'app:watch:zoltar', 'app:watch:statoblast', 'app:watch:trading']) {
-			const script = scripts[name]
-			if (script === undefined) throw new Error(`${name} script is missing`)
-			expect(script.startsWith('bun run app:build')).toBe(true)
+		for (const app of ['zoltar', 'statoblast', 'trading'] as const) {
+			for (const mode of ['serve', 'watch']) expect(scripts[`app:${mode}:${app}`]).toStartWith(`bun ./ui/coreShared/build/apps.mts ${app} && `)
+			const commands = getAppBuildCommands([app])
+			expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(getUiAppDependencyOrder(app).map(id => `ui/${id}/tsconfig.json`))
+			expect(commands.filter(command => command[0]?.endsWith('/vendor.mts'))).toEqual([['./ui/coreShared/build/vendor.mts', app]])
+			expect(commands.filter(command => command[0]?.endsWith('/workers.mts'))).toEqual([['./ui/coreShared/build/workers.mts', app, '--artifacts-current']])
 		}
-		const appBuild = scripts['app:build']
-		if (appBuild === undefined) throw new Error('app:build script is missing')
-		expect(appBuild).toContain('ui:build:apps')
+		expect(scripts['app:build']).toBe('bun run ui:build:apps && bun run ui:build:tests')
+		expect(scripts['ui:build:apps']).toBe('bun ./ui/coreShared/build/apps.mts')
+		expect(scripts['ui:build:prod']).toBe('bun run ui:build:apps && bun run ui:build:prod:current')
 	})
 
-	test('the public production build emits the complete UI DAG before bundling', () => {
+	test('prepared commands do not repeat shared package preparation', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		const productionBuild = scripts['ui:build:prod']
-		if (productionBuild === undefined) throw new Error('ui:build:prod script is missing')
-		const generateIndex = productionBuild.indexOf('bun run generate')
-		const appBuildIndex = productionBuild.indexOf('bun run ui:build:apps')
-		const productionBundleIndex = productionBuild.indexOf('bun run ui:build:prod:current')
-		expect(generateIndex).toBeGreaterThanOrEqual(0)
-		expect(appBuildIndex).toBeGreaterThan(generateIndex)
-		expect(productionBundleIndex).toBeGreaterThan(appBuildIndex)
+		expect(scripts['test']).toBe('bun run ensure-contract-artifacts && bun run tsc:ci:current && bun run test:run')
+		expect(scripts['tsc']).not.toContain('check:shared-dependencies')
+		expect(scripts['tsc']).toEndWith('bun run tsc:solidity:current')
+		expect(scripts['trading:compile']).not.toContain('shared:build')
+		const { repositoryRoot } = getUiCoreSharedPaths()
+		const solidityPackage = JSON.parse(fs.readFileSync(`${repositoryRoot}/solidity/package.json`, 'utf8')) as PackageJson
+		expect(solidityPackage.scripts?.['compile-contracts']).toBe('bun run shared && bun run refresh:shared-dependency && bun run compile-contracts:current')
+		expect(solidityPackage.scripts?.['compile-contracts:current']).not.toContain('bun run shared')
+		expect(solidityPackage.scripts?.['compile-contracts:current']).not.toContain('refresh:shared-dependency')
+		expect(solidityPackage.scripts?.['test']).toBe('bun run ensure-contract-artifacts && bun tsc && bun test --timeout 300000 ./js/tests/')
+		expect(solidityPackage.scripts?.['gas-costs']).toBe('cd .. && bun run ensure-shared-build && cd solidity && bun run ./ts/gas-costs.ts')
 	})
 
 	test('setup scripts emit the complete UI DAG before compiling tests', () => {

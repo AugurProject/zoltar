@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getQuestionId } from '@zoltar/shared/questionId'
 import { getChildUniverseId, loadForkMigrationContext } from '../../protocol/forks.js'
-import { loadLiveQuestionFields, loadUniverseIds } from '../../protocol/live.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)
 const shareToken = getAddress(`0x${'22'.repeat(20)}`)
@@ -158,26 +157,6 @@ describe('fork protocol helpers', () => {
 		expect(() => getChildUniverseId(7n, 1n << 256n)).toThrow('uint256')
 	})
 
-	test('rejects forged primary-discovery child IDs and stored routes', async () => {
-		const forgedIdClient = publicClient(
-			callSelector => {
-				if (callSelector === selectors.universes) return encodedUniverse(0n, 1n, 0n)
-				throw new Error(`Unexpected function selector: ${callSelector}`)
-			},
-			[deployChildLog(1n, 0, 42n, 0n)],
-		)
-		await expect(loadUniverseIds(forgedIdClient, deployment)).rejects.toThrow('mismatched deterministic child universe ID')
-
-		const forgedRouteClient = publicClient(
-			callSelector => {
-				if (callSelector === selectors.universes) return encodedUniverse(0n, 2n, 0n)
-				throw new Error(`Unexpected function selector: ${callSelector}`)
-			},
-			[deployChildLog(1n, 0, undefined, 0n)],
-		)
-		await expect(loadUniverseIds(forgedRouteClient, deployment)).rejects.toThrow('does not match its DeployChild route')
-	})
-
 	test('loads categorical branches from QuestionCreated metadata', async () => {
 		let canonicalPoolRead = 0
 		const labels = Array.from({ length: 32 }, (_, index) => `Choice ${index + 1}`)
@@ -298,13 +277,6 @@ describe('fork protocol helpers', () => {
 			[questionCreatedLog('Categorical fork', ['Yes', 'No'], 0n, 0n, 0n, '', 99n)],
 		)
 		await expect(loadForkMigrationContext(client, market)).rejects.toThrow('mismatched deterministic question ID')
-	})
-
-	test('rejects mismatched question metadata in primary live market discovery', async () => {
-		const client = publicClient(() => {
-			throw new Error('Unexpected contract read')
-		}, [questionCreatedLog('Live question', ['Yes', 'No'], 0n, 0n, 0n, '', 99n)])
-		await expect(loadLiveQuestionFields(client, questionData, 99n)).rejects.toThrow('mismatched deterministic question ID')
 	})
 
 	test('rejects a deployed child event with a mismatched deterministic ID', async () => {

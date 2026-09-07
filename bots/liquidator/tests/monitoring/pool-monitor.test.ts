@@ -2,21 +2,16 @@ import { expect, test } from 'bun:test'
 import { createPublicClient, custom, mainnet } from '@zoltar/bot-shared/ethereum'
 import { parseSettings } from '#config/settings'
 import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
-import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, loadUniverses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
+import { assertDeterministicChildUniverseId } from '#monitoring/universe-discovery'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
 import { getAddress } from '../helpers/ethereum.ts'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
 
-test('rejects a child event with a mismatched deterministic universe ID', async () => {
-	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
-	const client = {
-		getBlock: async (request?: { blockNumber?: bigint }) => ({ hash: `0x${'77'.repeat(32)}`, number: request?.blockNumber ?? 2n, timestamp: 1n, transactions: [] }),
-		getCode: async () => '0x01',
-		getLogs: async () => [{ args: { childUniverseId: 99n, outcomeIndex: 1n, universeId: 0n } }],
-	} as unknown as Parameters<typeof loadUniverses>[0]
-	await expect(loadUniverses(client, settings, 2n)).rejects.toThrow('mismatched deterministic child universe ID')
+test('rejects a child event with a mismatched deterministic universe ID', () => {
+	expect(() => assertDeterministicChildUniverseId(0n, 1n, 99n)).toThrow('mismatched deterministic child universe ID')
 })
 
 test('binds the complete pool scan to one canonical block', async () => {

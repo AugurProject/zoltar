@@ -310,7 +310,7 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	}
 }
 
-export async function loadLiveQuestionFields(client: PublicClient, questionData: Address, questionId: bigint) {
+async function loadLiveQuestionFields(client: PublicClient, questionData: Address, questionId: bigint) {
 	const logs = await loadCanonicalQuestionCreatedLogs(client, questionData)
 	for (const log of logs) {
 		try {
@@ -483,7 +483,7 @@ function securityPoolDeploymentFromEvent(log: Readonly<{ args?: unknown }>): Sec
 	}
 }
 
-export async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
+async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
 	const anchor = await latestBlockIdentity(client)
 	const childLogs = await loadCanonicalDeployChildLogs(client, configuration.zoltar, anchor.blockNumber)
 	const childrenByParent = new Map<bigint, bigint[]>()

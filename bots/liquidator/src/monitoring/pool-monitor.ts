@@ -1,6 +1,5 @@
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { createCanonicalLogLoader, fetchLogsWithAdaptiveRanges, findContractDeploymentBlock, requiredCanonicalBlockAnchor } from '@zoltar/bot-shared/monitoring/block-sync'
-import { getChildUniverseId } from '@zoltar/bot-shared/protocol/universe-id'
 import type { OperatorSettings } from '#config/settings'
 import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
@@ -9,6 +8,7 @@ import { hasStagedLiquidation } from '#core/staged-operations'
 import type { PoolObservation, StagedOperationObservation, UniverseObservation } from '#state/operator-state'
 import { createVaultStateIndex, refreshVaultStateIndex, type VaultStateIndex } from './vault-state-index.ts'
 import { discoverRelevantDeployments } from './relevant-deployments.ts'
+import { assertDeterministicChildUniverseId } from './universe-discovery.ts'
 
 type ReadClient = PublicClient<Transport, Chain>
 const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
@@ -73,12 +73,12 @@ function emptyVault(address: Address): VaultPosition {
 	}
 }
 
-export async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
+async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
 	const childLogs = await loadCanonicalChildLogs(client, settings.deployment.zoltar, blockNumber)
 	const childrenByParent = new Map<bigint, Array<{ childUniverseId: bigint; outcomeIndex: bigint }>>()
 	for (const log of childLogs) {
 		if (log.args === undefined) throw new Error('DeployChild event is missing its arguments')
-		if (getChildUniverseId(log.args.universeId, log.args.outcomeIndex) !== log.args.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		assertDeterministicChildUniverseId(log.args.universeId, log.args.outcomeIndex, log.args.childUniverseId)
 		const children = childrenByParent.get(log.args.universeId) ?? []
 		children.push({ childUniverseId: log.args.childUniverseId, outcomeIndex: log.args.outcomeIndex })
 		childrenByParent.set(log.args.universeId, children)

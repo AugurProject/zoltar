@@ -10,7 +10,7 @@ import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, carryProofDeploymentPro
 import { carryProofJournalDigest, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
-import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
+import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, topologyCheckpointRequiresSave, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import type { WalletBalanceState } from '../state/operator-state.ts'
@@ -204,10 +204,6 @@ export async function loadTopologyCacheForScan(parameters: { identity: Immutable
 		if (!immutableTopologyCacheExceedsConfiguredResidentLimits(error)) throw error
 		return undefined
 	}
-}
-
-export function topologyCheckpointRequiresSave(previous: CanonicalImmutableTopologyCache | undefined, next: CanonicalImmutableTopologyCache, topologyChanged: boolean) {
-	return topologyChanged || previous === undefined || previous.anchor.blockNumber !== next.anchor.blockNumber || previous.anchor.blockHash.toLowerCase() !== next.anchor.blockHash.toLowerCase()
 }
 
 export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {

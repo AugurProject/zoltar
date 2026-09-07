@@ -413,7 +413,7 @@ test('development import map maps browser dependency subpaths', () => {
 	expect(rootPackageJson.scripts?.['app:watch:statoblast']).toContain('build/watch.mts statoblast')
 	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
-	expect(vendorBuildSource).toContain("{ packageName: 'isows', subfolderToVendor: '_esm', mainEntrypointFile: 'native.js'")
+	expect(vendorBuildSource).toContain("{ packageName: 'isows', mainEntrypointFile: 'native.js'")
 	expect(vendorBuildSource).toContain("includeTrading: parseUiAppIdFromProcess('vendor build') === 'trading'")
 	expect(watchBuildSource).toContain("const runProjectArtifactBuild = async (reason: string) => {\n\tif (shuttingDown) return\n\tif (appId === 'trading') {\n\t\tawait runVendorBuild(reason)")
 	expect(watchBuildSource).toContain("if (appId === 'trading') {\n\t\tawait runProjectArtifactBuild(reason)")

@@ -13,6 +13,10 @@ export const IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS = 100_000
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES = 4 * 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES = IMMUTABLE_TOPOLOGY_SEGMENT_BYTES - 1024
 
+export function topologyCheckpointRequiresSave(previous: CanonicalImmutableTopologyCache | undefined, next: CanonicalImmutableTopologyCache, topologyChanged: boolean) {
+	return topologyChanged || previous === undefined || previous.anchor.blockNumber !== next.anchor.blockNumber || previous.anchor.blockHash.toLowerCase() !== next.anchor.blockHash.toLowerCase()
+}
+
 const TOPOLOGY_STORE_SCHEMA_VERSION = 2
 const TOPOLOGY_MANIFEST_SCHEMA_VERSION = 2
 const TOPOLOGY_POINTER_SCHEMA_VERSION = 1

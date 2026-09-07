@@ -141,7 +141,7 @@ async function syncContractFreshnessHash(): Promise<void> {
 }
 
 async function runCompileContracts(): Promise<void> {
-	await runBunScript(['run', 'compile-contracts'], `bun run compile-contracts`)
+	await runBunScript(['run', 'compile-contracts:current'], `bun run compile-contracts:current`)
 }
 
 async function runSharedBuild(): Promise<void> {
@@ -247,7 +247,7 @@ const mode = process.argv[2]
 
 if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
 	if (mode === '--ensure-shared-only') {
-		await ensureSharedBuildIsCurrent()
+		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies, ensureSharedBuildIsCurrent)
 	} else if (mode === '--headless') {
 		await prepareHeadlessContractArtifacts()
 	} else if (mode === '--sync-shared-freshness') {
@@ -256,6 +256,6 @@ if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === curre
 		await removeDeprecatedContractArtifactOutputs()
 		await syncContractFreshnessHash()
 	} else {
-		await ensureContractArtifactsAreCurrent()
+		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies)
 	}
 }

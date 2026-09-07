@@ -4,7 +4,6 @@ import * as liquidationCopy from '../copy/liquidation.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 
 test('vault operation copy uses accounting roles', () => {
-	expect(securityPoolCopy.settingCapacityOwnership).toBe('Setting capacity ownership…')
 	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
 })
 

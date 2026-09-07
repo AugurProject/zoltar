@@ -41,5 +41,6 @@
 			"browser/**/*.ts",
 			"tests/**/*.ts"
 		]
-	}
+	},
+	"main": "./src/server.ts"
 }
