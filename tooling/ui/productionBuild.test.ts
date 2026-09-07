@@ -95,7 +95,7 @@ for (const appId of UI_APP_IDS) {
 			productionIndexPath,
 			productionCssPath,
 			productionTokensCssPath,
-			...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
+			...['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(stylesheet => path.join(distRootPath, 'css', stylesheet)),
 			appBundlePath,
 			appSourceMapPath,
 			workerBundlePath,
@@ -151,7 +151,15 @@ for (const appId of UI_APP_IDS) {
 		}
 
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const responses = await Promise.all([fetch(`${baseUrl}/${appId}/`), fetch(`${baseUrl}/${appId}/assets/app.js`), fetch(`${baseUrl}/${appId}/assets/tevmWorker.worker.js`), fetch(`${baseUrl}/${appId}/css/index.css`), fetch(`${baseUrl}/${appId}/css/tokens.css`)])
+		const responses = await Promise.all([
+			fetch(`${baseUrl}/${appId}/`),
+			fetch(`${baseUrl}/${appId}/assets/app.js`),
+			fetch(`${baseUrl}/${appId}/assets/tevmWorker.worker.js`),
+			fetch(`${baseUrl}/${appId}/css/index.css`),
+			fetch(`${baseUrl}/${appId}/css/tokens.css`),
+			fetch(`${baseUrl}/${appId}/css/visual-foundation.css`),
+			fetch(`${baseUrl}/${appId}/css/protocol-apps.css`),
+		])
 
 		for (const response of responses) {
 			expect(response.status).toBe(200)
