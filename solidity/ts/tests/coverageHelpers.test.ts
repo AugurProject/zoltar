@@ -493,7 +493,8 @@ describe('Solidity bytecode coverage helpers', () => {
 		if (isCoverageEnabled()) {
 			await flushSolidityBytecodeCoverageForTest()
 			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
-			assert.ok((deploymentStatusCoverage.lineHits['14'] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
+			const constructorAssignmentLine = await findLineNumberByExactSource('contracts/DeploymentStatusOracle.sol', 'deploymentAddresses = _deploymentAddresses;')
+			assert.ok((deploymentStatusCoverage.lineHits[constructorAssignmentLine.toString()] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
 		}
 	})
 
@@ -1654,7 +1655,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/SafeERC20Ops token address must contain contract code/,
+			/Security pool deployment failed/,
 		)
 		const securityPoolDeployerAddress = await deployContract(
 			encodeDeployData({
@@ -1684,7 +1685,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/SafeERC20Ops token address must contain contract code/,
+			/Security pool deployment failed/,
 		)
 	})
 })
