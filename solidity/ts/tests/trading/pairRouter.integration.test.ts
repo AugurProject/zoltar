@@ -583,7 +583,7 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, routerV2, ids, [redeemAmount, redeemAmount, redeemAmount], requestData] }))
 		expect((await client.getBalance({ address: recipient })) - recipientEthBefore).toBe(1n)
 
-		const routerResidue = [7n, 11n, 13n] as const
+		const routerResidue: [bigint, bigint, bigint] = [7n, 11n, 13n]
 		for (const [outcome, amount] of routerResidue.entries()) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [routerV2, ids[outcome], amount] }))
 		const forcedEth = await deploy(mocks.TradingForceEth, [], 7n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingForceEth.abi, address: forcedEth, functionName: 'force', args: [routerV2] }))
