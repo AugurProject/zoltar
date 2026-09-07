@@ -80,11 +80,11 @@ contract EscalationGame is EscalationGameSettlement {
 		address claimDelegateAddress = address(claimDelegate);
 		address depositDelegateAddress = address(depositDelegate);
 		assembly ('memory-safe') {
-			// Claim-delegate calls have at most three static arguments. The two
-			// authorization deposit calls have seven or eight, and unknown selectors
-			// are rejected by whichever delegate receives them.
+			let selector := shr(224, calldataload(0))
 			let delegate := claimDelegateAddress
-			if gt(calldatasize(), 100) {
+			// Only the two signed public deposit entrypoints may reach the deposit
+			// delegate. Other selectors remain on the claim delegate's narrow surface.
+			if or(eq(selector, 0x8c18a0e1), eq(selector, 0x5a3df812)) {
 				delegate := depositDelegateAddress
 			}
 			calldatacopy(0, 0, calldatasize())
