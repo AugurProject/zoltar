@@ -132,11 +132,7 @@ contract Zoltar {
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amountAttoRep) private {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == address(genesisReputationToken)) {
-			if (migrator == address(this)) {
-				IERC20(address(reputationToken)).safeTransfer(Constants.BURN_ADDRESS, amountAttoRep);
-			} else {
-				IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
-			}
+			IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
 		} else {
 			ReputationToken(address(reputationToken)).burn(migrator, amountAttoRep);
 		}
@@ -201,10 +197,10 @@ contract Zoltar {
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
-		splitRepInternal(universeId, amountAttoRep, msg.sender, outcomeIndexes);
+		splitRepInternal(universeId, amountAttoRep, outcomeIndexes);
 	}
 
-	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, address recipient, uint256[] memory outcomeIndexes) private {
+	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
 		// Fork migration intentionally duplicates the holder's migration balance across the
 		// selected child universes. For example, splitting 1 parent-universe REP into the
@@ -220,8 +216,8 @@ contract Zoltar {
 			migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] +=
 				amountAttoRep;
 			require(migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId] <= migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, 'Cannot migrate more than internal balance: requested child REP exceeds sender migration REP');
-			universes[childUniverseId].reputationToken.mint(recipient, amountAttoRep);
-			emit MigrationRepSplit(msg.sender, recipient, universeId, outcomeIndex, childUniverseId, amountAttoRep, migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]);
+			universes[childUniverseId].reputationToken.mint(msg.sender, amountAttoRep);
+			emit MigrationRepSplit(msg.sender, msg.sender, universeId, outcomeIndex, childUniverseId, amountAttoRep, migrationRepBalances[msg.sender][universeId].childMigrationRepAmountsAttoRep[childUniverseId]);
 		}
 	}
 

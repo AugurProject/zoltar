@@ -15,11 +15,6 @@ interface PackageManifest {
 	files: string[]
 }
 
-interface ManifestEntry {
-	hash: string
-	relativePath: string
-}
-
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const readPackageJson = async (packagePath: string): Promise<PackageManifest> => {
@@ -69,14 +64,11 @@ const getPublishedSharedFiles = async () => {
 	return [path.join(sharedPackagePath, 'package.json'), ...publishedFiles.flat()].sort()
 }
 
-const getSharedPackageManifest = async (packageRootPath: string, files: readonly string[]): Promise<ManifestEntry[]> => {
+const getSharedPackageManifest = async (packageRootPath: string, files: readonly string[]): Promise<string[]> => {
 	return await Promise.all(
 		files.map(async sourcePath => {
 			const relativePath = path.relative(sharedPackagePath, sourcePath)
-			return {
-				hash: await hashFile(path.join(packageRootPath, relativePath)),
-				relativePath,
-			}
+			return await hashFile(path.join(packageRootPath, relativePath))
 		}),
 	)
 }
@@ -94,11 +86,7 @@ const manifestsMatch = async () => {
 		)
 			return false
 		const [sourceManifest, installedManifest] = await Promise.all([getSharedPackageManifest(sharedPackagePath, sourceFiles), getSharedPackageManifest(installedSharedPackagePath, sourceFiles)])
-		if (sourceManifest.length !== installedManifest.length) return false
-		return sourceManifest.every((sourceEntry, index) => {
-			const installedEntry = installedManifest[index]
-			return installedEntry !== undefined && sourceEntry.relativePath === installedEntry.relativePath && sourceEntry.hash === installedEntry.hash
-		})
+		return sourceManifest.every((hash, index) => hash === installedManifest[index])
 	} catch (error) {
 		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
 		throw error

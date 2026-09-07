@@ -72,7 +72,7 @@ describe('test impact recommendations', () => {
 		const integrationTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'
 		expect(getTestImpactRecommendations([{ path: integrationTest, status: 'deleted' }])).toEqual([])
 		expect(getTestImpactRecommendations([{ path: 'ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts', previousPath: integrationTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual([
-			'bun run ensure-contract-artifacts && bun run check:shared-dependencies && RUN_MAINNET_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
+			'bun run ensure-contract-artifacts && RUN_MAINNET_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
 		])
 		const forkTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'
 		const renamedForkTest = 'bots/liquidator/tests/uniswapQuoter.fork.test.ts'
@@ -81,10 +81,7 @@ describe('test impact recommendations', () => {
 				{ path: 'ui/zoltar/ts/protocol/uniswapQuoter.ts', status: 'modified' },
 				{ path: renamedForkTest, previousPath: forkTest, status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual([
-			'bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --timeout 300000 tests/uniswapQuoter.fork.test.ts',
-			'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
-		])
+		).toEqual(['bun run ensure-contract-artifacts && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --timeout 300000 tests/uniswapQuoter.fork.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
 	})
 
 	test('removes or rewrites browser tiers when their owned production-build test moves', () => {
@@ -96,8 +93,8 @@ describe('test impact recommendations', () => {
 		expect(combinedCommands).toHaveLength(3)
 		expect(combinedCommands).toEqual(
 			expect.arrayContaining([
-				'bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && bun test --timeout 300000 tests/productionBuild.test.ts',
-				"bun run ensure-contract-artifacts && bun run check:shared-dependencies && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun test --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
+				'bun run ensure-contract-artifacts && cd bots/liquidator && bun test --timeout 300000 tests/productionBuild.test.ts',
+				"bun run ensure-contract-artifacts && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun test --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
 				'cd bots/liquidator && bun test tests/productionBuild.test.ts',
 			]),
 		)
