@@ -1,8 +1,7 @@
 // Generated from docs/runtime TypeScript by bun run docs:build-runtime. Do not edit.
 (() => {
-  // shared/ts/escalationMath.ts
+  // shared/ts/oracle/escalationMath.ts
   var ESCALATION_TIME_LENGTH = 4233600n;
-
   // docs/charts/chartModels.ts
   function calculateAuctionModel(ethRaiseCap, repInventory, bids) {
     const qualificationPrice = ethRaiseCap / repInventory;
