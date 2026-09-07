@@ -717,12 +717,12 @@
 						<tr>
 							<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
 							<td>Applies fixed-point retention over elapsed time, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Canonical callers avoid zero eligible capacity ownership before this division.</td>
-							<td><a href="../explanation/statoblast.html#fees-capacity-liquidations">Fee accrual</a></td>
+							<td><a href="../explanation/fees.html">Fee accrual</a></td>
 						</tr>
 						<tr>
 							<td><code>calculateVaultFee(capacityOwnershipAttoRep, feeIndexDelta, remainder)</code></td>
 							<td>Floors the vault's whole fee credit and returns the remaining fixed-point numerator for its next checkpoint.</td>
-							<td><a href="../explanation/statoblast.html#fees-capacity-liquidations">Fee accrual</a></td>
+							<td><a href="../explanation/fees.html">Fee accrual</a></td>
 						</tr>
 						<tr>
 							<td><code>calculateMintingCapacityAttoEth(capacityOwnershipAttoRep, repEthPrice, securityMultiplierBps)</code></td>
@@ -747,7 +747,7 @@
 						<tr>
 							<td><code>calculateRetentionRate(settlementCollateralAttoEth, mintingCapacityAttoEth)</code></td>
 							<td>Zero live minting capacity returns the maximum retention rate. Otherwise retention decreases linearly through the 80% utilization dip and remains at the minimum rate above it.</td>
-							<td><a href="../explanation/statoblast.html#fees-capacity-liquidations">Retention rate</a></td>
+							<td><a href="../explanation/fees.html">Retention rate</a></td>
 						</tr>
 					</tbody>
 				</table>
