@@ -226,7 +226,7 @@ describe('coverage policy', () => {
 	})
 
 	test('fails the exact Solidity gate when one uncovered line rounds to 100%', () => {
-		const oneLineMissing = { covered: 9_999, total: 10_000, percentage: 99.99 }
+		const oneLineMissing = { covered: 99_999, total: 100_000, percentage: 99.999 }
 		const result = evaluateCoveragePolicy(
 			{
 				typescript: {
@@ -249,8 +249,8 @@ describe('coverage policy', () => {
 			policy,
 		)
 
-		expect(result.failures).toContain('First-party Solidity line coverage 99.9900% is below 100.000%')
-		expect(result.failures).toContain('Aggregate Solidity line coverage 99.9900% is below 100.000%')
+		expect(result.failures).toContain('First-party Solidity line coverage 99.9990% is below 100.000%')
+		expect(result.failures).toContain('Aggregate Solidity line coverage 99.9990% is below 100.000%')
 		expect(result.failures).toContain('Solidity coverage has 1 uncovered line: solidity/contracts/Protocol.sol:42')
 	})
 })
