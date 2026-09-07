@@ -12,7 +12,6 @@ type ProjectTask = {
 	readonly cwd: string
 	readonly inputs: readonly string[]
 	readonly outputs?: readonly string[]
-	readonly requiredEnvironment?: readonly string[]
 	readonly cacheInputs?: readonly string[]
 	readonly groups?: readonly string[]
 }
@@ -103,7 +102,7 @@ export const projects: readonly Project[] = [
 		dependencies: ['shared'],
 		tasks: {
 			setup: packageInstallTask('solidity'),
-			build: packageTask('solidity', 'compile-contracts', {
+			build: packageTask('solidity', 'compile-contracts:current', {
 				cacheInputs: [...packageInputs('solidity'), 'solidity/tsconfig-compile.json', 'solidity/ts/abi/**', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'tooling/ui/projectArtifacts.mts'],
 				groups: ['generated', 'component-artifacts'],
 				outputs: ['solidity/artifacts', 'solidity/js', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
@@ -359,7 +358,6 @@ export function validateProjectRegistry(registry: readonly Project[] = projects)
 				['inputs', task.inputs],
 				['outputs', task.outputs ?? []],
 				['cache inputs', task.cacheInputs ?? []],
-				['environment', task.requiredEnvironment ?? []],
 				['groups', task.groups ?? []],
 			] as const)
 				if (entries.some(entry => entry.trim() === '')) throw new Error(`${project.id} ${taskName} ${field} must not contain blank entries`)
