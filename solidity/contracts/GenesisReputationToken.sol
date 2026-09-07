@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import './ERC20.sol';
 import './Constants.sol';
+import { ERC20 } from './ERC20.sol';
+import { ERC20Authorization } from './vendor/authorization/ERC20Authorization.sol';
 
-contract GenesisReputationToken is ERC20 {
+contract GenesisReputationToken is ERC20Authorization {
 	uint256 private immutable totalTheoreticalSupplyAttoRep;
 
 	constructor(address[] memory initialHolders, uint256[] memory initialBalances) ERC20('Reputation', 'REP') {

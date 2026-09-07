@@ -92,10 +92,33 @@ describe('GenesisReputationToken', () => {
 			client.writeContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: tokenAddress,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [11_000_000n * 10n ** 18n + 1n],
+				functionName: 'initialize',
+				args: [1n, 11_000_000n * 10n ** 18n + 1n, 1n],
 			}),
 			/exceeds maximum REP|reverted/i,
 		)
+	})
+
+	test('child REP initialization is Zoltar-only and one-time', async () => {
+		const data = encodeDeployData({
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [client.account.address],
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
+		const tokenAddress = receipt.contractAddress
+		if (tokenAddress === undefined || tokenAddress === null) throw new Error('Child REP deployment address missing')
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await assert.rejects(
+			attacker.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }),
+			/ReputationToken caller must be the Zoltar contract|reverted/i,
+		)
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }) })
+		await assert.rejects(
+			client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [2n, 200n, 2n] }),
+			/already initialized|reverted/i,
+		)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'name' }), 'Augur Reputation 1')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'symbol' }), 'REP1')
 	})
 })

@@ -41,8 +41,8 @@ describe('Statoblast: privileged authorization matrix', () => {
 			client.writeContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: reputationToken,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [1_000n],
+				functionName: 'initialize',
+				args: [1n, 1_000n, 1n],
 			}),
 		)
 
@@ -73,8 +73,8 @@ describe('Statoblast: privileged authorization matrix', () => {
 				attacker.writeContract({
 					abi: ReputationToken_ReputationToken.abi,
 					address: reputationToken,
-					functionName: 'setMaxTheoreticalSupplyAttoRep',
-					args: [2_000n],
+					functionName: 'initialize',
+					args: [2n, 2_000n, 2n],
 				}),
 			),
 		)

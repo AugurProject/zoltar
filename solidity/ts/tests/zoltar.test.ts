@@ -630,6 +630,93 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent')
 	})
 
+	test('child REP names follow successful global deployment order without affecting predicted addresses', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		const questionData = {
+			title: 'ordered child REP metadata',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+
+		const firstUniverseId = getChildUniverseId(genesisUniverse, 1n)
+		const secondUniverseId = getChildUniverseId(genesisUniverse, 2n)
+		const firstPredictedAddress = getRepTokenAddress(firstUniverseId)
+		const secondPredictedAddress = getRepTokenAddress(secondUniverseId)
+		await deployChild(client, genesisUniverse, 2n)
+		await deployChild(client, genesisUniverse, 1n)
+
+		assert.strictEqual(getRepTokenAddress(secondUniverseId), secondPredictedAddress)
+		assert.strictEqual(getRepTokenAddress(firstUniverseId), firstPredictedAddress)
+		const readMetadata = async (token: Address) =>
+			await Promise.all([
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'name' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'symbol' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'repNumber' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'universeId' }),
+			])
+		assert.deepStrictEqual(await readMetadata(secondPredictedAddress), ['Augur Reputation 1', 'REP1', 1n, secondUniverseId])
+		assert.deepStrictEqual(await readMetadata(firstPredictedAddress), ['Augur Reputation 2', 'REP2', 2n, firstUniverseId])
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'name' }), 'Reputation')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'symbol' }), 'REP')
+	})
+
+	test('failed and duplicate child deployments do not consume REP numbers', async () => {
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		const questionData = {
+			title: 'failed child numbering',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+		await assert.rejects(deployChild(client, genesisUniverse, 3n), /Malformed outcome index/)
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'childReputationTokenCount' }), 0n)
+		await deployChild(client, genesisUniverse, 1n)
+		await assert.rejects(deployChild(client, genesisUniverse, 1n), /already deployed/)
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'childReputationTokenCount' }), 1n)
+	})
+
+	test('nested children share the global REP sequence and child REP forks with zero allowance', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		const createEndedBinaryQuestion = async (title: string) => {
+			const questionData = { title, description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+			const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+			await createQuestion(client, questionData, outcomes)
+			return getQuestionId(questionData, outcomes)
+		}
+		await forkUniverse(client, genesisUniverse, await createEndedBinaryQuestion('parent fork for nested REP'))
+		const childUniverseId = getChildUniverseId(genesisUniverse, 1n)
+		await deployChild(client, genesisUniverse, 1n)
+		const childForkThreshold = (await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId)) / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const prepared = await getMigrationRepBalanceAttoRep(client, genesisUniverse, client.account.address)
+		if (prepared < childForkThreshold) await addRepToMigrationBalance(client, genesisUniverse, childForkThreshold - prepared)
+		await splitMigrationRep(client, genesisUniverse, childForkThreshold, [1n])
+		const childRep = getRepTokenAddress(childUniverseId)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n)
+		await forkUniverse(client, childUniverseId, await createEndedBinaryQuestion('nested fork for global REP numbering'))
+		const nestedUniverseId = getChildUniverseId(childUniverseId, 2n)
+		await deployChild(client, childUniverseId, 2n)
+		const nestedRep = getRepTokenAddress(nestedUniverseId)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'symbol' }), 'REP1')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: nestedRep, functionName: 'symbol' }), 'REP2')
+	})
+
 	test('deployChild rejects malformed child universe outcomes', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
