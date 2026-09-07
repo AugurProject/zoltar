@@ -41,5 +41,6 @@ describe('trading simulation market discovery', () => {
 		expect(discovery.universeIds).toEqual([0n])
 		expect(discovery.markets).toHaveLength(1)
 		expect(discovery.markets[0]?.title).toBe('Will this resolve?')
+		expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 	}, 180_000)
 })

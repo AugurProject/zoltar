@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { getAddress } from '@zoltar/shared/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
 import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { marketUniverseIdentity } from '../../features/LiveTrading.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
@@ -121,7 +123,7 @@ describe('standalone trading UI model', () => {
 	})
 	test('parses only exact security pool detail routes', () => {
 		const address = `0x${'AB'.repeat(20)}`
-		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(address.toLowerCase())
+		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
 		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
 	})
 
@@ -136,6 +138,11 @@ describe('standalone trading UI model', () => {
 	test('keeps displayed conditional prices complementary after rounding', () => {
 		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
 		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
+	})
+
+	test('keeps the active universe separate from the market lineage origin', () => {
+		expect(marketUniverseIdentity({ universeId: 0n, originUniverseId: 0n })).toEqual({ currentUniverseId: 0n, originUniverseId: 0n })
+		expect(marketUniverseIdentity({ universeId: 42n, originUniverseId: 0n })).toEqual({ currentUniverseId: 42n, originUniverseId: 0n })
 	})
 
 	test('parses and formats chain quantities without numbers', () => {

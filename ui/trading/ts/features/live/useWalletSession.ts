@@ -205,7 +205,11 @@ export function useWalletSessionController({
 
 	async function establish(provider: InjectedEthereum, expectedContext: string, requestIsCurrent: () => boolean, eventName?: WalletContextChangeEvent) {
 		const requireCurrent = () => {
-			if (!mounted.current || !requestIsCurrent() || renderContextKeyRef.current !== expectedContext || getInjectedEthereum() !== provider) return false
+			if (!mounted.current || !requestIsCurrent() || getInjectedEthereum() !== provider) return false
+			if (renderContextKeyRef.current !== expectedContext) {
+				connectHandler.current()
+				return false
+			}
 			return true
 		}
 		if (configuration === undefined) throw new Error('Deployment configuration is unavailable')

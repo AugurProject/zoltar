@@ -87,6 +87,7 @@ export function useSettlementWorkflowController({
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const inputRevision = useRef(0)
 	const mounted = useRef(true)
+	const preserveConfirmedOnNextInvalidation = useRef(false)
 	const matches = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, targetOutcomeIndexes, account, walletClient)
 	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, matches) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
@@ -100,8 +101,10 @@ export function useSettlementWorkflowController({
 		setQuote(undefined)
 		setError(undefined)
 		if (!workflow.isActive()) {
+			const preserveConfirmed = preserveConfirmedOnNextInvalidation.current
+			preserveConfirmedOnNextInvalidation.current = false
 			setTransactionHash(undefined)
-			setState('idle')
+			setState(current => (preserveConfirmed && current === 'confirmed' ? current : 'idle'))
 		}
 	}
 
@@ -191,7 +194,10 @@ export function useSettlementWorkflowController({
 			setReceiptWarning(undefined)
 			setState('confirmed')
 			await refresh()
-			if (selectedQuote.operation === 'migrate-shares' && mounted.current) onMigrationConfirmed()
+			if (selectedQuote.operation === 'migrate-shares' && mounted.current) {
+				preserveConfirmedOnNextInvalidation.current = true
+				onMigrationConfirmed()
+			}
 		} catch (caught) {
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
@@ -246,7 +252,14 @@ export function useSettlementWorkflowController({
 				},
 			})
 			if (!mounted.current) return
-			if (receipt.status === 'reverted') throw new Error('Approval transaction reverted')
+			if (receipt.status === 'reverted') {
+				if (!walletContextIsCurrent(account)) {
+					setState('error')
+					setError('Wallet context changed while the share-token approval was pending. Approval transaction reverted.')
+					return
+				}
+				throw new Error('Approval transaction reverted')
+			}
 			setState('approval-confirmed')
 			if (!walletContextIsCurrent(account)) return
 			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', market, account)

@@ -48,8 +48,13 @@ function questionOutcomeLabel(outcome: number) {
 	return `Unknown outcome ${outcome}`
 }
 
+export function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originUniverseId'>) {
+	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
+}
+
 function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
+	const identity = marketUniverseIdentity(market)
 	return (
 		<>
 			<div>
@@ -66,11 +71,11 @@ function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' 
 			</div>
 			<div>
 				<dt>Current universe ID</dt>
-				<dd>{market.universeId.toString()}</dd>
+				<dd>{identity.currentUniverseId.toString()}</dd>
 			</div>
 			<div>
 				<dt>Market lineage origin universe ID</dt>
-				<dd>{market.originUniverseId?.toString() ?? 'Unavailable'}</dd>
+				<dd>{identity.originUniverseId?.toString() ?? 'Unavailable'}</dd>
 			</div>
 			<div>
 				<dt>Question ID</dt>

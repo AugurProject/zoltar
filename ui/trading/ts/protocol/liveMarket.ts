@@ -6,6 +6,7 @@ export type LiveMarket = Readonly<{
 	pair: Address | undefined
 	shareToken: Address
 	universeId: bigint
+	originUniverseId?: bigint
 	questionId: bigint
 	title: string
 	description: string

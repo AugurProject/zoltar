@@ -9,7 +9,7 @@ export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
-import { capabilitiesForTradingVersion } from './capabilities.js'
+import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { configuredFactory, configuredPair, configuredShareOperationRouter, receiveBasedExitArguments, shareTokenAbi } from './versionedAuthorization.js'
 
 export { encodeReceiveBasedExitRequest } from './versionedAuthorization.js'
@@ -34,9 +34,10 @@ const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
-	const [questionData, zoltar, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'zoltar' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'parent' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getCurrentMintingCapacityAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getPoolAccountingSnapshot' }),
@@ -48,6 +49,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	return {
 		questionData,
 		zoltar,
+		parent,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: accounting.settlementCollateralAttoEth,
 		currentRetentionRate: accounting.currentRetentionRate,
@@ -60,6 +62,21 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		vaultCount,
 		forker,
 	}
+}
+
+async function loadOriginUniverseId(client: PublicClient, parent: Address, currentUniverseId: bigint) {
+	let originUniverseId = currentUniverseId
+	let ancestor = parent
+	const visited = new Set<string>()
+	while (ancestor !== zeroAddress) {
+		const key = ancestor.toLowerCase()
+		if (visited.has(key)) throw new Error('SecurityPool parent lineage contains a cycle')
+		visited.add(key)
+		const [universeId, nextParent] = await Promise.all([client.readContract({ abi: securityPoolAbi, address: ancestor, functionName: 'universeId' }), client.readContract({ abi: securityPoolAbi, address: ancestor, functionName: 'parent' })])
+		originUniverseId = universeId
+		ancestor = getAddress(nextParent)
+	}
+	return originUniverseId
 }
 
 export function marketDiscoveryRanges(total: bigint, pageSize = 25n) {
@@ -173,11 +190,13 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 	const factoryArtifact = configuredFactory(configuration)
 	const pairArtifact = configuredPair(configuration)
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const { questionData, zoltar, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } = poolSettings
-	const [question, questionOutcome, universeForkTime] = await Promise.all([
+	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } =
+		poolSettings
+	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
 		client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
+		loadOriginUniverseId(client, getAddress(parent), universeId),
 	])
 	const questionFields = liveQuestionFields(question)
 	const canonicalPair = pairAddress === zeroAddress ? undefined : getAddress(pairAddress)
@@ -204,6 +223,7 @@ async function loadLiveMarket(client: PublicClient, configuration: DeploymentCon
 		pair: canonicalPair,
 		shareToken,
 		universeId,
+		originUniverseId,
 		questionId,
 		title: questionFields.title,
 		description: questionFields.description,
