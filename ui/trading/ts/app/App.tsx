@@ -275,7 +275,7 @@ export function App({
 								</a>
 							</nav>
 							<button class='trading-context-trigger' type='button' aria-controls='trading-context-panel' aria-expanded={tradingContextOpen} onClick={() => setTradingContextOpen(open => !open)}>
-								Trading context
+								{appCopy.tradingContext}
 							</button>
 							<div id='trading-context-panel' class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`} hidden={!tradingContextOpen}>
 								{settingsMenu}

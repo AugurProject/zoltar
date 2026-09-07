@@ -82,7 +82,7 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
 	if (busy) return `Deploying ${nextStep?.label ?? 'contract'}…`
-	if (status?.factory === true && status.router && status.receiveRouter !== false) return 'Deployment complete'
+	if (status?.factory === true && status.router && status.receiveRouter !== false) return appCopy.deploymentComplete
 	if (nextStep === undefined) return 'Deploy trading contracts'
 	return `Deploy ${nextStep.label}`
 }

@@ -1,5 +1,6 @@
 import { TradingAddressValue } from '../components/TradingAddress.js'
 import { shareBalanceScope, type LiveMarket } from '../protocol/live.js'
+import * as identityCopy from '../copy/identity.js'
 
 export function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originUniverseId'>) {
 	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
@@ -11,34 +12,32 @@ export function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 
 	return (
 		<>
 			<div>
-				<dt>Security pool address</dt>
+				<dt>{identityCopy.securityPoolAddress}</dt>
 				<dd>
 					<TradingAddressValue value={scope.pool} />
 				</dd>
 			</div>
 			<div>
-				<dt>Share token address</dt>
+				<dt>{identityCopy.shareTokenAddress}</dt>
 				<dd>
 					<TradingAddressValue value={scope.shareToken} />
 				</dd>
 			</div>
 			<div>
-				<dt>Current universe ID</dt>
+				<dt>{identityCopy.currentUniverseId}</dt>
 				<dd>{identity.currentUniverseId.toString()}</dd>
 			</div>
 			<div>
-				<dt>Market lineage origin universe ID</dt>
-				<dd>{identity.originUniverseId?.toString() ?? 'Unavailable'}</dd>
+				<dt>{identityCopy.marketLineageOriginUniverseId}</dt>
+				<dd>{identity.originUniverseId?.toString() ?? identityCopy.unavailableOriginUniverse}</dd>
 			</div>
 			<div>
-				<dt>Question ID</dt>
+				<dt>{identityCopy.questionId}</dt>
 				<dd>{market.questionId.toString()}</dd>
 			</div>
 			<div>
-				<dt>Outcome token IDs</dt>
-				<dd>
-					INVALID {scope.invalidTokenId.toString()} · YES {scope.yesTokenId.toString()} · NO {scope.noTokenId.toString()}
-				</dd>
+				<dt>{identityCopy.outcomeTokenIds}</dt>
+				<dd>{identityCopy.outcomeTokenIdSummary(scope.invalidTokenId.toString(), scope.yesTokenId.toString(), scope.noTokenId.toString())}</dd>
 			</div>
 		</>
 	)
