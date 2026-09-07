@@ -35,73 +35,277 @@
 	},
 	"types": "./js/protocol/index.d.ts",
 	"exports": {
-		"./copy/app.js": "./js/copy/app.js",
-		"./copy/forkAuction.js": "./js/copy/forkAuction.js",
-		"./copy/liquidation.js": "./js/copy/liquidation.js",
-		"./copy/securityPool.js": "./js/copy/securityPool.js",
-		"./features/deployment/deploymentSections.js": "./js/features/deployment/deploymentSections.js",
-		"./features/markets/components/MarketCreateQuestionSection.js": "./js/features/markets/components/MarketCreateQuestionSection.js",
-		"./features/markets/components/MarketOverviewSection.js": "./js/features/markets/components/MarketOverviewSection.js",
-		"./features/markets/components/ScalarDeploymentSection.js": "./js/features/markets/components/ScalarDeploymentSection.js",
-		"./features/markets/components/TradingSection.js": "./js/features/markets/components/TradingSection.js",
-		"./features/markets/hooks/useMarketCreation.js": "./js/features/markets/hooks/useMarketCreation.js",
-		"./features/markets/hooks/useTradingOperations.js": "./js/features/markets/hooks/useTradingOperations.js",
-		"./features/markets/lib/marketCreation.js": "./js/features/markets/lib/marketCreation.js",
-		"./features/markets/lib/marketForm.js": "./js/features/markets/lib/marketForm.js",
-		"./features/markets/lib/trading.js": "./js/features/markets/lib/trading.js",
-		"./features/security-pools/components/CollateralizationCircle.js": "./js/features/security-pools/components/CollateralizationCircle.js",
-		"./features/security-pools/components/CollateralizationMetricField.js": "./js/features/security-pools/components/CollateralizationMetricField.js",
-		"./features/security-pools/components/LiquidationModal.js": "./js/features/security-pools/components/LiquidationModal.js",
-		"./features/security-pools/components/SecurityPoolLink.js": "./js/features/security-pools/components/SecurityPoolLink.js",
-		"./features/security-pools/components/SecurityPoolSection.js": "./js/features/security-pools/components/SecurityPoolSection.js",
-		"./features/security-pools/components/SecurityPoolWorkflowSection.js": "./js/features/security-pools/components/SecurityPoolWorkflowSection.js",
-		"./features/security-pools/components/SecurityPoolsOverviewSection.js": "./js/features/security-pools/components/SecurityPoolsOverviewSection.js",
-		"./features/security-pools/components/SecurityPoolsSection.js": "./js/features/security-pools/components/SecurityPoolsSection.js",
-		"./features/security-pools/components/SecurityVaultSection.js": "./js/features/security-pools/components/SecurityVaultSection.js",
-		"./features/security-pools/components/SelectedVaultSummarySection.js": "./js/features/security-pools/components/SelectedVaultSummarySection.js",
-		"./features/security-pools/components/UniverseDirectorySection.js": "./js/features/security-pools/components/UniverseDirectorySection.js",
-		"./features/security-pools/hooks/useSecurityPoolCreation.js": "./js/features/security-pools/hooks/useSecurityPoolCreation.js",
-		"./features/security-pools/hooks/useSecurityPoolsOverview.js": "./js/features/security-pools/hooks/useSecurityPoolsOverview.js",
-		"./features/security-pools/hooks/useSecurityVaultOperations.js": "./js/features/security-pools/hooks/useSecurityVaultOperations.js",
-		"./features/security-pools/lib/liquidation.js": "./js/features/security-pools/lib/liquidation.js",
-		"./features/security-pools/lib/liquidationStatus.js": "./js/features/security-pools/lib/liquidationStatus.js",
-		"./features/security-pools/lib/repPriceSource.js": "./js/features/security-pools/lib/repPriceSource.js",
-		"./features/security-pools/lib/retentionRate.js": "./js/features/security-pools/lib/retentionRate.js",
-		"./features/security-pools/lib/securityPoolCreationGuards.js": "./js/features/security-pools/lib/securityPoolCreationGuards.js",
-		"./features/security-pools/lib/securityPoolLabels.js": "./js/features/security-pools/lib/securityPoolLabels.js",
-		"./features/security-pools/lib/securityPoolNavigation.js": "./js/features/security-pools/lib/securityPoolNavigation.js",
-		"./features/security-pools/lib/securityPoolState.js": "./js/features/security-pools/lib/securityPoolState.js",
-		"./features/security-pools/lib/securityPoolState/matrix.js": "./js/features/security-pools/lib/securityPoolState/matrix.js",
-		"./features/security-pools/lib/securityPoolWorkflow.js": "./js/features/security-pools/lib/securityPoolWorkflow.js",
-		"./features/security-pools/lib/securityVault.js": "./js/features/security-pools/lib/securityVault.js",
-		"./features/security-pools/lib/securityVaultGuards.js": "./js/features/security-pools/lib/securityVaultGuards.js",
-		"./features/security-pools/lib/securityVaultHandlers.js": "./js/features/security-pools/lib/securityVaultHandlers.js",
-		"./features/security-pools/lib/uiPriceOracle.js": "./js/features/security-pools/lib/uiPriceOracle.js",
-		"./features/transactionPresentations.js": "./js/features/transactionPresentations.js",
-		"./features/truth-auctions/components/ForkAuctionSection.js": "./js/features/truth-auctions/components/ForkAuctionSection.js",
-		"./features/truth-auctions/components/TruthAuctionBidsSection.js": "./js/features/truth-auctions/components/TruthAuctionBidsSection.js",
-		"./features/truth-auctions/components/TruthAuctionMarketViewSection.js": "./js/features/truth-auctions/components/TruthAuctionMarketViewSection.js",
-		"./features/truth-auctions/hooks/useForkAuctionInteractionState.js": "./js/features/truth-auctions/hooks/useForkAuctionInteractionState.js",
-		"./features/truth-auctions/hooks/useForkAuctionOperations.js": "./js/features/truth-auctions/hooks/useForkAuctionOperations.js",
-		"./features/truth-auctions/hooks/useTruthAuctionBookData.js": "./js/features/truth-auctions/hooks/useTruthAuctionBookData.js",
-		"./features/truth-auctions/hooks/useTruthAuctionPaginationState.js": "./js/features/truth-auctions/hooks/useTruthAuctionPaginationState.js",
-		"./features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js": "./js/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js",
-		"./features/truth-auctions/lib/forkAuction.js": "./js/features/truth-auctions/lib/forkAuction.js",
-		"./features/truth-auctions/lib/truthAuctionBidViewModels.js": "./js/features/truth-auctions/lib/truthAuctionBidViewModels.js",
-		"./features/truth-auctions/lib/truthAuctionBook.js": "./js/features/truth-auctions/lib/truthAuctionBook.js",
-		"./features/truth-auctions/lib/truthAuctionSettlement.js": "./js/features/truth-auctions/lib/truthAuctionSettlement.js",
-		"./features/truth-auctions/lib/truthAuctionSettlementActionState.js": "./js/features/truth-auctions/lib/truthAuctionSettlementActionState.js",
-		"./features/types.js": "./js/features/types.js",
-		"./lib/routing.js": "./js/lib/routing.js",
-		"./protocol/contractLabels.js": "./js/protocol/contractLabels.js",
-		"./protocol/deployment.js": "./js/protocol/deployment.js",
-		"./protocol/index.js": "./js/protocol/index.js",
-		"./protocol/securityPools.js": "./js/protocol/securityPools.js",
-		"./protocol/securityVault.js": "./js/protocol/securityVault.js",
-		"./protocol/trading.js": "./js/protocol/trading.js",
-		"./protocol/truthAuctionActions.js": "./js/protocol/truthAuctionActions.js",
-		"./protocol/truthAuctions.js": "./js/protocol/truthAuctions.js",
-		"./simulation/statoblastScenarios.js": "./js/simulation/statoblastScenarios.js",
-		"./types/app.js": "./js/types/app.js"
+		"./copy/app.js": {
+			"bun": "./ts/copy/app.ts",
+			"default": "./js/copy/app.js"
+		},
+		"./copy/forkAuction.js": {
+			"bun": "./ts/copy/forkAuction.ts",
+			"default": "./js/copy/forkAuction.js"
+		},
+		"./copy/liquidation.js": {
+			"bun": "./ts/copy/liquidation.ts",
+			"default": "./js/copy/liquidation.js"
+		},
+		"./copy/securityPool.js": {
+			"bun": "./ts/copy/securityPool.ts",
+			"default": "./js/copy/securityPool.js"
+		},
+		"./features/deployment/deploymentSections.js": {
+			"bun": "./ts/features/deployment/deploymentSections.ts",
+			"default": "./js/features/deployment/deploymentSections.js"
+		},
+		"./features/markets/components/MarketCreateQuestionSection.js": {
+			"bun": "./ts/features/markets/components/MarketCreateQuestionSection.tsx",
+			"default": "./js/features/markets/components/MarketCreateQuestionSection.js"
+		},
+		"./features/markets/components/MarketOverviewSection.js": {
+			"bun": "./ts/features/markets/components/MarketOverviewSection.tsx",
+			"default": "./js/features/markets/components/MarketOverviewSection.js"
+		},
+		"./features/markets/components/ScalarDeploymentSection.js": {
+			"bun": "./ts/features/markets/components/ScalarDeploymentSection.tsx",
+			"default": "./js/features/markets/components/ScalarDeploymentSection.js"
+		},
+		"./features/markets/components/TradingSection.js": {
+			"bun": "./ts/features/markets/components/TradingSection.tsx",
+			"default": "./js/features/markets/components/TradingSection.js"
+		},
+		"./features/markets/hooks/useMarketCreation.js": {
+			"bun": "./ts/features/markets/hooks/useMarketCreation.ts",
+			"default": "./js/features/markets/hooks/useMarketCreation.js"
+		},
+		"./features/markets/hooks/useTradingOperations.js": {
+			"bun": "./ts/features/markets/hooks/useTradingOperations.ts",
+			"default": "./js/features/markets/hooks/useTradingOperations.js"
+		},
+		"./features/markets/lib/marketCreation.js": {
+			"bun": "./ts/features/markets/lib/marketCreation.ts",
+			"default": "./js/features/markets/lib/marketCreation.js"
+		},
+		"./features/markets/lib/marketForm.js": {
+			"bun": "./ts/features/markets/lib/marketForm.ts",
+			"default": "./js/features/markets/lib/marketForm.js"
+		},
+		"./features/markets/lib/trading.js": {
+			"bun": "./ts/features/markets/lib/trading.ts",
+			"default": "./js/features/markets/lib/trading.js"
+		},
+		"./features/security-pools/components/CollateralizationCircle.js": {
+			"bun": "./ts/features/security-pools/components/CollateralizationCircle.tsx",
+			"default": "./js/features/security-pools/components/CollateralizationCircle.js"
+		},
+		"./features/security-pools/components/CollateralizationMetricField.js": {
+			"bun": "./ts/features/security-pools/components/CollateralizationMetricField.tsx",
+			"default": "./js/features/security-pools/components/CollateralizationMetricField.js"
+		},
+		"./features/security-pools/components/LiquidationModal.js": {
+			"bun": "./ts/features/security-pools/components/LiquidationModal.tsx",
+			"default": "./js/features/security-pools/components/LiquidationModal.js"
+		},
+		"./features/security-pools/components/SecurityPoolLink.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolLink.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolLink.js"
+		},
+		"./features/security-pools/components/SecurityPoolSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolSection.js"
+		},
+		"./features/security-pools/components/SecurityPoolWorkflowSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolWorkflowSection.js"
+		},
+		"./features/security-pools/components/SecurityPoolsOverviewSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolsOverviewSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolsOverviewSection.js"
+		},
+		"./features/security-pools/components/SecurityPoolsSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolsSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolsSection.js"
+		},
+		"./features/security-pools/components/SecurityVaultSection.js": {
+			"bun": "./ts/features/security-pools/components/SecurityVaultSection.tsx",
+			"default": "./js/features/security-pools/components/SecurityVaultSection.js"
+		},
+		"./features/security-pools/components/SelectedVaultSummarySection.js": {
+			"bun": "./ts/features/security-pools/components/SelectedVaultSummarySection.tsx",
+			"default": "./js/features/security-pools/components/SelectedVaultSummarySection.js"
+		},
+		"./features/security-pools/components/UniverseDirectorySection.js": {
+			"bun": "./ts/features/security-pools/components/UniverseDirectorySection.tsx",
+			"default": "./js/features/security-pools/components/UniverseDirectorySection.js"
+		},
+		"./features/security-pools/hooks/useSecurityPoolCreation.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolCreation.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolCreation.js"
+		},
+		"./features/security-pools/hooks/useSecurityPoolsOverview.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolsOverview.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolsOverview.js"
+		},
+		"./features/security-pools/hooks/useSecurityVaultOperations.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityVaultOperations.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityVaultOperations.js"
+		},
+		"./features/security-pools/lib/liquidation.js": {
+			"bun": "./ts/features/security-pools/lib/liquidation.ts",
+			"default": "./js/features/security-pools/lib/liquidation.js"
+		},
+		"./features/security-pools/lib/liquidationStatus.js": {
+			"bun": "./ts/features/security-pools/lib/liquidationStatus.ts",
+			"default": "./js/features/security-pools/lib/liquidationStatus.js"
+		},
+		"./features/security-pools/lib/repPriceSource.js": {
+			"bun": "./ts/features/security-pools/lib/repPriceSource.tsx",
+			"default": "./js/features/security-pools/lib/repPriceSource.js"
+		},
+		"./features/security-pools/lib/retentionRate.js": {
+			"bun": "./ts/features/security-pools/lib/retentionRate.ts",
+			"default": "./js/features/security-pools/lib/retentionRate.js"
+		},
+		"./features/security-pools/lib/securityPoolCreationGuards.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolCreationGuards.ts",
+			"default": "./js/features/security-pools/lib/securityPoolCreationGuards.js"
+		},
+		"./features/security-pools/lib/securityPoolLabels.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolLabels.ts",
+			"default": "./js/features/security-pools/lib/securityPoolLabels.js"
+		},
+		"./features/security-pools/lib/securityPoolNavigation.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolNavigation.ts",
+			"default": "./js/features/security-pools/lib/securityPoolNavigation.js"
+		},
+		"./features/security-pools/lib/securityPoolState.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolState.ts",
+			"default": "./js/features/security-pools/lib/securityPoolState.js"
+		},
+		"./features/security-pools/lib/securityPoolState/matrix.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolState/matrix.ts",
+			"default": "./js/features/security-pools/lib/securityPoolState/matrix.js"
+		},
+		"./features/security-pools/lib/securityPoolWorkflow.js": {
+			"bun": "./ts/features/security-pools/lib/securityPoolWorkflow.ts",
+			"default": "./js/features/security-pools/lib/securityPoolWorkflow.js"
+		},
+		"./features/security-pools/lib/securityVault.js": {
+			"bun": "./ts/features/security-pools/lib/securityVault.ts",
+			"default": "./js/features/security-pools/lib/securityVault.js"
+		},
+		"./features/security-pools/lib/securityVaultGuards.js": {
+			"bun": "./ts/features/security-pools/lib/securityVaultGuards.ts",
+			"default": "./js/features/security-pools/lib/securityVaultGuards.js"
+		},
+		"./features/security-pools/lib/securityVaultHandlers.js": {
+			"bun": "./ts/features/security-pools/lib/securityVaultHandlers.ts",
+			"default": "./js/features/security-pools/lib/securityVaultHandlers.js"
+		},
+		"./features/security-pools/lib/uiPriceOracle.js": {
+			"bun": "./ts/features/security-pools/lib/uiPriceOracle.ts",
+			"default": "./js/features/security-pools/lib/uiPriceOracle.js"
+		},
+		"./features/transactionPresentations.js": {
+			"bun": "./ts/features/transactionPresentations.tsx",
+			"default": "./js/features/transactionPresentations.js"
+		},
+		"./features/truth-auctions/components/ForkAuctionSection.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkAuctionSection.tsx",
+			"default": "./js/features/truth-auctions/components/ForkAuctionSection.js"
+		},
+		"./features/truth-auctions/components/TruthAuctionBidsSection.js": {
+			"bun": "./ts/features/truth-auctions/components/TruthAuctionBidsSection.tsx",
+			"default": "./js/features/truth-auctions/components/TruthAuctionBidsSection.js"
+		},
+		"./features/truth-auctions/components/TruthAuctionMarketViewSection.js": {
+			"bun": "./ts/features/truth-auctions/components/TruthAuctionMarketViewSection.tsx",
+			"default": "./js/features/truth-auctions/components/TruthAuctionMarketViewSection.js"
+		},
+		"./features/truth-auctions/hooks/useForkAuctionInteractionState.js": {
+			"bun": "./ts/features/truth-auctions/hooks/useForkAuctionInteractionState.ts",
+			"default": "./js/features/truth-auctions/hooks/useForkAuctionInteractionState.js"
+		},
+		"./features/truth-auctions/hooks/useForkAuctionOperations.js": {
+			"bun": "./ts/features/truth-auctions/hooks/useForkAuctionOperations.ts",
+			"default": "./js/features/truth-auctions/hooks/useForkAuctionOperations.js"
+		},
+		"./features/truth-auctions/hooks/useTruthAuctionBookData.js": {
+			"bun": "./ts/features/truth-auctions/hooks/useTruthAuctionBookData.ts",
+			"default": "./js/features/truth-auctions/hooks/useTruthAuctionBookData.js"
+		},
+		"./features/truth-auctions/hooks/useTruthAuctionPaginationState.js": {
+			"bun": "./ts/features/truth-auctions/hooks/useTruthAuctionPaginationState.ts",
+			"default": "./js/features/truth-auctions/hooks/useTruthAuctionPaginationState.js"
+		},
+		"./features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js": {
+			"bun": "./ts/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.ts",
+			"default": "./js/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js"
+		},
+		"./features/truth-auctions/lib/forkAuction.js": {
+			"bun": "./ts/features/truth-auctions/lib/forkAuction.ts",
+			"default": "./js/features/truth-auctions/lib/forkAuction.js"
+		},
+		"./features/truth-auctions/lib/truthAuctionBidViewModels.js": {
+			"bun": "./ts/features/truth-auctions/lib/truthAuctionBidViewModels.ts",
+			"default": "./js/features/truth-auctions/lib/truthAuctionBidViewModels.js"
+		},
+		"./features/truth-auctions/lib/truthAuctionBook.js": {
+			"bun": "./ts/features/truth-auctions/lib/truthAuctionBook.ts",
+			"default": "./js/features/truth-auctions/lib/truthAuctionBook.js"
+		},
+		"./features/truth-auctions/lib/truthAuctionSettlement.js": {
+			"bun": "./ts/features/truth-auctions/lib/truthAuctionSettlement.ts",
+			"default": "./js/features/truth-auctions/lib/truthAuctionSettlement.js"
+		},
+		"./features/truth-auctions/lib/truthAuctionSettlementActionState.js": {
+			"bun": "./ts/features/truth-auctions/lib/truthAuctionSettlementActionState.ts",
+			"default": "./js/features/truth-auctions/lib/truthAuctionSettlementActionState.js"
+		},
+		"./features/types.js": {
+			"bun": "./ts/features/types.ts",
+			"default": "./js/features/types.js"
+		},
+		"./lib/routing.js": {
+			"bun": "./ts/lib/routing.ts",
+			"default": "./js/lib/routing.js"
+		},
+		"./protocol/contractLabels.js": {
+			"bun": "./ts/protocol/contractLabels.ts",
+			"default": "./js/protocol/contractLabels.js"
+		},
+		"./protocol/deployment.js": {
+			"bun": "./ts/protocol/deployment.ts",
+			"default": "./js/protocol/deployment.js"
+		},
+		"./protocol/index.js": {
+			"bun": "./ts/protocol/index.ts",
+			"default": "./js/protocol/index.js"
+		},
+		"./protocol/securityPools.js": {
+			"bun": "./ts/protocol/securityPools.ts",
+			"default": "./js/protocol/securityPools.js"
+		},
+		"./protocol/securityVault.js": {
+			"bun": "./ts/protocol/securityVault.ts",
+			"default": "./js/protocol/securityVault.js"
+		},
+		"./protocol/trading.js": {
+			"bun": "./ts/protocol/trading.ts",
+			"default": "./js/protocol/trading.js"
+		},
+		"./protocol/truthAuctionActions.js": {
+			"bun": "./ts/protocol/truthAuctionActions.ts",
+			"default": "./js/protocol/truthAuctionActions.js"
+		},
+		"./protocol/truthAuctions.js": {
+			"bun": "./ts/protocol/truthAuctions.ts",
+			"default": "./js/protocol/truthAuctions.js"
+		},
+		"./simulation/statoblastScenarios.js": {
+			"bun": "./ts/simulation/statoblastScenarios.ts",
+			"default": "./js/simulation/statoblastScenarios.js"
+		},
+		"./types/app.js": {
+			"bun": "./ts/types/app.ts",
+			"default": "./js/types/app.js"
+		}
 	}
 }
