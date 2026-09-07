@@ -38,6 +38,13 @@ test('registry tasks carry explicit working directories and derive canonical tas
 	expect(taskProjects('dependency-update').map(project => project.id)).toContain('ui-core')
 })
 
+test('validates composite task coverage against supported non-self tasks', () => {
+	const base = project('package')
+	const task = { command: ['bun', 'run', 'check'], cwd: 'package', inputs: ['package/**'] }
+	expect(() => validateProjectRegistry([{ ...base, tasks: { check: { ...task, covers: ['check'] } } }])).toThrow('cannot cover itself')
+	expect(() => validateProjectRegistry([{ ...base, tasks: { check: { ...task, covers: ['test'] } } }])).toThrow('covers unsupported task test')
+})
+
 test('dependency closure follows registry edges without hard-coded package lists', () => {
 	expect(projectDependencyClosure(['chaos']).map(project => project.id)).toEqual(['shared', 'contracts', 'bot-shared', 'chaos'])
 })

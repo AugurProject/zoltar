@@ -1,7 +1,7 @@
 import { getChangedFiles } from './changed-files.mts'
 import { classifyCiChange } from '../ci/classify-ci-change.mts'
 import { affectedProjects, projects, projectTaskNames, taskProjects, type ProjectTaskName } from './projects.ts'
-import { createProjectTaskPlan, runProjectTaskPlan } from './run-project-tasks.mts'
+import { createProjectTaskPlan, runProjectTaskPlan, type ProjectTaskPlanEntry } from './run-project-tasks.mts'
 
 export function affectedCheckSelection(filePaths: readonly string[]) {
 	const classification = classifyCiChange(filePaths)
@@ -10,17 +10,22 @@ export function affectedCheckSelection(filePaths: readonly string[]) {
 
 const checkTasks = ['typecheck', 'lint', 'test', 'check'] satisfies readonly ProjectTaskName[]
 
-async function main() {
-	const affected = affectedCheckSelection(getChangedFiles())
-	for (const taskName of checkTasks) {
+export function affectedCheckPlan(filePaths: readonly string[]): ProjectTaskPlanEntry[] {
+	const affected = affectedCheckSelection(filePaths)
+	const coveredByCheck = new Map(affected.flatMap(project => (project.tasks.check?.covers === undefined ? [] : [[project.id, new Set(project.tasks.check.covers)] as const])))
+	return checkTasks.flatMap(taskName => {
 		const projectIds = affected
 			.filter(project => project.tasks[taskName] !== undefined)
-			.filter(project => taskName !== 'check' || project.type === 'documentation')
+			.filter(project => taskName === 'check' || coveredByCheck.get(project.id)?.has(taskName) !== true)
+			.filter(project => taskName !== 'check' || project.type === 'documentation' || (project.tasks.check?.covers?.length ?? 0) > 0)
 			.map(project => project.id)
-		if (projectIds.length === 0) continue
-		const exitCode = await runProjectTaskPlan(createProjectTaskPlan(taskName, projectIds))
-		if (exitCode !== 0) process.exit(exitCode)
-	}
+		return createProjectTaskPlan(taskName, projectIds)
+	})
+}
+
+async function main() {
+	const exitCode = await runProjectTaskPlan(affectedCheckPlan(getChangedFiles()))
+	if (exitCode !== 0) process.exit(exitCode)
 }
 
 if (!checkTasks.every(taskName => projectTaskNames.includes(taskName))) throw new Error('Affected check tasks must be registered project tasks')

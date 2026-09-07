@@ -260,7 +260,7 @@ bun run check:affected
 bun run test:plan
 ```
 
-Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents.
+Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents. When a package's canonical `check` command already covers its typecheck, lint, or tests, affected validation runs that composite once instead of repeating the covered work.
 
 Run the complete local validation suite used for CI/release parity:
 

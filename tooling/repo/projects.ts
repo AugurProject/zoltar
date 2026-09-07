@@ -9,6 +9,7 @@ export type ProjectTaskName = (typeof projectTaskNames)[number]
 
 type ProjectTask = {
 	readonly command: readonly string[]
+	readonly covers?: readonly ProjectTaskName[]
 	readonly cwd: string
 	readonly inputs: readonly string[]
 	readonly outputs?: readonly string[]
@@ -33,10 +34,11 @@ export type Project = {
 }
 
 const packageInputs = (projectPath: string) => [`${projectPath}/package.json`, `${projectPath}/bun.lock`]
-const packageTask = (projectPath: string, scriptName: string, options: { readonly cacheInputs?: readonly string[]; readonly groups?: readonly string[]; readonly outputs?: readonly string[] } = {}): ProjectTask => ({
+const packageTask = (projectPath: string, scriptName: string, options: { readonly cacheInputs?: readonly string[]; readonly covers?: readonly ProjectTaskName[]; readonly groups?: readonly string[]; readonly outputs?: readonly string[] } = {}): ProjectTask => ({
 	command: ['bun', 'run', scriptName],
 	cwd: projectPath,
 	inputs: [...packageInputs(projectPath), `${projectPath}/**`],
+	...(options.covers === undefined ? {} : { covers: options.covers }),
 	...(options.outputs === undefined ? {} : { outputs: options.outputs }),
 	...(options.groups === undefined ? {} : { groups: options.groups }),
 	cacheInputs: options.cacheInputs ?? packageInputs(projectPath),
@@ -77,7 +79,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
 			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**']),
-			check: rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/ts/**', 'solidity/**', 'ui/**']),
+			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
 			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**']),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'x', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
@@ -241,7 +243,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/shared'),
 			test: packageTask('bots/shared', 'test'),
-			check: packageTask('bots/shared', 'check'),
+			check: packageTask('bots/shared', 'check', { covers: ['typecheck', 'lint', 'test'] }),
 			lint: packageTask('bots/shared', 'check'),
 			typecheck: packageTask('bots/shared', 'typecheck'),
 			audit: { ...packageTask('bots/shared', 'audit'), command: botAudit },
@@ -258,7 +260,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
-			check: packageTask('bots/chaos', 'check'),
+			check: packageTask('bots/chaos', 'check', { covers: ['typecheck', 'lint', 'test'] }),
 			lint: packageTask('bots/chaos', 'check'),
 			typecheck: packageTask('bots/chaos', 'typecheck'),
 			audit: { ...packageTask('bots/chaos', 'audit'), command: botAudit },
@@ -275,7 +277,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/open-oracle-arbitrager'),
 			test: packageTask('bots/open-oracle-arbitrager', 'test'),
-			check: packageTask('bots/open-oracle-arbitrager', 'check'),
+			check: packageTask('bots/open-oracle-arbitrager', 'check', { covers: ['typecheck', 'lint', 'test'] }),
 			lint: packageTask('bots/open-oracle-arbitrager', 'check'),
 			typecheck: packageTask('bots/open-oracle-arbitrager', 'typecheck'),
 			audit: { ...packageTask('bots/open-oracle-arbitrager', 'audit'), command: botAudit },
@@ -293,7 +295,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
-			check: packageTask('bots/liquidator', 'check'),
+			check: packageTask('bots/liquidator', 'check', { covers: ['typecheck', 'lint', 'test'] }),
 			lint: packageTask('bots/liquidator', 'check'),
 			typecheck: packageTask('bots/liquidator', 'typecheck'),
 			audit: { ...packageTask('bots/liquidator', 'audit'), command: botAudit },
@@ -311,7 +313,7 @@ export const projects: readonly Project[] = [
 			setup: packageInstallTask('augurScan'),
 			build: packageTask('augurScan', 'build', { outputs: ['augurScan/dist'] }),
 			test: packageTask('augurScan', 'test'),
-			check: packageTask('augurScan', 'check'),
+			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
 			audit: { ...packageTask('augurScan', 'audit'), command: augurScanAudit },
@@ -361,6 +363,11 @@ export function validateProjectRegistry(registry: readonly Project[] = projects)
 				['groups', task.groups ?? []],
 			] as const)
 				if (entries.some(entry => entry.trim() === '')) throw new Error(`${project.id} ${taskName} ${field} must not contain blank entries`)
+			if (task.covers?.includes(taskName)) throw new Error(`${project.id} ${taskName} cannot cover itself`)
+			for (const coveredTask of task.covers ?? []) {
+				if (!projectTaskNames.includes(coveredTask)) throw new Error(`${project.id} ${taskName} covers unknown task ${coveredTask}`)
+				if (project.tasks[coveredTask] === undefined) throw new Error(`${project.id} ${taskName} covers unsupported task ${coveredTask}`)
+			}
 		}
 		if ((project.generatedDirectories ?? []).some(entry => entry.trim() === '')) throw new Error(`${project.id} generated directories must not contain blank entries`)
 		if ((project.generatedFiles ?? []).some(entry => entry.trim() === '')) throw new Error(`${project.id} generated files must not contain blank entries`)
