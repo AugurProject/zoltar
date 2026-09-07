@@ -33,6 +33,7 @@ const ignoredPathPrefixes = [
 	'solidity/node_modules',
 	'ui/trading/dist',
 	'ui/trading/ts/generated',
+	'augurScan/public',
 	'coverage',
 ]
 const ignoredFiles = new Set(['solidity/ts/testSupport/simulator/types/wire-types.js'])
