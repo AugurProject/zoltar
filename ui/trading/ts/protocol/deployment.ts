@@ -2,6 +2,7 @@ import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, t
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
+import type { TradingDeploymentVersion } from './capabilities.js'
 
 export type CoreDeployment = Readonly<{
 	chainId: number
@@ -13,7 +14,7 @@ export type CoreDeployment = Readonly<{
 	zoltar: Address
 }>
 
-type TradingDeploymentStepId = 'factory' | 'router'
+type TradingDeploymentStepId = 'factory' | 'router' | 'receiveRouter'
 
 export type TradingDeploymentStep = Readonly<{
 	address: Address
@@ -28,6 +29,8 @@ export type TradingDeploymentPlan = Readonly<{
 	factory: TradingDeploymentStep
 	feeBps: number
 	router: TradingDeploymentStep
+	receiveRouter?: TradingDeploymentStep
+	version: TradingDeploymentVersion
 }>
 
 type TradingDeploymentWallet = Readonly<{
@@ -38,6 +41,8 @@ type TradingDeploymentWallet = Readonly<{
 
 const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
+const factoryContractV2 = tradingContracts['contracts/trading/TwoWayConstantProductFactoryV2.sol'].TwoWayConstantProductFactoryV2
+const routerContractV2 = tradingContracts['contracts/trading/TwoWayConstantProductRouterV2.sol'].TwoWayConstantProductRouterV2
 const zeroSalt = toHex(0, { size: 32 })
 const rpcStateRetryDelaysMilliseconds = [250, 500, 1_000, 2_000, 4_000] as const
 export const CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
@@ -47,25 +52,35 @@ function requireFeeBps(feeBps: number) {
 	return feeBps
 }
 
-export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): TradingDeploymentPlan {
+export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number, version: TradingDeploymentVersion = 2): TradingDeploymentPlan {
 	const checkedFeeBps = requireFeeBps(feeBps)
+	const selectedFactory = version === 2 ? factoryContractV2 : factoryContract
+	const selectedRouter = routerContract
 	const factoryData = encodeDeployData({
-		abi: factoryContract.abi,
-		bytecode: `0x${factoryContract.evm.bytecode.object}`,
+		abi: selectedFactory.abi,
+		bytecode: `0x${selectedFactory.evm.bytecode.object}`,
 		args: [core.securityPoolFactory, BigInt(checkedFeeBps)],
 	})
 	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: core.proxyDeployer, salt: zeroSalt })
 	const routerData = encodeDeployData({
-		abi: routerContract.abi,
-		bytecode: `0x${routerContract.evm.bytecode.object}`,
+		abi: selectedRouter.abi,
+		bytecode: `0x${selectedRouter.evm.bytecode.object}`,
 		args: [factoryAddress],
 	})
 	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
+	const receiveRouterData = version === 2
+		? encodeDeployData({ abi: routerContractV2.abi, bytecode: `0x${routerContractV2.evm.bytecode.object}`, args: [factoryAddress] })
+		: undefined
+	const receiveRouterAddress = receiveRouterData === undefined ? undefined : getCreate2Address({ bytecode: receiveRouterData, from: core.proxyDeployer, salt: zeroSalt })
 	return {
 		core,
 		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
 		feeBps: checkedFeeBps,
 		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
+		...(receiveRouterAddress === undefined || receiveRouterData === undefined
+			? {}
+			: { receiveRouter: { address: receiveRouterAddress, data: receiveRouterData, dependencies: ['factory'], id: 'receiveRouter' as const, label: 'Approval-free trading router' } }),
+		version,
 	}
 }
 
@@ -76,6 +91,8 @@ export function deploymentConfigurationForPlan(plan: TradingDeploymentPlan, rpcU
 		factory: plan.factory.address,
 		feeBps: plan.feeBps,
 		router: plan.router.address,
+		...(plan.receiveRouter === undefined ? {} : { receiveRouter: plan.receiveRouter.address }),
+		version: plan.version,
 		rpcUrl,
 		securityPoolFactory: plan.core.securityPoolFactory,
 		zoltar: plan.core.zoltar,
@@ -88,14 +105,25 @@ async function requireCode(client: Pick<PublicClient, 'getCode'>, address: Addre
 }
 
 async function validateTradingFactory(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
-	const [securityPoolFactory, feeBps] = await Promise.all([client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'securityPoolFactory' }), client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'feeBps' })])
+	const selectedFactory = plan.version === 2 ? factoryContractV2 : factoryContract
+	const [securityPoolFactory, feeBps] = await Promise.all([client.readContract({ abi: selectedFactory.abi, address: plan.factory.address, functionName: 'securityPoolFactory' }), client.readContract({ abi: selectedFactory.abi, address: plan.factory.address, functionName: 'feeBps' })])
 	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (feeBps !== BigInt(plan.feeBps)) throw new Error('Trading factory fee does not match the selected fee')
 }
 
 async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
-	const factory = await client.readContract({ abi: routerContract.abi, address: plan.router.address, functionName: 'factory' })
+	const selectedRouter = routerContract
+	const factory = await client.readContract({ abi: selectedRouter.abi, address: plan.router.address, functionName: 'factory' })
 	if (getAddress(factory) !== plan.factory.address) throw new Error('Trading router references a different factory')
+}
+
+async function validateReceiveRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
+	if (plan.receiveRouter === undefined) return
+	const [receiveFactory, version] = await Promise.all([
+		client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'factory' }),
+		client.readContract({ abi: routerContractV2.abi, address: plan.receiveRouter.address, functionName: 'IMPLEMENTATION_VERSION' }),
+	])
+	if (getAddress(receiveFactory) !== plan.factory.address || version !== 2n) throw new Error('Approval-free router capability does not match the V2 deployment')
 }
 
 export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan) {
@@ -106,16 +134,23 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 	if (factoryDeployed) await validateTradingFactory(client, plan)
 	const routerCode = await client.getCode({ address: plan.router.address })
 	const routerDeployed = routerCode !== undefined && routerCode !== '0x'
+	const receiveRouterCode = plan.receiveRouter === undefined ? undefined : await client.getCode({ address: plan.receiveRouter.address })
+	const receiveRouterDeployed = plan.receiveRouter === undefined || (receiveRouterCode !== undefined && receiveRouterCode !== '0x')
 	if (routerDeployed) {
 		if (!factoryDeployed) throw new Error('Trading router exists without its expected factory')
 		await validateTradingRouter(client, plan)
 	}
-	return { factory: factoryDeployed, router: routerDeployed }
+	if (receiveRouterDeployed && plan.receiveRouter !== undefined) {
+		if (!factoryDeployed) throw new Error('Approval-free router exists without its expected factory')
+		await validateReceiveRouter(client, plan)
+	}
+	return { factory: factoryDeployed, router: routerDeployed, receiveRouter: receiveRouterDeployed }
 }
 
-export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean }>) {
+export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>) {
 	if (!status.factory) return plan.factory
 	if (!status.router) return plan.router
+	if (plan.receiveRouter !== undefined && !status.receiveRouter) return plan.receiveRouter
 	return undefined
 }
 
@@ -141,7 +176,9 @@ export async function deployTradingStep(
 	const status = await loadTradingDeploymentStatus(publicClient, plan)
 	if (status[step.id]) throw new Error(`${step.label} is already deployed`)
 	for (const dependency of step.dependencies) {
-		if (!status[dependency]) throw new Error(`Deploy ${plan[dependency].label} first`)
+		const dependencyStep = plan[dependency]
+		if (dependencyStep === undefined) throw new Error(`Deployment plan is missing ${dependency}`)
+		if (!status[dependency]) throw new Error(`Deploy ${dependencyStep.label} first`)
 	}
 	await beforeSend()
 	const hash = await walletClient.sendTransaction({ to: plan.core.proxyDeployer, data: step.data })

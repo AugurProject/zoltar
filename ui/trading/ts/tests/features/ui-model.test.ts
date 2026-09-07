@@ -140,7 +140,7 @@ describe('standalone trading UI model', () => {
 
 	test('requires LP approval only after authoritative balances are ready', () => {
 		for (const state of ['disconnected', 'loading', 'error'] as const) expect(liquidityApprovalRequired(state, 'remove', 1n, 0n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeTrue()
+		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeFalse()
 		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
 		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
 	})

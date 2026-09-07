@@ -95,14 +95,12 @@ export function useLiveTradingController({
 		setTransactionValidityMinutes,
 		quote,
 		setQuote,
+		workflowState,
+		dispatchWorkflow,
 		state,
-		setState,
 		positionHash,
-		setPositionHash,
 		message,
-		setMessage,
 		positionReceiptWarning,
-		setPositionReceiptWarning,
 		positionWorkflow,
 		positionWorkflowLockedRef,
 		liquidityWorkflowLockedRef,
@@ -120,6 +118,7 @@ export function useLiveTradingController({
 	const connectionRequests = useRef(createLatestRequestGuard()).current
 	const simulationRequests = useRef(createLatestRequestGuard()).current
 	const walletContextRevision = useRef(0)
+	const transactionRequestRevision = useRef(0)
 	const walletSubscriptionCleanup = useRef<(() => void) | undefined>()
 	const walletContextChangeHandler = useRef<(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) => void>(() => undefined)
 	const walletConnectHandler = useRef<() => void>(() => undefined)
@@ -128,6 +127,10 @@ export function useLiveTradingController({
 	const walletRenderContextKeyRef = useRef(walletRenderContextKey)
 	walletRenderContextKeyRef.current = walletRenderContextKey
 	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
+	const nextTransactionContext = useCallback(
+		(expectedAccount: Address, market: LiveMarket, chainId: number) => ({ account: expectedAccount, market: market.pool, chainId, requestRevision: ++transactionRequestRevision.current }),
+		[],
+	)
 
 	const invalidateWalletIdentity = useCallback(
 		(detail: string) => {
@@ -157,13 +160,9 @@ export function useLiveTradingController({
 			setWalletContextInvalidated(true)
 			setQuote(undefined)
 			setWalletConnectionFeedback({ route, detail })
-			if (!positionWorkflowLockedRef.current) {
-				setPositionHash(undefined)
-				setPositionReceiptWarning(undefined)
-			}
-			setMessage(detail)
+			dispatchWorkflow(positionWorkflowLockedRef.current ? { type: 'context-invalidated', message: detail } : { type: 'failed', message: detail })
 		},
-		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, simulationRequests, walletSummaryRequests],
+		[balanceRequests, connectionRequests, dispatchWorkflow, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, simulationRequests, walletSummaryRequests],
 	)
 
 	const executeWithCurrentWalletContext = useCallback(
@@ -317,11 +316,7 @@ export function useLiveTradingController({
 		simulationRequests.invalidate()
 		setQuote(undefined)
 		if (!positionWorkflowLockedRef.current) {
-			setState('idle')
-			if (owner !== 'position') {
-				setPositionHash(undefined)
-				setPositionReceiptWarning(undefined)
-			}
+			if (owner !== 'position') dispatchWorkflow({ type: 'reset' })
 		}
 		if (accountRef.current !== undefined) {
 			setBalanceState('loading')
@@ -393,7 +388,7 @@ export function useLiveTradingController({
 			discoveryRequests.invalidate()
 			balanceRequests.invalidate()
 			simulationRequests.invalidate()
-			setMessage(configurationError)
+			dispatchWorkflow(configurationError === undefined ? { type: 'reset' } : { type: 'failed', message: configurationError })
 			return
 		}
 		void refresh(configuration, 0n)
@@ -410,12 +405,9 @@ export function useLiveTradingController({
 		if (positionWorkflowLockedRef.current) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		setPositionHash(undefined)
-		setPositionReceiptWarning(undefined)
-		setState('idle')
+		dispatchWorkflow({ type: 'reset' })
 		setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
-			setMessage(undefined)
 			void refresh(configuration, 0n)
 		}
 		previousRoute.current = route
@@ -425,7 +417,7 @@ export function useLiveTradingController({
 		if (selected === undefined || marketAcceptsNewRisk(selected, nowSeconds)) return
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) setState('idle')
+		if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) dispatchWorkflow({ type: 'reset' })
 	}, [nowSeconds, selected])
 
 	useEffect(
@@ -527,7 +519,7 @@ export function useLiveTradingController({
 		const request = balanceRequests.begin()
 		simulationRequests.invalidate()
 		setQuote(undefined)
-		if (!positionWorkflowLockedRef.current) setState('idle')
+		if (!positionWorkflowLockedRef.current) dispatchWorkflow({ type: 'reset' })
 		setBalanceState('loading')
 		setBalanceError(undefined)
 		setBalances(undefined)
@@ -536,7 +528,7 @@ export function useLiveTradingController({
 			if (!balanceRequests.isCurrent(request)) return
 			setBalances(loaded)
 			setBalanceState('ready')
-			setMessage(undefined)
+			dispatchWorkflow({ type: 'reset' })
 		} catch (error) {
 			if (!balanceRequests.isCurrent(request)) return
 			setBalanceState('error')
@@ -615,7 +607,7 @@ export function useLiveTradingController({
 			setWalletClient(services.createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
 			setWalletConnectionFeedback(undefined)
-			setMessage(undefined)
+			dispatchWorkflow({ type: 'reset' })
 			await refresh(configuration)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
@@ -628,7 +620,7 @@ export function useLiveTradingController({
 		const contextLabel = eventName === 'accountsChanged' ? 'Wallet account changed' : 'Wallet network changed'
 		if ((!allowDisconnectedRefresh && accountRef.current === undefined) || positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) {
 			invalidateWalletIdentity(`${contextLabel}. Reconnect before simulating or submitting.`)
-			if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) setState('error')
+			if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) dispatchWorkflow({ type: 'failed', message: `${contextLabel}. Reconnect before simulating or submitting.` })
 			return
 		}
 		invalidateWalletIdentity(`${contextLabel}. Refreshing wallet context…`)
@@ -680,13 +672,12 @@ export function useLiveTradingController({
 			setWalletClient(services.createTradingWalletClient(provider, connected))
 			setWalletProvider(provider)
 			setWalletConnectionFeedback(undefined)
-			setMessage(undefined)
-			setState('idle')
+			dispatchWorkflow({ type: 'reset' })
 			await refresh(configuration)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || walletRenderContextKeyRef.current !== expectedRenderContextKey) return
 			invalidateWalletIdentity(`${contextLabel}: ${publicErrorMessage(error, 'wallet refresh failed')}`)
-			setState('error')
+			dispatchWorkflow({ type: 'failed', message: `${contextLabel}: wallet refresh failed` })
 		}
 	}
 	walletContextChangeHandler.current = (provider, eventName, allowDisconnectedRefresh) => void refreshWalletContextAfterEvent(provider, eventName, allowDisconnectedRefresh)
@@ -717,34 +708,30 @@ export function useLiveTradingController({
 		const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n || slippageBps === undefined || validityMinutes === undefined) return
 		const request = simulationRequests.begin()
+		const context = nextTransactionContext(account, selected, configuration.chainId)
 		try {
-			setState('simulating')
-			setPositionHash(undefined)
-			setMessage(undefined)
-			const context = { account, configuration, walletClient }
+			dispatchWorkflow({ type: 'simulation-started', context })
+			const quoteContext = { account, configuration, walletClient }
 			const nextQuote: Quote =
 				mode === 'entry'
-					? { ...context, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
-					: { ...context, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
+					? { ...quoteContext, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
+					: { ...quoteContext, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
-			setState('ready')
+			dispatchWorkflow({ type: 'simulation-succeeded', context })
 		} catch (error) {
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(undefined)
-			setState('error')
-			setMessage(publicErrorMessage(error, 'Router simulation failed'))
+			dispatchWorkflow({ type: 'failed', context, operation: 'trade', message: publicErrorMessage(error, 'Router simulation failed') })
 		}
 	}
 
 	async function approve() {
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined) return
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || !positionWorkflow.begin()) return
+		const context = nextTransactionContext(account, selected, configuration.chainId)
 		updatePositionWorkflowLock(true)
-		setState('preparing')
-		setMessage(undefined)
-		setPositionReceiptWarning(undefined)
-		setPositionHash(undefined)
+		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'share-approval' })
 		const balanceRequest = balanceRequests.begin()
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
@@ -755,11 +742,10 @@ export function useLiveTradingController({
 				'Wallet network changed; switch back before approving',
 				'Wallet account changed; reconnect before approving',
 			)(async () => {
-				setState('approval')
+				dispatchWorkflow({ type: 'signature-requested', context, operation: 'share-approval' })
 				return await services.approveRouter(walletClient, selected, configuration, account)
 			})
-			setPositionHash(broadcastHash)
-			setState('approval-pending')
+			dispatchWorkflow({ type: 'broadcast', context, operation: 'share-approval', transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
 				allowRevertedReceipt: true,
 				onKnownReceipt: () => {
@@ -768,37 +754,32 @@ export function useLiveTradingController({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
-					setPositionHash(replacementHash)
+					dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
 			if (receipt.status === 'reverted') {
+				dispatchWorkflow({ type: 'reverted', context })
 				if (!balanceRequests.isCurrent(balanceRequest)) {
-					setState('error')
-					setMessage(current => `${current ?? 'Wallet context changed.'} Approval transaction reverted.`)
 					return
 				}
-				throw new Error('Approval transaction reverted')
+				return
 			}
-			setState('approval-confirmed')
+			dispatchWorkflow({ type: 'confirmed', context })
 			if (!balanceRequests.isCurrent(balanceRequest)) return
 			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', selected, account, balanceRequest)
 			if (refreshResult !== 'ready') return
-			setPositionReceiptWarning(undefined)
-			setMessage(undefined)
 		} catch (error) {
 			if (!balanceRequests.isCurrent(balanceRequest)) {
 				if (broadcastHash !== undefined && !receiptKnown) {
 					keepLocked = true
-					setState('approval-pending')
-					setPositionReceiptWarning(broadcastUncertainMessage('Share-token approval', broadcastHash))
-				} else setState('error')
+					dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Share-token approval', broadcastHash) })
+				} else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: publicErrorMessage(error, 'Wallet context changed while approving') })
 				return
 			}
 			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, error, 'Approval failed')
 			keepLocked = failure.keepLocked
-			setState(failure.state === 'pending' ? 'approval-pending' : failure.state)
-			setMessage(failure.message)
-			setPositionReceiptWarning(failure.warning)
+			if (failure.warning !== undefined) dispatchWorkflow({ type: 'uncertain', context, reason: failure.warning })
+			else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: failure.message ?? 'Approval failed' })
 		} finally {
 			positionWorkflow.finish()
 			if (!keepLocked) updatePositionWorkflowLock(false)
@@ -806,11 +787,11 @@ export function useLiveTradingController({
 	}
 
 	async function submit() {
-		if (configuration === undefined || account === undefined || walletClient === undefined || quote === undefined) return
+		if (configuration === undefined || account === undefined || walletClient === undefined || quote === undefined || selected === undefined) return
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || !positionWorkflow.begin()) return
+		const context = workflowState.kind === 'ready-to-submit' ? workflowState.context : nextTransactionContext(account, selected, configuration.chainId)
 		updatePositionWorkflowLock(true)
-		setState('preparing')
-		setPositionReceiptWarning(undefined)
+		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'trade' })
 		let broadcastHash: Hash | undefined
 		let receiptKnown = false
 		let keepLocked = false
@@ -834,12 +815,11 @@ export function useLiveTradingController({
 			const guardedPositionWrite = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and simulate again', 'Wallet account changed during transaction revalidation; reconnect and simulate again')
 			const guardedWrite: GuardedWalletWrite = async write =>
 				await guardedPositionWrite(async () => {
-					setState('submitting')
+					dispatchWorkflow({ type: 'signature-requested', context, operation: 'trade' })
 					return await write()
 				})
 			broadcastHash = quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
-			setPositionHash(broadcastHash)
-			setState('pending')
+			dispatchWorkflow({ type: 'broadcast', context, operation: 'trade', transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
 				allowRevertedReceipt: true,
 				onKnownReceipt: () => {
@@ -848,26 +828,24 @@ export function useLiveTradingController({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
-					setPositionHash(replacementHash)
+					dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
-			if (receipt.status === 'reverted') throw new Error('Transaction reverted')
+			if (receipt.status === 'reverted') {
+				dispatchWorkflow({ type: 'reverted', context })
+				return
+			}
 			setQuote(undefined)
-			setPositionReceiptWarning(undefined)
-			setState('confirmed')
+			dispatchWorkflow({ type: 'confirmed', context })
 			await refresh(configuration, marketPage.start, 'position')
 		} catch (error) {
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
-				setState('pending')
-				setMessage(undefined)
-				setPositionReceiptWarning(broadcastUncertainMessage('Transaction', broadcastHash))
+				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Transaction', broadcastHash) })
 			} else {
 				const failure = failedSubmissionTransition(error, 'Transaction failed')
 				setQuote(failure.quote)
-				setState(failure.state)
-				setMessage(failure.message)
-				setPositionReceiptWarning(undefined)
+				dispatchWorkflow({ type: 'failed', context, operation: 'trade', message: failure.message })
 			}
 		} finally {
 			positionWorkflow.finish()
@@ -880,8 +858,7 @@ export function useLiveTradingController({
 		simulationRequests.invalidate()
 		update()
 		setQuote(undefined)
-		setPositionHash(undefined)
-		setState('idle')
+		dispatchWorkflow({ type: 'reset' })
 	}
 
 	function selectMarket(market: LiveMarket) {
@@ -893,9 +870,7 @@ export function useLiveTradingController({
 		setBalanceError(undefined)
 		setSelectedPool(market.pool)
 		setQuote(undefined)
-		setState('idle')
-		setPositionHash(undefined)
-		setPositionReceiptWarning(undefined)
+		dispatchWorkflow({ type: 'reset' })
 		focusSection(marketDetailRef)
 	}
 

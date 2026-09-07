@@ -3,7 +3,7 @@ import { createPublicClient, createWalletClient, custom, decodeFunctionData, enc
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
+import { createTradingPublicClient, encodeReceiveBasedExitRequest, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -13,6 +13,8 @@ const shareToken = `0x${'44'.repeat(20)}` as Address
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const transactionHash = `0x${'66'.repeat(32)}` as Hex
 const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
+const directLiquidityRemovalV2Abi = [{ type: 'function', name: 'removeLiquidity', stateMutability: 'nonpayable', inputs: [{ name: 'liquidity', type: 'uint256' }, { name: 'minYes', type: 'uint256' }, { name: 'minNo', type: 'uint256' }, { name: 'recipient', type: 'address' }, { name: 'deadline', type: 'uint256' }], outputs: [{ name: 'yesOut', type: 'uint256' }, { name: 'noOut', type: 'uint256' }] }] as const
+const receiveRequestParameter = { type: 'tuple', components: [{ name: 'version', type: 'uint8' }, { name: 'operation', type: 'uint8' }, { name: 'shareToken', type: 'address' }, { name: 'securityPool', type: 'address' }, { name: 'pair', type: 'address' }, { name: 'universeId', type: 'uint248' }, { name: 'questionId', type: 'uint256' }, { name: 'invalidTokenId', type: 'uint256' }, { name: 'yesTokenId', type: 'uint256' }, { name: 'noTokenId', type: 'uint256' }, { name: 'longOutcome', type: 'uint8' }, { name: 'completeSetShares', type: 'uint256' }, { name: 'maxLongSharesIn', type: 'uint256' }, { name: 'minEthOut', type: 'uint256' }, { name: 'payoutRecipient', type: 'address' }, { name: 'refundRecipient', type: 'address' }, { name: 'deadline', type: 'uint256' }] } as const
 const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
 const market: LiveMarket = {
 	pool,
@@ -66,8 +68,13 @@ test('creates live read clients from the configured active backend', () => {
 })
 
 describe('live guarded transaction writes', () => {
+	test('binds every receive-based exit identity and user bound into the callback payload', () => {
+		expect(encodeReceiveBasedExitRequest(market, 'YES', 10n, 13n, 8n, account, 900n)).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, 13n, 8n, account, account, 900n]]))
+	})
+
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {
 		const calls: ReturnType<typeof decodeFunctionData>[] = []
+		const versionTwoConfiguration = { ...configuration, version: 2 as const }
 		const client = createWalletClient({
 			account,
 			transport: custom({
@@ -75,7 +82,7 @@ describe('live guarded transaction writes', () => {
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_call' || method === 'eth_sendTransaction') {
-						const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
+						const decoded = decodeFunctionData({ abi: [...routerAbi, ...directLiquidityRemovalV2Abi], data: callData(params) })
 						calls.push(decoded)
 						if (method === 'eth_sendTransaction') return transactionHash
 						if (decoded.functionName === 'removeLiquidity') return encodeAbiParameters([uint256, uint256], [5n, 5n])
@@ -95,10 +102,10 @@ describe('live guarded transaction writes', () => {
 			{ operation: 'remove', market },
 		] as const
 		for (const scenario of operations) {
-			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n, 5_000n, validityMinutes, slippageBps)
+			const quote = await simulateLiquidity(client, versionTwoConfiguration, scenario.market, account, scenario.operation, 10n, 5_000n, validityMinutes, slippageBps)
 			expect(quote.deadline).toBe(deadline)
 			expect(quote.slippageBps).toBe(slippageBps)
-			expect(await submitFreshLiquidity(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
+			expect(await submitFreshLiquidity(client, versionTwoConfiguration, account, quote, async write => await write())).toBe(transactionHash)
 		}
 
 		expect(calls).toHaveLength(12)
@@ -109,8 +116,8 @@ describe('live guarded transaction writes', () => {
 		for (const call of calls.filter((_, index) => index % 3 === 2)) {
 			if (call.args === undefined) throw new Error('Expected decoded submitted liquidity arguments')
 			if (call.functionName === 'removeLiquidity') {
+				expect(call.args[1]).toBe(4n)
 				expect(call.args[2]).toBe(4n)
-				expect(call.args[3]).toBe(4n)
 			} else expect(call.args.at(-3)).toBe(9n)
 		}
 		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_440n, slippageBps)

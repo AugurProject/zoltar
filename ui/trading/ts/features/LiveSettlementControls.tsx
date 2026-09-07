@@ -15,6 +15,7 @@ import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionT
 import type { BalanceState, TransactionState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from './LiveSettlementModel.js'
+import { capabilitiesForTradingVersion } from '../protocol/capabilities.js'
 
 export type LiveSettlementServices = Readonly<{
 	approveRouter: typeof approveRouter
@@ -146,7 +147,7 @@ export function LiveSettlementControls({
 	if (operation === 'redeem-complete-set' && slippageBps === undefined) protectionInputBlocker = 'Enter a slippage tolerance from 0% to 5%'
 	else if (operation === 'redeem-complete-set' && validityMinutes === undefined) protectionInputBlocker = 'Enter a transaction validity from 1 to 1440 whole minutes'
 	if (protectionInputBlocker !== undefined) inputBlocker = protectionInputBlocker
-	const approvalRequired = operation === 'redeem-complete-set' && balances?.approved === false
+	const approvalRequired = operation === 'redeem-complete-set' && !capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations && balances?.approved === false
 	const quoteMatchesInputs = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, targetOutcomeIndexes, account, walletClient)
 	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, quoteMatchesInputs) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })

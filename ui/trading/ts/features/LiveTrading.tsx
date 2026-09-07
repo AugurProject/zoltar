@@ -19,6 +19,7 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
+import { capabilitiesForTradingVersion } from '../protocol/capabilities.js'
 
 const ignoreWalletSummaryChange = () => undefined
 
@@ -437,9 +438,9 @@ export function LiveTrading({
 					) : undefined
 				}
 			/>
-			{message === undefined && parsedAmount.error === undefined ? null : (
+			{connectionMessage === undefined && message === undefined && parsedAmount.error === undefined ? null : (
 				<p class='error' role='alert'>
-					{message ?? parsedAmount.error}
+					{connectionMessage ?? message ?? parsedAmount.error}
 				</p>
 			)}
 			<div class={selected === undefined ? 'two-column two-column--single' : 'two-column'}>
@@ -588,6 +589,7 @@ export function LiveTrading({
 									receiptWarning={positionReceiptWarning}
 									transactionHash={positionHash}
 									externallyLocked={workflowLocked}
+									receiveBasedShareOperations={capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations}
 									nowSeconds={nowSeconds}
 									setMode={setMode}
 									setSide={setSide}

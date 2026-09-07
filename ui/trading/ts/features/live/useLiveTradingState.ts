@@ -1,12 +1,13 @@
 import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import { createExclusiveWorkflowGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { createSecurityPoolDeploymentIndex, type LiveBalances, type LiveMarket, type SecurityPoolDeployment } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import type { BalanceState, LiveTradingControllerServices, PortfolioBalanceEntry, Quote, TransactionState } from './liveTradingTypes.js'
+import type { BalanceState, LiveTradingControllerServices, PortfolioBalanceEntry, Quote } from './liveTradingTypes.js'
+import { idleTransactionWorkflow, transactionPhase, transactionWorkflowReducer } from './transactionWorkflow.js'
 
 export function parsedUniverseId(selectedUniverseId: string | undefined) {
 	if (selectedUniverseId === undefined) return undefined
@@ -93,10 +94,11 @@ export function usePositionWorkflowState(onWorkflowLockChange: (locked: boolean)
 	const [slippage, setSlippage] = useState(defaultSlippage)
 	const [transactionValidityMinutes, setTransactionValidityMinutes] = useState(defaultValidityMinutes)
 	const [quote, setQuote] = useState<Quote>()
-	const [state, setState] = useState<TransactionState>('idle')
-	const [positionHash, setPositionHash] = useState<Hash>()
-	const [message, setMessage] = useState<string>()
-	const [positionReceiptWarning, setPositionReceiptWarning] = useState<string>()
+	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
+	const state = transactionPhase(workflowState)
+	const positionHash = workflowState.kind === 'pending' || workflowState.kind === 'confirmed' || workflowState.kind === 'reverted' || workflowState.kind === 'uncertain' ? workflowState.transactionHash : undefined
+	const message = workflowState.kind === 'failed' ? workflowState.message : workflowState.notice
+	const positionReceiptWarning = workflowState.kind === 'uncertain' ? workflowState.reason : undefined
 	const positionWorkflow = useRef(createExclusiveWorkflowGuard()).current
 	const positionWorkflowLockedRef = useRef(false)
 	const liquidityWorkflowLockedRef = useRef(false)
@@ -141,14 +143,12 @@ export function usePositionWorkflowState(onWorkflowLockChange: (locked: boolean)
 		setTransactionValidityMinutes,
 		quote,
 		setQuote,
+		workflowState,
+		dispatchWorkflow,
 		state,
-		setState,
 		positionHash,
-		setPositionHash,
 		message,
-		setMessage,
 		positionReceiptWarning,
-		setPositionReceiptWarning,
 		positionWorkflow,
 		positionWorkflowLockedRef,
 		liquidityWorkflowLockedRef,

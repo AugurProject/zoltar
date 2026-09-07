@@ -56,15 +56,15 @@ const defaultServices: TradingDeploymentSetupServices = {
 	loadCoreDeployments,
 }
 
-type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
+type DeploymentStatus = Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>
 
 function initialQueryValue(name: string) {
 	return new URLSearchParams(window.location.search).get(name) ?? ''
 }
 
-function deploymentProgress(status: DeploymentStatus | undefined) {
+function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
 	if (status === undefined) return '—'
-	return `${Number(status.factory) + Number(status.router)} / 2`
+	return `${Number(status.factory) + Number(status.router) + Number(status.receiveRouter)} / ${total.toString()}`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
@@ -82,7 +82,7 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
 	if (busy) return `Deploying ${nextStep?.label ?? 'contract'}…`
-	if (status?.factory === true && status.router) return 'Deployment complete'
+	if (status?.factory === true && status.router && status.receiveRouter !== false) return 'Deployment complete'
 	if (nextStep === undefined) return 'Deploy trading contracts'
 	return `Deploy ${nextStep.label}`
 }
@@ -345,13 +345,13 @@ export function TradingDeploymentSetup({
 		else disconnectDeploymentWallet()
 	}, [walletControlRequestNonce])
 	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
-	const deploymentComplete = deploymentStatus?.factory === true && deploymentStatus.router
+	const deploymentComplete = deploymentStatus?.factory === true && deploymentStatus.router && deploymentStatus.receiveRouter !== false
 	const deploymentSteps =
 		plan === undefined
 			? []
-			: [plan.factory, plan.router].map(step => {
+			: [plan.factory, plan.router, ...(plan.receiveRouter === undefined ? [] : [plan.receiveRouter])].map(step => {
 					const deployed = deploymentStatus?.[step.id]
-					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false })?.id === step.id && !deploymentComplete
+					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false, receiveRouter: false })?.id === step.id && !deploymentComplete
 					return { step, presentation: contractStatusPresentation(deployed, isNext) }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
@@ -399,7 +399,7 @@ export function TradingDeploymentSetup({
 			})
 			const status = await loadTradingDeploymentStatus(publicClient, plan)
 			setDeploymentStatus(status)
-			if (status.factory && status.router) {
+			if (status.factory && status.router && status.receiveRouter !== false) {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 				const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
 				onComplete(configuration)
@@ -413,7 +413,7 @@ export function TradingDeploymentSetup({
 				const status = await loadTradingDeploymentStatus(publicClient, plan)
 				setDeploymentStatus(status)
 				if (status[nextStep.id]) {
-					if (status.factory && status.router) {
+					if (status.factory && status.router && status.receiveRouter !== false) {
 						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
 						onComplete(configuration)
@@ -521,7 +521,7 @@ export function TradingDeploymentSetup({
 				<div class='deployment-setup__status' role='status' aria-live='polite'>
 					<div>
 						<span>Deployment progress</span>
-						<strong>{deploymentProgress(deploymentStatus)}</strong>
+						<strong>{deploymentProgress(deploymentStatus, plan?.receiveRouter === undefined ? 2 : 3)}</strong>
 					</div>
 					{inspection === undefined ? null : <Status tone={inspection.tone}>{inspection.label}</Status>}
 				</div>

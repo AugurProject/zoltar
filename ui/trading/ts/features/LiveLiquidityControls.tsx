@@ -29,7 +29,11 @@ export const liveLiquidityServices: LiveLiquidityServices = {
 }
 
 export function liquidityApprovalRequired(balanceState: BalanceState, operation: LiquidityOperation, amount: bigint | undefined, allowance: bigint | undefined) {
-	return balanceState === 'ready' && operation === 'remove' && amount !== undefined && amount > 0n && allowance !== undefined && allowance < amount
+	void balanceState
+	void operation
+	void amount
+	void allowance
+	return false
 }
 
 export function liquidityOperationAvailable(operation: LiquidityOperation, market: MarketLifecycle, nowSeconds: bigint) {
@@ -97,7 +101,7 @@ export function LiveLiquidityControls({
 	}, [probability])
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
-	const needsLpApproval = market.lpTotalSupply > 0n && liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
+	const needsLpApproval = liquidityApprovalRequired(balanceState, operation, parsed, balances?.lpAllowance)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
 	useEffect(() => {
 		if (receiptWarning !== undefined) return

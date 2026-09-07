@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/shared/ethereum'
+import type { TradingDeploymentVersion } from './capabilities.js'
 
 export type DeploymentConfiguration = Readonly<{
 	chainId: number
@@ -8,7 +9,9 @@ export type DeploymentConfiguration = Readonly<{
 	zoltar: Address
 	factory: Address
 	router: Address
+	receiveRouter?: Address
 	feeBps: number
+	version?: TradingDeploymentVersion
 }>
 
 function requiredString(value: unknown, label: string) {

@@ -13,6 +13,7 @@ function examplePlan() {
 			securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
 		},
 		30,
+		1,
 	)
 }
 
@@ -48,6 +49,16 @@ describe('wallet trading deployment plan', () => {
 		expect(getTradingDeploymentPlan(core, 30).factory.address).not.toBe(getTradingDeploymentPlan(core, 25).factory.address)
 	})
 
+	test('keeps V1 and V2 venues independently predictable and defaults new deployments to V2', () => {
+		const legacyFixture = examplePlan()
+		const plan = getTradingDeploymentPlan(legacyFixture.core, legacyFixture.feeBps)
+		const legacy = getTradingDeploymentPlan(plan.core, plan.feeBps, 1)
+		expect(plan.version).toBe(2)
+		expect(legacy.version).toBe(1)
+		expect(plan.factory.address).not.toBe(legacy.factory.address)
+		expect(plan.router.address).not.toBe(legacy.router.address)
+	})
+
 	test('resumes at the first missing dependency', () => {
 		const plan = getTradingDeploymentPlan(
 			{
@@ -62,7 +73,8 @@ describe('wallet trading deployment plan', () => {
 		)
 		expect(nextTradingDeploymentStep(plan, { factory: false, router: false })?.id).toBe('factory')
 		expect(nextTradingDeploymentStep(plan, { factory: true, router: false })?.id).toBe('router')
-		expect(nextTradingDeploymentStep(plan, { factory: true, router: true })).toBeUndefined()
+		expect(nextTradingDeploymentStep(plan, { factory: true, router: true })?.id).toBe('receiveRouter')
+		expect(nextTradingDeploymentStep(plan, { factory: true, router: true, receiveRouter: true })).toBeUndefined()
 	})
 
 	test('rejects a network without the exact canonical proxy deployer runtime', async () => {

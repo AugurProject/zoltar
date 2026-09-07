@@ -633,34 +633,8 @@ describe('live workflow safety boundary', () => {
 		await act(async () => button('Refresh').click())
 		await flush()
 		await act(async () => button('Remove').click())
-		rejectBalanceRefresh = true
-		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action')
-		await act(async () => button('Approve exact LP amount').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		rejectBalanceRefresh = false
-		await act(() => render(<LiveTrading key='lp-context' route='liquidity' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
-		await flush()
-		await act(async () => button('Connect wallet').click())
-		await flush()
-		await act(async () => button('Remove').click())
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action after reconnecting')
-		await act(async () => button('Approve exact LP amount').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'96'.repeat(20)}`])
-			contextApprovalReceipt.resolve({ status: 'success' })
-			await contextApprovalReceipt.promise
-		})
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Liquidity transaction approval confirmed on-chain')
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(document.body.textContent).toContain('Wallet account changed')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
+		expect(hasButton('Approve exact LP amount')).toBeFalse()
+		expect(hasButton('Simulate liquidity transaction')).toBeTrue()
 
 		discoveredEndTime = now - 1n
 		approved = false
