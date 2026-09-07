@@ -152,12 +152,16 @@ function assertEscalationContinuationReference(): void {
 
 function assertSystemDecisionForkTriggers(): void {
 	const decisionFlow = diagramGraphSpecs['fig-statoblast-system-decision-flow']
-	const forkSources = decisionFlow.sections
-		.flatMap(section => section.edges)
-		.filter(edge => edge.target === 'fork')
-		.map(edge => edge.source)
-		.sort()
+	const nodes = decisionFlow.sections.flatMap(section => section.nodes)
+	const forkEdges = decisionFlow.sections.flatMap(section => section.edges).filter(edge => edge.target === 'fork')
+	const forkSources = forkEdges.map(edge => edge.source).sort()
 	assert.deepEqual(forkSources, ['decision', 'universe-fork'], 'Statoblast lifecycle diagram must show local non-decision and an independent universe fork entering migration')
+	assert.ok(forkEdges.find(edge => edge.source === 'decision')?.label?.includes('own-question'), 'Local non-decision must remain tied to the market question')
+	assert.ok(forkEdges.find(edge => edge.source === 'universe-fork')?.label?.includes('unresolved operational'), 'An independent universe fork must only interrupt an unresolved operational pool')
+	assert.ok(
+		nodes.find(node => node.id === 'fork')?.details?.some(detail => detail.includes('fork question')),
+		'Migrated children must follow the actual fork question rather than always using market outcomes',
+	)
 }
 
 function assertDisputeStakedReplayIdentityDocs(): void {
