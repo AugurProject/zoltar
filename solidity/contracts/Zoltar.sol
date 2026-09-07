@@ -89,7 +89,7 @@ contract Zoltar {
 	}
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
-		_forkUniverse(universeId, questionId, false);
+		_forkUniverse(msg.sender, universeId, questionId, false);
 	}
 
 	function forkUniverseWithPermit(uint248 universeId, uint256 questionId, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
@@ -100,17 +100,18 @@ contract Zoltar {
 		{} catch {
 			require(address(reputationToken) != address(genesisReputationToken) || IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Fork permit and allowance insufficient');
 		}
-		_forkUniverse(universeId, questionId, false);
+		_forkUniverse(msg.sender, universeId, questionId, false);
 	}
 
-	function forkUniverseWithAuthorization(uint248 universeId, uint256 questionId, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+	function forkUniverseWithAuthorization(address owner, uint248 universeId, uint256 questionId, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
 		uint256 amountAttoRep = getForkThresholdAttoRep(universeId);
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(msg.sender, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, keccak256(abi.encode(this.forkUniverseWithAuthorization.selector, universeId, questionId, amountAttoRep)), msg.sender), v, r, s);
-		_forkUniverse(universeId, questionId, true);
+		bytes32 operationHash = keccak256(abi.encode(this.forkUniverseWithAuthorization.selector, owner, universeId, questionId, amountAttoRep));
+		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
+		_forkUniverse(owner, universeId, questionId, true);
 	}
 
-	function _forkUniverse(uint248 universeId, uint256 questionId, bool repAlreadyReceived) private {
+	function _forkUniverse(address owner, uint248 universeId, uint256 questionId, bool repAlreadyReceived) private {
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
@@ -126,28 +127,49 @@ contract Zoltar {
 		universes[universeId].forkTime = block.timestamp;
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
-		_burnRep(universes[universeId].reputationToken, repAlreadyReceived ? address(this) : msg.sender, forkThresholdAttoRep);
+		_burnRep(universes[universeId].reputationToken, repAlreadyReceived ? address(this) : owner, forkThresholdAttoRep);
 		universeTheoreticalSupplies[universeId] -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;
 		// The initiator's uncredited admission haircut is permanently absent from
 		// every child. Later REP added to the migration balance still converts 1:1.
 		childUniverseTheoreticalSupplySnapshotsAttoRep[universeId] =
 			universeTheoreticalSupplies[universeId] + migrationRepBalanceAttoRep;
-		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
-		emit UniverseForked(msg.sender, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
+		emit UniverseForked(owner, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
 	// Burns REP without creating migration credit. Escalation games use this path
 	// when their question resolves without paying the winner haircut through an
 	// own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
+		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
+	}
+
+	function burnRepWithPermit(uint248 universeId, uint256 amountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+		ReputationToken reputationToken = universes[universeId].reputationToken;
+		try
+			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
+		{} catch {
+			require(address(reputationToken) != address(genesisReputationToken) || IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Burn permit and allowance insufficient');
+		}
+		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
+	}
+
+	function burnRepWithAuthorization(address owner, uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+		ReputationToken reputationToken = universes[universeId].reputationToken;
+		bytes32 operationHash = keccak256(abi.encode(this.burnRepWithAuthorization.selector, owner, universeId, amountAttoRep));
+		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
+		_burnRepFor(owner, universeId, amountAttoRep, true);
+	}
+
+	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
-		_burnRep(universe.reputationToken, msg.sender, amountAttoRep);
+		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
-		emit RepBurned(msg.sender, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
+		emit RepBurned(owner, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amountAttoRep) private {
@@ -216,7 +238,7 @@ contract Zoltar {
 
 	// stores rep in the migration balance for a universe
 	function addRepToMigrationBalance(uint248 universeId, uint256 amountAttoRep) public {
-		_addRepToMigrationBalance(universeId, amountAttoRep, false);
+		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
 	}
 
 	function addRepToMigrationBalanceWithPermit(uint248 universeId, uint256 amountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
@@ -226,22 +248,23 @@ contract Zoltar {
 		{} catch {
 			require(address(reputationToken) != address(genesisReputationToken) || IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Migration permit and allowance insufficient');
 		}
-		_addRepToMigrationBalance(universeId, amountAttoRep, false);
+		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
 	}
 
-	function addRepToMigrationBalanceWithAuthorization(uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+	function addRepToMigrationBalanceWithAuthorization(address owner, uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ReputationToken reputationToken = universes[universeId].reputationToken;
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(msg.sender, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, keccak256(abi.encode(this.addRepToMigrationBalanceWithAuthorization.selector, universeId, amountAttoRep)), msg.sender), v, r, s);
-		_addRepToMigrationBalance(universeId, amountAttoRep, true);
+		bytes32 operationHash = keccak256(abi.encode(this.addRepToMigrationBalanceWithAuthorization.selector, owner, universeId, amountAttoRep));
+		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
+		_addRepToMigrationBalance(owner, universeId, amountAttoRep, true);
 	}
 
-	function _addRepToMigrationBalance(uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
+	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
-		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : msg.sender, amountAttoRep);
+		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
-		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep += amountAttoRep;
-		emit MigrationRepAdded(msg.sender, universeId, amountAttoRep, migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;
+		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');

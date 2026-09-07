@@ -59,22 +59,27 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 permitAmountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-		address token = IEscalationGameDepositContext(address(this)).repToken();
-		try
-			IERC20PermitAuthorization(token).permit(msg.sender, address(this), permitAmountAttoRep, deadline, v, r, s)
-		{} catch {
-			require(IERC20(token).allowance(msg.sender, address(this)) >= maximumDepositAttoRep, 'Game permit and allowance insufficient');
-		}
-		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
-	}
-
-	function depositRepOnOutcomeWithAuthorization(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
-		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, game.securityPool(), outcome, maximumDepositAttoRep, depositedAttoRep));
-		IERC3009Authorization(game.repToken()).receiveWithAuthorization(msg.sender, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, msg.sender)), v, r, s);
+		address token = game.repToken();
+		try
+			IERC20PermitAuthorization(token).permit(msg.sender, address(this), permitAmountAttoRep, deadline, v, r, s)
+		{} catch {
+			require(IERC20(token).allowance(msg.sender, address(this)) >= depositedAttoRep, 'Game permit and allowance insufficient');
+		}
+		IERC20(token).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
 		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		_validateGameForDeposit(game);
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), outcome, maximumDepositAttoRep, depositedAttoRep));
+		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
+		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
 	function _depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) private {

@@ -86,11 +86,11 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
 	}
 
-	function depositRepToVaultWithAuthorization(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
-		bytes32 operationHash = keccak256(abi.encode(this.depositRepToVaultWithAuthorization.selector, pool.universeId(), pool.questionId(), attoRepAmount, targetHealthFactorBps));
-		IERC3009Authorization(pool.repToken()).receiveWithAuthorization(msg.sender, address(this), attoRepAmount, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, msg.sender)), v, r, s);
-		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, false);
+		bytes32 operationHash = keccak256(abi.encode(this.depositRepToVaultWithAuthorization.selector, owner, pool.universeId(), pool.questionId(), attoRepAmount, targetHealthFactorBps));
+		IERC3009Authorization(pool.repToken()).receiveWithAuthorization(owner, address(this), attoRepAmount, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
+		_depositRepToVault(owner, attoRepAmount, targetHealthFactorBps, false);
 	}
 
 	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, bool transferRep) private {
