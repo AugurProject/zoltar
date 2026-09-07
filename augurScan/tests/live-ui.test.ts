@@ -698,6 +698,7 @@ test('does not misclassify status elements whose ids contain button-like words',
 	expect(requiredElementRole('#activity-more-status')).toBe('element')
 	expect(requiredElementRole('#more')).toBe('button')
 	expect(requiredElementRole('#detail-canonical-retry')).toBe('button')
+	expect(requiredElementRole('#operations-route-select')).toBe('select')
 })
 
 test('keeps background refreshes silent while retaining explicit loading feedback', () => {

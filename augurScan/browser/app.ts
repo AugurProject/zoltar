@@ -456,7 +456,7 @@ interface AccountDetailOptions extends DetailOptions {
 
 function $(selector: '#detail-dialog'): HTMLDialogElement
 function $(selector: '#event-filter' | '#address-filter' | '#entity-search'): HTMLInputElement
-function $(selector: '#global-network-filter' | '#rich-sort'): HTMLSelectElement
+function $(selector: '#global-network-filter' | '#operations-route-select' | '#rich-sort'): HTMLSelectElement
 function $(selector: '#filters'): HTMLFormElement
 function $(selector: '#address-back' | '.skip-link'): HTMLAnchorElement
 function $(
@@ -482,6 +482,7 @@ const feed = $('#feed')
 const feedState = $('#feed-state')
 const networkCards = $('#network-cards')
 const globalNetworkFilter = $('#global-network-filter')
+const operationsRouteSelect = $('#operations-route-select')
 const dialog = $('#detail-dialog')
 const detailContent = $('#detail-content')
 const connection = $('.connection')
@@ -4778,14 +4779,24 @@ const rowFor = (log: ActivityRecord) => {
 	const contractLink = explorerLink(log.explorer_base_url, 'address', log.emitter_address, log.contract_label ?? short(log.emitter_address, 10, 8))
 	contractLink.className = 'contract-name address-link'
 	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
-	contract.append(contractLink, element('span', 'contract-address', short(log.emitter_address)))
+	contract.append(
+		contractLink,
+		element('span', 'contract-address', short(log.emitter_address)),
+		element('span', 'contract-category', log.contract_kind ?? 'Protocol contract'),
+	)
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Open ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
 	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.className = 'cell cell-tx'
 	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link', compact: true })
-	row.append(chain, timestamp, contract, event, tx, origin)
+	const integrity = element(
+		'span',
+		`cell log-integrity ${log.canonical ? 'is-canonical' : 'is-noncanonical'}`,
+		log.canonical ? (log.finalized ? 'Final canonical' : 'Canonical') : 'Noncanonical',
+	)
+	integrity.title = `Decode status: ${log.decode_status}`
+	row.append(chain, timestamp, contract, event, tx, origin, integrity)
 	row.addEventListener('click', (clickEvent: MouseEvent) => {
 		if (clickEvent.target instanceof HTMLAnchorElement) return
 		openDetail(log)
@@ -8641,6 +8652,7 @@ const syncVisibleRoute = () => {
 		if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page')
 		else link.removeAttribute('aria-current')
 	}
+	if ([...operationsRouteSelect.options].some((option) => option.value === location.pathname)) operationsRouteSelect.value = location.pathname
 }
 syncVisibleRoute()
 
@@ -8838,6 +8850,13 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a,
 		void navigateInPlace(target)
 	})
 }
+operationsRouteSelect.addEventListener('change', () => {
+	const target = new URL(operationsRouteSelect.value, location.href)
+	for (const [name, value] of new URL(location.href).searchParams) {
+		if (!['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock'].includes(name)) target.searchParams.set(name, value)
+	}
+	void navigateInPlace(target)
+})
 document.addEventListener('click', (event) => {
 	if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 	const targetElement = event.target

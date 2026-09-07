@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="color-scheme" content="dark" />
 		<meta name="description" content="Live, historical, and decoded protocol evidence for Zoltar networks." />
-		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff6846'/%3E%3Cpath d='M17 48 28 16h8l11 32h-8l-2-7H27l-2 7Zm12-14h6l-3-10Z' fill='%230b0d12'/%3E%3C/svg%3E" />
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232dd4bf'/%3E%3Cpath d='M32 13v12M32 25 18 39M32 25l14 14M18 39v12M46 39v12' stroke='%23090d12' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 		<title>augurScan</title>
 		<link rel="stylesheet" href="/styles.css" />
 		<script src="/app.js" type="module"></script>
@@ -63,7 +63,7 @@
 				<p id="activity-summary" class="activity-summary">Waiting for activity</p>
 
 				<div class="feed-shell">
-					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Transaction</span><span>msg.origin</span></div>
+					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Transaction</span><span>msg.origin</span><span>Integrity</span></div>
 					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
@@ -124,16 +124,42 @@
 					</div>
 				</div>
 				<nav class="operations-nav" aria-label="Operations sections">
-					<a href="/operations">Overview</a>
-					<a href="/operations/reports">Reports</a>
-					<a href="/operations/escalations">Escalations</a>
-					<a href="/operations/auctions">Auctions</a>
-					<a href="/operations/risk">Risk</a>
-					<a href="/operations/forks">Forks</a>
-					<a href="/operations/trading">Trading</a>
-					<a href="/operations/timeline">Timeline</a>
-					<a href="/operations/integrity">Chain history</a>
+					<div class="operations-nav-group">
+						<span>Protocol</span>
+						<a href="/operations">Overview</a>
+						<a href="/operations/trading">Trading</a>
+					</div>
+					<div class="operations-nav-group">
+						<span>Resolution</span>
+						<a href="/operations/reports">Reports</a>
+						<a href="/operations/escalations">Escalations</a>
+						<a href="/operations/forks">Forks</a>
+					</div>
+					<div class="operations-nav-group">
+						<span>Risk</span>
+						<a href="/operations/risk">Risk status</a>
+						<a href="/operations/auctions">Auctions</a>
+					</div>
+					<div class="operations-nav-group">
+						<span>Evidence</span>
+						<a href="/operations/timeline">Timeline</a>
+						<a href="/operations/integrity">Chain history</a>
+					</div>
 				</nav>
+				<label class="operations-route-selector"
+					><span>Operations view</span
+					><select id="operations-route-select">
+						<option value="/operations">Overview</option>
+						<option value="/operations/reports">Reports</option>
+						<option value="/operations/escalations">Escalations</option>
+						<option value="/operations/forks">Forks</option>
+						<option value="/operations/risk">Risk status</option>
+						<option value="/operations/auctions">Auctions</option>
+						<option value="/operations/trading">Trading</option>
+						<option value="/operations/timeline">Timeline</option>
+						<option value="/operations/integrity">Chain history</option>
+					</select></label
+				>
 				<div id="operations-status" class="system-status" role="status" aria-live="polite">Loading protocol operations…</div>
 				<div id="operations-content" class="operations-content" aria-busy="true"></div>
 			</section>
