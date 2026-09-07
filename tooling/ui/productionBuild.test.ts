@@ -117,6 +117,7 @@ for (const appId of UI_APP_IDS) {
 		expect(html).not.toContain('./js/')
 		expect(html).not.toContain('./vendor/')
 		expect(html).toContain(`<title>${expectedTitle}</title>`)
+		expect(html).toContain(`<html lang="en" data-product="${appId}">`)
 		for (const otherTitle of otherTitles) expect(html).not.toContain(`<title>${otherTitle}</title>`)
 	})
 

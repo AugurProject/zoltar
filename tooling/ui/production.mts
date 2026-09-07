@@ -76,6 +76,7 @@ async function writeProductionIndexHtml(paths: UiAppPaths) {
 	let html = await fs.readFile(templatePath, 'utf8')
 	const appTitle = APP_TITLES[appId]
 	if (appTitle === undefined) throw new Error(`No production title recorded for ${appId}`)
+	html = html.replace('<html lang="en">', `<html lang="en" data-product="${appId}">`)
 	html = html.replace('Zoltar + Augur Statoblast', appTitle)
 	if (appId === 'trading') html = html.replace('<link rel="stylesheet" href="./css/index.css" />', '<link rel="stylesheet" href="./css/index.css" />\n\t\t<link rel="stylesheet" href="./css/app.css" />')
 	await fs.mkdir(paths.appDistRoot, { recursive: true })
