@@ -1,6 +1,6 @@
 # OpenOracle upstream provenance
 
-This directory vendors the OpenOracle 0.2.0 SlimStorage source used by Zoltar. The snapshot is pinned to the `SlimStorage` branch at OpenOracle repository commit [`a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d`](https://github.com/openOracleProject/openOracle/commit/a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d).
+This directory vendors the OpenOracle Slim source used by Zoltar. The snapshot is pinned to the `openPunt` branch at OpenOracle repository commit [`4e5cffb7203ccc5d47ab986d74c04796a8f51302`](https://github.com/openOracleProject/openOracle/commit/4e5cffb7203ccc5d47ab986d74c04796a8f51302).
 
 | Upstream source | Local source |
 | --- | --- |
@@ -12,7 +12,7 @@ The OpenOracle repository pins `lib/openzeppelin-contracts` to commit [`c64a1edb
 
 The dedicated OpenOracle artifact pass reproduces the pinned upstream build profile: solc 0.8.28, IR compilation, 190 optimizer runs, and the Cancun EVM target. Keeping the exact compiler and profile is required because the contract validates hashes over packed calldata and memory representations.
 
-Local Solidity files use this repository's Prettier formatting. `OpenOracleSlim.sol` is renamed to preserve the existing local import path and artifact name; there are no intentional semantic changes to the pinned upstream sources.
+Local Solidity files use this repository's Prettier formatting. `OpenOracleSlim.sol` is renamed to preserve the existing local import path and artifact name; there are no intentional semantic changes to the pinned upstream source. This revision adds optional flags for persisting settlement eligibility, flexible pre-halt escalation, and charging fees only at the escalation halt. Existing Zoltar configurations do not enable those flags, so their behavior is unchanged.
 
 ## Permit2 dependency
 

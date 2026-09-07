@@ -33,7 +33,7 @@ contract OpenOracle {
 	uint256 internal constant MULTIPLIER_PRECISION = 100;
 	address internal constant ETH_SENTINEL = address(0);
 	address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-	uint8 internal constant FLAGS_MAX = 0x0F; // FLAG_TIME_TYPE | FLAG_TRACK_DISPUTES | FLAG_STORE_ALL | FLAG_STORE_PRICE
+	uint8 internal constant FLAGS_MAX = 0x7F; // All flags declared below.
 
 	bytes32 internal constant WITNESS_TYPEHASH = keccak256(
 		'Witness(address beneficiary,address relayer,address swapper,bytes32 intent)'
@@ -45,6 +45,9 @@ contract OpenOracle {
 	uint8 internal constant FLAG_TRACK_DISPUTES = 1 << 1; // = 2
 	uint8 internal constant FLAG_STORE_ALL = 1 << 2; // = 4
 	uint8 internal constant FLAG_STORE_PRICE = 1 << 3; // = 8
+	uint8 internal constant FLAG_STORE_SETTLEMENT_ELIGIBILITY = 1 << 4; // = 16
+	uint8 internal constant FLAG_FEES_ONLY_AT_HALT = 1 << 5; // = 32
+	uint8 internal constant FLAG_FLEXIBLE_ESCALATION = 1 << 6; // = 64
 
 	bytes4 internal constant CALLBACK_SELECTOR = bytes4(
 		keccak256('openOracleCallback(uint256,uint256,uint256,uint256,address,address)')
@@ -59,6 +62,7 @@ contract OpenOracle {
 	mapping(uint256 => OracleGame) public storedGame; // reportId => optional storage
 	mapping(uint256 => StoredHelper) public storedHelper; // reportId => optional stored helper
 	mapping(address => mapping(address => mapping(address => uint256))) public internalAllowance; // owner => spender => token => amount
+	mapping(uint256 => uint48) public settlementEligibility; // reportId => optional stored settlement eligibility clock value
 
 	struct DisputeRecord {
 		uint128 amount1;
@@ -179,6 +183,9 @@ contract OpenOracle {
 			initialRecord.baseFee = uint128(block.basefee);
 			initialRecord.reportTimestamp = reportTimestamp;
 		}
+		if (_hasFlag(params.flags, FLAG_STORE_SETTLEMENT_ELIGIBILITY)) {
+			settlementEligibility[reportId] = reportTimestamp + params.settlementTime;
+		}
 
 		// Force typed calldata loads for fields only used by later dispute/settle paths.
 		// The raw calldata hash below relies on dirty-calldata regression tests for the
@@ -255,7 +262,7 @@ contract OpenOracle {
 	 *      true when the disputer is intended to fund via approveInternal; any false flag makes
 	 *      that token's required contribution come from msg.sender externally.
 	 * @param reportId The report instance to dispute
-	 * @param newAmount1 New token1 amount; must equal oldAmount1 * multiplier / 100 unless at escalationHalt where it must equal oldAmount1 + 1
+	 * @param newAmount1 New token1 amount. Must follow standard escalation unless flexible escalation is enabled, which permits any amount between the standard next amount and escalationHalt, inclusive.
 	 * @param newAmount2 New token2 amount proposed by the disputer. Ratio of newAmount1 and newAmount2 is the new price disputer is quoting.
 	 * @param disputer Address recorded as the new currentReporter, credited for any ETH excess. Also receives tokens back when the round completes.
 	 * @param tryInternalBalance1 If true, draw token1 contributions from disputer's internal balance before pulling externally
@@ -312,7 +319,11 @@ contract OpenOracle {
 				expectedAmount1 = oldAmount1 + 1;
 			}
 
-			if (newAmount1 != expectedAmount1) {
+			bool flexibleEscalationAllowed =
+				_hasFlag(oracle.flags, FLAG_FLEXIBLE_ESCALATION) &&
+				newAmount1 >= expectedAmount1 &&
+				newAmount1 <= escalationHalt;
+			if (newAmount1 != expectedAmount1 && !flexibleEscalationAllowed) {
 				if (escalationHalt <= oldAmount1) {
 					revert Errors.EscalationHalted();
 				} else {
@@ -348,6 +359,9 @@ contract OpenOracle {
 				record.baseFee = uint128(block.basefee);
 				if (nextIndex < type(uint24).max) oracle.numReports = nextIndex + 1;
 			}
+			if (_hasFlag(oracle.flags, FLAG_STORE_SETTLEMENT_ELIGIBILITY)) {
+				settlementEligibility[reportId] = currentTime + oracle.settlementTime;
+			}
 
 			bytes32 nextStateHash;
 			assembly ('memory-safe') {
@@ -370,10 +384,13 @@ contract OpenOracle {
 		_getDustAmounts(disputer, token1, token2);
 
 		uint256 ethRequired = 0;
+		bool chargeFees =
+			!_hasFlag(oracle.flags, FLAG_FEES_ONLY_AT_HALT) || oldAmount1 >= oracle.escalationHalt;
 
 		if (!swapToken2) {
 			uint256 fee = (oldAmount1 * oracle.feePercentage) / PERCENTAGE_PRECISION;
 			uint256 protocolFee = (oldAmount1 * oracle.protocolFee) / PERCENTAGE_PRECISION;
+			if (!chargeFees) (fee, protocolFee) = (0, 0);
 			uint256 netToken2Contribution = newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0;
 			uint256 netToken2Receive = newAmount2 < oldAmount2 ? oldAmount2 - newAmount2 : 0;
 
@@ -405,6 +422,7 @@ contract OpenOracle {
 		} else {
 			uint256 fee = (oldAmount2 * oracle.feePercentage) / PERCENTAGE_PRECISION;
 			uint256 protocolFee = (oldAmount2 * oracle.protocolFee) / PERCENTAGE_PRECISION;
+			if (!chargeFees) (fee, protocolFee) = (0, 0);
 			uint256 netToken1Contribution = newAmount1 > (oldAmount1) ? newAmount1 - oldAmount1 : 0;
 
 			if (protocolFee > 0 && oracle.protocolFeeRecipient != address(0)) {
