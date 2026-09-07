@@ -1093,7 +1093,7 @@ describe('chaos dashboard configuration boundary', () => {
 			saveState: async () => {},
 			state,
 		})
-		expect((await controller.getState()).currentWorkflow).toMatchObject({ id: workflow.id, status: 'failed' })
+		expect(await controller.getState()).toMatchObject({ currentWorkflow: { id: workflow.id, status: 'failed' } })
 		await controller.setWorkflow({ action: 'abandon', confirmation: 'ABANDON PARTIAL WORKFLOW', reason: 'Operator verified the final canonical state manually', updatedAt: workflow.updatedAt, workflowId: workflow.id })
 		expect(state.workflows[0]).toMatchObject({ status: 'abandoned' })
 	})
