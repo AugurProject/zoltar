@@ -80,8 +80,12 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	expect(trading).toMatch(/\.status \{[^}]*13px \/ 1\.2 ui-monospace/s)
 	expect(trading).toMatch(/\.site-header nav a \{[^}]*min-width: 44px;[^}]*min-height: 44px;/s)
 	expect(base).toMatch(/\.metric-label-refresh \{[^}]*font-size: var\(--font-label\);/s)
+	expect(base).toMatch(/\.address-value\.copyable \{[^}]*min-height: var\(--touch-target-min\);/s)
+	expect(base).toMatch(/\.identifier-value\.copyable \{[^}]*min-height: var\(--touch-target-min\);/s)
 	expect(readStylesheet('protocol-surfaces.css')).toMatch(/\.global-transaction-notice-detail \{[^}]*font-size: var\(--font-label\);/s)
 	expect(augurScan).toMatch(/\.feed-state \{[^}]*font-size: 0\.8125rem;/s)
+	expect(augurScan).toMatch(/\.product-nav a \{[^}]*min-height: var\(--control-height\);/s)
+	expect(augurScan).toMatch(/\.block-number \{[^}]*min-height: var\(--control-height\);/s)
 
 	for (const selector of ['.operations-detail-header > a', '.operations-raw-evidence summary', '.operations-round-changes summary', '.chart-data-disclosure summary', '.detail-disclosure summary', '.rich-assets summary', '.account-transaction-action summary', '.explorer-link']) {
 		expect(augurScan).toContain(selector)

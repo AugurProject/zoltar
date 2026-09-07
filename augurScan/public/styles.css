@@ -104,6 +104,9 @@ select {
 	background: rgba(16, 23, 32, 0.72);
 }
 .product-nav a {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--control-height);
 	padding: 0.48rem 0.7rem;
 	color: var(--muted);
 	border-radius: 5px;
@@ -274,7 +277,9 @@ main {
 	background: rgba(255, 129, 122, 0.08);
 }
 .block-number {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--control-height);
 	margin-top: 0.9rem;
 	color: var(--text);
 	font:

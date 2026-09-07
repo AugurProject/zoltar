@@ -1026,7 +1026,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .address-value.copyable {
 	display: inline-flex;
 	align-items: center;
-	min-height: 2rem;
+	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
@@ -1307,9 +1307,11 @@ button.wallet-asset-action-pending:disabled {
 	white-space: normal;
 	text-overflow: clip;
 	overflow: visible;
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
 	max-width: 100%;
 	min-width: 0;
+	min-height: var(--touch-target-min);
 	border: 0;
 	border-radius: 0.35rem;
 	margin: 0;
