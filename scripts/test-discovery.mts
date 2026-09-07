@@ -1,7 +1,7 @@
 import { existsSync, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
-export const APPLICATION_TEST_ROOTS = ['scripts', 'shared/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
+export const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', 'shared/ts', 'ui/coreShared/build', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
 export const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
 export const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
 export const TEST_DOMAINS = ['all', 'application', 'solidity'] as const

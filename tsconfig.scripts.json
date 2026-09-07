@@ -25,5 +25,5 @@
 			"@zoltar/ui-statoblast/*": ["./ui/statoblast/ts/*"]
 		}
 	},
-	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "ui/coreShared/build/**/*.mts", "ui/coreShared/dev-server.ts"]
+	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "tooling/**/*.mts", "tooling/**/*.ts", "ui/coreShared/build/**/*.mts", "ui/coreShared/dev-server.ts"]
 }

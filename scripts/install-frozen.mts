@@ -8,6 +8,7 @@ const packageJsonPath = path.join(installDirectory, 'package.json')
 const lockfilePath = path.join(installDirectory, 'bun.lock')
 const packageJsonBackupPath = `${packageJsonPath}.zoltar-install-backup`
 const lockfileBackupPath = `${lockfilePath}.zoltar-install-backup`
+const repositoryBunVersion = '1.3.14'
 
 type DependencySection = 'dependencies' | 'devDependencies' | 'optionalDependencies'
 type DependencyMap = Record<string, string>
@@ -65,7 +66,11 @@ const getSharedDependencySection = (packageJson: PackageManifest): DependencySec
 }
 
 const runInstall = (installArguments: string[]): number => {
-	const result = spawnSync(process.execPath, installArguments, {
+	const command = process.versions.bun === repositoryBunVersion ? [process.execPath, ...installArguments] : [process.execPath, 'x', `bun@${repositoryBunVersion}`, ...installArguments]
+	if (process.versions.bun !== repositoryBunVersion) console.warn(`Using repository Bun ${repositoryBunVersion}; current Bun is ${process.versions.bun ?? 'unknown'}.`)
+	const executable = command[0]
+	if (executable === undefined) throw new Error('Bun install command is empty')
+	const result = spawnSync(executable, command.slice(1), {
 		cwd: installDirectory,
 		stdio: 'inherit',
 	})

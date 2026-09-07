@@ -62,7 +62,7 @@ function getAbiParameter(value: unknown, label: string): AbiParameter {
 	if (value['components'] !== undefined && !Array.isArray(value['components'])) throw new Error(`${label} components must be an array`)
 	return {
 		type: value['type'],
-		components: Array.isArray(value['components']) ? value['components'].map((component, index) => getAbiParameter(component, `${label} component ${index}`)) : undefined,
+		...(Array.isArray(value['components']) ? { components: value['components'].map((component, index) => getAbiParameter(component, `${label} component ${index}`)) } : {}),
 	}
 }
 
@@ -76,7 +76,7 @@ function splitArrayType(type: string): { elementType: string; length: number | u
 }
 
 function withType(parameter: AbiParameter, type: string): AbiParameter {
-	return { type, components: parameter.components }
+	return { type, ...(parameter.components === undefined ? {} : { components: parameter.components }) }
 }
 
 function isDynamicAbiParameter(parameter: AbiParameter): boolean {
@@ -158,13 +158,14 @@ function normalizeType(typeId: string, types: Record<string, unknown>, activeTyp
 function normalizeStorageLayout(contract: ArtifactContract): unknown[] {
 	const layout = contract.storageLayout
 	if (layout === undefined || !Array.isArray(layout.storage) || !isRecord(layout.types)) throw new Error('Contract output is missing a complete storage layout')
+	const types = layout.types
 	return layout.storage.map((entry, index) => {
 		if (!isRecord(entry)) throw new Error(`Invalid storage entry ${index}`)
 		return {
 			label: getString(entry['label'], `Storage entry ${index} is missing a label`),
 			offset: getNumber(entry['offset'], `Storage entry ${index} has an invalid offset`),
 			slot: getString(entry['slot'], `Storage entry ${index} is missing a slot`),
-			type: normalizeType(getString(entry['type'], `Storage entry ${index} is missing a type`), layout.types),
+			type: normalizeType(getString(entry['type'], `Storage entry ${index} is missing a type`), types),
 		}
 	})
 }

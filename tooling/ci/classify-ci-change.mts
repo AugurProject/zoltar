@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
+import { affectedProjects, componentProjects, projects } from '../repo/projects.ts'
 
-export const ciScopes = ['docs', 'core', 'trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan', 'infrastructure'] as const
+export const ciScopes = ['docs', 'core', 'trading', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'infrastructure'] as const
 export type CiScope = (typeof ciScopes)[number]
 type PackageMatrixEntry = { readonly package: string; readonly directory: string; readonly artifacts: boolean }
 export type CiChangeClassification = {
@@ -18,17 +19,13 @@ export type CiChangeClassification = {
 	readonly reason: string
 }
 
-const packageEntries: Readonly<Record<CiScope, PackageMatrixEntry | undefined>> = {
-	docs: undefined,
-	core: undefined,
-	trading: undefined,
-	'bot-shared': { package: 'bot-shared', directory: 'bots/shared', artifacts: false },
-	arbitrager: { package: 'arbitrager', directory: 'bots/open-oracle-arbitrager', artifacts: true },
-	liquidator: { package: 'liquidator', directory: 'bots/liquidator', artifacts: true },
-	'augur-scan': { package: 'augur-scan', directory: 'augurScan', artifacts: false },
-	infrastructure: undefined,
-}
-const dependencies: Readonly<Record<CiScope, readonly CiScope[]>> = { docs: [], core: [], trading: [], 'bot-shared': ['arbitrager', 'liquidator'], arbitrager: [], liquidator: [], 'augur-scan': [], infrastructure: [] }
+const packageEntries = new Map<CiScope, PackageMatrixEntry>(
+	componentProjects().map(project => {
+		const ci = project.ci
+		if (ci?.componentName === undefined) throw new Error(`Component ${project.id} has no CI name`)
+		return [ci.scope as CiScope, { package: ci.componentName, directory: project.path, artifacts: ci.requiresContractArtifacts === true }]
+	}),
+)
 const rootDocumentation = new Set(['AGENTS.md', 'LICENSE', 'README.md'])
 const rootInfrastructure = new Set(['reth', 'testnetwork'])
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
@@ -37,12 +34,13 @@ const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(sco
 function directScopeForPath(filePath: string): CiScope | 'full' {
 	if (rootDocumentation.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
 	if (filePath.startsWith('bots/shared/')) return 'bot-shared'
+	if (filePath.startsWith('bots/chaos/')) return 'chaos'
 	if (filePath.startsWith('bots/open-oracle-arbitrager/')) return 'arbitrager'
 	if (filePath.startsWith('bots/liquidator/')) return 'liquidator'
 	if (filePath.startsWith('augurScan/')) return 'augur-scan'
 	if (filePath.startsWith('shared/') || filePath.startsWith('ui/')) return 'core'
 	if (filePath.startsWith('solidity/')) return 'infrastructure'
-	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || rootGlobalFiles.has(filePath)) return 'full'
+	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || filePath.startsWith('tooling/') || rootGlobalFiles.has(filePath)) return 'full'
 	if ([...rootInfrastructure].some(path => filePath === path || filePath.startsWith(`${path}/`))) return 'infrastructure'
 	return 'full'
 }
@@ -50,15 +48,13 @@ function directScopeForPath(filePath: string): CiScope | 'full' {
 function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[], full: boolean): Set<CiScope> {
 	if (full) return new Set(ciScopes)
 	const result = new Set(direct)
-	if (filePaths.some(filePath => filePath.startsWith('shared/'))) for (const scope of ['trading', 'bot-shared', 'arbitrager', 'liquidator', 'augur-scan'] as const) result.add(scope)
-	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading', 'arbitrager', 'liquidator'] as const) result.add(scope)
-	const queue = [...result]
-	for (const scope of queue)
-		for (const dependent of dependencies[scope])
-			if (!result.has(dependent)) {
-				result.add(dependent)
-				queue.push(dependent)
-			}
+	for (const project of affectedProjects(filePaths, projects)) {
+		const scope = project.ci?.componentName === undefined ? undefined : project.ci.scope
+		if (scope !== undefined && ciScopes.includes(scope as CiScope)) result.add(scope as CiScope)
+	}
+	// The separately tiered Trading domain consumes shared and contract inputs.
+	if (filePaths.some(filePath => filePath.startsWith('shared/'))) result.add('trading')
+	if (filePaths.some(filePath => filePath.startsWith('solidity/'))) for (const scope of ['core', 'trading'] as const) result.add(scope)
 	return result
 }
 export function getCiChangedFiles(baseRef: string, cwd: string = process.cwd()): string[] {
@@ -91,7 +87,7 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	const expanded = expandScopes(direct, changedFiles, forcedFull)
 	const directScopes = ordered(direct)
 	const expandedScopes = ordered(expanded)
-	const packageMatrix = expandedScopes.flatMap(scope => packageEntries[scope] ?? [])
+	const packageMatrix = expandedScopes.flatMap(scope => packageEntries.get(scope) ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
 	const augurScanIntegration =
 		forcedFull ||

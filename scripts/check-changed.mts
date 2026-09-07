@@ -14,6 +14,7 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^\.codex\/review-contract\.md$/,
 	/^docs\//,
 	/^scripts\//,
+	/^tooling\//,
 	/^shared\/ts\//,
 	/^solidity\/ts\//,
 	/^ui\/AGENTS\.md$/,

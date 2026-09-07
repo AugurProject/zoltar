@@ -15,8 +15,8 @@ The codebase is split into these main areas:
 - `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
 - `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
-- `scripts/` contains repository-wide build, validation, and test orchestration
-- `bots/` contains liquidator and open oracle arbitrager bots
+- `tooling/` contains typed repository metadata plus CI and contract-safety orchestration; `scripts/` retains focused compatibility and generation entry points
+- `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
 
 Each interface package (`ui/zoltar`, `ui/statoblast`, `ui/trading`) keeps route-specific code under `ts/features`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. Imports point inward along `coreShared ← Zoltar ← Statoblast ← Trading`; shared packages never import an application that consumes them.
 
@@ -24,7 +24,7 @@ Protocol documentation lives in [docs/documentation.html](https://augurproject.g
 
 ## Prerequisites
 
-- Bun 1.3+
+- Bun 1.3.14 (the version pinned by `packageManager` and CI)
 - Node.js 20+ for the repository-wide TypeScript check
 
 ## Setup
@@ -44,6 +44,7 @@ bun run setup
 Important:
 
 - `bun run setup` is the fastest way to get to a working repo after the root install.
+- Repository install helpers automatically use Bun 1.3.14 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
 - If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
@@ -257,6 +258,21 @@ Run the full test suite:
 ```bash
 bun run test
 ```
+
+Run the normal change-scoped formatting and repository checks, then print the affected test plan:
+
+```bash
+bun run check:changed
+bun run test:plan
+```
+
+Run the complete local validation suite used for CI/release parity:
+
+```bash
+bun run validate
+```
+
+CI component selection, dependency expansion, generated directories, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
 
 Run the launch-focused fork, auction, and exit invariant gate:
 

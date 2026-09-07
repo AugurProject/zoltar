@@ -1,0 +1,33 @@
+import { expect, test } from 'bun:test'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { componentProjects } from './projects.ts'
+
+const repositoryRoot = path.resolve(import.meta.dir, '../..')
+const ignoredDirectories = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
+
+async function findPackageManifests(directory = repositoryRoot): Promise<string[]> {
+	const manifests: string[] = []
+	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+		if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue
+		const entryPath = path.join(directory, entry.name)
+		if (entry.isDirectory()) manifests.push(...(await findPackageManifests(entryPath)))
+		else if (entry.isFile() && entry.name === 'package.json') manifests.push(path.relative(repositoryRoot, entryPath).replaceAll('\\', '/'))
+	}
+	return manifests
+}
+
+test('every independently checked package has a component CI route', async () => {
+	const routedDirectories = new Set(componentProjects().map(project => project.path))
+	const missing: string[] = []
+	for (const manifestPath of await findPackageManifests()) {
+		if (manifestPath === 'package.json') continue
+		const manifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, manifestPath), 'utf8'))
+		if (typeof manifest !== 'object' || manifest === null) throw new Error(`${manifestPath} must contain an object`)
+		const scripts = Reflect.get(manifest, 'scripts')
+		if (typeof scripts !== 'object' || scripts === null || !Object.hasOwn(scripts, 'check')) continue
+		const packageDirectory = path.posix.dirname(manifestPath)
+		if (!routedDirectories.has(packageDirectory)) missing.push(packageDirectory)
+	}
+	expect(missing, 'packages with a check script but no component CI route').toEqual([])
+})

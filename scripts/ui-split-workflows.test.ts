@@ -216,7 +216,7 @@ describe('split UI workflow paths', () => {
 		const botInstallStep = setupAction.indexOf('name: Install bot workspace dependencies for dead code analysis')
 		expect(botInstallStep).toBeGreaterThan(0)
 		expect(setupAction.slice(botInstallStep)).toContain("if: github.job == 'knip'")
-		for (const packageId of ['shared', 'open-oracle-arbitrager', 'liquidator']) {
+		for (const packageId of ['shared', 'chaos', 'open-oracle-arbitrager', 'liquidator']) {
 			const installIndex = setupAction.indexOf(`bun ./scripts/install-frozen.mts bots/${packageId}`, botInstallStep)
 			expect(installIndex).toBeGreaterThan(0)
 		}

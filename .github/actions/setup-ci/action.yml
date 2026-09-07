@@ -51,6 +51,7 @@ runs:
       shell: bash
       run: |
         bun ./scripts/install-frozen.mts bots/shared
+        bun ./scripts/install-frozen.mts bots/chaos
         bun ./scripts/install-frozen.mts bots/open-oracle-arbitrager
         bun ./scripts/install-frozen.mts bots/liquidator
 

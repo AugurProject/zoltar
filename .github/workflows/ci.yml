@@ -28,6 +28,7 @@ jobs:
       core: ${{ steps.scope.outputs.core }}
       trading: ${{ steps.scope.outputs.trading }}
       bot_shared: ${{ steps.scope.outputs.bot_shared }}
+      chaos: ${{ steps.scope.outputs.chaos }}
       arbitrager: ${{ steps.scope.outputs.arbitrager }}
       liquidator: ${{ steps.scope.outputs.liquidator }}
       augur_scan: ${{ steps.scope.outputs.augur_scan }}
@@ -44,6 +45,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - name: Check production source size
+        run: bun run check:source-size
       - name: Select CI scope
         id: scope
         shell: bash
@@ -51,9 +54,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            bun scripts/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
+            bun tooling/ci/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
           else
-            bun scripts/classify-ci-change.mts --github-output --full
+            bun tooling/ci/classify-ci-change.mts --github-output --full
           fi
 
   docs-checks:
@@ -242,7 +245,7 @@ jobs:
         with:
           directory: ${{ matrix.directory }}
           artifacts: ${{ matrix.artifacts }}
-      - run: bun scripts/run-component-ci.mts "${{ matrix.package }}"
+      - run: bun tooling/ci/run-component-ci.mts "${{ matrix.package }}"
 
   augur-scan-integration:
     name: augurScan PostgreSQL integration
@@ -287,6 +290,7 @@ jobs:
           CORE_SELECTED: ${{ needs.changes.outputs.core }}
           TRADING_SELECTED: ${{ needs.changes.outputs.trading }}
           BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
+          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
           LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
           AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
@@ -324,7 +328,7 @@ jobs:
           for result in PREPARE_RESULT DOMAIN_TESTS_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi
