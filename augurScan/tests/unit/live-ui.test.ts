@@ -4,11 +4,13 @@ import { requiredElementRole } from '../../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityDetailAnchorIndex,
+	activityDetailProvenanceField,
 	activityRefreshRetention,
 	approvalTransitionFields,
 	availableSessionSnapshotStorage,
 	canonicalPageLimit,
 	canReuseNetworkStatusPresentation,
+	captureActivityDetailFocus,
 	captureDisclosureState,
 	classifyLiveRecords,
 	collectCanonicalPages,
@@ -28,6 +30,7 @@ import {
 	demoTimelineEvidenceStatus,
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
+	handleActivityDetailDrawerEscape,
 	historyInvalidationEvidencePresentation,
 	historyInvalidationNotice,
 	historyInvalidationReasonLabel,
@@ -63,6 +66,7 @@ import {
 	refreshPresentation,
 	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
+	restoreActivityDetailFocus,
 	restoreDisclosureState,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -161,6 +165,82 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeFalse()
 	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row'])
 	expect(visibleActivityLogCount(feed)).toBe(2)
+})
+
+test('renders event contract provenance supplied by the log detail API', () => {
+	const { document } = new Window()
+	const card = document.createElement('dl')
+	card.className = 'detail-card'
+	const [term, description] = activityDetailProvenanceField('deployment-manifest')
+	const termNode = document.createElement('dt')
+	termNode.textContent = term
+	const descriptionNode = document.createElement('dd')
+	descriptionNode.textContent = description
+	card.append(termNode, descriptionNode)
+	expect(card.tagName).toBe('DL')
+	expect(card.className).toBe('detail-card')
+	expect(card.querySelector('dt')?.textContent).toBe('Contract provenance')
+	expect(card.querySelector('dd')?.textContent).toBe('deployment-manifest')
+})
+
+test('Escape closes an activity detail drawer and restores its trigger focus', () => {
+	const { document, KeyboardEvent } = new Window()
+	const trigger = document.createElement('button')
+	const drawer = document.createElement('section')
+	document.body.append(trigger, drawer)
+	drawer.tabIndex = -1
+	drawer.focus()
+	const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+
+	const handled = handleActivityDetailDrawerEscape(event, () => {
+		drawer.remove()
+		trigger.focus()
+	})
+
+	expect(handled).toBeTrue()
+	expect(event.defaultPrevented).toBeTrue()
+	expect(drawer.isConnected).toBeFalse()
+	expect(document.activeElement).toBe(trigger)
+})
+
+test('restores the corresponding focused control after asynchronous event detail replacement', () => {
+	const { document } = new Window()
+	const drawer = document.createElement('section')
+	const content = document.createElement('div')
+	const original = document.createElement('summary')
+	original.textContent = 'Transaction calldata and decoded action'
+	content.append(original)
+	drawer.append(content)
+	document.body.append(drawer)
+	original.focus()
+	const snapshot = captureActivityDetailFocus(drawer, original)
+
+	const replacement = document.createElement('summary')
+	replacement.textContent = 'Transaction calldata and decoded action'
+	content.replaceChildren(replacement)
+	expect(document.activeElement).not.toBe(replacement)
+
+	expect(restoreActivityDetailFocus(drawer, snapshot)).toBeTrue()
+	expect(document.activeElement).toBe(replacement)
+})
+
+test('keeps the activity detail drawer focused when its loading content is replaced', () => {
+	const { document } = new Window()
+	const drawer = document.createElement('section')
+	drawer.tabIndex = -1
+	const content = document.createElement('div')
+	drawer.append(content)
+	document.body.append(drawer)
+	drawer.focus()
+	const snapshot = captureActivityDetailFocus(drawer, drawer)
+
+	content.replaceChildren(document.createElement('dl'))
+	document.body.tabIndex = -1
+	document.body.focus()
+	expect(document.activeElement).toBe(document.body)
+
+	expect(restoreActivityDetailFocus(drawer, snapshot)).toBeTrue()
+	expect(document.activeElement).toBe(drawer)
 })
 
 test('restores disclosure open state across a detail rerender while keeping initial sections collapsed', () => {
