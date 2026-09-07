@@ -741,7 +741,7 @@ export function App() {
 			currentTimestamp={currentTimestamp}
 			header={
 				<AppHeaderShell
-					overview={<OverviewPanels {...overviewProps} applicationTitle={applicationTitle} />}
+					renderOverview={settingsMenu => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} settingsMenu={settingsMenu} />}
 					simulationController={simulationController}
 					subNavigation={routeSubNavigation}
 					tabNavigation={tabNavigationProps}

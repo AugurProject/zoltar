@@ -1,3 +1,4 @@
+import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { bigintToSafeNumber, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -101,7 +102,7 @@ export type OpenOracleCreateValidation = {
 }
 
 function normalizeOpenOracleUnknownScaleDecimalInput(value: string) {
-	const trimmed = value.trim()
+	const trimmed = normalizeNumericInput(value)
 	if (trimmed === '') return trimmed
 	if (trimmed === '.' || trimmed === '-.') return trimmed
 	if (trimmed.startsWith('.')) return `0${trimmed}`

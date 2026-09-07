@@ -293,7 +293,7 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('class="section-nav"')
 		expect(pageSource).toContain('Universe truth policy')
 		expect(pageSource).not.toContain('public CCXT sources')
-		expect(pageSource).toContain('id="metrics" class="metric-grid"')
+		expect(pageSource).toContain('id="metrics" class="metric-grid operator-metrics"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
 		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)

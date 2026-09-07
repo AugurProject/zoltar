@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import {
 	assertCommonFinalizedBlockResults,
-	assertDeploymentRootCodeResults,
 	assertDoctorDurableStateScope,
 	assertFinalizedTagsMatchCommonBlock,
 	assertStableFinalizedCheckpointResults,
 	boundedAdaptiveLogRange,
 	commonFreshFinalizedBlockNumber,
+	probeChaosDoctor,
 	runChaosDoctor,
 	runChaosLaunchGate,
 	validateDoctorCompanionState,
@@ -167,14 +167,6 @@ describe('chaos launch doctor', () => {
 			),
 		).toThrow('disagree on initial finalized-tag block 930')
 		expect(() => assertStableFinalizedCheckpointResults([{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 929n }], [{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 929n }])).toThrow('regressed')
-	})
-
-	test('fails closed when either configured trading root has no bytecode', () => {
-		const roots = [
-			{ address: '0x0000000000000000000000000000000000000001' as const, name: 'tradingFactory' },
-			{ address: '0x0000000000000000000000000000000000000002' as const, name: 'tradingRouter' },
-		]
-		expect(() => assertDeploymentRootCodeResults(roots, ['0x1234', '0x'], 'https://reader.example')).toThrow('tradingRouter')
 	})
 
 	test('does not subdivide non-range log failures and fails an oversized single block', async () => {
@@ -515,4 +507,36 @@ describe('chaos launch doctor', () => {
 		expect(liveLocks).toBe(1)
 		expect(liveProbes).toBe(1)
 	})
+})
+
+test('doctor reports the actual chain, pinned block, and missing root address before discovery', async () => {
+	const baseline = await settingsFixture('operator.configured-placeholder.json')
+	const methods: string[] = []
+	const missing = baseline.deployment.tradingRouter
+	const server = Bun.serve({
+		port: 0,
+		fetch: async request => {
+			const body: unknown = await request.json()
+			if (typeof body !== 'object' || body === null) throw new Error('Expected RPC request')
+			const method = Reflect.get(body, 'method')
+			const params = Reflect.get(body, 'params')
+			if (typeof method !== 'string') throw new Error('Expected RPC method')
+			methods.push(method)
+			let result: unknown
+			if (method === 'eth_chainId') result = `0x${baseline.network.chainId.toString(16)}`
+			else if (method === 'eth_blockNumber') result = '0x64'
+			else if (method === 'eth_getBlockByNumber') result = { number: '0x64', hash: `0x${'11'.repeat(32)}`, timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}`, baseFeePerGas: '0x1', transactions: [], uncles: [], gasLimit: '0x100000', gasUsed: '0x0' }
+			else if (method === 'eth_getCode') result = Array.isArray(params) && params[0] === missing ? '0x' : '0x01'
+			else if (method === 'eth_getLogs') result = []
+			else return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', error: { code: -32601, message: 'Unexpected discovery request' } })
+			return Response.json({ id: Reflect.get(body, 'id'), jsonrpc: '2.0', result })
+		},
+	})
+	try {
+		const settings = { ...baseline, connectivity: { publicRpcUrls: [server.url.href], readRpcUrl: server.url.href, quorumRpcUrls: [], rpcQuorum: 1 as const } }
+		await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: tradingRouter (${missing})`)
+		expect(methods).not.toContain('eth_call')
+	} finally {
+		server.stop(true)
+	}
 })

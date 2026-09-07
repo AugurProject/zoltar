@@ -61,3 +61,6 @@ export const migrationDestinationRisk = 'Verify every destination outcome before
 export const permanentRepBurn = 'Permanent REP Burn'
 export const forkIrreversibleRisk = 'Fork initiation is irreversible and permanently sets this question as the universe fork question.'
 export const forkMigrationRisk = 'After the fork, REP and pool positions must follow the outcome-universe migration process before settlement.'
+
+export const migrationAvailableRep = 'Available to migrate'
+export const migrationMaxIncludesPrepared = 'Max includes wallet REP and REP already prepared for migration.'
