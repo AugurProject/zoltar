@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
 
 test('rejects static, dynamic, exported, and type imports from UI features', () => {
@@ -46,6 +47,18 @@ test('keeps runnable applications as dependency leaves behind domain APIs', () =
 test('prevents domain packages from reaching back into applications', () => {
 	const findings = findUiLayerBoundaryViolations('ui/statoblastDomain/ts/protocol/example.ts', "import { App } from '@zoltar/ui-zoltar/app/App.js'")
 	expect(findings.map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+})
+
+test('requires cross-package imports to use an explicitly exported domain entry point', () => {
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/private-helper.js'").map(finding => finding.rule)).toEqual(['cross-package-private-subpath'])
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/core.js'")).toEqual([])
+})
+
+test('domain packages expose intentional entry points instead of wildcard internals', () => {
+	for (const packageId of ['zoltarDomain', 'statoblastDomain', 'tradingDomain']) {
+		const manifest = JSON.parse(readFileSync(`ui/${packageId}/package.json`, 'utf8')) as { exports: Record<string, unknown> }
+		expect(Object.keys(manifest.exports).some(exportPath => exportPath.includes('*'))).toBe(false)
+	}
 })
 
 test('rejects test imports that bypass mirrored ownership', () => {

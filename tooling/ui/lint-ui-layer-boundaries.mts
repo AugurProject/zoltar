@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs'
+import { promises as fs, readFileSync } from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import * as ts from 'typescript'
@@ -11,7 +11,7 @@ export type UiLayerBoundaryFinding = {
 	column: number
 	file: string
 	line: number
-	rule: 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary'
+	rule: 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath'
 	specifier: string
 }
 
@@ -29,6 +29,15 @@ const packageAliases: Record<string, string> = {
 	'@zoltar/ui-statoblast': 'statoblast',
 	'@zoltar/ui-trading': 'trading',
 }
+const domainPackageIds = new Set(['zoltarDomain', 'statoblastDomain', 'tradingDomain'])
+const domainPublicExports = new Map(
+	Object.entries(packageAliases)
+		.filter(([, packageId]) => domainPackageIds.has(packageId))
+		.map(([alias, packageId]) => {
+			const manifest = JSON.parse(readFileSync(path.join(projectRoot, 'ui', packageId, 'package.json'), 'utf8')) as { exports?: Record<string, unknown> }
+			return [alias, new Set(Object.keys(manifest.exports ?? {}))] as const
+		}),
+)
 const allowedCrossPackageImports: Record<string, readonly string[]> = {
 	coreShared: [],
 	zoltarDomain: ['coreShared'],
@@ -51,6 +60,11 @@ function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundary
 		if (targetPackage === undefined) return undefined
 		const allowedTargets = allowedCrossPackageImports[sourcePackage] ?? []
 		if (targetPackage === sourcePackage || !allowedTargets.includes(targetPackage)) return 'cross-package-import-boundary'
+		const publicExports = aliasName === undefined ? undefined : domainPublicExports.get(aliasName)
+		if (publicExports !== undefined) {
+			const subpath = specifier === aliasName ? '.' : `.${specifier.slice(aliasName.length)}`
+			if (!publicExports.has(subpath)) return 'cross-package-private-subpath'
+		}
 		return undefined
 	}
 	if (!specifier.startsWith('.')) return undefined
