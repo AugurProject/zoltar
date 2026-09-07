@@ -28,51 +28,82 @@ export type AnchoredLayout = {
 	reason: string
 }
 
+const runtimeLimitBytes = 24_576
+const initcodeLimitBytes = 49_152
+
+function runtimeBudget(reference: ContractReference, maximumBytes: number, context: string): BytecodeBudget {
+	return {
+		...reference,
+		maximumBytes,
+		reason: `${context} The current runtime leaves ${runtimeLimitBytes - maximumBytes} bytes of EIP-170 headroom.`,
+	}
+}
+
+function initcodeBudget(reference: ContractReference, maximumBytes: number, context: string): BytecodeBudget {
+	return {
+		...reference,
+		maximumBytes,
+		reason: `${context} The current minimum initcode leaves ${initcodeLimitBytes - maximumBytes} bytes of EIP-3860 headroom.`,
+	}
+}
+
 export const contractSafetyPolicy = {
-	runtimeLimitBytes: 24_576,
-	initcodeLimitBytes: 49_152,
+	runtimeLimitBytes,
+	initcodeLimitBytes,
 	excludedSourcePrefixes: ['contracts/test/', 'contracts/trading/test/'],
 	// Contracts close to protocol deployment limits have explicit no-growth budgets.
 	// Raising one requires a reviewed reason in the same change.
 	runtimeBudgets: [
-		{
-			sourcePath: 'contracts/statoblast/SecurityPool.sol',
-			contractName: 'SecurityPool',
-			maximumBytes: 24_554,
-			reason: 'Only 22 bytes of EIP-170 headroom remain.',
-		},
-		{
-			sourcePath: 'contracts/statoblast/EscalationGame.sol',
-			contractName: 'EscalationGame',
-			maximumBytes: 24_286,
-			reason: 'The reviewed 59-byte growth dispatches the two narrowly scoped atomic REP authorization deposit entrypoints; 290 bytes of EIP-170 headroom remain.',
-		},
-		{
-			sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
-			contractName: 'OpenOraclePriceCoordinator',
-			maximumBytes: 24_129,
-			reason: 'The runtime is above 98% of the EIP-170 limit.',
-		},
-		{
-			sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
-			contractName: 'SecurityPoolForker',
-			maximumBytes: 24_014,
-			reason: 'The runtime is above 97% of the EIP-170 limit.',
-		},
+		runtimeBudget(
+			{
+				sourcePath: 'contracts/statoblast/SecurityPool.sol',
+				contractName: 'SecurityPool',
+			},
+			24_308,
+			'The pool is close to the protocol deployment limit, so its reviewed runtime budget permits no growth.',
+		),
+		runtimeBudget(
+			{
+				sourcePath: 'contracts/statoblast/EscalationGame.sol',
+				contractName: 'EscalationGame',
+			},
+			24_286,
+			'The reviewed runtime includes the two narrowly scoped atomic REP authorization deposit entrypoints and permits no further growth.',
+		),
+		runtimeBudget(
+			{
+				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
+				contractName: 'OpenOraclePriceCoordinator',
+			},
+			23_599,
+			'The coordinator runtime is above 96% of the protocol deployment limit, so its reviewed budget permits no growth.',
+		),
+		runtimeBudget(
+			{
+				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
+				contractName: 'SecurityPoolForker',
+			},
+			24_013,
+			'The forker runtime is above 97% of the protocol deployment limit, so its reviewed budget permits no growth.',
+		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
-		{
-			sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
-			contractName: 'SecurityPoolForker',
-			maximumBytes: 49_122,
-			reason: 'Only 30 bytes of EIP-3860 headroom remain after the constructor argument.',
-		},
-		{
-			sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
-			contractName: 'EscalationGameFactory',
-			maximumBytes: 46_137,
-			reason: 'The factory embeds the reviewed, question-bound atomic-authorization EscalationGame creation code; 3,015 bytes of EIP-3860 headroom remain.',
-		},
+		initcodeBudget(
+			{
+				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
+				contractName: 'SecurityPoolForker',
+			},
+			48_323,
+			'The forker is close to the protocol initcode limit after its minimum constructor arguments, so its reviewed budget permits no growth.',
+		),
+		initcodeBudget(
+			{
+				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
+				contractName: 'EscalationGameFactory',
+			},
+			46_119,
+			'The factory embeds the reviewed, question-bound atomic-authorization EscalationGame creation code and permits no further growth.',
+		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [
 		{
