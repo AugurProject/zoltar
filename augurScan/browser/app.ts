@@ -31,13 +31,16 @@ import { chartValueBounds, uniswapLiquidityChartModel, uniswapPriceChartModel, u
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
 import { requiredElementRole } from './dom-elements.ts'
 import {
+	type ActivityDetailFocusSnapshot,
 	accountStateDuringStagedRefresh,
+	activityDetailProvenanceField,
 	activityRefreshRetention,
 	approvalTransitionFields,
 	availableSessionSnapshotStorage,
 	type ContractRegistrySection,
 	canonicalPageLimit,
 	canReuseNetworkStatusPresentation,
+	captureActivityDetailFocus,
 	captureDisclosureState,
 	classifyLiveRecords,
 	collectCanonicalPages,
@@ -56,6 +59,7 @@ import {
 	entityHistoryContinuationPresentation,
 	evidenceStatusLabel,
 	type HistoryInvalidationReason,
+	handleActivityDetailDrawerEscape,
 	historyInvalidationEvidencePresentation,
 	historyInvalidationNotice,
 	historyInvalidationReasonLabel,
@@ -89,6 +93,7 @@ import {
 	refreshPresentation,
 	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
+	restoreActivityDetailFocus,
 	restoreDisclosureState,
 	retainedPaginationAvailable,
 	runSerializedOperationsLoad,
@@ -5183,16 +5188,9 @@ const decodedArgumentsTable = (
 	return table
 }
 
-interface DetailContextSnapshot {
+interface DetailContextSnapshot extends ActivityDetailFocusSnapshot {
 	scrollTop: number
-	focusIndex: number
-	focusKey?: string
-	focusKeyOccurrence?: number
-	focusTop?: number
 }
-
-const detailFocusKey = (node: HTMLElement): string =>
-	`${node.tagName}:${node instanceof HTMLAnchorElement ? node.href : ''}:${node.getAttribute('aria-label') ?? node.textContent ?? ''}`
 
 const closeEventDrawer = ({ clearUrl = true, restoreFocus = false } = {}) => {
 	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
@@ -5213,34 +5211,15 @@ const closeEventDrawer = ({ clearUrl = true, restoreFocus = false } = {}) => {
 
 const captureDetailContext = (): DetailContextSnapshot => {
 	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
-	if (!drawer) return { scrollTop: window.scrollY, focusIndex: -1 }
-	const focusable = [...drawer.querySelectorAll<HTMLElement>('a, button, summary')]
-	const focusIndex = document.activeElement instanceof HTMLElement ? focusable.indexOf(document.activeElement) : -1
-	return {
-		scrollTop: window.scrollY,
-		focusIndex,
-		focusKey: focusIndex >= 0 ? detailFocusKey(requiredArrayItem(focusable, focusIndex, 'Focused detail control')) : undefined,
-		focusKeyOccurrence:
-			focusIndex >= 0
-				? focusable
-						.slice(0, focusIndex + 1)
-						.filter((candidate) => detailFocusKey(candidate) === detailFocusKey(requiredArrayItem(focusable, focusIndex, 'Focused detail control'))).length - 1
-				: undefined,
-		focusTop: focusIndex >= 0 ? requiredArrayItem(focusable, focusIndex, 'Focused detail control').getBoundingClientRect().top : undefined,
-	}
+	if (!drawer) return { scrollTop: window.scrollY, drawerFocused: false, focusIndex: -1 }
+	return { scrollTop: window.scrollY, ...captureActivityDetailFocus(drawer, document.activeElement) }
 }
 
 const restoreDetailContext = (snapshot: DetailContextSnapshot) => {
 	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
 	if (!drawer) return
 	window.scrollTo({ top: snapshot.scrollTop })
-	if (snapshot.focusIndex < 0) return
-	const focusable = [...drawer.querySelectorAll<HTMLElement>('a, button, summary')]
-	const keyedCandidates = snapshot.focusKey ? focusable.filter((candidate) => detailFocusKey(candidate) === snapshot.focusKey) : []
-	const nextFocus = keyedCandidates[snapshot.focusKeyOccurrence ?? 0] ?? focusable[snapshot.focusIndex]
-	if (nextFocus === undefined) return
-	if (snapshot.focusTop !== undefined) window.scrollBy(0, nextFocus.getBoundingClientRect().top - snapshot.focusTop)
-	nextFocus.focus({ preventScroll: true })
+	restoreActivityDetailFocus(drawer, snapshot, (nextFocus, previousTop) => window.scrollBy(0, nextFocus.getBoundingClientRect().top - previousTop))
 }
 
 const placeEventDrawer = (drawer: HTMLElement, { allowOutsideShellFallback = true } = {}): boolean => {
@@ -5264,8 +5243,9 @@ const collapsibleDetailCard = (title: string, disclosureKey: string, ...content:
 
 const detailContextIsUnchanged = (snapshot: DetailContextSnapshot): boolean => {
 	if (Math.abs(window.scrollY - snapshot.scrollTop) > 1) return false
-	if (snapshot.focusIndex < 0) return true
 	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+	if (snapshot.drawerFocused) return document.activeElement === drawer
+	if (snapshot.focusIndex < 0) return true
 	const focusable = drawer ? [...drawer.querySelectorAll<HTMLElement>('a, button, summary')] : []
 	return document.activeElement === focusable[snapshot.focusIndex]
 }
@@ -5337,6 +5317,7 @@ const performOpenDetail = async (
 		const grid = element('div', 'detail-grid')
 		grid.append(
 			detailCard('Event signature', detail.event_signature ?? 'No matching ABI'),
+			detailCard(...activityDetailProvenanceField(detail.contract_provenance)),
 			detailCard('Block hash', detail.block_hash),
 			detailCard('Occurrence position', `transaction ${number(detail.transaction_index)} · log ${number(detail.log_index)}`),
 			addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
@@ -5362,7 +5343,7 @@ const performOpenDetail = async (
 			collapsibleDetailCard('Complete raw transaction receipt', 'transaction-receipt', element('pre', 'raw', JSON.stringify(detail.receipt, null, 2))),
 		)
 		restoreDisclosureState(grid, disclosureState)
-		const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext() : undefined
+		const contextToRestore = drawer.contains(document.activeElement) ? captureDetailContext() : undefined
 		drawerContent.replaceChildren(grid)
 		placeEventDrawer(drawer)
 		if (contextToRestore) restoreDetailContext(contextToRestore)
@@ -8108,6 +8089,10 @@ dialog.addEventListener('close', () => {
 window.addEventListener('resize', () => {
 	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
 	if (drawer) placeEventDrawer(drawer)
+})
+document.addEventListener('keydown', (event) => {
+	if (!document.querySelector('.event-detail-drawer')) return
+	handleActivityDetailDrawerEscape(event, () => closeEventDrawer({ restoreFocus: true }))
 })
 const isStateTab = (value: string | undefined | null): value is StateTab =>
 	value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
