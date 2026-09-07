@@ -29,7 +29,7 @@ test.each([
 })
 
 test('keeps AugurScan typechecking, tests, and its nonduplicated composite static check', () => {
-	expect(commandsFor('augurScan/src/server.ts', 'augur-scan')).toEqual(['bun run typecheck', 'bun run test', 'bun run check'])
+	expect(commandsFor('augurScan/src/server.ts', 'augur-scan')).toEqual(['bun run typecheck', 'bun run test:ci', 'bun run check'])
 })
 
 test('uses the repository composite check for lint without duplicating the full check', () => {

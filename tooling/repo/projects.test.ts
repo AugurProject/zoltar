@@ -38,6 +38,11 @@ test('registry tasks carry explicit working directories and derive canonical tas
 	expect(taskProjects('dependency-update').map(project => project.id)).toContain('ui-core')
 })
 
+test('complete validation includes root and non-database AugurScan tests', () => {
+	expect(projectsInTaskGroup('test', 'complete-validation').map(project => project.id)).toEqual(['repository', 'augur-scan'])
+	expect(projects.find(project => project.id === 'augur-scan')?.tasks.test?.command).toEqual(['bun', 'run', 'test:ci'])
+})
+
 test('validates composite task coverage against supported non-self tasks', () => {
 	const base = project('package')
 	const task = { command: ['bun', 'run', 'check'], cwd: 'package', inputs: ['package/**'] }

@@ -13,6 +13,7 @@
 		"metadata:check": "bun scripts/check-project-metadata.ts",
 		"qa:serve": "bun run build && bun scripts/serve-demo.ts",
 		"test": "bun run test:unit && bun run test:api && bun run test:replay && bun run test:integration",
+		"test:ci": "bun run test:unit && bun run test:api && bun run test:replay",
 		"test:unit": "bun test tests/unit",
 		"test:api": "bun test tests/api",
 		"test:replay": "bun test tests/replay",

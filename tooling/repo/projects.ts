@@ -78,7 +78,7 @@ export const projects: readonly Project[] = [
 		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
-			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**']),
+			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
 			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
 			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**']),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
@@ -312,7 +312,7 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: packageInstallTask('augurScan'),
 			build: packageTask('augurScan', 'build', { outputs: ['augurScan/dist'] }),
-			test: packageTask('augurScan', 'test'),
+			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
