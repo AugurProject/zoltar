@@ -8,7 +8,7 @@ const packageJsonPath = path.join(installDirectory, 'package.json')
 const lockfilePath = path.join(installDirectory, 'bun.lock')
 const packageJsonBackupPath = `${packageJsonPath}.zoltar-install-backup`
 const lockfileBackupPath = `${lockfilePath}.zoltar-install-backup`
-const repositoryBunVersion = '1.3.14'
+const repositoryBunVersion = '1.4.2'
 
 type DependencySection = 'dependencies' | 'devDependencies' | 'optionalDependencies'
 type DependencyMap = Record<string, string>
