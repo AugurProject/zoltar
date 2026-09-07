@@ -76,7 +76,10 @@ contract Zoltar {
 	}
 
 	function getForkThresholdAttoRep(uint248 universeId) public view returns (uint256) {
-		return getUniverseTheoreticalSupplyAttoRep(universeId) / forkThresholdDivisor;
+		uint256 theoreticalSupplyAttoRep = getUniverseTheoreticalSupplyAttoRep(universeId);
+		return
+			theoreticalSupplyAttoRep / forkThresholdDivisor +
+			(theoreticalSupplyAttoRep % forkThresholdDivisor == 0 ? 0 : 1);
 	}
 
 	function getNonDecisionThresholdAttoRep(uint248 universeId) public view returns (uint256) {
@@ -127,6 +130,7 @@ contract Zoltar {
 		universes[universeId].forkTime = block.timestamp;
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
+		require(forkThresholdAttoRep != 0, 'Fork threshold must be non-zero');
 		_burnRep(universes[universeId].reputationToken, repAlreadyReceived ? address(this) : owner, forkThresholdAttoRep);
 		universeTheoreticalSupplies[universeId] -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;

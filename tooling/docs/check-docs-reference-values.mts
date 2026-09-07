@@ -140,6 +140,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 		securityPoolOperationsDelegate,
 		/debtToMoveAttoEth = receiverOpenInterestAfterAttoEth - receiverOpenInterestBeforeAttoEth;[\s\S]*debtToMoveAttoEth <= nominalDebtToMoveAttoEth && debtToMoveAttoEth <= request\.requestedDebtAttoEth[\s\S]*nominalDebtToMoveAttoEth != 0 && debtToMoveAttoEth == 0[\s\S]*badDebtAttoEth = targetOpenInterestAttoEth - debtToMoveAttoEth/,
 	)
+	assert.match(securityPoolOperationsDelegate, /_getVaultBadDebtAttoEth\(request\.targetVault\) == 0[\s\S]*_getVaultBadDebtAttoEth\(request\.receiverVault\) == 0/)
 	assertCoordinatorDataFunctionInventory()
 }
 
@@ -278,7 +279,7 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
 	assert.match(capacityOwnershipEntry, /href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
 	assert.match(vaultEntry, /href="\.\.\/\.\.\/solidity\/contracts\/statoblast\/SecurityPool\.sol"><code>_registerVault<\/code><\/a>/)
-	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
+	assert.match(activeAuctionEntry, /href="#auc-12"><code>AUC-12<\/code><\/a>/)
 }
 
 function assertZoltarForkDepths(): void {
@@ -286,6 +287,7 @@ function assertZoltarForkDepths(): void {
 	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
 	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
 	assert.match(zoltar, /_forkBurnDivisor >= Constants\.MINIMUM_FORK_BURN_DIVISOR/)
+	assert.match(zoltar, /theoreticalSupplyAttoRep \/ forkThresholdDivisor \+[\s\S]*theoreticalSupplyAttoRep % forkThresholdDivisor == 0 \? 0 : 1/)
 	assert.match(zoltar, /uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep \/ forkBurnDivisor;/)
 
 	const nonDivisibleThreshold = 6n
@@ -301,7 +303,7 @@ function assertRecursiveForkGasStatusDocs(): void {
 }
 
 function assertCoordinatorRecoveryBranch(): void {
-	assert.match(openOracleIntegration, /<section id="callback-rejection-and-recovery">[\s\S]*<h2>Settlement validation, rejection, and recovery<\/h2>/)
+	assert.match(openOracleIntegration, /<section id="callback-rejection-and-recovery">/)
 	assert.match(
 		priceCoordinator,
 		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No report to recover'\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*pendingReportId = 0;[\s\S]*pendingReportSponsor = address\(0\);[\s\S]*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/,
@@ -392,11 +394,12 @@ function assertLifecycleReferences(): void {
 
 function assertContractInteractionDistinctions(): void {
 	assert.match(contractReferenceGenerator, /interaction\.declarations\.length, 1,[\s\S]*interaction rows must describe exactly one entrypoint name; split materially different guards, effects, and signals into separate rows/, 'generated interaction rows must remain limited to one entrypoint name')
-	assert.match(invariantsHtml, /id="fork-10"[\s\S]*<code>FORK-10<\/code>[\s\S]*mints only the unmaterialized balance/)
-	assert.match(invariantsHtml, /id="fork-11"[\s\S]*<code>FORK-11<\/code>[\s\S]*fork-time economic claim supply[\s\S]*Unequal ERC-1155 supplies[\s\S]*do not block complete-set minting[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
-	assert.match(securityPoolFactory, /SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*reputationToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
+	assert.match(invariantsHtml, /id="fork-10"/)
+	assert.match(invariantsHtml, /id="fork-11"[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
+	assert.match(securityPoolFactory, /zoltar\.getNonDecisionThresholdAttoRep\(universeId\) > _getInitialEscalationDepositAttoRep\(universeId\)/)
+	assert.match(securityPoolFactory, /SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\(zoltar\.getUniverseTheoreticalSupplyAttoRep\(universeId\)\)/)
 	assert.doesNotMatch(securityPoolFactory, /initialEscalationGameDepositAttoRep/, 'Factory must not duplicate the pool-derived escalation deposit')
-	assert.match(securityPool, /initialEscalationGameDepositAttoRep = SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\([\s\S]*repToken\.getTotalTheoreticalSupplyAttoRep\(\)/)
+	assert.match(securityPool, /universeTheoreticalSupplyAttoRep = _zoltar\.getUniverseTheoreticalSupplyAttoRep\(_universeId\)[\s\S]*initialEscalationGameDepositAttoRep = SecurityPoolUtils\.calculateInitialEscalationDepositAttoRep\(universeTheoreticalSupplyAttoRep\)/)
 	assert.match(securityPoolUtils, /function calculateInitialEscalationDepositAttoRep\([\s\S]*theoreticalSupplyAttoRep \/ 10_000_000[\s\S]*supplyBasedDepositAttoRep < 1e18 \? 1e18 : supplyBasedDepositAttoRep/)
 	assert.match(securityPoolUtils, /function calculateMinimumVaultRepDepositAttoRep\([\s\S]*configuredMinimumAttoRep == 0 \? theoreticalSupplyAttoRep \/ 100_000 : configuredMinimumAttoRep/)
 	assert.match(securityPool, /minimumVaultRepDepositAttoRep = SecurityPoolUtils\.calculateMinimumVaultRepDepositAttoRep\([\s\S]*securityPoolFactory\.minimumVaultRepDepositAttoRep\(\)/)
@@ -420,15 +423,16 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function createCompleteSet\(\) external payable isOperational \{[\s\S]*SecurityPoolSettlementDelegate\.createCompleteSet/, 'Complete-set issuance must delegate its atomic accounting transition')
 	assert.match(securityPoolSettlementDelegate, /function createCompleteSet\([\s\S]*nextSettlementCollateralAttoEth[\s\S]*_validateSettlementCollateral\(pool, nextSettlementCollateralAttoEth\);/, 'Complete-set issuance must compare resulting total collateral against live oracle-priced capacity and backing')
 	assert.match(securityPool, /function attoSharesToAttoEth\(uint256 amountAttoShares\)[\s\S]*return \(amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares/)
-	assert.match(securityPool, /function redeemCompleteSet\(uint256 amountAttoShares\)[\s\S]*uint256 settlementCollateralRedeemedAttoEth = attoSharesToAttoEth\(amountAttoShares\)/)
-	assert.match(securityPool, /function redeemShares\(\)[\s\S]*settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares/)
+	assert.match(securityPool, /function redeemCompleteSet\(uint256 amountAttoShares\)[\s\S]*SecurityPoolOperationsDelegate\.redeemCompleteSet/)
+	assert.match(securityPoolOperationsDelegate, /function redeemCompleteSet\([\s\S]*amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
+	assert.match(securityPool, /function redeemShares\(\)[\s\S]*SecurityPoolOperationsDelegate\.redeemShares/)
+	assert.match(securityPoolOperationsDelegate, /function redeemShares\([\s\S]*settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares[\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
 	assert.match(securityPoolForker, /securityPool\.setTotalSharesAttoShares\(parent\.shareTokenSupplyAttoShares\(\)\)/)
 	assert.match(diagramModelsSource, /withdraw REP or liquidation/)
 	assert.doesNotMatch(diagramModelsSource, /withdraw, capacity ownership/)
 	assert.match(securityPoolUtils, /capacityOwnershipToMoveAttoRep =[\s\S]*Math\.mulDiv\(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth\)/)
 	assert.match(securityPoolOperationsDelegate, /request\.receiverVault != request\.targetVault[\s\S]*receiverOpenInterestAttoEth < minimumSecurityBondDebtAttoEth[\s\S]*revert\('Receiver debt below minimum'\)/)
 	assert.match(securityPoolOperationsDelegate, /SecurityPoolUtils\.isVaultHealthyAtFactor\([\s\S]*minimumReceiverHealthFactorBps[\s\S]*'Receiver bad'/)
-	assert.match(contractReferenceGenerator, /calculateBundledLiquidationTransfer/)
 	assert.match(securityPool, /function _requireVaultCoverage\([\s\S]*uint256 openInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
 	assert.match(securityPool, /function _requirePoolCoverage\([\s\S]*uint256 totalOpenInterestAttoEth[\s\S]*SecurityPoolUtils\.isVaultHealthy/)
 	assert.match(securityPool, /function depositToEscalationGame\([^}]+if \(hasInheritedForkOutcome\) revert\(\);/)

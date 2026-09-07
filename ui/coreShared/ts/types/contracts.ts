@@ -331,6 +331,7 @@ export type ListedSecurityPool = {
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
+		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
 		totalFeesOwedRemainder: bigint

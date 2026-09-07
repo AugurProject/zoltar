@@ -253,7 +253,12 @@ export async function resolveOperatorVault(
 	const refreshed = refresh.refreshedVaults.find(vault => sameAddress(vault.address, wallet))
 	const active = refresh.vaults.find(vault => sameAddress(vault.address, wallet))
 	const cached = monitorIndex.operatorVaultsByPool.get(poolKey)
-	const position = refreshed ?? active ?? (refresh.reset ? emptyVault(wallet) : cached !== undefined && sameAddress(cached.address, wallet) ? cached : await loadPosition(wallet))
+	let position = refreshed ?? active
+	if (position === undefined) {
+		if (refresh.reset) position = emptyVault(wallet)
+		else if (cached !== undefined && sameAddress(cached.address, wallet)) position = cached
+		else position = await loadPosition(wallet)
+	}
 	const current = currentVaultPositionForPoolAccounting(position, accounting.totalAttoRep, accounting.denominator, accounting.settlementCollateralAttoEth, accounting.totalCapacityOwnershipAttoRep)
 	monitorIndex.operatorVaultsByPool.set(poolKey, current)
 	return current

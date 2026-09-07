@@ -570,14 +570,15 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	void test('shows the checkpoint retention estimate and uses it for the mint share preview', async () => {
+	void test('uses the child fee horizon beyond question end for the mint share preview', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={2n}>
 				<TradingSection
 					{...createTradingSectionProps({
 						selectedPool: createSelectedPool({
 							currentRetentionRate: 900_000_000_000_000_000n,
-							feeAccrualState: { feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
+							marketDetails: { ...createMarketDetails(), endTime: 1n },
+							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
 							settlementCollateralAttoEth: 10n * 10n ** 18n,
 							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 							totalCapacityOwnershipAttoRep: 50n * 10n ** 18n,
