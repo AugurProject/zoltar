@@ -109,7 +109,24 @@ describe('Drain & Retire persisted restart behavior', () => {
 		const owner = blockedSnapshot.wallet.address
 		const pool = address(70)
 		const positionKey = uniswapV3PositionKey(owner, -120, 120)
-		state.retirement.positions = [{ createdAt: new Date(0).toISOString(), creationWorkflowId: 'workflow:pending', fee: 3_000, id: `${pool.toLowerCase()}:${positionKey.toLowerCase()}`, owner, pool, positionKey, profileId: state.profileId, registeredBy: 'workflow', status: 'pending-confirmation', tickLower: -120, tickUpper: 120, token0: address(71), token1: address(72) }]
+		state.retirement.positions = [
+			{
+				createdAt: new Date(0).toISOString(),
+				creationWorkflowId: 'workflow:pending',
+				fee: 3_000,
+				id: `${pool.toLowerCase()}:${positionKey.toLowerCase()}`,
+				owner,
+				pool,
+				positionKey,
+				profileId: state.profileId,
+				registeredBy: 'workflow',
+				status: 'pending-confirmation',
+				tickLower: -120,
+				tickUpper: 120,
+				token0: address(71),
+				token1: address(72),
+			},
+		]
 		state = await reload(path, state)
 		await cycle(path, state, blockedSnapshot, executed)
 		expect(state.retirement.status).toBe('blocked')
