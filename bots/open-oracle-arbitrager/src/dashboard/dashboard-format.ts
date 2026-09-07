@@ -229,6 +229,7 @@ export function requiredSignerPrivateKey(value: string) {
 }
 
 export function statePollingFailureMessage(error: unknown) {
+	if (error instanceof SyntaxError) return 'The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.'
 	const message = error instanceof Error ? error.message : String(error)
 	return message.startsWith('The bot tried to ') ? `${message} Use Refresh to retry now.` : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active; use Refresh to retry now.`
 }

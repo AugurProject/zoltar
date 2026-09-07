@@ -6,8 +6,8 @@
 		<meta name="color-scheme" content="dark" />
 		<title>Statoblast liquidator</title>
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
+		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
 		<header class="topbar operator-shell">
@@ -15,13 +15,14 @@
 				<div>
 					<p class="eyebrow">Statoblast operator</p>
 					<h1>Statoblast liquidator</h1>
+					<p id="header-block-status" class="header-block-status">Block — · waiting for first observation</p>
 				</div>
 				<div class="topbar-actions operator-safety" aria-label="Bot safety status">
 					<span id="mode-badge" class="badge">Starting</span>
 					<span id="network-badge" class="badge">Network loading</span>
 					<span id="run-status-badge" class="badge">Loading</span>
 					<span id="capability-badge" class="badge">Capability loading</span>
-					<a id="attention-badge" class="badge attention-badge" href="/overview">No blockers</a>
+					<a id="attention-badge" class="badge attention-badge">No blockers</a>
 					<button id="refresh-button" class="secondary" type="button">Refresh</button>
 					<button id="pause-button" class="secondary" type="button">Pause</button>
 					<span id="pause-status" class="action-status" role="alert"></span>
@@ -50,7 +51,17 @@
 						<p id="last-scan" class="muted">Waiting for first scan</p>
 					</div>
 				</div>
-				<div id="metrics" class="metric-grid"></div>
+				<div id="metrics" class="metric-grid operator-metrics"></div>
+			</section>
+
+			<section class="panel" data-page-content="overview" aria-labelledby="wallet-inventory-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Inventory</p>
+						<h2 id="wallet-inventory-title">Wallet &amp; deployed capital</h2>
+					</div>
+				</div>
+				<div id="wallet-metrics" class="metric-grid operator-metrics"></div>
 			</section>
 
 			<section id="pools" data-page-content="pools" aria-labelledby="pools-title">

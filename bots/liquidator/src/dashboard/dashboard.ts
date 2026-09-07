@@ -1,3 +1,4 @@
+import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 type Activity = {
 	at: string
 	details?: string
@@ -228,23 +229,28 @@ function compactDuration(seconds: number) {
 }
 
 function renderBlockStatus(snapshot = currentSnapshot) {
+	const headerBlockStatus = element('header-block-status', HTMLParagraphElement)
 	if (snapshot?.lastScannedBlock === undefined) {
 		blockStatus.textContent = 'Block — · waiting for first observation'
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const timestamp = snapshot.lastScannedTimestamp
 	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
 		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const timestampMilliseconds = Number(timestamp) * 1_000
 	if (!Number.isSafeInteger(timestampMilliseconds)) {
 		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
+		headerBlockStatus.textContent = blockStatus.textContent
 		return
 	}
 	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
 	const age = compactDuration(differenceSeconds)
 	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
+	headerBlockStatus.textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -313,33 +319,20 @@ function shortAddress(address: string) {
 	return address.length <= 18 ? address : `${address.slice(0, 10)}…${address.slice(-6)}`
 }
 
-function metric(label: string, value: string) {
-	const container = document.createElement('dl')
-	container.className = 'metric'
-	const term = document.createElement('dt')
-	term.textContent = label
-	const description = document.createElement('dd')
-	description.textContent = value
-	container.append(term, description)
-	return container
-}
-
 function updateText(target: Element, value: string) {
 	if (target.textContent !== value) target.textContent = value
 }
 
 function renderMetrics(snapshot: Snapshot) {
 	metrics.replaceChildren(
-		metric('Pools', snapshot.metrics.poolCount.toString()),
-		metric('Selected', snapshot.metrics.selectedPoolCount.toString()),
-		metric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
-		metric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
-		metric('Candidates', snapshot.metrics.candidateCount.toString()),
-		metric('Deployed REP', snapshot.metrics.deployedRep),
-		metric('Open interest assumed', `${snapshot.metrics.assumedOpenInterestEth} ETH`),
-		metric('Wallet ETH', snapshot.metrics.walletEth),
-		metric('Wallet REP', snapshot.metrics.walletRep),
+		createMetric('Pools', snapshot.metrics.poolCount.toString()),
+		createMetric('Selected', snapshot.metrics.selectedPoolCount.toString()),
+		createMetric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
+		createMetric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
+		createMetric('Candidates', snapshot.metrics.candidateCount.toString()),
+		createMetric('Open interest assumed', `${snapshot.metrics.assumedOpenInterestEth} ETH`),
 	)
+	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', snapshot.metrics.walletEth), createMetric('Wallet REP', snapshot.metrics.walletRep), createMetric('REP deployed in pools', snapshot.metrics.deployedRep))
 }
 
 function renderAlerts(snapshot: Snapshot) {
@@ -1017,8 +1010,13 @@ function render(snapshot: Snapshot) {
 	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning configured pools…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	setGlobalError(
-		snapshot.error === undefined ? undefined : snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
-		'Scan failed',
+		snapshot.error === undefined
+			? capabilityBlockerGuidance(snapshot)?.message
+			: snapshot.status === 'connectivity-degraded'
+				? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.'
+				: `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
+		snapshot.error === undefined ? 'Operator blocked' : 'Scan failed',
+		snapshot.error === undefined ? 'warning' : 'error',
 	)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
@@ -1039,21 +1037,36 @@ function render(snapshot: Snapshot) {
 	}
 }
 
-function snapshotAttentionCount(snapshot: Snapshot) {
+function snapshotDetailedAttentionCount(snapshot: Snapshot) {
 	return (configurationConnected && currentConfiguration?.networkConfigured !== true ? 1 : 0) + Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length) + (snapshot.error === undefined ? 0 : 1)
+}
+
+function snapshotAttentionCount(snapshot: Snapshot) {
+	return Math.max(snapshotDetailedAttentionCount(snapshot), snapshot.operatorCapable === false ? 1 : 0)
+}
+
+function capabilityBlockerGuidance(snapshot: Snapshot) {
+	if (snapshot.operatorCapable !== false || snapshotDetailedAttentionCount(snapshot) > 0) return undefined
+	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Use Resume to continue scanning.' }
+	if (snapshot.scanning) return { pending: true, message: 'A scan is in progress. Readiness updates automatically when it completes.' }
+	if (snapshot.execute && snapshot.wallet === undefined) return { pending: false, message: 'Live execution needs an active signer. Open Settings and configure Execution signer.' }
+	if (snapshot.lastScanAt === undefined || snapshot.lastScannedBlock === undefined) return { pending: true, message: 'Waiting for the first successful scan. Readiness updates automatically; inspect the bot logs if scanning does not start.' }
+	return { pending: false, message: 'The operator is not ready. Status updates automatically; inspect the bot logs if it remains blocked.' }
 }
 
 function renderAttention(snapshot: Snapshot) {
 	const networkSetupRequired = configurationConnected && currentConfiguration?.networkConfigured !== true
 	const attentionCount = snapshotAttentionCount(snapshot)
-	attentionBadge.textContent = attentionCount === 0 ? 'No blockers' : `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
-	attentionBadge.className = `badge ${attentionCount === 0 ? 'ok' : 'warning'}`
-	let attentionTarget = '/overview'
+	let attentionTarget = '/overview#global-error'
 	if (networkSetupRequired) attentionTarget = '/settings#network-connectivity'
 	else if (snapshot.pendingTransactions.length > 0 || snapshot.pendingStagedOperations.length > 0) attentionTarget = '/operations#recovery'
 	else if (snapshot.error !== undefined) attentionTarget = '/overview#global-error'
 	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
-	attentionBadge.href = attentionTarget
+	setAttentionBadge(attentionBadge, attentionCount, attentionTarget)
+	if (capabilityBlockerGuidance(snapshot)?.pending === true) {
+		attentionBadge.textContent = 'Checking readiness'
+		attentionBadge.removeAttribute('href')
+	}
 }
 
 function setFormValue(name: string, value: string | number | boolean) {
@@ -1262,15 +1275,17 @@ function scanFailureDetail(error: string) {
 	return 'The latest scan cycle returned an unexpected error.'
 }
 
-function setGlobalError(message?: string, title = 'Dashboard unavailable') {
+function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' = 'error') {
 	if (message === undefined) {
 		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
 		if (globalError.childNodes.length > 0) globalError.replaceChildren()
 		delete globalError.dataset['noticeKey']
 		return
 	}
-	const noticeKey = `${title}\n${message}`
+	const noticeKey = `${tone}\n${title}\n${message}`
 	if (globalError.dataset['noticeKey'] === noticeKey && !globalError.classList.contains('hidden')) return
+	globalError.classList.toggle('error', tone === 'error')
+	globalError.classList.toggle('warning', tone === 'warning')
 	globalError.dataset['noticeKey'] = noticeKey
 	if (globalError.classList.contains('hidden')) globalError.classList.remove('hidden')
 	const heading = document.createElement('strong')
@@ -1315,12 +1330,12 @@ function renderConnectionFailure(error: unknown) {
 	modeBadge.textContent = snapshot === undefined ? 'Mode unavailable' : `${snapshot.execute ? 'Live' : 'Dry run'} · last known`
 	modeBadge.className = 'badge warning'
 	renderNetworkBadge()
+	capabilityBadge.textContent = 'Capability unavailable'
+	capabilityBadge.className = 'badge warning'
 	runStatusBadge.textContent = 'Disconnected'
 	runStatusBadge.className = 'badge warning'
 	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length))
-	attentionBadge.textContent = `${attentionCount.toString()} ${attentionCount === 1 ? 'action' : 'actions'}`
-	attentionBadge.className = 'badge warning'
-	attentionBadge.href = '/overview#global-error'
+	setAttentionBadge(attentionBadge, attentionCount, '/overview#global-error')
 	recoveryGuidance.hidden = true
 	setMutationControlsEnabled(false)
 	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')

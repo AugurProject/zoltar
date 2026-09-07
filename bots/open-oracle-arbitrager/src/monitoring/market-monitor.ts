@@ -1,3 +1,4 @@
+import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -205,17 +206,17 @@ export async function loadTokenMarkets(
 	},
 ) {
 	const snapshots: TokenMarketSnapshot[] = []
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }])
 	for (const token of parameters.tokens) {
+		const poolAddresses = []
+		for (const fee of UNISWAP_V3_FEES) {
+			const address = await client.readContract({ address: parameters.factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] })
+			poolAddresses.push({ fee, address })
+		}
 		try {
 			const metadata = await tokenMetadata(client, token)
 			const pools: MarketPoolSnapshot[] = []
-			for (const fee of UNISWAP_V3_FEES) {
-				const address = await client.readContract({
-					address: parameters.factory,
-					abi: factoryAbi,
-					functionName: 'getPool',
-					args: [parameters.weth, token, fee],
-				})
+			for (const { fee, address } of poolAddresses) {
 				if (address === zeroAddress) continue
 				const [liquidity, slot0] = await Promise.all([client.readContract({ address, abi: poolAbi, functionName: 'liquidity' }), client.readContract({ address, abi: poolAbi, functionName: 'slot0' })])
 				pools.push({

@@ -1,3 +1,4 @@
+import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { createHash } from 'node:crypto'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import {
@@ -513,6 +514,20 @@ export function forkRepMigrationTarget(forkData: { auctionableAttoRepAtFork: big
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
+	const requiredRoots = ['zoltar', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'openOracle', 'weth'] as const
+	await requireDeployedContracts(
+		client,
+		[
+			...requiredRoots.map(name => ({ name, address: deployments[name] })),
+			...(context.allowMissingTradingDeployment
+				? []
+				: [
+						{ name: 'tradingFactory', address: deployments.tradingFactory },
+						{ name: 'tradingRouter', address: deployments.tradingRouter },
+					]),
+		],
+		blockNumber,
+	)
 	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
 		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingFactory, blockNumber }) : Promise.resolve('deployed'),
