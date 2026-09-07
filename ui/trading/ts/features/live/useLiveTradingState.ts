@@ -19,7 +19,7 @@ export function parsedUniverseId(selectedUniverseId: string | undefined) {
 	}
 }
 
-export function useWalletState() {
+export function useWalletSession() {
 	const [account, setAccount] = useState<Address>()
 	const accountRef = useRef(account)
 	accountRef.current = account
@@ -64,7 +64,7 @@ export function useWalletState() {
 	}
 }
 
-export function useBalanceState() {
+export function usePortfolioQueries() {
 	const [balances, setBalances] = useState<LiveBalances>()
 	const [balanceState, setBalanceState] = useState<BalanceState>('disconnected')
 	const [balanceError, setBalanceError] = useState<string>()
@@ -76,7 +76,7 @@ export function useBalanceState() {
 	return { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce }
 }
 
-export function useDiscoveryState() {
+export function useMarketDiscovery() {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	const [selectedPool, setSelectedPool] = useState<Address>()
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -87,7 +87,7 @@ export function useDiscoveryState() {
 	return { markets, setMarkets, selectedPool, setSelectedPool, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex }
 }
 
-export function usePositionWorkflowState(onWorkflowLockChange: (locked: boolean) => void, defaultSlippage: string, defaultValidityMinutes: string) {
+export function useTransactionWorkflow(onWorkflowLockChange: (locked: boolean) => void, defaultSlippage: string, defaultValidityMinutes: string) {
 	const [mode, setMode] = useState<'entry' | 'exit'>('entry')
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
 	const [amount, setAmount] = useState('0.01')

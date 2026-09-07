@@ -8,7 +8,7 @@ import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthe
 import { liveBalancesForMarket, mapWithConcurrency, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import type { LiveTradingControllerServices, PortfolioBalanceEntry, Quote } from './live/liveTradingTypes.js'
-import { parsedUniverseId, useBalanceState, useDiscoveryState, usePositionWorkflowState, useQuestionClock, useWalletState } from './live/useLiveTradingState.js'
+import { parsedUniverseId, useMarketDiscovery, usePortfolioQueries, useQuestionClock, useTransactionWorkflow, useWalletSession } from './live/useLiveTradingState.js'
 import {
 	approvalFailureTransition,
 	broadcastUncertainMessage,
@@ -53,7 +53,7 @@ export function useLiveTradingController({
 	defaultValidityMinutes: string
 	services?: LiveTradingControllerServices
 }) {
-	const { markets, setMarkets, selectedPool, setSelectedPool, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex } = useDiscoveryState()
+	const { markets, setMarkets, selectedPool, setSelectedPool, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex } = useMarketDiscovery()
 	const {
 		account,
 		setAccount,
@@ -80,8 +80,8 @@ export function useLiveTradingController({
 		setWalletSummaryReceiptNonce,
 		walletConnectionFeedback,
 		setWalletConnectionFeedback,
-	} = useWalletState()
-	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce } = useBalanceState()
+	} = useWalletSession()
+	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce } = usePortfolioQueries()
 	const {
 		mode,
 		setMode,
@@ -107,7 +107,7 @@ export function useLiveTradingController({
 		workflowLocked,
 		updatePositionWorkflowLock,
 		updateLiquidityWorkflowLock,
-	} = usePositionWorkflowState(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
+	} = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
 	const marketListRef = useRef<HTMLElement>(null)
 	const marketDetailRef = useRef<HTMLElement>(null)
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
