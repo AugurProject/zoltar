@@ -12,11 +12,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  * entry as soon as its owner decomposes the module below the global limit.
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
-	...allowances('AugurScan decomposition is owned by Lane B.', [
-		['augurScan/src/indexer.ts', 1433],
-		['augurScan/src/database.ts', 1115],
-	]),
-	...allowances('Chaos retirement work will split this existing orchestration debt.', [
+	...allowances('Existing Chaos modules remain temporary responsibility debt; their reviewed ceilings prohibit further growth.', [
 		['bots/chaos/src/monitoring/carry-proof-journal.ts', 3668],
 		['bots/chaos/src/operations/statoblast.ts', 2616],
 		['bots/chaos/src/dashboard/dashboard.ts', 2380],
@@ -61,7 +57,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
 		['ui/zoltarDomain/ts/features/open-oracle/hooks/useOpenOracleOperations.ts', 832],
 		['ui/statoblastDomain/ts/protocol/securityPools.ts', 829],
-		['ui/trading/ts/protocol/live.ts', 793],
 		['ui/statoblast/ts/app/App.tsx', 760],
 		['ui/coreShared/ts/components/SimulationBanner.tsx', 758],
 		['ui/statoblastDomain/ts/features/security-pools/components/SecurityVaultSection.tsx', 757],
@@ -72,7 +67,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastDomain/ts/simulation/statoblastScenarios.ts', 682],
 		['ui/statoblastDomain/ts/features/security-pools/hooks/useSecurityPoolsOverview.ts', 676],
 		['ui/coreShared/ts/types/contracts.ts', 611],
-		['ui/trading/ts/features/LiveTrading.tsx', 609],
 	]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
 		['solidity/contracts/statoblast/SecurityPool.sol', 802],

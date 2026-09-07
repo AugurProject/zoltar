@@ -3,15 +3,15 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ChangedFileEntry } from './changed-files.mts'
+import type { ChangedFileEntry } from '../../scripts/changed-files.mts'
 import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getTestImpactRecommendations } from './test-impact.mts'
 
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)
 
 describe('test impact recommendations', () => {
 	test('maps test infrastructure to its focused runner tests', () => {
-		expect(commandsFor(['scripts/test-timings.mts'])).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
-		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
+		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
+		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
 	})
 
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
@@ -31,7 +31,7 @@ describe('test impact recommendations', () => {
 	})
 
 	test('deduplicates recommendations shared by multiple changed files', () => {
-		expect(commandsFor(['scripts/test-discovery.mts', 'scripts/test-discovery.test.ts', 'scripts/test-impact.mts', 'scripts/test-impact.test.ts', 'scripts/test-timings.mts'])).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts'])
+		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
@@ -52,20 +52,20 @@ describe('test impact recommendations', () => {
 	})
 
 	test('rewrites or removes static infrastructure commands when their tests move or are deleted', () => {
-		expect(getTestImpactRecommendations([{ path: 'scripts/test-impact.test.ts', status: 'deleted' }])).toEqual([])
-		expect(getTestImpactRecommendations([{ path: 'scripts/renamed-impact.test.ts', previousPath: 'scripts/test-impact.test.ts', status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['bun test scripts/renamed-impact.test.ts'])
+		expect(getTestImpactRecommendations([{ path: 'tooling/testing/test-impact.test.ts', status: 'deleted' }])).toEqual([])
+		expect(getTestImpactRecommendations([{ path: 'tooling/testing/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['bun test tooling/testing/renamed-impact.test.ts'])
 		expect(
 			getTestImpactRecommendations([
 				{ path: 'bun-test-setup.ts', status: 'modified' },
-				{ path: 'scripts/test-impact.test.ts', status: 'deleted' },
+				{ path: 'tooling/testing/test-impact.test.ts', status: 'deleted' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts'])
+		).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts'])
 		expect(
 			getTestImpactRecommendations([
 				{ path: 'bun-test-setup.ts', status: 'modified' },
-				{ path: 'bots/liquidator/tests/renamed-impact.test.ts', previousPath: 'scripts/test-impact.test.ts', status: 'renamed' },
+				{ path: 'bots/liquidator/tests/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts', 'cd bots/liquidator && bun test tests/renamed-impact.test.ts'])
+		).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts', 'cd bots/liquidator && bun test tests/renamed-impact.test.ts'])
 	})
 
 	test('does not retain opaque specialized tiers for deleted or renamed integration tests', () => {
@@ -106,12 +106,12 @@ describe('test impact recommendations', () => {
 	test('merges overlapping commands for the same runner so every selected test runs once', () => {
 		expect(
 			deduplicateTestRecommendations([
-				{ command: 'bun test scripts/run-tests.test.ts scripts/test-impact.test.ts', reason: 'import graph' },
-				{ command: 'bun test scripts/test-discovery.test.ts scripts/test-impact.test.ts', reason: 'test infrastructure' },
+				{ command: 'bun test tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts', reason: 'import graph' },
+				{ command: 'bun test tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts', reason: 'test infrastructure' },
 			]),
 		).toEqual([
 			{
-				command: 'bun test scripts/run-tests.test.ts scripts/test-discovery.test.ts scripts/test-impact.test.ts',
+				command: 'bun test tooling/testing/run-tests.test.ts tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts',
 				reason: 'import graph; test infrastructure',
 			},
 		])

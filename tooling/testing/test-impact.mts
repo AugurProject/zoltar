@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { getChangedFileEntries, type ChangedFileEntry } from './changed-files.mts'
+import { getChangedFileEntries, type ChangedFileEntry } from '../../scripts/changed-files.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { isTestSourceFile } from './test-discovery.mts'
@@ -27,29 +27,29 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 	'bun-test-setup-solidity.ts',
 	'bun-test-setup-ui.ts',
 	'bunfig.toml',
-	'scripts/merge-test-timings.mts',
-	'scripts/mutation-support.mts',
-	'scripts/run-mutation-smoke.mts',
-	'scripts/run-balanced-test-shard.mts',
-	'scripts/run-tests.mts',
-	'scripts/run-tests.test.ts',
-	'scripts/test-discovery.mts',
-	'scripts/test-discovery.test.ts',
-	'scripts/test-impact.mts',
-	'scripts/test-impact.test.ts',
-	'scripts/test-timings.mts',
+	'tooling/testing/merge-test-timings.mts',
+	'tooling/testing/mutation-support.mts',
+	'tooling/testing/run-mutation-smoke.mts',
+	'tooling/testing/run-balanced-test-shard.mts',
+	'tooling/testing/run-tests.mts',
+	'tooling/testing/run-tests.test.ts',
+	'tooling/testing/test-discovery.mts',
+	'tooling/testing/test-discovery.test.ts',
+	'tooling/testing/test-impact.mts',
+	'tooling/testing/test-impact.test.ts',
+	'tooling/testing/test-timings.mts',
 ])
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
-		command: 'bun test scripts/mutation-support.test.ts scripts/test-discovery.test.ts scripts/run-tests.test.ts scripts/test-impact.test.ts',
+		command: 'bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
 	},
 	{
-		command: 'bun test scripts/coverage-report.test.ts',
+		command: 'bun test tooling/testing/coverage-report.test.ts',
 		reason: 'coverage collection, reporting, or policy changed',
-		matches: filePath => filePath === '.coverage-policy.json' || filePath === 'scripts/coverage-report.mts' || filePath === 'scripts/run-typescript-coverage.mts' || filePath === 'scripts/run-solidity-bytecode-coverage.mts',
+		matches: filePath => filePath === '.coverage-policy.json' || filePath === 'tooling/testing/coverage-report.mts' || filePath === 'tooling/testing/run-typescript-coverage.mts' || filePath === 'tooling/testing/run-solidity-bytecode-coverage.mts',
 	},
 	{
 		command: 'bun test scripts/ui-split-workflows.test.ts',

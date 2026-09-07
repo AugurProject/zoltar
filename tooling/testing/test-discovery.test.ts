@@ -30,7 +30,7 @@ describe('canonical test discovery', () => {
 
 		expect(weightedPaths).toEqual(canonicalFiles)
 		expect(canonicalFiles).toContain('scripts/testnetwork.test.ts')
-		expect(canonicalFiles).toContain('shared/ts/ethereum.test.ts')
+		expect(canonicalFiles).toContain('shared/ts/evm/ethereum.test.ts')
 		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/browserSmoke.test.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/productionBuild.test.ts')

@@ -9,7 +9,7 @@ const createTemporaryDirectory = async (prefix: string) => await mkdtemp(join(tm
 
 const runTestWrapper = async ({ anvilStateDirectory, homeDirectory, testFile, useExistingProductionBuild = false }: { readonly anvilStateDirectory?: string; readonly homeDirectory: string; readonly testFile: string; readonly useExistingProductionBuild?: boolean }) => {
 	const child = Bun.spawn({
-		cmd: [process.execPath, './scripts/run-tests.mts', '--parallel=1', testFile],
+		cmd: [process.execPath, './tooling/testing/run-tests.mts', '--parallel=1', testFile],
 		env: {
 			...process.env,
 			HOME: homeDirectory,

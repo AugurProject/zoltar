@@ -146,7 +146,7 @@ jobs:
           pattern: ${{ matrix.domain }}-test-timing-*
           path: test-results
           merge-multiple: true
-      - run: bun ./scripts/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
+      - run: bun ./tooling/testing/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
       - uses: actions/cache/save@v5
         with:
           path: .ci/test-timings-${{ matrix.domain }}.json

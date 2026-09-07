@@ -11,7 +11,7 @@ await mkdir(coverageDirectory, { recursive: true })
 
 const testFiles = await discoverTestFiles(repositoryRoot)
 const child = Bun.spawn({
-	cmd: [process.execPath, './scripts/run-tests.mts', '--bail=1', '--coverage', '--coverage-reporter=lcov', '--coverage-reporter=text', '--coverage-dir=coverage/typescript', '--reporter=dots'],
+	cmd: [process.execPath, './tooling/testing/run-tests.mts', '--bail=1', '--coverage', '--coverage-reporter=lcov', '--coverage-reporter=text', '--coverage-dir=coverage/typescript', '--reporter=dots'],
 	env: process.env,
 	stdin: 'inherit',
 	stdout: 'inherit',
