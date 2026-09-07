@@ -19,7 +19,7 @@ import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '
 import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { parseSettings } from '../../src/config/settings.ts'
-import { processRetirementCycle, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, recordV3ScanFailure, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
 import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
@@ -205,6 +205,17 @@ describe('Drain & Retire planning', () => {
 		const unconfirmed = position('pending-confirmation')
 		updateV3PositionStatus({ liquidity: 0n, position: unconfirmed, tokensOwed0: 0n, tokensOwed1: 0n }, 102n)
 		expect(unconfirmed.status).toBe('pending-confirmation')
+	})
+
+	test('retries a pre-confirmation V3 scan after restart but blocks an invalid active identity', () => {
+		const state = initialRuntimeState(true, address(1), 31_337)
+		const pending = position('pending-confirmation')
+		recordV3ScanFailure(state, pending, new Error('creation receipt is not available yet'))
+		expect(pending.status).toBe('pending-confirmation')
+		expect(state.retirement.blockers).toContainEqual(expect.objectContaining({ id: pending.id }))
+		const active = position('active')
+		recordV3ScanFailure(state, active, new Error('pool identity mismatch'))
+		expect(active.status).toBe('blocked')
 	})
 
 	test('does not equate an empty plan with completion when approvals remain', () => {

@@ -57,6 +57,12 @@ export function updateV3PositionStatus(observation: V3PositionObservation, block
 	else if (observation.position.status !== 'pending-confirmation' || (observation.position.registeredBy === 'workflow' && observation.position.creationTransactionHash !== undefined)) observation.position.status = 'closed'
 }
 
+export function recordV3ScanFailure(state: RuntimeState, position: RuntimeState['retirement']['positions'][number], error: unknown) {
+	if (position.status !== 'pending-confirmation') position.status = 'blocked'
+	const details = error instanceof Error ? error.message : String(error)
+	state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
+}
+
 export async function retirementPositionsForScan(parameters: { blockNumber: bigint; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
 	const { blockNumber, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
@@ -69,9 +75,7 @@ export async function retirementPositionsForScan(parameters: { blockNumber: bigi
 			observations.push(...(await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], blockNumber)))
 			state.retirement.blockers = state.retirement.blockers.filter(blocker => blocker.id !== position.id)
 		} catch (error) {
-			position.status = 'blocked'
-			const details = error instanceof Error ? error.message : String(error)
-			state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
+			recordV3ScanFailure(state, position, error)
 		}
 	}
 	for (const observation of observations) updateV3PositionStatus(observation, blockNumber)
