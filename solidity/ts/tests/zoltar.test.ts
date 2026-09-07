@@ -528,10 +528,10 @@ describe('Contract Test Suite', () => {
 			[0n, 1n, 3n],
 			[3n, 1n, 0n],
 		]
-		const snapshot = await mockWindow.anvilSnapshot()
 		const results: Array<{ childBalances: bigint[]; remainingMigrationBalance: bigint }> = []
 
 		for (const outcomeIndexes of outcomeOrderings) {
+			const snapshot = await mockWindow.anvilSnapshot()
 			await splitMigrationRep(client, genesisUniverse, migrationBalance, outcomeIndexes)
 			const childBalances = await Promise.all(
 				outcomeIndexes.map(async outcomeIndex => {

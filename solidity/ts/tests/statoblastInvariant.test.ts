@@ -918,7 +918,12 @@ describe('Statoblast invariant harness', () => {
 				requiredTerminalActions.every(name => completed.has(name)),
 				`seed ${seed.toString()} should reach every terminal entitlement`,
 			)
-			assert.ok(trace.indexOf('finalize independent auction') < trace.indexOf('migrate actor A unresolved first vault') || trace.indexOf('finalize independent auction') < trace.indexOf('migrate actor A second vault'), 'independent auction actions should cross lifecycle action classes')
+			const finalizeIndex = trace.indexOf('finalize independent auction')
+			const firstMigrationIndex = trace.indexOf('migrate actor A unresolved first vault')
+			const secondMigrationIndex = trace.indexOf('migrate actor A second vault')
+			assert.ok(finalizeIndex >= 0, 'independent auction finalization action must exist before comparing execution order')
+			assert.ok(firstMigrationIndex >= 0 || secondMigrationIndex >= 0, 'at least one actor A migration action must exist before comparing execution order')
+			assert.ok((firstMigrationIndex >= 0 && finalizeIndex < firstMigrationIndex) || (secondMigrationIndex >= 0 && finalizeIndex < secondMigrationIndex), 'independent auction actions should cross lifecycle action classes')
 			strictEqualTypeSafe(await getSystemState(client, firstPool.securityPool), SystemState.PoolForked, 'own-fork parent should remain frozen')
 			strictEqualTypeSafe(await getSystemState(client, secondPool.securityPool), SystemState.PoolForked, 'external parent should remain frozen')
 
