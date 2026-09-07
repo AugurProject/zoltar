@@ -57,6 +57,8 @@ jobs:
           else
             bun tooling/ci/classify-ci-change.mts --github-output --full
           fi
+      - name: Validate canonical project and test ownership
+        run: bun run test:preflight
 
   docs-checks:
     name: Documentation checks
@@ -167,6 +169,17 @@ jobs:
     with:
       invocation: ci-gate
 
+  browser-smoke:
+    name: Required production browser smoke
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+      - run: bun run test:browser:smoke
+
   checks:
     name: Repository checks
     needs: changes
@@ -272,7 +285,7 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
+    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, browser-smoke, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
@@ -293,6 +306,7 @@ jobs:
           COMPONENT_INPUTS_RESULT: ${{ needs.component-inputs.result }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
           DOMAIN_TESTS_RESULT: ${{ needs.domain-tests.result }}
+          BROWSER_SMOKE_RESULT: ${{ needs.browser-smoke.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           KNIP_RESULT: ${{ needs.knip.result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
@@ -316,7 +330,7 @@ jobs:
           require_result "${INFRA_SELECTED}" "${INFRA_RESULT}" infrastructure
           require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
           require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
-          for result in PREPARE_RESULT DOMAIN_TESTS_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
+          for result in PREPARE_RESULT DOMAIN_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
           if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
