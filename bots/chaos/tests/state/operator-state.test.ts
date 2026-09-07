@@ -295,9 +295,21 @@ describe('chaos-bot durable state', () => {
 		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(validBlocker)
 
 		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
-		stored['version'] = DURABLE_STATE_VERSION - 1
+		stored['version'] = DURABLE_STATE_VERSION - 2
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		await expect(loadDurableState(path, 1)).rejects.toThrow('version is unsupported')
+	})
+
+	test('migrates version 3 state to an inactive retirement journal', async () => {
+		const path = await statePath()
+		await saveDurableState(path, initialDurableState(1))
+		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		stored['version'] = 3
+		delete stored['retirement']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.version).toBe(4)
+		expect(restored.retirement).toMatchObject({ blockers: [], positions: [], status: 'inactive' })
 	})
 
 	test('preserves an interrupted scheduler marker until startup schedules a fresh wait', () => {
