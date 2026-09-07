@@ -30,6 +30,7 @@ describe('HTTP response policy', () => {
 		const locks = [
 			{ chain_id: '1', backend_pid: 41 },
 			{ chain_id: '2', backend_pid: 42 },
+			{ chain_id: '4', backend_pid: 44 },
 			{ chain_id: '5', backend_pid: 45 },
 		]
 		const result = reconcileIndexerOwnership(networks, ownership, locks, Date.parse('2026-08-13T09:59:00.000Z'))

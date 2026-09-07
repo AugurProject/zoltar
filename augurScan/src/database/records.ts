@@ -201,7 +201,7 @@ export class IndexerLeaseReleaseError extends Error {
 
 	constructor(
 		message: string,
-		readonly sessionTerminated: boolean,
+		readonly releaseConfirmed: boolean,
 		cause: unknown,
 	) {
 		super(message, { cause })

@@ -32,10 +32,11 @@ export const reconcileIndexerOwnership = (
 		const heartbeatAt = recorded?.['heartbeat_at'] === null || recorded?.['heartbeat_at'] === undefined ? undefined : new Date(String(recorded['heartbeat_at']))
 		const heartbeatFresh = heartbeatAt !== undefined && heartbeatAt.getTime() >= staleBefore
 		let state: IndexerOwnershipState
-		if (lockedBackendPid !== undefined) {
+		if (recorded?.['state'] === 'release-failed' && (lockedBackendPid === undefined || recordedBackendPid === lockedBackendPid)) state = 'release-failed'
+		else if (lockedBackendPid !== undefined) {
 			if (recorded === undefined) state = 'unknown'
 			else state = recordedBackendPid === lockedBackendPid && recorded['state'] === 'owned' && heartbeatFresh ? 'owned' : 'stale-owner'
-		} else if (recorded?.['state'] === 'release-failed') state = 'release-failed'
+		}
 		else if (recorded?.['state'] === 'standby' || recorded?.['state'] === 'released') state = 'standby'
 		else state = 'unknown'
 		return {

@@ -297,7 +297,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				await lease?.release()
 				released = true
 			} catch (error) {
-				if (error instanceof IndexerLeaseReleaseError && error.sessionTerminated) released = true
+				if (error instanceof IndexerLeaseReleaseError && error.releaseConfirmed) released = true
 				if (retryDelay === undefined) {
 					consecutiveFailures++
 					retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
