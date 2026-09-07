@@ -80,4 +80,13 @@ describe('Solidity and TypeScript AMM math parity', () => {
 		expect(actual[0]).toBe(1n)
 		expect(actual[1]).toBe(maximum)
 	})
+
+	test('preserves imported branchless selection and exact Math panic behavior', async () => {
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'ternary', args: [true, 11n, 29n] })).resolves.toBe(11n)
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'ternary', args: [false, 11n, 29n] })).resolves.toBe(29n)
+
+		const maximum = (1n << 256n) - 1n
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'mulDiv', args: [maximum, maximum, 0n] })).rejects.toThrow(/division by zero|0x12|4e487b71[0-9a-f]*12/i)
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'mulDiv', args: [maximum, maximum, 1n] })).rejects.toThrow(/underflow or overflow|0x11|4e487b71[0-9a-f]*11/i)
+	})
 })
