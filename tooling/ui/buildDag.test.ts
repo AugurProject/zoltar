@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import { createProjectTaskPlan } from '../repo/run-project-tasks.mts'
+import { projectsInTaskGroup } from '../repo/projects.ts'
 import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
 
 type PackageJson = {
@@ -17,8 +18,9 @@ describe('UI build dependency direction', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildAppsScript = scripts['ui:build:apps']
 		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
-		expect(buildAppsScript).toBe('bun run projects:build')
-		expect(createProjectTaskPlan('build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
+		expect(buildAppsScript).toBe('bun ./tooling/repo/run-project-tasks.mts build --group ui && bun run projects:workers')
+		const uiProjects = projectsInTaskGroup('build', 'ui').map(project => project.id)
+		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 
 	test('app serve/watch scripts build the full DAG before starting', () => {
@@ -53,7 +55,7 @@ describe('UI build dependency direction', () => {
 		const appsIndex = setup.indexOf('bun run ui:build:apps')
 		const testsIndex = setup.indexOf('bun run ui:build:tests')
 		expect(createProjectTaskPlan('setup').map(entry => entry.projectId)).toContain('ui-trading')
-		expect(projectsIndex).toBeGreaterThan(0)
+		expect(projectsIndex).toBeGreaterThanOrEqual(0)
 		expect(appsIndex).toBeGreaterThan(projectsIndex)
 		expect(testsIndex).toBeGreaterThan(appsIndex)
 		expect(scripts['ui:setup']).toBe('bun run setup')
@@ -109,10 +111,7 @@ describe('UI build dependency direction', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildTestsScript = scripts['ui:build:tests']
 		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
-		expect(buildTestsScript.match(/bun run build:tests/g)).toHaveLength(4)
-		expect(buildTestsScript).toContain('cd ui/coreShared')
-		expect(buildTestsScript).toContain('cd ../zoltar')
-		expect(buildTestsScript).toContain('cd ../statoblast')
-		expect(buildTestsScript).toContain('cd ../trading')
+		expect(buildTestsScript).toBe('bun run projects:test-build')
+		expect(createProjectTaskPlan('test-build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 })

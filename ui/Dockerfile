@@ -11,9 +11,10 @@ RUN apk add --no-cache git
 WORKDIR /source
 RUN git init
 
-# Copy preinstall hook scripts before running bun install
-COPY ./scripts/ /source/scripts/
-COPY ./ui/coreShared/scripts/ /source/ui/coreShared/scripts/
+# Copy install orchestration before running package hooks or independent installs.
+COPY ./tooling/repo/link-shared-node-modules.mts /source/tooling/repo/link-shared-node-modules.mts
+COPY ./tooling/repo/install-frozen.mts /source/tooling/repo/install-frozen.mts
+COPY ./tooling/ui/share-ui-preact-runtime.mts /source/tooling/ui/share-ui-preact-runtime.mts
 
 # Shared package metadata and source for local package resolution
 COPY ./shared/package.json /source/shared/package.json
@@ -197,7 +198,7 @@ RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_ha
 # Print the hash for visibility
 RUN cat ipfs_hash.txt
 
-COPY --chmod=755 ./ui/coreShared/scripts/docker-entrypoint.sh /entrypoint.sh
+COPY --chmod=755 ./tooling/ui/docker-publisher-entrypoint.sh /entrypoint.sh
 
 WORKDIR /temp
 

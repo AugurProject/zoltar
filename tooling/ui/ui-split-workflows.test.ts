@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { projectQuery } from '../repo/query-projects.mts'
+import { taskProjects } from '../repo/projects.ts'
+import { dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
@@ -58,13 +61,9 @@ describe('split UI workflow paths', () => {
 		const prepareSteps = workflowSteps(jobs['prepare'])
 		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
 		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
-		const uploadedPaths = ['ui/coreShared/js', 'ui/zoltarDomain/js', 'ui/statoblastDomain/js', 'ui/tradingDomain/js', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/trading/js', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
-		expect(
-			String(uploadOptions['path'])
-				.split('\n')
-				.map(path => path.trim())
-				.filter(Boolean),
-		).toEqual(uploadedPaths)
+		expect(uploadOptions['path']).toBe('${{ steps.projects.outputs.ui_artifact_outputs }}')
+		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarDomain/js', 'ui/statoblastDomain/js', 'ui/tradingDomain/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
+		expect(prepareSteps.findIndex(step => step['id'] === 'projects')).toBeLessThan(prepareSteps.indexOf(upload ?? {}))
 		expect(uploadOptions['name']).toBe('domain-production-ui')
 		expect(uploadOptions['if-no-files-found']).toBe('error')
 
@@ -74,11 +73,8 @@ describe('split UI workflow paths', () => {
 		expect(downloadOptions).toMatchObject({ name: uploadOptions['name'], path: 'ui' })
 
 		const refreshStep = applicationSteps.slice(downloadIndex + 1).find(step => step['name'] === 'Refresh split UI package installs')
-		const installCommands = String(refreshStep?.['run'])
-			.split('\n')
-			.map(command => command.trim())
-			.filter(Boolean)
-		expect(new Set(installCommands)).toEqual(new Set(uiPackageIds.map(packageId => `bun ./tooling/repo/install-frozen.mts ui/${packageId}`)))
+		expect(refreshStep?.['run']).toBe('bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/')
+		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 	})
 
 	test('CI isolates the production browser workflow', async () => {
@@ -138,11 +134,11 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('contract caches and transferred inputs include the generated Trading artifact', async () => {
-		const setupAction = await readFile(setupActionPath, 'utf8')
-		expect(setupAction).toContain('ui/trading/ts/generated/contractArtifact.ts')
-
+		const query = await projectQuery()
+		expect(query.componentArtifactOutputs).toContain('ui/trading/ts/generated/contractArtifact.ts')
+		expect(query.generatedCachePaths).toContain('ui/trading/ts/generated/contractArtifact.ts')
 		const workflow = await readFile(activeCiWorkflowPath, 'utf8')
-		expect(workflow.match(/ui\/trading\/ts\/generated\/contractArtifact\.ts/g)).toHaveLength(2)
+		expect(workflow.match(/steps\.projects\.outputs\.component_artifact_outputs/gu)).toHaveLength(2)
 	})
 
 	test('Trading-owned compile and test commands explicitly generate Trading artifacts', async () => {
@@ -176,51 +172,42 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
-		const ciWorkflow = await readFile(activeCiWorkflowPath, 'utf8')
-		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
-		const refreshIndex = ciWorkflow.indexOf('bun ./tooling/repo/install-frozen.mts ui/statoblast', buildIndex)
-		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current', buildIndex)
-		expect(buildIndex).toBeGreaterThan(0)
+		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const prepareSteps = workflowSteps(workflowJobs(workflow)['prepare'])
+		const command = String(prepareSteps.find(step => step['name'] === 'TypeScript checks and production UI build')?.['run'])
+		const lines = command.split('\n').map(line => line.trim())
+		const buildIndex = lines.indexOf('bun run ui:build:apps')
+		const refreshIndex = lines.indexOf('bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast')
+		const preflightIndex = lines.indexOf('bun run ci:preflight:current')
+		expect(buildIndex).toBeGreaterThanOrEqual(0)
 		expect(refreshIndex).toBeGreaterThan(buildIndex)
 		expect(preflightIndex).toBeGreaterThan(refreshIndex)
 	})
 
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
-		const setupAction = await readFile(setupActionPath, 'utf8')
-		for (const appId of uiPackageIds) {
-			expect(setupAction).toContain(`(cd ui/${appId} && bun install --frozen-lockfile)`)
-		}
-		expect(setupAction).toContain("hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock')")
+		const setupWorkflow = await readWorkflow(setupActionPath)
+		const setupSteps = workflowSteps(requireRecord(setupWorkflow['runs'], 'setup action'))
+		expect(setupSteps.some(step => step['run'] === 'bun run projects:setup')).toBe(true)
+		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 
-		const dockerfile = await readFile(dockerfilePath, 'utf8')
-		expect(dockerfile).toContain('ARG BUN_VERSION=1.3.14')
+		const dockerStages = parseDockerfile(await readFile(dockerfilePath, 'utf8'))
+		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
+		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
 		for (const appId of uiPackageIds) {
-			expect(dockerfile).toContain(`COPY ./ui/${appId}/bun.lock /source/ui/${appId}/bun.lock`)
+			expect(copies.some(copy => copy.includes(`./ui/${appId}/bun.lock`))).toBe(true)
 		}
-		for (const appId of uiPackageIds) expect(dockerfile).toContain(`bun ./tooling/repo/install-frozen.mts ui/${appId}`)
+		for (const appId of uiPackageIds) expect(runs.some(run => run.includes(`bun ./tooling/repo/install-frozen.mts ui/${appId}`))).toBe(true)
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
-		const workflow = await readFile(activeCiWorkflowPath, 'utf8')
-		const deadCodeJobStart = workflow.indexOf('  knip:\n')
-		const auditJobStart = workflow.indexOf('  audit:\n', deadCodeJobStart)
-		expect(deadCodeJobStart).toBeGreaterThan(0)
-		expect(auditJobStart).toBeGreaterThan(deadCodeJobStart)
-		const deadCodeJob = workflow.slice(deadCodeJobStart, auditJobStart)
-		const setupIndex = deadCodeJob.indexOf('uses: ./.github/actions/setup-ci')
-		const knipIndex = deadCodeJob.indexOf('bun run knip')
-		expect(setupIndex).toBeGreaterThan(0)
-		expect(knipIndex).toBeGreaterThan(0)
-		expect(setupIndex).toBeLessThan(knipIndex)
-
-		const setupAction = await readFile(setupActionPath, 'utf8')
-		const botInstallStep = setupAction.indexOf('name: Install bot workspace dependencies for dead code analysis')
-		expect(botInstallStep).toBeGreaterThan(0)
-		expect(setupAction.slice(botInstallStep)).toContain("if: github.job == 'knip'")
-		for (const packageId of ['shared', 'chaos', 'open-oracle-arbitrager', 'liquidator']) {
-			const installIndex = setupAction.indexOf(`bun ./tooling/repo/install-frozen.mts bots/${packageId}`, botInstallStep)
-			expect(installIndex).toBeGreaterThan(0)
-		}
+		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const steps = workflowSteps(workflowJobs(workflow)['knip'])
+		expect(steps.findIndex(step => step['uses'] === './.github/actions/setup-ci')).toBeLessThan(steps.findIndex(step => step['run'] === 'bun run knip'))
+		expect(
+			taskProjects('setup')
+				.filter(project => project.path === 'shared' || project.path.startsWith('bots/'))
+				.map(project => project.path),
+		).toEqual(['shared', 'bots/shared', 'bots/chaos', 'bots/open-oracle-arbitrager', 'bots/liquidator'])
 	})
 
 	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {
