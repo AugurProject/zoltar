@@ -932,7 +932,7 @@ const updateSettlementCollateralRow = contractInteractionReferenceText.split('\n
 if (updateSettlementCollateralRow === undefined) {
 	throw new Error('contract interaction reference should document updateSettlementCollateral()')
 }
-assert.match(updateSettlementCollateralRow, /question end while this pool's universe remains unforked[\s\S]*fork timestamp replaces question end as this pool epoch's cutoff/i, 'contract interaction reference should document the conditional per-pool fee cutoff')
+assert.match(updateSettlementCollateralRow, /For an initial pool,[\s\S]*question end while its universe remains unforked[\s\S]*fork timestamp replaces question end as the cutoff/i, 'contract interaction reference should document the conditional initial-pool fee cutoff')
 assert.doesNotMatch(updateSettlementCollateralRow, /earlier question-end or universe-fork clamp/i, 'contract interaction reference should not describe the conditional fee cutoff as a minimum')
 
 const redeemRepFromVaultRow = contractInteractionReferenceText.split('\n').find(line => line.startsWith('`redeemRepFromVault(vault)`\t'))

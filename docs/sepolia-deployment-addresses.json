@@ -10,7 +10,6 @@
 	"protocolConfig": {
 		"forkBurnDivisor": "5",
 		"forkThresholdDivisor": "20",
-		"initialEscalationGameDepositAttoRep": "1000000000000000000",
 		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
 		"minimumVaultRepDepositAttoRep": "0"
 	},
@@ -23,7 +22,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x264393B450a84EECf7e08d9e82B102f92fE170b0"
+			"address": "0x51485Fa0618eaeC9608f7712a0fBd69002eA6D13"
 		},
 		{
 			"id": "weth",
@@ -58,17 +57,17 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
+			"address": "0x50b3Fc6D3351016BBC71cECAF2C0b661a84924B2"
 		},
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0xFC19c724B59b0afA1d4bA97Aa0879237e1cDB3b1"
+			"address": "0x8186ddBc1464Bf279f208A66170ba96D6726f00d"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0xFfad4B9e983C09DF4C738A4Afd48B9A32bc4821E"
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
 		},
 		{
 			"id": "openOracle",
@@ -83,12 +82,12 @@
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x88e96EB2118Df7F11C7FdeC6aCFc52e4c1D94626"
+			"address": "0x6b091445042a0d42c8b4023190Fc590519aea7D1"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x7EDBcD1Ba8d17af630D40857d4EA52BcE28A00E4"
+			"address": "0xaF685816b64F0C9Ed3D428eF48C6CF97bFDce52A"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -103,14 +102,14 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x57Ff57dB8B2B5ebC87703A5c40e3EEd503a37254"
+			"address": "0x6828b76fBEeC4c380e732F70c6bee5191f268F1d"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x7EDBcD1Ba8d17af630D40857d4EA52BcE28A00E4"
+			"address": "0xaF685816b64F0C9Ed3D428eF48C6CF97bFDce52A"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -125,12 +124,12 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x57Ff57dB8B2B5ebC87703A5c40e3EEd503a37254"
+			"address": "0x6828b76fBEeC4c380e732F70c6bee5191f268F1d"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0xFfad4B9e983C09DF4C738A4Afd48B9A32bc4821E"
+			"address": "0x476B2031aaBa0136B793da959eef734EbeA02738"
 		},
 		{
 			"id": "escalationGameProofVerifier",

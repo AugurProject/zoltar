@@ -113,7 +113,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, uint256, address _truthAuction) {
+	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, address _truthAuction) {
 		universeId = _universeId;
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
@@ -483,8 +483,8 @@ contract SecurityPool is SecurityPoolStorage {
 		onlyValidOracle
 		returns (uint256 debtMovedAttoEth, uint256 capacityOwnershipMovedAttoRep, uint256 badDebtAttoEth)
 	{
-		// Pool execution uses the live backing rate so the queue-time pool totals in
-		// request.snapshot remain reconstruction evidence rather than execution inputs.
+		// Pool execution uses the live backing rate; historical pool totals are emitted
+		// by the coordinator at queue time and are not persisted as execution inputs.
 		if (isEscalationResolved()) revert();
 		updateVaultFees(request.targetVault);
 		updateVaultFees(request.receiverVault);
@@ -690,15 +690,15 @@ contract SecurityPool is SecurityPoolStorage {
 		emit SystemStateSet(systemState);
 	}
 
-	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
+	function configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
 	}
 
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, lastDepositTargetHealthFactorBps, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
+		_configureVault(vault, repBackingUnits, capacityOwnershipAttoRep, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
 	}
 
-	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 lastDepositTargetHealthFactorBps, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
+	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
 		require(vault != address(0x0), 'Zero vault');
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (
@@ -709,7 +709,6 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 		securityVaults[vault].capacityOwnershipAttoRep = capacityOwnershipAttoRep;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
-		lastDepositTargetHealthFactorBpsByVault[vault] = lastDepositTargetHealthFactorBps;
 		_setVaultBadDebtAttoEth(vault, newVaultBadDebtAttoEth);
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
 		_registerVault(vault);
@@ -733,6 +732,10 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function _releaseUnassignableFeeReserveIfComplete() private returns (bool released) {
+		// Each independently rounded vault or unassigned-auction entitlement ledger, and each global
+		// fee-index denominator epoch whose remainder is cleared, can leave less than one attoETH of
+		// aggregate division residue. Their count has no safe protocol-wide bound, so release the
+		// terminal reserve only after every capacity unit behind the final fee index is reconciled.
 		if (
 			uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0 ||
 			systemState != SystemState.PoolForked ||

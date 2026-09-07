@@ -16,7 +16,7 @@ import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVaultMigrationDelegate.sol';
 import { EscalationGameForker } from './EscalationGameForker.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
-import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+import { SecurityPoolForkEventEmitter } from './SecurityPoolEventEmitter.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import {
 	EscalationForkSnapshot,
@@ -158,7 +158,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {
 		vaultMigrationDelegate = address(new SecurityPoolForkerVaultMigrationDelegate(_zoltar));
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
-		forkEventEmitter = address(new SecurityPoolEventEmitter());
+		forkEventEmitter = address(new SecurityPoolForkEventEmitter());
 	}
 
 	function _emitForkSnapshotEvents(ISecurityPool parent, address migrationProxy, address sourceGame, uint256 totalPoolHeldRepAtForkAttoRep, uint256 disputeStakedRepAtForkAttoRep, uint256 resultingLockedAttoRep) private {

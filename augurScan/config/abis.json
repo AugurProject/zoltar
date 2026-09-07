@@ -1,5 +1,5 @@
 {
-  "sourceHash": "b835d1495c8b683b6fe0db01ca494ce375d6ecfdaf0a9c377cff57264b55a749",
+  "sourceHash": "54378bcaef11168da10d61dc84661bb7a47712a962a937b6f9b6b93b51265ef7",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -16049,26 +16049,6 @@
                   "type": "uint256"
                 },
                 {
-                  "internalType": "uint256",
-                  "name": "snapshotTargetOpenInterestAttoEth",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTargetDisputeStakedAttoRep",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTotalPoolHeldAttoRep",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTotalRepBackingUnits",
-                  "type": "uint256"
-                },
-                {
                   "internalType": "bytes32",
                   "name": "liquidationApprovalId",
                   "type": "bytes32"
@@ -16136,26 +16116,6 @@
                 {
                   "internalType": "uint256",
                   "name": "snapshotTargetCapacityOwnershipAttoRep",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTargetOpenInterestAttoEth",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTargetDisputeStakedAttoRep",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTotalPoolHeldAttoRep",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "snapshotTotalRepBackingUnits",
                   "type": "uint256"
                 },
                 {
@@ -16754,26 +16714,6 @@
               "type": "uint256"
             },
             {
-              "internalType": "uint256",
-              "name": "snapshotTargetOpenInterestAttoEth",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "snapshotTargetDisputeStakedAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "snapshotTotalPoolHeldAttoRep",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "snapshotTotalRepBackingUnits",
-              "type": "uint256"
-            },
-            {
               "internalType": "bytes32",
               "name": "liquidationApprovalId",
               "type": "bytes32"
@@ -16943,11 +16883,6 @@
             {
               "internalType": "uint256",
               "name": "_statoblastSecurityMultiplierBps",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "",
               "type": "uint256"
             },
             {
@@ -17728,11 +17663,6 @@
             },
             {
               "internalType": "uint256",
-              "name": "lastDepositTargetHealthFactorBps",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
               "name": "newVaultBadDebtAttoEth",
               "type": "uint256"
             },
@@ -17767,11 +17697,6 @@
             {
               "internalType": "uint256",
               "name": "vaultFeeIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -18196,25 +18121,6 @@
           "type": "function"
         },
         {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "lastDepositTargetHealthFactorBpsByVault",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
           "inputs": [],
           "name": "lastUpdatedFeeAccumulator",
           "outputs": [
@@ -18318,16 +18224,6 @@
                     {
                       "internalType": "uint256",
                       "name": "targetCapacityOwnershipAttoRep",
-                      "type": "uint256"
-                    },
-                    {
-                      "internalType": "uint256",
-                      "name": "totalPoolHeldAttoRep",
-                      "type": "uint256"
-                    },
-                    {
-                      "internalType": "uint256",
-                      "name": "totalRepBackingUnits",
                       "type": "uint256"
                     }
                   ],
@@ -18982,6 +18878,411 @@
           "anonymous": false,
           "inputs": [
             {
+              "indexed": false,
+              "internalType": "enum AccountingReason",
+              "name": "reason",
+              "type": "uint8"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "settlementCollateralAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "feeEligibleCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalClaimableVaultFeesAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "unallocatedAccruedFeesAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "feeIndex",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "feeIndexRemainder",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "totalFeesOwedRemainder",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "lastUpdatedFeeAccumulator",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "currentRetentionRate",
+              "type": "uint256"
+            }
+          ],
+          "name": "PoolAccountingCheckpoint",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "claimableFeesAttoEth",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "feeIndex",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "vaultFeeRemainder",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingTotalRepBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "resultingFeeEligibleCapacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultAccountingCheckpoint",
+          "type": "event"
+        },
+        {
+          "inputs": [],
+          "name": "awaitingForkContinuation",
+          "outputs": [
+            {
+              "internalType": "bool",
+              "name": "",
+              "type": "bool"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "currentRetentionRate",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "enum AccountingReason",
+              "name": "reason",
+              "type": "uint8"
+            },
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "emitPoolAccountingCheckpoint",
+          "outputs": [],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "emitVaultAccountingCheckpoint",
+          "outputs": [],
+          "stateMutability": "payable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "escalationGame",
+          "outputs": [
+            {
+              "internalType": "contract EscalationGame",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "feeIndex",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "lastUpdatedFeeAccumulator",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumSecurityBondDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "minimumVaultRepDepositAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "securityVaults",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "repBackingUnits",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "claimableFeesAttoEth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "feeIndex",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "settlementCollateralAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "shareTokenSupplyAttoShares",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "statoblastSecurityMultiplierBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "systemState",
+          "outputs": [
+            {
+              "internalType": "enum SystemState",
+              "name": "",
+              "type": "uint8"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalCapacityOwnershipAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalClaimableVaultFeesAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "totalRepBackingUnits",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ]
+    },
+    "SecurityPoolForkEventEmitter": {
+      "source": "contracts/statoblast/SecurityPoolEventEmitter.sol",
+      "abi": [
+        {
+          "anonymous": false,
+          "inputs": [
+            {
               "indexed": true,
               "internalType": "contract ISecurityPool",
               "name": "parentPool",
@@ -19148,91 +19449,6 @@
           "anonymous": false,
           "inputs": [
             {
-              "indexed": false,
-              "internalType": "enum AccountingReason",
-              "name": "reason",
-              "type": "uint8"
-            },
-            {
-              "indexed": true,
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "settlementCollateralAttoEth",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "totalCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "feeEligibleCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "totalClaimableVaultFeesAttoEth",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "unallocatedAccruedFeesAttoEth",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "feeIndex",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "feeIndexRemainder",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "totalFeesOwedRemainder",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "uncheckpointedFeeEligibleCapacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "lastUpdatedFeeAccumulator",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "currentRetentionRate",
-              "type": "uint256"
-            }
-          ],
-          "name": "PoolAccountingCheckpoint",
-          "type": "event"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
               "indexed": true,
               "internalType": "contract ISecurityPool",
               "name": "parentPool",
@@ -19349,61 +19565,6 @@
             }
           ],
           "name": "SecurityPoolForkSnapshot",
-          "type": "event"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": true,
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "repBackingUnits",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "capacityOwnershipAttoRep",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "claimableFeesAttoEth",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "feeIndex",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "vaultFeeRemainder",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "resultingTotalRepBackingUnits",
-              "type": "uint256"
-            },
-            {
-              "indexed": false,
-              "internalType": "uint256",
-              "name": "resultingFeeEligibleCapacityOwnershipAttoRep",
-              "type": "uint256"
-            }
-          ],
-          "name": "VaultAccountingCheckpoint",
           "type": "event"
         },
         {
@@ -19586,37 +19747,6 @@
             }
           ],
           "name": "emitForkSnapshotEvents",
-          "outputs": [],
-          "stateMutability": "payable",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "enum AccountingReason",
-              "name": "reason",
-              "type": "uint8"
-            },
-            {
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            }
-          ],
-          "name": "emitPoolAccountingCheckpoint",
-          "outputs": [],
-          "stateMutability": "payable",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            }
-          ],
-          "name": "emitVaultAccountingCheckpoint",
           "outputs": [],
           "stateMutability": "payable",
           "type": "function"
@@ -23634,25 +23764,6 @@
           "type": "function"
         },
         {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "lastDepositTargetHealthFactorBpsByVault",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
           "inputs": [],
           "name": "lastUpdatedFeeAccumulator",
           "outputs": [
@@ -24124,25 +24235,6 @@
           "type": "function"
         },
         {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "lastDepositTargetHealthFactorBpsByVault",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
           "inputs": [],
           "name": "lastUpdatedFeeAccumulator",
           "outputs": [
@@ -24379,25 +24471,6 @@
         {
           "inputs": [],
           "name": "feeIndex",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "",
-              "type": "address"
-            }
-          ],
-          "name": "lastDepositTargetHealthFactorBpsByVault",
           "outputs": [
             {
               "internalType": "uint256",
@@ -25336,7 +25409,7 @@
               "type": "uint256"
             }
           ],
-          "name": "EthRefundDeferred",
+          "name": "EthRefundCredited",
           "type": "event"
         },
         {
@@ -27042,11 +27115,6 @@
               "type": "uint256"
             },
             {
-              "internalType": "uint256",
-              "name": "initialEscalationGameDepositAttoRep",
-              "type": "uint256"
-            },
-            {
               "internalType": "address",
               "name": "truthAuction",
               "type": "address"
@@ -27144,11 +27212,6 @@
             {
               "internalType": "uint256",
               "name": "statoblastSecurityMultiplierBps",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "initialEscalationGameDepositAttoRep",
               "type": "uint256"
             },
             {
@@ -27253,11 +27316,6 @@
               "internalType": "contract PriceOracleManagerAndOperatorQueuerFactory",
               "name": "_priceOracleManagerAndOperatorQueuerFactory",
               "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "_initialEscalationGameDepositAttoRep",
-              "type": "uint256"
             },
             {
               "internalType": "uint256",
@@ -27585,19 +27643,6 @@
               "internalType": "bytes32",
               "name": "",
               "type": "bytes32"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
-          "inputs": [],
-          "name": "initialEscalationGameDepositAttoRep",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
             }
           ],
           "stateMutability": "view",
@@ -31844,11 +31889,6 @@
             },
             {
               "internalType": "uint256",
-              "name": "lastDepositTargetHealthFactorBps",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
               "name": "newVaultBadDebtAttoEth",
               "type": "uint256"
             },
@@ -31883,11 +31923,6 @@
             {
               "internalType": "uint256",
               "name": "vaultFeeIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "lastDepositTargetHealthFactorBps",
               "type": "uint256"
             },
             {
@@ -32281,25 +32316,6 @@
           "type": "function"
         },
         {
-          "inputs": [
-            {
-              "internalType": "address",
-              "name": "vault",
-              "type": "address"
-            }
-          ],
-          "name": "lastDepositTargetHealthFactorBpsByVault",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        },
-        {
           "inputs": [],
           "name": "lastUpdatedFeeAccumulator",
           "outputs": [
@@ -32403,16 +32419,6 @@
                     {
                       "internalType": "uint256",
                       "name": "targetCapacityOwnershipAttoRep",
-                      "type": "uint256"
-                    },
-                    {
-                      "internalType": "uint256",
-                      "name": "totalPoolHeldAttoRep",
-                      "type": "uint256"
-                    },
-                    {
-                      "internalType": "uint256",
-                      "name": "totalRepBackingUnits",
                       "type": "uint256"
                     }
                   ],
@@ -35347,7 +35353,7 @@
               "type": "uint256"
             }
           ],
-          "name": "EthRefundDeferred",
+          "name": "EthRefundCredited",
           "type": "event"
         },
         {
@@ -36291,7 +36297,7 @@
               "type": "uint256"
             }
           ],
-          "name": "EthRefundDeferred",
+          "name": "EthRefundCredited",
           "type": "event"
         },
         {

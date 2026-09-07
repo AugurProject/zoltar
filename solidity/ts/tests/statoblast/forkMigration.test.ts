@@ -814,8 +814,6 @@ describe('Statoblast: fork migration', () => {
 			)
 			const targetVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBeforeLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const targetDepositPreferenceBeforeLiquidation = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] })
-			const receiverDepositPreferenceBeforeLiquidation = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [liquidatorClient.account.address] })
 			const targetClaimBeforeLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimBeforeLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
 
@@ -838,16 +836,6 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(originalVault.repBackingUnits + liquidatorVault.repBackingUnits, targetVaultBeforeLiquidation.repBackingUnits + liquidatorVaultBeforeLiquidation.repBackingUnits, 'liquidation should conserve target and receiver backing units')
 			strictEqualTypeSafe(originalClaim + liquidatorClaim, targetClaimBeforeLiquidation + liquidatorClaimBeforeLiquidation, 'liquidation should conserve target and receiver REP claims')
 			assert.ok(liquidatorVault.claimableFeesAttoEth >= liquidatorVaultBeforeLiquidation.claimableFeesAttoEth, 'the receiver should retain fees accrued from its own pre-liquidation ownership')
-			strictEqualTypeSafe(
-				await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				targetDepositPreferenceBeforeLiquidation,
-				'liquidation should not rewrite the target vault deposit preference',
-			)
-			strictEqualTypeSafe(
-				await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [liquidatorClient.account.address] }),
-				receiverDepositPreferenceBeforeLiquidation,
-				'liquidation should not rewrite the receiver vault deposit preference',
-			)
 		})
 
 		test('receiver existing debt permits accepting a liquidation slice below the debt floor', async () => {
@@ -1116,7 +1104,6 @@ describe('Statoblast: fork migration', () => {
 			const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const parentBackingAttoRep = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [parentVaultBeforeMigration.repBackingUnits] })
 			const parentBackingFactorsBps = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', args: [client.account.address] })
-			const parentDepositPreferenceBps = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] })
 
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -1131,11 +1118,6 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(childVault.feeIndex, await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'feeIndex' }), 'the migrated capacity should start from the child fee index')
 			strictEqualTypeSafe(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [childVault.repBackingUnits] }), parentBackingAttoRep, 'migration should preserve pool-held REP backing')
 			assert.deepStrictEqual(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', args: [client.account.address] }), parentBackingFactorsBps, 'migration should preserve derived REP-per-capacity ratios')
-			strictEqualTypeSafe(
-				await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				parentDepositPreferenceBps,
-				'migration may preserve the latest deposit preference only as metadata',
-			)
 			strictEqualTypeSafe(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', args: [client.account.address] }), 0n, 'parent vault bad debt should be consumed by migration')
 
 			const childVaultBeforeRepeat = await getSecurityVault(client, yesPool.securityPool, client.account.address)
@@ -1150,11 +1132,6 @@ describe('Statoblast: fork migration', () => {
 				'repeating migration to the same child should preserve derived backing factors',
 			)
 			strictEqualTypeSafe(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalBadDebtAttoEth' }), childTotalBadDebtBeforeRepeat, 'repeating migration to the same child should preserve aggregate bad debt')
-			strictEqualTypeSafe(
-				await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'lastDepositTargetHealthFactorBpsByVault', args: [client.account.address] }),
-				parentDepositPreferenceBps,
-				'repeating migration to the same child should preserve the latest deposit preference metadata',
-			)
 		})
 
 		test('liquidation rejects attempts to use the target vault as the receiver', async () => {

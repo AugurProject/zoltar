@@ -32,9 +32,6 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	uint256 constant AUCTION_TIME = 1 weeks;
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant MIN_BID_SIZE_DIVISOR = 100_000;
-	// Push refunds are best effort. Bounding the callback prevents a recipient from
-	// consuming settlement gas; contracts that need more gas can use the pull path.
-	uint256 constant REFUND_PUSH_GAS_LIMIT = 30_000;
 
 	mapping(uint256 => UniformPriceDualCapBatchAuctionStorage.Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
@@ -278,7 +275,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			emit BidSettled(withdrawFor, tick, index, bid.bidAmountAttoEth, bidUsedAttoEth, attoRepFilled, refundAttoEth, status);
 		}
 
-		_payOrDeferRefund(withdrawFor, totalRefundAttoEth);
+		_creditRefund(withdrawFor, totalRefundAttoEth);
 	}
 
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
@@ -324,25 +321,23 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			emit BidSettled(bidder, tick, index, originalBidAmountAttoEth, 0, 0, originalBidAmountAttoEth, BidSettlementStatus.PreFinalizationRefund);
 		}
 
-		_payOrDeferRefund(bidder, totalRefundAttoEth);
+		_creditRefund(bidder, totalRefundAttoEth);
 	}
 
 	function withdrawPendingEthRefund() external {
 		uint256 amountAttoEth = pendingEthRefundsAttoEth[msg.sender];
-		require(amountAttoEth > 0, 'Auction has no deferred ETH refund');
+		require(amountAttoEth > 0, 'Auction has no credited ETH refund');
 		pendingEthRefundsAttoEth[msg.sender] = 0;
 		emit PendingEthRefundWithdrawn(msg.sender, amountAttoEth);
 		(bool sent, ) = payable(msg.sender).call{value: amountAttoEth}('');
-		require(sent, 'Auction failed to withdraw deferred ETH refund');
+		require(sent, 'Auction failed to withdraw credited ETH refund');
 	}
 
-	function _payOrDeferRefund(address bidder, uint256 amountAttoEth) private {
+	function _creditRefund(address bidder, uint256 amountAttoEth) private {
 		if (amountAttoEth == 0) return;
-		(bool sent, ) = payable(bidder).call{value: amountAttoEth, gas: REFUND_PUSH_GAS_LIMIT}('');
-		if (sent) return;
 		uint256 pendingAmountAttoEth = pendingEthRefundsAttoEth[bidder] + amountAttoEth;
 		pendingEthRefundsAttoEth[bidder] = pendingAmountAttoEth;
-		emit EthRefundDeferred(bidder, amountAttoEth, pendingAmountAttoEth);
+		emit EthRefundCredited(bidder, amountAttoEth, pendingAmountAttoEth);
 	}
 
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {

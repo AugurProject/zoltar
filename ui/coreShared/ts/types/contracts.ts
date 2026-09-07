@@ -54,6 +54,7 @@ export type ForkAuctionAction =
 	| 'startTruthAuction'
 	| 'submitBid'
 	| 'refundLosingBids'
+	| 'withdrawAuctionRefund'
 	| 'finalizeTruthAuction'
 	| 'claimAuctionProceeds'
 	| 'settleForkedEscalation'

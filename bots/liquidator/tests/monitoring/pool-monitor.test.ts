@@ -19,6 +19,8 @@ test('binds the complete pool scan to one canonical block', async () => {
 	const forker = getAddress('0x0000000000000000000000000000000000000030')
 	const repToken = getAddress('0x0000000000000000000000000000000000000040')
 	const operator = getAddress('0x0000000000000000000000000000000000000050')
+	const unregisteredTarget = getAddress('0x0000000000000000000000000000000000000060')
+	const zeroApprovalId = `0x${'00'.repeat(32)}`
 	settings.selectedPools = [pool]
 	const contractReads: Array<{ blockNumber?: bigint; functionName: string }> = []
 	const multicalls: Array<{ blockNumber?: bigint }> = []
@@ -107,8 +109,28 @@ test('binds the complete pool scan to one canonical block', async () => {
 					if (parameters.functionName === 'systemState') return Promise.resolve(0n)
 					if (parameters.functionName === 'getTotalPoolHeldAttoRep') return Promise.resolve(1n)
 					if (parameters.functionName === 'forkData') return Promise.resolve([0n, getAddress('0x0000000000000000000000000000000000000000'), 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n])
-					if (parameters.functionName === 'getActiveStagedOperationCount') return Promise.resolve(0n)
+					if (parameters.functionName === 'getActiveStagedOperationCount') return Promise.resolve(1n)
 					if (parameters.functionName === 'getPendingSettlementOperationIds') return Promise.resolve([])
+					if (parameters.functionName === 'getActiveStagedOperations') {
+						return Promise.resolve([
+							[1n],
+							[
+								{
+									liquidationApprovalId: zeroApprovalId,
+									operation: 0,
+									operationAmountAttoRepOrAttoEth: 1n,
+									operator,
+									queuedAt: 1n,
+									receiverVault: operator,
+									reservedLiquidationDebtAttoEth: 0n,
+									snapshotTargetBackingUnits: 0n,
+									snapshotTargetCapacityOwnershipAttoRep: 0n,
+									targetVault: unregisteredTarget,
+									validForSeconds: 60n,
+								},
+							],
+						])
+					}
 					if (parameters.functionName === 'balanceOf') return Promise.resolve(5n)
 					throw new Error(`Unexpected contract read: ${parameters.functionName}`)
 				}
@@ -127,9 +149,10 @@ test('binds the complete pool scan to one canonical block', async () => {
 
 	expect(snapshot.block).toEqual({ hash: blockHash, number: 2n, timestamp: 2n })
 	expect(snapshot.walletRepByToken.get(repToken.toLowerCase())).toBe(5n)
+	expect(snapshot.pools[0]?.stagedOperations[0]).toMatchObject({ snapshotTargetDisputeStakedAttoRep: 0n, snapshotTargetOpenInterestAttoEth: 10n, targetVault: unregisteredTarget })
 	expect(contractReads.length).toBeGreaterThan(20)
 	expect(contractReads.every(read => read.blockNumber === 2n)).toBeTrue()
-	expect(multicalls.length).toBe(2)
+	expect(multicalls.length).toBe(4)
 	expect(multicalls.every(read => read.blockNumber === 2n)).toBeTrue()
 	expect(logReads.find(read => read.event?.name === 'DeploySecurityPool')).toMatchObject({ fromBlock: 0n, toBlock: 2n })
 	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })

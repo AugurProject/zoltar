@@ -36,7 +36,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			nextCapacityOwnershipAttoRep;
 		securityVaults[vault].capacityOwnershipAttoRep = nextCapacityOwnershipAttoRep;
 		if (depositTargetHealthFactorBps != 0) {
-			lastDepositTargetHealthFactorBpsByVault[vault] = depositTargetHealthFactorBps;
 			emit VaultDepositTargetHealthFactorRecorded(vault, depositTargetHealthFactorBps, nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
 		}
 	}

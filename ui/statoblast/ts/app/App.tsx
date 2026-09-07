@@ -255,6 +255,7 @@ export function App() {
 		settleForkedEscalation,
 		startTruthAuction,
 		submitBid,
+		withdrawAuctionRefund,
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
@@ -554,6 +555,7 @@ export function App() {
 				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
 				onMigrateVault: () => void migrateVault(),
 				onRefundLosingBids: (securityPoolAddressOverride, selectedBids, universeIdOverride) => void refundLosingBids(securityPoolAddressOverride, selectedBids, universeIdOverride),
+				onWithdrawAuctionRefund: (securityPoolAddressOverride, universeIdOverride) => void withdrawAuctionRefund(securityPoolAddressOverride, universeIdOverride),
 				onStartTruthAuction: (securityPoolAddressOverride, universeIdOverride) => void startTruthAuction(securityPoolAddressOverride, universeIdOverride),
 				onSubmitBid: (securityPoolAddressOverride, universeIdOverride) => void submitBid(securityPoolAddressOverride, universeIdOverride),
 				onWithdrawForkedEscalation: (outcome, parentDepositIndexes) => void settleForkedEscalation(outcome, parentDepositIndexes),

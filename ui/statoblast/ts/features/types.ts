@@ -309,6 +309,7 @@ type ForkAuctionRouteContentProps = {
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
 	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
+	onWithdrawAuctionRefund?: ((securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void) | undefined
 	onStartTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onSubmitBid: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onWithdrawForkedEscalation: (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) => void

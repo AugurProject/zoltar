@@ -36,8 +36,6 @@ abstract contract SecurityPoolStorage {
 	// Appended for delegatecall compatibility. Never reorder fields above this line.
 	uint256 public minimumSecurityBondDebtAttoEth;
 	uint256 public minimumVaultRepDepositAttoRep;
-	/// @notice Latest target supplied with a positive REP deposit; metadata only, not aggregate vault health.
-	mapping(address => uint256) public lastDepositTargetHealthFactorBpsByVault;
 	/// @dev Set only when this child initializes an inherited fork-continuation game whose terminal residual is burned.
 	bool internal postEndVaultAdmissionAllowed;
 	uint256 internal badDebtGeneration;
