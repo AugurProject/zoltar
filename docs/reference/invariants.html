@@ -1298,8 +1298,7 @@
 							<div class="invariant-property">
 								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears unresolved parent escalation-deposit accounting; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
 								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
-								<a href="../explanation/statoblast.html#forks-migration"><code>sourcePrincipalAtForkAttoRep</code></a>
-								is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
+								<code>sourcePrincipalAtForkAttoRep</code> is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
