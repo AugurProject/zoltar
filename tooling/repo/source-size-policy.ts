@@ -15,7 +15,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('AugurScan decomposition is owned by Lane B.', [
 		['augurScan/src/indexer.ts', 1840],
 		['augurScan/src/database.ts', 1673],
-		['augurScan/src/indexer-runtime.ts', 1147],
 		['augurScan/src/projections.ts', 701],
 	]),
 	...allowances('Chaos retirement work will split this existing orchestration debt.', [
