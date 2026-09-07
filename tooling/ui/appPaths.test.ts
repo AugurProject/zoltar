@@ -53,14 +53,24 @@ for (const appId of UI_APP_IDS) {
 	})
 }
 
-test('Trading shares the Statoblast favicon', () => {
-	expect(fs.readFileSync(getUiAppPaths('trading').faviconSvg, 'utf8')).toBe(fs.readFileSync(getUiAppPaths('statoblast').faviconSvg, 'utf8'))
-})
-
-test('Zoltar, Statoblast, and each bot own distinct favicons', () => {
-	const faviconPaths = [...UI_APP_IDS.filter(appId => appId !== 'trading').map(appId => getUiAppPaths(appId).faviconSvg), ...['chaos', 'liquidator', 'open-oracle-arbitrager'].map(botId => path.join(repositoryRoot, 'bots', botId, 'src', 'dashboard', 'favicon.svg'))]
+test('applications and bots own distinct favicons', () => {
+	const faviconPaths = [...UI_APP_IDS.map(appId => getUiAppPaths(appId).faviconSvg), ...['chaos', 'liquidator', 'open-oracle-arbitrager'].map(botId => path.join(repositoryRoot, 'bots', botId, 'src', 'dashboard', 'favicon.svg'))]
 	const favicons = faviconPaths.map(faviconPath => fs.readFileSync(faviconPath, 'utf8'))
 	expect(new Set(favicons).size).toBe(faviconPaths.length)
+})
+
+test('Statoblast and Trading favicons use related accessible marks with their product accents', () => {
+	for (const [appId, title, accent] of [
+		['statoblast', 'Statoblast', '#a07cff'],
+		['trading', 'Statoblast Trading', '#b7ee51'],
+	] as const) {
+		const favicon = fs.readFileSync(getUiAppPaths(appId).faviconSvg, 'utf8')
+		expect(favicon).toContain("role='img'")
+		expect(favicon).toContain(`aria-labelledby='${appId}-title'`)
+		expect(favicon).toContain(`<title id='${appId}-title'>${title}</title>`)
+		expect(favicon).toContain("data-motif='connected-evidence'")
+		expect(favicon).toContain(`stroke='${accent}'`)
+	}
 })
 
 test('getUiCoreSharedPaths resolves the repository root from tooling/ui', () => {

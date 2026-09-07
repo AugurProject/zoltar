@@ -1,6 +1,9 @@
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
-	<rect width='64' height='64' rx='15' fill='#101b25' />
-	<path d='M32 8l6 15 16-3-10 13 11 12-16-2-7 14-7-14-16 2 11-12-10-13 16 3z' fill='#ff6b35' />
-	<circle cx='32' cy='33' r='9' fill='#fff4dc' />
-	<circle cx='32' cy='33' r='4' fill='#101b25' />
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' role='img' aria-labelledby='statoblast-title' data-motif='connected-evidence'>
+	<title id='statoblast-title'>Statoblast</title>
+	<rect width='64' height='64' rx='15' fill='#08111d' />
+	<path d='M19 32h14m0 0 12-14M33 32h15M33 32l12 14' fill='none' stroke='#a07cff' stroke-linecap='round' stroke-linejoin='round' stroke-width='5' />
+	<circle cx='18' cy='32' r='6' fill='#e7f3ff' />
+	<circle cx='46' cy='18' r='5' fill='#a07cff' />
+	<circle cx='49' cy='32' r='5' fill='#a07cff' />
+	<circle cx='46' cy='46' r='5' fill='#a07cff' />
 </svg>
