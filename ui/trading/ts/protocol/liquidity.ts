@@ -84,8 +84,3 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		? await guardedWrite(async () => await client.writeContract({ abi: directLiquidityRemovalV2Abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
 		: await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account] }))
 }
-
-export async function approveLpRouter(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, amount: bigint) {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
-	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
-}
