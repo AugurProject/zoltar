@@ -16,6 +16,7 @@ export type ChaosDashboardController = {
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
+	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setSettings: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
@@ -590,6 +591,39 @@ function publicAlert(value: unknown) {
 	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
 }
 
+function publicRetirement(value: unknown) {
+	const source = record(value)
+	if (source === undefined) return undefined
+	return compact({
+		blockers: Array.isArray(source['blockers'])
+			? source['blockers'].map(entry => compact({ category: stringField(record(entry) ?? {}, 'category'), details: stringField(record(entry) ?? {}, 'details'), id: stringField(record(entry) ?? {}, 'id'), nextEligibleAt: isoTimestampField(record(entry) ?? {}, 'nextEligibleAt') }))
+			: [],
+		completionEvidence: source['completionEvidence'],
+		finalSweepStartedAt: isoTimestampField(source, 'finalSweepStartedAt'),
+		positions: Array.isArray(source['positions'])
+			? source['positions'].map(entry =>
+					compact({
+						fee: scalar(record(entry) ?? {}, 'fee'),
+						id: stringField(record(entry) ?? {}, 'id'),
+						lastCheckedAtBlock: stringField(record(entry) ?? {}, 'lastCheckedAtBlock'),
+						owner: stringField(record(entry) ?? {}, 'owner'),
+						pool: stringField(record(entry) ?? {}, 'pool'),
+						positionKey: stringField(record(entry) ?? {}, 'positionKey'),
+						status: stringField(record(entry) ?? {}, 'status'),
+						tickLower: scalar(record(entry) ?? {}, 'tickLower'),
+						tickUpper: scalar(record(entry) ?? {}, 'tickUpper'),
+						token0: stringField(record(entry) ?? {}, 'token0'),
+						token1: stringField(record(entry) ?? {}, 'token1'),
+					}),
+				)
+			: [],
+		recipient: stringField(source, 'recipient'),
+		requestedAt: isoTimestampField(source, 'requestedAt'),
+		status: stringField(source, 'status'),
+		updatedAt: isoTimestampField(source, 'updatedAt'),
+	})
+}
+
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
@@ -639,6 +673,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 					return transaction === undefined ? [] : [transaction]
 				})
 			: [],
+		profileId: stringField(source, 'profileId'),
+		retirement: publicRetirement(source['retirement']),
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
 		submissionHealth: publicSubmissionHealth(source['rpcEndpointHealth'], configurationValue, nowMilliseconds, publicSubmissionHealthMaximumAgeSeconds(configurationValue)),
 		safetyPaused: booleanField(source, 'safetyPaused'),
@@ -1027,6 +1063,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {

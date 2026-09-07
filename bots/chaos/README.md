@@ -124,6 +124,30 @@ For a consistent backup or restore:
 
 State may contain a remembered key, signed transactions, and credentialed endpoints. Never move only one sidecar, delete corruption, or stage a backup in shared storage. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the canonical state-unit inventory and recovery boundaries.
 
+### Drain & Retire a deployment
+
+Drain & Retire is a durable, restart-safe retirement workflow for one deployment profile. It is different from pause: pause stops signing, while drain stops new random exposure but continues pending-transaction recovery, partial-workflow cleanup, matured lifecycle obligations, claims, withdrawals, redemptions, allowance revocation, and asset recovery. A safety pause always overrides drain. `SIGINT` and `SIGTERM` retain their normal graceful-boundary behavior.
+
+Request drain from the dashboard or CLI with an exact confirmation containing both the active profile and recipient:
+
+```sh
+bun run run -- --drain 0xRecipient --confirm "DRAIN profile:id TO 0xRecipient"
+```
+
+Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. Inspect progress with `bun run run -- --retirement-status`. Cancel before draining starts with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"`.
+
+The planner executes one durable workflow and performs a fresh canonical scan after every confirmation. It distinguishes actionable work, time-locked work, ownership or discovery blockers, and accepted residuals. An empty plan is never completion. `drained` requires a complete canonical proof with no pending transaction, partial workflow, actionable lifecycle obligation, owned V3 liquidity, collectable V3 amount, claimable asset, or known approval. `drained-with-residuals` requires the same proof and records accepted dust, losing shares, mandatory sentinels, the retained gas reserve, irreversible burns, or deployment-specific assets.
+
+The bot journals every Uniswap V3 position it creates by profile, signer/owner, pool, token pair, fee tier, ticks, position key, creation workflow, and transaction hash. Current liquidity is always read from `positions(positionKey)`; pool-wide `liquidity()` is never treated as wallet ownership. Drain burns the wallet's full current liquidity and collects all principal and fees, including collect-only positions. Confirmed historical seed workflows are backfilled automatically. Ambiguous older positions become structured blockers. Register verified legacy coordinates without editing state through the dashboard or CLI:
+
+```sh
+bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":"0x…","token1":"0x…","fee":3000,"tickLower":-120,"tickUpper":120,"workflowId":"receipt:0x…"}' --confirm "REGISTER V3 profile:id"
+```
+
+Retirement reuses canonical discovery, simulation, receipt evidence, and transaction recovery. It removes custom Trading LP, redeems complete sets and resolved winning shares, claims vault fees and eligible REP, processes escalation, fork, auction, and refund obligations, withdraws OpenOracle token credits, optionally performs only claim-required migration, unwraps WETH, revokes known ERC-20, ERC-1155, and LP approvals, transfers reusable tokens, and sends native ETH last while retaining the configured gas reserve. Unmatched-share exits are disabled by default and require an explicit loss limit.
+
+For safe testnet redeployment, drain the old profile, review any residuals, archive the owner-only state and completion proof, and configure a distinct state file for the new profile. The bot refuses to silently reuse non-pristine state for a different deployment.
+
 ## Run with Docker
 
 The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume. Its fixed `zoltar-chaos-signer-locks` volume fences the same signer across Compose projects on one Docker host; it does not fence another host.

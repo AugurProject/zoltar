@@ -138,6 +138,49 @@ async function captureFailure(operation: () => unknown | Promise<unknown>): Prom
 }
 
 describe('chaos dashboard configuration boundary', () => {
+	test('persists profile- and recipient-bound Drain & Retire controls', async () => {
+		const current = configuredSettings(false, true)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		completeSignerScan(state, current)
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
+		const recipient = '0x0000000000000000000000000000000000000099'
+		await controller.setRetirement({
+			action: 'request',
+			confirmation: `DRAIN profile:test TO ${recipient}`,
+			policies: { exitAfterCompletion: false, exitUnmatchedShares: false, maximumExitLossBps: 0, migrateExistingClaims: false, sweepAssets: true, unwrapWeth: true },
+			profileId: 'profile:test',
+			recipient,
+		})
+		expect(state.retirement).toMatchObject({ recipient, status: 'requested' })
+		await controller.setRetirement({ action: 'cancel', confirmation: 'CANCEL DRAIN' })
+		expect(state.retirement.status).toBe('inactive')
+	})
+
+	test('registers only durable-signer V3 positions with explicit profile confirmation', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		completeSignerScan(state, current)
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined || state.signerAddress === undefined) throw new Error('Retirement controller is unavailable')
+		await controller.setRetirement({
+			action: 'register-v3-position',
+			confirmation: 'REGISTER V3 profile:test',
+			fee: 3000,
+			owner: state.signerAddress,
+			pool: '0x0000000000000000000000000000000000000020',
+			profileId: 'profile:test',
+			tickLower: -120,
+			tickUpper: 120,
+			token0: '0x0000000000000000000000000000000000000021',
+			token1: '0x0000000000000000000000000000000000000022',
+			workflowId: 'legacy:receipt',
+		})
+		expect(state.retirement.positions[0]).toMatchObject({ registeredBy: 'operator', status: 'pending-confirmation' })
+	})
+
 	test('builds a focused server-side RPC connectivity update', () => {
 		const candidate = connectivityCandidate(settings(), {
 			connectivity: {
