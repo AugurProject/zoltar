@@ -110,7 +110,7 @@ export const contractSafetyPolicy = {
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPoolForker.sol', contractName: 'SecurityPoolForker' },
-			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolForkEventEmitter' },
 			reason: 'Fork event emission reads SecurityPoolForker storage through delegatecall.',
 		},
 	] satisfies readonly ExactLayoutPair[],
