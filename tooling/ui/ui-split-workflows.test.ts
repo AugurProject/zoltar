@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { projectQuery } from '../repo/query-projects.mts'
 import { taskProjects } from '../repo/projects.ts'
-import { dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
+import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
@@ -201,8 +201,9 @@ describe('split UI workflow paths', () => {
 		expect(setupSteps.some(step => step['run'] === 'bun run projects:setup')).toBe(true)
 		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 
-		const dockerStages = parseDockerfile(await readFile(dockerfilePath, 'utf8'))
-		expect(dockerStages.flatMap(stage => dockerInstructions(stage, 'ARG')).some(argument => argument.includes('BUN_VERSION=1.4.2'))).toBe(true)
+		const dockerfile = await readFile(dockerfilePath, 'utf8')
+		const dockerStages = parseDockerfile(dockerfile)
+		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.2')
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
 		for (const appId of uiPackageIds) {
