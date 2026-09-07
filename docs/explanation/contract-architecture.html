@@ -11,13 +11,26 @@
 		<main>
 			<header>
 				<p><a href="../documentation.html">Documentation index</a></p>
-				<h1>Contract Interaction Map</h1>
+				<h1>Contract architecture</h1>
 				<p><strong>Mental model:</strong> actors enter through pools, oracle coordination, Zoltar universes, and child repair; custody boundaries explain the call graph.</p>
 				<p>This map connects the primary deployed Zoltar registry and Statoblast market contracts. It emphasizes contract-to-contract calls and asset movement, not every public user entrypoint. Factory-only deployment workers, delegate modules, event emitters, and compatibility contracts are summarized separately so the runtime path stays legible.</p>
-				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">the Statoblast whitepaper</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
+				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">How Statoblast works</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
+			<section id="product-layers">
+				<h2>Product layers</h2>
+				<figure class="diagram" aria-labelledby="product-layer-caption">
+					<div class="protocol-flow" role="img" aria-label="Zoltar supplies questions, universes, and REP to Statoblast core. Optional Statoblast Trading uses Statoblast shares. OpenOracle supplies REP and ETH prices to Statoblast. AugurScan indexes protocol activity, and bots perform permissionless operations.">
+						<p><strong>Zoltar</strong> — questions, universes, REP, forks</p>
+						<p><strong>Statoblast core</strong> — pools, collateral, shares, resolution, migration</p>
+						<p><strong>Optional Statoblast Trading</strong> — swaps and liquidity around shares</p>
+						<p><strong>OpenOracle</strong> — contestable REP/ETH prices</p>
+						<p><strong>AugurScan and bots</strong> — indexing, evidence, and permissionless operations</p>
+					</div>
+					<figcaption id="product-layer-caption"><span class="figure-label">Product-layer map.</span> These products share protocol data but retain separate responsibilities and deployment boundaries.</figcaption>
+				</figure>
+			</section>
 			<section id="conceptual-model">
-				<h2>Conceptual Model Before the Graph</h2>
+				<h2>Conceptual model before the graph</h2>
 				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
 				<ul>
 					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and REP branches.</li>
