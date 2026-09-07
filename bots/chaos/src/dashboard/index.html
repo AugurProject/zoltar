@@ -6,8 +6,8 @@
 		<meta name="color-scheme" content="dark" />
 		<title>Zoltar chaos bot</title>
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
+		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
 		<header class="topbar operator-shell">
@@ -17,6 +17,7 @@
 					<div>
 						<p class="eyebrow">Ecosystem operator</p>
 						<h1>Zoltar chaos bot</h1>
+						<p id="header-block-status" class="header-block-status"><span id="last-block">Block —</span> · <span id="last-scan">Waiting for first scan</span></p>
 					</div>
 				</div>
 				<div class="topbar-actions operator-safety" aria-label="Bot safety status">
@@ -47,10 +48,6 @@
 					<div>
 						<p class="eyebrow">Randomized execution</p>
 						<h2 id="overview-title">Overview</h2>
-					</div>
-					<div class="section-status">
-						<p id="last-block" class="muted">Block —</p>
-						<p id="last-scan" class="muted">Waiting for first scan</p>
 					</div>
 				</div>
 

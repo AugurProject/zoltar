@@ -371,17 +371,18 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
-	test('surfaces a forked Zoltar status in the operations header', async () => {
+	test('surfaces a prominent fork migration notice without a redundant badge', async () => {
 		const documentQueries = await renderOverviewPanels({
 			universeForkTime: 123n,
 			universeHasForked: true,
 		})
 
-		expect(documentQueries.getByText('Forked')).toBeDefined()
-		expect(document.body.textContent?.includes('Universe forked on')).toBe(true)
+		expect(documentQueries.getByText(/This Universe has forked on/)).toBeDefined()
+		expect(document.body.textContent).toContain('Please migrate your REP to continue to use Augur')
+		expect(document.body.textContent).not.toContain('Migration required')
 	})
 
-	test('renders the forked badge in the dedicated route-header badge slot', async () => {
+	test('does not render a redundant forked badge in the route-header badge slot', async () => {
 		await renderOverviewPanels({
 			universeHasForked: true,
 		})
@@ -396,7 +397,7 @@ describe('OverviewPanels', () => {
 		expect(routeTitleRow.querySelector('.route-header-badge')).toBeNull()
 		expect(routeHeaderMain.children[1]).toBe(badgeSlot)
 		expect(badgeSlot.textContent).not.toContain('Read-only')
-		expect(badgeSlot.textContent).toContain('Forked')
+		expect(badgeSlot.textContent).not.toContain('Forked')
 	})
 
 	test('distinguishes browser simulation from public network state', async () => {

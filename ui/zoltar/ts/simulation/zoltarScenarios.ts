@@ -17,7 +17,7 @@ let scenarioProtocolOverride: ZoltarScenarioProtocol | undefined
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
 
-export type ZoltarScenario = 'forked-categorical'
+export type ZoltarScenario = 'two-questions' | 'forked-categorical'
 
 export function installZoltarScenarioProtocolForTesting(override: ZoltarScenarioProtocol | undefined) {
 	scenarioProtocolOverride = override
@@ -29,6 +29,8 @@ function getScenarioProtocol(): ZoltarScenarioProtocol {
 
 export function getZoltarScenarioLabel(scenario: ZoltarScenario) {
 	switch (scenario) {
+		case 'two-questions':
+			return 'Two questions'
 		case 'forked-categorical':
 			return 'Forked categorical'
 		default:
@@ -38,6 +40,8 @@ export function getZoltarScenarioLabel(scenario: ZoltarScenario) {
 
 export function getZoltarScenarioDescription(scenario: ZoltarScenario) {
 	switch (scenario) {
+		case 'two-questions':
+			return 'App contracts are deployed with two questions ready to browse and use for a fork.'
 		case 'forked-categorical':
 			return 'App contracts are deployed, one five-way categorical fork has already happened, and two child universes are deployed. Use it to test fork warnings, REP migration, and universe switching.'
 		default:
@@ -98,10 +102,28 @@ async function seedForkedCategoricalScenario({ accounts, createReadClient, creat
 	await reportBootstrapProgress(onProgress, 'Seeded forked categorical scenario is ready', 0.995)
 }
 
+async function seedTwoQuestionsScenario({ accounts, createWriteClient, memoryClient, onProgress }: BootstrapScenarioApplyParameters) {
+	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
+	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
+	const writeClient = createWriteClient(primaryAccount)
+	const questions: QuestionData[] = [
+		{ answerUnit: '', description: 'A seeded binary question for simulator QA.', displayValueMax: 0n, displayValueMin: 0n, endTime: currentTimestamp - DAY_IN_SECONDS, numTicks: 0n, startTime: currentTimestamp - 2n * DAY_IN_SECONDS, title: 'Did the first proposal pass?' },
+		{ answerUnit: '', description: 'A second seeded binary question for list and selection QA.', displayValueMax: 0n, displayValueMin: 0n, endTime: currentTimestamp + 2n * DAY_IN_SECONDS, numTicks: 0n, startTime: currentTimestamp, title: 'Will the second proposal pass?' },
+	]
+	for (const [index, questionData] of questions.entries()) {
+		await getScenarioProtocol().createMarket(writeClient, { marketType: 'binary', outcomeLabels: ['Yes', 'No'], questionData })
+		await reportBootstrapProgress(onProgress, `Creating seeded question ${(index + 1).toString()} of 2`, 0.86 + index * 0.05)
+	}
+}
+
 export async function applyZoltarScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario }: BootstrapScenarioApplyParameters): Promise<boolean> {
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
 
 	switch (scenario) {
+		case 'two-questions':
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, getScenarioProtocol().getDeploymentSteps)
+			await seedTwoQuestionsScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario })
+			return true
 		case 'forked-categorical':
 			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.82 }, getScenarioProtocol().getDeploymentSteps)
 			await seedForkedCategoricalScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario })

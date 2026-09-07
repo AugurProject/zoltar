@@ -46,7 +46,9 @@ export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['solidity/ts/tests/statoblast/receiveGuards.test.ts', 2],
 ])
 
-function parseShardOption(args: readonly string[]): { domain: TestDomain; listOnly: boolean; shardIndex: number; shardCount: number; passthroughArgs: string[] } {
+const MANIFEST_ALTERING_OPTIONS = ['-t', '--changed', '--coverage', '--coverage-dir', '--coverage-reporter', '--grep', '--only', '--path-ignore-patterns', '--preload', '--reporter', '--reporter-outfile', '--test-name-pattern', '--todo'] as const
+
+export function parseShardOption(args: readonly string[]): { domain: TestDomain; listOnly: boolean; shardIndex: number; shardCount: number; passthroughArgs: string[] } {
 	const passthroughArgs: string[] = []
 	let domain: TestDomain = 'all'
 	let listOnly = false
@@ -86,6 +88,8 @@ function parseShardOption(args: readonly string[]): { domain: TestDomain; listOn
 			shardValue = arg.slice('--shard='.length)
 			continue
 		}
+		if (MANIFEST_ALTERING_OPTIONS.some(option => arg === option || arg.startsWith(`${option}=`))) throw new Error(`Balanced shard argument can alter the execution manifest: ${arg}`)
+		if (!arg.startsWith('-')) throw new Error(`Balanced shard argument can alter the execution manifest with an explicit path: ${arg}`)
 
 		passthroughArgs.push(arg)
 	}
@@ -147,8 +151,7 @@ if (import.meta.main) {
 		process.exit(0)
 	}
 	if (selectedShard.files.length === 0) {
-		console.log('Selected balanced shard has no test files.')
-		process.exit(0)
+		throw new Error(`Selected balanced shard ${shardIndex.toString()}/${shardCount.toString()} has no test files`)
 	}
 
 	const junitPath = timingOutputPath === undefined ? undefined : `${timingOutputPath}.junit.xml`
@@ -160,8 +163,11 @@ if (import.meta.main) {
 		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
 	})
 	const elapsedSeconds = (performance.now() - startedAt) / 1000
-	if (timingOutputPath !== undefined && junitPath !== undefined) {
+	if (exitCode === 0 && timingOutputPath !== undefined && junitPath !== undefined) {
 		await writeTestTimingObservation(timingOutputPath, junitPath, elapsedSeconds, selectedShard.files, getTimingContextPaths(domain))
+		const observation = JSON.parse(await fs.readFile(timingOutputPath, 'utf8')) as Record<string, unknown>
+		Object.assign(observation, { domain, shardCount, shardIndex })
+		await fs.writeFile(timingOutputPath, `${JSON.stringify(observation, undefined, 2)}\n`)
 		console.log(`Recorded ${elapsedSeconds.toFixed(1)}s timing observation in ${timingOutputPath}`)
 	}
 	process.exit(exitCode)

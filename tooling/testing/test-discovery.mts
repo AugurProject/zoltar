@@ -28,6 +28,33 @@ export function isExplicitTestPath(argument: string, repositoryRoot = process.cw
 	return isTestSourceFile(argument) || existsSync(path.resolve(repositoryRoot, argument))
 }
 
+const BUN_TEST_OPTIONS_WITH_VALUES = new Set(['-t', '--coverage-dir', '--coverage-reporter', '--grep', '--max-concurrency', '--parallel-delay', '--path-ignore-patterns', '--preload', '--reporter', '--reporter-outfile', '--rerun-each', '--retry', '--seed', '--shard', '--test-name-pattern', '--timeout', '--timings'])
+const BUN_TEST_OPTIONS_WITH_OPTIONAL_NUMERIC_VALUES = new Set(['--bail', '--parallel'])
+const BUN_TEST_OPTIONS_WITH_OPTIONAL_STRING_VALUES = new Set(['--changed'])
+
+export function hasExplicitTestPath(arguments_: readonly string[], repositoryRoot = process.cwd()) {
+	for (let index = 0; index < arguments_.length; index += 1) {
+		const argument = arguments_[index]
+		if (argument === undefined) continue
+		const optionName = argument.split('=', 1)[0]
+		if (optionName !== undefined && BUN_TEST_OPTIONS_WITH_VALUES.has(optionName)) {
+			if (argument === optionName) index += 1
+			continue
+		}
+		if (optionName !== undefined && BUN_TEST_OPTIONS_WITH_OPTIONAL_NUMERIC_VALUES.has(optionName)) {
+			if (argument === optionName && /^\d+$/.test(arguments_[index + 1] ?? '')) index += 1
+			continue
+		}
+		if (optionName !== undefined && BUN_TEST_OPTIONS_WITH_OPTIONAL_STRING_VALUES.has(optionName)) {
+			const nextArgument = arguments_[index + 1]
+			if (argument === optionName && nextArgument !== undefined && !nextArgument.startsWith('-') && !isExplicitTestPath(nextArgument, repositoryRoot)) index += 1
+			continue
+		}
+		if (isExplicitTestPath(argument, repositoryRoot)) return true
+	}
+	return false
+}
+
 async function collectTestFiles(repositoryRoot: string, directoryPath: string): Promise<string[]> {
 	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
 	const files: string[] = []

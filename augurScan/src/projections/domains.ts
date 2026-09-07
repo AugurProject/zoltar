@@ -57,7 +57,7 @@ export const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'VaultEscrowUpdated',
 		'VaultUnresolvedTotalsExported',
 	]),
-	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundDeferred', 'PendingEthRefundWithdrawn']),
+	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundCredited', 'PendingEthRefundWithdrawn']),
 	...definitions(
 		'risk',
 		'pool',

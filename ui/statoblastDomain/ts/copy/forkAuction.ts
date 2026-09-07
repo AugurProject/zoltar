@@ -46,14 +46,22 @@ export const forkReadiness = 'Fork Readiness'
 export const notChosen = 'Not chosen'
 export const systemIsForking = 'System is forking'
 export const ethRep = 'ETH / REP'
-export const refundSettlementDetail = 'Refund-only settlement returns locked ETH.'
+export const refundSettlementDetail = 'Refund-only settlement credits locked ETH for withdrawal.'
+export const pendingRefund = 'Pending Refund'
+export const refundWithdrawal = 'Refund Withdrawal'
+export const withdrawRefund = 'Withdraw refund'
+export const withdrawingRefundTruncated = 'Withdrawing refund…'
+export const loadingPendingRefund = 'Loading pending refund…'
+export const pendingRefundUnavailable = 'Failed to load the pending refund balance.'
+export const retryPendingRefund = 'Retry pending refund'
+export const noPendingRefund = 'No credited refund is available to withdraw.'
 export const formatFinalizedRefundOnlySettlementNotice = (capacityOwnershipLabel: CopyTemplateValue) => `Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningClaimCapacityOwnershipHeadline = (capacityOwnershipLabel: CopyTemplateValue) => `Winning claims add REP backing units and ${capacityOwnershipLabel}.`
 export const formatWinningClaimSettlementNotice = (capacityOwnershipLabel: CopyTemplateValue) =>
-	`Claiming a winning bid adds REP backing units and a pro-rata share of the ${capacityOwnershipLabel} to the bidder vault. That capacity ownership is the remaining capacity ownership being assigned during settlement. Refund-only bids just return locked ETH.`
-export const formatMixedSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Winning rows receive estimated REP backing units plus estimated ${capacityOwnershipLabel}, while refund rows return locked ETH.`
+	`Claiming a winning bid adds REP backing units and a pro-rata share of the ${capacityOwnershipLabel} to the bidder vault. That capacity ownership is the remaining capacity ownership being assigned during settlement. Refund-only bids credit locked ETH for a separate withdrawal.`
+export const formatMixedSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Winning rows receive estimated REP backing units plus estimated ${capacityOwnershipLabel}, while refund rows credit locked ETH for withdrawal.`
 export const formatWinningSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Winning rows receive estimated REP backing units plus estimated ${capacityOwnershipLabel}.`
-export const formatRefundSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Refund-only settlement returns locked ETH and does not assign ${capacityOwnershipLabel}.`
+export const formatRefundSettlementPreviewDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Refund-only settlement credits locked ETH for withdrawal and does not assign ${capacityOwnershipLabel}.`
 export const truthAuctionRefundEstimateDetail = 'Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.'
 export const underfundedWinningClaimUnavailable = 'Claim preview is unavailable for underfunded winning bids because the required per-tick ETH denominator is not exposed in current UI data.'
 export const settlementRoundingNotice = 'These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.'
@@ -96,13 +104,13 @@ export const formatStartsInValue = (duration: CopyTemplateValue) => `Starts in $
 export const pendingConfirmation = 'Pending confirmation'
 export const settleSelectedBids = 'Settle selected bids'
 export const formatWinningBidBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select winning bids and settle them together. Winning claims add REP backing units plus ${capacityOwnershipLabel}.`
-export const formatFinalizedRefundBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select finalized refund rows and settle them together. These rows return locked ETH without adding ${capacityOwnershipLabel}.`
-export const formatRefundableBidBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select refundable bids and settle them together. Refund-only settlement returns locked ETH without adding ${capacityOwnershipLabel}.`
-export const formatMixedBidBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select winning and refundable bids and settle them together. Winning selections add REP backing units plus ${capacityOwnershipLabel}, while refundable selections return locked ETH.`
+export const formatFinalizedRefundBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select finalized refund rows and settle them together. These rows credit locked ETH for withdrawal without adding ${capacityOwnershipLabel}.`
+export const formatRefundableBidBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select refundable bids and settle them together. Refund-only settlement credits locked ETH for withdrawal without adding ${capacityOwnershipLabel}.`
+export const formatMixedBidBatchSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Select winning and refundable bids and settle them together. Winning selections add REP backing units plus ${capacityOwnershipLabel}, while refundable selections credit locked ETH for withdrawal.`
 export const submittingSettlementTransactionTruncated = 'Submitting settlement transaction…'
 export const forkActionWalletRequired = 'Connect a wallet before using fork and auction actions.'
 export const auctionEndedStatus = 'Truth auction has ended.'
-export const formatFinalizedSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Bidding is closed and finalized settlement paths are now in effect. Winning claims receive REP backing units plus ${capacityOwnershipLabel}, while losing bids are refunded.`
+export const formatFinalizedSettlementDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Bidding is closed and finalized settlement paths are now in effect. Winning claims receive REP backing units plus ${capacityOwnershipLabel}, while losing bids are credited for withdrawal.`
 export const truthAuctionFinalizationRequiredDetail = 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'
 export const endedAtLead = 'Ended at: '
 export const finalizeTruthAuction = 'Finalize truth auction'
@@ -174,7 +182,7 @@ export const vaultMigrationDetail = 'This moves all remaining pool-held vault RE
 export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
 export const alreadyMigratedStatus = 'Already migrated'
 export const truthAuctionStatus = 'Truth Auction Status'
-export const formatStartTruthAuctionDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP backing units plus ${capacityOwnershipLabel}, while losing bids are refunded during settlement.`
+export const formatStartTruthAuctionDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP backing units plus ${capacityOwnershipLabel}, while losing bids are credited for withdrawal during settlement.`
 export const bypassTruthAuction = 'Bypass truth auction'
 export const bypassingAuctionTruncated = 'Bypassing auction…'
 export const settlementStatus = 'Settlement Status'

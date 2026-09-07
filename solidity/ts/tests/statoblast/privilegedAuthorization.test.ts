@@ -177,7 +177,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 								receiverVault: attacker.account.address,
 								targetVault: client.account.address,
 								requestedDebtAttoEth: 1n,
-								snapshot: { targetBackingUnits: 0n, targetCapacityOwnershipAttoRep: 0n, totalPoolHeldAttoRep: 0n, totalRepBackingUnits: 0n },
+								snapshot: { targetBackingUnits: 0n, targetCapacityOwnershipAttoRep: 0n },
 								minimumReceiverHealthFactorBps: 10_000n,
 								minLiquidationPriceDistanceBps: 0n,
 							},

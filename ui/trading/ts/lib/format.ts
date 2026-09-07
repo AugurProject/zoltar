@@ -1,3 +1,4 @@
+import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { bigintToSafeNumber } from '@zoltar/shared/ethereum'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
@@ -52,6 +53,7 @@ export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: big
 export { bigintToSafeNumber }
 
 export function parseUnits(value: string, decimals = 18) {
+	value = normalizeNumericInput(value)
 	requireNonNegativeSafeInteger(decimals, 'Decimals')
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') throw new Error('Enter a valid nonnegative amount')
 	const fraction = value.split('.')[1] ?? ''
@@ -62,6 +64,7 @@ export function parseUnits(value: string, decimals = 18) {
 }
 
 export function parseUnitsOrUndefined(value: string, decimals = 18) {
+	value = normalizeNumericInput(value)
 	if (!Number.isSafeInteger(decimals) || decimals < 0) return undefined
 	if (!/^\d*(?:\.\d*)?$/.test(value) || value.length === 0 || value === '.') return undefined
 	const fraction = value.split('.')[1] ?? ''

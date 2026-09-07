@@ -247,7 +247,7 @@ Compile the Solidity contracts:
 bun run compile-contracts
 ```
 
-Run the full test suite:
+Run the root test suite:
 
 ```bash
 bun run test
@@ -269,6 +269,12 @@ bun run validate
 ```
 
 `bun run validate` runs the root suite, every independent package `check` command, formatting, repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
+
+Run every local package suite and the required browser smoke tier (after the complete fresh-checkout setup above):
+
+```bash
+bun run test:all
+```
 
 Run the launch-focused fork, auction, and exit invariant gate:
 
@@ -339,10 +345,10 @@ bun run anvil -- --host 127.0.0.1 --port 8545 --chain-id 1 --block-base-fee-per-
 Then run `gas-costs` against it from another terminal:
 
 ```bash
-ANVIL_RPC=http://127.0.0.1:8545 bun run gas-costs
+GAS_COST_ANVIL_RPC=http://127.0.0.1:8545 bun run gas-costs
 ```
 
-Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the command runs from a container that reaches the host through Docker routing.
+Use `GAS_COST_ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the command runs from a container that reaches the host through Docker routing.
 
 ## Notes
 

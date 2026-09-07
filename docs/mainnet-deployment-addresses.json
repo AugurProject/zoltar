@@ -10,7 +10,6 @@
 	"protocolConfig": {
 		"forkBurnDivisor": "5",
 		"forkThresholdDivisor": "20",
-		"initialEscalationGameDepositAttoRep": "1000000000000000000",
 		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
 		"minimumVaultRepDepositAttoRep": "0"
 	},
@@ -23,7 +22,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0xE76c85d0190Ae8172D9D0a516d96e8AFeDC9E11C"
+			"address": "0x05EBAb79d7828F0502D172573232F139c1D20FE8"
 		},
 		{
 			"id": "multicall3",
@@ -48,17 +47,17 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0xD404A2bcc9DfE32F1c96c38B7c409f38dAfdd314"
+			"address": "0x50b3Fc6D3351016BBC71cECAF2C0b661a84924B2"
 		},
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0xFC19c724B59b0afA1d4bA97Aa0879237e1cDB3b1"
+			"address": "0x8186ddBc1464Bf279f208A66170ba96D6726f00d"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0x9d653F8E3fE57B6f3cD675A9cD2bBDe65d75e101"
+			"address": "0xB5D404abEEB1F68CDe11FB6c17a75010170941E3"
 		},
 		{
 			"id": "openOracle",
@@ -73,12 +72,12 @@
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x9cB2b09C1bd680B5CF4a821b2102D326B5c78B7e"
+			"address": "0xDFF656f799489Ca7C164BE2b6FcAF2659Aedfe84"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xCC4f57E2C2e514405223579aa503dD531B285295"
+			"address": "0xF9d8fEAe60A2F9f5799bae0794901963b43Ab36F"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -93,14 +92,14 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x5416b23bbEF9C064D797b86780D61Dba9F993846"
+			"address": "0xb6F99cE04f2d8A4bB6B7134E247694793905A59a"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xCC4f57E2C2e514405223579aa503dD531B285295"
+			"address": "0xF9d8fEAe60A2F9f5799bae0794901963b43Ab36F"
 		},
 		{
 			"id": "escalationGameClaimDelegate",
@@ -115,12 +114,12 @@
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x5416b23bbEF9C064D797b86780D61Dba9F993846"
+			"address": "0xb6F99cE04f2d8A4bB6B7134E247694793905A59a"
 		},
 		{
 			"id": "securityPoolOperationsDelegate",
 			"label": "Security Pool Operations Delegate",
-			"address": "0x9d653F8E3fE57B6f3cD675A9cD2bBDe65d75e101"
+			"address": "0xB5D404abEEB1F68CDe11FB6c17a75010170941E3"
 		},
 		{
 			"id": "escalationGameProofVerifier",

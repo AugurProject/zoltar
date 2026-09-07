@@ -53,8 +53,12 @@ for (const appId of UI_APP_IDS) {
 	})
 }
 
-test('each UI and bot application owns a distinct favicon', () => {
-	const faviconPaths = [...UI_APP_IDS.map(appId => getUiAppPaths(appId).faviconSvg), ...['chaos', 'liquidator', 'open-oracle-arbitrager'].map(botId => path.join(repositoryRoot, 'bots', botId, 'src', 'dashboard', 'favicon.svg'))]
+test('Trading shares the Statoblast favicon', () => {
+	expect(fs.readFileSync(getUiAppPaths('trading').faviconSvg, 'utf8')).toBe(fs.readFileSync(getUiAppPaths('statoblast').faviconSvg, 'utf8'))
+})
+
+test('Zoltar, Statoblast, and each bot own distinct favicons', () => {
+	const faviconPaths = [...UI_APP_IDS.filter(appId => appId !== 'trading').map(appId => getUiAppPaths(appId).faviconSvg), ...['chaos', 'liquidator', 'open-oracle-arbitrager'].map(botId => path.join(repositoryRoot, 'bots', botId, 'src', 'dashboard', 'favicon.svg'))]
 	const favicons = faviconPaths.map(faviconPath => fs.readFileSync(faviconPath, 'utf8'))
 	expect(new Set(favicons).size).toBe(faviconPaths.length)
 })

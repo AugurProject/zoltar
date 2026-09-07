@@ -19,6 +19,7 @@ import {
 	settleTruthAuctionBids,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
+	withdrawTruthAuctionRefund,
 	withdrawForkedEscalationDeposits,
 } from '../../../protocol/index.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
@@ -68,6 +69,7 @@ export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProdu
 	migrateVaultWithUnresolvedEscalation: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
 	refundTruthAuctionBid: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly SettlementSelectedBid[]) => Promise<ForkAuctionActionResult>
 	settleTruthAuctionBids: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, claimTickIndices: readonly SettlementSelectedBid[], refundTickIndices: readonly SettlementSelectedBid[]) => Promise<ForkAuctionActionResult>
+	withdrawTruthAuctionRefund: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address) => Promise<ForkAuctionActionResult>
 	startTruthAuctionForSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint) => Promise<ForkAuctionActionResult>
 	submitTruthAuctionBid: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) => Promise<ForkAuctionActionResult>
 	withdrawForkedEscalationDeposits: (client: TWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, proofs: ForkCarriedEscalationProofs) => Promise<ForkAuctionActionResult>
@@ -89,6 +91,7 @@ const defaultUseForkAuctionOperationsDependencies: UseForkAuctionOperationsDepen
 	migrateVaultWithUnresolvedEscalation: async (client, securityPoolAddress, vaultAddress, universeId, outcome) => await migrateVaultWithUnresolvedEscalation(client, securityPoolAddress, vaultAddress, universeId, outcome),
 	refundTruthAuctionBid: async (client, securityPoolAddress, universeId, truthAuctionAddress, tick, bidIndex, selectedBids) => await refundTruthAuctionBid(client, securityPoolAddress, universeId, truthAuctionAddress, tick, bidIndex, selectedBids),
 	settleTruthAuctionBids: async (client, securityPoolAddress, universeId, vaultAddress, claimTickIndices, refundTickIndices) => await settleTruthAuctionBids(client, securityPoolAddress, universeId, vaultAddress, claimTickIndices, refundTickIndices),
+	withdrawTruthAuctionRefund: async (client, securityPoolAddress, universeId, truthAuctionAddress) => await withdrawTruthAuctionRefund(client, securityPoolAddress, universeId, truthAuctionAddress),
 	startTruthAuctionForSecurityPool: async (client, securityPoolAddress, universeId) => await startTruthAuctionForSecurityPool(client, securityPoolAddress, universeId),
 	submitTruthAuctionBid: async (client, securityPoolAddress, universeId, truthAuctionAddress, tick, amount) => await submitTruthAuctionBid(client, securityPoolAddress, universeId, truthAuctionAddress, tick, amount),
 	withdrawForkedEscalationDeposits: async (client, securityPoolAddress, outcome, proofs) => await withdrawForkedEscalationDeposits(client, securityPoolAddress, outcome, proofs),
@@ -398,6 +401,19 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			universeIdOverride,
 		)
 
+	const withdrawAuctionRefund = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
+		await runForkAuctionAction(
+			'withdrawAuctionRefund',
+			async (walletAddress, details, isCurrentSelection) => {
+				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
+				if (!isCurrentSelection()) return undefined
+				return await dependencies.withdrawTruthAuctionRefund(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress)
+			},
+			'Failed to withdraw auction refund',
+			securityPoolAddressOverride,
+			universeIdOverride,
+		)
+
 	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => {
 		const displayTitleOverride = selectedClaimBids !== undefined && selectedRefundBids !== undefined && selectedClaimBids.length === 0 && selectedRefundBids.length > 0 ? 'Settle Finalized Refunds' : undefined
 
@@ -483,6 +499,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		startTruthAuction,
 		submitBid,
 		finalizeTruthAuction,
+		withdrawAuctionRefund,
 	}
 }
 

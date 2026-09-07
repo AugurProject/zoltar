@@ -1,7 +1,6 @@
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/ethereum'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
-import { createPortal } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Status } from '../components/Status.js'
 import { TradingAddressValue } from '../components/TradingAddress.js'
@@ -67,9 +66,10 @@ function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
 	return `${Number(status.factory) + Number(status.router) + Number(status.receiveRouter)} / ${total.toString()}`
 }
 
-function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
+function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
 	if (registryLoading) return { label: 'Loading networks', tone: 'neutral' as const }
 	if (registryError) return { label: 'Networks unavailable', tone: 'warn' as const }
+	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warn' as const }
 	if (busy) return { label: 'Deployment in progress', tone: 'neutral' as const }
 	if (deploymentComplete) return { label: 'Deployment complete', tone: 'good' as const }
 	if (state === 'loading') return { label: 'Checking network', tone: 'neutral' as const }
@@ -77,7 +77,7 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warn' as const }
 	if (state === 'error') return { label: 'Configuration unavailable', tone: 'warn' as const }
 	if (plan) return { label: 'Checking network', tone: 'neutral' as const }
-	return { label: 'Select a network', tone: 'neutral' as const }
+	return { label: appCopy.completeDeploymentSettings, tone: 'neutral' as const }
 }
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
@@ -100,7 +100,6 @@ export function TradingDeploymentSetup({
 	onWorkflowLockChange = () => undefined,
 	onWalletStateChange,
 	services = defaultServices,
-	settingsHost,
 	walletControlRequestNonce,
 }: {
 	currentConfiguration?: DeploymentConfiguration
@@ -108,7 +107,6 @@ export function TradingDeploymentSetup({
 	onWorkflowLockChange?(locked: boolean): void
 	onWalletStateChange?(state: DeploymentWalletState): void
 	services?: TradingDeploymentSetupServices
-	settingsHost?: HTMLElement
 	walletControlRequestNonce?: number
 }) {
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
@@ -355,7 +353,7 @@ export function TradingDeploymentSetup({
 					return { step, presentation: contractStatusPresentation(deployed, isNext) }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
-	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
+	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
@@ -433,8 +431,8 @@ export function TradingDeploymentSetup({
 		}
 	}
 	const settingsPanel = (
-		<details class='deployment-settings' open={rpcOverride || undefined}>
-			<summary>Settings</summary>
+		<section class='deployment-settings' aria-labelledby='deployment-connection-title'>
+			<h2 id='deployment-connection-title'>{appCopy.deploymentConnection}</h2>
 			<div class='deployment-settings__panel'>
 				<label class='field'>
 					<span>Network</span>
@@ -461,8 +459,8 @@ export function TradingDeploymentSetup({
 					<span>RPC URL</span>
 					<input
 						type='url'
-						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
 						disabled={busy}
+						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
 						placeholder={selectedCore?.defaultRpcUrl ?? 'https://…'}
 						spellcheck={false}
 						onInput={event => {
@@ -473,15 +471,14 @@ export function TradingDeploymentSetup({
 					/>
 				</label>
 			</div>
-		</details>
+		</section>
 	)
 
 	return (
 		<main class='route' id='main-content'>
-			{settingsHost === undefined ? null : createPortal(settingsPanel, settingsHost)}
 			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} actions={standaloneWalletButton} />
 			<section class='section deployment-setup'>
-				{settingsHost === undefined ? settingsPanel : null}
+				{settingsPanel}
 				{registryError === undefined ? null : (
 					<p class='error' role='alert'>
 						{registryError}

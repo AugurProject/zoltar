@@ -1,3 +1,4 @@
+import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
@@ -220,7 +221,7 @@ function publicError(error: unknown, status: number, operation: string, fallback
 export function startDashboardServer(port: number, controller: DashboardController) {
 	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished, controller.publicAuthority)
 	const directory = import.meta.dir
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
+	const browserEntrypoint = join(directory, 'dashboard.ts')
 	const dashboardPages = new Set(['overview', 'pools', 'markets', 'operations', 'settings'])
 	const dashboardPage = async (pathname: string) => {
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
@@ -228,7 +229,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const source = await Bun.file(join(directory, 'index.html')).text()
 		return source.replace('<body>', `<body data-page="${page}">`)
 	}
-	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let acceptedAuthorities: ReadonlySet<string> = new Set()
 	const server = Bun.serve({
 		hostname: controller.hostname,
@@ -257,7 +257,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				})
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
-				return new Response(transpiler.transformSync(await browserSource.text()), {
+				return new Response(await buildDashboardScript(browserEntrypoint), {
 					headers: headers('text/javascript; charset=utf-8'),
 				})
 			}

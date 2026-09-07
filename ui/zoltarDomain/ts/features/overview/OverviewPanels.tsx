@@ -45,6 +45,7 @@ function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
 }
 
 export function OverviewPanels({
+	settingsMenu,
 	applicationTitle,
 	accountState,
 	isConnectingWallet,
@@ -141,45 +142,38 @@ export function OverviewPanels({
 			</details>
 		)
 	})()
-	const headerDescription = (() => {
-		const forkDescription = (() => {
-			if (!universeHasForked) return undefined
-			if (universeForkTime === undefined) return appCopy.universeForkedDetail
-			return (
-				<>
-					{appCopy.zoltarForkedOn} <TimestampValue timestamp={universeForkTime} />.
-				</>
-			)
-		})()
-		if (environmentDescription === undefined) return forkDescription
-		if (forkDescription === undefined) return environmentDescription
-		return (
-			<>
-				{environmentDescription} {forkDescription}
-			</>
-		)
-	})()
+	const headerDescription = environmentDescription
 	return (
 		<section className='overview-shell'>
+			{universeHasForked ? (
+				<WarningSurface role='alert' surface='flat' className='universe-fork-notice'>
+					<p>
+						{appCopy.universeForkNoticeLead}
+						{universeForkTime === undefined ? undefined : (
+							<>
+								{' '}
+								{appCopy.forkedOnConnector} <TimestampValue timestamp={universeForkTime} />
+							</>
+						)}
+						. {appCopy.migrateRepToContinueUsingAugur}
+					</p>
+				</WarningSurface>
+			) : undefined}
 			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
 				<RouteHeader
-					actions={accountActions}
+					className='overview-route-header'
+					actions={settingsMenu}
 					badge={
 						<span className='environment-badge-row'>
 							{activeNetworkBadge}
 							{environmentBadge}
-							{universeHasForked ? <Badge tone='warning'>{commonCopy.forked}</Badge> : undefined}
 						</span>
 					}
 					description={headerDescription}
 					title={applicationTitle}
 				/>
-				{universeHasForked ? (
-					<WarningSurface role='alert' surface='flat'>
-						<strong>{appCopy.universeForkedWarningTitle}</strong>
-						<p>{appCopy.universeForkedWarningDetail}</p>
-					</WarningSurface>
-				) : undefined}
+				{accountActions}
+
 				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
 					<MetricField className='overview-address-metric' label={appCopy.address}>
 						{(() => {

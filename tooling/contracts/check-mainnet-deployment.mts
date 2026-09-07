@@ -6,7 +6,6 @@ import * as url from 'node:url'
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
 	forkThresholdDivisor: string
-	initialEscalationGameDepositAttoRep: string
 	minimumSecurityBondDebtAttoEth: string
 	minimumVaultRepDepositAttoRep: string
 }
@@ -100,18 +99,15 @@ function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 	if (!isRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
 	const forkBurnDivisor = Reflect.get(source, 'forkBurnDivisor')
 	const forkThresholdDivisor = Reflect.get(source, 'forkThresholdDivisor')
-	const initialEscalationGameDepositAttoRep = Reflect.get(source, 'initialEscalationGameDepositAttoRep')
 	const minimumSecurityBondDebtAttoEth = Reflect.get(source, 'minimumSecurityBondDebtAttoEth')
 	const minimumVaultRepDepositAttoRep = Reflect.get(source, 'minimumVaultRepDepositAttoRep')
 	if (typeof forkBurnDivisor !== 'bigint') throw new Error('Mainnet protocol config forkBurnDivisor must be a bigint')
 	if (typeof forkThresholdDivisor !== 'bigint') throw new Error('Mainnet protocol config forkThresholdDivisor must be a bigint')
-	if (typeof initialEscalationGameDepositAttoRep !== 'bigint') throw new Error('Mainnet protocol config initialEscalationGameDepositAttoRep must be a bigint')
 	if (typeof minimumSecurityBondDebtAttoEth !== 'bigint') throw new Error('Mainnet protocol config minimumSecurityBondDebtAttoEth must be a bigint')
 	if (typeof minimumVaultRepDepositAttoRep !== 'bigint') throw new Error('Mainnet protocol config minimumVaultRepDepositAttoRep must be a bigint')
 	return {
 		forkBurnDivisor: forkBurnDivisor.toString(),
 		forkThresholdDivisor: forkThresholdDivisor.toString(),
-		initialEscalationGameDepositAttoRep: initialEscalationGameDepositAttoRep.toString(),
 		minimumSecurityBondDebtAttoEth: minimumSecurityBondDebtAttoEth.toString(),
 		minimumVaultRepDepositAttoRep: minimumVaultRepDepositAttoRep.toString(),
 	}
@@ -245,7 +241,6 @@ async function readManifest(manifestId: ManifestId): Promise<DeploymentManifest>
 		protocolConfig: {
 			forkBurnDivisor: readStringField(protocolConfig, 'forkBurnDivisor', 'protocolConfig.forkBurnDivisor'),
 			forkThresholdDivisor: readStringField(protocolConfig, 'forkThresholdDivisor', 'protocolConfig.forkThresholdDivisor'),
-			initialEscalationGameDepositAttoRep: readStringField(protocolConfig, 'initialEscalationGameDepositAttoRep', 'protocolConfig.initialEscalationGameDepositAttoRep'),
 			minimumSecurityBondDebtAttoEth: readStringField(protocolConfig, 'minimumSecurityBondDebtAttoEth', 'protocolConfig.minimumSecurityBondDebtAttoEth'),
 			minimumVaultRepDepositAttoRep: readStringField(protocolConfig, 'minimumVaultRepDepositAttoRep', 'protocolConfig.minimumVaultRepDepositAttoRep'),
 		},

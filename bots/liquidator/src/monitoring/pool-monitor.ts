@@ -322,12 +322,21 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getPendingSettlementOperationIds' }),
 	])
 	const stagedOperations: StagedOperationObservation[] = []
+	const stagedTargetVaults = new Map(vaults.map(vault => [vault.address.toLowerCase(), vault]))
 	for (let start = 0n; start < stagedOperationCount; start += 100n) {
 		const pageCount = stagedOperationCount - start < 100n ? stagedOperationCount - start : 100n
 		const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: manager, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
 		for (const [index, operation] of operations.entries()) {
 			const id = ids[index]
 			if (id === undefined) throw new Error('Coordinator returned mismatched staged operation arrays')
+			const targetAddress = getAddress(operation.targetVault)
+			let target = stagedTargetVaults.get(targetAddress.toLowerCase())
+			if (target === undefined) {
+				const loadedTarget = (await loadVaultPage(client, address, normalizedEscalationGame, [targetAddress], blockNumber))[0]
+				if (loadedTarget === undefined) throw new Error('Security pool returned no staged-operation target state')
+				target = currentVaultPositionForPoolAccounting(loadedTarget, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
+				stagedTargetVaults.set(targetAddress.toLowerCase(), target)
+			}
 			stagedOperations.push({
 				operationAmountAttoRepOrAttoEth: operation.operationAmountAttoRepOrAttoEth,
 				id,
@@ -338,13 +347,13 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 				queuedAt: operation.queuedAt,
 				receiverVault: getAddress(operation.receiverVault),
 				reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth,
-				snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
+				snapshotTotalRepBackingUnits: denominator,
 				snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
-				snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep,
-				snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth,
+				snapshotTargetDisputeStakedAttoRep: target.disputeStakedAttoRep,
+				snapshotTargetOpenInterestAttoEth: target.openInterestAttoEth,
 				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits,
-				snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
-				targetVault: getAddress(operation.targetVault),
+				snapshotTotalPoolHeldAttoRep: totalAttoRep,
+				targetVault: targetAddress,
 				validForSeconds: operation.validForSeconds,
 			})
 		}

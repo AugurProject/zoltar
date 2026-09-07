@@ -31,6 +31,8 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 		forkAuctionCopy.formatStartTruthAuctionDetail(capacityOwnership),
 	]
 	for (const copy of settlementCopy) expect(copy).toContain('REP backing units')
+	expect(forkAuctionCopy.formatFinalizedSettlementDetail(capacityOwnership)).toContain('credited for withdrawal')
+	expect(forkAuctionCopy.formatStartTruthAuctionDetail(capacityOwnership)).toContain('credited for withdrawal during settlement')
 	expect(forkAuctionCopy.estimatedVaultRepBackingAttoRep).toBe('Estimated REP backing')
 })
 

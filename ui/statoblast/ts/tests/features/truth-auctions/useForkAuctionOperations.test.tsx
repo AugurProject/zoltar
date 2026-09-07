@@ -172,6 +172,9 @@ function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAucti
 		withdrawForkedEscalationDeposits: async () => {
 			throw new Error('withdrawForkedEscalationDeposits should not be called in this test')
 		},
+		withdrawTruthAuctionRefund: async () => {
+			throw new Error('withdrawTruthAuctionRefund should not be called in this test')
+		},
 		...overrides,
 	}
 }
@@ -253,6 +256,35 @@ describe('useForkAuctionOperations', () => {
 		expect(refundTruthAuctionBid).toHaveBeenCalledTimes(1)
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('refundLosingBids')
+	})
+
+	test('withdrawAuctionRefund pulls the connected wallet credit from the selected truth auction', async () => {
+		const onTransactionFailed = mock(() => undefined)
+		const withdrawTruthAuctionRefund = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address) => {
+			expect(securityPoolAddress).toBe(SECURITY_POOL_ADDRESS)
+			expect(universeId).toBe(1n)
+			expect(truthAuctionAddress).toBe(TRUTH_AUCTION_ADDRESS)
+			return createForkAuctionResult('withdrawAuctionRefund')
+		})
+		const dependencies = createForkAuctionOperationsDependencies({ withdrawTruthAuctionRefund })
+		let hookState: UseForkAuctionOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawAuctionRefund()
+		})
+
+		expect(withdrawTruthAuctionRefund).toHaveBeenCalledTimes(1)
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('withdrawAuctionRefund')
 	})
 
 	test('claimAuctionProceeds preserves negative winning and refund ticks from settlement selections', async () => {

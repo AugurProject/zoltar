@@ -25,6 +25,18 @@ type JsonRpcSuccess = {
 	error?: { code: number; message: string; data?: unknown }
 }
 
+export class JsonRpcError extends Error {
+	readonly code: number
+	readonly data?: unknown
+
+	constructor(error: { code: number; message: string; data?: unknown }, options?: { cause?: unknown }) {
+		super(error.message, options)
+		this.name = 'JsonRpcError'
+		this.code = error.code
+		if ('data' in error) this.data = error.data
+	}
+}
+
 type RpcBlock = {
 	readonly timestamp?: string
 }
@@ -88,7 +100,7 @@ function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: n
 }
 
 function isJsonRpcError(value: unknown): value is { code: number; message: string; data?: unknown } {
-	return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string'
+	return typeof value === 'object' && value !== null && 'code' in value && Number.isInteger(value.code) && 'message' in value && typeof value.message === 'string'
 }
 
 function isRpcTransactionRequest(value: unknown): value is RpcTransactionRequest {
@@ -123,13 +135,35 @@ export function normalizeAnvilTransactionParams(params: unknown[]) {
 	return [normalizedTransactionRequest, ...remainingParams]
 }
 
-function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
+export function parseJsonRpcResponse(raw: unknown, expectedId: number | string): JsonRpcSuccess {
 	if (typeof raw !== 'object' || raw === null) throw new Error('Invalid JSON-RPC response: not an object')
 	if (!hasJsonRpcBaseFields(raw)) throw new Error('Invalid JSON-RPC response: missing base fields')
 	if (raw.jsonrpc !== '2.0') throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${raw.jsonrpc}'`)
+	if (raw.id !== expectedId) throw new Error(`Invalid JSON-RPC response id: expected ${String(expectedId)}, got ${String(raw.id)}`)
+	const hasResult = 'result' in raw
+	const hasError = 'error' in raw
+	if (hasResult === hasError) throw new Error('Invalid JSON-RPC response: expected exactly one of result or error')
 	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) throw new Error('Invalid JSON-RPC response: malformed error object')
 
 	return raw
+}
+
+const CANONICAL_QUANTITY = /^0x(?:0|[1-9a-f][0-9a-f]*)$/
+const TRANSACTION_HASH = /^0x[0-9a-fA-F]{64}$/
+
+export function validateRpcResult(method: string, value: unknown, context: { transactionHash?: string } = {}): void {
+	if (['eth_chainId', 'eth_blockNumber'].includes(method) && (typeof value !== 'string' || !CANONICAL_QUANTITY.test(value))) throw new Error(`Invalid ${method} response: expected canonical quantity`)
+	if (['eth_sendTransaction', 'wallet_sendTransaction', 'eth_sendRawTransaction'].includes(method) && (typeof value !== 'string' || !TRANSACTION_HASH.test(value))) throw new Error(`Invalid ${method} response: expected transaction hash`)
+	if (method === 'anvil_snapshot' && (typeof value !== 'string' || !CANONICAL_QUANTITY.test(value))) throw new Error('Invalid anvil_snapshot response: expected canonical snapshot id')
+	if (['anvil_revert', 'anvil_getAutomine'].includes(method) && typeof value !== 'boolean') throw new Error(`Invalid ${method} response: expected boolean`)
+	if (method === 'eth_getTransactionReceipt' && value !== null) {
+		if (!isObjectRecord(value)) throw new Error('Invalid eth_getTransactionReceipt response: expected receipt or null')
+		const status = value['status']
+		if (status !== '0x0' && status !== '0x1') throw new Error('Invalid eth_getTransactionReceipt response: status must be 0x0 or 0x1')
+		const transactionHash = value['transactionHash']
+		if (typeof transactionHash !== 'string' || !TRANSACTION_HASH.test(transactionHash)) throw new Error('Invalid eth_getTransactionReceipt response: expected transaction hash')
+		if (context.transactionHash !== undefined && transactionHash.toLowerCase() !== context.transactionHash.toLowerCase()) throw new Error('Invalid eth_getTransactionReceipt response: receipt does not belong to the submitted hash')
+	}
 }
 
 const fetchJsonRpcResponse = async ({ body, method, rpcUrl, timeoutMs }: { body: string; method: string; rpcUrl: string; timeoutMs?: number }): Promise<unknown> => {
@@ -195,6 +229,13 @@ export interface AnvilWindowEthereum {
 	removeListener: () => void
 }
 
+export class AnvilSnapshotUnavailableError extends Error {
+	constructor(snapshotId: string) {
+		super(`Anvil snapshot is missing or already consumed: ${snapshotId}`)
+		this.name = 'AnvilSnapshotUnavailableError'
+	}
+}
+
 export const getDefaultAnvilRpcUrl = (): string => 'http://127.0.0.1:8545'
 
 export const validateLocalAnvilRpcUrl = (url: string): void => {
@@ -203,25 +244,23 @@ export const validateLocalAnvilRpcUrl = (url: string): void => {
 		parsed = new URL(url)
 	} catch (error) {
 		const detail = error instanceof Error ? ` ${error.message}` : ''
-		throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.${detail}`)
+		throw new Error(`Invalid local Anvil RPC URL: ${url}. Must be a valid HTTP URL.${detail}`)
 	}
 
-	if (parsed.protocol !== 'http:') throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must use http:// for a local Anvil endpoint.`)
+	if (parsed.protocol !== 'http:') throw new Error(`Invalid local Anvil RPC URL: ${url}. Must use http:// for a local Anvil endpoint.`)
 
 	const allowedHosts = ['localhost', '127.0.0.1', '::1', '[::1]', 'host.docker.internal']
-	if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
+	if (!allowedHosts.includes(parsed.hostname)) throw new Error(`Anvil RPC points to unauthorized host '${parsed.hostname}'. Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal).`)
 }
 
 const isEvmMineUnsupported = (error: unknown): boolean => {
-	if (!(error instanceof Error)) return false
-	const message = error.message.toLowerCase()
-	return message.includes('method not found') || message.includes('unknown method') || message.includes('method does not exist') || message.includes('not available') || message.includes('-32601')
+	return error instanceof JsonRpcError && error.code === -32601
 }
 
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
 	let currentTimestamp = 0n
-	let snapshotTimestamp = 0n
+	const snapshotTimestamps = new Map<string, bigint>()
 
 	validateLocalAnvilRpcUrl(ANVIL_RPC)
 
@@ -230,18 +269,21 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	const requestRaw = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
 		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
 		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
+		const id = requestId++
 		const raw = await fetchJsonRpcResponse({
 			rpcUrl: ANVIL_RPC,
 			method: args.method,
-			body: JSON.stringify({ jsonrpc: '2.0', id: requestId++, method: args.method, params }),
+			body: JSON.stringify({ jsonrpc: '2.0', id, method: args.method, params }),
 		})
-		const json = parseJsonRpcResponse(raw)
+		const json = parseJsonRpcResponse(raw, id)
 		const hasResult = 'result' in json
 		const hasError = 'error' in json
 		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
 		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
-		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		if (json.error !== undefined) throw new JsonRpcError(json.error)
 		ensureDefined(json.result, 'json.result is undefined')
+		const requestedReceiptHash = args.method === 'eth_getTransactionReceipt' && typeof params[0] === 'string' ? params[0] : undefined
+		validateRpcResult(args.method, json.result, requestedReceiptHash === undefined ? {} : { transactionHash: requestedReceiptHash })
 		return json.result
 	}
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean; rpcTimeoutMs?: number }): Promise<unknown> => {
@@ -262,18 +304,19 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 		}
 
+		const id = requestId++
 		const raw = await fetchJsonRpcResponse({
 			rpcUrl: ANVIL_RPC,
 			method: args.method,
 			...(args.rpcTimeoutMs === undefined ? {} : { timeoutMs: args.rpcTimeoutMs }),
 			body: JSON.stringify({
 				jsonrpc: '2.0',
-				id: requestId++,
+				id,
 				method: args.method,
 				params,
 			}),
 		})
-		const json = parseJsonRpcResponse(raw)
+		const json = parseJsonRpcResponse(raw, id)
 
 		// Validate JSON-RPC response structure
 		// Ensure exactly one of result or error is present (per JSON-RPC spec)
@@ -292,7 +335,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			if (isSendTransactionMethod && params[0] !== undefined && isRpcTransactionRequest(params[0])) {
 				await collectBytecodeCoverageForCall({ request, transaction: params[0] })
 			}
-			throw new Error(json.error.message || 'RPC error')
+			throw new JsonRpcError(json.error)
 		}
 		if (args.method === 'anvil_reset' || args.method === 'anvil_revert') resetSolidityBytecodeCoverageAddressCache()
 		if (args.method === 'anvil_setCode' && typeof params[0] === 'string') invalidateSolidityBytecodeCoverageAddressCache(params[0])
@@ -367,6 +410,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
 		ensureDefined(json.result, 'json.result is undefined')
+		const requestedReceiptHash = args.method === 'eth_getTransactionReceipt' && typeof params[0] === 'string' ? params[0] : undefined
+		validateRpcResult(args.method, json.result, requestedReceiptHash === undefined ? {} : { transactionHash: requestedReceiptHash })
 		if (ethCallCoverageRequest !== undefined) {
 			await collectBytecodeCoverageForCall({
 				request,
@@ -411,6 +456,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				})
 			}
 			if (receiptResult?.status === '0x0') {
+				const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+				if (latestBlockTimestamp !== undefined) currentTimestamp = latestBlockTimestamp
 				try {
 					await request({ method: 'eth_call', params: [params[0], 'latest'], skipCoverage: true })
 				} catch (error) {
@@ -523,14 +570,19 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	}
 
 	const anvilSnapshot = async (): Promise<string> => {
-		snapshotTimestamp = currentTimestamp
 		const result = await request({ method: 'anvil_snapshot', params: [] })
-		return parseSnapshotId(result)
+		const snapshotId = parseSnapshotId(result)
+		snapshotTimestamps.set(snapshotId, currentTimestamp)
+		return snapshotId
 	}
 
 	const anvilRevert = async (snapshotId: string): Promise<void> => {
-		await request({ method: 'anvil_revert', params: [snapshotId] })
-		currentTimestamp = snapshotTimestamp
+		const reverted = await request({ method: 'anvil_revert', params: [snapshotId] })
+		if (reverted !== true) throw new AnvilSnapshotUnavailableError(snapshotId)
+		snapshotTimestamps.delete(snapshotId)
+		const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+		if (latestBlockTimestamp === undefined) throw new Error('Invalid block timestamp after anvil_revert')
+		currentTimestamp = latestBlockTimestamp
 	}
 
 	const resetToCleanState = async (): Promise<void> => {
@@ -538,7 +590,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
 		const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 		currentTimestamp = latestBlockTimestamp ?? 0n
-		snapshotTimestamp = currentTimestamp
+		snapshotTimestamps.clear()
 	}
 
 	const setNextBlockBaseFeePerGasToZero = async (): Promise<void> => {

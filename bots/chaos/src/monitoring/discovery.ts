@@ -1,3 +1,4 @@
+import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { createHash } from 'node:crypto'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import {
@@ -513,6 +514,20 @@ export function forkRepMigrationTarget(forkData: { auctionableAttoRepAtFork: big
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {
 	const { client, deployments } = context
+	const requiredRoots = ['zoltar', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'openOracle', 'weth'] as const
+	await requireDeployedContracts(
+		client,
+		[
+			...requiredRoots.map(name => ({ name, address: deployments[name] })),
+			...(context.allowMissingTradingDeployment
+				? []
+				: [
+						{ name: 'tradingFactory', address: deployments.tradingFactory },
+						{ name: 'tradingRouter', address: deployments.tradingRouter },
+					]),
+		],
+		blockNumber,
+	)
 	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
 		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingFactory, blockNumber }) : Promise.resolve('deployed'),
@@ -964,6 +979,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	}
 	return await mapWithConcurrency(entries, DISCOVERY_RPC_CONCURRENCY, async ({ id, operation }): Promise<StagedOperationSnapshot> => {
 		const operationType = bigintToSafeNumber(operation.operation)
+		const targetVault = pool.vaults.find(vault => sameAddress(vault.address, operation.targetVault)) ?? (await discoverVault(client, pool.address, pool.escalationGame, getAddress(operation.targetVault), blockNumber))
 		let executionExpectedSuccess = false
 		let executionExpectedResult: Hex = '0x'
 		let liquidationMinimumReceiverHealthFactorBps = 0n
@@ -1014,8 +1030,6 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 							snapshot: {
 								targetBackingUnits: operation.snapshotTargetBackingUnits,
 								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
-								totalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep,
-								totalRepBackingUnits: operation.snapshotTotalRepBackingUnits,
 							},
 							targetVault: operation.targetVault,
 						},
@@ -1066,10 +1080,10 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
 			snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
-			snapshotTargetDisputeStakedAttoRep: operation.snapshotTargetDisputeStakedAttoRep.toString(),
-			snapshotTargetOpenInterestAttoEth: operation.snapshotTargetOpenInterestAttoEth.toString(),
-			snapshotTotalPoolHeldAttoRep: operation.snapshotTotalPoolHeldAttoRep.toString(),
-			snapshotTotalRepBackingUnits: operation.snapshotTotalRepBackingUnits.toString(),
+			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
+			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
+			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,
+			snapshotTotalRepBackingUnits: pool.totalRepBackingUnits,
 			targetVault: getAddress(operation.targetVault),
 			validForSeconds: operation.validForSeconds.toString(),
 		}

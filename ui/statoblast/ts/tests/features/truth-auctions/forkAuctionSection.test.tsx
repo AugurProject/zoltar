@@ -190,6 +190,38 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	}
 }
 
+function createFinalizedTruthAuctionDetails(currentChildPool: ListedSecurityPool): ForkAuctionDetails {
+	return createForkAuctionDetails({
+		currentTime: 604_802n,
+		parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+		questionOutcome: 'yes',
+		securityPoolAddress: currentChildPool.securityPoolAddress,
+		systemState: 'operational',
+		truthAuction: {
+			accumulatedBidAttoEth: 5n * 10n ** 18n,
+			auctionEndsAt: 604_801n,
+			clearingPrice: 1n,
+			clearingTick: 0n,
+			bidAtClearingTickAttoEth: 0n,
+			attoEthRaiseCap: 10n * 10n ** 18n,
+			attoEthRaised: 5n * 10n ** 18n,
+			finalized: true,
+			hitCap: false,
+			maxAttoRepBeingSold: 10n * 10n ** 18n,
+			minBidSizeAttoEth: 1n,
+			attoRepPurchasableAtBid: undefined,
+			timeRemaining: 0n,
+			totalAttoRepPurchased: 5n * 10n ** 18n,
+			underfunded: false,
+			underfundedThreshold: undefined,
+			underfundedWinningAttoEth: 0n,
+		},
+		truthAuctionAddress: currentChildPool.truthAuctionAddress,
+		truthAuctionStartedAt: 1n,
+		universeId: currentChildPool.universeId,
+	})
+}
+
 function createForkMigrationReadClient(): Pick<ReadClient, 'readContract'> {
 	return {
 		readContract: mock(async request => {
@@ -237,6 +269,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onSelectedStageViewChange: () => undefined,
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
+		onWithdrawAuctionRefund: () => undefined,
 		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
 		securityPools: [createChildPool()],
 		selectedStageView: 'migration',
@@ -1011,6 +1044,178 @@ describe('ForkAuctionSection', () => {
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
 		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
+		expect(within(truthAuctionCard).getByText('Pending Refund')).not.toBeNull()
+	})
+
+	test('keeps refund withdrawal disabled while loading, then shows the credited amount beside an enabled action', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000aa')
+		const currentChildPool = createChildPool({
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000f7'),
+			systemState: 'operational',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const pendingRefund = createDeferred<bigint>()
+		const onWithdrawAuctionRefund = mock(() => undefined)
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				if (request.functionName === 'pendingEthRefundsAttoEth') return await pendingRefund.promise
+				if (request.functionName === 'activeTickCount' || request.functionName === 'getBidderBidCount') return 0n
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'settlement',
+					forkAuctionDetails: createFinalizedTruthAuctionDetails(currentChildPool),
+					onWithdrawAuctionRefund,
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'settlement',
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const refundHeading = documentQueries.getByRole('heading', { name: 'Refund Withdrawal' })
+		const refundSection = refundHeading.closest('.section-block')
+		if (!(refundSection instanceof HTMLElement)) throw new Error('Expected refund withdrawal section')
+		const refundQueries = within(refundSection)
+		const withdrawButton = refundQueries.getByRole('button', { name: 'Withdraw refund' })
+		expect(withdrawButton.hasAttribute('disabled')).toBe(true)
+		expect(refundQueries.getByText('Loading pending refund…')).not.toBeNull()
+
+		pendingRefund.resolve(5n * 10n ** 18n)
+		await waitFor(() => {
+			expect(withdrawButton.hasAttribute('disabled')).toBe(false)
+			expect(refundSection.textContent).toContain('5.00 ETH')
+		})
+		fireEvent.click(withdrawButton)
+		expect(onWithdrawAuctionRefund).toHaveBeenCalledWith(currentChildPool.securityPoolAddress, currentChildPool.universeId)
+	})
+
+	test('shows pending-refund read failure recovery and retries before enabling withdrawal', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000aa')
+		const currentChildPool = createChildPool({
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000f7'),
+			systemState: 'operational',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		let pendingRefundCalls = 0
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				if (request.functionName === 'pendingEthRefundsAttoEth') {
+					pendingRefundCalls += 1
+					if (pendingRefundCalls === 1) throw new Error('Refund RPC unavailable')
+					return 2n * 10n ** 18n
+				}
+				if (request.functionName === 'activeTickCount' || request.functionName === 'getBidderBidCount') return 0n
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'settlement',
+					forkAuctionDetails: createFinalizedTruthAuctionDetails(currentChildPool),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'settlement',
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => expect(documentQueries.getByText('Failed to load the pending refund balance.')).not.toBeNull())
+		const withdrawButton = documentQueries.getByRole('button', { name: 'Withdraw refund' })
+		expect(withdrawButton.hasAttribute('disabled')).toBe(true)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry pending refund' }))
+		await waitFor(() => {
+			expect(pendingRefundCalls).toBe(2)
+			expect(withdrawButton.hasAttribute('disabled')).toBe(false)
+			expect(documentQueries.queryByText('Failed to load the pending refund balance.')).toBeNull()
+		})
+	})
+
+	test('keeps zero-credit withdrawal disabled', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000aa')
+		const currentChildPool = createChildPool({
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000f7'),
+			systemState: 'operational',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const createTruthAuctionReadClient = (pendingRefundAttoEth: bigint): Pick<ReadClient, 'readContract'> => ({
+			readContract: mock(async request => {
+				if (request.functionName === 'pendingEthRefundsAttoEth') return pendingRefundAttoEth
+				if (request.functionName === 'activeTickCount' || request.functionName === 'getBidderBidCount') return 0n
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		})
+		const commonProps = {
+			accountState: createAccountState({ address: walletAddress }),
+			currentStageView: 'settlement' as const,
+			forkAuctionDetails: createFinalizedTruthAuctionDetails(currentChildPool),
+			previewPool: currentChildPool,
+			securityPools: [currentChildPool],
+			selectedStageView: 'settlement' as const,
+		}
+		const zeroRendered = await renderIntoDocument(h(ForkAuctionSection, createProps({ ...commonProps, truthAuctionReadClient: createTruthAuctionReadClient(0n) })))
+		await waitFor(() => {
+			const zeroButton = within(document.body).getByRole('button', { name: 'Withdraw refund' })
+			expect(zeroButton.hasAttribute('disabled')).toBe(true)
+			expect(zeroButton.getAttribute('title')).toBe('No credited refund is available to withdraw.')
+		})
+		cleanupRenderedComponent = zeroRendered.cleanup
+	})
+
+	test('marks an in-progress refund withdrawal pending', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000aa')
+		const currentChildPool = createChildPool({
+			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000f7'),
+			systemState: 'operational',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				if (request.functionName === 'pendingEthRefundsAttoEth') return 5n * 10n ** 18n
+				if (request.functionName === 'activeTickCount' || request.functionName === 'getBidderBidCount') return 0n
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'settlement',
+					forkAuctionActiveAction: 'withdrawAuctionRefund',
+					forkAuctionDetails: createFinalizedTruthAuctionDetails(currentChildPool),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'settlement',
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => {
+			const pendingButton = within(document.body).getByRole('button', { name: 'Withdrawing refund…' })
+			expect(pendingButton.hasAttribute('disabled')).toBe(true)
+			expect(pendingButton.getAttribute('aria-busy')).toBe('true')
+			expect(pendingButton.textContent).toContain('Withdrawing refund…')
+		})
 	})
 
 	test('keeps the submit bid form before the current auction bids', async () => {

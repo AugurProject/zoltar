@@ -33,6 +33,7 @@ export type SecurityPoolActionId =
 	| 'submitBid'
 	| 'finalizeTruthAuction'
 	| 'refundLosingBids'
+	| 'withdrawAuctionRefund'
 	| 'claimAuctionProceeds'
 	| 'settleForkedEscalation'
 

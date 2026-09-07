@@ -7,9 +7,21 @@ import { DEFAULT_ANVIL_STATE_MAX_AGE_MS } from './cleanup-foundry-anvil-state.mt
 
 const createTemporaryDirectory = async (prefix: string) => await mkdtemp(join(tmpdir(), prefix))
 
-const runTestWrapper = async ({ anvilStateDirectory, homeDirectory, testFile, useExistingProductionBuild = false }: { readonly anvilStateDirectory?: string; readonly homeDirectory: string; readonly testFile: string; readonly useExistingProductionBuild?: boolean }) => {
+const runTestWrapper = async ({
+	anvilStateDirectory,
+	bareParallel = false,
+	homeDirectory,
+	testFile,
+	useExistingProductionBuild = false,
+}: {
+	readonly anvilStateDirectory?: string
+	readonly bareParallel?: boolean
+	readonly homeDirectory: string
+	readonly testFile: string
+	readonly useExistingProductionBuild?: boolean
+}) => {
 	const child = Bun.spawn({
-		cmd: [process.execPath, './tooling/testing/run-tests.mts', '--parallel=1', testFile],
+		cmd: [process.execPath, './tooling/testing/run-tests.mts', bareParallel ? '--parallel' : '--parallel=1', testFile],
 		env: {
 			...process.env,
 			HOME: homeDirectory,
@@ -41,6 +53,20 @@ test('run-tests preserves a prepared production build when requested', async () 
 		expect(existsSync(productionBuildMarker)).toBe(true)
 	} finally {
 		await rm(productionBuildMarker, { force: true })
+		await rm(workspaceDirectory, { recursive: true, force: true })
+	}
+})
+
+test('run-tests preserves an explicit path after bare --parallel', async () => {
+	const workspaceDirectory = await createTemporaryDirectory('run-tests-bare-parallel-')
+	const homeDirectory = join(workspaceDirectory, 'home')
+	const testFile = join(workspaceDirectory, 'only.test.ts')
+	try {
+		await writeFile(testFile, "import { expect, test } from 'bun:test'\ntest('only explicit test', () => expect(1).toBe(1))\n")
+		const result = await runTestWrapper({ bareParallel: true, homeDirectory, testFile, useExistingProductionBuild: true })
+		expect(result.exitCode).toBe(0)
+		expect(`${result.stdout}${result.stderr}`).toContain('1 pass')
+	} finally {
 		await rm(workspaceDirectory, { recursive: true, force: true })
 	}
 })

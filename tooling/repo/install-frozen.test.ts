@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
@@ -21,6 +21,19 @@ const createPackageJson = (dependencies: Record<string, string>) =>
 
 const runForcedWindowsInstall = (installDirectory: string) => {
 	const result = Bun.spawnSync([process.execPath, '-e', `Object.defineProperty(process, 'platform', { value: 'win32' }); process.argv = [process.argv[0], process.argv[1], ${JSON.stringify(installDirectory)}]; await import(${JSON.stringify(installScriptPath)})`], {
+		cwd: repositoryRootPath,
+		stderr: 'pipe',
+		stdout: 'pipe',
+	})
+	return {
+		exitCode: result.exitCode,
+		stderr: Buffer.from(result.stderr).toString('utf8'),
+		stdout: Buffer.from(result.stdout).toString('utf8'),
+	}
+}
+
+const runNativeInstall = (installDirectory: string) => {
+	const result = Bun.spawnSync([process.execPath, installScriptPath, installDirectory], {
 		cwd: repositoryRootPath,
 		stderr: 'pipe',
 		stdout: 'pipe',
@@ -92,6 +105,57 @@ test('windows install workaround rejects invalid package backups without corrupt
 
 		expect(result.exitCode).not.toBe(0)
 		expect(await readFile(path.join(installDirectory, 'package.json'), 'utf8')).toBe(currentPackageJson)
+	} finally {
+		await rm(installDirectory, { force: true, recursive: true })
+	}
+})
+
+test('native local dependency workaround rejects a stale registry lock without modifying inputs', async () => {
+	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-native-'))
+	const installDirectory = path.join(temporaryRoot, 'app')
+	const sharedDirectory = path.join(temporaryRoot, 'shared')
+	try {
+		await mkdir(installDirectory)
+		await mkdir(sharedDirectory)
+		await writeFile(path.join(sharedDirectory, 'package.json'), createPackageJson({}))
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.5' }))
+		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
+		expect(initialInstall.exitCode).toBe(0)
+		const installedSharedPath = path.join(installDirectory, 'node_modules', '@zoltar', 'shared')
+		await rm(installedSharedPath, { force: true, recursive: true })
+		await symlink(sharedDirectory, installedSharedPath, 'dir')
+
+		const stalePackageJson = createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.4' })
+		await writeFile(path.join(installDirectory, 'package.json'), stalePackageJson)
+		const originalLockfile = await readFile(path.join(installDirectory, 'bun.lock'), 'utf8')
+		const result = runNativeInstall(installDirectory)
+
+		expect(result.exitCode).not.toBe(0)
+		expect(await readFile(path.join(installDirectory, 'package.json'), 'utf8')).toBe(stalePackageJson)
+		expect(await readFile(path.join(installDirectory, 'bun.lock'), 'utf8')).toBe(originalLockfile)
+		expect((await lstat(installedSharedPath)).isSymbolicLink()).toBe(true)
+		await expectNoInstallBackups(installDirectory)
+	} finally {
+		await rm(temporaryRoot, { force: true, recursive: true })
+	}
+})
+
+test('native install retains transitive dependencies from safe local packages', async () => {
+	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-safe-local-'))
+	const sharedDirectory = path.join(installDirectory, 'shared')
+	try {
+		await mkdir(sharedDirectory)
+		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:shared' }))
+		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
+		expect(initialInstall.exitCode).toBe(0)
+		await rm(path.join(installDirectory, 'node_modules'), { force: true, recursive: true })
+
+		const result = runNativeInstall(installDirectory)
+
+		if (result.exitCode !== 0) throw new Error(`${result.stdout}\n${result.stderr}`)
+		expect(await readFile(path.join(installDirectory, 'node_modules', 'kleur', 'package.json'), 'utf8')).toContain('"version": "4.1.5"')
+		await expectNoInstallBackups(installDirectory)
 	} finally {
 		await rm(installDirectory, { force: true, recursive: true })
 	}

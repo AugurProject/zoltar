@@ -52,9 +52,9 @@ export const executingStagedOperation = 'Executing Staged Operation'
 export const requestingPrice = 'Requesting Price'
 export const stagedOperationExecuted = 'Staged Operation Executed'
 export const priceRequested = 'Price Requested'
-export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was returned without assigning REP backing units or ${capacityOwnershipLabel}.`
+export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or ${capacityOwnershipLabel}.`
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
-export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows returned locked ETH.`
+export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`
 export const childUniverseLinkedToForkPathDetail = 'The selected child universe was deployed and linked to this fork path.'
 export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & Migration.'
 export const zoltarUniverseForkSubmittedDetail = 'The selected universe fork was submitted on-chain.'
@@ -65,7 +65,8 @@ export const poolRepMigrationSuccessDetail = 'Pool-held REP was migrated into th
 export const unresolvedEscalationMigratedDetail = 'The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.'
 export const clearUnresolvedParentEscalationDepositAccounting = 'Clear Unresolved Parent Escalation-Deposit Accounting'
 export const vaultMigratedDetail = 'Vault REP backing and capacity ownership were migrated into the selected child universe.'
-export const losingBidsRefundedDetail = 'Selected losing truth-auction bids were refunded.'
+export const losingBidsRefundedDetail = 'Selected losing truth-auction bids were settled and their ETH was credited for withdrawal.'
+export const auctionRefundWithdrawnDetail = 'The connected wallet withdrew its credited truth-auction ETH refund.'
 export const forkDepositSettlementSuccessDetail = 'Imported fork-carried escalation deposits were settled.'
 export const truthAuctionStartedSuccessDetail = 'Truth auction state was started for the selected child universe.'
 export const truthAuctionBidSuccessDetail = 'Truth auction bid submitted. Bid ETH stays committed until settlement.'

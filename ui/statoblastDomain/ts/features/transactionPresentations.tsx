@@ -268,6 +268,8 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 				return transactionCopy.truthAuctionStartedSuccessDetail
 			case 'submitBid':
 				return transactionCopy.truthAuctionBidSuccessDetail
+			case 'withdrawAuctionRefund':
+				return transactionCopy.auctionRefundWithdrawnDetail
 			default:
 				return undefined
 		}

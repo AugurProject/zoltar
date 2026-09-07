@@ -153,6 +153,11 @@ export function ForkZoltarSection({
 			)}
 
 			<div className='form-grid'>
+				<label className='field'>
+					<span>{zoltarCopy.forkQuestionId}</span>
+					<FormInput aria-describedby={selectedQuestionDescriptionId} disabled={hasForked || zoltarForkPending} invalid={selectedQuestionDescriptionId !== undefined} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} value={zoltarForkQuestionId} />
+				</label>
+
 				{hasForked || !requiresApproval ? undefined : (
 					<TokenApprovalControl
 						actionLabel={zoltarCopy.forkingActionLabel}
@@ -170,11 +175,6 @@ export function ForkZoltarSection({
 						tokenUnits={18}
 					/>
 				)}
-
-				<label className='field'>
-					<span>{zoltarCopy.forkQuestionId}</span>
-					<FormInput aria-describedby={selectedQuestionDescriptionId} disabled={hasForked || zoltarForkPending} invalid={selectedQuestionDescriptionId !== undefined} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} value={zoltarForkQuestionId} />
-				</label>
 
 				{selectedQuestion === undefined ? undefined : (
 					<WorkflowSubsection title={commonCopy.question}>

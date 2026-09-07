@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, normalizeAnvilTransactionParams, validateLocalAnvilRpcUrl } from '../testSupport/simulator/AnvilWindowEthereum'
+import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, JsonRpcError, normalizeAnvilTransactionParams, parseJsonRpcResponse, validateLocalAnvilRpcUrl, validateRpcResult } from '../testSupport/simulator/AnvilWindowEthereum'
 
 type JsonRpcRequest = {
 	readonly id: number | string
@@ -52,7 +52,7 @@ test('validateLocalAnvilRpcUrl rejects non-HTTP endpoints', () => {
 })
 
 test('validateLocalAnvilRpcUrl rejects non-local endpoints', () => {
-	expect(() => validateLocalAnvilRpcUrl('http://example.com:8545')).toThrow("ANVIL_RPC points to unauthorized host 'example.com'")
+	expect(() => validateLocalAnvilRpcUrl('http://example.com:8545')).toThrow("Anvil RPC points to unauthorized host 'example.com'")
 })
 
 test('normalizeAnvilTransactionParams forces legacy zero-gas pricing for send transactions', () => {
@@ -109,6 +109,91 @@ test('normalizeAnvilTransactionParams leaves non-object params unchanged', () =>
 	expect(normalizeAnvilTransactionParams(params)).toEqual(params)
 })
 
+test('JSON-RPC envelopes and method results fail closed', () => {
+	expect(() => parseJsonRpcResponse({ jsonrpc: '2.0', id: 8, result: '0x1' }, 7)).toThrow('response id')
+	expect(() => parseJsonRpcResponse({ jsonrpc: '2.0', id: 7, error: { code: 'bad', message: 'failure' } }, 7)).toThrow('malformed error')
+	expect(() => parseJsonRpcResponse({ jsonrpc: '2.0', id: 7, result: true, error: undefined }, 7)).toThrow('exactly one')
+	expect(() => validateRpcResult('eth_chainId', '0x01')).toThrow('canonical quantity')
+	expect(() => validateRpcResult('eth_sendTransaction', '0x1234')).toThrow('transaction hash')
+	expect(() => validateRpcResult('eth_getTransactionReceipt', { status: '0x2', transactionHash: `0x${'11'.repeat(32)}` }, { transactionHash: `0x${'11'.repeat(32)}` })).toThrow('status')
+	expect(() => validateRpcResult('eth_getTransactionReceipt', { status: '0x1', transactionHash: `0x${'22'.repeat(32)}` }, { transactionHash: `0x${'11'.repeat(32)}` })).toThrow('submitted hash')
+	expect(() => validateRpcResult('anvil_revert', false)).not.toThrow()
+})
+
+test('JSON-RPC failures preserve structured code and data', () => {
+	const error = new JsonRpcError({ code: -32601, message: 'alternate unsupported wording', data: { method: 'evm_mine' } })
+	expect(error.code).toBe(-32601)
+	expect(error.data).toEqual({ method: 'evm_mine' })
+	expect(error.message).toBe('alternate unsupported wording')
+})
+
+test('request and requestRaw both preserve structured JSON-RPC failures', async () => {
+	globalThis.fetch = createMockedFetch(async (_input, init) => {
+		if (typeof init?.body !== 'string') throw new Error('Expected a JSON-RPC string body')
+		const request = JSON.parse(init.body) as JsonRpcRequest
+		if (request.method === 'anvil_reset') return createJsonRpcResponse(request, { result: null })
+		if (request.method === 'anvil_setNextBlockBaseFeePerGas') return createJsonRpcResponse(request, { result: null })
+		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: '0x0' } })
+		return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32_001, message: 'structured failure', data: '0xdead' } }))
+	})
+	const ethereum = await getMockedEthSimulateWindowEthereum()
+	for (const invoke of [() => ethereum.request({ method: 'unknown_method' }), () => ethereum.requestRaw({ method: 'unknown_method' })]) {
+		try {
+			await invoke()
+			throw new Error('Expected request failure')
+		} catch (error) {
+			expect(error).toBeInstanceOf(JsonRpcError)
+			if (!(error instanceof JsonRpcError)) throw error
+			expect(error.code).toBe(-32_001)
+			expect(error.data).toBe('0xdead')
+		}
+	}
+})
+
+test('nested snapshots restore their own node timestamp and reject consumed snapshots', async () => {
+	let timestamp = 1n
+	let nextSnapshot = 1
+	const snapshots = new Map<string, bigint>()
+	globalThis.fetch = createMockedFetch(async (_input, init) => {
+		if (typeof init?.body !== 'string') throw new Error('Expected a JSON-RPC string body')
+		const request = JSON.parse(init.body) as JsonRpcRequest
+		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: `0x${timestamp.toString(16)}` } })
+		if (request.method === 'evm_setNextBlockTimestamp') {
+			const value = request.params?.[0]
+			if (typeof value !== 'string') throw new Error('Missing timestamp')
+			timestamp = BigInt(value)
+			return createJsonRpcResponse(request, { result: null })
+		}
+		if (request.method === 'anvil_snapshot') {
+			const id = `0x${nextSnapshot.toString(16)}`
+			nextSnapshot += 1
+			snapshots.set(id, timestamp)
+			return createJsonRpcResponse(request, { result: id })
+		}
+		if (request.method === 'anvil_revert') {
+			const id = request.params?.[0]
+			if (typeof id !== 'string') throw new Error('Missing snapshot id')
+			const restored = snapshots.get(id)
+			if (restored === undefined) return createJsonRpcResponse(request, { result: false })
+			timestamp = restored
+			snapshots.delete(id)
+			return createJsonRpcResponse(request, { result: true })
+		}
+		return createJsonRpcResponse(request, { result: null })
+	})
+	const ethereum = await getMockedEthSimulateWindowEthereum()
+	await ethereum.setTime(10n)
+	const outer = await ethereum.anvilSnapshot()
+	await ethereum.setTime(20n)
+	const inner = await ethereum.anvilSnapshot()
+	await ethereum.setTime(30n)
+	await ethereum.anvilRevert(inner)
+	expect(await ethereum.getTime()).toBe(20n)
+	await ethereum.anvilRevert(outer)
+	expect(await ethereum.getTime()).toBe(10n)
+	await expect(ethereum.anvilRevert(outer)).rejects.toThrow('snapshot')
+})
+
 test('send transaction lets automining publish a delayed receipt before fallback mining', async () => {
 	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
 	const originalDateNow = Date.now
@@ -132,6 +217,7 @@ test('send transaction lets automining publish a delayed receipt before fallback
 				result: {
 					contractAddress: null,
 					status: '0x1',
+					transactionHash,
 					to: '0x0000000000000000000000000000000000000002',
 				},
 			})
@@ -187,6 +273,7 @@ test('send transaction waits for a delayed receipt and mines pending Anvil trans
 				result: {
 					contractAddress: null,
 					status: '0x1',
+					transactionHash,
 					to: '0x0000000000000000000000000000000000000002',
 				},
 			})

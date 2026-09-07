@@ -1,3 +1,4 @@
+import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { getAddress, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
@@ -62,7 +63,8 @@ async function loadPool(client: ReadClient, address: Address, token: Address, fe
 	}
 }
 
-export async function poolsForToken(client: ReadClient, config: Configuration, token: Address) {
+export async function poolsForToken(client: ReadClient, config: Pick<Configuration, 'network' | 'v2Router' | 'twapSeconds'>, token: Address) {
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: config.network.factory }])
 	const pools: Pool[] = []
 	let v2Pair: Address | undefined
 	if (config.v2Router !== undefined && config.network.chain.id === 1) {
@@ -79,14 +81,14 @@ export async function poolsForToken(client: ReadClient, config: Configuration, t
 		}
 	}
 	for (const fee of FEES) {
+		const address = await client.readContract({
+			address: config.network.factory,
+			abi: factoryAbi,
+			functionName: 'getPool',
+			args: [config.network.weth, token, fee],
+		})
+		if (address === zeroAddress) continue
 		try {
-			const address = await client.readContract({
-				address: config.network.factory,
-				abi: factoryAbi,
-				functionName: 'getPool',
-				args: [config.network.weth, token, fee],
-			})
-			if (address === zeroAddress) continue
 			const pool = await loadPool(client, address, token, fee, config.twapSeconds)
 			if (pool !== undefined) pools.push({ ...pool, v2Pair })
 		} catch (error) {

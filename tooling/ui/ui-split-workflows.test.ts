@@ -10,8 +10,7 @@ const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.ym
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
 const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
-const stagedCoverageWorkflowPath = join(repositoryRoot, 'workflow', 'coverage.yml')
-const coverageWorkflowPath = (await Bun.file(stagedCoverageWorkflowPath).exists()) ? stagedCoverageWorkflowPath : activeCoverageWorkflowPath
+const coverageWorkflowPath = activeCoverageWorkflowPath
 const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-domains.yml')
 const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
@@ -43,8 +42,14 @@ const workflowSteps = (job: unknown) => {
 	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
 }
 describe('split UI workflow paths', () => {
+	test('CI validates test ownership before scope-dependent jobs', async () => {
+		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const changesSteps = workflowSteps(jobs['changes'])
+		expect(changesSteps.some(step => step['run'] === 'bun run test:preflight')).toBe(true)
+	})
 	test('CI validation cannot be diverted to a staged workflow copy', async () => {
 		await expect(access(stagedCiWorkflowPath)).rejects.toThrow()
+		expect(coverageWorkflowPath).toBe(activeCoverageWorkflowPath)
 	})
 
 	test('split CI remains callable by the version release workflow', async () => {
@@ -83,6 +88,12 @@ describe('split UI workflow paths', () => {
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
+		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciJobs = workflowJobs(ciWorkflow)
+		const requiredBrowserJob = requireRecord(ciJobs['browser-smoke'], 'required browser smoke job')
+		expect(requiredBrowserJob['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(workflowSteps(requiredBrowserJob).some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
+		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
 	})
 
 	test('manual coverage publishes and retains the canonical policy report', async () => {
@@ -191,6 +202,7 @@ describe('split UI workflow paths', () => {
 		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 
 		const dockerStages = parseDockerfile(await readFile(dockerfilePath, 'utf8'))
+		expect(dockerStages.flatMap(stage => dockerInstructions(stage, 'ARG')).some(argument => argument.includes('BUN_VERSION=1.4.2'))).toBe(true)
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
 		for (const appId of uiPackageIds) {

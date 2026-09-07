@@ -103,6 +103,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	missingContract?: Address
 	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
 	delayUniswapPoolReads?: boolean
@@ -147,6 +148,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
+			if (parameters.address === graph.missingContract) return '0x'
+			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
 		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
@@ -1347,8 +1350,25 @@ describe('anchored ecosystem discovery', () => {
 
 	test('marks a staged liquidation executable only after exact coordinator-context simulation', async () => {
 		const fixture = snapshotFixture()
-		const pool = fixture.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
+		const fixturePool = fixture.pools[0]
+		if (fixturePool === undefined) throw new Error('Pool fixture missing')
+		const fixtureVault = fixturePool.vaults[0]
+		if (fixtureVault === undefined) throw new Error('Vault fixture missing')
+		const pool = {
+			...fixturePool,
+			vaults: [
+				...fixturePool.vaults,
+				{
+					...fixtureVault,
+					address: address(88),
+					capacityOwnershipAttoRep: String(20n),
+					disputeStakedAttoRep: String(0n),
+					openInterestAttoEth: String(100n),
+					repBackingAttoRep: String(10n),
+					repBackingUnits: String(10n),
+				},
+			],
+		}
 		const anchor = 555n
 		let simulationFailure: Error | undefined
 		let registryCoordinator = pool.coordinator
@@ -1378,10 +1398,6 @@ describe('anchored ecosystem discovery', () => {
 									reservedLiquidationDebtAttoEth: 80n,
 									snapshotTargetBackingUnits: 10n,
 									snapshotTargetCapacityOwnershipAttoRep: 20n,
-									snapshotTargetDisputeStakedAttoRep: 0n,
-									snapshotTargetOpenInterestAttoEth: 100n,
-									snapshotTotalPoolHeldAttoRep: 1_000n,
-									snapshotTotalRepBackingUnits: 900n,
 									targetVault: address(88),
 									validForSeconds: 3_600n,
 								},
@@ -1414,6 +1430,16 @@ describe('anchored ecosystem discovery', () => {
 							reservedDebtAttoEth: 80n,
 							revoked: approvalRevoked,
 						}
+					case 'securityVaults':
+						return [10n, 20n, 0n, 0n]
+					case 'getVaultOpenInterestAttoEth':
+						return 100n
+					case 'vaultBadDebtAttoEth':
+						return 0n
+					case 'backingUnitsToAttoRep':
+						return 10n
+					case 'disputeStakedRepByVaultAttoRep':
+						return 0n
 					default:
 						throw new Error(`Unexpected read ${parameters.functionName}`)
 				}
@@ -1438,6 +1464,12 @@ describe('anchored ecosystem discovery', () => {
 		expect(simulations[0]?.blockNumber).toBe(anchor)
 		expect(simulations[0]?.functionName).toBe('performLiquidation')
 		expect(simulations[0]?.args?.[0]).toMatchObject({ minimumReceiverHealthFactorBps: 12_000n, operationId: 42n, requestedDebtAttoEth: 80n })
+
+		const unregisteredTarget = await discoverStagedOperations(client, { ...pool, vaults: fixturePool.vaults }, anchor, 10, [])
+		expect(unregisteredTarget[0]?.executionExpectedSuccess).toBe(true)
+		expect(unregisteredTarget[0]?.snapshotTargetDisputeStakedAttoRep).toBe('0')
+		expect(unregisteredTarget[0]?.snapshotTargetOpenInterestAttoEth).toBe('100')
+		expect(unregisteredTarget[0]?.targetVault).toBe(address(88))
 
 		const revertedSimulation = new Error('Contract simulation failed', { cause: new Error('execution reverted: stale liquidation snapshot') })
 		revertedSimulation.name = 'ContractFunctionExecutionError'
@@ -1735,3 +1767,27 @@ describe('anchored ecosystem discovery', () => {
 		expect(() => assertCanonicalPairGraph({ ...pairIdentity, pairShareToken: address(99) })).toThrow('share-token edge')
 	})
 })
+
+test('reports missing configured contract code before calling protocol getters', async () => {
+	const fake = fakeClient(10n, hash(10), { missingContract: address(5) })
+	await expect(
+		discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			wallet: address(1),
+		}),
+	).rejects.toThrow('securityPoolForker')
+	expect(fake.contractReads).toHaveLength(0)
+})
+
+for (const [name, missingContract] of [
+	['tradingFactory', address(8)],
+	['tradingRouter', address(9)],
+] as const) {
+	test(`reports missing required ${name} before protocol getters`, async () => {
+		const fake = fakeClient(10n, hash(10), { missingContract })
+		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow(`No contract code on RPC chain 31337 at block 10: ${name} (${missingContract})`)
+		expect(fake.contractReads).toHaveLength(0)
+	})
+}

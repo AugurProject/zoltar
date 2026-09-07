@@ -1550,3 +1550,40 @@
 		width: 100%;
 	}
 }
+
+.overview-route-header .route-header-main {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.overview-route-header .route-header-badge {
+	justify-self: start;
+	align-self: center;
+}
+
+.overview-route-header .route-header-actions {
+	align-self: center;
+}
+
+.overview-route-header .route-title-row h2 {
+	white-space: nowrap;
+}
+
+.overview-route-header .environment-badge-row {
+	flex-wrap: wrap;
+}
+
+.overview-shell > .universe-fork-notice {
+	border: 1px solid var(--warning-border-strong);
+	padding: var(--space-3);
+	background: var(--notice-warning-gradient);
+}
+
+@media (max-width: 42rem) {
+	.overview-route-header .environment-badge-row .badge {
+		padding-inline: 0.3rem;
+		letter-spacing: 0.02em;
+	}
+}

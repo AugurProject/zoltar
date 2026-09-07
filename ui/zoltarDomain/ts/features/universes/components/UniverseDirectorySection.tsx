@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -11,14 +12,28 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import type { Address } from '@zoltar/shared/ethereum'
+import { getChildDeploymentAvailabilityReason } from './ChildUniverseDeploymentSection.js'
 
 type UniverseDirectorySectionProps = {
+	children?: ComponentChildren
 	activeUniverseId: bigint
+	accountAddress: Address | undefined
+	isOnActiveAppChain: boolean
+	onDeployChildUniverse: (outcomeIndex: bigint) => void
+	pendingOutcomeIndex: bigint | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: UniverseDirectorySectionProps) {
-	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+export function UniverseDirectorySection({ children, activeUniverseId, accountAddress, isOnActiveAppChain, onDeployChildUniverse, pendingOutcomeIndex, zoltarUniverse }: UniverseDirectorySectionProps) {
+	if (zoltarUniverse === undefined)
+		return (
+			<>
+				<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+				{children}
+			</>
+		)
 
 	const getUniverseBadge = (universeId: bigint, exists: boolean) => {
 		if (universeId === activeUniverseId) return { label: commonCopy.selected, tone: 'warning' as const }
@@ -44,6 +59,7 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 				)}
 			</SectionBlock>
 
+			{children}
 			<SectionBlock title={marketCopy.childUniverses} variant='plain'>
 				{zoltarUniverse.childUniverses.length === 0 ? (
 					<StateHint presentation={{ key: 'empty', badgeLabel: marketCopy.noChildUniverses, badgeTone: 'muted', detail: marketCopy.deployedChildUniversesEmpty }} />
@@ -51,15 +67,21 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 					<div className='entity-card-list'>
 						{zoltarUniverse.childUniverses.map(childUniverse => {
 							const badge = getUniverseBadge(childUniverse.universeId, childUniverse.exists)
+							const deploymentReason = getChildDeploymentAvailabilityReason({ accountAddress, exists: childUniverse.exists, hasForked: zoltarUniverse.hasForked, isOnActiveAppChain })
 
 							return (
 								<EntityCard
 									key={childUniverse.universeId.toString()}
 									actions={
-										childUniverse.universeId === activeUniverseId || !childUniverse.exists ? undefined : (
-											<UniverseLink className='button-link secondary-link' universeId={childUniverse.universeId}>
-												{commonCopy.select}
-											</UniverseLink>
+										childUniverse.exists ? undefined : (
+											<TransactionActionButton
+												idleLabel={marketCopy.deployUniverse}
+												pendingLabel={marketCopy.deployingUniverse}
+												pending={pendingOutcomeIndex === childUniverse.outcomeIndex}
+												onClick={() => onDeployChildUniverse(childUniverse.outcomeIndex)}
+												availability={{ disabled: pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: deploymentReason }}
+												showDisabledReason
+											/>
 										)
 									}
 									badge={<Badge tone={badge.tone}>{badge.label}</Badge>}
@@ -68,7 +90,7 @@ export function UniverseDirectorySection({ activeUniverseId, zoltarUniverse }: U
 								>
 									<DataGrid dense>
 										{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
-										<MetricField label={commonCopy.universe}>{formatUniverseLabel(childUniverse.universeId)}</MetricField>
+										<MetricField label={commonCopy.universe}>{childUniverse.exists ? <UniverseLink universeId={childUniverse.universeId}>{formatUniverseLabel(childUniverse.universeId)}</UniverseLink> : formatUniverseLabel(childUniverse.universeId)}</MetricField>
 										<MetricField label={marketCopy.parentUniverse}>
 											<UniverseLink universeId={childUniverse.parentUniverseId} />
 										</MetricField>

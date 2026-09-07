@@ -213,10 +213,7 @@
 				<ul>
 					<li><code>ShareTokenFactory</code>, <code>EscalationGameFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, and <code>SecurityPoolDeployer</code> construct the displayed runtime contracts.</li>
 					<li><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, and the <code>SecurityPoolForker*</code> delegate modules execute against their owning contract's storage; they are implementation boundaries, not independent user-facing protocol hubs.</li>
-					<li>
-						<code>SecurityPoolMigrationProxy</code> isolates a pool's Zoltar migration balance, while <code>SecurityPoolEventEmitter</code>
-						preserves pool-address event attribution under delegated fork work.
-					</li>
+					<li><code>SecurityPoolMigrationProxy</code> isolates a pool's Zoltar migration balance. <code>SecurityPoolEventEmitter</code> reads the typed <code>SecurityPoolStorage</code> layout to emit pool and vault accounting checkpoints from the pool address, while <code>SecurityPoolForkEventEmitter</code> reads the typed <code>SecurityPoolForkerStorage</code> layout to emit fork snapshots from the forker address.</li>
 					<li><code>WETH9</code>, <code>Multicall3</code>, and the imported <code>OpenOracle</code> implementation are compatibility or external boundaries; only OpenOracle's protocol-facing relationship is shown.</li>
 				</ul>
 			</section>
