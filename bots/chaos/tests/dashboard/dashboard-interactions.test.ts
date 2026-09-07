@@ -136,6 +136,8 @@ const scenarios: RecoveryScenario[] = [
 ]
 
 const workflowRenderingState = state({
+	lastScannedBlock: '12345678',
+	lastScanAt: new Date(Date.now() - 12_000).toISOString(),
 	activities: [{ at: '2026-08-24T00:02:00.000Z', label: 'Rendered activity', status: 'dry-run', txHash: activityHash }],
 	currentWorkflow: {
 		createdAt: '2026-08-24T00:00:00.000Z',
@@ -603,6 +605,8 @@ browserTest(
 				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 				await waitFor(`document.querySelectorAll('#current-workflow .step-list li').length === ${workflowSteps.length.toString()}`, `${viewport.label} workflow steps did not render`)
 				expect(await cdp.evaluate("document.querySelector('#scheduler-state')?.textContent")).toBe('Transaction recovery pending')
+				expect(await cdp.evaluate("document.querySelector('header #last-block')?.textContent")).toBe('Block 12345678')
+				expect(await cdp.evaluate("document.querySelector('header #last-scan')?.textContent")).toMatch(/^Scanned \d+[smh] ago$/)
 				const health = await cdp.evaluate(`({
 					chain: document.querySelector('#rpc-chain-readiness')?.textContent,
 					configured: document.querySelector('#rpc-configured-total')?.textContent,
@@ -813,6 +817,7 @@ browserTest(
 				expect(await cdp.evaluate('window.__identifierCopies')).toEqual([walletAddress, walletAddress])
 
 				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
+				await waitFor("document.querySelector('header #last-block')?.textContent === 'Block 12345678'", 'Shared block header did not render on the catalog route')
 				await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
 				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
 					configurable: true,

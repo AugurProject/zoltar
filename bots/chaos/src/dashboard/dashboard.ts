@@ -200,8 +200,8 @@ const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const globalError = element('global-error', HTMLDivElement)
 const operatorAlerts = element('operator-alerts', HTMLUListElement)
-const lastBlock = element('last-block', HTMLParagraphElement)
-const lastScan = element('last-scan', HTMLParagraphElement)
+const lastBlock = element('last-block', HTMLSpanElement)
+const lastScan = element('last-scan', HTMLSpanElement)
 const countdown = element('countdown', HTMLHeadingElement)
 const countdownProgress = element('countdown-progress', HTMLSpanElement)
 const schedulerState = element('scheduler-state', HTMLSpanElement)
@@ -1020,6 +1020,8 @@ function activeSchedulerWorkLabel(value: Snapshot) {
 }
 
 function renderHeader(value: Snapshot) {
+	lastBlock.textContent = value.lastScannedBlock === undefined ? 'Block —' : `Block ${String(value.lastScannedBlock)}`
+	lastScan.textContent = formatRelative(value.lastScanAt)
 	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
 	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
 	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
@@ -1037,8 +1039,6 @@ function renderHeader(value: Snapshot) {
 }
 
 function renderOverview(value: Snapshot) {
-	lastBlock.textContent = value.lastScannedBlock === undefined ? 'Block —' : `Block ${String(value.lastScannedBlock)}`
-	lastScan.textContent = formatRelative(value.lastScanAt)
 	nextRun.textContent = formatDate(value.scheduler.nextRunAt)
 	const delay = parsePositiveNumber(value.scheduler.lastDelaySeconds)
 	lastDelay.textContent = delay === undefined ? '—' : formatDuration(delay)
