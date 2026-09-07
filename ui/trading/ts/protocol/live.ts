@@ -8,8 +8,7 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { fetchLogsWithAdaptiveRanges, findContractDeploymentBlock } from '@zoltar/shared/logScan'
 import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
-import { getQuestionId } from '@zoltar/shared/questionId'
-import { getChildUniverseId } from '@zoltar/shared/universeId'
+import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from './eventValidation.js'
 export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
@@ -315,8 +314,9 @@ async function loadLiveQuestionFields(client: PublicClient, questionData: Addres
 	for (const log of logs) {
 		try {
 			const decoded = decodeEventLog({ abi: questionDataAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'QuestionCreated' || decoded.args.questionId !== questionId) continue
-			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+			if (decoded.eventName !== 'QuestionCreated') continue
+			assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId)
+			if (decoded.args.questionId !== questionId) continue
 			const { title, description, endTime } = decoded.args.questionData
 			return { title, description, endTime }
 		} catch (error) {
@@ -493,8 +493,9 @@ async function loadUniverseIds(client: PublicClient, configuration: DeploymentCo
 		const universeId = Reflect.get(args, 'universeId')
 		const outcomeIndex = Reflect.get(args, 'outcomeIndex')
 		const childUniverseId = Reflect.get(args, 'childUniverseId')
-		if (typeof universeId !== 'bigint' || typeof outcomeIndex !== 'bigint' || typeof childUniverseId !== 'bigint') throw new Error('DeployChild event is incomplete')
-		if (getChildUniverseId(universeId, outcomeIndex) !== childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		const childReputationToken = Reflect.get(args, 'childReputationToken')
+		if (typeof universeId !== 'bigint' || typeof outcomeIndex !== 'bigint' || typeof childUniverseId !== 'bigint' || typeof childReputationToken !== 'string') throw new Error('DeployChild event is incomplete')
+		assertDeployChildId(universeId, outcomeIndex, childUniverseId)
 		const child = await client.readContract({
 			abi: zoltarAbi,
 			address: configuration.zoltar,
@@ -502,7 +503,7 @@ async function loadUniverseIds(client: PublicClient, configuration: DeploymentCo
 			functionName: 'universes',
 			...registrySnapshotBlockParameters(anchor, getActiveBackend().id === 'simulation'),
 		})
-		if (child.parentUniverseId !== universeId || child.forkingOutcomeIndex !== outcomeIndex) throw new Error(`Zoltar universe ${childUniverseId.toString()} does not match its DeployChild route`)
+		assertDeployChildRoute(child.parentUniverseId, child.forkingOutcomeIndex, getAddress(child.reputationToken), universeId, outcomeIndex, getAddress(childReputationToken))
 		const children = childrenByParent.get(universeId) ?? []
 		children.push(childUniverseId)
 		childrenByParent.set(universeId, children)

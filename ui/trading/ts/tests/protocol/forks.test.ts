@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getQuestionId } from '@zoltar/shared/questionId'
 import { getChildUniverseId, loadForkMigrationContext } from '../../protocol/forks.js'
+import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from '../../protocol/eventValidation.js'
+import { discoverLiveUniverseMarketPage } from '../../protocol/live.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)
 const shareToken = getAddress(`0x${'22'.repeat(20)}`)
@@ -94,8 +96,8 @@ function encodedAddress(address: Address) {
 	return encodeAbiParameters([{ type: 'address' }], [address])
 }
 
-function encodedUniverse(forkQuestionId: bigint, forkingOutcomeIndex = 0n, parentUniverseId = 0n) {
-	return encodeAbiParameters(universeOutputs, [1n, forkQuestionId, forkingOutcomeIndex, zeroAddress, parentUniverseId])
+function encodedUniverse(forkQuestionId: bigint, forkingOutcomeIndex = 0n, parentUniverseId = 0n, reputationToken = shareToken) {
+	return encodeAbiParameters(universeOutputs, [1n, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId])
 }
 
 function rpcLog(address: Address, topics: readonly Hex[], data: Hex, logIndex: number): RpcLog {
@@ -127,12 +129,12 @@ function questionCreatedLog(title: string, outcomes: readonly string[], numTicks
 	)
 }
 
-function deployChildLog(outcomeIndex: bigint, logIndex: number, overrideChildUniverseId?: bigint, parentUniverseId = market.universeId) {
+function deployChildLog(outcomeIndex: bigint, logIndex: number, overrideChildUniverseId?: bigint, parentUniverseId = market.universeId, childReputationToken = shareToken) {
 	const childUniverseId = overrideChildUniverseId ?? getChildUniverseId(parentUniverseId, outcomeIndex)
 	return rpcLog(
 		zoltar,
 		[keccak256('DeployChild(address,uint248,uint256,uint248,address,uint256)'), toHex(parentUniverseId, { size: 32 }), toHex(outcomeIndex, { size: 32 }), toHex(childUniverseId, { size: 32 })],
-		encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [pool, zeroAddress, 1n]),
+		encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [pool, childReputationToken, 1n]),
 		logIndex,
 	)
 }
@@ -155,6 +157,59 @@ describe('fork protocol helpers', () => {
 		expect(() => getChildUniverseId(-1n, 42n)).toThrow('uint248')
 		expect(() => getChildUniverseId(7n, -1n)).toThrow('uint256')
 		expect(() => getChildUniverseId(7n, 1n << 256n)).toThrow('uint256')
+	})
+
+	test('authenticates question and child discovery events with shared validators', () => {
+		expect(() => assertQuestionCreatedId(questionDataFor('Question'), ['Yes', 'No'], 99n)).toThrow('mismatched deterministic question ID')
+		expect(() => assertDeployChildId(0n, 1n, 99n)).toThrow('mismatched deterministic child universe ID')
+		expect(() => assertDeployChildRoute(2n, 0n, shareToken, 1n, 0n, shareToken)).toThrow('does not match its DeployChild route')
+	})
+
+	test('rejects forged child IDs and stored routes through primary live discovery', async () => {
+		const forgedIdClient = publicClient(
+			callSelector => {
+				if (callSelector === selectors.universes) return encodedUniverse(0n, 1n, 0n)
+				throw new Error(`Unexpected function selector: ${callSelector}`)
+			},
+			[deployChildLog(1n, 0, 42n, 0n)],
+		)
+		await expect(discoverLiveUniverseMarketPage(forgedIdClient, deployment, undefined)).rejects.toThrow('mismatched deterministic child universe ID')
+
+		const forgedRouteClient = publicClient(
+			callSelector => {
+				if (callSelector === selectors.universes) return encodedUniverse(0n, 2n, 0n)
+				throw new Error(`Unexpected function selector: ${callSelector}`)
+			},
+			[deployChildLog(1n, 0, undefined, 0n)],
+		)
+		await expect(discoverLiveUniverseMarketPage(forgedRouteClient, deployment, undefined)).rejects.toThrow('does not match its DeployChild route')
+	})
+
+	test('discovers a valid child and matching stored route through primary live discovery', async () => {
+		const childUniverseId = getChildUniverseId(0n, 1n)
+		const client = publicClient(
+			callSelector => {
+				if (callSelector === selectors.universes) return encodedUniverse(0n, 1n, 0n)
+				throw new Error(`Unexpected function selector: ${callSelector}`)
+			},
+			[deployChildLog(1n, 0, childUniverseId, 0n)],
+		)
+
+		const discovery = await discoverLiveUniverseMarketPage(client, deployment, undefined)
+		expect(discovery.universeIds).toEqual([0n, childUniverseId])
+	})
+
+	test('rejects a deterministic child event when the stored universe is unmapped', async () => {
+		const childUniverseId = getChildUniverseId(0n, 0n)
+		const client = publicClient(
+			callSelector => {
+				if (callSelector === selectors.universes) return encodedUniverse(0n, 0n, 0n, zeroAddress)
+				throw new Error(`Unexpected function selector: ${callSelector}`)
+			},
+			[deployChildLog(0n, 0, childUniverseId, 0n)],
+		)
+
+		await expect(discoverLiveUniverseMarketPage(client, deployment, undefined)).rejects.toThrow('does not match its DeployChild reputation token')
 	})
 
 	test('loads categorical branches from QuestionCreated metadata', async () => {

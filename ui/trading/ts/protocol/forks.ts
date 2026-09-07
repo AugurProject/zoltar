@@ -1,11 +1,11 @@
 import { decodeEventLog, getAddress, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/scalarOutcome'
-import { getQuestionId } from '@zoltar/shared/questionId'
 import { getChildUniverseId } from '@zoltar/shared/universeId'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { requiredCanonicalBlockAnchor } from '@zoltar/shared/logScan'
 import { loadCanonicalDeployChildLogs, loadCanonicalQuestionCreatedLogs } from './eventLogs.js'
+import { assertDeployChildId, assertDeployChildRoute, assertQuestionCreatedId } from './eventValidation.js'
 import type { LiveMarket } from './live.js'
 
 const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -49,9 +49,9 @@ async function loadScalarTargets(client: PublicClient, zoltar: Address, question
 		}
 	})
 	for (const child of children) {
-		if (getChildUniverseId(child.universeId, child.outcomeIndex) !== child.childUniverseId) throw new Error('DeployChild event has a mismatched deterministic child universe ID')
+		assertDeployChildId(child.universeId, child.outcomeIndex, child.childUniverseId)
 		const universe = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'universes', args: [child.childUniverseId], blockHash: anchor.blockHash })
-		if (universe.parentUniverseId !== child.universeId || universe.forkingOutcomeIndex !== child.outcomeIndex) throw new Error('Deployed child universe does not match its DeployChild route')
+		assertDeployChildRoute(universe.parentUniverseId, universe.forkingOutcomeIndex, getAddress(universe.reputationToken), child.universeId, child.outcomeIndex, getAddress(child.childReputationToken))
 	}
 	const outcomeIndexes = children.map(child => child.outcomeIndex)
 	const childUniverseIds = children.map(child => child.childUniverseId)
@@ -92,7 +92,7 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 		try {
 			const decoded = decodeEventLog({ abi: forkQuestionAbi, data: log.data, topics: log.topics })
 			if (decoded.eventName !== 'QuestionCreated') return []
-			if (getQuestionId(decoded.args.questionData, decoded.args.outcomeOptions) !== decoded.args.questionId) throw new Error('QuestionCreated event has a mismatched deterministic question ID')
+			assertQuestionCreatedId(decoded.args.questionData, decoded.args.outcomeOptions, decoded.args.questionId)
 			return decoded.args.questionId === forkQuestionId ? [decoded.args] : []
 		} catch (error) {
 			if (!isIgnorableLogDecodeError(error)) throw error
