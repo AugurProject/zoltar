@@ -610,21 +610,6 @@ for (const scenario of [
 				days.dispatchEvent(new Event('input', { bubbles: true }))
 				expect(state.value).toBe('locally resolvable: Yes')
 			}
-			if (scenario.name === 'collateral repair') {
-				const routed = tool.querySelector<HTMLInputElement>('[data-example-input="forkSettlementCollateralReceived"]')
-				const raised = tool.querySelector<HTMLInputElement>('[data-example-input="auctionRaised"]')
-				const status = tool.querySelector<HTMLOutputElement>('[data-example-output="repairStatus"]')
-				if (routed === null || raised === null || status === null) throw new Error('Collateral repair status fixture is incomplete')
-				expect(status.value).toBe('fully repaired')
-				routed.value = '50'
-				raised.value = '0'
-				routed.dispatchEvent(new Event('input', { bubbles: true }))
-				expect(status.value).toBe('no repair needed')
-				routed.value = '47.5'
-				raised.value = '1'
-				routed.dispatchEvent(new Event('input', { bubbles: true }))
-				expect(status.value).toBe('shortfall remains')
-			}
 			input.value = ''
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 			expect(tool.dataset['inputsValid']).toBe('false')

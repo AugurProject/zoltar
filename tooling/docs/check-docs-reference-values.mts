@@ -17,7 +17,6 @@ const whitepaperStatoblast = normalizeHtmlSource(await readFile('docs/explanatio
 const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8')
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
-const startHere = normalizeHtmlSource(await readFile('docs/documentation.html', 'utf8'))
 const systemOverview = normalizeHtmlSource(await readFile('docs/explanation/system-overview.html', 'utf8'))
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
 const securityModel = await readFile('docs/reference/security-model.html', 'utf8')

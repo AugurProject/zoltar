@@ -66,12 +66,12 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		await finishSearchLoad()
 		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
 		if (input === null) throw new Error('Search input is missing')
-		input.value = 'OpenOracle integration'
+		input.value = 'Why Statoblast uses OpenOracle'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Why Statoblast uses OpenOracle')
 		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/explanation/open-oracle.html')
 		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toBe('REP/ETH price oracle for Statoblast.')
-		expect(document.querySelector('.docs-search-status')?.textContent).toBe('5 results')
+		expect(document.querySelector('.docs-search-status')?.textContent).toBe('2 results')
 
 		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
 		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
@@ -82,7 +82,7 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		keywords.push('Diátaxis')
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
-		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('OpenOracle integration')
+		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Why Statoblast uses OpenOracle')
 	} finally {
 		shell.cleanup()
 	}
