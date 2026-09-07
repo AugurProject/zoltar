@@ -56,6 +56,9 @@ export type CoveragePolicy = {
 	>
 	solidity: {
 		minimumFirstPartyLines: number
+		minimumImportedLines: number
+		minimumAggregateLines: number
+		requireNoUncoveredLines: boolean
 	}
 	changedLines: {
 		minimum: number
@@ -423,6 +426,16 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 	if (report.solidity !== undefined && belowMinimum(report.solidity.firstParty, policy.solidity.minimumFirstPartyLines)) {
 		failures.push(`First-party Solidity line coverage ${formatExact(report.solidity.firstParty)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(3)}%`)
 	}
+	if (report.solidity !== undefined && belowMinimum(report.solidity.imported, policy.solidity.minimumImportedLines)) {
+		failures.push(`Imported Solidity line coverage ${formatExact(report.solidity.imported)}% is below ${policy.solidity.minimumImportedLines.toFixed(3)}%`)
+	}
+	if (report.solidity !== undefined && belowMinimum(report.solidity.all, policy.solidity.minimumAggregateLines)) {
+		failures.push(`Aggregate Solidity line coverage ${formatExact(report.solidity.all)}% is below ${policy.solidity.minimumAggregateLines.toFixed(3)}%`)
+	}
+	if (report.solidity !== undefined && policy.solidity.requireNoUncoveredLines) {
+		const uncoveredLines = [...report.solidity.uncoveredFirstPartyLines, ...report.solidity.uncoveredImportedLines]
+		if (uncoveredLines.length > 0) failures.push(`Solidity coverage has ${uncoveredLines.length.toString()} uncovered line${uncoveredLines.length === 1 ? '' : 's'}: ${uncoveredLines.join(', ')}`)
+	}
 	if (report.changedLines === undefined || !('percentage' in report.changedLines)) {
 		failures.push('Changed product TypeScript line coverage is unavailable')
 	} else if (belowMinimum(report.changedLines, policy.changedLines.minimum)) {
@@ -458,8 +471,13 @@ function parsePolicy(value: unknown): CoveragePolicy {
 		return { minimumLines, minimumFunctions, allowedUnloadedFiles, maximumAllowedUnloadedFiles, unloadedFilesReviewBy }
 	}
 	const minimumFirstPartyLines = solidityValue['minimumFirstPartyLines']
+	const minimumImportedLines = solidityValue['minimumImportedLines']
+	const minimumAggregateLines = solidityValue['minimumAggregateLines']
+	const requireNoUncoveredLines = solidityValue['requireNoUncoveredLines']
 	const minimumChangedLines = changedLinesValue['minimum']
-	if (typeof minimumFirstPartyLines !== 'number' || typeof minimumChangedLines !== 'number') throw new Error('Coverage policy has invalid non-TypeScript thresholds')
+	if (typeof minimumFirstPartyLines !== 'number' || typeof minimumImportedLines !== 'number' || typeof minimumAggregateLines !== 'number' || typeof requireNoUncoveredLines !== 'boolean' || typeof minimumChangedLines !== 'number') {
+		throw new Error('Coverage policy has invalid non-TypeScript thresholds')
+	}
 	return {
 		version: 1,
 		typescript: {
@@ -467,7 +485,7 @@ function parsePolicy(value: unknown): CoveragePolicy {
 			shared: parseSurfacePolicy('shared'),
 			tooling: parseSurfacePolicy('tooling'),
 		},
-		solidity: { minimumFirstPartyLines },
+		solidity: { minimumFirstPartyLines, minimumImportedLines, minimumAggregateLines, requireNoUncoveredLines },
 		changedLines: { minimum: minimumChangedLines },
 	}
 }

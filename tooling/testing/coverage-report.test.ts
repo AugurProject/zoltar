@@ -128,7 +128,7 @@ describe('coverage policy', () => {
 			shared: { minimumLines: 75, minimumFunctions: 65, allowedUnloadedFiles: ['shared/ts/known.ts'], maximumAllowedUnloadedFiles: 1, unloadedFilesReviewBy: '2999-01-01' },
 			tooling: { minimumLines: 35, minimumFunctions: 30, allowedUnloadedFiles: [], maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2999-01-01' },
 		},
-		solidity: { minimumFirstPartyLines: 99.9 },
+		solidity: { minimumFirstPartyLines: 100, minimumImportedLines: 100, minimumAggregateLines: 100, requireNoUncoveredLines: true },
 		changedLines: { minimum: 90 },
 	}
 
@@ -158,7 +158,9 @@ describe('coverage policy', () => {
 		expect(result.failures).toContain('TypeScript ui line coverage 79.0000% is below 80.000%')
 		expect(result.failures).toContain('TypeScript shared has newly unloaded executable source: shared/ts/new.ts')
 		expect(result.failures).toContain('TypeScript shared policy still allows source that is no longer unloaded: shared/ts/known.ts')
-		expect(result.failures).toContain('First-party Solidity line coverage 99.5000% is below 99.900%')
+		expect(result.failures).toContain('First-party Solidity line coverage 99.5000% is below 100.000%')
+		expect(result.failures).toContain('Imported Solidity line coverage 90.0000% is below 100.000%')
+		expect(result.failures).toContain('Aggregate Solidity line coverage 98.0000% is below 100.000%')
 		expect(result.failures).toContain('Changed product TypeScript line coverage 85.0000% is below 90.000%')
 	})
 
@@ -221,6 +223,35 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('TypeScript ui line coverage 88.0565% is below 88.060%')
+	})
+
+	test('fails the exact Solidity gate when one uncovered line rounds to 100%', () => {
+		const oneLineMissing = { covered: 9_999, total: 10_000, percentage: 99.99 }
+		const result = evaluateCoveragePolicy(
+			{
+				typescript: {
+					surfaces: {
+						ui: surface(100, 100),
+						shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] },
+						tooling: surface(100, 100),
+					},
+					excludedFiles: [],
+				},
+				solidity: {
+					firstParty: oneLineMissing,
+					imported: metric(100),
+					all: oneLineMissing,
+					uncoveredFirstPartyLines: ['solidity/contracts/Protocol.sol:42'],
+					uncoveredImportedLines: [],
+				},
+				changedLines: metric(100),
+			},
+			policy,
+		)
+
+		expect(result.failures).toContain('First-party Solidity line coverage 99.9900% is below 100.000%')
+		expect(result.failures).toContain('Aggregate Solidity line coverage 99.9900% is below 100.000%')
+		expect(result.failures).toContain('Solidity coverage has 1 uncovered line: solidity/contracts/Protocol.sol:42')
 	})
 })
 

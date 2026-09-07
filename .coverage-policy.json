@@ -129,7 +129,10 @@
 		}
 	},
 	"solidity": {
-		"minimumFirstPartyLines": 99.9
+		"minimumFirstPartyLines": 100,
+		"minimumImportedLines": 100,
+		"minimumAggregateLines": 100,
+		"requireNoUncoveredLines": true
 	},
 	"changedLines": {
 		"minimum": 85.836
