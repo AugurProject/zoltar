@@ -149,6 +149,7 @@ summary:focus-visible {
 .brand {
 	display: inline-flex;
 	width: fit-content;
+	min-height: var(--touch-target-min);
 	align-items: center;
 	gap: 0.7rem;
 	text-decoration: none;
@@ -1080,7 +1081,9 @@ summary {
 }
 
 .security-pool-link {
-	display: inline-block;
+	display: inline-flex;
+	min-height: var(--touch-target-min);
+	align-items: center;
 	max-width: 100%;
 	text-decoration-color: var(--muted);
 	text-underline-offset: 0.2em;
@@ -2130,6 +2133,82 @@ summary {
 
 :root[data-product="trading"] :where(.metrics dd, .fact-list dd, .trade-summary strong, .balance-strip strong) {
 	font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 521px) and (max-width: 1200px) {
+	:root[data-product="trading"] .site-header {
+		grid-template-columns: minmax(0, 1fr) auto;
+		min-height: 0;
+		padding-block: 0.5rem;
+	}
+
+	:root[data-product="trading"] .site-header > .brand {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	:root[data-product="trading"] .trading-context-trigger {
+		display: inline-flex;
+		grid-column: 2;
+		grid-row: 1;
+		align-items: center;
+		min-height: var(--touch-target-min);
+		padding: 0.5rem 0.7rem;
+		border: 1px solid var(--line-strong);
+		background: var(--surface-raised);
+		color: var(--text);
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .site-header nav {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: flex-start;
+		width: 100%;
+		padding: 0;
+	}
+
+	:root[data-product="trading"] .header-actions {
+		grid-column: 1 / -1;
+		grid-row: 3;
+		grid-template-columns: auto minmax(0, 1fr) auto auto;
+		gap: var(--space-2);
+		width: 100%;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+
+	:root[data-product="trading"] .header-actions[hidden] {
+		display: none;
+	}
+
+	:root[data-product="trading"] .header-actions > * {
+		grid-column: auto;
+		grid-row: auto;
+		max-width: 100%;
+	}
+
+	:root[data-product="trading"] .header-actions > .app-settings {
+		grid-column: 1;
+	}
+
+	:root[data-product="trading"] .header-actions .network-pill {
+		grid-column: 2;
+		min-width: 0;
+	}
+
+	:root[data-product="trading"] .header-actions .universe-selector {
+		grid-column: 3;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-button {
+		grid-column: 4;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-summary {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
 }
 
 @media (max-width: 520px) {
