@@ -1980,12 +1980,16 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(ensureDefined(secondHolderChildShares[1], 'second holder yes child winning shares missing'), 0n, 'second holder should not have migrated winning shares into the child')
 
 			const firstHolderBalanceBeforeRedemption = await getETHBalance(client, firstHolder.account.address)
+			const childFeesBeforeRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await redeemShares(firstHolder, yesSecurityPool.securityPool)
 			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
+			const childFeesAfterRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
+			const redemptionFeeDelta = childFeesAfterRedemption - childFeesBeforeRedemption
 
-			const expectedFirstHolderPayout = (childCollateralBeforeRedemption * firstHolderWinningShares) / (firstHolderWinningShares + secondWinningShares)
+			const collateralAfterCurrentFees = childCollateralBeforeRedemption - redemptionFeeDelta
+			const expectedFirstHolderPayout = (collateralAfterCurrentFees * firstHolderWinningShares) / (firstHolderWinningShares + secondWinningShares)
 			strictEqualTypeSafe(firstHolderPayout, expectedFirstHolderPayout, 'the early migrant should receive only its fork-time share of child collateral')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), childCollateralBeforeRedemption - expectedFirstHolderPayout, 'late winning claims should retain their collateral reserve')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralAfterCurrentFees - expectedFirstHolderPayout, 'late winning claims should retain their collateral reserve after current fees')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), secondWinningShares, 'redemption should consume economic claims instead of replacing them with materialized supply')
 
 			await migrateShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
@@ -2724,14 +2728,17 @@ describe('Statoblast: fork migration', () => {
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
 			const collateralBeforeRedemption = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			const feesBeforeRedemption = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			const supplyBeforeRedemption = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
 			assert.ok(supplyBeforeRedemption > economicSupplyBeforeMint, 'new complete sets should add economic claims even when migrated outcome supplies are uneven')
-			const expectedRedemption = (collateralBeforeRedemption * migratedBalancedSupply) / supplyBeforeRedemption
 			const balanceBeforeRedemption = await getETHBalance(client, client.account.address)
 			await redeemCompleteSet(client, yesSecurityPool.securityPool, migratedBalancedSupply)
+			const redemptionFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - feesBeforeRedemption
+			const collateralAfterCurrentFees = collateralBeforeRedemption - redemptionFeeDelta
+			const expectedRedemption = (collateralAfterCurrentFees * migratedBalancedSupply) / supplyBeforeRedemption
 			strictEqualTypeSafe((await getETHBalance(client, client.account.address)) - balanceBeforeRedemption, expectedRedemption, 'balanced holder should redeem proportionally against all economic claims')
 
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeRedemption - expectedRedemption, 'redemption should debit only the proportional collateral payout')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralAfterCurrentFees - expectedRedemption, 'redemption should debit current fees and only the proportional collateral payout')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), supplyBeforeRedemption - migratedBalancedSupply, 'redemption should reduce the economic claim denominator by the burned complete sets')
 			const balancesAfterRedemption = await balanceOfShares(client, yesSecurityPool.shareToken, yesUniverse, client.account.address)
 			strictEqualTypeSafe(balancesAfterRedemption[0], 0n, 'redemption should burn the holder invalid balance')
@@ -2767,13 +2774,15 @@ describe('Statoblast: fork migration', () => {
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const collateralBeforeMint = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			const feesBeforeMint = await getTotalAccruedFees(client, yesSecurityPool.securityPool)
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
+			const mintFeeDelta = (await getTotalAccruedFees(client, yesSecurityPool.securityPool)) - feesBeforeMint
 			const mintedOutcomeSupplies = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
 			const mintedCompleteSets = ensureDefined(mintedOutcomeSupplies[0], 'new invalid child shares missing')
 			assert.ok(mintedCompleteSets > 0n, 'fork-time economic claims should define a nonzero child exchange rate')
 			assert.deepStrictEqual(mintedOutcomeSupplies, [mintedCompleteSets, mintedCompleteSets, mintedCompleteSets], 'post-fork complete-set minting should materialize balanced new claims')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), forkTimeShareSupply + mintedCompleteSets, 'new complete sets should add to the reserved economic claim supply')
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeMint + 1n * 10n ** 18n, 'successful minting should add its collateral without exposing the preexisting reserve')
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeMint - mintFeeDelta + 1n * 10n ** 18n, 'successful minting should charge current fees and add its collateral without exposing the preexisting reserve')
 		})
 
 		test('child pool with migrated shares but no collateral activates after settlement while still rejecting complete-set minting', async () => {

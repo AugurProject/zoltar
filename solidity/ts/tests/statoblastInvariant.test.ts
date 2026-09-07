@@ -65,6 +65,7 @@ import {
 	getTotalCapacityOwnershipAttoRep,
 	backingUnitsToAttoRep,
 	redeemRepFromVault,
+	updateVaultFees,
 } from '../testSupport/simulator/utils/contracts/securityPool'
 import { approveToken, contractExists, getChildUniverseId as deriveChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -1265,6 +1266,10 @@ describe('Statoblast invariant harness', () => {
 				await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
 				await assertTruthAuctionAccounting('after claim-first losing refund')
 			}
+			// Normalize the winning vault to the post-settlement block. Child pools now
+			// accrue during this interval, so reading immediately after its claim would
+			// compare two different timestamps across the two transaction orderings.
+			await updateVaultFees(client, yesSecurityPool.securityPool, winningBidder.account.address)
 
 			const losingBidderBalance = await getETHBalance(client, losingBidder.account.address)
 			const winningVault = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)

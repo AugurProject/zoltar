@@ -130,7 +130,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Universe REP token missing');
-		require(zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(reputationToken), 'Escalation threshold too low');
+		require(zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(universeId), 'Escalation threshold too low');
 		bytes32 originId = getOriginId(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
@@ -173,8 +173,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		securityPool.setStartingParams(currentRetentionRate, settlementCollateralAttoEth);
 	}
 
-	function _getInitialEscalationDepositAttoRep(ReputationToken reputationToken) private view returns (uint256 initialDepositAttoRep) {
+	function _getInitialEscalationDepositAttoRep(uint248 universeId) private view returns (uint256 initialDepositAttoRep) {
 		return
-			SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(reputationToken.getTotalTheoreticalSupplyAttoRep());
+			SecurityPoolUtils.calculateInitialEscalationDepositAttoRep(zoltar.getUniverseTheoreticalSupplyAttoRep(universeId));
 	}
 }

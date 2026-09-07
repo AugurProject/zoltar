@@ -120,7 +120,7 @@
 					<tbody>
 						<tr>
 							<td>Origin pool shape</td>
-							<td>Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: <code>Yes</code>, then <code>No</code>. Statoblast adds <code>Invalid</code> as the third trading and resolution outcome. At construction, the effective escalation deposit is exactly <code>max(1 REP, theoretical REP supply / 10,000,000)</code>; a new origin's non-decision threshold must exceed that effective value. A zero configured vault REP floor selects the default <code>theoretical supply / 100,000</code>; a nonzero constructor value is the exact override. The independently configured security-bond debt floor defaults to 1 ETH.</td>
+							<td>Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: <code>Yes</code>, then <code>No</code>. Statoblast adds <code>Invalid</code> as the third trading and resolution outcome. At construction, the effective escalation deposit is exactly <code>max(1 REP, live universe theoretical REP supply / 10,000,000)</code>; a new origin's non-decision threshold must exceed that effective value. A zero configured vault REP floor selects the default <code>live universe theoretical supply / 100,000</code>; a nonzero constructor value is the exact override. The independently configured security-bond debt floor defaults to 1 ETH.</td>
 							<td><a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">SecurityPoolFactory.sol</a>, <a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">ShareToken.sol</a>, <a href="../../solidity/contracts/statoblast/BinaryOutcomes.sol">BinaryOutcomes.sol</a></td>
 						</tr>
 						<tr>
@@ -149,7 +149,7 @@
 						</tr>
 						<tr>
 							<td>Fee accrual clamp</td>
-							<td>Fee accrual is clamped to the question end time while the universe is unforked; after a universe fork, the accumulator is clamped to the fork time.</td>
+							<td>While the initial pool's universe remains unforked, its provisional fee cutoff is the question end time. A universe fork replaces that cutoff with the fork timestamp, whether the fork is before or after the question end. Finalizing a child opens a new epoch at that finalization timestamp even though the child reuses the ended parent question; the child epoch is later fixed at its local escalation-game resolution time or at a subsequent universe fork time.</td>
 							<td><a href="../../solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 						</tr>
 						<tr>
