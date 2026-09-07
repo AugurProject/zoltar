@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 
@@ -101,6 +101,7 @@ function state(
 ) {
 	return {
 		activities: [],
+		operatorCapable: true,
 		alerts,
 		error,
 		execute: options.execute ?? false,
@@ -406,11 +407,36 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('shows the current block and when it appeared', async () => {
 		const nowSeconds = Math.floor(Date.now() / 1_000)
 		const page = await dashboard(configuration(), state(undefined, [], { lastScannedBlock: '12345678', lastScannedTimestamp: (nowSeconds - 12).toString() }))
-		await page.refresh()
-		await page.blockTick()
-		expect(page.window.document.getElementById('block-status')?.textContent).toMatch(/^Block 12345678 · seen 1[23]s ago$/)
+		const clock = spyOn(page.window.Date, 'now').mockReturnValue(nowSeconds * 1_000)
+		try {
+			await page.refresh()
+			await page.blockTick()
+			expect(page.window.document.getElementById('block-status')?.textContent).toBe('Block 12345678 · seen 12s ago')
+		} finally {
+			clock.mockRestore()
+		}
 	})
 
+	for (const [label, snapshot, guidance] of [
+		['startup', { ...state(), operatorCapable: false }, 'first successful scan'],
+		['scanning', { ...state(), scanning: true, operatorCapable: false }, 'scan is in progress'],
+		['paused', { ...state(undefined, [], { paused: true }), operatorCapable: false }, 'Use Resume'],
+		['missing signer', { ...state(undefined, [], { execute: true }), operatorCapable: false }, 'Execution signer'],
+	] as const) {
+		test(`explains capability-only ${label} blockers`, async () => {
+			const pending = label === 'startup' || label === 'scanning'
+			const page = await dashboard(mainnetConfiguration(), snapshot)
+			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? 'Checking readiness' : '1 action')
+			expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe(pending ? null : '/overview#global-error')
+			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(true)
+			if (pending) expect(page.window.document.getElementById('global-error')?.textContent).toContain('automatically')
+			expect(page.window.document.getElementById('global-error')?.textContent).toContain(guidance)
+			page.setSnapshot({ ...state(), operatorCapable: true })
+			await page.refresh()
+			expect(page.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
+			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
+		})
+	}
 	test('provides a durable manual refresh action across success and failure', async () => {
 		const page = await dashboard()
 		const refreshButton = page.window.document.getElementById('refresh-button')
@@ -469,6 +495,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(initialFailure.window.document.getElementById('mode-badge')?.textContent).toBe('Mode unavailable')
 		expect(initialFailure.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · unverified')
 		expect(initialFailure.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(initialFailure.window.document.getElementById('capability-badge')?.textContent).toBe('Capability unavailable')
+		expect(initialFailure.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('warning')
 		expect(initialFailure.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
 		expect(initialFailure.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('/overview#global-error')
 		expect(initialFailure.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(true)
@@ -481,6 +509,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run · last known')
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1 · last known')
 		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
+		expect(recovered.window.document.getElementById('global-error')?.classList.contains('error')).toBe(true)
+		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Capability unavailable')
+		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('warning')
 		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
 		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		const stalePause = recovered.window.document.getElementById('pause-button')
@@ -494,6 +525,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
 		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Running')
 		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
+		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Operator capable')
+		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('ok')
 		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
 	})
@@ -535,7 +568,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps network identity visible and updates it after configuration', async () => {
-		const unconfigured = await dashboard(configuration(), state())
+		const unconfigured = await dashboard(configuration(), { ...state(), operatorCapable: false })
 		expect(unconfigured.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · RPC setup required')
 		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Ethereum mainnet profile')
 		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toContain('Ethereum mainnet profile')
@@ -562,8 +595,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		networkName.value = 'sepolia'
 		readRpcUrl.value = 'https://sepolia.example'
 		publicRpcUrls.value = 'https://sepolia.example'
+		unconfigured.setSnapshot({ ...state(), operatorCapable: true })
 		networkForm.dispatchEvent(new unconfigured.window.Event('submit', { bubbles: true, cancelable: true }))
 		await unconfigured.waitUntilComplete()
+		await unconfigured.refresh()
 		await Bun.sleep(1)
 		expect({
 			attention: unconfigured.window.document.getElementById('attention-badge')?.textContent,
@@ -750,7 +785,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('turns a scan-only error into an actionable blocker', async () => {
-		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), state('read RPC stalled'))
+		const page = await dashboard(configuration(['1'], { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' }), { ...state('read RPC stalled'), operatorCapable: false })
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Error')
 		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
 		const action = page.window.document.querySelector('#attention-badge[href="/overview#global-error"]')
@@ -882,8 +917,10 @@ describe('liquidator dashboard refresh behavior', () => {
 			requiresMarketEvidence: true,
 			submissionBlock: '100',
 		}
-		page.setSnapshot(state(undefined, [], { execute: true, pendingTransactions: [pending] }))
+		page.setSnapshot({ ...state(undefined, [], { execute: true, pendingTransactions: [pending] }), operatorCapable: false })
 		await page.refresh()
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('1 action')
+		expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('/operations#recovery')
 		const recoveryGuidance = page.window.document.getElementById('recovery-guidance')
 		if (!(recoveryGuidance instanceof page.window.HTMLElement)) throw new Error('Expected recovery guidance')
 		expect(recoveryGuidance.hidden).toBe(false)

@@ -1,3 +1,4 @@
+import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
@@ -452,7 +453,7 @@ const rawTruthAuctionMaxPriceFraction = truthAuctionMaxPriceParts[1] ?? ''
 const TRUTH_AUCTION_MAX_PRICE_FRACTION = rawTruthAuctionMaxPriceFraction.padEnd(18, '0')
 
 function isTruthAuctionPriceInputDefinitelyOutOfRange(input: string) {
-	const normalized = normalizeTruthAuctionPriceInput(input.trim())
+	const normalized = normalizeTruthAuctionPriceInput(normalizeNumericInput(input))
 	if (normalized === '' || normalized.startsWith('-')) return false
 	const match = normalized.match(/^(\d+)(?:\.(\d+))?$/)
 	if (match === null) return false

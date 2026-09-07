@@ -1303,12 +1303,16 @@ button.wallet-asset-action-pending:disabled {
 }
 
 .identifier-value.copyable {
+	width: max-content;
+	white-space: normal;
+	text-overflow: clip;
+	overflow: visible;
 	display: inline-block;
 	max-width: 100%;
 	min-width: 0;
 	border: 0;
 	border-radius: 0.35rem;
-	margin: -0.2rem -0.25rem;
+	margin: 0;
 	padding: 0.2rem 0.25rem;
 	background: transparent;
 	font: inherit;

@@ -1,4 +1,4 @@
-import { applyExactMutation, classifyMutantResult, MUTATION_SMOKE_CASES } from './mutation-support.mts'
+import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, MUTATION_SMOKE_CASES } from './mutation-support.mts'
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,13 +22,14 @@ for (const mutation of MUTATION_SMOKE_CASES) {
 		if (control.exitCode !== 0 || !controlJunit.includes('<testcase')) throw new Error(`Mutation control failed before applying ${mutation.name}\n${control.stdout}${control.stderr}`)
 		const mutatedFilePath = join(mutationDirectory, mutation.filePath)
 		const source = await readFile(mutatedFilePath, 'utf8')
-		await writeFile(mutatedFilePath, applyExactMutation(source, mutation))
+		const moduleLoadedPath = join(mutationDirectory, 'mutated-module-loaded')
+		await writeFile(mutatedFilePath, `${applyExactMutation(source, mutation)}\nawait Bun.write(${JSON.stringify(moduleLoadedPath)}, 'loaded')\n`)
 		const mutantJunitPath = join(mutationDirectory, 'mutant.xml')
 		const mutant = await runTest(command, mutantJunitPath)
 		const mutantJunit = await readFile(mutantJunitPath, 'utf8')
 		process.stdout.write(mutant.stdout)
 		process.stderr.write(mutant.stderr)
-		result = classifyMutantResult(mutant.exitCode, mutantJunit)
+		result = classifyMutantResult(mutant.exitCode, mutantJunit, { expectedTestNames: getMutationJunitTestNames(controlJunit), mutatedModuleLoaded: await Bun.file(moduleLoadedPath).exists() })
 	} finally {
 		await rm(mutationDirectory, { recursive: true })
 	}
