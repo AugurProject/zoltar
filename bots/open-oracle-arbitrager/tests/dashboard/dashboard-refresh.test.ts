@@ -160,7 +160,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	page.url = server.url.href
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
 	const window = page.mainFrame.window
-	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, decodeURIComponent })) Reflect.set(window, name, value)
+	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
 	window.setInterval = () => {
 		const timeout = window.setTimeout(() => undefined, 1)
 		window.clearTimeout(timeout)
