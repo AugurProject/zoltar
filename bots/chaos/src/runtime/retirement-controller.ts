@@ -37,7 +37,7 @@ export function createRetirementController(options: RetirementControllerOptions)
 				recordActivity(candidateState, { message: 'Drain & Retire request cancelled before final sweeping', status: 'info', type: 'configuration' })
 			} else if (action === 'accept-residuals') {
 				exactKeys(body, ['action', 'confirmation', 'reason', 'targetProfileId'], 'Retirement update')
-				acceptResidualProfileReplacement(candidateState.retirement, String(body['targetProfileId']), String(body['reason']), String(body['confirmation']))
+				acceptResidualProfileReplacement(candidateState.retirement, options.state.profileId, String(body['targetProfileId']), String(body['reason']), String(body['confirmation']))
 				recordActivity(candidateState, { details: String(body['reason']), message: `Residual profile replacement accepted for ${String(body['targetProfileId'])}`, status: 'info', type: 'configuration' })
 			} else if (action === 'register-v3-position') {
 				exactKeys(body, ['action', 'confirmation', 'fee', 'owner', 'pool', 'profileId', 'tickLower', 'tickUpper', 'token0', 'token1', 'workflowId'], 'Retirement update')

@@ -20,6 +20,7 @@ import {
 	type PendingTransactionIntent,
 	type StateFilesystem,
 } from '../../src/state/operator-state.ts'
+import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
 
 const directories: string[] = []
 
@@ -337,6 +338,35 @@ describe('chaos-bot durable state', () => {
 		delete stored.retirement['lastObservedBalances']
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
+	})
+
+	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		state.profileId = 'profile:test'
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.recipient = emitter
+		state.retirement.completionEvidence = {
+			blockHash: topic0,
+			blockNumber: '50',
+			completedAt: createdAt,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+		}
+		acceptResidualProfileReplacement(state.retirement, state.profileId, 'profile:next', 'Reviewed current residual assets.', 'ACCEPT RESIDUALS FOR profile:next', createdAt)
+		await saveDurableState(path, state)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.retirement.profileReplacementOverride).toEqual(state.retirement.profileReplacementOverride)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		const boundOverride = stored.retirement['profileReplacementOverride'] as Record<string, unknown>
+		boundOverride['completionBlockNumber'] = '51'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('does not match current completion evidence')
+
+		stored.retirement['profileReplacementOverride'] = { acceptedAt: createdAt, reason: 'Legacy unbound acceptance.', targetProfileId: 'profile:next' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.profileReplacementOverride).toBeUndefined()
 	})
 
 	test('rejects retirement completion states whose canonical evidence is missing or inconsistent', async () => {

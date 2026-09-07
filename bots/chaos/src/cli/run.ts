@@ -5,7 +5,7 @@ import { assertSettingsProfileIsolation, loadSettings } from '../config/settings
 import { acquireChaosProcessLocksForShutdown, ChaosProcessLockAcquisitionError, createChaosShutdownController, type ChaosProcessLocks } from '../core/process-locks.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
-import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
+import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -15,6 +15,7 @@ type RunCommand =
 	| { kind: 'operator' }
 	| { confirmation: string; exitAfterCompletion: boolean; exitUnmatchedShares: boolean; kind: 'request-drain'; maximumExitLossBps: number; migrateExistingClaims: boolean; recipient: string }
 	| { confirmation: string; kind: 'cancel-drain' }
+	| { confirmation: string; kind: 'accept-residuals'; reason: string; targetProfileId: string }
 	| { kind: 'retirement-status' }
 	| { confirmation: string; json: string; kind: 'register-v3-position' }
 
@@ -25,12 +26,19 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 	const confirmation = confirmationIndex === -1 ? undefined : args[confirmationIndex + 1]
 	if (confirmation === undefined) throw new Error('Retirement mutations require --confirm followed by the exact confirmation text')
 	if (args[0] === '--cancel-drain') return { confirmation, kind: 'cancel-drain' }
+	if (args[0] === '--accept-residuals') {
+		const targetProfileId = args[1]
+		const reasonIndex = args.indexOf('--reason')
+		const reason = reasonIndex === -1 ? undefined : args[reasonIndex + 1]
+		if (targetProfileId === undefined || reason === undefined) throw new Error('--accept-residuals requires a target profile followed by --reason and the operator rationale')
+		return { confirmation, kind: 'accept-residuals', reason, targetProfileId }
+	}
 	if (args[0] === '--register-v3-position') {
 		const json = args[1]
 		if (json === undefined) throw new Error('--register-v3-position requires a JSON position record')
 		return { confirmation, json, kind: 'register-v3-position' }
 	}
-	if (args[0] !== '--drain' || args[1] === undefined) throw new Error('Supported commands are --drain, --cancel-drain, --register-v3-position, and --retirement-status')
+	if (args[0] !== '--drain' || args[1] === undefined) throw new Error('Supported commands are --drain, --cancel-drain, --accept-residuals, --register-v3-position, and --retirement-status')
 	const lossArgument = args.find(argument => argument.startsWith('--exit-unmatched-shares='))
 	const maximumExitLossBps = lossArgument === undefined ? 0 : Number(lossArgument.slice('--exit-unmatched-shares='.length))
 	if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Unmatched-share loss must be an integer from 0 through 10000 bps')
@@ -63,6 +71,8 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 		)
 	} else if (command.kind === 'cancel-drain') {
 		cancelRetirement(state.retirement, command.confirmation)
+	} else if (command.kind === 'accept-residuals') {
+		acceptResidualProfileReplacement(state.retirement, state.profileId, command.targetProfileId, command.reason, command.confirmation)
 	} else {
 		const input = JSON.parse(command.json) as Record<string, unknown>
 		if (command.confirmation !== `REGISTER V3 ${profileId}`) throw new Error(`Confirmation must exactly match REGISTER V3 ${profileId}`)

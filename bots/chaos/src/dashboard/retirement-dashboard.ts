@@ -58,6 +58,11 @@ function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const v3Upper = retirementElement('retirement-v3-upper', HTMLInputElement)
 	const v3Workflow = retirementElement('retirement-v3-workflow', HTMLInputElement)
 	const v3Confirmation = retirementElement('retirement-v3-confirmation', HTMLInputElement)
+	const residualForm = retirementElement('retirement-residual-form', HTMLFormElement)
+	const residualTargetProfile = retirementElement('retirement-residual-target-profile', HTMLInputElement)
+	const residualReason = retirementElement('retirement-residual-reason', HTMLTextAreaElement)
+	const residualConfirmation = retirementElement('retirement-residual-confirmation', HTMLInputElement)
+	const residualSubmit = retirementElement('retirement-residual-submit', HTMLButtonElement)
 
 	form.addEventListener('submit', event => {
 		event.preventDefault()
@@ -119,6 +124,18 @@ function createRetirementDashboard(options: RetirementDashboardOptions) {
 			}
 		})()
 	})
+	residualForm.addEventListener('submit', event => {
+		event.preventDefault()
+		void (async () => {
+			try {
+				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason: residualReason.value, targetProfileId: residualTargetProfile.value.trim() })
+				actionStatus.textContent = 'Residual profile replacement acceptance saved.'
+				await options.refresh()
+			} catch (error) {
+				actionStatus.textContent = error instanceof Error ? error.message : 'Residual acceptance failed.'
+			}
+		})()
+	})
 
 	return {
 		render(value: RetirementSnapshot) {
@@ -133,6 +150,7 @@ function createRetirementDashboard(options: RetirementDashboardOptions) {
 			summary.textContent = status === 'inactive' ? 'No retirement has been requested.' : `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; recipient ${retirement?.recipient ?? 'not recorded'}.`
 			recipient.disabled = status !== 'inactive'
 			cancel.disabled = status === 'inactive' || retirement?.finalSweepStartedAt !== undefined || status === 'drained' || status === 'drained-with-residuals'
+			residualSubmit.disabled = status !== 'drained-with-residuals'
 		},
 	}
 }

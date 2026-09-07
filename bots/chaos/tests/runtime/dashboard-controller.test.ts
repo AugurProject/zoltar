@@ -181,6 +181,25 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(state.retirement.positions[0]).toMatchObject({ registeredBy: 'operator', status: 'pending-confirmation' })
 	})
 
+	test('binds dashboard residual acceptance to the current profile and completion proof', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.recipient = '0x0000000000000000000000000000000000000099'
+		state.retirement.completionEvidence = {
+			blockHash: zeroHash,
+			blockNumber: '42',
+			completedAt: '2026-09-07T00:00:00.000Z',
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'TEST', category: 'operator-accepted', reason: 'Retained test asset' }],
+		}
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
+		await controller.setRetirement({ action: 'accept-residuals', confirmation: 'ACCEPT RESIDUALS FOR profile:next', reason: 'Reviewed residual assets and accepted replacement.', targetProfileId: 'profile:next' })
+		expect(state.retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: zeroHash, completionBlockNumber: '42', recipient: state.retirement.recipient, sourceProfileId: 'profile:test', targetProfileId: 'profile:next' })
+	})
+
 	test('builds a focused server-side RPC connectivity update', () => {
 		const candidate = connectivityCandidate(settings(), {
 			connectivity: {

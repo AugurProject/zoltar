@@ -41,6 +41,16 @@ export type RetirementCompletionEvidence = {
 	residuals: RetirementResidual[]
 }
 
+export type RetirementProfileReplacementOverride = {
+	acceptedAt: string
+	completionBlockHash: Hash
+	completionBlockNumber: string
+	reason: string
+	recipient: Address
+	sourceProfileId: string
+	targetProfileId: string
+}
+
 export type DurableV3Position = {
 	createdAt: string
 	creationTransactionHash?: Hex | undefined
@@ -67,7 +77,7 @@ export type DurableRetirementState = {
 	finalSweepStartedAt?: string | undefined
 	lastObservedBalances: Record<string, string>
 	positions: DurableV3Position[]
-	profileReplacementOverride?: { acceptedAt: string; reason: string; targetProfileId: string } | undefined
+	profileReplacementOverride?: RetirementProfileReplacementOverride | undefined
 	recipient?: Address | undefined
 	/** Cumulative balance increases observed between canonical retirement scans. */
 	recoveredBalances: Record<string, string>
@@ -247,13 +257,47 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 		}
 	})
 	const rawOverride = retirement['profileReplacementOverride'] === undefined ? undefined : record(retirement['profileReplacementOverride'], 'retirement.profileReplacementOverride')
-	if (rawOverride !== undefined) exactKeys(rawOverride, ['acceptedAt', 'reason', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
+	const legacyOverride = rawOverride !== undefined && !('completionBlockHash' in rawOverride)
+	if (rawOverride !== undefined) {
+		exactKeys(rawOverride, legacyOverride ? ['acceptedAt', 'reason', 'targetProfileId'] : ['acceptedAt', 'completionBlockHash', 'completionBlockNumber', 'reason', 'recipient', 'sourceProfileId', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
+	}
 	const completionEvidence = retirement['completionEvidence'] === undefined ? undefined : parseCompletionEvidence(retirement['completionEvidence'])
+	let profileReplacementOverride: RetirementProfileReplacementOverride | undefined
+	if (rawOverride !== undefined && !legacyOverride) {
+		const completionBlockHash = rawOverride['completionBlockHash']
+		if (typeof completionBlockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(completionBlockHash)) throw new Error('retirement.profileReplacementOverride.completionBlockHash is invalid')
+		const acceptedAt = timestamp(rawOverride['acceptedAt'], 'retirement.profileReplacementOverride.acceptedAt')
+		const reason = rawOverride['reason']
+		if (typeof reason !== 'string' || reason !== reason.trim() || reason.length < 12 || reason.length > 2_048) throw new Error('retirement.profileReplacementOverride.reason is invalid')
+		const sourceProfileId = rawOverride['sourceProfileId']
+		const targetProfileId = rawOverride['targetProfileId']
+		if (typeof sourceProfileId !== 'string' || sourceProfileId !== sourceProfileId.trim() || sourceProfileId.length === 0 || sourceProfileId.length > 256) throw new Error('retirement.profileReplacementOverride.sourceProfileId is invalid')
+		if (typeof targetProfileId !== 'string' || targetProfileId !== targetProfileId.trim() || targetProfileId.length === 0 || targetProfileId.length > 256 || targetProfileId === sourceProfileId) throw new Error('retirement.profileReplacementOverride.targetProfileId is invalid')
+		profileReplacementOverride = {
+			acceptedAt,
+			completionBlockHash: completionBlockHash as Hash,
+			completionBlockNumber: unsigned(rawOverride['completionBlockNumber'], 'retirement.profileReplacementOverride.completionBlockNumber'),
+			reason,
+			recipient: getAddress(String(rawOverride['recipient'])),
+			sourceProfileId,
+			targetProfileId,
+		}
+	}
 	const terminal = status === 'drained' || status === 'drained-with-residuals'
 	if (terminal && completionEvidence === undefined) throw new Error(`Retirement status ${String(status)} requires completion evidence`)
 	if (!terminal && completionEvidence !== undefined) throw new Error(`Retirement status ${String(status)} cannot retain completion evidence`)
 	if (status === 'drained' && completionEvidence !== undefined && completionEvidence.residuals.length !== 0) throw new Error('Retirement status drained requires zero residuals')
 	if (status === 'drained-with-residuals' && completionEvidence !== undefined && completionEvidence.residuals.length === 0) throw new Error('Retirement status drained-with-residuals requires at least one residual')
+	if (profileReplacementOverride !== undefined) {
+		if (status !== 'drained-with-residuals' || completionEvidence === undefined) throw new Error('A residual profile replacement override requires current drained-with-residuals completion evidence')
+		if (profileReplacementOverride.completionBlockHash.toLowerCase() !== completionEvidence.blockHash.toLowerCase() || profileReplacementOverride.completionBlockNumber !== completionEvidence.blockNumber) {
+			throw new Error('Residual profile replacement override does not match current completion evidence')
+		}
+		if (Date.parse(profileReplacementOverride.acceptedAt) < Date.parse(completionEvidence.completedAt)) throw new Error('Residual profile replacement override predates current completion evidence')
+		if (retirement['recipient'] === undefined || profileReplacementOverride.recipient.toLowerCase() !== getAddress(String(retirement['recipient'])).toLowerCase()) {
+			throw new Error('Residual profile replacement override does not match the retirement recipient')
+		}
+	}
 	return {
 		blockers,
 		...(retirement['cancelledAt'] === undefined ? {} : { cancelledAt: timestamp(retirement['cancelledAt'], 'retirement.cancelledAt') }),
@@ -261,7 +305,7 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 		...(retirement['finalSweepStartedAt'] === undefined ? {} : { finalSweepStartedAt: timestamp(retirement['finalSweepStartedAt'], 'retirement.finalSweepStartedAt') }),
 		lastObservedBalances,
 		positions,
-		...(rawOverride === undefined ? {} : { profileReplacementOverride: { acceptedAt: timestamp(rawOverride['acceptedAt'], 'retirement.profileReplacementOverride.acceptedAt'), reason: String(rawOverride['reason']), targetProfileId: String(rawOverride['targetProfileId']) } }),
+		...(profileReplacementOverride === undefined ? {} : { profileReplacementOverride }),
 		...(retirement['recipient'] === undefined ? {} : { recipient: getAddress(String(retirement['recipient'])) }),
 		recoveredBalances,
 		...(retirement['requestedAt'] === undefined ? {} : { requestedAt: timestamp(retirement['requestedAt'], 'retirement.requestedAt') }),
@@ -271,11 +315,23 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 	}
 }
 
-export function acceptResidualProfileReplacement(state: DurableRetirementState, targetProfileId: string, reason: string, confirmation: string, now = new Date().toISOString()) {
+export function acceptResidualProfileReplacement(state: DurableRetirementState, sourceProfileId: string, targetProfileId: string, reason: string, confirmation: string, now = new Date().toISOString()) {
 	if (state.status !== 'drained-with-residuals') throw new Error('A residual override is only valid after drained-with-residuals completion')
+	if (state.completionEvidence === undefined || state.recipient === undefined) throw new Error('A residual override requires current completion evidence and its retirement recipient')
+	if (sourceProfileId !== sourceProfileId.trim() || targetProfileId !== targetProfileId.trim() || sourceProfileId.length === 0 || targetProfileId.length === 0 || sourceProfileId.length > 256 || targetProfileId.length > 256 || sourceProfileId === targetProfileId) {
+		throw new Error('Residual override requires distinct valid source and target deployment profiles')
+	}
 	if (reason.trim().length < 12 || reason.trim().length > 2_048) throw new Error('Residual override reason must contain 12 to 2048 characters')
 	if (confirmation !== `ACCEPT RESIDUALS FOR ${targetProfileId}`) throw new Error(`Confirmation must exactly match ACCEPT RESIDUALS FOR ${targetProfileId}`)
-	state.profileReplacementOverride = { acceptedAt: now, reason: reason.trim(), targetProfileId }
+	state.profileReplacementOverride = {
+		acceptedAt: now,
+		completionBlockHash: state.completionEvidence.blockHash,
+		completionBlockNumber: state.completionEvidence.blockNumber,
+		reason: reason.trim(),
+		recipient: state.recipient,
+		sourceProfileId,
+		targetProfileId,
+	}
 	state.updatedAt = now
 }
 
@@ -289,6 +345,7 @@ export function requestRetirement(state: DurableRetirementState, profileId: stri
 	state.updatedAt = now
 	state.blockers = []
 	state.completionEvidence = undefined
+	state.profileReplacementOverride = undefined
 }
 
 export function cancelRetirement(state: DurableRetirementState, confirmation: string, now = new Date().toISOString()) {
@@ -298,6 +355,7 @@ export function cancelRetirement(state: DurableRetirementState, confirmation: st
 	state.cancelledAt = now
 	state.updatedAt = now
 	state.blockers = []
+	state.profileReplacementOverride = undefined
 }
 
 export function registerV3Position(state: DurableRetirementState, input: Omit<DurableV3Position, 'createdAt' | 'id' | 'positionKey' | 'registeredBy' | 'status'>, now = new Date().toISOString()) {

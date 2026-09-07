@@ -195,6 +195,15 @@
 							<label>Owner <input id="retirement-v3-owner" required /></label><label>Pool <input id="retirement-v3-pool" required /></label> <label>Token 0 <input id="retirement-v3-token0" required /></label><label>Token 1 <input id="retirement-v3-token1" required /></label> <label>Fee tier <input id="retirement-v3-fee" type="number" value="3000" required /></label><label>Lower tick <input id="retirement-v3-lower" type="number" required /></label> <label>Upper tick <input id="retirement-v3-upper" type="number" required /></label><label>Receipt/workflow reference <input id="retirement-v3-workflow" required /></label> <label>Typed confirmation <input id="retirement-v3-confirmation" required /></label><button type="submit">Register position</button>
 						</form>
 					</details>
+					<details>
+						<summary>Accept residuals for profile replacement</summary>
+						<form id="retirement-residual-form" class="reconciliation-form">
+							<label>Target deployment profile <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
+							<label>Review rationale <textarea id="retirement-residual-reason" required minlength="12" maxlength="2048"></textarea></label>
+							<label>Typed confirmation <input id="retirement-residual-confirmation" required autocomplete="off" placeholder="ACCEPT RESIDUALS FOR profile:id" /></label>
+							<button id="retirement-residual-submit" type="submit" disabled>Accept residuals</button>
+						</form>
+					</details>
 				</article>
 
 				<div class="two-column">

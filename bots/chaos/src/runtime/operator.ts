@@ -888,7 +888,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				const retirementV3 = await retirementPositionsForScan({ blockNumber: scan.anchor.blockNumber, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
 				updateRetirementAssessment(scan, settings, state, retirementV3)
 				await persistState(configuration, state)
-				if (!scan.indexComplete || !scan.carryProofJournalComplete) {
+				if (!scan.canonicalLifecyclePresenceComplete || !scan.indexComplete || !scan.carryProofJournalComplete) {
 					backfillIncomplete = true
 					return settings.runtime.once
 				}

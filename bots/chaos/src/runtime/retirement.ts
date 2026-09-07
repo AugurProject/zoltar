@@ -107,7 +107,7 @@ export async function readV3Position(client: Pick<PublicClient, 'getBlock' | 'ge
 export async function readV3PositionsWithQuorum(readers: readonly V3PositionReader[], requiredQuorum: number, positions: readonly DurableV3Position[], blockNumber: bigint) {
 	if (readers.length < requiredQuorum) throw new Error('Retirement V3 scan does not have enough RPC clients for quorum')
 	const observations: V3PositionObservation[] = []
-	for (const position of positions.filter(candidate => candidate.status === 'active' || candidate.status === 'collect-only' || candidate.status === 'pending-confirmation')) {
+	for (const position of positions.filter(candidate => candidate.status === 'active' || candidate.status === 'blocked' || candidate.status === 'collect-only' || candidate.status === 'pending-confirmation')) {
 		const settled = await Promise.allSettled(readers.map(reader => reader(position, blockNumber)))
 		const successful = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 		const grouped = new Map<string, V3PositionObservation[]>()
@@ -298,7 +298,14 @@ export function buildNativeOpenOracleCreditPlan(snapshot: EcosystemSnapshot, ret
 	}
 }
 
-export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number, limits?: { maximumEthAttoEth: bigint; maximumRepAttoRep: bigint; minimumEthReserveAttoEth: bigint }): OperationPlan | undefined {
+type RetirementSweepLimits = {
+	maximumEthAttoEth: bigint
+	maximumGasCostAttoEth: bigint
+	maximumRepAttoRep: bigint
+	minimumEthReserveAttoEth: bigint
+}
+
+export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number, limits?: RetirementSweepLimits): OperationPlan | undefined {
 	if (!retirement.policies.sweepAssets || retirement.recipient === undefined || limits === undefined) return undefined
 	const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 	if (retirement.policies.unwrapWeth && weth !== undefined && BigInt(weth.balance) > 0n) {
@@ -337,7 +344,7 @@ export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: Dur
 			planningSeed: seed,
 		}
 	}
-	const spendableEth = BigInt(snapshot.wallet.ethBalanceAttoEth) - limits.minimumEthReserveAttoEth
+	const spendableEth = BigInt(snapshot.wallet.ethBalanceAttoEth) - limits.minimumEthReserveAttoEth - limits.maximumGasCostAttoEth
 	if (spendableEth <= 0n) return undefined
 	const amount = spendableEth < limits.maximumEthAttoEth ? spendableEth : limits.maximumEthAttoEth
 	return {
@@ -346,7 +353,7 @@ export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: Dur
 			ecosystem: 'trading',
 			label: 'Sweep native ETH last',
 			metadata: { amount: amount.toString(), recipient: retirement.recipient },
-			postconditions: ['Native ETH is transferred last while the configured gas reserve remains'],
+			postconditions: ['Native ETH is transferred last while the configured ETH reserve and one maximum gas budget remain'],
 			risk: 'low',
 			snapshot,
 			steps: [
@@ -449,7 +456,7 @@ export function assessRetirement(parameters: {
 	snapshot: EcosystemSnapshot
 	state: Pick<DurableState, 'obligations' | 'pendingTransactions' | 'workflows'>
 	v3: readonly V3PositionObservation[]
-	sweepLimits?: { maximumEthAttoEth: bigint; maximumRepAttoRep: bigint; minimumEthReserveAttoEth: bigint } | undefined
+	sweepLimits?: RetirementSweepLimits | undefined
 	planning?: PlanningOptions | undefined
 	canonicalScanComplete: boolean
 }): RetirementAssessment {
@@ -501,14 +508,14 @@ export function assessRetirement(parameters: {
 	const recoveryPlan = claimPlan ?? fullLiquidityPlan ?? revocationPlan ?? nativeCreditPlan
 	const directPlan = recoveryPlan ?? (canonicalClaims === 0 && blockers.length === 0 ? sweepPlan : undefined)
 	let action: RetirementAssessment['action']
-	if (v3Action !== undefined) action = { kind: 'v3-position', observation: v3Action }
-	else if (directPlan !== undefined) action = { kind: 'existing-plan', plan: directPlan }
+	if (parameters.canonicalScanComplete && v3Action !== undefined) action = { kind: 'v3-position', observation: v3Action }
+	else if (parameters.canonicalScanComplete && directPlan !== undefined) action = { kind: 'existing-plan', plan: directPlan }
 	const outstanding = proof.actionableObligations + proof.claimableAssets + proof.collectableV3Positions + proof.knownApprovals + proof.ownedLiquidityPositions + proof.partialWorkflows + proof.pendingTransactions
 	if (action !== undefined) return { action, blockers, proof, residuals, status: 'draining' }
 	if (blockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
 	if (blockers.length !== 0) return { action, blockers, proof, residuals, status: 'waiting' }
 	if (outstanding > 0) return { action, blockers, proof, residuals, status: 'draining' }
-	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured gas reserve retained after native sweeping' })
+	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured ETH reserve and final-sweep gas budget retained after native sweeping' })
 	return { action, blockers, proof, residuals, status: residuals.length === 0 ? 'drained' : 'drained-with-residuals' }
 }
 
@@ -516,6 +523,7 @@ export function applyRetirementAssessment(retirement: DurableRetirementState, as
 	retirement.blockers = assessment.blockers
 	retirement.status = assessment.status
 	retirement.updatedAt = now
+	retirement.profileReplacementOverride = undefined
 	if (assessment.status !== 'drained' && assessment.status !== 'drained-with-residuals') {
 		retirement.completionEvidence = undefined
 		return

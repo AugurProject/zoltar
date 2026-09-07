@@ -16,10 +16,11 @@ import {
 	type V3PositionObservation,
 } from '../../src/runtime/retirement.ts'
 import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '../../src/state/operator-state.ts'
-import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
+import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { parseSettings } from '../../src/config/settings.ts'
-import { processRetirementCycle, recordV3ScanFailure, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, recordV3ScanFailure, recordV3ScanSuccess, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
@@ -209,15 +210,23 @@ describe('Drain & Retire planning', () => {
 		expect(unconfirmed.status).toBe('pending-confirmation')
 	})
 
-	test('retries a pre-confirmation V3 scan after restart but blocks an invalid active identity', () => {
+	test('retries V3 scan failures and clears the blocker after a later quorum succeeds', async () => {
 		const state = initialRuntimeState(true, address(1), 31_337)
 		const pending = position('pending-confirmation')
 		recordV3ScanFailure(state, pending, new Error('creation receipt is not available yet'))
 		expect(pending.status).toBe('pending-confirmation')
 		expect(state.retirement.blockers).toContainEqual(expect.objectContaining({ id: pending.id }))
 		const active = position('active')
-		recordV3ScanFailure(state, active, new Error('pool identity mismatch'))
+		recordV3ScanFailure(state, active, new Error('No RPC quorum agreed on retirement position'))
 		expect(active.status).toBe('blocked')
+		const reader = async (current: DurableV3Position) => ({ liquidity: 5n, position: current, tokensOwed0: 2n, tokensOwed1: 3n })
+		const observations = await readV3PositionsWithQuorum([reader], 1, [active], 101n)
+		expect(observations).toHaveLength(1)
+		const observation = observations[0]
+		if (observation === undefined) throw new Error('Expected retryable V3 observation')
+		recordV3ScanSuccess(state, observation, 101n)
+		expect(active).toMatchObject({ lastCheckedAtBlock: '101', status: 'active' })
+		expect(state.retirement.blockers).not.toContainEqual(expect.objectContaining({ id: active.id }))
 	})
 
 	test('does not equate an empty plan with completion when approvals remain', () => {
@@ -323,7 +332,7 @@ describe('Drain & Retire planning', () => {
 	test('unwraps WETH, sweeps tokens in bounded chunks, and sends native ETH last above reserve', () => {
 		const snapshot = emptySnapshot()
 		const retirement = request()
-		const limits = { maximumEthAttoEth: 10n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
+		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
 		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'WETH' }]
 		expect(buildAssetSweepPlan(snapshot, retirement, 1, limits)).toMatchObject({ definitionId: 'retirement.sweep.unwrap-weth', metadata: { amount: '10' } })
 		snapshot.wallet.tokens = [{ address: snapshot.universes[0]?.repToken ?? address(10), allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'REP' }]
@@ -331,6 +340,41 @@ describe('Drain & Retire planning', () => {
 		snapshot.wallet.tokens = []
 		snapshot.wallet.ethBalanceAttoEth = '20'
 		expect(buildAssetSweepPlan(snapshot, retirement, 1, limits)).toMatchObject({ definitionId: 'retirement.sweep.native-last', metadata: { amount: '10' } })
+	})
+
+	test('reserves both configured ETH and the maximum gas cost before a native final sweep', () => {
+		const snapshot = emptySnapshot()
+		const retirement = request()
+		const limits = { maximumEthAttoEth: 100n, maximumGasCostAttoEth: 4n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
+		snapshot.wallet.ethBalanceAttoEth = '20'
+		const sweep = buildAssetSweepPlan(snapshot, retirement, 1, limits)
+		expect(sweep).toMatchObject({ definitionId: 'retirement.sweep.native-last', metadata: { amount: '13' } })
+		if (sweep === undefined) throw new Error('Expected a native sweep plan')
+		expect(assertOperationEthFunding(sweep, 20n, limits)).toEqual({ maximumGasCost: 4n, requiredBalance: 20n, transactionValue: 13n })
+	})
+
+	test('does not execute retirement actions until canonical lifecycle discovery is complete', async () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
+		const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId)
+		request(state.retirement)
+		const settings = parseSettings(example)
+		settings.paused = false
+		settings.runtime.execute = true
+		let executed = false
+		await processRetirementCycle({
+			execute: async () => {
+				executed = true
+			},
+			persist: async () => {},
+			prepareExecution: async () => {},
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: false, carryProofJournalComplete: true, indexComplete: true, snapshot },
+			settings,
+			state,
+			v3: [],
+		})
+		expect(executed).toBeFalse()
+		expect(state.retirement).toMatchObject({ blockers: [{ id: 'canonical-scan-incomplete' }], status: 'blocked' })
 	})
 
 	test('waits for delayed obligations and blocks ambiguous ownership', () => {
@@ -382,6 +426,32 @@ describe('Drain & Retire planning', () => {
 		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: pool.shareToken, universeId: pool.universeId, yes: '0' }]
 		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
 		expect(residual.status).toBe('drained-with-residuals')
+	})
+
+	test('binds a residual replacement override to current completion evidence, profile, and recipient', () => {
+		const snapshot = emptySnapshot()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Pool fixture is missing')
+		pool.questionOutcome = 1
+		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: pool.shareToken, universeId: pool.universeId, yes: '0' }]
+		const retirement = request()
+		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
+		applyRetirementAssessment(retirement, residual, hash(2), 2n, now)
+		acceptResidualProfileReplacement(retirement, 'profile:test', 'profile:replacement', 'Residual share loss was reviewed and accepted.', 'ACCEPT RESIDUALS FOR profile:replacement', now)
+		expect(retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: hash(2), completionBlockNumber: '2', recipient: address(99), sourceProfileId: 'profile:test', targetProfileId: 'profile:replacement' })
+
+		const mismatchedRuntime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
+		mismatchedRuntime.profileId = 'profile:other'
+		mismatchedRuntime.retirement = structuredClone(retirement)
+		expect(() => resetPristineStateForDeploymentProfile(mismatchedRuntime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toThrow('drain it first')
+
+		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
+		runtime.profileId = 'profile:test'
+		runtime.retirement = structuredClone(retirement)
+		expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toBeTrue()
+
+		applyRetirementAssessment(retirement, residual, hash(3), 3n, '2026-09-07T00:01:00.000Z')
+		expect(retirement.profileReplacementOverride).toBeUndefined()
 	})
 
 	test('persists cumulative canonical balance increases across recovery and sweeping', () => {

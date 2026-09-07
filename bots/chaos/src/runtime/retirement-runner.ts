@@ -43,7 +43,7 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 		state,
 		v3,
 		canonicalScanComplete,
-		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
+		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumGasCostAttoEth: settings.strategy.maximumGasCostAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
 	})
 	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber)
 	state.scheduler.status = 'paused'
@@ -63,6 +63,11 @@ export function recordV3ScanFailure(state: RuntimeState, position: RuntimeState[
 	state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
 }
 
+export function recordV3ScanSuccess(state: RuntimeState, observation: V3PositionObservation, blockNumber: bigint) {
+	state.retirement.blockers = state.retirement.blockers.filter(blocker => blocker.id !== observation.position.id)
+	updateV3PositionStatus(observation, blockNumber)
+}
+
 export async function retirementPositionsForScan(parameters: { blockNumber: bigint; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
 	const { blockNumber, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
@@ -72,13 +77,13 @@ export async function retirementPositionsForScan(parameters: { blockNumber: bigi
 	const observations: V3PositionObservation[] = []
 	for (const position of state.retirement.positions) {
 		try {
-			observations.push(...(await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], blockNumber)))
-			state.retirement.blockers = state.retirement.blockers.filter(blocker => blocker.id !== position.id)
+			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], blockNumber)
+			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, blockNumber)
+			observations.push(...positionObservations)
 		} catch (error) {
 			recordV3ScanFailure(state, position, error)
 		}
 	}
-	for (const observation of observations) updateV3PositionStatus(observation, blockNumber)
 	return observations
 }
 
@@ -88,7 +93,8 @@ export async function processRetirementCycle(parameters: { execute: (plan: Opera
 	const assessment = updateRetirementAssessment(scan, settings, state, parameters.v3)
 	if (assessment === undefined) throw new Error('Active retirement did not produce an assessment')
 	await parameters.persist()
-	if (state.paused || !settings.runtime.execute || assessment.action === undefined) {
+	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete
+	if (!canonicalScanComplete || state.paused || !settings.runtime.execute || assessment.action === undefined) {
 		return settings.runtime.once || (state.retirement.policies.exitAfterCompletion && (state.retirement.status === 'drained' || state.retirement.status === 'drained-with-residuals'))
 	}
 	await parameters.prepareExecution()

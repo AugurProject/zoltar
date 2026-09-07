@@ -311,7 +311,7 @@ describe('Drain & Retire on a local chain', () => {
 
 		snapshot.wallet.tokens = []
 		snapshot.wallet.ethBalanceAttoEth = (5n * 10n ** 18n).toString()
-		const sweep = buildAssetSweepPlan(snapshot, retirementWithRecipient, 6, { maximumEthAttoEth: 10n ** 18n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
+		const sweep = buildAssetSweepPlan(snapshot, retirementWithRecipient, 6, { maximumEthAttoEth: 10n ** 18n, maximumGasCostAttoEth: 2n * 10n ** 16n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
 		if (sweep === undefined) throw new Error('Native sweep was not planned')
 		expect(sweep.definitionId).toBe('retirement.sweep.native-last')
 		const recipientBefore = await owner.getBalance({ address: recipient })

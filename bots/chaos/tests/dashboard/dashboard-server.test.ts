@@ -23,6 +23,7 @@ function controller(overrides: Partial<Parameters<typeof startDashboardServer>[1
 		setObligation: (value: unknown) => value,
 		setPaused: (value: unknown) => value,
 		setReplacement: (value: unknown) => value,
+		setRetirement: (value: unknown) => value,
 		setSettings: (value: unknown) => value,
 		setSigner: (value: unknown) => value,
 		setWorkflow: (value: unknown) => value,
@@ -71,6 +72,7 @@ describe('chaos dashboard server', () => {
 		expect(overview).toContain('type="password"')
 		expect(overview).toContain('id="countdown"')
 		expect(overview).toContain('id="replacement-hash"')
+		expect(overview).toContain('id="retirement-residual-form"')
 		expect(overview).toContain('id="cancellation-confirmation"')
 		expect(overview).toContain('id="candidate-confirmation"')
 		expect(overview).toContain('id="workflow-confirmation"')
