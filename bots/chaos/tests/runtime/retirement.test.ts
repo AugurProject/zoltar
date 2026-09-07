@@ -281,7 +281,8 @@ describe('Drain & Retire planning', () => {
 
 	test('enforces the configured unmatched-share loss against guaranteed output', () => {
 		const exit = plan('trading.position.exit')
-		exit.metadata = { maximumLong: '1000', minimumEthAttoEth: '970' }
+		const minimumEthAttoEth = 970n
+		exit.metadata = { maximumLong: '1000', minimumEthAttoEth: minimumEthAttoEth.toString() }
 		const policies = { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true }
 		expect(retirementPlanFromEvaluations([evaluation(exit)], { ...policies, maximumExitLossBps: 250 })).toBeUndefined()
 		expect(retirementPlanFromEvaluations([evaluation(exit)], { ...policies, maximumExitLossBps: 300 })).toBe(exit)

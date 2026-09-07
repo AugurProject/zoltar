@@ -70,24 +70,24 @@ const receiveRequestParameter = {
 
 type ReceiveMarket = Pick<LiveMarket, 'pair' | 'shareToken' | 'pool' | 'universeId' | 'questionId'>
 
-export function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint): Hex {
+export function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
 	if (market.pair === undefined) throw new Error('Pair is unavailable')
 	const invalidTokenId = market.universeId << 8n
-	return encodeAbiParameters([receiveRequestParameter], [[1, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEth, recipient, recipient, deadline]])
+	return encodeAbiParameters([receiveRequestParameter], [[1, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline]])
 }
 
-export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint): Hex {
+export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
 	if (market.pair === undefined) throw new Error('Pair is unavailable')
 	const invalidTokenId = market.universeId << 8n
-	return encodeAbiParameters([receiveRequestParameter], [[1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, 0, completeSetShares, 0n, minimumEth, recipient, recipient, deadline]])
+	return encodeAbiParameters([receiveRequestParameter], [[1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, 0, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline]])
 }
 
-export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint) {
+export function receiveBasedExitArguments(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint) {
 	const invalidTokenId = market.universeId << 8n
 	return {
 		ids: [invalidTokenId, invalidTokenId | (side === 'YES' ? 1n : 2n)],
 		amounts: [completeSetShares, maximumLongShares],
-		data: encodeReceiveBasedExitRequest(market, side, completeSetShares, maximumLongShares, minimumEth, recipient, deadline),
+		data: encodeReceiveBasedExitRequest(market, side, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, deadline),
 	}
 }
 
