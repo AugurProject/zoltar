@@ -1,6 +1,6 @@
 import type { DurableRetirementState } from '../state/retirement.ts'
 
-export type RetirementOperationDisposition = 'claim-linked-migration' | 'prohibited' | 'recovery' | 'unmatched-exit'
+type RetirementOperationDisposition = 'claim-linked-migration' | 'prohibited' | 'recovery' | 'unmatched-exit'
 
 const RECOVERY_OPERATIONS = [
 	'open-oracle.push-or-credit',

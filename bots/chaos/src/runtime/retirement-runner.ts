@@ -19,7 +19,7 @@ export function enforceRetirementContinuation(state: RuntimeState, workflow: Dur
 	return false
 }
 
-export function retirementEvaluationsForScan(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState) {
+function retirementEvaluationsForScan(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState) {
 	return evaluateOperationCatalog(scan.snapshot, {
 		...planningOptions(settings, 0),
 		allowHighRisk: true,

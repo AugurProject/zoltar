@@ -1,6 +1,6 @@
 import { getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 
-export type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'drained' | 'drained-with-residuals'
+type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'drained' | 'drained-with-residuals'
 
 export type RetirementPolicies = {
 	exitAfterCompletion: boolean
@@ -25,7 +25,7 @@ export type RetirementResidual = {
 	reason: string
 }
 
-export type RetirementCompletionEvidence = {
+type RetirementCompletionEvidence = {
 	blockHash: Hash
 	blockNumber: string
 	completedAt: string
@@ -41,7 +41,7 @@ export type RetirementCompletionEvidence = {
 	residuals: RetirementResidual[]
 }
 
-export type RetirementProfileReplacementOverride = {
+type RetirementProfileReplacementOverride = {
 	acceptedAt: string
 	completionBlockHash: Hash
 	completionBlockNumber: string

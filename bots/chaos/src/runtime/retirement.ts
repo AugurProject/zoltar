@@ -9,7 +9,7 @@ import type { DurableState } from '../state/operator-state.ts'
 import type { RetirementAssessment, RetirementProofCounts, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 import { CLAIM_LINKED_MIGRATIONS, operationAllowedDuringRetirement } from './retirement-operation-policy.ts'
 
-export type { RetirementAssessment, RetirementProofCounts, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
+export type { RetirementAssessment, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 
 const RETIREMENT_OPERATION_ORDER = [
 	'open-oracle.withdraw',
@@ -41,7 +41,7 @@ const RETIREMENT_OPERATION_ORDER = [
 
 export { operationAllowedDuringRetirement } from './retirement-operation-policy.ts'
 
-export function migrationPlanRecoversWalletClaim(plan: OperationPlan, snapshot: EcosystemSnapshot) {
+function migrationPlanRecoversWalletClaim(plan: OperationPlan, snapshot: EcosystemSnapshot) {
 	if (!CLAIM_LINKED_MIGRATIONS.has(plan.definitionId)) return true
 	if (plan.definitionId === 'trading.shares.migrate') {
 		const shareToken = plan.metadata['shareToken']
