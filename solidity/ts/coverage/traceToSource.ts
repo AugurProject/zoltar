@@ -20,7 +20,7 @@ type RpcTransactionRequest = {
 interface CoverageProfile {
 	readonly sourceFileNames: ReadonlyArray<string | undefined>
 	readonly pcToSource: ReadonlyMap<number, ParsedSourceMapSegment | undefined>
-	readonly immutableRanges: readonly BytecodeRange[]
+	readonly mutableRanges: readonly BytecodeRange[]
 }
 
 type BytecodeRange = { readonly start: number; readonly length: number }
@@ -64,6 +64,7 @@ type ContractArtifactEvmBytecode = {
 	readonly object: string
 	readonly sourceMap: string
 	readonly immutableReferences: readonly BytecodeRange[]
+	readonly linkReferences: readonly BytecodeRange[]
 }
 
 type ContractArtifact = {
@@ -81,6 +82,17 @@ type ContractsJson = {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const flattenBytecodeRanges = (value: unknown): BytecodeRange[] => {
+	if (Array.isArray(value)) {
+		return value.flatMap(range => {
+			if (!isRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') return []
+			return [{ start: range['start'], length: range['length'] }]
+		})
+	}
+	if (!isRecord(value)) return []
+	return Object.values(value).flatMap(flattenBytecodeRanges)
+}
 
 const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 	const contractsValue = raw.contracts
@@ -101,23 +113,15 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 				if (!isRecord(sectionValue)) return undefined
 				const object = typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined
 				const sourceMap = typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined
-				const immutableReferences: BytecodeRange[] = []
-				const immutableReferencesValue = sectionValue['immutableReferences']
-				if (isRecord(immutableReferencesValue)) {
-					for (const ranges of Object.values(immutableReferencesValue)) {
-						if (!Array.isArray(ranges)) continue
-						for (const range of ranges) {
-							if (!isRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') continue
-							immutableReferences.push({ start: range['start'], length: range['length'] })
-						}
-					}
-				}
+				const immutableReferences = flattenBytecodeRanges(sectionValue['immutableReferences'])
+				const linkReferences = flattenBytecodeRanges(sectionValue['linkReferences'])
 				if (object === undefined && sourceMap === undefined) return undefined
 
 				return {
 					object: object === undefined ? '' : object,
 					sourceMap: sourceMap === undefined ? '' : sourceMap,
 					immutableReferences,
+					linkReferences,
 				}
 			}
 
@@ -154,13 +158,25 @@ const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts
 	return { contracts, sourceFiles }
 }
 
-const isBytecodeProfile = (bytecode: string | undefined, sourceMap: string | undefined, sourceFileNames: ReadonlyArray<string | undefined>, immutableRanges: readonly BytecodeRange[]): CoverageProfile | undefined => {
+const maskBytecodeRanges = (bytecode: string, ranges: readonly BytecodeRange[]): string => {
+	const characters = bytecode.split('')
+	for (const range of ranges) {
+		const start = range.start * 2
+		const end = Math.min(characters.length, start + range.length * 2)
+		for (let index = start; index < end; index++) characters[index] = '0'
+	}
+	return characters.join('')
+}
+
+export const buildCoveragePcToSourceMapForTest = (bytecode: string, sourceMap: string, linkRanges: readonly BytecodeRange[]) => buildPcToSourceMap(maskBytecodeRanges(normalizeBytecode(bytecode), linkRanges), sourceMap)
+
+const isBytecodeProfile = (bytecode: string | undefined, sourceMap: string | undefined, sourceFileNames: ReadonlyArray<string | undefined>, immutableRanges: readonly BytecodeRange[], linkRanges: readonly BytecodeRange[]): CoverageProfile | undefined => {
 	if (bytecode === undefined || sourceMap === undefined) return undefined
 	const bytecodeHex = normalizeBytecode(bytecode)
 	if (bytecodeHex.length === 0) return undefined
-	const pcToSource = buildPcToSourceMap(bytecodeHex, sourceMap)
+	const pcToSource = buildPcToSourceMap(maskBytecodeRanges(bytecodeHex, linkRanges), sourceMap)
 	if (pcToSource.size === 0) return undefined
-	return { sourceFileNames, pcToSource, immutableRanges }
+	return { sourceFileNames, pcToSource, mutableRanges: [...immutableRanges, ...linkRanges] }
 }
 
 const addProfileToMap = (profileByBytecode: CoverageProfileMap, bytecode: string | undefined, profile: CoverageProfile): void => {
@@ -182,10 +198,10 @@ const collectProfilesByBytecode = async (artifactsPath: string): Promise<Coverag
 			const evm = contract.evm
 			if (evm === undefined) continue
 
-			const creationProfile = isBytecodeProfile(evm.bytecode?.object, evm.bytecode?.sourceMap, sourceFiles, evm.bytecode?.immutableReferences ?? [])
+			const creationProfile = isBytecodeProfile(evm.bytecode?.object, evm.bytecode?.sourceMap, sourceFiles, evm.bytecode?.immutableReferences ?? [], evm.bytecode?.linkReferences ?? [])
 			if (creationProfile !== undefined) addProfileToMap(profileMaps.creation, evm.bytecode?.object, creationProfile)
 
-			const deployedProfile = isBytecodeProfile(evm.deployedBytecode?.object, evm.deployedBytecode?.sourceMap, sourceFiles, evm.deployedBytecode?.immutableReferences ?? [])
+			const deployedProfile = isBytecodeProfile(evm.deployedBytecode?.object, evm.deployedBytecode?.sourceMap, sourceFiles, evm.deployedBytecode?.immutableReferences ?? [], evm.deployedBytecode?.linkReferences ?? [])
 			if (deployedProfile !== undefined) addProfileToMap(profileMaps.deployed, evm.deployedBytecode?.object, deployedProfile)
 		}
 	}
@@ -193,79 +209,90 @@ const collectProfilesByBytecode = async (artifactsPath: string): Promise<Coverag
 	return profileMaps
 }
 
-const countDifferentCharacters = (first: string, second: string, ignoredByteRanges: readonly BytecodeRange[]): number => {
-	const length = Math.min(first.length, second.length)
-	let differences = Math.abs(first.length - second.length)
-	const ignoredCharacters = new Set<number>()
-	for (const range of ignoredByteRanges) {
-		const start = range.start * 2
-		const end = start + range.length * 2
-		for (let index = start; index < end; index++) ignoredCharacters.add(index)
-	}
-	for (let index = 0; index < length; index++) if (!ignoredCharacters.has(index) && first[index] !== second[index]) differences++
-	return differences
+export const isCoverageBytecodeCompatibleForTest = (artifactBytecode: string, runtimeBytecode: string, mutableRanges: readonly BytecodeRange[]): boolean => {
+	const normalizedArtifact = normalizeBytecode(artifactBytecode)
+	const normalizedRuntime = normalizeBytecode(runtimeBytecode)
+	if (normalizedArtifact.length !== normalizedRuntime.length) return false
+	return maskBytecodeRanges(normalizedArtifact, mutableRanges) === maskBytecodeRanges(normalizedRuntime, mutableRanges)
 }
 
-const getCompatibleBytecodeDifferenceLimit = (bytecodeLength: number): number => Math.max(160, Math.ceil(bytecodeLength * 0.02))
-const getMetadataCompatibleBytecodeDifferenceLimit = (bytecodeLength: number): number => Math.max(160, Math.ceil(bytecodeLength * 0.2))
+const sameSegment = (first: ParsedSourceMapSegment | undefined, second: ParsedSourceMapSegment | undefined): boolean =>
+	first === second || (first !== undefined && second !== undefined && first.sourceIndex === second.sourceIndex && first.sourceOffset === second.sourceOffset && first.sourceLength === second.sourceLength && first.jumpType === second.jumpType && first.modifierDepth === second.modifierDepth)
 
-const getSolidityMetadataSuffix = (bytecode: string): string | undefined => {
-	const markerIndex = bytecode.lastIndexOf('a2646970667358')
-	if (markerIndex === -1) return undefined
-	return bytecode.slice(markerIndex)
+const equivalentProfileSets = (first: readonly CoverageProfile[], second: readonly CoverageProfile[]): boolean => {
+	if (first.length !== second.length) return false
+	return first.every((profile, index) => {
+		const comparison = second[index]
+		if (comparison === undefined || profile.sourceFileNames.length !== comparison.sourceFileNames.length || profile.pcToSource.size !== comparison.pcToSource.size) return false
+		if (profile.sourceFileNames.some((sourceName, sourceIndex) => sourceName !== comparison.sourceFileNames[sourceIndex])) return false
+		for (const [pc, segment] of profile.pcToSource) if (!sameSegment(segment, comparison.pcToSource.get(pc))) return false
+		return true
+	})
 }
 
-const getCompatibleBytecodeDifferenceLimitForPair = (artifactBytecode: string, normalizedCode: string): number => {
-	const artifactMetadata = getSolidityMetadataSuffix(artifactBytecode)
-	const deployedMetadata = getSolidityMetadataSuffix(normalizedCode)
-	if (artifactMetadata !== undefined && artifactMetadata === deployedMetadata) return getMetadataCompatibleBytecodeDifferenceLimit(normalizedCode.length)
-	return getCompatibleBytecodeDifferenceLimit(normalizedCode.length)
+const selectUnambiguousProfiles = (matches: readonly CoverageProfile[][]): CoverageProfile[] | undefined => {
+	const first = matches[0]
+	if (first === undefined) return undefined
+	return matches.every(profiles => equivalentProfileSets(first, profiles)) ? first : undefined
 }
 
 const findCompatibleProfilesForBytecode = (profileByBytecode: CoverageProfileMap, normalizedCode: string): CoverageProfile[] | undefined => {
 	const exactProfiles = profileByBytecode.get(normalizedCode)
 	if (exactProfiles !== undefined) return exactProfiles
 
-	let bestProfiles: CoverageProfile[] | undefined
-	let bestDifferenceCount = Number.POSITIVE_INFINITY
-	let ambiguousBestMatch = false
-
+	const matches: CoverageProfile[][] = []
 	for (const [artifactBytecode, profiles] of profileByBytecode.entries()) {
 		if (artifactBytecode.length !== normalizedCode.length) continue
-		const differenceLimit = getCompatibleBytecodeDifferenceLimitForPair(artifactBytecode, normalizedCode)
-		const differenceCount = countDifferentCharacters(
-			artifactBytecode,
-			normalizedCode,
-			profiles.flatMap(profile => profile.immutableRanges),
+		if (
+			isCoverageBytecodeCompatibleForTest(
+				artifactBytecode,
+				normalizedCode,
+				profiles.flatMap(profile => profile.mutableRanges),
+			)
 		)
-		if (differenceCount > differenceLimit) continue
-		if (differenceCount === bestDifferenceCount) {
-			ambiguousBestMatch = true
-			continue
-		}
-		if (differenceCount > bestDifferenceCount) continue
-		bestDifferenceCount = differenceCount
-		bestProfiles = profiles
-		ambiguousBestMatch = false
+			matches.push(profiles)
 	}
-
-	if (bestProfiles === undefined || ambiguousBestMatch) return undefined
-	return bestProfiles
+	return selectUnambiguousProfiles(matches)
 }
 
 const findProfilesForCreationBytecode = (profileByBytecode: CoverageProfileMap, normalizedCreationCode: string): CoverageProfile[] | undefined => {
 	const exactProfiles = profileByBytecode.get(normalizedCreationCode)
 	if (exactProfiles !== undefined) return exactProfiles
 
-	let bestProfiles: CoverageProfile[] | undefined
 	let bestBytecodeLength = 0
+	const matches: CoverageProfile[][] = []
 	for (const [artifactBytecode, profiles] of profileByBytecode.entries()) {
-		if (artifactBytecode.length <= bestBytecodeLength) continue
-		if (!normalizedCreationCode.startsWith(artifactBytecode)) continue
-		bestProfiles = profiles
-		bestBytecodeLength = artifactBytecode.length
+		if (artifactBytecode.length < bestBytecodeLength || artifactBytecode.length > normalizedCreationCode.length) continue
+		const creationPrefix = normalizedCreationCode.slice(0, artifactBytecode.length)
+		if (
+			!isCoverageBytecodeCompatibleForTest(
+				artifactBytecode,
+				creationPrefix,
+				profiles.flatMap(profile => profile.mutableRanges),
+			)
+		)
+			continue
+		if (artifactBytecode.length > bestBytecodeLength) {
+			bestBytecodeLength = artifactBytecode.length
+			matches.length = 0
+		}
+		matches.push(profiles)
 	}
-	return bestProfiles
+	return selectUnambiguousProfiles(matches)
+}
+
+const testProfile = (profileId: string, mutableRanges: readonly BytecodeRange[]): CoverageProfile => ({ sourceFileNames: [profileId], pcToSource: new Map(), mutableRanges })
+
+export const resolveCoverageBytecodeCandidateForTest = (candidates: readonly { readonly artifactBytecode: string; readonly mutableRanges: readonly BytecodeRange[]; readonly profileId: string }[], runtimeBytecode: string): string | undefined => {
+	const profilesByBytecode: CoverageProfileMap = new Map()
+	for (const candidate of candidates) profilesByBytecode.set(normalizeBytecode(candidate.artifactBytecode), [testProfile(candidate.profileId, candidate.mutableRanges)])
+	return findCompatibleProfilesForBytecode(profilesByBytecode, normalizeBytecode(runtimeBytecode))?.[0]?.sourceFileNames[0]
+}
+
+export const resolveCoverageCreationCandidateForTest = (candidates: readonly { readonly artifactBytecode: string; readonly mutableRanges: readonly BytecodeRange[]; readonly profileId: string }[], creationBytecodeWithArguments: string): string | undefined => {
+	const profilesByBytecode: CoverageProfileMap = new Map()
+	for (const candidate of candidates) profilesByBytecode.set(normalizeBytecode(candidate.artifactBytecode), [testProfile(candidate.profileId, candidate.mutableRanges)])
+	return findProfilesForCreationBytecode(profilesByBytecode, normalizeBytecode(creationBytecodeWithArguments))?.[0]?.sourceFileNames[0]
 }
 
 const traceStepAddress = (step: Record<string, unknown>): string | undefined => {
