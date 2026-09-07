@@ -1,10 +1,18 @@
-import { existsSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import * as path from 'node:path'
 
 export const preactSingletonDependencyPaths = ['preact', '@preact/signals', '@preact/signals-core'] as const
 
 export function shareUiPreactRuntime(installDirectory: string) {
 	if (path.basename(path.dirname(installDirectory)) !== 'ui') return false
+	const packageJsonPath = path.join(installDirectory, 'package.json')
+	if (existsSync(packageJsonPath)) {
+		const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+			dependencies?: Record<string, string>
+			devDependencies?: Record<string, string>
+		}
+		if (packageJson.dependencies?.['preact'] === undefined && packageJson.devDependencies?.['preact'] === undefined) return false
+	}
 	const repositoryRoot = path.dirname(path.dirname(installDirectory))
 	const dependencyPaths = preactSingletonDependencyPaths.map(dependencyPath => ({
 		root: path.join(repositoryRoot, 'node_modules', dependencyPath),
