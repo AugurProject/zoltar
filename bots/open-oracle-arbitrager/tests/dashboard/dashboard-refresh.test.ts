@@ -59,6 +59,8 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	let releaseState: (() => void) | undefined
 	let releaseConfiguration: (() => void) | undefined
 	let hangProfileResponse = true
+	let capable = false
+	let stateFailure = true
 	const submission = validateSubmissionSettings({ mode: 'public', relayUrls: [] })
 	const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	const deployment = {
@@ -97,6 +99,11 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	})
 	const snapshot = () => {
 		const state = operatorState()
+		if (capable) {
+			state.paused = false
+			state.status = 'running'
+			state.lastPollAt = new Date().toISOString()
+		}
 		state.endpointChecks = [{ chainId: 1, checkedAt: new Date().toISOString(), error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://mainnet-rpc.example' }]
 		state.rpcEndpointHealth = [{ consecutiveFailures: 0, error: undefined, lastFailureAt: undefined, lastSuccessAt: new Date().toISOString(), latencyMilliseconds: 1, nextRetryAt: undefined, status: 'healthy', target: 'https://mainnet-live.example' }]
 		return operatorSnapshot(state, currentStrategy, submission, connectivity, {
@@ -120,6 +127,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			return captured
 		},
 		getSnapshot: async () => {
+			if (stateFailure) throw new Error('State unavailable')
 			const captured = snapshot()
 			const gate = stateGate
 			if (gate !== undefined) await gate
@@ -177,6 +185,35 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const initialConfigurationStatus = element(window, 'configuration-status', window.HTMLElement).textContent
 	if (!element(window, 'settings-chain-scope', window.HTMLElement).textContent.includes('Ethereum mainnet')) throw new Error(`Initial configuration did not load: ${initialConfigurationStatus}`)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
+	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
+	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
+	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
+	stateFailure = false
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator blocked')
+	expect(element(window, 'attention-badge', window.HTMLElement).textContent).toBe('1 action')
+
+	capable = true
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+	stateFailure = true
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
+	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
+	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
+	stateFailure = false
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
+
+	capable = false
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
 
 	stateGate = new Promise(resolve => (releaseState = resolve))
 	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))

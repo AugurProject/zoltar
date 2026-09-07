@@ -83,3 +83,6 @@ export function universeLabel(id: string) {
 export function openSecurityPoolLabel(address: string) {
 	return `Open security pool ${address}`
 }
+
+export const invalidDeploymentSettings = 'Invalid deployment settings'
+export const completeDeploymentSettings = 'Complete deployment settings'

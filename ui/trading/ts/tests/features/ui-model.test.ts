@@ -146,6 +146,8 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
+		expect(parseUnits('2 550 000.25')).toBe(2_550_000_250_000_000_000_000_000n)
+		expect(parseUnitsOrUndefined(' 70\u00a0250.25 ', 2)).toBe(7_025_025n)
 		expect(parseUnits('1.2345')).toBe(1_234_500_000_000_000_000n)
 		expect(formatUnits(1_234_500_000_000_000_000n)).toBe('1.2345')
 		expect(() => parseUnits('1.0000000000000000001')).toThrow('18 decimal places')

@@ -6,8 +6,8 @@
 		<meta name="color-scheme" content="dark" />
 		<title>Statoblast liquidator</title>
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
+		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
 		<header class="topbar operator-shell">
@@ -51,7 +51,17 @@
 						<p id="last-scan" class="muted">Waiting for first scan</p>
 					</div>
 				</div>
-				<div id="metrics" class="metric-grid"></div>
+				<div id="metrics" class="metric-grid operator-metrics"></div>
+			</section>
+
+			<section class="panel" data-page-content="overview" aria-labelledby="wallet-inventory-title">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Inventory</p>
+						<h2 id="wallet-inventory-title">Wallet &amp; deployed capital</h2>
+					</div>
+				</div>
+				<div id="wallet-metrics" class="metric-grid operator-metrics"></div>
 			</section>
 
 			<section id="pools" data-page-content="pools" aria-labelledby="pools-title">

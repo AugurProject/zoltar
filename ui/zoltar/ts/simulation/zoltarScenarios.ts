@@ -111,7 +111,7 @@ async function seedTwoQuestionsScenario({ accounts, createWriteClient, memoryCli
 		{ answerUnit: '', description: 'A second seeded binary question for list and selection QA.', displayValueMax: 0n, displayValueMin: 0n, endTime: currentTimestamp + 2n * DAY_IN_SECONDS, numTicks: 0n, startTime: currentTimestamp, title: 'Will the second proposal pass?' },
 	]
 	for (const [index, questionData] of questions.entries()) {
-		await getScenarioProtocol().createMarket(writeClient, { marketType: 'binary', outcomeLabels: [], questionData })
+		await getScenarioProtocol().createMarket(writeClient, { marketType: 'binary', outcomeLabels: ['Yes', 'No'], questionData })
 		await reportBootstrapProgress(onProgress, `Creating seeded question ${(index + 1).toString()} of 2`, 0.86 + index * 0.05)
 	}
 }

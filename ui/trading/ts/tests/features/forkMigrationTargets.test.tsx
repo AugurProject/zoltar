@@ -76,7 +76,7 @@ describe('fork migration target selection', () => {
 		cleanup = rendered.cleanup
 		const tickInput = inputByLabel(rendered.container, 'Scalar fork tick')
 
-		for (const tick of ['0', '25', '50', '75', '100']) {
+		for (const tick of ['0', '25', '50', '75', '1 00']) {
 			await input(tickInput, tick)
 			await click(buttonByText(rendered.container, 'Add scalar target'))
 		}

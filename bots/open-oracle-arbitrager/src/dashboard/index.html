@@ -6,8 +6,8 @@
 		<meta name="color-scheme" content="dark" />
 		<title>OpenOracle Arbitrager</title>
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/operator-console.css" />
 		<link rel="stylesheet" href="/dashboard.css" />
+		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
 		<header class="app-header operator-shell">
@@ -48,7 +48,7 @@
 				<span id="notice-copy">Waiting for the first local state snapshot.</span>
 			</section>
 
-			<section id="overview" class="metric-grid" data-page-content="overview" aria-label="Bot summary">
+			<section id="overview" class="metric-grid operator-metrics" data-page-content="overview" aria-label="Bot summary">
 				<div class="metric"><span class="metric-label">Status</span><strong id="status-value">—</strong><small id="last-poll-value">No poll completed</small></div>
 				<div class="metric"><span class="metric-label">Active reports</span><strong id="active-report-value">0</strong><small id="block-value">Block — · waiting for first observation</small></div>
 				<div class="metric"><span class="metric-label">Realized net P&amp;L</span><strong id="profit-value">0 ETH</strong><small>Exact automatic closes, including settler rewards, plus acknowledged all-in manual records</small></div>

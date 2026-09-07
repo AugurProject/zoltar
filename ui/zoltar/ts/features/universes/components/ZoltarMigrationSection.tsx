@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import { useMemo } from 'preact/hooks'
+import { useId, useMemo } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
@@ -85,6 +85,7 @@ export function ZoltarMigrationSection({
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
 }: ZoltarMigrationSectionProps) {
+	const prepareReasonId = useId()
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -216,6 +217,9 @@ export function ZoltarMigrationSection({
 					</div>
 				</div>
 				<DataGrid>
+					<MetricField label={zoltarCopy.migrationAvailableRep}>
+						<CurrencyValue value={loadingZoltarForkAccess ? undefined : migrationAmountSource} suffix={commonCopy.rep} />
+					</MetricField>
 					<MetricField label={zoltarCopy.walletRepBalance}>
 						<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
@@ -241,6 +245,7 @@ export function ZoltarMigrationSection({
 								{commonCopy.max}
 							</button>
 						</div>
+						<p className='detail'>{zoltarCopy.migrationMaxIncludesPrepared}</p>
 						{migrationAmountHintMessage === undefined ? undefined : <p className='detail'>{migrationAmountHintMessage}</p>}
 					</div>
 
@@ -285,9 +290,16 @@ export function ZoltarMigrationSection({
 						</WorkflowSubsection>
 					)}
 
+					{!canPrepare && prepareHintMessage !== undefined ? (
+						<p className='detail' id={prepareReasonId} role='status'>
+							{prepareHintMessage}
+						</p>
+					) : undefined}
 					<div className='actions'>
 						<TransactionActionButton
 							idleLabel={zoltarCopy.prepareRep}
+							showDisabledReason={false}
+							disabledReasonElementId={prepareReasonId}
 							pendingLabel={zoltarCopy.preparingRepPending}
 							onClick={onPrepareRepForMigration}
 							pending={zoltarMigrationActiveAction === 'prepare'}

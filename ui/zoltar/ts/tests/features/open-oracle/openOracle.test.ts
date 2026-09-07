@@ -672,7 +672,7 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than dispute delay.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '99' } })).toBe('Multiplier must be at least 1.00x.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1 000 000 000' } })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 })).toBeUndefined()

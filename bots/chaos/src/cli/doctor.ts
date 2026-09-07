@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname } from 'node:path'
@@ -216,17 +217,7 @@ export async function boundedAdaptiveLogRange(client: Pick<ChaosReadClient, 'get
 	return { chunkCount, logCount: logs.length }
 }
 
-export function assertDeploymentRootCodeResults(roots: readonly DeploymentRoot[], codes: readonly (`0x${string}` | undefined)[], endpoint: string) {
-	if (codes.length !== roots.length) throw new Error(`RPC ${endpoint} returned an incomplete deployment-code result set`)
-	const missing = roots.filter((_root, index) => {
-		const code = codes[index]
-		return code === undefined || code === '0x'
-	})
-	if (missing.length !== 0) throw new Error(`RPC ${endpoint} found no bytecode at configured roots: ${missing.map(root => root.name).join(', ')}`)
-	return roots.length
-}
-
-async function defaultProbe(settings: OperatorSettings, wallet: `0x${string}`): Promise<ChaosDoctorProbeResult> {
+export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${string}`): Promise<ChaosDoctorProbeResult> {
 	const pool = createChaosReadPool(settings)
 	const anchor = await canonicalAnchor(settings, pool)
 	if (settings.runtime.protocolStartBlock > anchor.blockNumber) throw new Error(`Configured protocol start block ${settings.runtime.protocolStartBlock.toString()} is ahead of canonical block ${anchor.blockNumber.toString()}`)
@@ -248,8 +239,11 @@ async function defaultProbe(settings: OperatorSettings, wallet: `0x${string}`): 
 		readers.map(async ({ client, endpoint }, index) => {
 			const readerUrl = readerUrls[index]
 			if (readerUrl === undefined) throw new Error(`RPC ${endpoint} is missing its configured URL`)
-			const [finalized, codes, logs] = await Promise.all([finalizedBlockIdentity(readerUrl), Promise.all(deploymentAddresses.map(address => client.getCode({ address, blockNumber: anchor.blockNumber }))), boundedAdaptiveLogRange(client, deploymentAddresses, settings.runtime.protocolStartBlock, logToBlock)])
-			const codeRoots = assertDeploymentRootCodeResults(deploymentRoots, codes, endpoint)
+			await requireDeployedContracts(client, deploymentRoots, anchor.blockNumber).catch(error => {
+				throw new Error(`RPC ${endpoint}: ${error instanceof Error ? error.message : String(error)}`)
+			})
+			const [finalized, logs] = await Promise.all([finalizedBlockIdentity(readerUrl), boundedAdaptiveLogRange(client, deploymentAddresses, settings.runtime.protocolStartBlock, logToBlock)])
+			const codeRoots = deploymentRoots.length
 			return {
 				client,
 				finalized,
@@ -351,7 +345,7 @@ const defaultDependencies: ChaosDoctorDependencies = {
 	load: loadSettings,
 	loadState: loadDurableState,
 	preflightSubmission: preflightTransactionSubmissionNetwork,
-	probe: defaultProbe,
+	probe: probeChaosDoctor,
 	validateCompanionState: validateDoctorCompanionState,
 	verifyStateParent,
 }

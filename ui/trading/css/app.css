@@ -200,10 +200,10 @@ nav a[aria-current="page"] {
 	display: grid;
 	gap: 0.75rem;
 	width: 100%;
-	padding: 1rem;
-	border: 1px solid var(--line-strong);
-	border-radius: 4px;
-	background: var(--surface);
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 }
 .universe-selector {
 	display: block;
@@ -1685,14 +1685,8 @@ summary {
 		grid-row: 3;
 		grid-column: 1 / -1;
 	}
-	.site-header:has(.deployment-settings[open]) .header-actions--deployment .network-pill {
-		grid-row: 4;
-	}
 	.site-header--deployment nav {
 		grid-row: 4;
-	}
-	.site-header--deployment:has(.deployment-settings[open]) nav {
-		grid-row: 5;
 	}
 	.header-actions {
 		display: contents;

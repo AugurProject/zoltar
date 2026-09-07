@@ -1469,3 +1469,17 @@
 		padding: 0.85rem;
 	}
 }
+
+.question-preview-meta {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+
+.question-summary .question-summary-heading strong,
+.question-summary .detail,
+.loaded-question-preview .entity-card-title {
+	max-width: none;
+	white-space: normal;
+	overflow: visible;
+	text-overflow: clip;
+	overflow-wrap: anywhere;
+}

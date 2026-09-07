@@ -66,9 +66,10 @@ function deploymentProgress(status: DeploymentStatus | undefined) {
 	return `${Number(status.factory) + Number(status.router)} / 2`
 }
 
-function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
+function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
 	if (registryLoading) return { label: 'Loading networks', tone: 'neutral' as const }
 	if (registryError) return { label: 'Networks unavailable', tone: 'warn' as const }
+	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warn' as const }
 	if (busy) return { label: 'Deployment in progress', tone: 'neutral' as const }
 	if (deploymentComplete) return { label: 'Deployment complete', tone: 'good' as const }
 	if (state === 'loading') return { label: 'Checking network', tone: 'neutral' as const }
@@ -76,7 +77,7 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warn' as const }
 	if (state === 'error') return { label: 'Configuration unavailable', tone: 'warn' as const }
 	if (plan) return { label: 'Checking network', tone: 'neutral' as const }
-	return { label: 'Select a network', tone: 'neutral' as const }
+	return { label: appCopy.completeDeploymentSettings, tone: 'neutral' as const }
 }
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
@@ -352,7 +353,7 @@ export function TradingDeploymentSetup({
 					return { step, presentation: contractStatusPresentation(deployed, isNext) }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
-	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
+	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)

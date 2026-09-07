@@ -283,8 +283,9 @@ export function App() {
 			}
 			header={
 				<AppHeaderShell
-					overview={
+					renderOverview={settingsMenu => (
 						<OverviewPanels
+							settingsMenu={settingsMenu}
 							applicationTitle={zoltarCopy.applicationTitle}
 							activeUniverseId={activeUniverseId}
 							accountState={accountState}
@@ -318,7 +319,7 @@ export function App() {
 							isRefreshing={isRefreshing}
 							walletBootstrapComplete={walletBootstrapComplete}
 						/>
-					}
+					)}
 					simulationController={simulationController}
 					subNavigation={routeSubNavigation}
 					tabNavigation={tabNavigationProps}

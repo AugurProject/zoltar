@@ -7,6 +7,8 @@ import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { ZoltarSection } from '../../../features/zoltarSurface/components/ZoltarSection.js'
+import type { MarketRouteContentProps } from '../../../features/types.js'
 import { UniverseDirectorySection } from '../../../features/universes/components/UniverseDirectorySection.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -54,4 +56,74 @@ describe('UniverseDirectorySection', () => {
 		expect(documentQueries.getAllByRole('link').some(link => link.textContent?.includes('Universe'))).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 	})
+
+	for (const hasForked of [false, true]) {
+		test(`renders ${hasForked ? 'migration' : 'fork'} actions in the Universe view`, async () => {
+			const props: MarketRouteContentProps = {
+				accountState: { address: zeroAddress, chainId: '0x1', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
+				activeUniverseId: 1n,
+				activeView: 'universes',
+				environmentRefreshKey: 0,
+				zoltarUniverseState: 'ready',
+				questionForm: { answerUnit: '', categoricalOutcomes: [], description: '', scalarIncrement: '', scalarMax: '', scalarMin: '', title: '', endTime: '', marketType: 'binary', startTime: '' },
+				zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+				zoltarForkQuestionId: '',
+				zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
+				zoltarMigrationChildRepBalancesAttoRep: {},
+				zoltarQuestions: [],
+				zoltarUniverse: createUniverse({ hasForked }),
+				onApproveZoltarForkRep: () => undefined,
+				onCreateChildUniverseForOutcomeIndex: () => undefined,
+				onForkZoltar: () => undefined,
+				onMigrateInternalRep: () => undefined,
+				onPrepareRepForMigration: () => undefined,
+				onActiveViewChange: () => undefined,
+				loadingZoltarQuestionCount: false,
+				loadingZoltarQuestion: false,
+				loadingZoltarQuestions: false,
+				hasLoadedZoltarQuestions: false,
+				zoltarForkActiveAction: undefined,
+				loadingZoltarUniverse: false,
+				onLoadZoltarQuestions: async () => undefined,
+				onLoadZoltarQuestion: async () => undefined,
+				onLoadZoltarQuestionPage: async () => undefined,
+				onCreateQuestion: () => undefined,
+				onQuestionFormChange: () => undefined,
+				onResetQuestion: () => undefined,
+				onZoltarMigrationFormChange: () => undefined,
+				zoltarQuestionCount: undefined,
+				zoltarQuestionLookupError: undefined,
+				zoltarQuestionLookupId: undefined,
+				zoltarQuestionPage: undefined,
+				questionCreating: false,
+				questionError: undefined,
+				questionResult: undefined,
+				zoltarForkError: undefined,
+				loadingZoltarForkAccess: false,
+				zoltarChildUniverseError: undefined,
+				zoltarChildUniversePendingOutcomeIndex: undefined,
+				zoltarForkPending: false,
+				zoltarForkRepBalanceAttoRep: undefined,
+				zoltarMigrationError: undefined,
+				zoltarMigrationPending: false,
+				zoltarMigrationPreparedRepBalanceAttoRep: undefined,
+				zoltarQuestionsError: undefined,
+				zoltarMigrationActiveAction: undefined,
+				onZoltarForkQuestionIdChange: () => undefined,
+			}
+			const rendered = await renderIntoDocument(h(ZoltarSection, props))
+			cleanupRenderedComponent = rendered.cleanup
+			const queries = within(document.body)
+			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
+			if (hasForked) {
+				expect(queries.getByRole('button', { name: 'Prepare REP' })).toBeTruthy()
+				expect(document.body.textContent?.indexOf('Migrate REP')).toBeLessThan(document.body.textContent?.indexOf('Child Universes') ?? 0)
+				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
+				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
+			} else {
+				expect(queries.getByRole('button', { name: 'Fork Universe' })).toBeTruthy()
+				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
+			}
+		})
+	}
 })

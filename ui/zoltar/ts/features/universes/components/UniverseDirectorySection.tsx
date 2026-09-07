@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -16,6 +17,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { getChildDeploymentAvailabilityReason } from './ChildUniverseDeploymentSection.js'
 
 type UniverseDirectorySectionProps = {
+	children?: ComponentChildren
 	activeUniverseId: bigint
 	accountAddress: Address | undefined
 	isOnActiveAppChain: boolean
@@ -24,8 +26,14 @@ type UniverseDirectorySectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function UniverseDirectorySection({ activeUniverseId, accountAddress, isOnActiveAppChain, onDeployChildUniverse, pendingOutcomeIndex, zoltarUniverse }: UniverseDirectorySectionProps) {
-	if (zoltarUniverse === undefined) return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+export function UniverseDirectorySection({ children, activeUniverseId, accountAddress, isOnActiveAppChain, onDeployChildUniverse, pendingOutcomeIndex, zoltarUniverse }: UniverseDirectorySectionProps) {
+	if (zoltarUniverse === undefined)
+		return (
+			<>
+				<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+				{children}
+			</>
+		)
 
 	const getUniverseBadge = (universeId: bigint, exists: boolean) => {
 		if (universeId === activeUniverseId) return { label: commonCopy.selected, tone: 'warning' as const }
@@ -51,6 +59,7 @@ export function UniverseDirectorySection({ activeUniverseId, accountAddress, isO
 				)}
 			</SectionBlock>
 
+			{children}
 			<SectionBlock title={marketCopy.childUniverses} variant='plain'>
 				{zoltarUniverse.childUniverses.length === 0 ? (
 					<StateHint presentation={{ key: 'empty', badgeLabel: marketCopy.noChildUniverses, badgeTone: 'muted', detail: marketCopy.deployedChildUniversesEmpty }} />

@@ -1,3 +1,4 @@
+import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
@@ -42,8 +43,9 @@ function ScalarTargets({ context, selectedTargets, disabled, onChange }: { conte
 	const [tickInput, setTickInput] = useState('0')
 	const [invalid, setInvalid] = useState(false)
 	const tick = useMemo(() => {
-		if (!/^\d+$/.test(tickInput)) return undefined
-		const parsedTick = BigInt(tickInput)
+		const normalized = normalizeNumericInput(tickInput)
+		if (!/^\d+$/.test(normalized)) return undefined
+		const parsedTick = BigInt(normalized)
 		return parsedTick <= context.numTicks ? parsedTick : undefined
 	}, [context.numTicks, tickInput])
 	let outcomeIndex: bigint | undefined

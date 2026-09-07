@@ -140,7 +140,7 @@ export function App({
 		setLiveDeploymentStatus('verified')
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
-	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus !== 'verified')
+	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const displayedRoute = deploymentSetupActive ? 'deploy' : route
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
@@ -212,7 +212,7 @@ export function App({
 	let content
 	if (route === 'not-found') content = renderNotFoundRoute()
 	else if (route === 'help') content = <Help />
-	else if (route === 'deploy')
+	else if (deploymentSetupActive)
 		content = (
 			<TradingDeploymentSetup
 				onComplete={completeWalletDeployment}
@@ -223,8 +223,6 @@ export function App({
 				{...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })}
 			/>
 		)
-	else if (liveDeploymentStatus === 'unavailable')
-		content = <TradingDeploymentSetup onComplete={completeWalletDeployment} onWorkflowLockChange={updateWorkflowLock} onWalletStateChange={updateDeploymentWalletState} walletControlRequestNonce={deploymentWalletRequestNonce} {...(deploymentSetupServices === undefined ? {} : { services: deploymentSetupServices })} />
 	else
 		content = (
 			<LiveTrading
