@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import type { IntegrityIssue } from './database.ts'
+import type { IntegrityIssue } from './records.ts'
 
 export type IndexerOwnershipState = 'owned' | 'standby' | 'release-failed' | 'stale-owner' | 'unknown'
 

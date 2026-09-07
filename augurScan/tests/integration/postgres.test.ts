@@ -20,7 +20,7 @@ import {
 	scannerDatabaseOptions,
 } from '../../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../../src/ethereum.ts'
-import { readIndexerHealth } from '../../src/indexer-health.ts'
+import { readIndexerHealth } from '../../src/database.ts'
 import { LiveBus } from '../../src/live.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../../src/types.ts'

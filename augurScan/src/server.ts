@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { handleApi } from './api.ts'
 import { runtimeConfig } from './config.ts'
-import { ScannerDatabase } from './database.ts'
+import { readIndexerHealth, ScannerDatabase } from './database.ts'
 import {
 	createFixedWindowRateLimiter,
 	createRequestMetrics,
@@ -11,7 +11,6 @@ import {
 	requestAccessGuard,
 	staticAssetResponse,
 } from './http.ts'
-import { readIndexerHealth } from './indexer-health.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { LiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'

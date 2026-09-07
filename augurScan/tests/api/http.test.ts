@@ -10,7 +10,7 @@ import {
 	requestAccessGuard,
 	staticAssetResponse,
 } from '../../src/http.ts'
-import { reconcileIndexerOwnership } from '../../src/indexer-health.ts'
+import { reconcileIndexerOwnership } from '../../src/database.ts'
 
 describe('HTTP response policy', () => {
 	test('reconciles durable ownership heartbeats with actual PostgreSQL advisory locks', () => {
