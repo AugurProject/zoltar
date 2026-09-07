@@ -31,7 +31,9 @@ describe('test impact recommendations', () => {
 	})
 
 	test('deduplicates recommendations shared by multiple changed files', () => {
-		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
+		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual([
+			'bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
+		])
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {

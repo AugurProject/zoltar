@@ -2,7 +2,15 @@ import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { getBootstrapDescendantAddresses } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
-import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getProxyDeployerActivity, getProxyDeployerFundingShortfall, PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
+import {
+	assertStaticDeploymentArtifactRuntimeCodeHashes,
+	CANONICAL_DEPLOYER_RAW_GAS_PRICE,
+	CANONICAL_DEPLOYER_RAW_TRANSACTION_COST,
+	EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	getProxyDeployerActivity,
+	getProxyDeployerFundingShortfall,
+	PROXY_DEPLOYER_RUNTIME_CODE,
+} from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../../ui/statoblastDomain/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/lib/networkProfile.ts'

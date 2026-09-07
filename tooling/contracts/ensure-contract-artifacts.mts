@@ -19,14 +19,7 @@ const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifac
 
 const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
 const requiredOutputs = requiredContractArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
-const freshnessInputs = [
-	path.join(solidityRoot, 'bun.lock'),
-	path.join(solidityRoot, 'package.json'),
-	path.join(solidityRoot, 'tsconfig-compile.json'),
-	path.join(solidityRoot, 'ts', 'abi', 'abis.ts'),
-	path.join(solidityRoot, 'ts', 'compile.ts'),
-	path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts'),
-]
+const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
 const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
