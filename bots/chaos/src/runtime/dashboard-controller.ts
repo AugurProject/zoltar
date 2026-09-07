@@ -1,4 +1,4 @@
-import { getAddress, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { checkPublicTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
@@ -9,7 +9,8 @@ import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AU
 import { liveInventoryReadinessBlockers } from './live-readiness.ts'
 import { workflowNeedsContinuation } from './workflows.ts'
 import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
-import { acceptResidualProfileReplacement, cancelRetirement, registerV3Position, requestRetirement, type RetirementPolicies } from '../state/retirement.ts'
+import { createRetirementController } from './retirement-controller.ts'
+import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
 
 export type ConfigurationState = {
 	path: string
@@ -32,19 +33,6 @@ export type DashboardControllerOptions = {
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
 	state: RuntimeState
-}
-
-function record(value: unknown, label: string) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be a JSON object`)
-	return Object.fromEntries(Object.entries(value))
-}
-
-function exactKeys(value: Record<string, unknown>, required: readonly string[], label: string) {
-	const allowed = new Set(required)
-	const missing = required.filter(key => !(key in value))
-	const unexpected = Object.keys(value).filter(key => !allowed.has(key))
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-	if (unexpected.length !== 0) throw new Error(`${label} contains unsupported field ${unexpected[0] ?? 'unknown'}`)
 }
 
 function expectedRevision(value: unknown, current: string) {
@@ -861,66 +849,7 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				throw error
 			}
 		},
-		async setRetirement(value) {
-			await update(async () => {
-				const body = record(value, 'Retirement update')
-				const action = body['action']
-				const candidateState = runtimeStateCandidate(options.state)
-				candidateState.retirement = structuredClone(options.state.retirement)
-				if (action === 'request') {
-					exactKeys(body, ['action', 'confirmation', 'policies', 'profileId', 'recipient'], 'Retirement update')
-					if (body['profileId'] !== options.state.profileId) throw new Error('Retirement deployment profile does not match the active durable profile')
-					const rawPolicies = record(body['policies'], 'Retirement policies')
-					exactKeys(rawPolicies, ['exitAfterCompletion', 'exitUnmatchedShares', 'maximumExitLossBps', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'], 'Retirement policies')
-					const policies: RetirementPolicies = {
-						exitAfterCompletion: rawPolicies['exitAfterCompletion'] === true,
-						exitUnmatchedShares: rawPolicies['exitUnmatchedShares'] === true,
-						maximumExitLossBps: typeof rawPolicies['maximumExitLossBps'] === 'number' ? rawPolicies['maximumExitLossBps'] : -1,
-						migrateExistingClaims: rawPolicies['migrateExistingClaims'] === true,
-						sweepAssets: rawPolicies['sweepAssets'] === true,
-						unwrapWeth: rawPolicies['unwrapWeth'] === true,
-					}
-					if (!Number.isSafeInteger(policies.maximumExitLossBps) || policies.maximumExitLossBps < 0 || policies.maximumExitLossBps > 10_000) throw new Error('maximumExitLossBps must be an integer from 0 through 10000')
-					requestRetirement(candidateState.retirement, options.state.profileId, getAddress(String(body['recipient'])), policies, String(body['confirmation']))
-					recordActivity(candidateState, { message: `Drain & Retire requested for ${options.state.profileId}`, status: 'info', type: 'configuration' })
-				} else if (action === 'cancel') {
-					exactKeys(body, ['action', 'confirmation'], 'Retirement update')
-					cancelRetirement(candidateState.retirement, String(body['confirmation']))
-					recordActivity(candidateState, { message: 'Drain & Retire request cancelled before final sweeping', status: 'info', type: 'configuration' })
-				} else if (action === 'accept-residuals') {
-					exactKeys(body, ['action', 'confirmation', 'reason', 'targetProfileId'], 'Retirement update')
-					acceptResidualProfileReplacement(candidateState.retirement, String(body['targetProfileId']), String(body['reason']), String(body['confirmation']))
-					recordActivity(candidateState, { details: String(body['reason']), message: `Residual profile replacement accepted for ${String(body['targetProfileId'])}`, status: 'info', type: 'configuration' })
-				} else if (action === 'register-v3-position') {
-					exactKeys(body, ['action', 'confirmation', 'fee', 'owner', 'pool', 'profileId', 'tickLower', 'tickUpper', 'token0', 'token1', 'workflowId'], 'Retirement update')
-					if (body['profileId'] !== options.state.profileId || body['confirmation'] !== `REGISTER V3 ${options.state.profileId}`) throw new Error(`Confirmation must exactly match REGISTER V3 ${options.state.profileId}`)
-					const owner = getAddress(String(body['owner']))
-					if (options.state.signerAddress === undefined || owner.toLowerCase() !== options.state.signerAddress.toLowerCase()) throw new Error('Registered V3 owner must be the durable signer')
-					const integer = (field: 'fee' | 'tickLower' | 'tickUpper') => {
-						const candidate = body[field]
-						if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate)) throw new Error(`${field} must be an integer`)
-						return candidate
-					}
-					registerV3Position(candidateState.retirement, {
-						creationWorkflowId: String(body['workflowId']),
-						fee: integer('fee'),
-						owner,
-						pool: getAddress(String(body['pool'])),
-						profileId: options.state.profileId,
-						tickLower: integer('tickLower'),
-						tickUpper: integer('tickUpper'),
-						token0: getAddress(String(body['token0'])),
-						token1: getAddress(String(body['token1'])),
-					})
-					recordActivity(candidateState, { message: 'Verified legacy Uniswap V3 position registered for canonical confirmation', status: 'info', type: 'configuration' })
-				} else {
-					throw new Error('Retirement action must be request, cancel, accept-residuals, or register-v3-position')
-				}
-				await persistRuntimeState(options.configuration.settings.runtime.stateFile, candidateState)
-				options.state.retirement = candidateState.retirement
-				options.state.activities.splice(0, options.state.activities.length, ...candidateState.activities)
-			})
-		},
+		setRetirement: createRetirementController({ persist: async state => await persistRuntimeState(options.configuration.settings.runtime.stateFile, state), state: options.state, update }),
 		async setConnectivity(value) {
 			await update(async () => {
 				const candidate = connectivityCandidate(options.configuration.settings, value)

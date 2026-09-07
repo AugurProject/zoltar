@@ -16,12 +16,13 @@ import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, resetRuntimeStateForProfile, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
-import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, chaosReadClients, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
+import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
+import { resetPristineStateForDeploymentProfile } from './deployment-profile.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans, urgentOperationPlans } from './selection.ts'
-import { applyRetirementAssessment, assessRetirement, buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, type V3PositionObservation } from './retirement.ts'
+import { processRetirementCycle, retirementPositionsForScan } from './retirement-runner.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
 import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
@@ -133,34 +134,6 @@ function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefin
 	if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
 		throw new Error(`Durable state ${stateFile} is scoped to signer ${state.signerAddress}; configure a distinct state file for signer ${wallet}`)
 	}
-}
-
-function isPristineBootstrapState(state: RuntimeState) {
-	const schedulerIsPristine = (state.scheduler.status === 'idle' || state.scheduler.status === 'paused') && state.scheduler.lastDelaySeconds === undefined && state.scheduler.lastRunAt === undefined && state.scheduler.nextRunAt === undefined && state.scheduler.selectedOperationId === undefined
-	return (
-		state.signerAddress === undefined &&
-		state.activities.length === 0 &&
-		state.lifecyclePresenceBlocker === undefined &&
-		state.obligationTombstones.length === 0 &&
-		state.obligations.length === 0 &&
-		state.pendingTransactions.length === 0 &&
-		state.protocolIndex === undefined &&
-		state.retirement.status === 'inactive' &&
-		state.retirement.positions.length === 0 &&
-		!state.safetyPaused &&
-		schedulerIsPristine &&
-		state.workflows.length === 0
-	)
-}
-
-function resetPristineStateForDeploymentProfile(state: RuntimeState, expectedProfileId: string, paused: boolean, wallet: Address | undefined, stateFile: string) {
-	if (state.profileId === expectedProfileId) return false
-	if (!isPristineBootstrapState(state)) {
-		const retirementAllowsReplacement = state.retirement.status === 'drained' || (state.retirement.status === 'drained-with-residuals' && state.retirement.profileReplacementOverride?.targetProfileId === expectedProfileId)
-		if (!retirementAllowsReplacement) throw new Error(`Durable state ${stateFile} contains signer, workflow, obligation, recovery, or audit history for deployment profile ${state.profileId}; drain it first or configure a distinct state file for the new deployment profile ${expectedProfileId}`)
-	}
-	resetRuntimeStateForProfile(state, expectedProfileId, paused, wallet)
-	return true
 }
 
 export function executionProfileId(settings: OperatorSettings) {
@@ -905,25 +878,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.error = undefined
 				state.warnings = [...scan.snapshot.warnings]
 				state.rpcEndpointHealth = resourceHealth(resources)
-				if (state.wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, expectedProfileId, state.wallet)
 				synchronizeLifecycleObligations(state, state.evaluations, scan.canonicalLifecyclePresence, scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber, scan.anchor.timestamp)
 				if (state.lifecyclePresenceBlocker !== undefined) {
 					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
 				}
-				let retirementV3: V3PositionObservation[] = []
-				if (state.retirement.status !== 'inactive' && state.retirement.positions.length !== 0) {
-					retirementV3 = await readV3PositionsWithQuorum(
-						chaosReadClients(settings, resources.pool).map(candidate => (position, blockNumber) => readV3Position(candidate.client, position, blockNumber)),
-						settings.connectivity.rpcQuorum,
-						state.retirement.positions,
-						scan.anchor.blockNumber,
-					)
-					for (const observation of retirementV3) {
-						observation.position.lastCheckedAtBlock = scan.anchor.blockNumber.toString()
-						observation.position.status = observation.liquidity > 0n ? 'active' : observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n ? 'collect-only' : 'closed'
-					}
-				}
+				const retirementV3 = await retirementPositionsForScan({ blockNumber: scan.anchor.blockNumber, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
 				await persistState(configuration, state)
 				if (!scan.indexComplete || !scan.carryProofJournalComplete) {
 					backfillIncomplete = true
@@ -1024,38 +984,20 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					await persistState(configuration, state)
 					return settings.runtime.once
 				}
-				if (state.retirement.status !== 'inactive') {
-					const assessment = assessRetirement({
-						blockHash: scan.anchor.blockHash,
-						blockNumber: scan.anchor.blockNumber,
-						evaluations: state.evaluations,
-						retirement: state.retirement,
-						snapshot: scan.snapshot,
-						state,
-						v3: retirementV3,
-						canonicalScanComplete: scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete,
-						sweepLimits: {
-							maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth,
-							maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep,
-							minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth,
-						},
-					})
-					applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber)
-					state.scheduler.status = 'paused'
-					await persistState(configuration, state)
-					if (state.paused || !settings.runtime.execute || assessment.action === undefined) {
-						return settings.runtime.once || (state.retirement.policies.exitAfterCompletion && (state.retirement.status === 'drained' || state.retirement.status === 'drained-with-residuals'))
-					}
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-					const retirementPlan = assessment.action.kind === 'existing-plan' ? assessment.action.plan : buildV3RetirementPlan(scan.snapshot, assessment.action.observation, randomInteger(0, 0x1_0000_0000))
-					if (retirementPlan.definitionId.startsWith('retirement.sweep.') && state.retirement.finalSweepStartedAt === undefined) {
-						state.retirement.finalSweepStartedAt = new Date().toISOString()
-						await persistState(configuration, state)
-					}
-					await executeRandomPlan(configuration, state, resources, retirementPlan, shutdown.isRequested)
-					return settings.runtime.once
-				}
+				const retirementResources = resources
+				const retirementResult = await processRetirementCycle({
+					execute: async plan => await executeRandomPlan(configuration, state, retirementResources, plan, shutdown.isRequested),
+					persist: async () => await persistState(configuration, state),
+					prepareExecution: async () => {
+						await ensureSubmissionPreflight(retirementResources, settings)
+						state.rpcEndpointHealth = resourceHealth(retirementResources)
+					},
+					scan,
+					settings,
+					state,
+					v3: retirementV3,
+				})
+				if (retirementResult !== undefined) return retirementResult
 				await scheduler.resume()
 				await scheduler.ensureScheduled()
 				await scheduler.markDue()

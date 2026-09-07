@@ -1385,8 +1385,8 @@ function lpApproval(snapshot: EcosystemSnapshot, pair: PairSnapshot, liquidity: 
 	]
 }
 
-function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {
-	if (liquidity > 10n ** 15n || amount(pair.walletLiquidity) < liquidity) return undefined
+function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string, allowAboveOperationalCap = false) {
+	if ((!allowAboveOperationalCap && liquidity > 10n ** 15n) || amount(pair.walletLiquidity) < liquidity) return undefined
 	const inventory = snapshot.wallet.lpTokens.find(candidate => candidate.pair.toLowerCase() === pair.address.toLowerCase())
 	const quote = removableLiquidityQuote(pair, liquidity)
 	if (inventory === undefined || amount(inventory.balance) < liquidity || quote === undefined || quote.yesOut < minimumYes || quote.noOut < minimumNo) return undefined
@@ -1418,6 +1418,18 @@ function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		snapshot,
 		steps,
 	})
+}
+
+export function buildRetirementLiquidityRemovalPlan(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	const pair = [...snapshot.pairs].sort((left, right) => left.address.localeCompare(right.address)).find(candidate => amount(candidate.walletLiquidity) > 0n)
+	if (pair === undefined) return undefined
+	const pool = poolForPair(snapshot, pair)
+	const liquidity = amount(pair.walletLiquidity)
+	const quote = removableLiquidityQuote(pair, liquidity)
+	if (pool === undefined || quote === undefined) return undefined
+	const minimumYes = minimumAfterSlippage(quote.yesOut)
+	const minimumNo = minimumAfterSlippage(quote.noOut)
+	return buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter }, false, undefined, true)
 }
 
 function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {

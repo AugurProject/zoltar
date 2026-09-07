@@ -1,7 +1,9 @@
 import { getAddress, type Address, type Hash, type PublicClient } from '@zoltar/bot-shared/ethereum'
-import { erc1155Abi, erc20Abi, uniswapV3PoolAbi, wethAbi } from '../contracts/abi.ts'
+import { erc1155Abi, erc20Abi, wethAbi } from '../contracts/abi.ts'
+import { retirementErc20TransferAbi, retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
-import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
+import { buildRetirementLiquidityRemovalPlan } from '../operations/trading.ts'
+import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan, PlanningOptions } from '../operations/types.ts'
 import { uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position, type RetirementBlocker, type RetirementResidual } from '../state/retirement.ts'
 import type { DurableState } from '../state/operator-state.ts'
 
@@ -95,14 +97,14 @@ export function retirementPlanFromEvaluations(evaluations: readonly EvaluatedOpe
 }
 
 export async function readV3Position(client: Pick<PublicClient, 'readContract'>, position: DurableV3Position, blockNumber: bigint): Promise<V3PositionObservation> {
-	const result = await client.readContract({ abi: uniswapV3PoolAbi, address: position.pool, args: [position.positionKey], blockNumber, functionName: 'positions' })
+	const result = await client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, args: [position.positionKey], blockNumber, functionName: 'positions' })
 	return { liquidity: result[0], position, tokensOwed0: result[3], tokensOwed1: result[4] }
 }
 
 export async function readV3PositionsWithQuorum(readers: readonly V3PositionReader[], requiredQuorum: number, positions: readonly DurableV3Position[], blockNumber: bigint) {
 	if (readers.length < requiredQuorum) throw new Error('Retirement V3 scan does not have enough RPC clients for quorum')
 	const observations: V3PositionObservation[] = []
-	for (const position of positions.filter(candidate => candidate.status !== 'closed' && candidate.status !== 'blocked')) {
+	for (const position of positions.filter(candidate => candidate.status === 'active' || candidate.status === 'collect-only')) {
 		const settled = await Promise.allSettled(readers.map(reader => reader(position, blockNumber)))
 		const successful = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 		const grouped = new Map<string, V3PositionObservation[]>()
@@ -124,7 +126,7 @@ export function buildV3RetirementPlan(snapshot: EcosystemSnapshot, observation: 
 	if (observation.liquidity > 0n) {
 		steps.push(
 			encodeStep({
-				abi: uniswapV3PoolAbi,
+				abi: retirementUniswapV3PositionAbi,
 				args: [position.tickLower, position.tickUpper, observation.liquidity],
 				functionName: 'burn',
 				id: 'burn-full-v3-position',
@@ -136,7 +138,7 @@ export function buildV3RetirementPlan(snapshot: EcosystemSnapshot, observation: 
 	}
 	steps.push(
 		encodeStep({
-			abi: uniswapV3PoolAbi,
+			abi: retirementUniswapV3PositionAbi,
 			args: [position.owner, position.tickLower, position.tickUpper, (1n << 128n) - 1n, (1n << 128n) - 1n],
 			functionName: 'collect',
 			id: 'collect-full-v3-position',
@@ -258,7 +260,7 @@ export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: Dur
 				postconditions: ['The selected reusable token amount is transferred to the retirement recipient'],
 				risk: 'low',
 				snapshot,
-				steps: [encodeStep({ abi: erc20Abi, args: [retirement.recipient, amount], functionName: 'transfer', id: 'sweep-erc20', label: 'Sweep ERC-20 asset', to: token.address, walletAssetDebits: [{ amount: amount.toString(), asset: token.address, category: isRep ? 'rep' : 'other', kind: 'erc20' }] })],
+				steps: [encodeStep({ abi: retirementErc20TransferAbi, args: [retirement.recipient, amount], functionName: 'transfer', id: 'sweep-erc20', label: 'Sweep ERC-20 asset', to: token.address, walletAssetDebits: [{ amount: amount.toString(), asset: token.address, category: isRep ? 'rep' : 'other', kind: 'erc20' }] })],
 			}),
 			planningSeed: seed,
 		}
@@ -311,6 +313,15 @@ function shareResiduals(snapshot: EcosystemSnapshot): RetirementResidual[] {
 	]
 }
 
+export function recordCanonicalRecoveredBalances(retirement: DurableRetirementState, snapshot: EcosystemSnapshot) {
+	retirement.recoveredBalances = Object.fromEntries([
+		['ETH', snapshot.wallet.ethBalanceAttoEth],
+		...snapshot.wallet.tokens.map(token => [token.address, token.balance] as const),
+		...snapshot.wallet.lpTokens.map(token => [`LP:${token.pair}`, token.balance] as const),
+		...snapshot.wallet.shares.flatMap(shares => [[`${shares.shareToken}:INVALID`, shares.invalid] as const, [`${shares.shareToken}:YES`, shares.yes] as const, [`${shares.shareToken}:NO`, shares.no] as const]),
+	])
+}
+
 export function assessRetirement(parameters: {
 	blockHash: Hash
 	blockNumber: bigint
@@ -320,11 +331,13 @@ export function assessRetirement(parameters: {
 	state: Pick<DurableState, 'obligations' | 'pendingTransactions' | 'workflows'>
 	v3: readonly V3PositionObservation[]
 	sweepLimits?: { maximumEthAttoEth: bigint; maximumRepAttoRep: bigint; minimumEthReserveAttoEth: bigint } | undefined
+	planning?: PlanningOptions | undefined
 	canonicalScanComplete?: boolean | undefined
 }): RetirementAssessment {
 	const partialWorkflows = parameters.state.workflows.filter(workflow => !['abandoned', 'completed', 'failed'].includes(workflow.status)).length
 	const actionableObligations = parameters.state.obligations.filter(obligation => !['abandoned', 'completed', 'deferred'].includes(obligation.status)).length
-	const claimPlan = retirementPlanFromEvaluations(parameters.evaluations, parameters.retirement.policies)
+	const fullLiquidityPlan = parameters.planning === undefined ? undefined : buildRetirementLiquidityRemovalPlan(parameters.snapshot, parameters.planning)
+	const claimPlan = retirementPlanFromEvaluations(fullLiquidityPlan === undefined ? parameters.evaluations : parameters.evaluations.filter(evaluation => evaluation.plan?.definitionId !== 'trading.liquidity.remove'), parameters.retirement.policies)
 	const revocationPlan = buildAllowanceRevocationPlan(parameters.snapshot, Number(parameters.blockNumber & 0xffff_ffffn))
 	const sweepPlan = buildAssetSweepPlan(parameters.snapshot, parameters.retirement, Number(parameters.blockNumber & 0xffff_ffffn), parameters.sweepLimits)
 	const v3Action = parameters.v3.find(observation => observation.liquidity > 0n || observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n)
@@ -349,8 +362,10 @@ export function assessRetirement(parameters: {
 		partialWorkflows,
 		pendingTransactions: parameters.state.pendingTransactions.length,
 	}
-	const directPlan = claimPlan ?? revocationPlan ?? sweepPlan
-	const action = v3Action === undefined ? (directPlan === undefined ? undefined : { kind: 'existing-plan' as const, plan: directPlan }) : { kind: 'v3-position' as const, observation: v3Action }
+	const directPlan = claimPlan ?? fullLiquidityPlan ?? revocationPlan ?? sweepPlan
+	let action: RetirementAssessment['action']
+	if (v3Action !== undefined) action = { kind: 'v3-position', observation: v3Action }
+	else if (directPlan !== undefined) action = { kind: 'existing-plan', plan: directPlan }
 	const outstanding = proof.actionableObligations + proof.claimableAssets + proof.collectableV3Positions + proof.knownApprovals + proof.ownedLiquidityPositions + proof.partialWorkflows + proof.pendingTransactions
 	if (action !== undefined) return { action, blockers, proof, residuals, status: 'draining' }
 	if (blockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
@@ -384,19 +399,22 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 		const metadata = workflow.metadata
 		if (typeof metadata['pool'] !== 'string' || typeof metadata['token0'] !== 'string' || typeof metadata['token1'] !== 'string') continue
 		const pool = getAddress(metadata['pool'])
-		const idPrefix = `${pool.toLowerCase()}:`
-		if (retirement.positions.some(position => position.id.startsWith(idPrefix))) continue
-		const confirmedSeed = workflow.steps.find(step => step.id.includes('seed') && step.status === 'confirmed')
+		const seedStep = workflow.steps.find(step => step.id.includes('seed'))
+		const confirmed = seedStep?.status === 'confirmed'
+		const recoverable = seedStep?.status === 'planned' || seedStep?.status === 'signed' || seedStep?.status === 'submitted'
+		let positionStatus: DurableV3Position['status'] = 'blocked'
+		if (confirmed) positionStatus = 'active'
+		else if (recoverable) positionStatus = 'pending-confirmation'
 		const position: Omit<DurableV3Position, 'id' | 'positionKey'> = {
 			createdAt: workflow.createdAt,
-			...(confirmedSeed?.transactionHash === undefined ? {} : { creationTransactionHash: confirmedSeed.transactionHash }),
+			...(seedStep?.transactionHash === undefined ? {} : { creationTransactionHash: seedStep.transactionHash }),
 			creationWorkflowId: workflow.id,
 			fee: 10_000,
 			owner,
 			pool,
 			profileId,
-			registeredBy: confirmedSeed === undefined ? 'backfill' : 'workflow',
-			status: confirmedSeed === undefined ? 'blocked' : 'active',
+			registeredBy: confirmed || recoverable ? 'workflow' : 'backfill',
+			status: positionStatus,
 			tickLower: -887_200,
 			tickUpper: 887_200,
 			token0: getAddress(metadata['token0']),
@@ -404,6 +422,12 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 		}
 		const positionKey = uniswapV3PositionKey(position.owner, position.tickLower, position.tickUpper)
 		const key = `${position.pool.toLowerCase()}:${positionKey.toLowerCase()}`
+		const existing = retirement.positions.find(candidate => candidate.id === key)
+		if (existing !== undefined) {
+			if (confirmed && existing.status === 'pending-confirmation') existing.status = 'active'
+			if (seedStep?.transactionHash !== undefined) existing.creationTransactionHash = seedStep.transactionHash
+			continue
+		}
 		retirement.positions.push({ ...position, id: key, positionKey })
 		retirement.updatedAt = now
 	}

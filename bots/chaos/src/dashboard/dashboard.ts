@@ -232,27 +232,6 @@ const submissionSignerProof = element('submission-signer-proof', HTMLElement)
 const submissionLastCheck = element('submission-last-check', HTMLElement)
 const currentWorkflow = element('current-workflow', HTMLDivElement)
 const coverageSummary = element('coverage-summary', HTMLDivElement)
-const retirementStatus = element('retirement-status', HTMLSpanElement)
-const retirementSummary = element('retirement-summary', HTMLParagraphElement)
-const retirementForm = element('retirement-form', HTMLFormElement)
-const retirementRecipient = element('retirement-recipient', HTMLInputElement)
-const retirementMaxLoss = element('retirement-max-loss', HTMLInputElement)
-const retirementExitUnmatched = element('retirement-exit-unmatched', HTMLInputElement)
-const retirementMigrateClaims = element('retirement-migrate-claims', HTMLInputElement)
-const retirementExitAfter = element('retirement-exit-after', HTMLInputElement)
-const retirementConfirmation = element('retirement-confirmation', HTMLInputElement)
-const retirementCancel = element('retirement-cancel', HTMLButtonElement)
-const retirementActionStatus = element('retirement-action-status', HTMLSpanElement)
-const retirementV3Form = element('retirement-v3-form', HTMLFormElement)
-const retirementV3Owner = element('retirement-v3-owner', HTMLInputElement)
-const retirementV3Pool = element('retirement-v3-pool', HTMLInputElement)
-const retirementV3Token0 = element('retirement-v3-token0', HTMLInputElement)
-const retirementV3Token1 = element('retirement-v3-token1', HTMLInputElement)
-const retirementV3Fee = element('retirement-v3-fee', HTMLInputElement)
-const retirementV3Lower = element('retirement-v3-lower', HTMLInputElement)
-const retirementV3Upper = element('retirement-v3-upper', HTMLInputElement)
-const retirementV3Workflow = element('retirement-v3-workflow', HTMLInputElement)
-const retirementV3Confirmation = element('retirement-v3-confirmation', HTMLInputElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
 const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
 const catalogEligibilityFilter = element('catalog-eligibility-filter', HTMLSelectElement)
@@ -363,6 +342,7 @@ let pauseMutationUnreconciled = false
 let settingsMutationUnreconciled = false
 let connectivityMutationUnreconciled = false
 let signerMutationUnreconciled = false
+const retirementDashboard = createRetirementDashboard({ current: () => snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await refresh() })
 let configurationCommitIndeterminate = false
 
 const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
@@ -576,7 +556,6 @@ function parseSnapshot(value: unknown): Snapshot {
 	const rpcHealth = record(source['rpcHealth']) ?? {}
 	const submissionHealth = record(source['submissionHealth']) ?? {}
 	const scheduler = record(source['scheduler']) ?? {}
-	const retirement = record(source['retirement'])
 	return {
 		activities: list(source['activities'], entry => ({
 			at: stringValue(entry['at']),
@@ -647,18 +626,7 @@ function parseSnapshot(value: unknown): Snapshot {
 			submissionBlock: scalarValue(entry['submissionBlock']),
 		})),
 		profileId: stringValue(source['profileId']),
-		retirement:
-			retirement === undefined
-				? undefined
-				: {
-						blockers: Array.isArray(retirement['blockers']) ? retirement['blockers'] : [],
-						finalSweepStartedAt: stringValue(retirement['finalSweepStartedAt']),
-						positions: Array.isArray(retirement['positions']) ? retirement['positions'] : [],
-						recipient: stringValue(retirement['recipient']),
-						requestedAt: stringValue(retirement['requestedAt']),
-						status: stringValue(retirement['status']),
-						updatedAt: stringValue(retirement['updatedAt']),
-					},
+		retirement: parsePublicRetirement(source['retirement']),
 		rpcHealth: {
 			chainReady: booleanValue(rpcHealth['chainReady']),
 			configuredReadEndpointCount: nonnegativeIntegerValue(rpcHealth['configuredReadEndpointCount']),
@@ -931,17 +899,6 @@ function publicCandidateCount(value: string | number | undefined) {
 	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
 }
 
-function formatAtomic18(value: string | number | undefined) {
-	if (value === undefined) return '—'
-	let atomic = ''
-	if (typeof value === 'string') atomic = value
-	else if (Number.isSafeInteger(value) && value >= 0) atomic = value.toString()
-	if (!/^(?:0|[1-9]\d*)$/.test(atomic)) return 'Invalid atomic balance'
-	const padded = atomic.padStart(19, '0')
-	const integer = padded.slice(0, -18).replace(/^0+(?=\d)/, '')
-	return `${integer}.${padded.slice(-18)}`
-}
-
 function formatDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)
@@ -1102,12 +1059,7 @@ function renderOverview(value: Snapshot) {
 	renderSubmissionHealth(value.submissionHealth)
 	renderWorkflow(value.currentWorkflow)
 	renderCoverage(value.operationEvaluations)
-	const retirement = value.retirement
-	const status = retirement?.status ?? 'inactive'
-	setBadge(retirementStatus, status.replaceAll('-', ' '), status === 'drained' ? 'success' : status === 'blocked' ? 'error' : status === 'inactive' ? 'neutral' : 'warning')
-	retirementSummary.textContent = status === 'inactive' ? 'No retirement has been requested.' : `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; recipient ${retirement?.recipient ?? 'not recorded'}.`
-	retirementRecipient.disabled = status !== 'inactive'
-	retirementCancel.disabled = status === 'inactive' || retirement?.finalSweepStartedAt !== undefined || status === 'drained' || status === 'drained-with-residuals'
+	retirementDashboard.render(value)
 }
 
 function renderRpcHealth(value: Snapshot) {
@@ -1962,76 +1914,6 @@ cancelResume.addEventListener('click', () => resumeDialog.close())
 confirmResume.addEventListener('click', () => {
 	resumeDialog.close()
 	void mutatePaused(false)
-})
-
-retirementForm.addEventListener('submit', event => {
-	event.preventDefault()
-	void (async () => {
-		const profileId = snapshot?.profileId
-		if (profileId === undefined) {
-			retirementActionStatus.textContent = 'Wait for the durable deployment profile to load.'
-			return
-		}
-		try {
-			await put('/api/retirement', {
-				action: 'request',
-				confirmation: retirementConfirmation.value,
-				policies: {
-					exitAfterCompletion: retirementExitAfter.checked,
-					exitUnmatchedShares: retirementExitUnmatched.checked,
-					maximumExitLossBps: retirementMaxLoss.valueAsNumber,
-					migrateExistingClaims: retirementMigrateClaims.checked,
-					sweepAssets: true,
-					unwrapWeth: true,
-				},
-				profileId,
-				recipient: retirementRecipient.value.trim(),
-			})
-			retirementActionStatus.textContent = 'Drain request saved.'
-			await refresh()
-		} catch (error) {
-			retirementActionStatus.textContent = error instanceof Error ? error.message : 'Drain request failed.'
-		}
-	})()
-})
-
-retirementCancel.addEventListener('click', () => {
-	void (async () => {
-		try {
-			await put('/api/retirement', { action: 'cancel', confirmation: retirementConfirmation.value })
-			retirementActionStatus.textContent = 'Drain request cancelled.'
-			await refresh()
-		} catch (error) {
-			retirementActionStatus.textContent = error instanceof Error ? error.message : 'Drain cancellation failed.'
-		}
-	})()
-})
-
-retirementV3Form.addEventListener('submit', event => {
-	event.preventDefault()
-	void (async () => {
-		const profileId = snapshot?.profileId
-		if (profileId === undefined) return
-		try {
-			await put('/api/retirement', {
-				action: 'register-v3-position',
-				confirmation: retirementV3Confirmation.value,
-				fee: retirementV3Fee.valueAsNumber,
-				owner: retirementV3Owner.value.trim(),
-				pool: retirementV3Pool.value.trim(),
-				profileId,
-				tickLower: retirementV3Lower.valueAsNumber,
-				tickUpper: retirementV3Upper.valueAsNumber,
-				token0: retirementV3Token0.value.trim(),
-				token1: retirementV3Token1.value.trim(),
-				workflowId: retirementV3Workflow.value.trim(),
-			})
-			retirementActionStatus.textContent = 'Legacy V3 position registered for canonical verification.'
-			await refresh()
-		} catch (error) {
-			retirementActionStatus.textContent = error instanceof Error ? error.message : 'Position registration failed.'
-		}
-	})()
 })
 
 replacementForm.addEventListener('submit', event => {

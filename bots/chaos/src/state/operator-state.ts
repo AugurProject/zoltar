@@ -6,6 +6,7 @@ import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, typ
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import { initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { serializedScheduler } from './state-serialization.ts'
 import {
 	loadPersistedProtocolIndex,
 	parseProtocolIndex as parseStoredProtocolIndex,
@@ -1189,16 +1190,6 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 
 export async function loadDurableState(path: string, expectedChainId: number, filesystem: StateFilesystem = stateFilesystem) {
 	return loadDurableStateFile(path, expectedChainId, filesystem, path, undefined)
-}
-
-function serializedScheduler(scheduler: SchedulerState) {
-	return {
-		lastDelaySeconds: scheduler.lastDelaySeconds ?? null,
-		lastRunAt: scheduler.lastRunAt ?? null,
-		nextRunAt: scheduler.nextRunAt ?? null,
-		selectedOperationId: scheduler.selectedOperationId ?? null,
-		status: scheduler.status,
-	}
 }
 
 export function serializedDurableState(

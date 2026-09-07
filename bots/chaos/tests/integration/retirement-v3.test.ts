@@ -1,0 +1,199 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
+import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
+import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
+import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
+import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
+import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildV3RetirementPlan, readV3Position } from '../../src/runtime/retirement.ts'
+import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
+import { address, snapshotFixture } from '../operations/fixture.ts'
+import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '../support/bot-shared.ts'
+
+const tokenAbi = [
+	{
+		inputs: [
+			{ name: 'account', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'mint',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'spender', type: 'address' },
+		],
+		name: 'allowance',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'spender', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		name: 'approve',
+		outputs: [{ name: '', type: 'bool' }],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+const poolAbi = [
+	{
+		inputs: [
+			{ name: 'token0', type: 'address' },
+			{ name: 'token1', type: 'address' },
+		],
+		stateMutability: 'nonpayable',
+		type: 'constructor',
+	},
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'tickLower', type: 'int24' },
+			{ name: 'tickUpper', type: 'int24' },
+		],
+		name: 'positionKey',
+		outputs: [{ name: '', type: 'bytes32' }],
+		stateMutability: 'pure',
+		type: 'function',
+	},
+	{
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'tickLower', type: 'int24' },
+			{ name: 'tickUpper', type: 'int24' },
+			{ name: 'liquidity', type: 'uint128' },
+			{ name: 'tokensOwed0', type: 'uint128' },
+			{ name: 'tokensOwed1', type: 'uint128' },
+		],
+		name: 'seed',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+] as const
+
+let node: AnvilNode | undefined
+let tokenBytecode: Hex
+let poolBytecode: Hex
+let compileDirectory: string | undefined
+
+async function compileFixture() {
+	compileDirectory = await mkdtemp(join(tmpdir(), 'chaos-retirement-solc-'))
+	const source = new URL('../fixtures/RetirementV3Pool.sol', import.meta.url).pathname
+	const solc = new URL('../../../../node_modules/.bin/solcjs', import.meta.url).pathname
+	const process = Bun.spawn([solc, '--bin', '--optimize', '--output-dir', compileDirectory, source], { stderr: 'pipe', stdout: 'pipe' })
+	const exitCode = await process.exited
+	if (exitCode !== 0) throw new Error(`Retirement integration fixture compilation failed: ${await new Response(process.stderr).text()}`)
+	const files = await readdir(compileDirectory)
+	const readBytecode = async (suffix: string) => {
+		const file = files.find(candidate => candidate.endsWith(suffix))
+		if (file === undefined) throw new Error(`Compiled fixture omitted ${suffix}`)
+		return `0x${(await readFile(join(compileDirectory ?? '', file), 'utf8')).trim()}` as Hex
+	}
+	tokenBytecode = await readBytecode('_RetirementTokenMock.bin')
+	poolBytecode = await readBytecode('_RetirementV3PoolMock.bin')
+}
+
+beforeAll(async () => {
+	await compileFixture()
+	node = await createAnvilNodeForConnectionMode({ port: 0, rpcUrl: '', type: 'spawn-isolated' }, { chainId: 31_337, context: 'chaos retirement integration', disableCodeSizeLimit: true, gasLimit: 30_000_000n })
+	await setupTestAccounts(node.anvilWindowEthereum)
+})
+
+afterAll(async () => {
+	await node?.dispose()
+	if (compileDirectory !== undefined) await rm(compileDirectory, { force: true, recursive: true })
+})
+
+function requiredNode() {
+	if (node === undefined) throw new Error('Retirement integration node was not initialized')
+	return node
+}
+
+async function deploy(client: ReturnType<typeof createWriteClient>, bytecode: Hex, abi: Abi, args: readonly unknown[] = []) {
+	const hash = await client.sendTransaction({ data: encodeDeployData({ abi, args, bytecode }) })
+	const receipt = await client.waitForTransactionReceipt({ hash })
+	if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Fixture deployment failed')
+	return receipt.contractAddress
+}
+
+function durablePosition(pool: Address, owner: Address, token0: Address, token1: Address, id: string): DurableV3Position {
+	const positionKey = uniswapV3PositionKey(owner, -120, 120)
+	return { createdAt: new Date(0).toISOString(), creationWorkflowId: id, fee: 3_000, id: `${pool}:${positionKey}`, owner, pool, positionKey, profileId: 'integration', registeredBy: 'workflow', status: 'active', tickLower: -120, tickUpper: 120, token0, token1 }
+}
+
+async function executePlan(client: ReturnType<typeof createWriteClient>, plan: ReturnType<typeof buildV3RetirementPlan>) {
+	for (const step of plan.steps) await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: step.data, to: step.to, value: BigInt(step.value ?? '0') }) })
+}
+
+describe('Drain & Retire on a local chain', () => {
+	test('burns and collects exact current liquidity while leaving another wallet position untouched', async () => {
+		const simulator = requiredNode().anvilWindowEthereum
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[0], 0)
+		const other = createWriteClient(simulator, TEST_ADDRESSES[1], 1)
+		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
+		await owner.writeContract({ abi: poolAbi, address: pool, args: [other.account.address, -120, 120, 90n, 5n, 6n], functionName: 'seed' })
+		const position = durablePosition(pool, owner.account.address, token0, token1, 'owner')
+		const onChainKey = await owner.readContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120], functionName: 'positionKey' })
+		expect(position.positionKey).toBe(onChainKey)
+		const before = await readV3Position(owner, position, await owner.getBlockNumber())
+		expect(before).toMatchObject({ liquidity: 70n, tokensOwed0: 3n, tokensOwed1: 4n })
+		await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), before, 1))
+		expect(await readV3Position(owner, position, await owner.getBlockNumber())).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
+		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(73n)
+		expect(await owner.readContract({ abi: tokenAbi, address: token1, args: [owner.account.address], functionName: 'balanceOf' })).toBe(144n)
+		const otherPosition = durablePosition(pool, other.account.address, token0, token1, 'other')
+		expect(await readV3Position(owner, otherPosition, await owner.getBlockNumber())).toMatchObject({ liquidity: 90n, tokensOwed0: 5n, tokensOwed1: 6n })
+	})
+
+	test('collects a zero-liquidity position, revokes allowance, and sweeps native ETH last with gas reserve', async () => {
+		const simulator = requiredNode().anvilWindowEthereum
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[2], 2)
+		const recipient = getAddress(addressString(TEST_ADDRESSES[3]))
+		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 0n, 7n, 8n], functionName: 'seed' })
+		const position = durablePosition(pool, owner.account.address, token0, token1, 'collect-only')
+		const observation = await readV3Position(owner, position, await owner.getBlockNumber())
+		const plan = buildV3RetirementPlan(snapshotFixture(), observation, 2)
+		expect(plan.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
+		await executePlan(owner, plan)
+		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(7n)
+
+		const spender = address(90)
+		await owner.writeContract({ abi: tokenAbi, address: token0, args: [spender, 55n], functionName: 'approve' })
+		const snapshot = snapshotFixture()
+		snapshot.wallet.address = owner.account.address
+		snapshot.wallet.tokens = [{ address: token0, allowances: { [spender]: '55' }, balance: '0', openOracleCredit: '0', symbol: 'MOCK' }]
+		const revoke = buildAllowanceRevocationPlan(snapshot, 3)
+		if (revoke === undefined) throw new Error('Allowance revocation was not planned')
+		for (const step of revoke.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })
+		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address, spender], functionName: 'allowance' })).toBe(0n)
+
+		snapshot.wallet.tokens = []
+		snapshot.wallet.ethBalanceAttoEth = (5n * 10n ** 18n).toString()
+		const retirement = { ...initialRetirementState(), policies: { ...DEFAULT_RETIREMENT_POLICIES }, recipient, status: 'draining' as const }
+		const sweep = buildAssetSweepPlan(snapshot, retirement, 4, { maximumEthAttoEth: 10n ** 18n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 10n ** 18n })
+		if (sweep === undefined) throw new Error('Native sweep was not planned')
+		expect(sweep.definitionId).toBe('retirement.sweep.native-last')
+		const recipientBefore = await owner.getBalance({ address: recipient })
+		for (const step of sweep.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to, value: BigInt(step.value ?? '0') }) })
+		expect((await owner.getBalance({ address: recipient })) - recipientBefore).toBe(10n ** 18n)
+		expect(await owner.getBalance({ address: owner.account.address })).toBeGreaterThan(10n ** 18n)
+	})
+})

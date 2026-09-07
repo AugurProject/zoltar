@@ -1,6 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
-import { applyRetirementAssessment, assessRetirement, buildAllowanceRevocationPlan, buildAssetSweepPlan, buildV3RetirementPlan, operationAllowedDuringRetirement, readV3PositionsWithQuorum, reconcileV3PositionJournal, retirementPlanFromEvaluations, type V3PositionObservation } from '../../src/runtime/retirement.ts'
+import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/trading.ts'
+import {
+	applyRetirementAssessment,
+	assessRetirement,
+	buildAllowanceRevocationPlan,
+	buildAssetSweepPlan,
+	buildV3RetirementPlan,
+	operationAllowedDuringRetirement,
+	readV3PositionsWithQuorum,
+	reconcileV3PositionJournal,
+	recordCanonicalRecoveredBalances,
+	retirementPlanFromEvaluations,
+	type V3PositionObservation,
+} from '../../src/runtime/retirement.ts'
 import { initialDurableState, type DurableWorkflow } from '../../src/state/operator-state.ts'
 import { cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
@@ -168,6 +181,18 @@ describe('Drain & Retire planning', () => {
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-lp')
 	})
 
+	test('removes the full custom LP balance above ordinary chaos caps', () => {
+		const snapshot = snapshotFixture()
+		const pair = snapshot.pairs[0]
+		if (pair === undefined) throw new Error('Trading pair fixture is missing')
+		pair.walletLiquidity = '2000000000000000'
+		pair.totalSupply = '4000000000000000'
+		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: pair.walletLiquidity, pair: pair.address }]
+		const plan = buildRetirementLiquidityRemovalPlan(snapshot, { maximumBlockIntervalSeconds: 15, seed: 1, workflowValidForBlocks: 288 })
+		expect(plan?.metadata['liquidity']).toBe(pair.walletLiquidity)
+		expect(plan?.steps.map(step => step.id)).toEqual(['approve-lp', 'removeLiquidity'])
+	})
+
 	test('unwraps WETH, sweeps tokens in bounded chunks, and sends native ETH last above reserve', () => {
 		const snapshot = emptySnapshot()
 		const retirement = request()
@@ -221,43 +246,81 @@ describe('Drain & Retire planning', () => {
 		expect(residual.status).toBe('drained-with-residuals')
 	})
 
-	test('backfills confirmed seed workflows and blocks ambiguous older workflows', () => {
-		const workflow = (status: DurableWorkflow['steps'][number]['status'], id: string): DurableWorkflow => ({
-			classification: 'selectable',
-			createdAt: now,
-			createdAtBlock: '1',
-			ecosystem: 'trading',
-			id,
-			label: 'seed',
-			metadata: { pool: address(id === 'confirmed' ? 60 : 61), token0: address(62), token1: address(63) },
-			obligation: false,
-			operationId: 'trading.genesis-uniswap.seed-pool',
-			planId: `plan:${id}`,
-			planningSeed: 1,
-			postconditions: ['seeded'],
-			priority: 'random',
-			risk: 'medium',
-			status: status === 'confirmed' ? 'completed' : 'failed',
-			steps: [
-				{
-					confirmedAt: status === 'confirmed' ? now : undefined,
-					data: '0x',
-					evidence: [{ kind: 'receipt-success' }],
-					gasLimit: '1',
-					id: 'seed-genesis-uniswap-pool',
-					label: 'seed',
-					preflightCalls: [],
-					status,
-					to: address(64),
-					transactionHash: status === 'confirmed' ? hash(9) : undefined,
-					value: '0',
-					walletAssetDebits: [],
-				},
-			],
-			updatedAt: now,
-		})
+	test('persists the latest canonical recovered wallet balances', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.ethBalanceAttoEth = '12'
+		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'REP' }]
+		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '5', pair: address(41) }]
 		const retirement = initialRetirementState()
-		reconcileV3PositionJournal(retirement, [workflow('confirmed', 'confirmed'), workflow('failed', 'ambiguous')], 'profile:test', address(1), now)
-		expect(retirement.positions.map(candidate => candidate.status)).toEqual(['active', 'blocked'])
+		recordCanonicalRecoveredBalances(retirement, snapshot)
+		expect(retirement.recoveredBalances).toEqual({ ETH: '12', [address(40)]: '7', [`LP:${address(41)}`]: '5' })
+	})
+
+	test('backfills confirmed seed workflows and blocks ambiguous older workflows', async () => {
+		const workflow = (status: DurableWorkflow['steps'][number]['status'], id: string): DurableWorkflow => {
+			let pool = 62
+			if (id === 'confirmed') pool = 60
+			else if (id === 'pending') pool = 61
+			let workflowStatus: DurableWorkflow['status'] = 'failed'
+			if (status === 'confirmed') workflowStatus = 'completed'
+			else if (status === 'signed' || status === 'submitted' || status === 'planned') workflowStatus = 'waiting-transaction'
+			return {
+				classification: 'selectable',
+				createdAt: now,
+				createdAtBlock: '1',
+				ecosystem: 'trading',
+				id,
+				label: 'seed',
+				metadata: { pool: address(pool), token0: address(63), token1: address(64) },
+				obligation: false,
+				operationId: 'trading.genesis-uniswap.seed-pool',
+				planId: `plan:${id}`,
+				planningSeed: 1,
+				postconditions: ['seeded'],
+				priority: 'random',
+				risk: 'medium',
+				status: workflowStatus,
+				steps: [
+					{
+						confirmedAt: status === 'confirmed' ? now : undefined,
+						data: '0x',
+						evidence: [{ kind: 'receipt-success' }],
+						gasLimit: '1',
+						id: 'seed-genesis-uniswap-pool',
+						label: 'seed',
+						preflightCalls: [],
+						status,
+						to: address(65),
+						transactionHash: status === 'confirmed' ? hash(9) : undefined,
+						value: '0',
+						walletAssetDebits: [],
+					},
+				],
+				updatedAt: now,
+			}
+		}
+		const retirement = initialRetirementState()
+		const pending = workflow('signed', 'pending')
+		reconcileV3PositionJournal(retirement, [workflow('confirmed', 'confirmed'), pending, workflow('failed', 'ambiguous')], 'profile:test', address(1), now)
+		expect(retirement.positions.map(candidate => candidate.status)).toEqual(['active', 'pending-confirmation', 'blocked'])
+		expect(
+			await readV3PositionsWithQuorum(
+				[
+					async () => {
+						throw new Error('pending positions must not be read')
+					},
+				],
+				1,
+				[retirement.positions[1] as DurableV3Position],
+				1n,
+			),
+		).toEqual([])
+		const seed = pending.steps[0]
+		if (seed === undefined) throw new Error('Seed workflow step is missing')
+		seed.status = 'confirmed'
+		seed.transactionHash = hash(10)
+		pending.status = 'completed'
+		reconcileV3PositionJournal(retirement, [pending], 'profile:test', address(1), now)
+		expect(retirement.positions[1]).toMatchObject({ creationTransactionHash: hash(10), status: 'active' })
 	})
 })

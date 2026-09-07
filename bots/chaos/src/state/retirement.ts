@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 
 export type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'drained' | 'drained-with-residuals'
 
@@ -95,7 +95,8 @@ export function initialRetirementState(): DurableRetirementState {
 }
 
 export function uniswapV3PositionKey(owner: Address, tickLower: number, tickUpper: number) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'int24' }, { type: 'int24' }], [owner, tickLower, tickUpper]))
+	const packedTick = (tick: number) => (tick < 0 ? 0x1_000_000 + tick : tick).toString(16).padStart(6, '0')
+	return keccak256(`0x${owner.slice(2)}${packedTick(tickLower)}${packedTick(tickUpper)}`)
 }
 
 function timestamp(value: unknown, label: string) {
@@ -187,6 +188,38 @@ function parsePosition(value: unknown, index: number): DurableV3Position {
 	}
 }
 
+function parseCompletionEvidence(value: unknown): RetirementCompletionEvidence {
+	const evidence = record(value, 'retirement.completionEvidence')
+	exactKeys(evidence, ['blockHash', 'blockNumber', 'completedAt', 'proof', 'residuals'], [], 'retirement.completionEvidence')
+	const blockHash = evidence['blockHash']
+	if (typeof blockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(blockHash)) throw new Error('retirement.completionEvidence.blockHash is invalid')
+	const proof = record(evidence['proof'], 'retirement.completionEvidence.proof')
+	const proofFields = ['actionableObligations', 'claimableAssets', 'collectableV3Positions', 'knownApprovals', 'ownedLiquidityPositions', 'partialWorkflows', 'pendingTransactions'] as const
+	exactKeys(proof, proofFields, [], 'retirement.completionEvidence.proof')
+	for (const field of proofFields) {
+		if (proof[field] !== 0) throw new Error(`retirement.completionEvidence.proof.${field} must be zero`)
+	}
+	if (!Array.isArray(evidence['residuals'])) throw new Error('retirement.completionEvidence.residuals must be an array')
+	const residuals = evidence['residuals'].map((candidate, index): RetirementResidual => {
+		const label = `retirement.completionEvidence.residuals[${index.toString()}]`
+		const residual = record(candidate, label)
+		exactKeys(residual, ['amount', 'asset', 'category', 'reason'], [], label)
+		const category = residual['category']
+		if (!['accepted-dust', 'deployment-token', 'irreversible-burn', 'losing-share', 'mandatory-sentinel', 'operator-accepted'].includes(String(category))) throw new Error(`${label}.category is invalid`)
+		for (const field of ['asset', 'reason'] as const) {
+			if (typeof residual[field] !== 'string' || residual[field].length === 0 || residual[field].length > 2_048) throw new Error(`${label}.${field} is invalid`)
+		}
+		return { amount: unsigned(residual['amount'], `${label}.amount`), asset: residual['asset'] as string, category: category as RetirementResidual['category'], reason: residual['reason'] as string }
+	})
+	return {
+		blockHash: blockHash as Hash,
+		blockNumber: unsigned(evidence['blockNumber'], 'retirement.completionEvidence.blockNumber'),
+		completedAt: timestamp(evidence['completedAt'], 'retirement.completionEvidence.completedAt'),
+		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+		residuals,
+	}
+}
+
 export function parseRetirementState(value: unknown): DurableRetirementState {
 	const retirement = record(value, 'retirement')
 	exactKeys(retirement, ['blockers', 'policies', 'positions', 'recoveredBalances', 'status'], ['cancelledAt', 'completionEvidence', 'finalSweepStartedAt', 'profileReplacementOverride', 'recipient', 'requestedAt', 'updatedAt'], 'retirement')
@@ -213,7 +246,7 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 	return {
 		blockers,
 		...(retirement['cancelledAt'] === undefined ? {} : { cancelledAt: timestamp(retirement['cancelledAt'], 'retirement.cancelledAt') }),
-		...(retirement['completionEvidence'] === undefined ? {} : { completionEvidence: retirement['completionEvidence'] as RetirementCompletionEvidence }),
+		...(retirement['completionEvidence'] === undefined ? {} : { completionEvidence: parseCompletionEvidence(retirement['completionEvidence']) }),
 		...(retirement['finalSweepStartedAt'] === undefined ? {} : { finalSweepStartedAt: timestamp(retirement['finalSweepStartedAt'], 'retirement.finalSweepStartedAt') }),
 		positions,
 		...(rawOverride === undefined ? {} : { profileReplacementOverride: { acceptedAt: timestamp(rawOverride['acceptedAt'], 'retirement.profileReplacementOverride.acceptedAt'), reason: String(rawOverride['reason']), targetProfileId: String(rawOverride['targetProfileId']) } }),
