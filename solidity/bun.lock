@@ -10,6 +10,7 @@
         "bun-types": "1.4.2",
         "funtypes": "5.1.1",
         "knip": "6.17.1",
+        "micro-eth-signer": "0.18.1",
         "solc": "0.8.35",
         "solc-0-8-28": "npm:solc@0.8.28",
         "tsx": "4.19.3",

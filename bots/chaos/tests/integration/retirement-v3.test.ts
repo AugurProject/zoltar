@@ -127,7 +127,7 @@ let compileDirectory: string | undefined
 async function compileFixture() {
 	compileDirectory = await mkdtemp(join(tmpdir(), 'chaos-retirement-solc-'))
 	const source = new URL('../fixtures/RetirementV3Pool.sol', import.meta.url).pathname
-	const solc = new URL('../../../../node_modules/.bin/solcjs', import.meta.url).pathname
+	const solc = new URL('../../node_modules/.bin/solcjs', import.meta.url).pathname
 	const process = Bun.spawn([solc, '--bin', '--optimize', '--output-dir', compileDirectory, source], { stderr: 'pipe', stdout: 'pipe' })
 	const exitCode = await process.exited
 	if (exitCode !== 0) throw new Error(`Retirement integration fixture compilation failed: ${await new Response(process.stderr).text()}`)
