@@ -49,3 +49,17 @@ test('registry owns every independent package and its setup exactly once', async
 test('registry paths, local dependencies, cache inputs, and generated outputs are valid', () => {
 	expect(() => validateProjectRegistryFiles(repositoryRoot)).not.toThrow()
 })
+
+test('local installation and CI use the package-manager Bun version', async () => {
+	const rootManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'package.json'), 'utf8'))
+	if (typeof rootManifest !== 'object' || rootManifest === null) throw new Error('package.json must contain an object')
+	const packageManager = Reflect.get(rootManifest, 'packageManager')
+	if (typeof packageManager !== 'string') throw new Error('package.json must declare packageManager')
+	const bunVersion = packageManager.match(/^bun@(?<version>\d+\.\d+\.\d+)$/)?.groups?.version
+	if (bunVersion === undefined) throw new Error(`Unsupported packageManager declaration: ${packageManager}`)
+
+	const installSource = await fs.readFile(path.join(repositoryRoot, 'tooling/repo/install-frozen.mts'), 'utf8')
+	const ciSource = await fs.readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
+	expect(installSource).toContain(`const repositoryBunVersion = '${bunVersion}'`)
+	expect(ciSource).toContain(`BUN_VERSION: ${bunVersion}`)
+})
