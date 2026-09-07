@@ -945,7 +945,7 @@ describe('chaos operator runtime', () => {
 		workflow.classification = 'lifecycle-obligation'
 		workflow.continuationDisposition = undefined
 		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
-		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(workflow).toMatchObject({ continuationDisposition: 'cleanup-only' })
 	})
 
 	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {
