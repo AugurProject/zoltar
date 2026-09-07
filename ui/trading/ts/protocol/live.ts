@@ -12,7 +12,7 @@ import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfte
 import { capabilitiesForTradingVersion } from './capabilities.js'
 import { configuredFactory, configuredPair, configuredShareOperationRouter, receiveBasedExitArguments, shareTokenAbi } from './versionedAuthorization.js'
 
-export { encodeReceiveBasedExitRequest, encodeReceiveBasedRedeemRequest } from './versionedAuthorization.js'
+export { encodeReceiveBasedExitRequest } from './versionedAuthorization.js'
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId } from './runtimeClients.js'
 export { publicErrorMessage } from './publicError.js'
 export { normalizeForkOutcomeIndexes, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from './settlement.js'
@@ -527,7 +527,9 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 			const longSharesSwapped = quote.result[0]
 			const totalLongShares = completeSets + longSharesSwapped
 			const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-			const transfer = receiveBasedExitArguments(market, side, completeSets, totalLongShares, 0n, account, deadline)
+			const maximumLongShares = maximumAfterSlippage(totalLongShares, slippageBps)
+			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
+			const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
 			const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, configuredShareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockHash: block.blockHash })
 			void simulation
 			return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, deadline }

@@ -75,7 +75,8 @@ async function simulateSettlementWithExpiryParameters(
 			if (capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations) {
 				const invalidTokenId = market.universeId << 8n
 				const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (amount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-				const data = encodeReceiveBasedRedeemRequest(market, amount, 0n, account, deadline)
+				const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
+				const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline)
 				const simulation = await client.simulateContract({
 					abi: shareTokenAbi,
 					address: market.shareToken,

@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/shared/ethereum'
 
-export type TransactionOperation = 'share-approval' | 'trade'
+type TransactionOperation = 'share-approval' | 'trade'
 
 export type TransactionContext = Readonly<{
 	account: Address
@@ -39,7 +39,7 @@ export type TransactionWorkflowEvent =
 
 export const idleTransactionWorkflow: TransactionWorkflowState = { kind: 'idle' }
 
-export function sameTransactionContext(left: TransactionContext, right: TransactionContext) {
+function sameTransactionContext(left: TransactionContext, right: TransactionContext) {
 	return left.account === right.account && left.chainId === right.chainId && left.market === right.market && left.requestRevision === right.requestRevision
 }
 

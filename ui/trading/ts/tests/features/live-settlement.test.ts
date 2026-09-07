@@ -4,6 +4,7 @@ import { tradingContracts } from '../../generated/contractArtifact.js'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/LiveSettlementControls.js'
 import { normalizeForkOutcomeIndexes, simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
+import { encodeReceiveBasedRedeemRequest } from '../../protocol/versionedAuthorization.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
@@ -24,7 +25,21 @@ const migrateAbi = [
 		outputs: [],
 	},
 ] as const
-
+const shareTransferAbi = [
+	{
+		type: 'function',
+		name: 'safeBatchTransferFrom',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'from', type: 'address' },
+			{ name: 'to', type: 'address' },
+			{ name: 'ids', type: 'uint256[]' },
+			{ name: 'values', type: 'uint256[]' },
+			{ name: 'data', type: 'bytes' },
+		],
+		outputs: [],
+	},
+] as const
 const market: LiveMarket = {
 	pool,
 	pair: undefined,
@@ -166,6 +181,39 @@ describe('live settlement contract encoding', () => {
 		const callsBeforeRejectedSlippage = transactionData.length
 		await expect(simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount, validityMinutes: 7n, slippageBps: 501n })).rejects.toThrow('between 0% and 5%')
 		expect(transactionData).toHaveLength(callsBeforeRejectedSlippage)
+	})
+
+	test('simulates and submits the exact final receive-based redemption payload', async () => {
+		const pair = `0x${'66'.repeat(20)}` as Address
+		const receiveRouter = `0x${'aa'.repeat(20)}` as Address
+		const versionTwoConfiguration = { ...configuration, receiveRouter, version: 2 as const }
+		const versionTwoMarket = { ...market, pair, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
+		const transactionData: Hex[] = []
+		const client = createWalletClient({
+			account,
+			transport: custom({
+				async request({ method, params }) {
+					if (method === 'eth_blockNumber') return '0x2'
+					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+					if (method === 'eth_call' || method === 'eth_sendTransaction') {
+						transactionData.push(requireTransactionData(params))
+						return method === 'eth_sendTransaction' ? transactionHash : '0x'
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const quote = await simulateSettlement(client, versionTwoConfiguration, versionTwoMarket, account, 'redeem-complete-set', { amount: 10n, validityMinutes: 7n, slippageBps: 500n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		expect(quote.expectedAttoEth).toBe(10n)
+		expect(quote.minimumAttoEth).toBe(9n)
+		expect(await submitFreshSettlement(client, versionTwoConfiguration, account, quote, async write => await write())).toBe(transactionHash)
+		expect(transactionData).toHaveLength(3)
+		expect(transactionData[1]).toBe(transactionData[0])
+		expect(transactionData[2]).toBe(transactionData[0])
+		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: transactionData[0] })
+		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
+		expect(decodedTransfer.args[4]).toBe(encodeReceiveBasedRedeemRequest(versionTwoMarket, 10n, quote.minimumAttoEth, account, quote.deadline))
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
