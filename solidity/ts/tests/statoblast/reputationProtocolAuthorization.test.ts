@@ -4,7 +4,7 @@ import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGa
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 
-function splitSignature(signature: Hex) {
+function splitSignature(signature: string) {
 	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
 	return { r: `0x${signature.slice(2, 66)}` as Hex, s: `0x${signature.slice(66, 130)}` as Hex, v: Number.parseInt(signature.slice(130, 132), 16) }
 }

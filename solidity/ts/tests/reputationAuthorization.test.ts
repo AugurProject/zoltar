@@ -11,7 +11,7 @@ import { GenesisReputationToken_GenesisReputationToken } from '../types/contract
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-function splitSignature(signature: Hex) {
+function splitSignature(signature: string) {
 	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
 	return {
 		r: `0x${signature.slice(2, 66)}` as Hex,

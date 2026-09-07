@@ -29,7 +29,7 @@ const vaultDepositTargetHealthFactorRecordedEvent = {
 
 const MAX_UINT256 = 2n ** 256n - 1n
 
-function splitSignature(signature: Hex) {
+function splitSignature(signature: string) {
 	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
 	return { r: `0x${signature.slice(2, 66)}` as Hex, s: `0x${signature.slice(66, 130)}` as Hex, v: Number.parseInt(signature.slice(130, 132), 16) }
 }

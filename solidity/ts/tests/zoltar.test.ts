@@ -44,7 +44,7 @@ function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
 }
 
-function splitSignature(signature: Hex) {
+function splitSignature(signature: string) {
 	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
 	return {
 		r: `0x${signature.slice(2, 66)}` as Hex,
@@ -844,6 +844,7 @@ describe('Contract Test Suite', () => {
 		const childToken = getRepTokenAddress(childUniverseId)
 		const childSupply = await getTotalTheoreticalSupplyAttoRep(client, childToken)
 		const rawSlot = await mockWindow.request({ method: 'eth_getStorageAt', params: [childToken, formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT), 'latest'] })
+		if (typeof rawSlot !== 'string' || !isHex(rawSlot)) throw new Error('Child REP theoretical supply slot missing')
 		assert.strictEqual(BigInt(rawSlot), childSupply, 'child theoretical supply must remain in storage slot 5')
 
 		const spender = addressString(TEST_ADDRESSES[2])
