@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
+import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { createCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
@@ -142,6 +142,19 @@ describe('Statoblast: vault accounting', () => {
 
 	test('can deposit rep and withdraw it', async () => {
 		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		const poolRepBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		const totalBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
+		const conversionAmount = repDeposit / 3n
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
+				address: getInfraContractAddresses().securityPoolForker,
+				functionName: 'attoRepToBackingUnits',
+				args: [securityPoolAddresses.securityPool, conversionAmount],
+			}),
+			(conversionAmount * totalBackingUnits) / poolRepBalance,
+			'forker conversion should price REP against the live pool balance',
+		)
 		const preferenceBefore = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
@@ -153,6 +166,16 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), reportedRepEthPrice, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
+				address: getInfraContractAddresses().securityPoolForker,
+				functionName: 'attoRepToBackingUnits',
+				args: [securityPoolAddresses.securityPool, conversionAmount],
+			}),
+			conversionAmount * 10n ** 18n,
+			'forker conversion should use one backing unit per attoREP when the pool is empty',
+		)
 		const factorsAfter = await getVaultCapacityBackingFactorsBps(client.account.address)
 		strictEqualTypeSafe(factorsAfter[0], 0n, 'fully withdrawn zero-capacity vault should report zero associated factor')
 		strictEqualTypeSafe(factorsAfter[1], 0n, 'fully withdrawn zero-capacity vault should report zero pool-held factor')

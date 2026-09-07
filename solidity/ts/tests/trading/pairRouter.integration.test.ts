@@ -5,6 +5,7 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
+import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const rate = 10n ** 18n
@@ -66,6 +67,7 @@ describe('factory, pair, and router integration', () => {
 	let factoryArtifact: TradingContracts['contracts/trading/TwoWayConstantProductFactory.sol']['TwoWayConstantProductFactory']
 	let factoryV2Artifact: TradingContracts['contracts/trading/TwoWayConstantProductFactoryV2.sol']['TwoWayConstantProductFactoryV2']
 	let pairArtifact: TradingContracts['contracts/trading/TwoWayConstantProductPair.sol']['TwoWayConstantProductPair']
+	let pairV2Artifact: TradingContracts['contracts/trading/TwoWayConstantProductPairV2.sol']['TwoWayConstantProductPairV2']
 	let routerArtifact: TradingContracts['contracts/trading/TwoWayConstantProductRouter.sol']['TwoWayConstantProductRouter']
 
 	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) {
@@ -101,6 +103,7 @@ describe('factory, pair, and router integration', () => {
 		factoryArtifact = contracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 		factoryV2Artifact = contracts['contracts/trading/TwoWayConstantProductFactoryV2.sol'].TwoWayConstantProductFactoryV2
 		pairArtifact = contracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
+		pairV2Artifact = contracts['contracts/trading/TwoWayConstantProductPairV2.sol'].TwoWayConstantProductPairV2
 		routerArtifact = contracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const ethereum = getAnvilWindowEthereum()
 		account = `0x${TEST_ADDRESSES[0].toString(16).padStart(40, '0')}`
@@ -130,6 +133,17 @@ describe('factory, pair, and router integration', () => {
 		expect(predicted).toBe(pair)
 		expect(await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'isPair', args: [pair] })).toBe(true)
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'invalidTokenId' })).toBe(universe << 8n)
+	})
+
+	test('direct V2 deployment initializes ERC-20 identity from the inherited constructor', async () => {
+		const directPair = await deploy(pairV2Artifact, [account, pool, 30n, account])
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: directPair, functionName: 'name' })).toBe('Zoltar Two-Way LP')
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: directPair, functionName: 'symbol' })).toBe('Z2LP')
+		expect(await client.readContract({ abi: pairV2Artifact.abi, address: directPair, functionName: 'factory' })).toBe(account)
+		if (process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1') {
+			await flushSolidityBytecodeCoverageForTest()
+			expect(await getSolidityBytecodeCoverageProfileHitCountForTest('contracts/ERC20.sol', 45)).toBeGreaterThan(0)
+		}
 	})
 
 	test('quarantines canonical shares sent to the counterfactual pair address before deployment', async () => {

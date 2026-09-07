@@ -88,5 +88,7 @@ describe('Solidity and TypeScript AMM math parity', () => {
 		const maximum = (1n << 256n) - 1n
 		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'mulDiv', args: [maximum, maximum, 0n] })).rejects.toThrow(/division by zero|0x12|4e487b71[0-9a-f]*12/i)
 		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'mulDiv', args: [maximum, maximum, 1n] })).rejects.toThrow(/underflow or overflow|0x11|4e487b71[0-9a-f]*11/i)
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'panic', args: [0x11n] })).rejects.toThrow(/underflow or overflow|0x11|4e487b71[0-9a-f]*11/i)
+		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'panic', args: [0x12n] })).rejects.toThrow(/division by zero|0x12|4e487b71[0-9a-f]*12/i)
 	})
 })

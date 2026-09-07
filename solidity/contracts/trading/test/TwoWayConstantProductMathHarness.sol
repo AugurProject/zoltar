@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { TwoWayConstantProductMath } from '../TwoWayConstantProductMath.sol';
 import { Math } from '../../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Panic } from '../../statoblast/openOracle/openzeppelin/contracts/utils/Panic.sol';
 
 contract TwoWayConstantProductMathHarness {
 	function quoteExactInput(uint256 reserveIn, uint256 reserveOut, uint256 amountIn, uint256 feeBps) external pure returns (uint256 amountOut, uint256 feeAmount) {
@@ -27,5 +28,9 @@ contract TwoWayConstantProductMathHarness {
 
 	function mulDiv(uint256 x, uint256 y, uint256 denominator) external pure returns (uint256) {
 		return Math.mulDiv(x, y, denominator);
+	}
+
+	function panic(uint256 code) external pure {
+		Panic.panic(code);
 	}
 }
